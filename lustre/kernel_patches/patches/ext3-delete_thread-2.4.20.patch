@@ -39,7 +39,7 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +
 +	/* main loop */
 +	for (;;) {
-+		wait_event_interruptible(&sbi->s_delete_thread_queue,
++		wait_event_interruptible(sbi->s_delete_thread_queue,
 +					 !list_empty(&sbi->s_delete_list) ||
 +					 !test_opt(sb, ASYNCDEL));
 +		ext3_debug("%s woken up: %lu inodes, %lu blocks\n",
@@ -113,7 +113,7 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +	if (sbi->s_delete_list.next == 0)	/* thread never started */
 +		return;
 +
-+	clear_opt(sbi->s_mount_flags, ASYNCDEL);
++	clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
 +	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
 +}
@@ -240,7 +240,7 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
-@@ -514,6 +725,16 @@ static int parse_options (char * options
+@@ -514,6 +725,13 @@ static int parse_options (char * options
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
@@ -248,10 +248,7 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +		if (!strcmp(this_char, "asyncdel"))
 +			set_opt(*mount_options, ASYNCDEL);
 +		else if (!strcmp(this_char, "noasyncdel"))
-+			if (is_remount)
-+				ext3_stop_delete_thread(sbi);
-+			else
-+				clear_opt(*mount_options, ASYNCDEL);
++			clear_opt(*mount_options, ASYNCDEL);
 +		else
 +#endif
  #ifdef CONFIG_EXT3_FS_XATTR_USER
@@ -265,6 +262,16 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
+@@ -1648,6 +1874,9 @@ int ext3_remount (struct super_block * s
+ 	if (!parse_options(data, &tmp, sbi, &tmp, 1))
+ 		return -EINVAL;
+ 
++	if (!test_opt(sb, ASYNCDEL) || (*flags & MS_RDONLY))
++		ext3_stop_delete_thread(sbi);
++
+ 	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
+ 		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
+ 
 diff -puNr origin/include/linux/ext3_fs.h linux/include/linux/ext3_fs.h
 --- origin/include/linux/ext3_fs.h	2003-05-04 17:22:49.000000000 +0400
 +++ linux/include/linux/ext3_fs.h	2003-05-04 15:06:10.000000000 +0400
