@@ -116,6 +116,7 @@
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
 # define sk_wmem_queued wmem_queued
+# define sk_err         err
 #endif
 
 typedef struct                                  /* pool of forwarding buffers */
