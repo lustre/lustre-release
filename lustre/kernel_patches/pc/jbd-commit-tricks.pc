@@ -1,4 +1,0 @@
-fs/jbd/checkpoint.c
-fs/jbd/journal.c
-fs/jbd/transaction.c
-include/linux/jbd.h
