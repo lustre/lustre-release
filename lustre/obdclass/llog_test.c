@@ -131,7 +131,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         ENTRY;
 
         lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
-        lcr.lcr_hdr.lrh_type = OST_CREATE_REC;
+        lcr.lcr_hdr.lrh_type = OST_SZ_REC;
 
         CERROR("3a: write one create_rec\n");
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
