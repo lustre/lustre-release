@@ -144,30 +144,24 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         MOD_INC_USE_COUNT;
 #warning shaver: we might need a real cluuid here
         rc = class_connect(conn, obd, NULL);
-        if (!rc)
-                cli->cl_conn_count++;
-        else {
+        if (rc) {
                 MOD_DEC_USE_COUNT;
-                up(&cli->cl_sem);
-                RETURN(rc);
+                GOTO(out_sem, rc);
         }
 
-        if (cli->cl_conn_count > 1) {
-                up(&cli->cl_sem);
-                RETURN(0);
-        }
+        cli->cl_conn_count++;
+        if (cli->cl_conn_count > 1)
+                GOTO(out_sem, rc);
 
         obd->obd_namespace = ldlm_namespace_new(obd->obd_name,
                                                 LDLM_NAMESPACE_CLIENT);
-        if (obd->obd_namespace == NULL) {
-                up(&cli->cl_sem);
-                RETURN(-ENOMEM);
-        }
+        if (obd->obd_namespace == NULL)
+                GOTO(out_disco, rc = -ENOMEM);
 
         request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 2, size,
                                   tmp);
         if (!request)
-                GOTO(out_disco, -ENOMEM);
+                GOTO(out_ldlm, rc = -ENOMEM);
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
@@ -179,19 +173,23 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out_req, rc);
 
         request->rq_connection->c_level = LUSTRE_CONN_FULL;
         cli->cl_exporth = *(struct lustre_handle *)request->rq_repmsg;
 
         EXIT;
- out:
+out_req:
         ptlrpc_free_req(request);
- out_disco:
         if (rc) {
+out_ldlm:
+                ldlm_namespace_free(obd->obd_namespace);
+                obd->obd_namespace = NULL;
+out_disco:
                 class_disconnect(conn);
                 MOD_DEC_USE_COUNT;
         }
+out_sem:
         up(&cli->cl_sem);
         return rc;
 }
@@ -199,41 +197,46 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 int client_obd_disconnect(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
+        struct client_obd *cli = &obd->u.cli;
         int rq_opc = (obd->obd_type->typ_ops->o_getattr) ? OST_DISCONNECT : MDS_DISCONNECT;
         struct ptlrpc_request *request = NULL;
-        int rc;
+        int rc, err;
         ENTRY;
 
-        down(&obd->u.cli.cl_sem);
-        if (!obd->u.cli.cl_conn_count) {
+        down(&cli->cl_sem);
+        if (!cli->cl_conn_count) {
                 CERROR("disconnecting disconnected device (%s)\n",
                        obd->obd_name);
-                RETURN(0);
+                GOTO(out_sem, rc = -EINVAL);
         }
 
-        obd->u.cli.cl_conn_count--;
-        if (obd->u.cli.cl_conn_count)
-                GOTO(class_only, 0);
+        cli->cl_conn_count--;
+        if (cli->cl_conn_count)
+                GOTO(out_disco, rc = 0);
 
         ldlm_namespace_free(obd->obd_namespace);
         obd->obd_namespace = NULL;
         request = ptlrpc_prep_req2(conn, rq_opc, 0, NULL, NULL);
         if (!request)
-                RETURN(-ENOMEM);
+                GOTO(out_disco, rc = -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
 
         rc = ptlrpc_queue_wait(request);
         if (rc)
-                GOTO(out, rc);
- class_only:
-        rc = class_disconnect(conn);
-        if (!rc)
-                MOD_DEC_USE_COUNT;
- out:
+                GOTO(out_req, rc);
+
+        EXIT;
+ out_req:
         if (request)
                 ptlrpc_free_req(request);
-        up(&obd->u.cli.cl_sem);
+ out_disco:
+        err = class_disconnect(conn);
+        if (!rc && err)
+                rc = err;
+        MOD_DEC_USE_COUNT;
+ out_sem:
+        up(&cli->cl_sem);
         RETURN(rc);
 }
 
@@ -248,50 +251,49 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         tgtuuid = lustre_msg_buf(req->rq_reqmsg, 0);
         if (req->rq_reqmsg->buflens[0] > 37) {
-                /* Invalid UUID */
-                req->rq_status = -EINVAL;
-                RETURN(-EINVAL);
+                CERROR("bad target UUID for connect\n");
+                GOTO(out, rc = -EINVAL);
         }
 
-        cluuid =  lustre_msg_buf(req->rq_reqmsg, 1);
+        cluuid = lustre_msg_buf(req->rq_reqmsg, 1);
         if (req->rq_reqmsg->buflens[1] > 37) {
-                /* Invalid UUID */
-                req->rq_status = -EINVAL;
-                RETURN(-EINVAL);
+                CERROR("bad client UUID for connect\n");
+                GOTO(out, rc = -EINVAL);
         }
 
         i = class_uuid2dev(tgtuuid);
         if (i == -1) {
-                req->rq_status = -ENODEV;
-                RETURN(-ENODEV);
+                CERROR("UUID '%s' not found for connect\n", tgtuuid);
+                GOTO(out, rc = -ENODEV);
         }
 
         target = &obd_dev[i];
-        if (!target) {
-                req->rq_status = -ENODEV;
-                RETURN(-ENODEV);
-        }
+        if (!target)
+                GOTO(out, rc = -ENODEV);
 
         conn.addr = req->rq_reqmsg->addr;
         conn.cookie = req->rq_reqmsg->cookie;
 
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
-        req->rq_status = obd_connect(&conn, target, cluuid);
+        rc = obd_connect(&conn, target, cluuid);
+        if (rc)
+                GOTO(out, rc);
         req->rq_repmsg->addr = conn.addr;
         req->rq_repmsg->cookie = conn.cookie;
 
         export = class_conn2export(&conn);
-        if (!export)
-                LBUG();
+        LASSERT(export);
 
         req->rq_export = export;
         export->exp_connection = req->rq_connection;
 #warning Peter: is this the right place to upgrade the server connection level?
         req->rq_connection->c_level = LUSTRE_CONN_FULL;
-        RETURN(0);
+out:
+        req->rq_status = rc;
+        RETURN(rc);
 }
 
 int target_handle_disconnect(struct ptlrpc_request *req)
