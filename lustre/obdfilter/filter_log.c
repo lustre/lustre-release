@@ -113,18 +113,19 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_export *exp = obd->obd_self_export;
         struct llog_cookie cookie;
+        struct llog_gen_rec *lgr;
         struct llog_unlink_rec *lur;
         struct obdo *oa;
-        struct obd_trans_info oti = { 0 };
         obd_id oid;
         int rc = 0;
         ENTRY;
                                                                                                                              
-        if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
+        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
-        if (rec->lrh_type != MDS_UNLINK_REC) {
+        if (rec->lrh_type != MDS_UNLINK_REC &&
+            rec->lrh_type != LLOG_GEN_REC) {
                 CERROR("log record type error\n");
                 RETURN(-EINVAL);
         }
@@ -132,9 +133,19 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_subsys = LLOG_UNLINK_ORIG_CTXT;
         cookie.lgc_index = le32_to_cpu(rec->lrh_index);
-                                                                                                                             
+
+        if (rec->lrh_type == LLOG_GEN_REC) {
+                lgr = (struct llog_gen_rec *)rec;
+                if (llog_gen_lt(lgr->lgr_gen, ctxt->loc_gen))
+                        rc = 0;
+                else
+                        rc = LLOG_PROC_BREAK;
+                CWARN("fetch generation log, send cookie\n");
+                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+                RETURN(rc);
+        }
+
         lur = (struct llog_unlink_rec *)rec;
-        
         oa = obdo_alloc();
         if (oa == NULL) 
                 RETURN(-ENOMEM);
@@ -144,16 +155,16 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         memcpy(obdo_logcookie(oa), &cookie, sizeof(cookie));
         oid = oa->o_id;
 
-        rc = obd_destroy(exp, oa, NULL, &oti);
+        rc = obd_destroy(exp, oa, NULL, NULL);
         obdo_free(oa);
         if (rc == -ENOENT) {
-                CWARN("object already removed: send cookie\n");
+                CDEBUG(D_HA, "object already removed, send cookie\n");
                 llog_cancel(ctxt, NULL, 1, &cookie, 0);
                 RETURN(0);
         }
 
         if (rc == 0)
-                CWARN("object: "LPU64" in record is destroyed\n", oid);
+                CDEBUG(D_HA, "object: "LPU64" in record is destroyed\n", oid);
 
         RETURN(rc);
 }
