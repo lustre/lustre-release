@@ -280,13 +280,20 @@ unpack_lustre()
 	    DATESTAMP=""
 	fi	    
 
-	cvs -d "$CVSROOT" -qz3 co $DATESTAMP -r "$TAG" -d "$DIRNAME" lustre || \
-	    fatal 1 "There was an error checking out Lustre from CVS."
+	cvs -d "$CVSROOT" -qz3 co $DATESTAMP -d "$DIRNAME" lustre || \
+	    fatal 1 "There was an error checking out toplevel Lustre from CVS."
+	pushd "$DIRNAME" > /dev/null
+	./lustrecvs "$TAG" || \
+	    fatal 1 "There was an error checking out Lustre/Portals/Build from CVS."
 	echo "Creating lustre tarball..."
-	tar zcf "$DIRNAME.tar.gz" "$DIRNAME" \
-	    --exclude "CVS" --exclude "*~" --exclude ".cvsignore" || \
-	    fatal 1 "Could not create Lustre tarball."
-	LUSTRE="$PWD/$DIRNAME.tar.gz"
+	sh autogen.sh || fatal 1 "There was an error running autogen.sh."
+	./configure --disable-{modules,utils,liblustre,tests,doc} || \
+	    fatal 1 "There was an error running ./configure to create makefiles."
+	make dist || fatal 1 "There was an error running 'make dist'."
+	popd > /dev/null
+	fname=`basename $DIRNAME/lustre-*.tar.gz`
+	cp $DIRNAME/$fname . || fatal 1 "There was an error copying lustre tarball."
+	LUSTRE="$PWD/$fname"
 	ln -sf "$DIRNAME" lustre
     fi
 }
