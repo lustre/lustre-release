@@ -115,7 +115,7 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 tgtlen = strlen(tgt);
                 it->it_data = NULL;
         } else if (it->it_op & IT_LOOKUP)
-                lock_mode = LCK_CR;
+                lock_mode = LCK_PR;
         else {
                 LBUG();
                 RETURN(-EINVAL);

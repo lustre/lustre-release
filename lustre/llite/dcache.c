@@ -46,9 +46,35 @@ void ll_intent_release(struct dentry *de)
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
+        struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
+        struct lustre_handle lockh;
+        __u64 res_id[RES_NAME_SIZE] = {0};
+        struct obd_device *obddev;
         ENTRY;
 
-        /* for debugging purposes, we currently always force client re-get */
+        if (it)
+                RETURN(0); /* lookups will have NULL it */
+
+        if (!de->d_inode)
+                RETURN(0);
+
+        obddev = class_conn2obd(&sbi->ll_mdc_conn);
+        res_id[0] = de->d_inode->i_ino;
+
+        CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id[0]);
+
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_MDSINTENT,
+                            NULL, 0, LCK_PR, &lockh)) {
+                ldlm_lock_decref(&lockh, LCK_PR);
+                RETURN(1);
+        }
+
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_MDSINTENT,
+                            NULL, 0, LCK_PW, &lockh)) {
+                ldlm_lock_decref(&lockh, LCK_PW);
+                RETURN(1);
+        }
+
         RETURN(0);
 }
 
