@@ -389,6 +389,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                                            0, &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
+                } else {
+                        /* Per-directory striping default code removed, because
+                         * it uses the same unnamed EA storage as the directory
+                         * striping for CMD. -p */
                 } 
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
                 rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
