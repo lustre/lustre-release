@@ -1,16 +1,16 @@
  fs/ext3/Makefile           |    3 
- fs/ext3/extents.c          | 1578 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/extents.c          | 1624 +++++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/ialloc.c           |    4 
  fs/ext3/inode.c            |   30 
  fs/ext3/super.c            |    8 
  include/linux/ext3_fs.h    |   18 
  include/linux/ext3_fs_i.h  |    4 
  include/linux/ext3_fs_sb.h |   10 
- 8 files changed, 1647 insertions(+), 8 deletions(-)
+ 8 files changed, 1693 insertions(+), 8 deletions(-)
 
 --- /dev/null	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.18-chaos-alexey/fs/ext3/extents.c	2003-09-17 00:43:16.000000000 +0400
-@@ -0,0 +1,1578 @@
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/extents.c	2003-09-23 14:30:02.000000000 +0400
+@@ -0,0 +1,1624 @@
 +/*
 + *
 + * linux/fs/ext3/extents.c
@@ -292,7 +292,7 @@
 +	struct ext3_extent_idx *ix;
 +	struct buffer_head *bh;
 +	struct ext3_extent *ex;
-+	int depth, i, k, ppos = 0;
++	int depth, i, k, ppos = 0, prev = 0;
 +	
 +	eh = (struct ext3_extent_header *) ei->i_data;
 +
@@ -316,14 +316,19 @@
 +		ext_debug(inode, "depth %d: num %d, max %d\n",
 +				ppos, eh->e_num, eh->e_max);
 +		ix = EXT_FIRST_INDEX(eh);
-+		if (eh->e_num)
++		if (eh->e_num) {
++			EXT_ASSERT(ppos == 0 || ix->e_block == prev);
 +			path[ppos].p_idx = ix;
++		}
 +		EXT_ASSERT(eh->e_num <= eh->e_max);
 +		for (k = 0; k < eh->e_num; k++, ix++) {
 +			ext_debug(inode, "index: %d -> %d\n",
 +					ix->e_block, ix->e_leaf);
++			EXT_ASSERT((k == 0 && prev <= (int)ix->e_block) ||
++					(k > 0 && prev < (int)ix->e_block));
 +			if (block < ix->e_block)
 +				break;
++			prev = ix->e_block;
 +			path[ppos].p_idx = ix;
 +		}
 +		path[ppos].p_block = path[ppos].p_idx->e_leaf;
@@ -354,8 +359,12 @@
 +		path[ppos].p_ext = ex;
 +	EXT_ASSERT(eh->e_num <= eh->e_max);
 +	for (k = 0; k < eh->e_num; k++, ex++) {
++		EXT_ASSERT(ex->e_num < EXT3_BLOCKS_PER_GROUP(inode->i_sb));
++		EXT_ASSERT((k == 0 && prev <= (int)ex->e_block) ||
++				(k > 0 && prev < (int)ex->e_block));
 +		if (block < ex->e_block) 
 +			break;
++		prev = ex->e_block;
 +		path[ppos].p_ext = ex;
 +	}
 +
@@ -466,6 +475,7 @@
 +
 +	/* if current leaf will be splitted, then we should use 
 +	 * border from split point */
++	
 +	if (path[depth].p_ext != EXT_MAX_EXTENT(path[depth].p_hdr)) {
 +		border = path[depth].p_ext[1].e_block;
 +		ext_debug(inode, "leaf will be splitted."
@@ -496,13 +506,15 @@
 +	memset(ablocks, 0, sizeof(long) * depth);
 +
 +	/* allocate all needed blocks */
-+	ext_debug(inode, "allocate %d blocks for indexes and leaf\n",
-+			depth - at);
-+	ablocks[0] = newext->e_start++;
-+	newext->e_num--;
-+	for (a = 1; a < depth - at; a++) {
-+		newblock = ext3_new_block(handle, inode, newext->e_start,
-+						0, 0, &err);
++	ext_debug(inode, "allocate %d blocks for indexes/leaf\n", depth - at);
++	newblock = 0; /* FIXME: something more sophisticated needed here */ 
++	for (a = 0; newext->e_num > 0 && a < depth - at; a++) {
++		newblock = ablocks[a] = newext->e_start++;
++		newext->e_num--;
++	}
++	for (; a < depth - at; a++) {
++		newblock = ext3_new_block(handle, inode,
++						newblock + 1, 0, 0, &err);
 +		if (newblock == 0)
 +			goto cleanup;
 +		ablocks[a] = newblock;
@@ -599,10 +611,10 @@
 +		/* copy indexes */
 +		m = 0;
 +		path[i].p_idx++;
-+		EXT_ASSERT(EXT_MAX_INDEX(path[i].p_hdr) ==
-+				EXT_LAST_INDEX(path[i].p_hdr));
 +		ext_debug(inode, "cur 0x%p, last 0x%p\n", path[i].p_idx,
 +				EXT_MAX_INDEX(path[i].p_hdr));
++		EXT_ASSERT(EXT_MAX_INDEX(path[i].p_hdr) ==
++				EXT_LAST_INDEX(path[i].p_hdr));
 +		while (path[i].p_idx <=
 +				EXT_MAX_INDEX(path[i].p_hdr)) {
 +			ext_debug(inode, "%d: move %d:%d in new index\n",
@@ -637,7 +649,7 @@
 +	}
 +
 +	/* insert new index */
-+	if (!err) 
++	if (!err)
 +		err = ext3_ext_insert_index(handle, inode, path + at,
 +						border, newblock);
 +
@@ -682,7 +694,16 @@
 +	 * use already allocated by the called block for new root block
 +	 */
 +	newblock = newext->e_start++;
-+	newext->e_num--;
++	if (newext->e_num == 0) {
++		/* 
++		 * FIXME: if this may happen, then we have to handle
++		 * possible error and free allocated block
++		 */
++		printk("grow_indepth with zero blocks\n");
++		newblock = ext3_new_block(handle, inode,
++						newblock, 0, 0, &err);
++	} else
++		newext->e_num--;
 +	
 +	bh = sb_getblk(inode->i_sb, newblock);
 +	if (!bh) {
@@ -743,11 +764,13 @@
 +					struct ext3_ext_path *path,
 +					struct ext3_extent *newext)
 +{
-+	int depth = EXT3_I(inode)->i_depth;
-+	struct ext3_ext_path *curp;
-+	int i = depth, err = 0;
 +	long newblock = newext->e_start;
++	struct ext3_ext_path *curp;
++	int depth, i, err = 0;
 +
++repeat:
++	i = depth = EXT3_I(inode)->i_depth;
++	
 +	/* walk up to the tree and look for free index entry */
 +	curp = path + depth;
 +	while (i > 0 && !EXT_HAS_FREE_INDEX(curp)) {
@@ -761,31 +784,49 @@
 +		/* if we found index with free entry, then use that
 +		 * entry: create all needed subtree and add new leaf */
 +		err = ext3_ext_split(handle, inode, path, newext, i);
-+	} else {
-+		/* tree is full, time to grow in depth */
-+		err = ext3_ext_grow_indepth(handle, inode, path, newext);
-+	}
 +
-+	if (!err) {
 +		/* refill path */
 +		ext3_ext_drop_refs(inode, path);
 +		path = ext3_ext_find_extent(inode, newext->e_block, path);
 +		if (IS_ERR(path))
 +			err = PTR_ERR(path);
++	} else {
++		/* tree is full, time to grow in depth */
++		err = ext3_ext_grow_indepth(handle, inode, path, newext);
 +
++		/* refill path */
++		ext3_ext_drop_refs(inode, path);
++		path = ext3_ext_find_extent(inode, newext->e_block, path);
++		if (IS_ERR(path))
++			err = PTR_ERR(path);
++	
 +		/*
-+		 * probably we've used some blocks from extent
-+		 * let's allocate new block for it
++		 * only first (depth 0 -> 1) produces free space
++		 * in all other cases we have to split growed tree
 +		 */
-+		if (newext->e_num == 0 && !err) {
-+			newext->e_start =
-+				ext3_new_block(handle, inode, newblock,
-+						0, 0, &err);
-+			newext->e_num = 1;
++		depth = EXT3_I(inode)->i_depth;
++		if (path[depth].p_hdr->e_num == path[depth].p_hdr->e_max) {
++			/* now we need split */
++			goto repeat;
 +		}
 +	}
 +
-+	return err;
++	if (err)
++		return err;
++
++	/*
++	 * probably we've used some blocks from extent
++	 * let's allocate new block for it
++	 */
++	if (newext->e_num == 0 && !err) {
++		newext->e_start =
++			ext3_new_block(handle, inode, newblock,
++					0, 0, &err);
++		if (newext->e_start != 0)
++			newext->e_num = 1;
++	}
++
++	return 0;
 +}
 +
 +/*
@@ -882,6 +923,9 @@
 +		return 0;
 +	}
 +	
++	/*
++	 * TODO: we need correction if border is smaller then current one
++	 */
 +	k = depth - 1;
 +	border = path[depth].p_ext->e_block;
 +	if ((err = ext3_ext_get_access(handle, inode, path + k)))
@@ -892,8 +936,7 @@
 +
 +	while (k--) {
 +		/* change all left-side indexes */
-+		if (path[k].p_idx != EXT_FIRST_INDEX(path[k].p_hdr)
-+				&& k != 0)
++		if (path[k+1].p_idx != EXT_FIRST_INDEX(path[k+1].p_hdr))
 +			break;
 +		if ((err = ext3_ext_get_access(handle, inode, path + k)))
 +			break;
@@ -1010,19 +1053,22 @@
 +				"move %d from 0x%p to 0x%p\n",
 +				newext->e_block, newext->e_start, newext->e_num,
 +				nearex, len, nearex + 1, nearex + 2);
++		
 +		memmove(nearex + 1, nearex, len);
 +		path[depth].p_ext = nearex;
-+		eh->e_num++;
-+
-+		/* time to correct all indexes above */
-+		err = ext3_ext_correct_indexes(handle, inode, path);
 +	}
 +
 +	if (!err) {
++		eh->e_num++;
 +		nearex = path[depth].p_ext;
 +		nearex->e_block = newext->e_block;
 +		nearex->e_start = newext->e_start;
 +		nearex->e_num = newext->e_num;
++		EXT_ASSERT(nearex->e_num < EXT3_BLOCKS_PER_GROUP(inode->i_sb) &&
++				nearex->e_num > 0);
++
++		/* time to correct all indexes above */
++		err = ext3_ext_correct_indexes(handle, inode, path);
 +	}
 +
 +	err = ext3_ext_dirty(handle, inode, path + depth);
@@ -1589,8 +1635,8 @@
 +				sbi->s_ext_blocks / sbi->s_ext_extents);
 +}
 +
---- linux-2.4.18-chaos/fs/ext3/ialloc.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-17 00:20:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/ext3/ialloc.c	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/fs/ext3/ialloc.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:53.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/ialloc.c	2003-09-23 14:29:32.000000000 +0400
 @@ -573,6 +573,10 @@ repeat:
  	ei->i_prealloc_count = 0;
  #endif
@@ -1602,8 +1648,8 @@
  
  	if (ei->i_flags & EXT3_SYNC_FL)
  		inode->i_flags |= S_SYNC;
---- linux-2.4.18-chaos/fs/ext3/inode.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-17 00:20:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/ext3/inode.c	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/fs/ext3/inode.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:53.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/inode.c	2003-09-23 14:29:32.000000000 +0400
 @@ -842,6 +842,15 @@ changed:
  	goto reread;
  }
@@ -1711,8 +1757,8 @@
                  if (rc) {
                          printk(KERN_INFO "ext3_map_inode_page: error reading "
                                 "block %ld\n", iblock);
---- linux-2.4.18-chaos/fs/ext3/Makefile~ext3-extents-2.4.18-chaos-pdirops	2003-09-16 23:47:28.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/ext3/Makefile	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/fs/ext3/Makefile~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:48.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/Makefile	2003-09-23 14:29:32.000000000 +0400
 @@ -12,7 +12,8 @@ O_TARGET := ext3.o
  export-objs :=	ext3-exports.o
  
@@ -1723,8 +1769,8 @@
  obj-m    := $(O_TARGET)
  
  include $(TOPDIR)/Rules.make
---- linux-2.4.18-chaos/fs/ext3/super.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-17 00:20:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/fs/ext3/super.c	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/fs/ext3/super.c~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:53.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/fs/ext3/super.c	2003-09-23 14:29:33.000000000 +0400
 @@ -619,6 +619,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
@@ -1754,8 +1800,8 @@
  
  	if (test_opt(sb, PDIROPS)) {
  		printk (KERN_INFO "EXT3-fs: mounted filesystem with parallel dirops\n");
---- linux-2.4.18-chaos/include/linux/ext3_fs.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-17 00:20:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs.h	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/include/linux/ext3_fs.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:53.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/include/linux/ext3_fs.h	2003-09-23 14:29:33.000000000 +0400
 @@ -188,6 +188,7 @@ struct ext3_group_desc
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -1773,7 +1819,7 @@
  			__u16	l_i_uid_high;	/* these 2 fields    */
  			__u16	l_i_gid_high;	/* were reserved2[0] */
  			__u32	l_i_reserved2;
-@@ -330,6 +331,8 @@ struct ext3_inode {
+@@ -329,6 +330,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_IOPEN		0x8000	/* Allow access via iopen */
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x10000	/* Make iopen world-readable */
  #define EXT3_MOUNT_ASYNCDEL		0x20000	/* Delayed deletion */
@@ -1782,7 +1828,7 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -721,6 +724,12 @@ extern void ext3_discard_prealloc (struc
+@@ -720,6 +723,12 @@ extern void ext3_discard_prealloc (struc
  extern void ext3_dirty_inode(struct inode *);
  extern int ext3_change_inode_journal_flag(struct inode *, int);
  extern void ext3_truncate (struct inode *);
@@ -1795,7 +1841,7 @@
  #ifdef EXT3_DELETE_THREAD
  extern void ext3_truncate_thread(struct inode *inode);
  #endif
-@@ -782,6 +791,13 @@ extern struct inode_operations ext3_dir_
+@@ -781,6 +790,13 @@ extern struct inode_operations ext3_dir_
  /* symlink.c */
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -1809,8 +1855,8 @@
  
  #endif	/* __KERNEL__ */
  
---- linux-2.4.18-chaos/include/linux/ext3_fs_i.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-17 00:20:20.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs_i.h	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/include/linux/ext3_fs_i.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:44:53.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/include/linux/ext3_fs_i.h	2003-09-23 14:29:33.000000000 +0400
 @@ -79,6 +79,10 @@ struct ext3_inode_info {
  	struct dynlock i_htree_lock;
  	struct semaphore i_append_sem;
@@ -1822,8 +1868,8 @@
  };
  
  #endif	/* _LINUX_EXT3_FS_I */
---- linux-2.4.18-chaos/include/linux/ext3_fs_sb.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-16 23:45:39.000000000 +0400
-+++ linux-2.4.18-chaos-alexey/include/linux/ext3_fs_sb.h	2003-09-17 00:20:21.000000000 +0400
+--- linux-2.4.18-chaos-pdirops/include/linux/ext3_fs_sb.h~ext3-extents-2.4.18-chaos-pdirops	2003-09-23 13:34:51.000000000 +0400
++++ linux-2.4.18-chaos-pdirops-alexey/include/linux/ext3_fs_sb.h	2003-09-23 14:29:33.000000000 +0400
 @@ -86,6 +86,16 @@ struct ext3_sb_info {
  	wait_queue_head_t s_delete_thread_queue;
  	wait_queue_head_t s_delete_waiter_queue;
