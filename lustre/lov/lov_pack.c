@@ -70,7 +70,6 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         if (*lmmp && !lsm) {
                 /* endianness */
                 stripe_count = ((*lmmp)->lmm_stripe_count);
-                CERROR("freeing %p with %d stripes\n", *lmmp, stripe_count);
                 OBD_FREE(*lmmp, lov_mds_md_size(stripe_count));
                 *lmmp = NULL;
                 RETURN(0);
@@ -78,7 +77,6 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
 
         if (!*lmmp) {
                 OBD_ALLOC(*lmmp, lmm_size);
-                CERROR("allocated %p with %d stripes\n", *lmmp, stripe_count);
                 if (!*lmmp)
                         RETURN(-ENOMEM);
         }
@@ -134,7 +132,6 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
         if (*lsmp && !lmm) {
                 stripe_count = (*lsmp)->lsm_stripe_count;
-                CERROR("freeing %p with %d stripes\n", *lsmp, stripe_count);
                 OBD_FREE(*lsmp, lov_stripe_md_size(stripe_count));
                 *lsmp = NULL;
                 RETURN(0);
@@ -142,7 +139,6 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
         if (!*lsmp) {
                 OBD_ALLOC(*lsmp, lsm_size);
-                CERROR("allocated %p with %d stripes\n", *lsmp, stripe_count);
                 if (!*lsmp)
                         RETURN(-ENOMEM);
         }
