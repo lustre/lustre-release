@@ -833,7 +833,13 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
         LASSERT(!lli->lli_smd);
 
-        /* core attributes from the MDS first */
+        /* Core attributes from the MDS first.  This is a new inode, and
+         * the VFS doesn't zero times in the core inode so we have to do
+         * it ourselves.  They will be overwritten by either MDS or OST
+         * attributes - we just need to make sure they aren't newer. */
+        LTIME_S(inode->i_mtime) = 0;
+        LTIME_S(inode->i_atime) = 0;
+        LTIME_S(inode->i_ctime) = 0;
         ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
