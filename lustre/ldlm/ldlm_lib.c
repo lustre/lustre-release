@@ -372,7 +372,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct list_head *p;
         char *str, *tmp;
         int rc = 0, abort_recovery;
+        unsigned long flags;
         ENTRY;
+
+        OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
 
         LASSERT_REQSWAB (req, 0);
         str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
@@ -386,7 +389,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         if (!target) {
                 target = class_name2obd(str);
         }
-
+        
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
@@ -498,6 +501,17 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export = req->rq_export = class_conn2export(&conn);
         LASSERT(export != NULL);
 
+        spin_lock_irqsave(&export->exp_lock, flags);
+        if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
+                CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
+                       cluuid.uuid, export->exp_conn_cnt, 
+                       req->rq_reqmsg->conn_cnt);
+                spin_unlock_irqrestore(&export->exp_lock, flags);
+                GOTO(out, rc = -EALREADY);
+        }
+        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
+        spin_unlock_irqrestore(&export->exp_lock, flags);
+
         /* request from liblustre? */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
                 export->exp_libclient = 1;
@@ -506,9 +520,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 ptlrpc_put_connection(export->exp_connection);
         export->exp_connection = ptlrpc_get_connection(&req->rq_peer,
                                                        &remote_uuid);
-
-        LASSERT(export->exp_conn_cnt < req->rq_reqmsg->conn_cnt);
-        export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
 
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */

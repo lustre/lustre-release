@@ -39,6 +39,7 @@ extern unsigned int obd_fail_loc;
 extern unsigned int obd_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
+extern wait_queue_head_t obd_race_waitq;
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -129,6 +130,7 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_OBD_LOGD_NET            0x602
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
+#define OBD_FAIL_TGT_CONN_RACE           0x701
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
@@ -172,6 +174,22 @@ do {                                                                         \
                 set_current_state(TASK_RUNNING);                             \
                 CERROR("obd_fail_timeout id %x awake\n", (id));              \
        }                                                                     \
+} while(0)
+
+/* The idea here is to synchronise two threads to force a race. The
+ * first thread that calls this with a matching fail_loc is put to
+ * sleep. The next thread that calls with the same fail_loc wakes up
+ * the first and continues. */
+#define OBD_RACE(id)                                            \
+do {                                                            \
+        if  (OBD_FAIL_CHECK_ONCE(id)) {                         \
+                CERROR("obd_race id %x sleeping\n", (id));      \
+                sleep_on(&obd_race_waitq);                      \
+                CERROR("obd_fail_race id %x awake\n", (id));    \
+        } else if ((obd_fail_loc & OBD_FAIL_MASK_LOC) ==        \
+                    ((id) & OBD_FAIL_MASK_LOC)) {               \
+                wake_up(&obd_race_waitq);                       \
+        }                                                       \
 } while(0)
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
