@@ -2398,9 +2398,9 @@ Index: linux-2.4.24/fs/ext3/super.c
 --- linux-2.4.24.orig/fs/ext3/super.c	2004-09-12 19:57:08.000000000 +0400
 +++ linux-2.4.24/fs/ext3/super.c	2004-09-12 19:57:09.000000000 +0400
 @@ -530,6 +530,7 @@
- 	int i;
- 
+ #ifdef EXT3_DELETE_THREAD
  	J_ASSERT(sbi->s_delete_inodes == 0);
+ #endif
 +	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
