@@ -32,6 +32,29 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
+/*
+ * Add a page to the dirty page list.
+ */
+void __set_page_dirty(struct page *page)
+{
+        struct address_space *mapping;
+        spinlock_t *pg_lock;
+
+        pg_lock = PAGECACHE_LOCK(page);
+        spin_lock(pg_lock);
+
+        mapping = page->mapping;
+        spin_lock(&mapping->page_lock);
+
+        list_del(&page->list);
+        list_add(&page->list, &mapping->dirty_pages);
+
+        spin_unlock(&mapping->page_lock);
+        spin_unlock(pg_lock);
+
+        if (mapping->host)
+                mark_inode_dirty_pages(mapping->host);
+}
 
 static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
 {
@@ -82,22 +105,24 @@ static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
 /*
  * Add a page to the dirty page list.
  */
+#if 0
 void set_page_dirty(struct page *page)
 {
 	if (!test_and_set_bit(PG_dirty, &page->flags)) {
 		struct address_space *mapping = page->mapping;
 
 		if (mapping) {
-			spin_lock(&pagecache_lock);
 			list_del(&page->list);
 			list_add(&page->list, &mapping->dirty_pages);
-			spin_unlock(&pagecache_lock);
 
 			if (mapping->host)
 				mark_inode_dirty_pages(mapping->host);
 		}
 	}
 }
+#endif
+
+
 
 /*
  * Remove page from dirty list
@@ -110,7 +135,6 @@ void __set_page_clean(struct page *page)
 	if (!mapping)
 		return;
 
-	spin_lock(&pagecache_lock);
 	list_del(&page->list);
 	list_add(&page->list, &mapping->clean_pages);
 
@@ -119,7 +143,6 @@ void __set_page_clean(struct page *page)
 		CDEBUG(D_INODE, "inode clean\n");
 		inode->i_state &= ~I_DIRTY_PAGES;
 	}
-	spin_unlock(&pagecache_lock);
 	EXIT;
 }
 
@@ -284,7 +307,7 @@ int ll_dir_readpage(struct file *file, struct page *page)
 
 	SetPageUptodate(page);
  readpage_out:
-	unlock_page(page);
+	obd_unlock_page(page);
         EXIT;
         return rc;
 } /* ll_dir_readpage */

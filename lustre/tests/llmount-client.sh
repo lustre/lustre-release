@@ -1,4 +1,5 @@
 #!/bin/sh
+export PATH=/sbin:/usr/sbin:$PATH
 
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
@@ -8,12 +9,13 @@ SERVER=compila
 mknod /dev/portals c 10 240
 
 insmod $R/usr/src/portals/linux/oslib/portals.o
-insmod $R/usr/src/portals/linux/socknal/ksocknal.o
+# insmod $R/usr/src/portals/linux/socknal/ksocknal.o
+insmod $R/usr/src/portals/linux/qswnal/kqswnal.o
 
 $R/usr/src/portals/linux/utils/ptlctl <<EOF
 mynid
-setup tcp
-connect $SERVER 1234
+setup elan 
+connect 5
 add_uuid self
 add_uuid mds
 EOF

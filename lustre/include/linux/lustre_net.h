@@ -101,7 +101,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
 int rpc_register_service(struct ptlrpc_service *service, char *uuid);
 
 /* FIXME */
-#if 1
+#if 0
 # define LUSTRE_NAL "ksocknal"
 #else
 # define LUSTRE_NAL "kqswnal"
