@@ -15,6 +15,7 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/module.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
 #include <linux/quotaops.h>
@@ -414,6 +415,11 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_kfree, err);
         spin_lock_init(&filter->fo_lock);
 
+        obddev->obd_namespace =
+                ldlm_namespace_new("filter-tgt", LDLM_NAMESPACE_SERVER);
+        if (obddev->obd_namespace == NULL)
+                LBUG();
+
         RETURN(0);
 
 err_kfree:
@@ -442,6 +448,8 @@ static int filter_cleanup(struct obd_device * obddev)
                 CERROR("still has clients!\n");
                 RETURN(-EBUSY);
         }
+
+        ldlm_namespace_free(obddev->obd_namespace);
 
         sb = obddev->u.filter.fo_sb;
         if (!obddev->u.filter.fo_sb)

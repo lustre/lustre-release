@@ -261,7 +261,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
-        if (strcmp(req->rq_obd->obd_type->typ_name, "mds") != 0)
+        if (strcmp(req->rq_export->export_obd->obd_type->typ_name, "mds") != 0)
                 LBUG();
 
         if (req->rq_reqmsg->bufcount <= offset + 1) {

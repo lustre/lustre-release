@@ -545,11 +545,6 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(error_dec, err = -EINVAL);
         }
 
-        obddev->obd_namespace =
-                ldlm_namespace_new("ost", LDLM_NAMESPACE_SERVER);
-        if (obddev->obd_namespace == NULL)
-                LBUG();
-
         ost->ost_service = ptlrpc_init_svc(64 * 1024, OST_REQUEST_PORTAL,
                                            OSC_REPLY_PORTAL, "self",ost_handle);
         if (!ost->ost_service) {
@@ -595,8 +590,6 @@ static int ost_cleanup(struct obd_device * obddev)
                 CERROR("lustre ost: fail to disconnect device\n");
                 RETURN(-EINVAL);
         }
-
-        ldlm_namespace_free(obddev->obd_namespace);
 
         MOD_DEC_USE_COUNT;
         RETURN(0);
