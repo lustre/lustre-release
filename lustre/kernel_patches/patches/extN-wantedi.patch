@@ -1,54 +1,72 @@
- fs/ext3/ialloc.c        |   38 ++++++++++++++++++++++++++++++++++++--
+ fs/ext3/ialloc.c        |   40 ++++++++++++++++++++++++++++++++++++++--
+ fs/ext3/inode.c         |    2 +-
  fs/ext3/ioctl.c         |   25 +++++++++++++++++++++++++
- fs/ext3/namei.c         |   12 ++++++++----
+ fs/ext3/namei.c         |   21 +++++++++++++++++----
+ include/linux/dcache.h  |    5 +++++
  include/linux/ext3_fs.h |    5 ++++-
- 4 files changed, 73 insertions(+), 7 deletions(-)
+ 6 files changed, 90 insertions(+), 8 deletions(-)
 
---- linux-2.4.20/fs/ext3/namei.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/namei.c	2003-04-08 23:35:55.000000000 -0600
-@@ -1555,7 +1555,8 @@ static int ext3_create (struct inode * d
+--- linux-2.4.18-chaos-uml/fs/ext3/namei.c~extN-wantedi	2003-09-18 12:17:23.000000000 +0400
++++ linux-2.4.18-chaos-uml-alexey/fs/ext3/namei.c	2003-09-18 12:17:26.000000000 +0400
+@@ -1531,6 +1531,19 @@ static int ext3_add_nondir(handle_t *han
+ 	return err;
+ }
+ 
++static struct inode * ext3_new_inode_wantedi(handle_t *handle, struct inode *dir,
++						int mode, struct dentry *dentry)
++{
++	unsigned long inum = 0;
++
++	if (dentry->d_fsdata != NULL) {
++		struct dentry_params *param =
++			(struct dentry_params *) dentry->d_fsdata;
++		inum = param->p_inum;
++	}
++	return ext3_new_inode(handle, dir, mode, inum);
++}
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
+@@ -1554,7 +1567,7 @@ static int ext3_create (struct inode * d
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = ext3_new_inode (handle, dir, mode);
-+	inode = ext3_new_inode (handle, dir, mode,
-+				(unsigned long)dentry->d_fsdata);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext3_file_inode_operations;
-@@ -1583,7 +1584,8 @@ static int ext3_mknod (struct inode * di
+@@ -1583,7 +1596,7 @@ static int ext3_mknod (struct inode * di
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = ext3_new_inode (handle, dir, mode);
-+	inode = ext3_new_inode (handle, dir, mode,
-+				(unsigned long)dentry->d_fsdata);
++	inode = ext3_new_inode_wantedi (handle, dir, mode, dentry);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, mode, rdev);
-@@ -1613,7 +1615,8 @@ static int ext3_mkdir(struct inode * dir
+@@ -1614,7 +1627,7 @@ static int ext3_mkdir(struct inode * dir
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = ext3_new_inode (handle, dir, S_IFDIR | mode);
-+	inode = ext3_new_inode (handle, dir, S_IFDIR | mode,
-+				(unsigned long)dentry->d_fsdata);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFDIR | mode, dentry);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -2009,7 +2012,8 @@ static int ext3_symlink (struct inode * 
+@@ -2008,7 +2021,7 @@ static int ext3_symlink (struct inode * 
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = ext3_new_inode (handle, dir, S_IFLNK|S_IRWXUGO);
-+	inode = ext3_new_inode (handle, dir, S_IFLNK|S_IRWXUGO,
-+				(unsigned long)dentry->d_fsdata);
++	inode = ext3_new_inode_wantedi (handle, dir, S_IFLNK|S_IRWXUGO, dentry);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
---- linux-2.4.20/fs/ext3/ialloc.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/ialloc.c	2003-04-08 23:35:55.000000000 -0600
-@@ -299,7 +299,8 @@ error_return:
+--- linux-2.4.18-chaos-uml/fs/ext3/ialloc.c~extN-wantedi	2003-09-18 12:17:25.000000000 +0400
++++ linux-2.4.18-chaos-uml-alexey/fs/ext3/ialloc.c	2003-09-18 12:17:26.000000000 +0400
+@@ -330,7 +330,8 @@ int ext3_itable_block_used(struct super_
   * group to find a free inode.
   */
  struct inode * ext3_new_inode (handle_t *handle,
@@ -174,11 +192,25 @@
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
-@@ -757,4 +759,5 @@ extern struct inode_operations ext3_fast
+@@ -776,4 +778,5 @@ extern struct inode_operations ext3_fast
  
  #endif	/* __KERNEL__ */
  
 +#define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
  #endif	/* _LINUX_EXT3_FS_H */
+--- linux-2.4.18-chaos-uml/include/linux/dcache.h~extN-wantedi	2003-09-18 12:17:17.000000000 +0400
++++ linux-2.4.18-chaos-uml-alexey/include/linux/dcache.h	2003-09-18 12:18:47.000000000 +0400
+@@ -62,6 +62,11 @@ static inline void intent_init(struct lo
+ 
+ #define IS_ROOT(x) ((x) == (x)->d_parent)
+ 
++struct dentry_params {
++	unsigned long   p_inum;
++	void            *p_ptr;
++};
++
+ /*
+  * "quick string" -- eases parameter passing, but more importantly
+  * saves "metadata" about the string (ie length and the hash).
 
 _
