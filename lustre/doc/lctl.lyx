@@ -40,16 +40,11 @@ SYNOPSIS
 
 
 \series bold 
-\emph on 
-\SpecialChar ~
-
-\newline 
 lctl 
 \layout Standard
 
 
 \series bold 
-\emph on 
 lctl\SpecialChar ~
 --device\SpecialChar ~
 <devno> <command\SpecialChar ~
@@ -58,7 +53,6 @@ lctl\SpecialChar ~
 
 
 \series bold 
-\emph on 
 lctl\SpecialChar ~
 --threads\SpecialChar ~
 <numthreads>\SpecialChar ~
@@ -166,39 +160,25 @@ command
 
 \emph default 
  
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
---device
-\series default 
-\emph default 
- The device number to be used for the operation.
+--device The device number to be used for the operation.
  The value of devno is an integer, normally found by calling 
 \emph on 
 lctl name2dev 
 \emph default 
 on a device name.
  
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
---threads
-\series default 
-\emph default 
- How many threads should be forked doing the command specified.
- The numthreads variable is a strictly positivie integer indicating how
- many threads should be started.
- Verbose can take values <XXXX>; 
+--threads How many threads should be forked doing the command specified.
+ The numthreads variable is a strictly positive integer indicating how many
+ threads should be started.
+ The 
 \emph on 
 devno 
 \emph default 
-is used as above.
+option is used as above.
 \layout LyX-Code
 
 \layout LyX-Code
@@ -208,33 +188,20 @@ is used as above.
 Network\SpecialChar ~
 Configuration
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 network\SpecialChar ~
-<tcp/elans/myrinet>
-\series default 
-\emph default 
- Indicate what kind of network applies for the configuration commands that
- follow.
-\layout List
-\labelwidthstring 00.00.0000
+<tcp/elans/myrinet> Indicate what kind of network applies for the
+ configuration commands that follow.
+\layout Description
 
-
-\series bold 
-\emph on 
 connect\SpecialChar ~
 [[<hostname>\SpecialChar ~
 <port>]\SpecialChar ~
 |\SpecialChar ~
 <elan\SpecialChar ~
-id>]
-\series default 
-\emph default 
- This will establish a connection to a remote network network 
+id>] This will establish a connection to
+ a remote network network 
 \emph on 
 id
 \emph default 
@@ -243,216 +210,105 @@ id
 id
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 disconnect\SpecialChar ~
-<nid>
-\series default 
-\emph default 
- Disconnect from a remote 
+<nid> Disconnect from a remote 
 \emph on 
 nid
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 mynid\SpecialChar ~
-[nid]
-\series default 
-\emph default 
- Informs the socknal of the local 
+[nid] Informs the socknal of the local 
 \emph on 
 nid
 \emph default 
 .
  It defaults to hostname for tcp networks and is automatically setup for
  elan/myrinet networks.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 add_uuid\SpecialChar ~
 <uuid>\SpecialChar ~
-<nid>
-\series default 
-\emph default 
- Associate a given UUID with an 
+<nid> Associate a given UUID with an 
 \emph on 
 nid.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 close_uuid\SpecialChar ~
-<uuid>
-\series default 
-\emph default 
- Disconnect a UUID.
-\layout List
-\labelwidthstring 00.00.0000
+<uuid> Disconnect a UUID.
+\layout Description
 
-
-\series bold 
-\emph on 
 del_uuid\SpecialChar ~
-<uuid>
-\series default 
-\emph default 
- Delete a UUID association.
-\layout List
-\labelwidthstring 00.00.0000
+<uuid> Delete a UUID association.
+\layout Description
 
-
-\series bold 
-\emph on 
 add_route\SpecialChar ~
 <gateway>\SpecialChar ~
 <target>\SpecialChar ~
-[target]
-\series default 
-\emph default 
- Add an entry to the routing table for the given target.
-\layout List
-\labelwidthstring 00.00.0000
+[target] Add an entry to the routing table for
+ the given target.
+\layout Description
 
-
-\series bold 
-\emph on 
 del_route\SpecialChar ~
-<target>
-\series default 
-\emph default 
- Delete an entry for the target from the routing table.
-\layout List
-\labelwidthstring 00.00.0000
+<target> Delete an entry for the target from the routing table.
+\layout Description
 
+route_list Print the complete routing table.
+\layout Description
 
-\series bold 
-\emph on 
-route_list
-\series default 
-\emph default 
- Print the complete routing table.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 recv_mem\SpecialChar ~
-[size]
-\series default 
-\emph default 
- Set the socket 
+[size] Set the socket 
 \emph on 
 receive
 \emph default 
  buffer size; if the size is omitted, the default size for the buffer is
  printed.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 send_mem\SpecialChar ~
-[size]
-\series default 
-\emph default 
- Set send buffer size for the socket; if size is omitted, the default size
- for the buffer is printed.
-\layout List
-\labelwidthstring 00.00.0000
+[size] Set send buffer size for the socket; if size is omitted,
+ the default size for the buffer is printed.
+\layout Description
 
-
-\series bold 
-\emph on 
 nagle\SpecialChar ~
-[on/off]
-\series default 
-\emph default 
- Enable/disable nagle; omitting the argument will cause the default value
- to be printed.
+[on/off] Enable/disable nagle; omitting the argument will cause the
+ default value to be printed.
 \end_deeper 
 \layout Description
 
 Device\SpecialChar ~
 Selection
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+newdev Create a new device.
+\layout Description
 
-\series bold 
-\emph on 
-newdev
-\series default 
-\emph default 
- Create a new device.
-\layout List
-\labelwidthstring 00.00.0000
+name2dev This command can be used to determine a device number for the given
+ device name.
+\layout Description
 
-
-\series bold 
-\emph on 
-name2dev
-\series default 
-\emph default 
- This command can be used to determine a device number for the given device
- name.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
-device
-\series default 
-\emph default 
- This will select the specified OBD device.
+device This will select the specified OBD device.
   All other commands depend on the device being set.
  
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
-device_list
-\series default 
-\emph default 
- Show all the devices.
+device_list Show all the devices.
 \end_deeper 
 \layout Description
 
 Device\SpecialChar ~
 Configuration
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 attach\SpecialChar ~
 type\SpecialChar ~
 [name\SpecialChar ~
-[uuid]]
-\series default 
-\emph default 
- 
+[uuid]] 
 \shape italic 
 \emph on 
 Attach
@@ -467,46 +323,21 @@ device
  command) and give that device a name and UUID.
   This allows us to identify the device for use later, and also tells us
  what type of device we will have.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 setup\SpecialChar ~
-<args...>
-\series default 
-\emph default 
- Type specific device setup commands.
+<args...> Type specific device setup commands.
  For obdfilter, a setup command tells the driver which block device it should
  use for storage and what type of filesystem is on that device.
  
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+cleanup Cleanup a previously setup device.
+\layout Description
 
-\series bold 
-\emph on 
-cleanup
-\series default 
-\emph default 
- Cleanup a previously setup device.
-\layout List
-\labelwidthstring 00.00.0000
+detach Remove driver (and name and UUID) from the current device.
+\layout Description
 
-
-\series bold 
-\emph on 
-detach
-\series default 
-\emph default 
- Remove driver (and name and UUID) from the current device.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 lov_setconfig\SpecialChar ~
 lov-uuid\SpecialChar ~
 default-stripe-count\SpecialChar ~
@@ -515,21 +346,11 @@ offset\SpecialChar ~
 pattern\SpecialChar ~
 UUID1\SpecialChar ~
 [U
-UID2...]
-\series default 
-\emph default 
- Write LOV configuration to an MDS device.
-\layout List
-\labelwidthstring 00.00.0000
+UID2...] Write LOV configuration to an MDS device.
+\layout Description
 
-
-\series bold 
-\emph on 
 lov_getconfig\SpecialChar ~
-lov-uuid
-\series default 
-\emph default 
- Read LOV configuration from an MDS device.
+lov-uuid Read LOV configuration from an MDS device.
  Returns default-stripe-count, default-stripe-size, offset, pattern, and
  a list of OST UUID's.
 \end_deeper 
@@ -538,73 +359,41 @@ lov-uuid
 Device\SpecialChar ~
 Operations
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 probe\SpecialChar ~
-[timeout]
-\series default 
-\emph default 
- Build a connection handle to a device.
+[timeout] Build a connection handle to a device.
  This command is used to suspend configuration until the lctl command has
  ensured that the MDS and OSC services are available.
  This is to avoid mount failures in a rebooting cluster.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 close
-\emph default 
- 
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
 \emph on 
+ 
+\layout Description
+
 getattr\SpecialChar ~
-<objid>
-\series default 
-\emph default 
- Get attributes for an OST object 
+<objid> Get attributes for an OST object 
 \emph on 
 <objid>
 \emph default 
  .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 setattr\SpecialChar ~
 <objid>\SpecialChar ~
-<mode>
-\series default 
-\emph default 
- Set mode attribute for OST object 
+<mode> Set mode attribute for OST object 
 \emph on 
 <objid>
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 create\SpecialChar ~
 [num\SpecialChar ~
 [mode\SpecialChar ~
-[verbose]]]
-\series default 
-\emph default 
- Create the specified number 
+[verbose]]] Create the specified number 
 \emph on 
 <num>
 \emph default 
@@ -613,30 +402,16 @@ create\SpecialChar ~
 <mode>
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 destroy\SpecialChar ~
-<objid>
-\series default 
-\emph default 
- Destroy an OST object.
-\layout List
-\labelwidthstring 00.00.0000
+<objid> Destroy an OST object.
+\layout Description
 
-
-\series bold 
-\emph on 
 test_getattr\SpecialChar ~
 <num>\SpecialChar ~
 [verbose\SpecialChar ~
-[[t]objid]]
-\series default 
-\emph default 
- Do 
+[[t]objid]] Do 
 \emph on 
 <num>
 \emph default 
@@ -653,21 +428,14 @@ getattrs
 objectid
 \emph default 
 +1 on each thread).
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 test_brw\SpecialChar ~
 [t]<num>\SpecialChar ~
 [write\SpecialChar ~
 [verbose\SpecialChar ~
 [npages\SpecialChar ~
-[[t]objid]]]]
-\series default 
-\emph default 
- Do 
+[[t]objid]]]] Do 
 \emph on 
 <num>
 \emph default 
@@ -688,57 +456,26 @@ writes
 <npages>
 \emph default 
  per I/O).
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+test_ldlm Perform lock manager test.
+\layout Description
 
-\series bold 
-\emph on 
-test_ldlm
-\series default 
-\emph default 
- Perform lock manager test.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 ldlm_regress_start\SpecialChar ~
 %s\SpecialChar ~
 [numthreads\SpecialChar ~
 [refheld\SpecialChar ~
 [numres\SpecialChar ~
-[numext]]]]
-\series default 
-\emph default 
- Start lock manager stress test.
-\layout List
-\labelwidthstring 00.00.0000
+[numext]]]] Start lock manager
+ stress test.
+\layout Description
 
+ldlm_regress_stop Stop lock manager stress test.
+\layout Description
 
-\series bold 
-\emph on 
-ldlm_regress_stop
-\series default 
-\emph default 
- Stop lock manager stress test.
-\layout List
-\labelwidthstring 00.00.0000
+dump_ldlm Dump all lock manager state, this is very useful for debugging
+\layout Description
 
-
-\series bold 
-\emph on 
-dump_ldlm
-\series default 
-\emph default 
- Dump all lock manager state, this is very useful for debugging
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 newconn\SpecialChar ~
 <olduuid>\SpecialChar ~
 [newuuid]
@@ -747,154 +484,77 @@ newconn\SpecialChar ~
 
 Debug
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 debug_kernel\SpecialChar ~
 [file]\SpecialChar ~
-[raw]
-\series default 
-\emph default 
- Get debug buffer and dump to a 
+[raw] Get debug buffer and dump to a 
 \emph on 
 fileusage
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 debug_file\SpecialChar ~
 <input>\SpecialChar ~
 [output]\SpecialChar ~
-[raw]
-\series default 
-\emph default 
- Read debug buffer from input and dump to 
+[raw] Read debug buffer from input and dump to
+ 
 \emph on 
 outputusage
 \emph default 
 .
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+clear Clear kernel debug buffer.
+\layout Description
 
-\series bold 
-\emph on 
-clear
-\series default 
-\emph default 
- Clear kernel debug buffer.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 mark\SpecialChar ~
-<text>
-\series default 
-\emph default 
- Insert marker text in kernel debug buffer.
-\layout List
-\labelwidthstring 00.00.0000
+<text> Insert marker text in kernel debug buffer.
+\layout Description
 
-
-\series bold 
-\emph on 
 filter\SpecialChar ~
 <subsystem\SpecialChar ~
 id/debug\SpecialChar ~
-mask>
-\series default 
-\emph default 
- Filter message type from the kernel debug buffer.
-\layout List
-\labelwidthstring 00.00.0000
+mask> Filter message type from the kernel debug
+ buffer.
+\layout Description
 
-
-\series bold 
-\emph on 
 show\SpecialChar ~
 <subsystem\SpecialChar ~
 id/debug\SpecialChar ~
-mask>
-\series default 
-\emph default 
- Show specific type of messages.
-\layout List
-\labelwidthstring 00.00.0000
+mask> Show specific type of messages.
+\layout Description
 
-
-\series bold 
-\emph on 
 debug_list\SpecialChar ~
-<subs/types>
-\series default 
-\emph default 
- List all the subsystem and debug types.
-\layout List
-\labelwidthstring 00.00.0000
+<subs/types> List all the subsystem and debug types.
+\layout Description
 
-
-\series bold 
-\emph on 
-panic
-\series default 
-\emph default 
- Force the kernel to panic.
+panic Force the kernel to panic.
 \end_deeper 
 \layout Description
 
 Control
 \begin_deeper 
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
-help
-\series default 
-\emph default 
- Show a complete list of commands; 
+help Show a complete list of commands; 
 \emph on 
 help <command name>
 \emph default 
  can be used to get help on specific command.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+exit Close the lctl session.
+\layout Description
 
-\series bold 
-\emph on 
-exit
-\series default 
-\emph default 
- Close the lctl session.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
-quit
-\series default 
-\emph default 
- Close the lctl session.
+quit Close the lctl session.
 \end_deeper 
 \layout Subsection
 
 EXAMPLES
 \layout Description
 
-
-\emph on 
 attach
 \layout LyX-Code
 
@@ -911,8 +571,6 @@ lctl > attach obdfilter OBDDEV OBDUUID
 
 \layout Description
 
-
-\emph on 
 connect
 \layout LyX-Code
 
@@ -931,8 +589,6 @@ lctl > connect
 
 \layout Description
 
-
-\emph on 
 getattr
 \layout LyX-Code
 
@@ -981,10 +637,8 @@ Finished (success)
 
 \layout Description
 
-
-\emph on 
 setup
-\emph default 
+\emph on 
  
 \layout LyX-Code
 

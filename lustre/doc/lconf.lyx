@@ -40,7 +40,6 @@ SYNOPSIS
 
 
 \series bold 
-\emph on 
 lconf\SpecialChar ~
 [--node <node_name>] [-d,--cleanup] [--noexec] [--gdb] [--nosetup]
  [--nomod] [-n,--noexec] [-v,--verbose] [-h,--help] <XML-config file>
@@ -50,17 +49,10 @@ DESCRIPTION
 \layout Standard
 
 This program configures a node following directives in the <XML-config-file>.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
 --node\SpecialChar ~
-node_name
-\series default 
-\emph default 
- Specify a specific node to configure.
+node_name Specify a specific node to configure.
  By default, lconf will search for nodes with the local hostname and 'localhost'.
  When
 \emph on 
@@ -73,16 +65,9 @@ node_name
  is searched for.
  If a matching node is not found in the config, then lconf exits with an
  error.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
---cleanup
-\series default 
-\emph default 
- Unconfigure a node.
+--cleanup Unconfigure a node.
  The same config and 
 \emph on 
 --node
@@ -90,96 +75,42 @@ node_name
  argument used for configuration needs to be used for cleanup as well.
  This will attempt to undo all of the configuration steps done by lconf,
  including unloading the kernel modules.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
---noexec
-\series default 
-\emph default 
- Print, but don't execute, the steps lconf will perform.
+--noexec Print, but don't execute, the steps lconf will perform.
  This is useful for debugging a configuration, and when used with 
 \emph on 
 --node
 \emph default 
 , can be run on any host.
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
-
-\series bold 
-\emph on 
---gdb
-\series default 
-\emph default 
- Causes lconf to print a message and pause for 5 seconds after creating
+--gdb Causes lconf to print a message and pause for 5 seconds after creating
  a gdb module script and before doing any Lustre configuration (the gdb
  module script is always created, however).
-\layout List
-\labelwidthstring 00.00.0000
+\layout Description
 
+--nosetup Only load modules, do not configure devices or services.
+\layout Description
 
-\series bold 
-\emph on 
---nosetup
-\series default 
-\emph default 
- Only load modules, do not configure devices or services.
-\layout List
-\labelwidthstring 00.00.0000
+--nomod Only setup devices and services, do not load modules.
+\layout Description
 
+--noexec,-n Don't do anything, but print what would happen.
+\layout Description
 
-\series bold 
-\emph on 
---nomod
-\series default 
-\emph default 
- Only setup devices and services, do not load modules.
-\layout List
-\labelwidthstring 00.00.0000
+--verbose,-v Be verbose and show actions while going along.
+\layout Description
 
+--reformat Reformat all the devices
+\layout Description
 
-\series bold 
-\emph on 
---noexec,-n
-\emph default 
- 
-\series default 
-Don't do anything, but print what would happen.
-\layout List
-\labelwidthstring 00.00.0000
+-h,--help Print help.
+\layout Description
 
-
-\series bold 
-\emph on 
---verbose,-v
-\series default 
-\emph default 
- Be verbose and show actions while going along.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
--h,--help
-\series default 
-\emph default 
- Print help.
-\layout List
-\labelwidthstring 00.00.0000
-
-
-\series bold 
-\emph on 
 --maxlevel\SpecialChar ~
-<level>
-\series default 
-\emph default 
- [NOT IMPLEMENTED] Perform configuration of devices and services up to level
- given.
+<level> [NOT IMPLEMENTED] Perform configuration of devices and
+ services up to level given.
  
 \emph on 
 level
