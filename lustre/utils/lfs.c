@@ -304,6 +304,6 @@ int main(int argc, char **argv)
                 rc = Parser_commands();
         }
 
-        obd_cleanup(argc, argv);
+        obd_finalize(argc, argv);
         return rc;
 }
