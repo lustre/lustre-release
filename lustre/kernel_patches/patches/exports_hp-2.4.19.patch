@@ -1,0 +1,53 @@
+ fs/ext3/Makefile   |    2 ++
+ fs/ext3/super.c    |    2 +-
+ include/linux/fs.h |    1 +
+ kernel/ksyms.c     |    4 ++++
+ 4 files changed, 8 insertions(+), 1 deletion(-)
+
+--- linux-2.4.19-hppl/fs/ext3/Makefile~export_hp_2.4.19	2001-12-22 01:41:55.000000000 +0800
++++ linux-2.4.19-hppl-root/fs/ext3/Makefile	2003-04-11 17:12:50.000000000 +0800
+@@ -9,6 +9,8 @@
+ 
+ O_TARGET := ext3.o
+ 
++export-objs :=	super.o inode.o
++
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+ 		ioctl.o namei.o super.o symlink.o
+ obj-m    := $(O_TARGET)
+--- linux-2.4.19-hppl/fs/ext3/super.c~export_hp_2.4.19	2002-02-26 03:38:08.000000000 +0800
++++ linux-2.4.19-hppl-root/fs/ext3/super.c	2003-04-11 17:12:50.000000000 +0800
+@@ -1744,7 +1744,7 @@ static void __exit exit_ext3_fs(void)
+ 	unregister_filesystem(&ext3_fs_type);
+ }
+ 
+-EXPORT_NO_SYMBOLS;
++EXPORT_SYMBOL(ext3_bread);
+ 
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+--- linux-2.4.19-hppl/include/linux/fs.h~export_hp_2.4.19	2003-04-11 17:02:19.000000000 +0800
++++ linux-2.4.19-hppl-root/include/linux/fs.h	2003-04-11 17:13:39.000000000 +0800
+@@ -1020,6 +1020,7 @@ extern int unregister_filesystem(struct 
+ extern struct vfsmount *kern_mount(struct file_system_type *);
+ extern int may_umount(struct vfsmount *);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
++struct vfsmount *do_kern_mount(const char *type, int flags, char *name, void *data);
+ extern void umount_tree(struct vfsmount *);
+ 
+ #define kern_umount mntput
+--- linux-2.4.19-hppl/kernel/ksyms.c~export_hp_2.4.19	2003-04-11 17:02:20.000000000 +0800
++++ linux-2.4.19-hppl-root/kernel/ksyms.c	2003-04-11 17:12:50.000000000 +0800
+@@ -308,6 +308,10 @@ EXPORT_SYMBOL(dcache_dir_fsync);
+ EXPORT_SYMBOL(dcache_readdir);
+ EXPORT_SYMBOL(dcache_dir_ops);
+ 
++/* lustre */
++EXPORT_SYMBOL(pagecache_lock_cacheline);
++EXPORT_SYMBOL(do_kern_mount);
++
+ /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
+ EXPORT_SYMBOL(default_llseek);
+ EXPORT_SYMBOL(dentry_open);
+
+_
