@@ -30,10 +30,10 @@
 #include <linux/locks.h>
 #include <linux/quotaops.h>
 
-#define DEBUG_SUBSYSTEM S_LLIGHT
+#define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/obd_support.h>
-#include <linux/lustre_light.h>
+#include <linux/lustre_lite.h>
 extern struct address_space_operations ll_aops;
 
 /* from super.c */

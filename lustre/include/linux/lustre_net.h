@@ -67,11 +67,16 @@
 struct ptlrpc_client {
         struct lustre_peer cli_server;
         struct obd_device *cli_obd;
+        struct list_head cli_sending_head;
+        struct list_head cli_sent_head;
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
 
         spinlock_t cli_lock;
         __u32 cli_xid;
+        __u32 cli_generation;  /* changes upon new connection */
+        __u32 cli_epoch;       /* changes when peer changes */
+        __u32 cli_bootcount;   /* peer's boot count */ 
         struct semaphore cli_rpc_sem;
 };
 
@@ -122,6 +127,7 @@ struct ptlrpc_request {
         __u32 rq_req_portal;
 
         struct lustre_peer rq_peer;
+        struct ptlrpc_client *rq_client;
 };
 
 struct ptlrpc_bulk_desc {
@@ -194,8 +200,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
-                          struct ptlrpc_client *cl);
+void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
+                       struct ptlrpc_client *cl);
+int ptlrpc_connect_client(int dev, char *uuid, struct ptlrpc_client *cl);
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req);
 int ptlrpc_queue_req(struct ptlrpc_client *peer, struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,

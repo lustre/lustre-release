@@ -13,18 +13,18 @@ ERROR=
 llmount.sh || exit 1
 
 # let's start slowly here...
-touch /mnt/obd || exit 2
-cp /etc/hosts /mnt/obd || exit 3
-diff -u /etc/hosts /mnt/obd/hosts || exit 4
+touch /mnt/lustre || exit 2
+cp /etc/hosts /mnt/lustre || exit 3
+diff -u /etc/hosts /mnt/lustre/hosts || exit 4
 
 # ok, that hopefully worked, so let's do a little more
 FILES=`find /etc -type f`
-echo "copying files from /etc to /mnt/obd"
-tar cf - $FILES | tar xf - -C /mnt/obd || exit 10
+echo "copying files from /etc to /mnt/lustre"
+tar cf - $FILES | tar xf - -C /mnt/lustre || exit 10
 
 echo "comparing newly copied files"
 for f in $FILES; do
-	diff -q $f /mnt/obd/$f || ERROR=11
+	diff -q $f /mnt/lustre/$f || ERROR=11
 done
 
 [ "$ERROR" ] && exit $ERROR
@@ -33,16 +33,16 @@ llmountcleanup.sh
 
 llrmount.sh || exit 20
 echo "comparing previously copied files"
-diff -u /etc/hosts /mnt/obd/hosts || exit 21
+diff -u /etc/hosts /mnt/lustre/hosts || exit 21
 
 for f in $FILES; do
-	diff -q $f /mnt/obd/$f || ERROR=22
+	diff -q $f /mnt/lustre/$f || ERROR=22
 done
 
 [ "$ERROR" ] && exit $ERROR
 
-rm /mnt/obd/hosts || exit 23
+rm /mnt/lustre/hosts || exit 23
 
-rm -r /mnt/obd/etc || exit 24
+rm -r /mnt/lustre/etc || exit 24
 
 llmountcleanup.sh

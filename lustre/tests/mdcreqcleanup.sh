@@ -3,7 +3,7 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-rmmod llight
+rmmod llite
 rmmod mdc
 
 $OBDCTL <<EOF

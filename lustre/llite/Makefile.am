@@ -5,16 +5,16 @@
 
 DEFS:= 
 
-MODULE = llight
-modulefs_DATA = llight.o
-EXTRA_PROGRAMS = llight
+MODULE = llite
+modulefs_DATA = llite.o
+EXTRA_PROGRAMS = llite
 
 page.c: 
 	-ln -s ../lib/page.c
 
 
 LINX=page.c
-llight_SOURCES =  page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
+llite_SOURCES =  llite_ha.c page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c
 
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done

@@ -30,4 +30,4 @@ setup 2
 quit
 EOF
 
-# mount -t lustre_light -o device=3 none /mnt/obd
+# mount -t lustre_lite -o device=3 none /mnt/lustre

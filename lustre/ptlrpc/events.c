@@ -32,13 +32,40 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-ptl_handle_eq_t sent_pkt_eq, rcvd_rep_eq, bulk_source_eq, bulk_sink_eq;
+ptl_handle_eq_t request_out_eq, 
+                reply_in_eq, 
+                reply_out_eq,
+                bulk_source_eq, 
+                bulk_sink_eq;
 static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
 
 /*
  *  Free the packet when it has gone out
  */
-static int sent_packet_callback(ptl_event_t *ev, void *data)
+static int request_out_callback(ptl_event_t *ev, void *data)
+{
+        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
+        struct ptlrpc_client *cl = req->rq_client; 
+        
+        ENTRY;
+
+        if (ev->type == PTL_EVENT_SENT) {
+                list_del(&req->rq_list);
+                list_add(&req->rq_list, &cl->cli_sent_head);
+        } else { 
+                // XXX make sure we understand all events, including ACK's
+                CERROR("Unknown event %d\n", ev->type); 
+                LBUG();
+        }
+
+        RETURN(1);
+}
+
+
+/*
+ *  Free the packet when it has gone out
+ */
+static int reply_out_callback(ptl_event_t *ev, void *data)
 {
         ENTRY;
 
@@ -56,7 +83,7 @@ static int sent_packet_callback(ptl_event_t *ev, void *data)
 /*
  * Wake up the thread waiting for the reply once it comes in.
  */
-static int rcvd_reply_callback(ptl_event_t *ev, void *data)
+static int reply_in_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_request *rpc = ev->mem_desc.user_ptr;
         ENTRY;
@@ -74,7 +101,7 @@ static int rcvd_reply_callback(ptl_event_t *ev, void *data)
         RETURN(1);
 }
 
-int server_request_callback(ptl_event_t *ev, void *data)
+int request_in_callback(ptl_event_t *ev, void *data)
 {
         struct ptlrpc_service *service = data;
         int index;
@@ -184,11 +211,15 @@ int ptlrpc_init_portals(void)
         else
                 ni = *socknal_nip;
 
-        rc = PtlEQAlloc(ni, 128, sent_packet_callback, NULL, &sent_pkt_eq);
+        rc = PtlEQAlloc(ni, 128, request_out_callback, NULL, &request_out_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
-        rc = PtlEQAlloc(ni, 128, rcvd_reply_callback, NULL, &rcvd_rep_eq);
+        rc = PtlEQAlloc(ni, 128, reply_out_callback, NULL, &reply_out_eq);
+        if (rc != PTL_OK)
+                CERROR("PtlEQAlloc failed: %d\n", rc);
+
+        rc = PtlEQAlloc(ni, 128, reply_in_callback, NULL, &reply_in_eq);
         if (rc != PTL_OK)
                 CERROR("PtlEQAlloc failed: %d\n", rc);
 
@@ -205,8 +236,9 @@ int ptlrpc_init_portals(void)
 
 void ptlrpc_exit_portals(void)
 {
-        PtlEQFree(sent_pkt_eq);
-        PtlEQFree(rcvd_rep_eq);
+        PtlEQFree(request_out_eq);
+        PtlEQFree(reply_out_eq);
+        PtlEQFree(reply_in_eq);
         PtlEQFree(bulk_source_eq);
         PtlEQFree(bulk_sink_eq);
 

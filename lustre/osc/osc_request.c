@@ -563,9 +563,9 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
         if (osc->osc_client == NULL)
                 RETURN(-ENOMEM);
 
-        rc = ptlrpc_connect_client(dev, "ost",
-                                   OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+        ptlrpc_init_client(dev, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                                    osc->osc_client);
+        rc = ptlrpc_connect_client(dev, "ost", osc->osc_client);
 
         if (rc == 0)
                 MOD_INC_USE_COUNT;

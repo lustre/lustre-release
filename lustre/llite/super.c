@@ -32,9 +32,9 @@
 #include <asm/uaccess.h>
 #include <asm/segment.h>
 
-#define DEBUG_SUBSYSTEM S_LLIGHT
+#define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/lustre_light.h>
+#include <linux/lustre_lite.h>
 
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
@@ -134,14 +134,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         /* the first parameter should become an mds device no */
-        err = ptlrpc_connect_client(-1, "mds",
-                                    MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                    &sbi->ll_mds_client);
-
+        ptlrpc_init_client(-1, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                           &sbi->ll_mds_client);
+        err = ptlrpc_connect_client(-1, "mds", &sbi->ll_mds_client);
         if (err) {
                 CERROR("cannot find MDS\n");
                 GOTO(out_disc, sb = NULL);
         }
+
         sbi->ll_super = sb;
         sbi->ll_rootino = 2;
 
@@ -164,7 +164,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         if (root) {
                 sb->s_root = d_alloc_root(root);
         } else {
-                CERROR("lustre_light: bad iget4 for root\n");
+                CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_req, sb = NULL);
         }
 
@@ -177,8 +177,10 @@ out_free:
                 MOD_DEC_USE_COUNT;
                 OBD_FREE(sbi, sizeof(*sbi));
         }
-        OBD_FREE(device, strlen(device) + 1);
-        OBD_FREE(version, strlen(version) + 1);
+        if (device) 
+                OBD_FREE(device, strlen(device) + 1);
+        if (version)
+                OBD_FREE(version, strlen(version) + 1);
 
         RETURN(sb);
 } /* ll_read_super */
@@ -382,31 +384,51 @@ struct super_operations ll_super_operations =
         // statfs: ll_statfs
 };
 
-struct file_system_type lustre_light_fs_type = {
-        "lustre_light", 0, ll_read_super, NULL
+struct file_system_type lustre_lite_fs_type = {
+        "lustre_lite", 0, ll_read_super, NULL
 };
 
-static int __init init_lustre_light(void)
+static int llite_setup(struct obd_device *dev, obd_count len, void *buf)
 {
-        printk(KERN_INFO "Lustre Light 0.0.1, braam@clusterfs.com\n");
+        MOD_INC_USE_COUNT;
+        return 0;
+}
+
+static int llite_cleanup(struct obd_device *dev)
+{
+        MOD_DEC_USE_COUNT;
+        return 0;
+}
+
+/* use obd ops to offer management infrastructure */
+static struct obd_ops llite_obd_ops = {
+        o_setup:       llite_setup,
+        o_cleanup:     llite_cleanup,
+};
+
+static int __init init_lustre_lite(void)
+{
+        printk(KERN_INFO "Lustre Lite 0.0.1, braam@clusterfs.com\n");
+        obd_register_type(&llite_obd_ops, LUSTRE_LITE_NAME);
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                                SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
-        return register_filesystem(&lustre_light_fs_type);
+        return register_filesystem(&lustre_lite_fs_type);
 }
 
-static void __exit exit_lustre_light(void)
+static void __exit exit_lustre_lite(void)
 {
-        unregister_filesystem(&lustre_light_fs_type);
         kmem_cache_destroy(ll_file_data_slab);
+        unregister_filesystem(&lustre_lite_fs_type);
+        obd_unregister_type(LUSTRE_LITE_NAME);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Light Client File System v1.0");
+MODULE_DESCRIPTION("Lustre Lite Client File System v1.0");
 MODULE_LICENSE("GPL");
 
-module_init(init_lustre_light);
-module_exit(exit_lustre_light);
+module_init(init_lustre_lite);
+module_exit(exit_lustre_lite);

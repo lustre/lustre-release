@@ -24,14 +24,14 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
-#define DEBUG_SUBSYSTEM S_LLIGHT
+#define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_light.h>
+#include <linux/lustre_lite.h>
 
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))

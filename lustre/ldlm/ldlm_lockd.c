@@ -155,9 +155,8 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                 return -EINVAL;
         }
 
-        err = ptlrpc_connect_client(-1, "ldlm",
-                                    LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                                    &cl);
+        ptlrpc_init_client(-1, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, &cl);
+        err = ptlrpc_connect_client(-1, "ldlm", &cl);
         if (err) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);

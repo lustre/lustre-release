@@ -54,6 +54,40 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
+int mdc_connect(struct ptlrpc_client *cl, ino_t ino, int type, int valid,
+                struct ptlrpc_request **request)
+{
+        struct ptlrpc_request *req;
+        struct mds_body *body;
+        int rc, size = sizeof(*body);
+        ENTRY;
+
+        req = ptlrpc_prep_req(cl, MDS_GETATTR, 1, &size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0);
+        ll_ino2fid(&body->fid1, ino, 0, type);
+        body->valid = valid;
+
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_check_status(req, rc);
+
+        if (!rc) {
+                mds_unpack_body(req);
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                CDEBUG(D_NET, "mode: %o\n", body->mode);
+        }
+
+        EXIT;
+ out:
+        *request = req;
+        return rc;
+}
+
+
 int mdc_getattr(struct ptlrpc_client *cl, ino_t ino, int type, int valid,
                 struct ptlrpc_request **request)
 {
@@ -225,8 +259,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 RETURN(-EINVAL);
         }
 
-        err = ptlrpc_connect_client(-1, "mds",
-                                    MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
+        ptlrpc_init_client(-1, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
+        err = ptlrpc_connect_client(-1, "mds", &cl);
         if (err) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);

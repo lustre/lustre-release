@@ -3,10 +3,10 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  * 
- * Copyright (C), 1999, Stelias Computing Inc
  *
  *
- */
+ *
+
 
 
 #ifndef _LL_H
@@ -17,6 +17,8 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
 #include <linux/obdo.h>
+
+#define LUSTRE_LITE_NAME "llite"
 
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data { 

@@ -32,7 +32,11 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-extern ptl_handle_eq_t bulk_source_eq, sent_pkt_eq, rcvd_rep_eq, bulk_sink_eq;
+extern ptl_handle_eq_t request_out_eq, 
+        reply_in_eq, 
+        reply_out_eq,
+        bulk_source_eq, 
+        bulk_sink_eq;
 static ptl_process_id_t local_id = {PTL_ID_ANY, PTL_ID_ANY};
 
 
@@ -62,6 +66,8 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         ptl_handle_md_t md_h;
         ptl_ack_req_t ack;
 
+        request->rq_req_md.user_ptr = request;
+
         switch (request->rq_type) {
         case PTL_RPC_BULK:
                 request->rq_req_md.start = request->rq_bulkbuf;
@@ -73,14 +79,14 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         case PTL_RPC_REQUEST:
                 request->rq_req_md.start = request->rq_reqbuf;
                 request->rq_req_md.length = request->rq_reqlen;
-                request->rq_req_md.eventq = sent_pkt_eq;
+                request->rq_req_md.eventq = request_out_eq;
                 request->rq_req_md.threshold = 1;
                 ack = PTL_NOACK_REQ;
                 break;
         case PTL_RPC_REPLY:
                 request->rq_req_md.start = request->rq_repbuf;
                 request->rq_req_md.length = request->rq_replen;
-                request->rq_req_md.eventq = sent_pkt_eq;
+                request->rq_req_md.eventq = reply_out_eq;
                 request->rq_req_md.threshold = 1;
                 ack = PTL_NOACK_REQ;
                 break;
@@ -305,7 +311,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
         request->rq_reply_md.threshold = 1;
         request->rq_reply_md.options = PTL_MD_OP_PUT;
         request->rq_reply_md.user_ptr = request;
-        request->rq_reply_md.eventq = rcvd_rep_eq;
+        request->rq_reply_md.eventq = reply_in_eq;
 
         rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
                          PTL_UNLINK, &request->rq_reply_md_h);
@@ -318,6 +324,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
         CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %u, portal %u\n",
                request->rq_replen, request->rq_xid, request->rq_reply_portal);
 
+        list_add(&request->rq_list, &cl->cli_sending_head);
         rc = ptl_send_buf(request, &cl->cli_server, request->rq_req_portal);
         RETURN(rc);
 

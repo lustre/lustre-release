@@ -36,10 +36,10 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
-#define DEBUG_SUBSYSTEM S_LLIGHT
+#define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/obd_support.h>
-#include <linux/lustre_light.h>
+#include <linux/lustre_lite.h>
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);

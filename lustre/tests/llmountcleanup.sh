@@ -3,10 +3,10 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-umount /mnt/obd
+umount /mnt/lustre
 
 killall acceptor
-rmmod llight
+rmmod llite
 rmmod mdc
 
 $OBDCTL <<EOF

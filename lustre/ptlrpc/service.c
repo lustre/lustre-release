@@ -32,7 +32,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-extern int server_request_callback(ptl_event_t *ev, void *data);
+extern int request_in_callback(ptl_event_t *ev, void *data);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
@@ -119,7 +119,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         service->srv_id.pid = PTL_ID_ANY;
 
         rc = PtlEQAlloc(service->srv_self.peer_ni, 128,
-                        server_request_callback,
+                        request_in_callback,
                         service, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {

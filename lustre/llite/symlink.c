@@ -9,10 +9,6 @@
  * Laboratoire MASI - Institut Blaise Pascal
  * Universite Pierre et Marie Curie (Paris VI)
  *
- *  from
- *
- *  linux/fs/minix/symlink.c
- *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  *
  *  ext2 symlink handling code
@@ -26,10 +22,10 @@
 #include <linux/stat.h>
 #include <linux/locks.h>
 
-#define DEBUG_SUBSYSTEM S_LLIGHT
+#define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
-#include <linux/lustre_light.h>
+#include <linux/lustre_lite.h>
 
 static int ll_fast_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
@@ -47,6 +43,6 @@ extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
         readlink:       ll_fast_readlink,
         follow_link:    ll_fast_follow_link,
-	setattr:        ll_setattr
+        setattr:        ll_setattr
 };
 

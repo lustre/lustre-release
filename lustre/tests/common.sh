@@ -117,11 +117,11 @@ setup() {
     insmod $SRCDIR/../../obd/obdecho/obdecho.o || exit -1
     insmod $SRCDIR/../../obd/mds/mds.o || exit -1
     insmod $SRCDIR/../../obd/mdc/mdc.o || exit -1
-    insmod $SRCDIR/../../obd/llight/llight.o || exit -1
+    insmod $SRCDIR/../../obd/llight/llite.o || exit -1
 
     list_mods
 
-    [ -d /mnt/obd ] || mkdir /mnt/obd
+    [ -d /mnt/lustre ] || mkdir /mnt/lustre
 }
 
 setup_portals() {

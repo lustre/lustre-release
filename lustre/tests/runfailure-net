@@ -10,8 +10,8 @@ run() {
 	kill -9 $!
 
         echo 0 > /proc/sys/lustre/fail_loc
-        umount /mnt/obd
-        mount -t lustre_light -o device=3 none /mnt/obd
+        umount /mnt/lustre
+        mount -t lustre_lite -o device=3 none /mnt/lustre
 }
 
 mknod /dev/request c 10 244
@@ -19,30 +19,30 @@ mknod /dev/request c 10 244
 sh llmount.sh
 
 # GETATTR_NET - ls will hang on the getattr
-run 0x102 ls -l /mnt/obd
+run 0x102 ls -l /mnt/lustre
 
 # READPAGE_NET - ls will hang reading in new pages (lost+found is not in cache)
-run 0x104 ls /mnt/obd
+run 0x104 ls /mnt/lustre
 
 sleep 1
 
 # REINT_NET - touch will hang on setattr
-run 0x107 touch /mnt/obd
+run 0x107 touch /mnt/lustre
 
 # REINT_NET - touch will hang on create
-run 0x107 touch /mnt/obd/tt
+run 0x107 touch /mnt/lustre/tt
 
 # REINT_NET - mv will hang on rename
-touch /mnt/obd/foo
-run 0x107 mv /mnt/obd/foo /mnt/obd/bar
+touch /mnt/lustre/foo
+run 0x107 mv /mnt/lustre/foo /mnt/lustre/bar
 
 # REINT_NET - rm will hang on unlink
-touch /mnt/obd/salmon
-run 0x107 rm /mnt/obd/salmon
+touch /mnt/lustre/salmon
+run 0x107 rm /mnt/lustre/salmon
 
 # OPEN_NET - touch will hang on open
-touch /mnt/obd/foo
-run 0x113 cat /mnt/obd/foo
+touch /mnt/lustre/foo
+run 0x113 cat /mnt/lustre/foo
 
 # CLOSE_NET - ls will hang on close
 run 0x115 ./testreq --close junk_file_handle

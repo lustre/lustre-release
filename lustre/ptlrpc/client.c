@@ -25,6 +25,7 @@
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/list.h>
 
 #define DEBUG_SUBSYSTEM S_RPC
 
@@ -32,66 +33,28 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-int ptlrpc_enqueue(struct ptlrpc_client *peer, struct ptlrpc_request *req)
-{
-        struct ptlrpc_request *srv_req;
-
-        if (!peer->cli_obd)
-                RETURN(-1);
-
-        OBD_ALLOC(srv_req, sizeof(*srv_req));
-        if (!srv_req)
-                RETURN(-ENOMEM);
-
-        CDEBUG(0, "peer obd minor %d, incoming req %p, srv_req %p\n",
-               peer->cli_obd->obd_minor, req, srv_req);
-
-        /* move the request buffer */
-        srv_req->rq_reqbuf = req->rq_reqbuf;
-        srv_req->rq_reqlen = req->rq_reqlen;
-        srv_req->rq_obd = peer->cli_obd;
-
-        /* remember where it came from */
-        srv_req->rq_reply_handle = req;
-
-        spin_lock(&peer->cli_lock);
-        list_add(&srv_req->rq_list, &peer->cli_obd->obd_req_list);
-        spin_unlock(&peer->cli_lock);
-        wake_up(&peer->cli_obd->obd_req_waitq);
-        return 0;
-}
-
-int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
+void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
                           struct ptlrpc_client *cl)
 {
-        int err;
-
         memset(cl, 0, sizeof(*cl));
         spin_lock_init(&cl->cli_lock);
         cl->cli_xid = 1;
+        cl->cli_generation = 1;
+        cl->cli_epoch = 1;
+        cl->cli_bootcount = 0;
         cl->cli_obd = NULL;
         cl->cli_request_portal = req_portal;
         cl->cli_reply_portal = rep_portal;
+        INIT_LIST_HEAD(&cl->cli_sending_head);
+        INIT_LIST_HEAD(&cl->cli_sent_head);
         sema_init(&cl->cli_rpc_sem, 32);
+}
 
-        /* non networked client */
-        if (dev >= 0 && dev < MAX_OBD_DEVICES) {
-                struct obd_device *obd = &obd_dev[dev];
+int ptlrpc_connect_client(int dev, char *uuid, struct ptlrpc_client *cl)
+{
+        int err;
 
-                if ((!obd->obd_flags & OBD_ATTACHED) ||
-                    (!obd->obd_flags & OBD_SET_UP)) {
-                        CERROR("target device %d not att or setup\n", dev);
-                        return -EINVAL;
-                }
-                if (strcmp(obd->obd_type->typ_name, "ost") &&
-                    strcmp(obd->obd_type->typ_name, "mds"))
-                        return -EINVAL;
-
-                cl->cli_obd = &obd_dev[dev];
-                return 0;
-        }
-
-        /* networked */
+        cl->cli_epoch++;
         err = kportal_uuid_to_peer(uuid, &cl->cli_server);
         if (err != 0)
                 CERROR("cannot find peer %s!\n", uuid);
@@ -203,8 +166,15 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err)
         RETURN(0);
 }
 
+static void ptlrpc_cleanup_request_buf(struct ptlrpc_request *request)
+{
+        OBD_FREE(request->rq_reqbuf, request->rq_reqlen);
+        request->rq_reqbuf = NULL;
+        request->rq_reqlen = 0;
+}
+
 /* Abort this request and cleanup any resources associated with it. */
-int ptlrpc_abort(struct ptlrpc_request *request)
+static int ptlrpc_abort(struct ptlrpc_request *request)
 {
         /* First remove the ME for the reply; in theory, this means
          * that we can tear down the buffer safely. */
@@ -212,7 +182,6 @@ int ptlrpc_abort(struct ptlrpc_request *request)
         OBD_FREE(request->rq_reply_md.start, request->rq_replen);
         request->rq_repbuf = NULL;
         request->rq_replen = 0;
-
         return 0;
 }
 
@@ -223,18 +192,13 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
         init_waitqueue_head(&req->rq_wait_for_rep);
 
-        if (cl->cli_obd) {
-                /* Local delivery */
-                down(&cl->cli_rpc_sem);
-                rc = ptlrpc_enqueue(cl, req);
-        } else {
-                /* Remote delivery via portals. */
-                req->rq_req_portal = cl->cli_request_portal;
-                req->rq_reply_portal = cl->cli_reply_portal;
-                rc = ptl_send_rpc(req, cl);
-        }
+        req->rq_client = cl;
+        req->rq_req_portal = cl->cli_request_portal;
+        req->rq_reply_portal = cl->cli_reply_portal;
+        rc = ptl_send_rpc(req, cl);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
+                ptlrpc_cleanup_request_buf(req);
                 up(&cl->cli_rpc_sem);
                 RETURN(-rc);
         }
@@ -242,6 +206,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         CDEBUG(D_OTHER, "-- sleeping\n");
         wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
+        ptlrpc_cleanup_request_buf(req);
         up(&cl->cli_rpc_sem);
         if (req->rq_flags == PTL_RPC_INTR) {
                 /* Clean up the dangling reply buffers */
