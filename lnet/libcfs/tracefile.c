@@ -190,7 +190,7 @@ static void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
                 ptype = KERN_INFO;
         }
 
-        printk("%s%s: %d:%d:(%s:%d:%s()) %*s", ptype, prefix, hdr->ph_pid,
+        printk("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix, hdr->ph_pid,
                hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
 }
 
