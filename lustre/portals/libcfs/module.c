@@ -468,7 +468,27 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 kportal_put_ni (data->ioc_nal);
                 break;
         }
-
+#if LWT_SUPPORT
+        case IOC_PORTAL_LWT_CONTROL: 
+                err = lwt_control (data->ioc_flags, data->ioc_misc);
+                break;
+                
+        case IOC_PORTAL_LWT_SNAPSHOT:
+                err = lwt_snapshot (&data->ioc_count, &data->ioc_misc,
+                                    data->ioc_pbuf1, data->ioc_plen1);
+                if (err == 0 &&
+                    copy_to_user((char *)arg, data, sizeof (*data)))
+                        err = -EFAULT;
+                break;
+                
+        case IOC_PORTAL_LWT_LOOKUP_STRING:
+                err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
+                                         data->ioc_pbuf2, data->ioc_plen2);
+                if (err == 0 &&
+                    copy_to_user((char *)arg, data, sizeof (*data)))
+                        err = -EFAULT;
+                break;
+#endif                        
         default:
                 err = -EINVAL;
                 break;
@@ -507,12 +527,19 @@ static int init_kportals_module(void)
                 return (rc);
         }
 
+#if LWT_SUPPORT
+        rc = lwt_init();
+        if (rc != 0) {
+                CERROR("lwt_init: error %d\n", rc);
+                goto cleanup_debug;
+        }
+#endif
         sema_init(&nal_cmd_sem, 1);
 
         rc = misc_register(&portal_dev);
         if (rc) {
                 CERROR("misc_register: error %d\n", rc);
-                goto cleanup_debug;
+                goto cleanup_lwt;
         }
 
         rc = PtlInit();
@@ -534,6 +561,10 @@ static int init_kportals_module(void)
         PtlFini();
  cleanup_deregister:
         misc_deregister(&portal_dev);
+ cleanup_lwt:
+#if LWT_SUPPORT
+        lwt_fini();
+#endif
  cleanup_debug:
         portals_debug_cleanup();
         return rc;
@@ -553,6 +584,10 @@ static void exit_kportals_module(void)
         rc = misc_deregister(&portal_dev);
         if (rc)
                 CERROR("misc_deregister error %d\n", rc);
+
+#if LWT_SUPPORT
+        lwt_fini();
+#endif
 
         if (atomic_read(&portal_kmemory) != 0)
                 CERROR("Portals memory leaked: %d bytes\n",
