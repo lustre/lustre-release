@@ -36,6 +36,7 @@
 
 #include "filter_internal.h"
 
+/* Called with res->lr_lvb_sem held */
 static int filter_lvbo_init(struct ldlm_resource *res)
 {
         int rc = 0;
@@ -45,13 +46,13 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         ENTRY;
 
         LASSERT(res);
+        LASSERT(down_trylock(&res->lr_lvb_sem) != 0);
 
         /* we only want lvb's for object resources */
         /* check for internal locks: these have name[1] != 0 */
         if (res->lr_name.name[1])
                 RETURN(0);
 
-        down(&res->lr_lvb_sem);
         if (res->lr_lvb_data)
                 GOTO(out, rc = 0);
 
@@ -85,7 +86,6 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         f_dput(dentry);
  out:
         /* Don't free lvb data on lookup error */
-        up(&res->lr_lvb_sem);
         return rc;
 }
 
