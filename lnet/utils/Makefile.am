@@ -23,7 +23,7 @@ libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
 
 if UTILS
 if !CRAY_PORTALS
-sbin_PROGRAMS += acceptor ptlctl routerstat wirecheck gmnalnid
+sbin_PROGRAMS += acceptor ptlctl routerstat wirecheck 
 endif
 endif
 
