@@ -17,7 +17,7 @@ static void d_unalloc(struct dentry *dentry)
         if (dentry) {                                                                                                                                                                                
         	list_del(&dentry->d_hash);
         	INIT_LIST_HEAD(&dentry->d_hash);
-        	dput(dentry); 	
+		dput(dentry); 	
 	}
 }
 static struct inode *sm_create_inode(struct super_block *sb,
@@ -197,14 +197,18 @@ static int smfs_unlink(struct inode * dir,
 	if (!cache_dir || !cache_inode)
 		RETURN(-ENOENT);
 	
+	igrab(cache_dentry->d_inode);
+	
 	prepare_parent_dentry(&tmp, cache_dir);
 	cache_dentry = d_alloc(&tmp, &dentry->d_name); 
 	d_add(cache_dentry, cache_inode);
 	
-	if (cache_inode->i_op->unlink)
+	if (cache_dir->i_op->unlink)
 		rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
 	
-	duplicate_inode(tmp.d_inode, dentry->d_inode);
+
+	duplicate_inode(cache_dentry->d_inode, dentry->d_inode);
+	duplicate_inode(cache_dir, dir);
 	
 	d_unalloc(cache_dentry);	
 	RETURN(rc);	

@@ -58,9 +58,10 @@ void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb);
 void init_smfs_cache(void);
 void cleanup_smfs_cache(void);
 /*super.c*/
-int init_smfs(void);
-int cleanup_smfs(void);
-void smfs_put_super(struct super_block *sb);
+extern int init_smfs(void);
+extern int cleanup_smfs(void);
+extern void smfs_put_super(struct super_block *sb);
+extern void duplicate_sb(struct super_block *csb, struct super_block *sb);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;
