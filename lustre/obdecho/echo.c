@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.34 2002/09/08 07:59:39 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.34 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.35 2002/09/08 09:56:57 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.35 $"
 
 #define EXPORT_SYMTAB
 
@@ -93,7 +93,7 @@ void echo_proc_fini(void)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        uuid_t cluuid)
+                        obd_uuid_t cluuid)
 {
         int rc;
 
@@ -406,6 +406,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
                 LBUG();
                 RETURN(-ENOMEM);
         }
+        spin_lock_init(&obddev->u.echo.eo_lock);
         obddev->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
         RETURN(0);
