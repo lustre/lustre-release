@@ -246,6 +246,9 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
                         }
+                        else if (!strcmp(opt, "clone")) {
+                                lmd->lmd_clone_index = val;
+                        } 
                 } else {
                         val = 1;
                         if (!strncmp(opt, "no", 2)) {

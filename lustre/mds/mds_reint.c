@@ -1227,7 +1227,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 char *name, int namelen,
                                 struct lustre_handle *child_lockh,
                                 struct dentry **dchildp, int child_mode,
-                                __u64 child_lockpart)
+                                __u64 child_lockpart, void *clone_info)
 {
         struct ldlm_res_id child_res_id = { .name = {0} };
         struct ldlm_res_id parent_res_id = { .name = {0} };
@@ -1281,6 +1281,13 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 #endif
 
         cleanup_phase = 1; /* parent dentry */
+#ifdef CONFIG_SNAPFS
+        if (clone_info) {
+                /*FIXME is there any other FUNC will use d_fsdata, 
+                 *excepet creating inode according inum*/
+                (*dparentp)->d_fsdata = clone_info;         
+        }
+#endif
 
         /* Step 2: Lookup child (without DLM lock, to get resource name) */
         *dchildp = ll_lookup_one_len(name, *dparentp, namelen - 1);
@@ -1659,7 +1666,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                                  rec->ur_namelen, &child_lockh,
                                                  &dchild, LCK_EX,
                                                  MDS_INODELOCK_LOOKUP |
-                                                        MDS_INODELOCK_UPDATE);
+                                                   MDS_INODELOCK_UPDATE, NULL);
         }
         if (rc)
                 GOTO(cleanup, rc);
@@ -2514,7 +2521,7 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
                                          &de_srcdir,LCK_PW,MDS_INODELOCK_UPDATE,
                                          &update_mode, rec->ur_tgt, rec->ur_tgtlen,
                                          &child_lockh, &de_new, LCK_EX,
-                                         MDS_INODELOCK_LOOKUP);
+                                         MDS_INODELOCK_LOOKUP, NULL);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2609,7 +2616,7 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
                                          &de_srcdir,LCK_PW,MDS_INODELOCK_UPDATE,
                                          &update_mode, rec->ur_name, 
                                          rec->ur_namelen, &child_lockh, &de_old,
-                                         LCK_EX, MDS_INODELOCK_LOOKUP);
+                                         LCK_EX, MDS_INODELOCK_LOOKUP, NULL);
         LASSERT(rc == 0);
         LASSERT(de_srcdir);
         LASSERT(de_srcdir->d_inode);

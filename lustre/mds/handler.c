@@ -51,6 +51,7 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_snap.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 
@@ -850,6 +851,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         struct lustre_handle parent_lockh[2];
         int namesize, update_mode;
         int rc = 0, cleanup_phase = 0, resent_req = 0;
+        struct clonefs_info *clone_info = NULL;
         char *name;
         ENTRY;
 
@@ -870,6 +872,14 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 CERROR("Can't unpack name\n");
                 GOTO(cleanup, rc = -EFAULT);
         }
+#if CONFIG_SNAPFS
+        clone_info = lustre_swab_reqbuf(req, offset + 2, sizeof(*clone_info), 
+                                        lustre_swab_clonefs_info);
+        if (clone_info) {
+                CDEBUG(D_INFO,"getattr name %s clone_info index %d \n", name,
+                       clone_info->clone_index);
+        }
+#endif
         namesize = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT (offset == 0 || offset == 2);
@@ -954,7 +964,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                                                  LCK_PR, MDS_INODELOCK_LOOKUP,
                                                  &update_mode, name, namesize,
                                                  child_lockh, &dchild, LCK_PR,
-                                                 child_part);
+                                                 child_part, clone_info);
                 if (rc)
                         GOTO(cleanup, rc);
         } else {

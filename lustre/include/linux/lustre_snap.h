@@ -146,6 +146,9 @@ struct snap_ea{
 #define SNAPTABLE_INFO          "snaptable"
 #define SNAP_GENERATION         "snap_generation"
 
+
+#define SNAP_LOOKUP     (REINT_MAX + 1)
+
 struct snap {
         time_t          sn_time;
         unsigned int    sn_index;
@@ -170,6 +173,13 @@ struct snap_info {
         struct snap_table        *sntbl;
         struct dentry            *sn_cowed_dentry;
 };
+#define SM_CLONE_FS        0x01
+#define SET_CLONE_INDEX(clone_info, index)            \
+                       (((struct clonefs_info *)clone_info)->clone_index = index)
+#define SET_CLONE_FLAGS(clone_info, flags)            \
+                       (((struct clonefs_info *)clone_info)->clone_flags = flags)
+
+
 extern int smfs_add_snap_item(struct super_block *sb, char *name);
 extern int smfs_start_cow(struct super_block *sb);
 extern int smfs_stop_cow(struct super_block *sb);
@@ -182,4 +192,5 @@ int smfs_cow(struct inode *dir, struct dentry *dentry,
              void *data1, void *data2, int op);
 int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
                    void *data2);
+struct inode* smfs_cow_get_ind(struct inode *inode, int index);
 #endif /*_LUSTRE_SNAP_H*/

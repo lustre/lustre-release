@@ -870,6 +870,11 @@ struct ptlbd_rsp {
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
+struct clonefs_info {
+        int clone_index;
+        int clone_flags;
+};
+extern void lustre_swab_clonefs_info(struct clonefs_info *clone);
 /*
  * Opcodes for management/monitoring node.
  */

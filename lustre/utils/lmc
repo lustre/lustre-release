@@ -137,6 +137,7 @@ Object creation command summary:
   --mds mds_name
   --lmv lmv_name
   --ost ost_name OR --lov lov_name
+  --clientoptions options
 
 --add route
   --node nodename
@@ -236,6 +237,7 @@ lmc_options = [
     ('echo_client', "", PARAM),
     ('path', "Specify the mountpoint for Lustre.", PARAM),
     ('filesystem', "Lustre filesystem name", PARAM,""),
+    ('clientoptions', "Specify the options for Lustre, such as async.", PARAM, ""),
 
     # lov
     ('lov', "Specify LOV name.", PARAM,""),
@@ -558,10 +560,12 @@ class GenConfig:
         mgmt.appendChild(self.ref("active", mgmt_uuid))
         return mgmt
 
-    def mountpoint(self, name, uuid, fs_uuid, path):
+    def mountpoint(self, name, uuid, fs_uuid, path, clientoptions):
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
+        if clientoptions:
+            self.addElement(mtpt, "clientoptions", clientoptions)
         return mtpt
 
     def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid):
@@ -1366,6 +1370,7 @@ def add_mtpt(gen, lustre, options):
     node_name = get_option(options, 'node')
 
     path = get_option(options, 'path')
+    clientoptions = get_option(options, "clientoptions")
     fs_name = get_option(options, 'filesystem')
 
     lov_name = get_option(options, 'lov')
@@ -1402,7 +1407,7 @@ def add_mtpt(gen, lustre, options):
         error("MOUNTPOINT: ", name, " already exists.")
 
     uuid = new_uuid(name)
-    mtpt = gen.mountpoint(name, uuid, fs_uuid, path)
+    mtpt = gen.mountpoint(name, uuid, fs_uuid, path, clientoptions)
     node = findByName(lustre, node_name, "node")
     if not node:
         error('node:',  node_name, "not found.")

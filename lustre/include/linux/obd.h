@@ -280,7 +280,8 @@ struct client_obd {
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
-        struct osc_creator      cl_oscc;
+        struct osc_creator       cl_oscc;
+        void                    *cl_clone_info;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we

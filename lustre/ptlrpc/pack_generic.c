@@ -33,6 +33,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_snap.h>
 #include <linux/fcntl.h>
 
 
@@ -640,7 +641,11 @@ void lustre_swab_mds_body (struct mds_body *b)
         __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
 }
-
+void lustre_swab_clonefs_info (struct clonefs_info *clone)
+{
+       __swab32s(&clone->clone_index);
+       __swab32s(&clone->clone_flags); 
+}
 void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
 {
         __swab32s (&sa->sa_opcode);

@@ -646,6 +646,60 @@ exit:
 }
 EXPORT_SYMBOL(smfs_cow_write);
 
+int smfs_cow_lookup(struct inode *inode, struct dentry *dentry, void *data1,
+                    void *data2)
+{
+        struct snap_info *snap_info = S2SNAPI(inode->i_sb);
+        struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
+        struct dentry *dparent = dentry->d_parent;
+        struct clonefs_info *clone_info=(struct clonefs_info*)dparent->d_fsdata;
+        int rc = 0;
+ 
+        if (clone_info && clone_info->clone_flags && SM_CLONE_FS) {
+                struct inode *ind_inode = NULL;
+                struct inode *cache_ind = NULL;
+                struct dentry *cache_dentry = NULL;
+                struct dentry *cache_parent = NULL;
+                struct inode *cache_inode;
+                struct dentry *tmp;
+                rc = 1;
+ 
+                ind_inode = snapops->fs_get_indirect(inode, NULL, clone_info->clone_index);
+                if (!ind_inode) 
+                        RETURN(-ENOENT);
+                
+                if (!(cache_ind = I2CI(ind_inode)))
+                        GOTO(exit, rc = -ENOENT);
+
+                cache_parent=pre_smfs_dentry(NULL, cache_ind, dentry->d_parent);
+                cache_dentry=pre_smfs_dentry(cache_parent, NULL, dentry);
+
+                tmp = cache_ind->i_op->lookup(cache_ind, cache_dentry);
+        
+                if (IS_ERR(tmp))
+                        GOTO(exit, rc = -ENOENT);
+
+                if ((cache_inode = tmp ? tmp->d_inode : cache_dentry->d_inode)) {
+                        if (IS_ERR(cache_inode)) {
+                                dentry->d_inode = cache_inode;
+                                GOTO(exit, rc = -ENOENT);
+                        }
+                        inode = iget4(inode->i_sb, cache_inode->i_ino, NULL,
+                                      &I2SMI(inode)->smi_flags);
+                } else {
+                        d_add(dentry, NULL);
+                        GOTO(exit, rc = -ENOENT);
+                }
+                d_add(dentry, inode);
+exit:
+                iput(ind_inode);
+                post_smfs_dentry(cache_dentry);
+                post_smfs_dentry(cache_parent);
+                RETURN(rc);
+        } 
+        RETURN(rc);         
+}
+
 struct inode *smfs_cow_get_ind(struct inode *inode, int index)
 {
         struct snap_info *snap_info = S2SNAPI(inode->i_sb);
@@ -673,16 +727,19 @@ struct inode *smfs_cow_get_ind(struct inode *inode, int index)
         RETURN(NULL);
 }
 EXPORT_SYMBOL(smfs_cow_get_ind);
+
 typedef int (*cow_funcs)(struct inode *dir, struct dentry *dentry, 
                          void *new_dir, void *new_dentry);
 
-static cow_funcs smfs_cow_funcs[REINT_MAX + 1] = {
+
+static cow_funcs smfs_cow_funcs[REINT_MAX + 2] = {
         [REINT_SETATTR] smfs_cow_setattr,
         [REINT_CREATE]  smfs_cow_create,
         [REINT_LINK]    smfs_cow_link,
         [REINT_UNLINK]  smfs_cow_unlink,
         [REINT_RENAME]  smfs_cow_rename,
         [REINT_WRITE]   smfs_cow_write,
+        [SNAP_LOOKUP]   smfs_cow_lookup,
 };
 
 int smfs_cow(struct inode *dir, struct dentry *dentry, void *new_dir, 

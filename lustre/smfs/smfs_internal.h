@@ -321,7 +321,9 @@ do {                                                                           \
                 CDEBUG(D_INODE, "Do %s snap post for dir %lu \n",              \
                               name, dir->i_ino);                               \
                 rc = smfs_cow(dir, dentry, new_dir, new_dentry, op);           \
-                if (rc)                                                        \
+                if (op == SNAP_LOOKUP && rc == 1)                              \
+                        GOTO(label, rc = 0);                                   \
+                else if (rc)                                                   \
                         GOTO(label, rc);                                       \
         }                                                                      \
 } while(0)
