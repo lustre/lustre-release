@@ -16,3 +16,4 @@ iopen-2.5.73.patch
 export-truncate-2.5.63.patch
 qla2xxx-v8.00.00b1-2.5.73.patch
 ext3-noread-inode.patch
+inode-protection-from-pdflush.patch
