@@ -40,6 +40,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix MDS llog_logid record size, 64-bit array alignment (2733)
 	- don't call usermode_helper from ptlrpcd, DEFAULT upcall (2773)
 	- put magic in mount.lustre data, check for bad/NULL mount data (2529)
+	- MDS recovery shouldn't delete objects that it has given out (2730)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
 
