@@ -1,0 +1,115 @@
+--- lum/include/linux/blkdev.h.orig	Thu Mar 28 11:40:24 2002
++++ lum/include/linux/blkdev.h	Thu Mar 28 23:38:46 2002
+@@ -228,4 +228,8 @@
+ 	return retval;
+ }
+ 
++#define CONFIG_DEV_RDONLY
++void dev_set_rdonly(kdev_t, int);
++int dev_check_rdonly(kdev_t);
++void dev_clear_rdonly(int);
+ #endif
+--- lum/drivers/block/blkpg.c.orig	Sun Nov 11 11:20:21 2001
++++ lum/drivers/block/blkpg.c	Thu Mar 28 16:30:41 2002
+@@ -294,3 +294,38 @@
+ }
+ 
+ EXPORT_SYMBOL(blk_ioctl);
++
++#define NUM_DEV_NO_WRITE 16
++static int dev_no_write[NUM_DEV_NO_WRITE];
++
++/*
++ * Debug code for turning block devices "read-only" (will discard writes
++ * silently).  This is for filesystem crash/recovery testing.
++ */
++void dev_set_rdonly(kdev_t dev, int no_write)
++{
++	if (dev) {
++		printk(KERN_WARNING "Turning device %s read-only\n", 
++		       bdevname(dev));
++		dev_no_write[no_write] = 0xdead0000 + dev;
++	}
++}
++
++int dev_check_rdonly(kdev_t dev) {
++	int i;
++
++	for (i = 0; i < NUM_DEV_NO_WRITE; i++) {
++		if ((dev_no_write[i] & 0xffff0000) == 0xdead0000 &&
++		    dev == (dev_no_write[i] & 0xffff))
++			return 1;
++	}
++	return 0;
++}
++
++void dev_clear_rdonly(int no_write) {
++	dev_no_write[no_write] = 0;
++}
++
++EXPORT_SYMBOL(dev_set_rdonly);
++EXPORT_SYMBOL(dev_check_rdonly);
++EXPORT_SYMBOL(dev_clear_rdonly);
+--- lum/drivers/block/loop.c.orig	Fri Dec 21 10:41:53 2001
++++ lum/drivers/block/loop.c	Thu Mar 28 23:39:25 2002
+@@ -471,6 +475,11 @@
+ 	spin_unlock_irq(&lo->lo_lock);
+ 
+ 	if (rw == WRITE) {
++#ifdef CONFIG_DEV_RDONLY
++		if (dev_check_rdonly(rbh->b_rdev))
++			goto err;
++#endif
++
+ 		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
+ 			goto err;
+ 	} else if (rw == READA) {
+--- lum/drivers/ide/ide-disk.c.orig	Fri Dec 21 10:41:54 2001
++++ lum/drivers/ide/ide-disk.c	Thu Mar 28 23:38:41 2002
+@@ -367,6 +367,12 @@
+  */
+ static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
+ {
++#ifdef CONFIG_DEV_RDONLY
++	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
++		ide_end_request(1, HWGROUP(drive));
++		return ide_stopped;
++	}
++#endif
+ 	if (IDE_CONTROL_REG)
+ 		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
+ 	OUT_BYTE(0x00, IDE_FEATURE_REG);
+--- lum/arch/um/drivers/ubd.c.orig	Wed Mar 13 14:04:59 2002
++++ lum/arch/um/drivers/ubd.c	Thu Mar 28 23:39:15 2002
+@@ -693,14 +697,23 @@
+ 		spin_unlock(&io_request_lock);
+ 		return(1);
+ 	}
+-	if((req->cmd == WRITE) && 
+-	   ((dev->openflags & O_ACCMODE) == O_RDONLY)){
+-		printk("Write attempted on readonly ubd device %d\n", 
+-		       minor(req->rq_dev));
+-		spin_lock(&io_request_lock);
+-		end_request(0);
+-		spin_unlock(&io_request_lock);
+-		return(1);
++	if (req->cmd == WRITE) {
++#ifdef CONFIG_DEV_RDONLY
++		if (dev_check_rdonly(req->rq_dev)) {
++			spin_lock(&io_request_lock);
++			end_request(1);
++			spin_unlock(&io_request_lock);
++			return(0);
++		}
++#endif
++		if ((dev->openflags & O_ACCMODE) == O_RDONLY) {
++			printk("Write attempted on readonly ubd device %d\n",
++			       minor(req->rq_dev));
++			spin_lock(&io_request_lock);
++			end_request(0);
++			spin_unlock(&io_request_lock);
++			return(1);
++		}
+ 	}
+ 
+         block = req->sector;
