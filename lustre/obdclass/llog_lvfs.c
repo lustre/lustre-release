@@ -555,9 +555,14 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        fdentry = handle->lgh_file->f_dentry; 
+        fdentry = handle->lgh_file->f_dentry;
         if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
+                struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
                 struct inode *inode = fdentry->d_parent->d_inode;
+                struct obd_run_ctxt saved;
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                dget(fdentry);
                 rc = llog_lvfs_close(handle);
                 if (rc)
                         RETURN(rc);
@@ -565,7 +570,9 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 down(&inode->i_sem);
                 rc = vfs_unlink(inode, fdentry);
                 up(&inode->i_sem);
-                RETURN(rc); 
+                dput(fdentry);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                RETURN(rc);
         }
 
         oa = obdo_alloc();
