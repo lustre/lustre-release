@@ -134,7 +134,7 @@ $CLEAN
 $START
 
 
-echo '== mkdir .../d9; mkdir .../d9/d2; mkdir .../d9/d2/d3 == test 9'
+echo '== mkdir .../d9 .../d9/d2 .../d9/d2/d3 =========== test 9'
 mkdir $MOUNT/d9
 mkdir $MOUNT/d9/d2
 mkdir $MOUNT/d9/d2/d3
@@ -153,7 +153,7 @@ pass
 $CLEAN
 $START
 
-echo '=================================================== test 11'
+echo '== mkdir .../d11 d11/d2; chmod .../d11/d2 .../d11/d2 == test 11'
 mkdir $MOUNT/d11
 mkdir $MOUNT/d11/d2
 chmod 0666 $MOUNT/d11/d2
@@ -163,7 +163,7 @@ pass
 $CLEAN
 $START
 
-echo '=================================================== test 12'
+echo '== mkdir .../d12; touch .../d12/f; chmod .../d12/f d12/f == test 12'
 mkdir $MOUNT/d12
 touch $MOUNT/d12/f
 chmod 0666 $MOUNT/d12/f
@@ -173,9 +173,9 @@ pass
 $CLEAN
 $START
 
-echo '=================================================== test 13'
+echo '== mkdir .../d13; cp /etc/passwd .../d13/f; > .../d13/f == test 13'
 mkdir $MOUNT/d13
-cp /etc/passwd $MOUNT/d13/f
+cp /etc/hosts $MOUNT/d13/f
 >  $MOUNT/d13/f
 $CHECKSTAT -t file -s 0 $MOUNT/d13/f || error
 pass
@@ -183,7 +183,7 @@ $CLEAN
 $START
 
 
-echo '=================================================== test 14'
+echo '================================================== test 14'
 mkdir $MOUNT/d14
 touch $MOUNT/d14/f
 rm $MOUNT/d14/f
@@ -193,7 +193,7 @@ $CLEAN
 $START
 
 
-echo '=================================================== test 15'
+echo '================================================== test 15'
 mkdir $MOUNT/d15
 touch $MOUNT/d15/f
 mv $MOUNT/d15/f $MOUNT/d15/f2
@@ -202,7 +202,7 @@ pass
 $CLEAN
 $START
 
-echo '=================================================== test 16'
+echo '================================================== test 16'
 mkdir $MOUNT/d16
 touch $MOUNT/d16/f
 rm -rf $MOUNT/d16/f
@@ -211,7 +211,7 @@ pass
 $CLEAN
 $START
 
-echo '== symlinks: create, remove (dangling and real) === test 17'
+echo '== symlinks: create, remove (dangling and real) == test 17'
 mkdir $MOUNT/d17
 touch $MOUNT/d17/f
 ln -s $MOUNT/d17/f $MOUNT/d17/l-exist
@@ -229,14 +229,14 @@ pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls $MOUNT ========== test 18"
+echo "== touch $MOUNT/f ; ls $MOUNT ==================== test 18"
 touch $MOUNT/f
 ls $MOUNT || error
 pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls -l $MOUNT ======= test 19"
+echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 19"
 touch $MOUNT/f
 ls -l $MOUNT
 rm $MOUNT/f
@@ -245,7 +245,7 @@ pass
 $CLEAN
 $START
 
-echo "== touch $MOUNT/f ; ls -l $MOUNT ======= test 20"
+echo "== touch $MOUNT/f ; ls -l $MOUNT ================= test 20"
 touch $MOUNT/f
 rm $MOUNT/f
 echo "1 done"
@@ -260,7 +260,7 @@ pass
 $CLEAN
 $START
 
-echo '== write to dangling link ======================= test 21'
+echo '== write to dangling link ======================== test 21'
 mkdir $MOUNT/d21
 [ -f $MOUNT/d21/dangle ] && rm -f $MOUNT/d21/dangle
 ln -s dangle $MOUNT/d21/link
@@ -272,18 +272,19 @@ pass
 $CLEAN
 $START
 
-echo '== unpack tar archive as nonroot user =========== test 22'
+echo '== unpack tar archive as non-root user =========== test 22'
 mkdir $MOUNT/d22
 which sudo && chown 4711 $MOUNT/d22
-SUDO=`which sudo` && SUDO="$SUDO -u #4711" || SUDO=""
+SUDO=`which sudo 2> /dev/null` && SUDO="$SUDO -u #4711" || SUDO=""
 $SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $MOUNT/d22
 ls -lR $MOUNT/d22/etc
-$CHECKSTAT -u \#4711 -t dir $MOUNT/d22/etc || error
+$CHECKSTAT -t dir $MOUNT/d22/etc || error
+[ -z "$SUDO" ] || $CHECKSTAT -u \#4711 $MOUNT/d22/etc || error
 pass
 $CLEAN
 $START
 
-echo '== O_CREAT|O_EXCL in subdir ===================== test 23'
+echo '== O_CREAT|O_EXCL in subdir ====================== test 23'
 mkdir $MOUNT/d23
 ./toexcl $MOUNT/d23/f23
 ./toexcl -e $MOUNT/d23/f23 || error
@@ -291,7 +292,7 @@ pass
 $CLEAN
 $START
 
-echo '== rename sanity ============================= test24'
+echo '== rename sanity ================================= test24'
 echo '-- same directory rename'
 echo '-- test 24-R1: touch a ; rename a b'
 mkdir $MOUNT/R1
