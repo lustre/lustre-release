@@ -1,3 +1,0 @@
-DESC
-patches for making kernel 2.5.44 ready for mounting Lustre.
-EDESC
