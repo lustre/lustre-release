@@ -280,7 +280,7 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 
 static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
-	CDEBUG(D_INODE, "src obdo %Ld valid 0x%x, dst obdo %Ld\n",
+	CDEBUG(D_INFO, "src obdo %Ld valid 0x%x, dst obdo %Ld\n",
 	       src->o_id, src->o_valid, dst->o_id);
 	if ( src->o_valid & OBD_MD_FLATIME ) 
 		dst->o_atime = src->o_atime;

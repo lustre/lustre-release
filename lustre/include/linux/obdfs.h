@@ -131,13 +131,13 @@ static inline struct list_head *obdfs_slist(struct inode *inode)
 }
 
 #define obd_down(mutex) {\
-	CDEBUG(D_INODE, "got lock at %s, %d\n", __FUNCTION__, __LINE__);\
+	/* CDEBUG(D_INFO, "get lock\n"); */ \
 	down(mutex);\
 }
 
 #define obd_up(mutex) {\
 	up(mutex);\
-	CDEBUG(D_INODE, "free lock at %s, %d\n", __FUNCTION__, __LINE__);\
+	/* CDEBUG(D_INFO, "free lock\n"); */ \
 }
 
 static inline void obdfs_print_plist(struct inode *inode) 
@@ -145,10 +145,10 @@ static inline void obdfs_print_plist(struct inode *inode)
 	struct list_head *page_list = obdfs_iplist(inode);
 	struct list_head *tmp;
 
-	CDEBUG(D_INODE, "inode %ld: page", inode->i_ino);
+	CDEBUG(D_INFO, "inode %ld: page", inode->i_ino);
 	/* obd_down(&obdfs_i2sbi(inode)->osi_list_mutex); */
 	if (list_empty(page_list)) {
-		printk(" list empty\n");
+		CDEBUG(D_INFO, " list empty\n");
 		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
 		return;
 	}
@@ -157,9 +157,9 @@ static inline void obdfs_print_plist(struct inode *inode)
 	while ( (tmp = tmp->next) != page_list) {
 		struct obdfs_pgrq *pgrq;
 		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		printk(" %p", pgrq->rq_page);
+		CDEBUG(D_INFO, " %p", pgrq->rq_page);
 	}
-	printk("\n");
+	CDEBUG(D_INFO, "\n");
 	/* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
 }
 
@@ -172,11 +172,11 @@ static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
 	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
-	CDEBUG(D_INODE, "src inode %ld, dst obdo %ld valid 0x%08x\n",
+	CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
 	       inode->i_ino, (long)oa->o_id, oa->o_valid);
 	obdo_from_inode(oa, inode);
 	if (obdfs_has_inline(inode)) {
-		CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
+		CDEBUG(D_INFO, "copying inline data from inode to obdo\n");
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_obdflags |= OBD_FL_INLINEDATA;
 		oa->o_valid |= OBD_MD_FLINLINE;
@@ -187,12 +187,12 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
 	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
-	CDEBUG(D_INODE, "src obdo %ld valid 0x%08x, dst inode %ld\n",
+	CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
 	       (long)oa->o_id, oa->o_valid, inode->i_ino);
 	obdo_to_inode(inode, oa);
 
 	if (obdo_has_inline(oa)) {
-		CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
+		CDEBUG(D_INFO, "copying inline data from obdo to inode\n");
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 	}
