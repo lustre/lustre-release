@@ -494,7 +494,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         /* 2.4 doesn't seem to have SEQ_START_TOKEN, so we implement
          * it in our own state */
         if (dummy_llap->llap_magic == 0) {
-                seq_printf(seq, "generation | llap .cookie | page ");
+                seq_printf(seq, "generation | llap .cookie origin | page ");
                 seq_printf(seq, "inode .index [ page flags ]\n");
                 return 0;
         }
@@ -505,10 +505,21 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
         if (llap != NULL)  {
                 int has_flags = 0;
                 struct page *page = llap->llap_page;
+                static char *origins[] = {
+                        [LLAP_ORIGIN_UNKNOWN] = "--",
+                        [LLAP_ORIGIN_READPAGE] = "rp",
+                        [LLAP_ORIGIN_READAHEAD] = "ra",
+                        [LLAP_ORIGIN_COMMIT_WRITE] = "cw",
+                        [LLAP_ORIGIN_WRITEPAGE] = "wp",
+                };
 
-                seq_printf(seq, "%lu | %p %p | %p %p %lu [", 
+                LASSERTF(llap->llap_origin < LLAP__ORIGIN_MAX, "%u\n", 
+                         llap->llap_origin);
+
+                seq_printf(seq, "%lu | %p %p %s | %p %p %lu [", 
                                 sbi->ll_pglist_gen, 
-                                llap, llap->llap_cookie,
+                                llap, llap->llap_cookie, 
+                                        origins[llap->llap_origin],
                                 page, page->mapping->host, page->index);
                 seq_page_flag(seq, page, locked, has_flags);
                 seq_page_flag(seq, page, error, has_flags);

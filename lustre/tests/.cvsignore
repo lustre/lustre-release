@@ -66,4 +66,5 @@ openfilleddirunlink
 copy_attr
 rename_many
 memhog
+mmap_sanity
 rmdirmany

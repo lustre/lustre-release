@@ -1,4 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+/* p_fr-*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Lustre Lite I/O page cache routines shared by different kernel revs
@@ -347,7 +347,7 @@ struct ll_async_page *llap_cast_private(struct page *page)
 }
 
 /* XXX have the exp be an argument? */
-struct ll_async_page *llap_from_page(struct page *page)
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -356,9 +356,11 @@ struct ll_async_page *llap_from_page(struct page *page)
         int rc;
         ENTRY;
 
+        LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
+
         llap = llap_cast_private(page);
         if (llap != NULL)
-                RETURN(llap);
+                GOTO(out, llap);
 
         exp = ll_i2obdexp(page->mapping->host);
         if (exp == NULL)
@@ -376,6 +378,8 @@ struct ll_async_page *llap_from_page(struct page *page)
                 RETURN(ERR_PTR(rc));
         }
 
+        LL_CDEBUG_PAGE(D_PAGE, page, "obj off "LPU64"\n", 
+                       (obd_off)page->index << PAGE_SHIFT);
         CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n", llap,
                page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
         /* also zeroing the PRIVBITS low order bitflags */
@@ -387,7 +391,60 @@ struct ll_async_page *llap_from_page(struct page *page)
         list_add_tail(&llap->llap_proc_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
+out:
+        llap->llap_origin = origin;
         RETURN(llap);
+}
+
+static int queue_or_sync_write(struct obd_export *exp, 
+                               struct lov_stripe_md *lsm, 
+                               struct ll_async_page *llap,
+                               unsigned to,
+                               obd_flag async_flags)
+{
+        struct obd_io_group *oig;
+        int rc;
+        ENTRY;
+
+        /* _make_ready only sees llap once we've unlocked the page */
+        llap->llap_write_queued = 1;
+        rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie,
+                                OBD_BRW_WRITE, 0, 0, 0, async_flags);
+        if (rc == 0) {
+                LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
+                //llap_write_pending(inode, llap);
+                GOTO(out, 0);
+        }
+
+        llap->llap_write_queued = 0;
+
+        rc = oig_init(&oig);
+        if (rc)
+                GOTO(out, rc);
+
+        rc = obd_queue_group_io(exp, lsm, NULL, oig, llap->llap_cookie,
+                                OBD_BRW_WRITE, 0, to, 0, ASYNC_READY | 
+                                ASYNC_URGENT | ASYNC_COUNT_STABLE |
+                                ASYNC_GROUP_SYNC);
+        if (rc)
+                GOTO(free_oig, rc);
+
+        rc = obd_trigger_group_io(exp, lsm, NULL, oig);
+        if (rc)
+                GOTO(free_oig, rc);
+
+        rc = oig_wait(oig);
+        
+        if (!rc && async_flags & ASYNC_READY)
+                unlock_page(llap->llap_page);
+
+        LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "sync write returned %d\n", 
+                       rc);
+
+free_oig:
+        oig_release(oig);
+out:
+        RETURN(rc);
 }
 
 void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -416,7 +473,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_COMMIT_WRITE);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
@@ -429,55 +486,34 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 exp = ll_i2obdexp(inode);
                 if (exp == NULL)
                         RETURN(-EINVAL);
-
-                /* _make_ready only sees llap once we've unlocked the page */
-                llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, lsm, NULL, llap->llap_cookie,
-                                        OBD_BRW_WRITE, 0, 0, 0, 0);
-                if (rc != 0) { /* async failed, try sync.. */
-                        struct obd_io_group *oig;
-                        rc = oig_init(&oig);
-                        if (rc)
-                                GOTO(out, rc);
-
-                        llap->llap_write_queued = 0;
-                        rc = obd_queue_group_io(exp, lsm, NULL, oig,
-                                                llap->llap_cookie,
-                                                OBD_BRW_WRITE, 0, to, 0,
-                                                ASYNC_READY | ASYNC_URGENT |
-                                                ASYNC_COUNT_STABLE |
-                                                ASYNC_GROUP_SYNC);
-
-                        if (rc)
-                                GOTO(free_oig, rc);
-
-                        rc = obd_trigger_group_io(exp, lsm, NULL, oig);
-                        if (rc)
-                                GOTO(free_oig, rc);
-
-                        rc = oig_wait(oig);
-free_oig:
-                        oig_release(oig);
+                
+                rc = queue_or_sync_write(exp, ll_i2info(inode)->lli_smd, llap,
+                                         to, 0);
+                if (rc)
                         GOTO(out, rc);
-                }
-                LL_CDEBUG_PAGE(D_PAGE, page, "write queued\n");
-                //llap_write_pending(inode, llap);
         } else {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_HITS);
         }
 
         /* put the page in the page cache, from now on ll_removepage is
-         * responsible for cleaning up the llap */
-        set_page_dirty(page);
+         * responsible for cleaning up the llap.
+         * only set page dirty when it's queued to be write out */
+        if (llap->llap_write_queued)
+                set_page_dirty(page);
 
 out:
+        size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (rc == 0) {
-                size = (((obd_off)page->index) << PAGE_SHIFT) + to;
                 lov_increase_kms(exp, lsm, size);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);
+        } else if (size > inode->i_size) {
+                /* this page beyond the pales of i_size, so it can't be
+                 * truncated in ll_p_r_e during lock revoking. we must
+                 * teardown our book-keeping here. */
+                ll_removepage(page);
         }
         RETURN(rc);
 }
@@ -504,6 +540,44 @@ static void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
                  ra->ra_cur_pages, len);
         ra->ra_cur_pages -= len;
         spin_unlock(&sbi->ll_lock);
+}
+
+int ll_writepage(struct page *page)
+{
+        struct inode *inode = page->mapping->host;
+        struct obd_export *exp;
+        struct ll_async_page *llap;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(!PageDirty(page));
+        LASSERT(PageLocked(page));
+
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                GOTO(out, rc = -EINVAL);
+
+        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
+        if (IS_ERR(llap))
+                GOTO(out, rc = PTR_ERR(llap));
+
+        page_cache_get(page);
+        if (llap->llap_write_queued) {
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                                         llap->llap_cookie,
+                                         ASYNC_READY | ASYNC_URGENT);
+        } else {
+                rc = queue_or_sync_write(exp, ll_i2info(inode)->lli_smd, llap,
+                                         PAGE_SIZE, ASYNC_READY | 
+                                         ASYNC_URGENT);
+        }
+        if (rc)
+                page_cache_release(page);
+out:
+        if (rc)
+                unlock_page(page);
+        RETURN(rc);
 }
 
 /* called for each page in a completed rpc.*/
@@ -586,7 +660,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, 0);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
                        page->index, PTR_ERR(llap));
@@ -673,7 +747,7 @@ void ll_ra_accounting(struct page *page, struct address_space *mapping)
 {
         struct ll_async_page *llap;
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
         if (IS_ERR(llap))
                 return;
 
@@ -750,7 +824,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
                 /* we do this first so that we can see the page in the /proc
                  * accounting */
-                llap = llap_from_page(page);
+                llap = llap_from_page(page, LLAP_ORIGIN_READAHEAD);
                 if (IS_ERR(llap) || llap->llap_defer_uptodate)
                         goto next_page;
 
@@ -929,7 +1003,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        llap = llap_from_page(page);
+        llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
 
@@ -957,17 +1031,10 @@ int ll_readpage(struct file *filp, struct page *page)
         }
 
         if (rc == 0) {
-                static unsigned long next_print;
-                CDEBUG(D_INODE, "ino %lu page %lu (%llu) didn't match a lock\n",
-                       inode->i_ino, page->index,
-                       (long long)page->index << PAGE_CACHE_SHIFT);
-                if (0 && time_after(jiffies, next_print)) {
-                        CWARN("ino %lu page %lu (%llu) not covered by "
-                               "a lock (mmap?).  check debug logs.\n",
-                               inode->i_ino, page->index,
-                               (long long)page->index << PAGE_CACHE_SHIFT);
-                        next_print = jiffies + 30 * HZ;
-                }
+                CWARN("ino %lu page %lu (%llu) not covered by "
+                      "a lock (mmap?).  check debug logs.\n",
+                      inode->i_ino, page->index,
+                      (long long)page->index << PAGE_CACHE_SHIFT);
         }
 
         rc = ll_issue_page_read(exp, llap, oig, 0);

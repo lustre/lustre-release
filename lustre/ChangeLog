@@ -11,6 +11,7 @@
 	- "lctl deactivate" will stop automatic recovery attempts (3406)
 	- look for existing locks in ldlm_handle_enqueue() (3764)
 	- don't resolve lock handle twice in recovery avoiding race (4401)
+	- basic mmap support (3918)
 	
 2004-08-24  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.5
