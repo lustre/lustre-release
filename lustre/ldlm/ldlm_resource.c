@@ -73,6 +73,7 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (client) {
+                        spin_unlock(&res->lr_lock);
                         rc = ldlm_cli_cancel(lock->l_client, lock);
                         if (rc < 0) {
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
@@ -80,6 +81,8 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         }
                         if (rc == ELDLM_RESOURCE_FREED)
                                 rc = 1;
+                        else
+                                spin_lock(&res->lr_lock);
                 } else {
                         CERROR("Freeing a lock still held by a client node.\n");
 
