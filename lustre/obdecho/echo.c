@@ -1,15 +1,24 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/fs/obdecho/echo.c
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- * by Peter Braam <braam@clusterfs.com>
- * and Andreas Dilger <adilger@clusterfs.com>
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define OBDECHO_VERSION "1.0"
@@ -443,8 +452,7 @@ int echo_detach(struct obd_device *dev)
         return lprocfs_dereg_obd(dev);
 }
 
-
-struct obd_ops echo_obd_ops = {
+static struct obd_ops echo_obd_ops = {
         o_attach:       echo_attach,
         o_detach:       echo_detach,
         o_connect:      echo_connect,
@@ -461,26 +469,33 @@ struct obd_ops echo_obd_ops = {
         o_cleanup:      echo_cleanup
 };
 
+extern int echo_client_init(void);
+extern void echo_client_cleanup(void);
+
 static int __init obdecho_init(void)
 {
         int rc;
-        
 
         printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION
                " info@clusterfs.com\n");
 
         echo_proc_init();
-        rc = class_register_type(&echo_obd_ops, status_class_var, 
+        rc = class_register_type(&echo_obd_ops, status_class_var,
                                  OBD_ECHO_DEVICENAME);
-        RETURN(rc);
-        
+        if (rc)
+                RETURN(rc);
 
+        rc = echo_client_init();
+        if (rc)
+                class_unregister_type(OBD_ECHO_DEVICENAME);
+
+        RETURN(rc);
 }
 
 static void __exit obdecho_exit(void)
 {
-                
         echo_proc_fini();
+        echo_client_cleanup();
         class_unregister_type(OBD_ECHO_DEVICENAME);
 }
 

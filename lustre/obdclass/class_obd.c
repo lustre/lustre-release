@@ -86,14 +86,12 @@ static int obd_class_release(struct inode * inode, struct file * file)
         RETURN(0);
 }
 
-
 static inline void obd_data2conn(struct lustre_handle *conn,
                                  struct obd_ioctl_data *data)
 {
         conn->addr = data->ioc_addr;
         conn->cookie = data->ioc_cookie;
 }
-
 
 static inline void obd_conn2data(struct obd_ioctl_data *data,
                                  struct lustre_handle *conn)
@@ -130,38 +128,23 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                             unsigned int cmd, unsigned long arg)
 {
         char *buf = NULL;
-        int len = 0;
         struct obd_ioctl_data *data;
         struct obd_device *obd = filp->private_data;
-
         struct lustre_handle conn;
-        int rw = OBD_BRW_READ;
-        int err = 0;
-        int serialised = 0;
-
+        int err = 0, len = 0;
         ENTRY;
 
-        switch (cmd)
-        {
-        case OBD_IOC_BRW_WRITE:
-        case OBD_IOC_BRW_READ:
-        case OBD_IOC_GETATTR:
-                break;
-        default:
-                down(&obd_conf_sem);
-                serialised = 1;
-                break;
-        }
+        down(&obd_conf_sem);
 
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
             cmd != OBD_IOC_LIST &&
             cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
                 CERROR("OBD ioctl: No device\n");
-                GOTO(out, err=-EINVAL);
+                GOTO(out, err = -EINVAL);
         }
         if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
-                GOTO(out, err=-EINVAL);
+                GOTO(out, err = -EINVAL);
         }
         data = (struct obd_ioctl_data *)buf;
 
@@ -379,8 +362,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         if(data->ioc_inlbuf2)
                                 OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_type = NULL;
-
-                        } else {
+                } else {
                         obd->obd_flags |= OBD_ATTACHED;
 
                         type->typ_refcnt++;
@@ -502,156 +484,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 GOTO(out, err=0);
         }
 
-        case OBD_IOC_CREATE: {
-                struct lov_stripe_md *lsm = NULL;
-                obd_data2conn(&conn, data);
-
-#warning FIXME: save lsm into file handle for other ops, release on close
-                err = obd_create(&conn, &data->ioc_obdo1, &lsm);
-                if (!err) {
-                        err = copy_to_user((void *)arg, data, sizeof(*data));
-                        if (err)
-                                err = -EFAULT;
-                }
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_GETATTR: {
-                obd_data2conn(&conn, data);
-                err = obd_getattr(&conn, &data->ioc_obdo1, NULL);
-                if (!err) {
-                        err = copy_to_user((void *)arg, data, sizeof(*data));
-                        if (err)
-                                err = -EFAULT;
-                }
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_SETATTR: {
-                obd_data2conn(&conn, data);
-                err = obd_setattr(&conn, &data->ioc_obdo1, NULL);
-                if (!err) {
-                        err = copy_to_user((void *)arg, data, sizeof(*data));
-                        if (err)
-                                err = -EFAULT;
-                }
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_DESTROY: {
-                //void *ea;
-                obd_data2conn(&conn, data);
-
-                err = obd_destroy(&conn, &data->ioc_obdo1, NULL);
-                if (!err) {
-                        err = copy_to_user((void *)arg, data, sizeof(*data));
-                        if (err)
-                                err = -EFAULT;
-                }
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_OPEN: {
-                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
-
-                obd_data2conn(&conn, data);
-                err = obd_open(&conn, &data->ioc_obdo1, lsm);
-                if (!err) {
-                        err = copy_to_user((void *)arg, data, sizeof(*data));
-                        if (err)
-                                err = -EFAULT;
-                }
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_CLOSE: {
-                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
-
-                obd_data2conn(&conn, data);
-                err = obd_close(&conn, &data->ioc_obdo1, lsm);
-                GOTO(out, err);
-        }
-
-        case OBD_IOC_BRW_WRITE:
-                rw = OBD_BRW_WRITE;
-        case OBD_IOC_BRW_READ: {
-                struct lov_stripe_md tmp_lsm; // XXX fill in from create
-                struct lov_stripe_md *lsm = &tmp_lsm; // XXX fill in from create
-                struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
-                obd_count       pages = 0;
-                struct brw_page *pga, *pgp;
-                __u64 id = data->ioc_obdo1.o_id;
-                int gfp_mask = (id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
-                int verify = (id != 0);
-                __u64 off;
-                int j;
-
-                if (!brw_cbd)
-                        GOTO(out, err = -ENOMEM);
-
-                obd_data2conn(&conn, data);
-
-                pages = data->ioc_count / PAGE_SIZE;
-                off = data->ioc_offset;
-
-                CDEBUG(D_INODE, "BRW %s with %d pages @ "LPX64"\n",
-                       rw == OBD_BRW_READ ? "read" : "write", pages, off);
-                OBD_ALLOC(pga, pages * sizeof(*pga));
-                if (!pga) {
-                        CERROR("no memory for %d BRW per-page data\n", pages);
-                        GOTO(brw_free, err = -ENOMEM);
-                }
-
-                memset(lsm, 0, sizeof(*lsm)); // XXX don't do this later
-                lsm->lsm_object_id = id; // ensure id == lsm->lsm_object_id
-
-                for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
-                        pgp->pg = alloc_pages(gfp_mask, 0);
-                        if (!pgp->pg) {
-                                CERROR("no memory for brw pages\n");
-                                GOTO(brw_cleanup, err = -ENOMEM);
-                        }
-                        pgp->count = PAGE_SIZE;
-                        pgp->off = off;
-                        pgp->flag = 0;
-
-                        if (verify) {
-                                void *addr = kmap(pgp->pg);
-
-                                if (rw == OBD_BRW_WRITE)
-                                        page_debug_setup(addr, pgp->count,
-                                                         pgp->off, id);
-                                else
-                                        page_debug_setup(addr, pgp->count,
-                                                         0xdeadbeef00c0ffee,
-                                                         0xdeadbeef00c0ffee);
-                                kunmap(pgp->pg);
-                        }
-                }
-
-                err = obd_brw(rw, &conn, lsm, j, pga, ll_sync_brw_cb, brw_cbd);
-                if (err)
-                        CERROR("test_brw: error from obd_brw: err = %d\n", err);
-                EXIT;
-        brw_cleanup:
-                for (j = 0, pgp = pga; j < pages; j++, pgp++) {
-                        if (pgp->pg != NULL) {
-                                if (verify && !err) {
-                                        void *addr = kmap(pgp->pg);
-
-                                        err = page_debug_check("test_brw",
-                                                               addr,
-                                                               PAGE_SIZE,
-                                                               pgp->off,id);
-                                        kunmap(pgp->pg);
-                                }
-                                __free_pages(pgp->pg, 0);
-                        }
-                }
-        brw_free:
-                OBD_FREE(pga, pages * sizeof(*pga));
-                GOTO(out, err);
-        }
         default:
                 obd_data2conn(&conn, data);
 
@@ -668,8 +500,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
  out:
         if (buf)
                 OBD_FREE(buf, len);
-        if (serialised)
-                up(&obd_conf_sem);
+        up(&obd_conf_sem);
         RETURN(err);
 } /* obd_class_ioctl */
 
@@ -677,9 +508,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
-        ioctl: obd_class_ioctl,       /* ioctl */
+        ioctl: obd_class_ioctl,      /* ioctl */
         open: obd_class_open,        /* open */
-        release: obd_class_release,     /* release */
+        release: obd_class_release,  /* release */
 };
 
 /* modules setup */
@@ -693,7 +524,6 @@ static struct miscdevice obd_psdev = {
 void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 
 #ifdef CONFIG_HIGHMEM
-#warning "using kmap accounting for deadlock avoidance"
 /* Allow at most 3/4 of the kmap mappings to be consumed by vector I/O
  * requests.  This avoids deadlocks on servers which have a lot of clients
  * doing vector I/O.  We don't need to do this for non-vector I/O requests
@@ -780,14 +610,9 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_conn2ldlmimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_all);
-//EXPORT_SYMBOL(class_uuid_parse);
 EXPORT_SYMBOL(class_uuid_unparse);
-//EXPORT_SYMBOL(class_multi_setup);
-//EXPORT_SYMBOL(class_multi_cleanup);
 
 EXPORT_SYMBOL(class_signal_connection_failure);
-EXPORT_SYMBOL(ll_sync_brw_cb);
-EXPORT_SYMBOL(ll_init_brw_cb_data);
 EXPORT_SYMBOL(class_nm_to_type);
 
 static int __init init_obdclass(void)

@@ -7,12 +7,7 @@
  * See the file COPYING in this distribution
  */
 
-
-#ifndef OBD_ECHO_DEVICENAME
 #define OBD_ECHO_DEVICENAME "obdecho"
-#endif
-
-extern struct obd_ops echo_obd_ops;
+#define OBD_ECHO_CLIENT_DEVICENAME "echo_client"
 
 #endif
-

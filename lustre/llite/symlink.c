@@ -32,7 +32,7 @@ static int ll_readlink_internal(struct inode *inode,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int rc, len = inode->i_size + 1;
+        int rc, symlen = inode->i_size + 1;
         ENTRY;
 
         *request = NULL;
@@ -44,7 +44,7 @@ static int ll_readlink_internal(struct inode *inode,
         }
 
         rc = mdc_getattr(&sbi->ll_mdc_conn, inode->i_ino, S_IFLNK,
-                         OBD_MD_LINKNAME, len, request);
+                         OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 CERROR("inode "LPD64": rc = %d\n", inode->i_ino, rc);
                 RETURN(rc);
@@ -52,10 +52,10 @@ static int ll_readlink_internal(struct inode *inode,
 
         *symname = lustre_msg_buf((*request)->rq_repmsg, 1);
 
-        OBD_ALLOC(lli->lli_symlink_name, len);
+        OBD_ALLOC(lli->lli_symlink_name, symlen);
         /* do not return an error if we cannot cache the symlink locally */
         if (lli->lli_symlink_name)
-                memcpy(lli->lli_symlink_name, *symname, len);
+                memcpy(lli->lli_symlink_name, *symname, symlen);
 
         RETURN(0);
 }

@@ -29,7 +29,6 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
-#include <linux/obd_lov.h>
 #include <linux/lprocfs_status.h>
 
 #define REQUEST_MINOR 244
@@ -126,15 +125,11 @@ int mdc_getattr(struct lustre_handle *conn,
         ll_ino2fid(&body->fid1, ino, 0, type);
         body->valid = valid;
 
-        if (S_ISREG(type)) {
-                struct client_obd *mdc = &class_conn2obd(conn)->u.cli;
-                bufcount = 2;
-                size[1] = mdc->cl_max_mds_easize;
-        } else if (valid & OBD_MD_LINKNAME) {
-                bufcount = 2;
-                size[1] = ea_size;
+        if (ea_size) {
+                size[bufcount] = ea_size;
+                bufcount++;
                 body->size = ea_size;
-                CDEBUG(D_INODE, "allocating %d bytes for symlink in packet\n",
+                CDEBUG(D_INODE, "reserving %d bytes for MD/symlink in packet\n",
                        ea_size);
         }
         req->rq_replen = lustre_msg_size(bufcount, size);
@@ -347,8 +342,8 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                                 de->d_name.name, de->d_name.len);
 
                 req->rq_replen = lustre_msg_size(3, repsize);
-        } else if (it->it_op  & (IT_GETATTR | IT_RENAME | IT_LINK | 
-                   IT_OPEN |  IT_SETATTR | IT_LOOKUP | IT_READLINK)) {
+        } else if (it->it_op & (IT_GETATTR | IT_RENAME | IT_LINK |
+                   IT_OPEN | IT_SETATTR | IT_LOOKUP | IT_READLINK)) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 
@@ -468,7 +463,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 }
 
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
-             struct lov_stripe_md *lsm, struct lustre_handle *fh,
+             struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **request)
 {
         struct mds_body *body;
@@ -477,21 +472,16 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         struct ptlrpc_request *req;
         ENTRY;
 
-        if (lsm) {
+        if (lmm && lmm_size) {
                 bufcount = 3;
                 size[2] = size[1]; /* shuffle the spare data along */
-
-                size[1] = lsm->lsm_mds_easize;
+                size[1] = lmm_size;
         }
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_OPEN, bufcount, size,
                               NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-
-        if (lsm)
-                lustre_msg_set_op_flags(req->rq_reqmsg, MDS_OPEN_HAS_EA);
-
 
         req->rq_flags |= PTL_RPC_FL_REPLAY;
         body = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -500,8 +490,13 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
         body->flags = HTON__u32(flags);
         memcpy(&body->handle, fh, sizeof(body->handle));
 
-        if (lsm)
-                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 1), lsm);
+        if (lmm && lmm_size) {
+                CDEBUG(D_INODE, "sending %u bytes MD for ino LPU64\n",
+                       lmm_size, ino);
+                lustre_msg_set_op_flags(req->rq_reqmsg, MDS_OPEN_HAS_EA);
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 1), lmm, lmm_size);
+                body->flags |= HTON__u32(OBD_MD_FLEASIZE);
+        }
 
         req->rq_replen = lustre_msg_size(1, size);
 
@@ -515,9 +510,9 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         /* If open is replayed, we need to fix up the fh. */
         req->rq_replay_cb = mdc_replay_open;
-        replay_data = lustre_msg_buf(req->rq_reqmsg, lsm ? 2 : 1);
+        replay_data = lustre_msg_buf(req->rq_reqmsg, lmm ? 2 : 1);
         replay_data->fh = fh;
-        
+
         EXIT;
  out:
         *request = req;
@@ -658,7 +653,7 @@ struct obd_ops mdc_obd_ops = {
 
 static int __init ptlrpc_request_init(void)
 {
-        return class_register_type(&mdc_obd_ops, status_class_var, 
+        return class_register_type(&mdc_obd_ops, status_class_var,
                                    LUSTRE_MDC_NAME);
 }
 

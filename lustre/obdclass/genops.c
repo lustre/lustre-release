@@ -1,15 +1,25 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * lustre/obdclass/genops.c
- * Copyright (C) 2001-2002  Cluster File Systems, Inc.
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
- *
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -26,89 +36,6 @@ kmem_cache_t *import_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-
-/* I would prefer if these next four functions were in ptlrpc, to be honest,
- * but obdclass uses them for the netregression ioctls. -phil */
-static int ll_sync_brw_timeout(void *data)
-{
-        struct brw_cb_data *brw_cbd = data;
-        struct ptlrpc_bulk_desc *desc;
-        ENTRY;
-
-        LASSERT(brw_cbd);
-        desc = brw_cbd->brw_desc;
-
-        if (!desc) {
-                CERROR("no desc for timed-out BRW, reopen Bugzilla 214!\n");
-                RETURN(0); /* back to sleep -- someone had better wake us up! */
-        }
-
-        LASSERT(desc->bd_connection);
-
-        CERROR("IO of %d pages to/from %s:%d (conn %p) timed out\n",
-               desc->bd_page_count, desc->bd_connection->c_remote_uuid,
-               desc->bd_portal, desc->bd_connection);
-        desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
-        desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
-        if (desc->bd_connection && class_signal_connection_failure) {
-                class_signal_connection_failure(desc->bd_connection);
-
-                /* We go back to sleep, until we're resumed or interrupted. */
-                RETURN(0);
-        }
-
-        /* If we can't be recovered, just abort the syscall with -ETIMEDOUT. */
-        RETURN(1);
-}
-
-static int ll_sync_brw_intr(void *data)
-{
-        struct brw_cb_data *brw_cbd = data;
-        struct ptlrpc_bulk_desc *desc = brw_cbd->brw_desc;
-
-        ENTRY;
-        desc->bd_flags |= PTL_RPC_FL_INTR;
-        RETURN(1); /* ignored, as of this writing */
-}
-
-int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase)
-{
-        int ret;
-        ENTRY;
-
-        if (phase == CB_PHASE_START) {
-                struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ll_sync_brw_timeout,
-                                       ll_sync_brw_intr, brw_cbd);
-                ret = l_wait_event(brw_cbd->brw_waitq, brw_cbd->brw_complete, &lwi);
-                if (atomic_dec_and_test(&brw_cbd->brw_refcount))
-                        OBD_FREE(brw_cbd, sizeof(*brw_cbd));
-                if (ret == -EINTR)
-                        RETURN(ret);
-        } else if (phase == CB_PHASE_FINISH) {
-                brw_cbd->brw_err = err;
-                brw_cbd->brw_complete = 1;
-                wake_up(&brw_cbd->brw_waitq);
-                if (atomic_dec_and_test(&brw_cbd->brw_refcount))
-                        OBD_FREE(brw_cbd, sizeof(*brw_cbd));
-                RETURN(err);
-        } else
-                LBUG();
-        EXIT;
-        return 0;
-}
-
-struct brw_cb_data *ll_init_brw_cb_data(void)
-{
-        struct brw_cb_data *brw_cbd;
-
-        OBD_ALLOC(brw_cbd, sizeof(*brw_cbd));
-        if (brw_cbd) {
-                init_waitqueue_head(&brw_cbd->brw_waitq);
-                atomic_set(&brw_cbd->brw_refcount, 2);
-        }
-        RETURN(brw_cbd);
-}
 
 /*
  * support functions: we could use inter-module communication, but this
@@ -149,7 +76,8 @@ struct obd_type *class_nm_to_type(char *nm)
         return type;
 }
 
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars, char *nm)
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
+                        char *nm)
 {
         struct obd_type *type;
         int rc;
@@ -478,7 +406,9 @@ void class_disconnect_all(struct obd_device *obddev)
                         conn.addr = (__u64)(unsigned long)export;
                         conn.cookie = export->exp_cookie;
                         spin_unlock(&obddev->obd_dev_lock);
-                        CERROR("force disconnecting export %p\n", export);
+                        CERROR("force disconnecting %s:%s export %p\n",
+                               export->exp_obd->obd_type->typ_name,
+                               export->exp_uuid, export);
                         rc = obd_disconnect(&conn);
                         if (rc < 0) {
                                 /* AED: not so sure about this...  We can't

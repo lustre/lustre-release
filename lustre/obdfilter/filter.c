@@ -3,13 +3,24 @@
  *
  *  linux/fs/obdfilter/filter.c
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Peter Braam <braam@clusterfs.com>
- * and Andreas Dilger <adilger@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -700,10 +711,15 @@ static struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
                                            oa->o_id, oa->o_mode);
         }
 
+        if (IS_ERR(dentry)) {
+                CERROR("%s error looking up object: "LPX64"\n", what, oa->o_id);
+                RETURN(dentry);
+        }
+
         if (!dentry->d_inode) {
-                CERROR("%s on non-existent object: "LPU64"\n", what, oa->o_id);
+                CERROR("%s on non-existent object: "LPX64"\n", what, oa->o_id);
                 f_dput(dentry);
-                dentry = ERR_PTR(-ENOENT);
+                RETURN(ERR_PTR(-ENOENT));
         }
 
         return dentry;
@@ -947,8 +963,7 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                               struct lov_stripe_md *lsm, obd_count oa_bufs,
-                              struct brw_page *pga, brw_cb_t callback,
-                              struct brw_cb_data *brw_cbd)
+                              struct brw_page *pga, struct obd_brw_set *set)
 {
         struct obd_export       *export = class_conn2export(conn);
         struct obd_run_ctxt      saved;
@@ -1712,9 +1727,10 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
          */
         while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
                 struct brw_page pg;
-                struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
+                struct obd_brw_set *set;
 
-                if (!brw_cbd) {
+                set = obd_brw_set_new();
+                if (set == NULL) {
                         err = -ENOMEM;
                         EXIT;
                         break;
@@ -1726,16 +1742,16 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 pg.flag = 0;
 
                 page->index = index;
-                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg,
-                              ll_sync_brw_cb, brw_cbd);
-
-                if ( err ) {
+                set->brw_callback = ll_brw_sync_wait;
+                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg, set);
+                obd_brw_set_free(set);
+                if (err) {
                         EXIT;
                         break;
                 }
 
-                brw_cbd = ll_init_brw_cb_data();
-                if (!brw_cbd) {
+                set = obd_brw_set_new();
+                if (set == NULL) {
                         err = -ENOMEM;
                         EXIT;
                         break;
@@ -1743,11 +1759,12 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 pg.flag = OBD_BRW_CREATE;
                 CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
-                err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1, &pg,
-                              ll_sync_brw_cb, brw_cbd);
+                set->brw_callback = ll_brw_sync_wait;
+                err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1, &pg, set);
+                obd_brw_set_free(set);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
-                if ( err ) {
+                if (err) {
                         EXIT;
                         break;
                 }

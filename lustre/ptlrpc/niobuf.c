@@ -278,6 +278,52 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
         return 0;
 }
 
+void obd_brw_set_add(struct obd_brw_set *set, struct ptlrpc_bulk_desc *desc)
+{
+        atomic_inc(&desc->bd_refcount);
+        atomic_inc(&set->brw_refcount);
+        desc->bd_brw_set = set;
+        list_add(&desc->bd_set_chain, &set->brw_desc_head);
+}
+
+struct obd_brw_set *obd_brw_set_new(void)
+{
+        struct obd_brw_set *set;
+
+        OBD_ALLOC(set, sizeof(*set));
+
+        if (set != NULL) {
+                init_waitqueue_head(&set->brw_waitq);
+                INIT_LIST_HEAD(&set->brw_desc_head);
+                atomic_set(&set->brw_refcount, 0);
+        }
+
+        return set;
+}
+
+void obd_brw_set_free(struct obd_brw_set *set)
+{
+        struct list_head *tmp, *next;
+        ENTRY;
+
+        if (!list_empty(&set->brw_desc_head)) {
+                EXIT;
+                return;
+        }
+
+        list_for_each_safe(tmp, next, &set->brw_desc_head) {
+                struct ptlrpc_bulk_desc *desc =
+                        list_entry(tmp, struct ptlrpc_bulk_desc, bd_set_chain);
+
+                CERROR("Unfinished bulk descriptor: %p\n", desc);
+
+                ptlrpc_abort_bulk(desc);
+        }
+        OBD_FREE(set, sizeof(*set));
+        EXIT;
+        return;
+}
+
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         if (req->rq_repmsg == NULL) {

@@ -253,6 +253,11 @@ class GenConfig:
         osc.appendChild(self.ref("obd", obd_uuid))
         return osc
 
+    def echo_client(self, name, uuid, osc_uuid):
+        ec = self.newService("echo_client", name, uuid)
+        ec.appendChild(self.ref("osc", osc_uuid))
+        return ec
+
     def ost(self, name, uuid, obd_uuid, net_uuid):
         ost = self.newService("ost", name, uuid)
         ost.appendChild(self.ref("network", net_uuid))
@@ -508,7 +513,6 @@ def add_mds(gen, lustre, options, args):
     if not net_uuid:
         error("NODE: ", node_name, "not found")
 
-
     mds = gen.mds(mds_name, mds_uuid, fstype, devname, get_format_flag(options),
                   net_uuid, node_uuid, dev_size=size)
     lustre.appendChild(mds)
@@ -593,6 +597,26 @@ def add_osc(gen, lustre, options, args):
     node_add_profile(gen, node, 'osc', osc_uuid)
 
 
+#ditto
+def add_echo_client(gen, lustre, options, args):
+    """ add an echo client to the profile for this node. """
+    if len(args) < 1:
+        usage()
+    osc_name = args[0]
+    if options.has_key('node'):
+        node_name = options['node']
+    else:
+        error("--echo_client requires a --node argument")
+    node = findByName(lustre, node_name, "node")
+
+    echoname = new_name('ECHO_'+ node_name)
+    echo_uuid = new_uuid(echoname)
+    node_add_profile(gen, node, 'echo_client', echo_uuid)
+    osc_uuid = name2uuid(lustre, osc_name) # either 'osc' or 'lov'
+    echo = gen.echo_client(echoname, echo_uuid, osc_uuid)
+    lustre.appendChild(echo)
+
+
 def add_lov(gen, lustre, options, args):
     """ create a lov """
     if len(args) < 4:
@@ -665,7 +689,8 @@ def add_mtpt(gen, lustre, options, args):
 #
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
-    long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net", "tcpbuf=",
+    long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net",
+                 "echo_client", "tcpbuf=",
                  "route", "router", "merge=", "format", "reformat", "output=",
                  "obdtype=", "fstype=", "obduuid=", "in=", "help", "batch="]
     opts = []
@@ -683,6 +708,8 @@ def parse_cmdline(argv):
             options['ost'] = 1
         if o == "--osc":
             options['osc'] = 1
+        if o == "--echo_client":
+            options['echo_client'] = 1
         if o == "--mds":
             options['mds'] = a
         if o == "--net":
@@ -754,6 +781,8 @@ def do_command(gen, lustre, options, args):
         add_ost(gen, lustre, options, args)
     elif options.has_key('osc'):
         add_osc(gen, lustre, options, args)
+    elif options.has_key('echo_client'):
+        add_echo_client(gen, lustre, options, args)
     elif options.has_key('mtpt'):
         add_mtpt(gen, lustre, options, args)
     elif options.has_key('mds'):

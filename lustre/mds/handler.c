@@ -38,6 +38,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/buffer_head.h>
 #endif
+#include <linux/obd_lov.h>
 #include <linux/lprocfs_status.h>
 
 static kmem_cache_t *mds_file_cache;
@@ -486,8 +487,8 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        mds->mds_max_mdsize = sizeof(struct lov_mds_md) +
-                tgt_count * sizeof(struct lov_object_id);
+        /* XXX the MDS should not really know about this */
+        mds->mds_max_mdsize = lov_mds_md_size(tgt_count);
         rc = mds_get_lovtgts(mds, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
         if (rc) {
@@ -530,13 +531,51 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
+int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
+                int offset, struct mds_body *body, struct inode *inode)
+{
+        struct lov_mds_md *lmm;
+        int lmm_size = req->rq_repmsg->buflens[offset];
+        int rc;
+
+        if (lmm_size == 0) {
+                CERROR("no space reserved for inode %u MD\n", inode->i_ino);
+                RETURN(0);
+        }
+
+        lmm = lustre_msg_buf(req->rq_repmsg, offset);
+
+        /* I don't really like this, but it is a sanity check on the client
+         * MD request.  However, if the client doesn't know how much space
+         * to reserve for the MD, this shouldn't be fatal either...
+         */
+        if (lmm_size > mds->mds_max_mdsize) {
+                CERROR("Reading MD for inode %u of %d bytes > max %d\n",
+                       inode->i_ino, lmm_size, mds->mds_max_mdsize);
+                // RETURN(-EINVAL);
+        }
+
+        /* We don't need to store the reply size, because this buffer is
+         * discarded right after unpacking, and the LOV can figure out the
+         * size itself from the ost count.
+         */
+        if ((rc = mds_fs_get_md(mds, inode, lmm, lmm_size)) < 0) {
+                CDEBUG(D_INFO, "No md for ino %u: rc = %d\n", inode->i_ino, rc);
+        } else {
+                body->valid |= OBD_MD_FLEASIZE;
+                rc = 0;
+        }
+
+        return rc;
+}
+
 static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                                 struct ptlrpc_request *req,
                                 struct mds_body *reqbody, int reply_off)
 {
         struct mds_body *body;
         struct inode *inode = dentry->d_inode;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         if (inode == NULL)
@@ -548,19 +587,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
         mds_pack_inode2body(body, inode);
 
         if (S_ISREG(inode->i_mode)) {
-                struct lov_mds_md *lmm;
-
-                lmm = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
-                lmm->lmm_easize = mds->mds_max_mdsize;
-                rc = mds_fs_get_md(mds, inode, lmm);
-
-                if (rc < 0) {
-                        if (rc == -ENODATA)
-                                RETURN(0);
-                        CERROR("mds_fs_get_md failed: %d\n", rc);
-                        RETURN(rc);
-                }
-                body->valid |= OBD_MD_FLEASIZE;
+                rc = mds_pack_md(mds, req, reply_off + 1, body, inode);
         } else if (S_ISLNK(inode->i_mode) && reqbody->valid & OBD_MD_LINKNAME) {
                 char *symname = lustre_msg_buf(req->rq_repmsg, reply_off + 1);
                 int len = req->rq_repmsg->buflens[reply_off + 1];
@@ -568,13 +595,12 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                 rc = inode->i_op->readlink(dentry, symname, len);
                 if (rc < 0) {
                         CERROR("readlink failed: %d\n", rc);
-                        RETURN(rc);
-                } else
+                } else {
                         CDEBUG(D_INODE, "read symlink dest %s\n", symname);
-
-                body->valid |= OBD_MD_LINKNAME;
+                        body->valid |= OBD_MD_LINKNAME;
+                }
         }
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int mds_getattr_name(int offset, struct ptlrpc_request *req)
@@ -686,17 +712,30 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
-                bufcount = 2;
-                size[1] = mds->mds_max_mdsize;
+                int rc = mds_fs_get_md(mds, inode, NULL, 0);
+                CDEBUG(D_INODE, "got %d bytes MD data for inode %u\n",
+                       rc, inode->i_ino);
+                if (rc < 0) {
+                        if (rc != -ENODATA)
+                                CERROR("error getting inode %u MD: rc = %d\n",
+                                       inode->i_ino, rc);
+                        size[bufcount] = 0;
+                } else if (rc < mds->mds_max_mdsize) {
+                        size[bufcount] = 0;
+                        CERROR("MD size %d larger than maximum possible %u\n",
+                               rc, mds->mds_max_mdsize);
+                } else
+                        size[bufcount] = rc;
+                bufcount++;
         } else if (body->valid & OBD_MD_LINKNAME) {
-                bufcount = 2;
-                size[1] = MIN(inode->i_size + 1, body->size);
+                size[bufcount] = MIN(inode->i_size + 1, body->size);
+                bufcount++;
                 CDEBUG(D_INODE, "symlink size: %d, reply space: %d\n",
                        inode->i_size + 1, body->size);
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
-                CERROR("failed GETATTR_PACK test\n");
+                CERROR("failed MDS_GETATTR_PACK test\n");
                 req->rq_status = -ENOMEM;
                 GOTO(out, rc = -ENOMEM);
         }
@@ -704,7 +743,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
                              &req->rq_repmsg);
         if (rc) {
-                CERROR("out of memory or FAIL_MDS_GETATTR_PACK\n");
+                CERROR("out of memoryK\n");
                 req->rq_status = rc;
                 GOTO(out, rc);
         }
@@ -764,34 +803,47 @@ static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
         return mfd;
 }
 
-static int mds_store_ea(struct mds_obd *mds, struct ptlrpc_request *req,
-                        struct mds_body *body, struct dentry *de,
-                        struct lov_mds_md *lmm)
+static int mds_store_md(struct mds_obd *mds, struct ptlrpc_request *req,
+                        int offset, struct mds_body *body, struct inode *inode)
 {
+        struct lov_mds_md *lmm = lustre_msg_buf(req->rq_reqmsg, offset);
+        int lmm_size = req->rq_reqmsg->buflens[offset];
         struct obd_run_ctxt saved;
         struct obd_ucred uc;
         void *handle;
         int rc, rc2;
+        ENTRY;
 
+        /* I don't really like this, but it is a sanity check on the client
+         * MD request.
+         */
+        if (lmm_size > mds->mds_max_mdsize) {
+                CERROR("Saving MD for inode %u of %d bytes > max %d\n",
+                       inode->i_ino, lmm_size, mds->mds_max_mdsize);
+                //RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_INODE, "storing %d bytes MD for inode %u\n",
+               lmm_size, inode->i_ino);
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
         uc.ouc_cap = body->capability;
-       push_ctxt(&saved, &mds->mds_ctxt, &uc);
-        handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
+        push_ctxt(&saved, &mds->mds_ctxt, &uc);
+        handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
         if (!handle)
                 GOTO(out_ea, rc = -ENOMEM);
 
-        rc = mds_fs_set_md(mds, de->d_inode, handle, lmm);
+        rc = mds_fs_set_md(mds, inode, handle, lmm, lmm_size);
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
-        rc2 = mds_fs_commit(mds, de->d_inode, handle);
+        rc2 = mds_fs_commit(mds, inode, handle);
         if (rc2 && !rc)
                 rc = rc2;
 out_ea:
         pop_ctxt(&saved);
 
-        return rc;
+        RETURN(rc);
 }
 
 static int mds_open(struct ptlrpc_request *req)
@@ -853,9 +905,7 @@ static int mds_open(struct ptlrpc_request *req)
 
         /* check if this inode has seen a delayed object creation */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MDS_OPEN_HAS_EA) {
-                struct lov_mds_md *lmm = lustre_msg_buf(req->rq_reqmsg, 1);
-
-                rc = mds_store_ea(mds, req, body, de, lmm);
+                rc = mds_store_md(mds, req, 1, body, de->d_inode);
                 if (rc) {
                         l_dput(de);
                         mntput(mnt);
@@ -985,7 +1035,7 @@ out:
         RETURN(0);
 }
 
-int mds_reint(int offset, struct ptlrpc_request *req)
+int mds_reint(struct ptlrpc_request *req, int offset)
 {
         int rc;
         struct mds_update_record rec;
@@ -1073,7 +1123,7 @@ int mds_handle(struct ptlrpc_request *req)
                         req->rq_status = rc;
                         break;
                 }
-                rc = mds_reint(0, req);
+                rc = mds_reint(req, 0);
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET_REP, 0);
                 break;
                 }
@@ -1344,7 +1394,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 /* execute policy */
                 switch ((long)it->opc) {
                 case IT_CREAT|IT_OPEN:
-                        rc = mds_reint(2, req);
+                        rc = mds_reint(req, 2);
                         if (rc || (req->rq_status != 0 &&
                                    req->rq_status != -EEXIST)) {
                                 rep->lock_policy_res2 = req->rq_status;
@@ -1359,7 +1409,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_RMDIR:
                 case IT_SYMLINK:
                 case IT_UNLINK:
-                        rc = mds_reint(2, req);
+                        rc = mds_reint(req, 2);
                         if (rc || (req->rq_status != 0 &&
                                    req->rq_status != -EISDIR &&
                                    req->rq_status != -ENOTDIR)) {
@@ -1409,14 +1459,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 /* If the client is about to open a file that doesn't have an MD
                  * stripe record, it's going to need a write lock. */
-                if (it->opc & IT_OPEN) {
-                        struct lov_mds_md *lmm =
-                                lustre_msg_buf(req->rq_repmsg, 2);
-                        if (lmm->lmm_easize == 0) {
-                                LDLM_DEBUG(lock, "open with no EA; returning PW"
-                                           " lock");
-                                lock->l_req_mode = LCK_PW;
-                        }
+                if (it->opc & IT_OPEN &&
+                    !(lustre_msg_get_op_flags(req->rq_reqmsg)&MDS_OPEN_HAS_EA)){
+                        LDLM_DEBUG(lock, "open with no EA; returning PW lock");
+                        lock->l_req_mode = LCK_PW;
                 }
 
                 if (flags & LDLM_FL_INTENT_ONLY) {

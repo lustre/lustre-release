@@ -24,6 +24,16 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 
+/* lov_unpackdesc() is in lov/lov_pack.c */
+
+void lov_packdesc(struct lov_desc *ld)
+{
+        ld->ld_tgt_count = HTON__u32(ld->ld_tgt_count);
+        ld->ld_default_stripe_count = HTON__u32(ld->ld_default_stripe_count);
+        ld->ld_default_stripe_size = HTON__u32(ld->ld_default_stripe_size);
+        ld->ld_pattern = HTON__u32(ld->ld_pattern);
+}
+
 int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                     obd_uuid_t *uuidarray)
 {

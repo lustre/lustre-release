@@ -1,5 +1,5 @@
-TBD
-	* version TBD
+2002-11-18  Phil Schwan  <phil@clusterfs.com>
+	* version v0_5_17
 	* bug fixes
 	  - fix null d_it dereference (346)
 	  - fix full OST/dbench hang (333)
@@ -11,11 +11,18 @@ TBD
 	  - free locks on clients when inodes are removed due to memory
 	    pressure (201)
 	  - fix inode pointer in lock data (285)
-	  - partial support for multiple MDS on a single host (623279, 241)
+	  - partial support for multiple MDS on a single host (241)
 	  - data locks weren't cancelled at clear_inode time (290, 311)
 	  - intent locks could lead to unbounded lock growth (205)
 	  - added a maximum lock count, an LRU list, and a flusher
 	  - fix multiple rename (365)
+	  - properly abstracted the echo client
+	  - OSC locked 1 byte too many; fixed
+	  - rewrote brw callback code:
+	    - fixed recovery bugs related to LOVs (306)
+	    - fixed too-many-pages-in-one-write crash (191)
+	    - fixed (again) crash in sync_io_timeout (214)
+	    - probably fixed callback-related race (385)
 	* protocol change
           - Add capability to MDS protocol
 	  - LDLM cancellations and callbacks on different portals

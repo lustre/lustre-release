@@ -45,24 +45,14 @@
 #endif
 
 
-/*
- *  ======== OBD Device Declarations ===========
- */
+/* OBD Device Declarations */
 #define MAX_OBD_DEVICES 128
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 #define OBD_ATTACHED 0x1
 #define OBD_SET_UP   0x2
 
-extern struct proc_dir_entry *
-proc_lustre_register_obd_device(struct obd_device *obd);
-extern void proc_lustre_release_obd_device(struct obd_device *obd);
-extern void proc_lustre_remove_obd_entry(const char* name,
-                                         struct obd_device *obd);
-
-/*
- *  ======== OBD Operations Declarations ===========
- */
+/* OBD Operations Declarations */
 
 #ifdef __KERNEL__
 static inline int obd_check_conn(struct lustre_handle *conn)
@@ -193,6 +183,90 @@ static inline int obd_cleanup(struct obd_device *obd)
 
         rc = OBP(obd, cleanup)(obd);
         RETURN(rc);
+}
+
+/* Pack an in-memory MD struct for sending to the MDS and/or disk.
+ * Returns +ve size of packed MD (0 for free), or -ve error.
+ *
+ * If @wire_tgt == NULL, MD size is returned (max size if @mem_src == NULL).
+ * If @*wire_tgt != NULL and @mem_src == NULL, @*wire_tgt will be freed.
+ * If @*wire_tgt == NULL, it will be allocated
+ */
+static inline int obd_packmd(struct lustre_handle *conn,
+                             struct lov_mds_md **wire_tgt,
+                             struct lov_stripe_md *mem_src)
+{
+        struct obd_export *exp;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, packmd);
+
+        RETURN(OBP(exp->exp_obd, packmd)(conn, wire_tgt, mem_src));
+}
+
+static inline int obd_size_wiremd(struct lustre_handle *conn,
+                                  struct lov_stripe_md *mem_src)
+{
+        return obd_packmd(conn, NULL, mem_src);
+}
+
+/* helper functions */
+static inline int obd_alloc_wiremd(struct lustre_handle *conn,
+                                   struct lov_mds_md **wire_tgt)
+{
+        LASSERT(wire_tgt);
+        LASSERT(*wire_tgt == NULL);
+        return obd_packmd(conn, wire_tgt, NULL);
+}
+
+static inline int obd_free_wiremd(struct lustre_handle *conn,
+                                  struct lov_mds_md **wire_tgt)
+{
+        LASSERT(wire_tgt);
+        LASSERT(*wire_tgt);
+        return obd_packmd(conn, wire_tgt, NULL);
+}
+
+/* Unpack an MD struct from the MDS and/or disk to in-memory format.
+ * Returns +ve size of unpacked MD (0 for free), or -ve error.
+ *
+ * If @mem_tgt == NULL, MD size is returned (max size if @wire_src == NULL).
+ * If @*mem_tgt != NULL and @wire_src == NULL, @*mem_tgt will be freed.
+ * If @*mem_tgt == NULL, it will be allocated
+ */
+static inline int obd_unpackmd(struct lustre_handle *conn,
+                               struct lov_stripe_md **mem_tgt,
+                               struct lov_mds_md *wire_src)
+{
+        struct obd_export *exp;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, unpackmd);
+
+        RETURN(OBP(exp->exp_obd, unpackmd)(conn, mem_tgt, wire_src));
+}
+
+static inline int obd_size_memmd(struct lustre_handle *conn,
+                                 struct lov_mds_md *wire_src)
+{
+        return obd_unpackmd(conn, NULL, wire_src);
+}
+
+/* helper functions */
+static inline int obd_alloc_memmd(struct lustre_handle *conn,
+                                  struct lov_stripe_md **mem_tgt)
+{
+        LASSERT(mem_tgt);
+        LASSERT(*mem_tgt == NULL);
+        return obd_unpackmd(conn, mem_tgt, NULL);
+}
+
+static inline int obd_free_memmd(struct lustre_handle *conn,
+                                 struct lov_stripe_md **mem_tgt)
+{
+        LASSERT(mem_tgt);
+        LASSERT(*mem_tgt);
+        return obd_unpackmd(conn, mem_tgt, NULL);
 }
 
 static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
@@ -327,8 +401,7 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
 
 static inline int obd_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *ea, obd_count oa_bufs,
-                          struct brw_page *pg,
-                          brw_cb_t callback, struct brw_cb_data *data)
+                          struct brw_page *pg, struct obd_brw_set *set)
 {
         struct obd_export *exp;
         int rc;
@@ -341,7 +414,7 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, callback, data);
+        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, set);
         RETURN(rc);
 }
 
@@ -438,9 +511,7 @@ static inline int obd_cancel_unused(struct lustre_handle *conn,
 
 #endif
 
-/*
- *  ======== OBD Metadata Support  ===========
- */
+/* OBD Metadata Support */
 
 extern int obd_init_caches(void);
 extern void obd_cleanup_caches(void);

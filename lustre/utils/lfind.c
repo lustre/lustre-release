@@ -14,26 +14,26 @@
 #define	printk printf
 #include <linux/lustre_lib.h>
 #include <linux/lustre_lite.h>
+#include <linux/obd_lov.h>
 
 #warning Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c
 #define MAX_LOV_UUID_COUNT	1000
 #define OBD_NOT_FOUND		((__u32)-1)
-#define	debugMsg		if (debug) printf
 
 char *		cmd;
-int		debug;
 struct option	longOpts[] = {
-			{"debug", 0, 0, 'd'},
 			{"help", 0, 0, 'h'},
 			{"obd", 1, 0, 'o'},
 			{"query", 0, 0, 'o'},
+			{"verbose", 0, 0, 'v'},
 			{0, 0, 0, 0}
 		};
 int		query;
-char *		shortOpts = "dho:qv";
+int		verbose;
+char *		shortOpts = "ho:qv";
 char *		usageMsg = "[ --obd <obd uuid> | --query ] <dir|file> ...";
 
-int		max_stripe_count = MAX_LOV_UUID_COUNT;
+int		max_ost_count = MAX_LOV_UUID_COUNT;
 obd_uuid_t *	obduuid;
 __u32		obdcount;
 __u32		obdindex;
@@ -44,8 +44,8 @@ struct lov_desc desc;
 obd_uuid_t *	uuids;
 int		uuidslen;
 int		cfglen;
-struct lov_user_md *lum;
-int		lumlen;
+struct lov_mds_md *lmm;
+int		lmmlen;
 
 void	init();
 void	usage(FILE *stream);
@@ -67,9 +67,6 @@ main (int argc, char **argv) {
 
 	while ((c = getopt_long(argc, argv, shortOpts, longOpts, NULL)) != -1) {
 		switch (c) {
-		case 'd':
-			debug++;
-			break;
 		case 'o':
 			if (obduuid) {
 				errMsg("obd '%s' already specified: '%s'.",
@@ -84,6 +81,9 @@ main (int argc, char **argv) {
 			exit(0);
 		case 'q':
 			query++;
+			break;
+		case 'v':
+			verbose++;
 			break;
 		case '?':
 			usage(stderr);
@@ -120,13 +120,13 @@ init()
 
 	datalen = size_round(sizeof(data));
 	desclen = size_round(sizeof(desc));
-	uuidslen = size_round(max_stripe_count * sizeof(*uuids));
+	uuidslen = size_round(max_ost_count * sizeof(*uuids));
 	cfglen = datalen + desclen + uuidslen;
-	lumlen = sizeof(*lum) + max_stripe_count * sizeof(*lum->lum_luoinfo);
-	if (cfglen > lumlen)
+	lmmlen = lov_mds_md_size(max_ost_count);
+	if (cfglen > lmmlen)
 		buflen = cfglen;
 	else
-		buflen = lumlen;
+		buflen = lmmlen;
 
 #warning max ioctl buffer size currently hardcoded to 8192
 	if (buflen > 8192) {
@@ -138,15 +138,14 @@ init()
 		remaining = nuuids * sizeof(*uuids);
 		if (uuidslen > remaining)
 			nuuids--;
-		nluoinfos = (buflen - sizeof(*lum)) / sizeof(*lum->lum_luoinfo);
+		nluoinfos = (buflen - sizeof(*lmm)) / sizeof(*lmm->lmm_objects);
 		if (nuuids > nluoinfos)
-			max_stripe_count = nluoinfos;
+			max_ost_count = nluoinfos;
 		else
-			max_stripe_count = nuuids;
+			max_ost_count = nuuids;
 
 		cfglen = datalen + desclen + uuidslen;
-		lumlen = sizeof(*lum) + max_stripe_count *
-				sizeof(*lum->lum_luoinfo);
+		lmmlen = lov_mds_md_size(max_ost_count);
 	}
 
 	if ((buf = malloc(buflen)) == NULL) {
@@ -155,7 +154,7 @@ init()
 		exit(1);
 	}
 
-	lum = (struct lov_user_md *)buf;
+	lmm = (struct lov_mds_md *)buf;
 	uuids = (obd_uuid_t *)buf;
 }
 
@@ -185,12 +184,8 @@ processPath(char *path)
 }
 
 int
-processFile(const char *path,
-	const struct stat *sp,
-	int flag,
-	struct FTW *ftwp
-) {
-	struct lov_user_oinfo *luoinfo;
+processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
+{
 	int fd;
 	int count;
 	int rc;
@@ -211,9 +206,10 @@ processFile(const char *path,
 	}
 
 	memset((void *)buf, 0, buflen);
-        lum->lum_stripe_count = max_stripe_count;
+	lmm->lmm_magic = LOV_MAGIC;
+        lmm->lmm_ost_count = max_ost_count;
 
-	if ((rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lum)) < 0) {
+	if ((rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm)) < 0) {
 		errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed.");
 		perror("ioctl");
 		exit(1);
@@ -221,29 +217,38 @@ processFile(const char *path,
 
 	close(fd);
 
-	count = lum->lum_stripe_count;
-	luoinfo = lum->lum_luoinfo;
+	if (query || verbose)
+		printf("\n%s:\n", path);
 
-	if (query) {
+	if (verbose) {
+		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
+		printf("lmm_object_id:      0x%llx\n", lmm->lmm_object_id);
+		printf("lmm_stripe_offset:  %d\n", lmm->lmm_stripe_offset);
+		printf("lmm_stripe_count:   %d\n", lmm->lmm_stripe_count);
+		printf("lmm_ost_count:      %d\n", lmm->lmm_ost_count);
+		printf("lmm_stripe_pattern: %d\n", lmm->lmm_stripe_pattern);
+	}
+
+	count = lmm->lmm_ost_count;
+
+	if (query || verbose) {
+		struct lov_object_id *loi;
+		__u64 oid;
+
+		loi = lmm->lmm_objects;
+
+		printf("obdidx\tobjid\n");
+
+		for (i = 0; i < count; i++, loi++)
+			if ((oid = loi->l_object_id))
+				printf("%6d\t%5lld\n", i, oid);
+
+		if (query)
+			return(0);
+	}
+
+	if (lmm->lmm_objects[obdindex].l_object_id)
 		printf("%s\n", path);
-		for (i = 0; i < count; i++, luoinfo++) {
-			printf("%4d: obdindex: %-4d objid: %lld\n",
-				i, luoinfo->luo_idx, luoinfo->luo_id);
-		}
-		return(0);
-	}
-
-	debugMsg("LL_IOC_LOV_GETSTRIPE:%s: obdindex: %d count: %d\n",
-		path, obdindex, count);
-
-	for (i = 0; i < count; i++, luoinfo++) {
-		debugMsg("%-4d: obdidx: %-4d objid: %lld\n",
-			i, luoinfo->luo_idx, luoinfo->luo_id);
-		if (luoinfo->luo_idx == obdindex) {
-			printf("%s\n", path);
-			return 0;
-		}
-	}
 
 	return(0);
 }
@@ -269,7 +274,7 @@ getobdindex(const char *path)
         data.ioc_inllen3 = 0;
 
         memset(&desc, 0, sizeof(desc));
-        desc.ld_tgt_count = max_stripe_count;
+        desc.ld_tgt_count = max_ost_count;
 
         if (obd_ioctl_pack(&data, &buf, buflen)) {
                 errMsg("internal buffering error.");

@@ -16,7 +16,6 @@
 #include <linux/version.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
-#include <linux/obd_lov.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
@@ -111,8 +110,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
-
-     
 
         ENTRY;
         MOD_INC_USE_COUNT;
@@ -268,7 +265,7 @@ static void ll_put_super(struct super_block *sb)
 
         lprocfs_dereg_mnt(sbi->ll_proc_root);
         sbi->ll_proc_root = NULL;
-        
+
         obd_disconnect(&sbi->ll_mdc_conn);
 
         spin_lock(&dcache_lock);
@@ -306,13 +303,11 @@ static void ll_clear_inode(struct inode *inode)
         }
 
         if (atomic_read(&inode->i_count) == 0) {
-                struct lov_stripe_md *lsm = lli->lli_smd;
                 char *symlink_name = lli->lli_symlink_name;
 
-                if (lsm) {
-                        OBD_FREE(lsm, ll_ost_easize(inode->i_sb));
-                        lli->lli_smd = NULL;
-                }
+                if (lli->lli_smd)
+                        obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
+
                 if (symlink_name) {
                         OBD_FREE(symlink_name, strlen(symlink_name) + 1);
                         lli->lli_symlink_name = NULL;
@@ -344,7 +339,6 @@ static void ll_delete_inode(struct inode *inode)
                         GOTO(out, -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_easize = ll_mds_easize(inode->i_sb);
                 oa->o_mode = inode->i_mode;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLEASIZE | OBD_MD_FLTYPE;
 
@@ -512,28 +506,9 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         ll_update_inode(inode, body);
 
         //if (body->valid & OBD_MD_FLEASIZE)
-        if (lic && lic->lic_lmm) {
-                struct lov_mds_md *lmm = lic->lic_lmm;
-                int size;
-
-                /* XXX This should probably not be an error in the future,
-                 *     when we allow LOV OSTs to be added.
-                 */
-                if (lmm->lmm_easize != ll_mds_easize(inode->i_sb)) {
-                        CERROR("Striping metadata size error %ld\n",
-                               inode->i_ino);
-                        LBUG();
-                }
-                size = ll_ost_easize(inode->i_sb);
-                OBD_ALLOC(lli->lli_smd, size);
-                if (!lli->lli_smd) {
-                        CERROR("No memory for %d\n", size);
-                        LBUG();
-                }
-                lov_unpackmd(lli->lli_smd, lmm);
-        } else {
-                lli->lli_smd = NULL;
-        }
+        LASSERT(!lli->lli_smd);
+        if (lic && lic->lic_lmm)
+                obd_unpackmd(ll_i2obdconn(inode), &lli->lli_smd, lic->lic_lmm);
 
         /* Get the authoritative file size */
         if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
@@ -544,6 +519,7 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                         CERROR("ll_file_size: %d\n", rc);
                         /* FIXME: need to somehow prevent inode creation */
                         LBUG();
+                        make_bad_inode(inode);
                 }
         }
 

@@ -89,11 +89,22 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
                 atomic_set(&desc->bd_refcount, 1);
                 init_waitqueue_head(&desc->bd_waitq);
                 INIT_LIST_HEAD(&desc->bd_page_list);
+                INIT_LIST_HEAD(&desc->bd_set_chain);
                 ptl_set_inv_handle(&desc->bd_md_h);
                 ptl_set_inv_handle(&desc->bd_me_h);
         }
 
         return desc;
+}
+
+int ptlrpc_bulk_error(struct ptlrpc_bulk_desc *desc)
+{
+        int rc = 0;
+        if (desc->bd_flags & PTL_RPC_FL_TIMEOUT) {
+                rc = (desc->bd_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS :
+                      -ETIMEDOUT);
+        }
+        return rc;
 }
 
 struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
@@ -117,6 +128,8 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
                 EXIT;
                 return;
         }
+
+        LASSERT(list_empty(&desc->bd_set_chain));
 
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
@@ -142,6 +155,100 @@ void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
         bulk->bp_desc->bd_page_count--;
         OBD_FREE(bulk, sizeof(*bulk));
         EXIT;
+}
+
+static int ll_sync_brw_timeout(void *data)
+{
+        struct obd_brw_set *set = data;
+        struct list_head *tmp;
+        int failed = 0;
+        ENTRY;
+
+        LASSERT(set);
+
+        set->brw_flags |= PTL_RPC_FL_TIMEOUT;
+
+        list_for_each(tmp, &set->brw_desc_head) {
+                struct ptlrpc_bulk_desc *desc =
+                        list_entry(tmp, struct ptlrpc_bulk_desc, bd_set_chain);
+
+                /* Skip descriptors that were completed successfully. */
+                if (desc->bd_flags & (PTL_BULK_FL_RCVD | PTL_BULK_FL_SENT))
+                        continue;
+
+                LASSERT(desc->bd_connection);
+
+                /* If PtlMDUnlink succeeds, then it hasn't completed yet.  If it
+                 * fails, the bulk finished _just_ in time (after the timeout
+                 * fired but before we got this far) and we'll let it live.
+                 */
+                if (PtlMDUnlink(desc->bd_md_h) != 0) {
+                        CERROR("Near-miss on OST %s -- need to adjust "
+                               "obd_timeout?\n",
+                               desc->bd_connection->c_remote_uuid);
+                        continue;
+                }
+
+                CERROR("IO of %d pages to/from %s:%d (conn %p) timed out\n",
+                       desc->bd_page_count, desc->bd_connection->c_remote_uuid,
+                       desc->bd_portal, desc->bd_connection);
+                desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
+
+                /* This one will "never" arrive, don't wait for it. */
+                if (atomic_dec_and_test(&set->brw_refcount))
+                        wake_up(&set->brw_waitq);
+
+                if (class_signal_connection_failure)
+                        class_signal_connection_failure(desc->bd_connection);
+                else
+                        failed = 1;
+        }
+
+        /* 0 = We go back to sleep, until we're resumed or interrupted */
+        /* 1 = We can't be recovered, just abort the syscall with -ETIMEDOUT */
+        RETURN(failed);
+}
+
+static int ll_sync_brw_intr(void *data)
+{
+        struct obd_brw_set *set = data;
+
+        ENTRY;
+        set->brw_flags |= PTL_RPC_FL_INTR;
+        RETURN(1); /* ignored, as of this writing */
+}
+
+int ll_brw_sync_wait(struct obd_brw_set *set, int phase)
+{
+        struct l_wait_info lwi;
+        struct list_head *tmp, *next;
+        int rc = 0;
+        ENTRY;
+
+        switch(phase) {
+        case CB_PHASE_START:
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ll_sync_brw_timeout,
+                                       ll_sync_brw_intr, set);
+                rc = l_wait_event(set->brw_waitq,
+                                  atomic_read(&set->brw_refcount) == 0, &lwi);
+
+                list_for_each_safe(tmp, next, &set->brw_desc_head) {
+                        struct ptlrpc_bulk_desc *desc =
+                                list_entry(tmp, struct ptlrpc_bulk_desc,
+                                           bd_set_chain);
+                        list_del_init(&desc->bd_set_chain);
+                        ptlrpc_bulk_decref(desc);
+                }
+                break;
+        case CB_PHASE_FINISH:
+                if (atomic_dec_and_test(&set->brw_refcount))
+                        wake_up(&set->brw_waitq);
+                break;
+        default:
+                LBUG();
+        }
+
+        RETURN(rc);
 }
 
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
@@ -654,10 +761,13 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         /* Requests that aren't from replayable imports, or which don't have
          * transno information, can be "committed" early.
+         *
+         * But don't commit anything that's kept indefinitely for replay (has
+         * the PTL_RPC_FL_REPLAY flag set), such as open requests.
          */
-
         if ((req->rq_import->imp_flags & IMP_REPLAYABLE) == 0 ||
-            req->rq_repmsg->transno == 0) {
+            (req->rq_repmsg->transno == 0 &&
+             (req->rq_flags & PTL_RPC_FL_REPLAY) == 0)) {
                 /* This import doesn't support replay, so we can just "commit"
                  * this request now.
                  */

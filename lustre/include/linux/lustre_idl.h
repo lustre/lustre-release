@@ -224,7 +224,7 @@ struct lov_object_id { /* per-child structure */
 
 struct lov_mds_md {
         __u32 lmm_magic;
-        __u32 lmm_easize;          /* packed size of extended */
+        __u32 lmm_unused;          /* was packed size of extended attribute */
         __u64 lmm_object_id;       /* lov object id */
         __u32 lmm_stripe_offset;   /* starting stripe offset in lmd_objects */
         __u32 lmm_stripe_count;    /* number of stipes in use for this object */
@@ -255,7 +255,8 @@ struct lov_mds_md {
 #define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
 #define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
 #define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME))
+#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
+                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE))
 
 struct obd_statfs {
         __u64           os_type;
@@ -388,6 +389,7 @@ struct mds_body {
         __u32          generation;
 };
 
+/* This is probably redundant with OBD_MD_FLEASIZE, but we need an audit */
 #define MDS_OPEN_HAS_EA 1 /* this open has an EA, for a delayed create*/
 
 /* MDS update records */

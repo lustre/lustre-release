@@ -36,20 +36,17 @@ struct brw_page {
 
 struct lov_oinfo { /* per-child structure */
         __u64 loi_id;              /* object ID on the target OST */
-        __u64 loi_size;            /* size of this object on the target OST */
         struct lustre_handle *loi_handle; /* handle for object on OST */
         int loi_ost_idx;           /* OST stripe index in lmd_objects array */
 };
 
 struct lov_stripe_md {
         __u32 lsm_magic;
-        __u32 lsm_mds_easize;      /* packed size for MDS of ea - KILL ME*/
         __u64 lsm_object_id;       /* lov object id */
         __u64 lsm_stripe_size;     /* size of the stripe */
         __u32 lsm_stripe_pattern;  /* per-lov object stripe pattern */
         int   lsm_stripe_offset;   /* offset of first stripe in lmd_objects */
         int   lsm_stripe_count;    /* how many objects are being striped on */
-        int   lsm_ost_count;       /* how many OSTs are in this LOV - KILL ME */
         struct lov_oinfo lsm_oinfo[0];
 };
 
@@ -110,8 +107,9 @@ struct client_obd {
         struct semaphore     cl_sem;
         int                  cl_conn_count;
         obd_uuid_t           cl_target_uuid; /* XXX -> lustre_name */
+        /* max_mds_easize is purely a performance thing so we don't have to
+         * call obd_size_wiremd() all the time. */
         int                  cl_max_mds_easize;
-        int                  cl_max_ost_easize;
         struct obd_device   *cl_containing_lov;
 };
 
@@ -192,6 +190,9 @@ struct ost_obd {
         struct lustre_handle ost_conn;   /* the local connection to the OBD */
 };
 
+struct echo_client_obd {
+        struct lustre_handle conn;   /* the local connection to osc/lov */
+};
 
 struct lov_tgt_desc {
         obd_uuid_t uuid;
@@ -244,6 +245,7 @@ struct obd_device {
                 struct mds_obd mds;
                 struct client_obd cli;
                 struct ost_obd ost;
+                struct echo_client_obd echo_client;;
                 //                struct osc_obd osc;
                 struct ldlm_obd ldlm;
                 struct echo_obd echo;
@@ -258,8 +260,6 @@ struct obd_device {
         unsigned int cntr_mem_size;
         void* counters;
 };
-
-struct brw_cb_data;
 
 struct obd_ops {
         int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
@@ -279,6 +279,11 @@ struct obd_ops {
 
 
         int (*o_statfs)(struct lustre_handle *conn, struct obd_statfs *osfs);
+        int (*o_packmd)(struct lustre_handle *, struct lov_mds_md **wire_tgt,
+                        struct lov_stripe_md *mem_src);
+        int (*o_unpackmd)(struct lustre_handle *,
+                          struct lov_stripe_md **mem_tgt,
+                          struct lov_mds_md *wire_src);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct lustre_handle *conn,  struct obdo *oa,
@@ -295,8 +300,7 @@ struct obd_ops {
                        struct lov_stripe_md *ea);
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *ea, obd_count oa_bufs,
-                     struct brw_page *pgarr, brw_cb_t callback,
-                     struct brw_cb_data *data);
+                     struct brw_page *pgarr, struct obd_brw_set *);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *ea, obd_size count,
                        obd_off offset);
@@ -361,15 +365,16 @@ static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
 }
 
 static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
-                                  void *handle, struct lov_mds_md *md)
+                                void *handle, struct lov_mds_md *md,
+                                int size)
 {
-        return mds->mds_fsops->fs_set_md(inode, handle, md);
+        return mds->mds_fsops->fs_set_md(inode, handle, md, size);
 }
 
 static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
-                                  struct lov_mds_md *md)
+                                struct lov_mds_md *md, int size)
 {
-        return mds->mds_fsops->fs_get_md(inode, md);
+        return mds->mds_fsops->fs_get_md(inode, md, size);
 }
 
 static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,

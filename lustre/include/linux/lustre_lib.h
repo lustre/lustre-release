@@ -76,30 +76,19 @@ void l_lock_init(struct lustre_lock *);
 void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
 
-
-/* page.c */
 #define CB_PHASE_START   12
 #define CB_PHASE_FINISH  13
 
-/*
- * io_cb_data: io callback data merged into one struct to simplify
- *   memory managment. This may be turn out to be too simple.
- */
-struct brw_cb_data;
-typedef int (*brw_cb_t)(struct brw_cb_data *, int err, int phase);
-
-struct brw_cb_data {
+/* This list head doesn't need to be locked, because it's only manipulated by
+ * one thread at a time. */
+struct obd_brw_set {
+        struct list_head brw_desc_head; /* list of ptlrpc_bulk_desc */
         wait_queue_head_t brw_waitq;
         atomic_t brw_refcount;
-        int brw_complete;
-        int brw_err;
-        struct ptlrpc_bulk_desc *brw_desc;
-        brw_cb_t brw_cb;
-        void *brw_data;
-};
+        int brw_flags;
 
-int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase);
-struct  brw_cb_data *ll_init_brw_cb_data(void);
+        int (*brw_callback)(struct obd_brw_set *, int phase);
+};
 
 /* simple.c */
 struct obd_run_ctxt;

@@ -248,7 +248,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                sizeof(lock->l_remote_handle));
         *flags = reply->lock_flags;
 
-        CDEBUG(D_INFO, "remote handle: %p, flags: %d\n",
+        CDEBUG(D_INFO, "local: %p, remote: %p, flags: %d\n", lock,
                (void *)(unsigned long)reply->lock_handle.addr, *flags);
         if (type == LDLM_EXTENT) {
                 CDEBUG(D_INFO, "requested extent: "LPU64" -> "LPU64", got "
@@ -289,15 +289,15 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                 }
         }
 
-        if (!req_passed_in)
-                ptlrpc_req_finished(req);
-
         if (!is_replay) {
                 rc = ldlm_lock_enqueue(lock, cookie, cookielen, flags,
                                        completion, blocking);
                 if (lock->l_completion_ast)
                         lock->l_completion_ast(lock, *flags);
         }
+
+        if (!req_passed_in)
+                ptlrpc_req_finished(req);
 
         LDLM_DEBUG(lock, "client-side enqueue END");
         EXIT;

@@ -6,10 +6,10 @@ LMC=${LMC:-../utils/lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=$TMP/mds1
-MDSSIZE=50000
+MDSSIZE=100000
 
 OSTDEV=$TMP/ost1
-OSTSIZE=50000
+OSTSIZE=250000
 
 kver=`uname -r | cut -d "." -f 1,2`
 

@@ -1,18 +1,28 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *   Author Peter Braam <braam@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *  Author Peter Braam <braam@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- *  This server is single threaded at present (but can easily be multi
- *  threaded). For testing and management it is treated as an
- *  obd_device, although it does not export a full OBD method table
- *  (the requests are coming in over the wire, so object target
- *  modules do not have a full method table.)
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  For testing and management it is treated as an obd_device,
+ *  although * it does not export a full OBD method table (the
+ *  requests are coming * in over the wire, so object target modules
+ *  do not have a full * method table.)
  *
  */
 
@@ -30,7 +40,6 @@
 #include <linux/kp30.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
-#include <linux/obd_lov.h>
 #include <linux/ctype.h>
 #include <linux/init.h>
 #include <linux/lustre_ha.h>
@@ -41,6 +50,71 @@
 
 extern struct lprocfs_vars status_var_nm_1[];
 extern struct lprocfs_vars status_class_var[];
+
+int osc_attach(struct obd_device *dev, obd_count len, void *data)
+{
+        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
+}
+
+int osc_detach(struct obd_device *dev)
+{
+        return lprocfs_dereg_obd(dev);
+}
+
+/* Pack OSC object metadata for shipment to the MDS. */
+static int osc_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
+                      struct lov_stripe_md *lsm)
+{
+        int lmm_size;
+
+        lmm_size = sizeof(**lmmp);
+        if (!lmmp)
+                RETURN(lmm_size);
+
+        if (*lmmp && !lsm) {
+                OBD_FREE(*lmmp, lmm_size);
+                *lmmp = NULL;
+                RETURN(0);
+        }
+
+        if (!*lmmp) {
+                OBD_ALLOC(*lmmp, lmm_size);
+                if (!*lmmp)
+                        RETURN(-ENOMEM);
+        }
+        if (lsm)
+                (*lmmp)->lmm_object_id = (lsm->lsm_object_id);
+
+        return lmm_size;
+}
+
+static int osc_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
+                        struct lov_mds_md *lmm)
+{
+        int lsm_size;
+
+        lsm_size = sizeof(**lsmp);
+        if (!lsmp)
+                RETURN(lsm_size);
+
+        if (*lsmp && !lmm) {
+                OBD_FREE(*lsmp, lsm_size);
+                *lsmp = NULL;
+                RETURN(0);
+        }
+
+        if (!*lsmp) {
+                OBD_ALLOC(*lsmp, lsm_size);
+                if (!*lsmp)
+                        RETURN(-ENOMEM);
+        }
+
+        /* XXX endianness */
+        if (lmm)
+                (*lsmp)->lsm_object_id = (lmm->lmm_object_id);
+
+        return lsm_size;
+}
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *md)
@@ -188,11 +262,9 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
 
         lsm = *ea;
         if (!lsm) {
-                // XXX check oa->o_valid & OBD_MD_FLEASIZE first...
-                OBD_ALLOC(lsm, oa->o_easize);
-                if (!lsm)
-                        RETURN(-ENOMEM);
-                lsm->lsm_mds_easize = oa->o_easize;
+                rc = obd_alloc_memmd(conn, &lsm);
+                if (rc < 0)
+                        RETURN(rc);
         }
 
         request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CREATE, 1, &size,
@@ -221,7 +293,7 @@ out_req:
         ptlrpc_req_finished(request);
 out:
         if (rc && !*ea)
-                OBD_FREE(lsm, oa->o_easize);
+                obd_free_memmd(conn, &lsm);
         return rc;
 }
 
@@ -306,13 +378,6 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
         return rc;
 }
 
-struct osc_brw_cb_data {
-        brw_cb_t callback;
-        void *cb_data;
-        void *obd_data;
-        size_t obd_size;
-};
-
 /* Our bulk-unmapping bottom half. */
 static void unmap_and_decref_bulk_desc(void *data)
 {
@@ -336,24 +401,14 @@ static void unmap_and_decref_bulk_desc(void *data)
 /*  this is the callback function which is invoked by the Portals
  *  event handler associated with the bulk_sink queue and bulk_source queue. 
  */
-
-static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc, void *data)
+static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc)
 {
-        struct osc_brw_cb_data *cb_data = data;
-        int err = 0;
         ENTRY;
 
-        if (desc->bd_flags & PTL_RPC_FL_TIMEOUT) {
-                err = (desc->bd_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS :
-                       -ETIMEDOUT);
-        }
+        LASSERT(desc->bd_brw_set != NULL);
+        LASSERT(desc->bd_brw_set->brw_callback != NULL);
 
-        if (cb_data->callback)
-                cb_data->callback(cb_data->cb_data, err, CB_PHASE_FINISH);
-
-        if (cb_data->obd_data)
-                OBD_FREE(cb_data->obd_data, cb_data->obd_size);
-        OBD_FREE(cb_data, sizeof(*cb_data));
+        desc->bd_brw_set->brw_callback(desc->bd_brw_set, CB_PHASE_FINISH);
 
         /* We can't kunmap the desc from interrupt context, so we do it from
          * the bottom half above. */
@@ -365,17 +420,15 @@ static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc, void *data)
 
 static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                         obd_count page_count, struct brw_page *pga,
-                        brw_cb_t callback, struct brw_cb_data *data)
+                        struct obd_brw_set *set)
 {
         struct ptlrpc_connection *connection =
                 client_conn2cli(conn)->cl_import.imp_connection;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ost_body *body;
-        struct osc_brw_cb_data *cb_data = NULL;
-        int rc, size[3] = {sizeof(*body)};
+        int rc, size[3] = {sizeof(*body)}, mapped = 0;
         void *iooptr, *nioptr;
-        int mapped = 0;
         __u32 xid;
         ENTRY;
 
@@ -394,15 +447,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OST_BULK_PORTAL;
         desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
-        OBD_ALLOC(cb_data, sizeof(*cb_data));
-        if (!cb_data)
-                GOTO(out_desc, rc = -ENOMEM);
-
-        cb_data->callback = callback;
-        cb_data->cb_data = data;
-        CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
-        data->brw_desc = desc;
-        desc->bd_ptl_ev_data = cb_data;
+        CDEBUG(D_PAGE, "desc = %p\n", desc);
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -433,7 +478,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
          * Register the bulk first, because the reply could arrive out of order,
          * and we want to be ready for the bulk data.
          *
-         * The reference is released when brw_finish is complete.
+         * One reference is released when brw_finish is complete, the other when
+         * the caller removes us from the "set" list.
          *
          * On error, we never do the brw_finish, so we handle all decrefs.
          */
@@ -444,6 +490,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 rc = ptlrpc_register_bulk(desc);
                 if (rc)
                         GOTO(out_unmap, rc);
+                obd_brw_set_add(set, desc);
         }
 
         request->rq_replen = lustre_msg_size(1, size);
@@ -463,13 +510,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
          *      callback, before any such cleanup-requiring error condition can
          *      be detected.
          */
-        if (rc)
-                GOTO(out_req, rc);
-
-        /* Callbacks cause asynchronous handling. */
-        rc = callback(data, 0, CB_PHASE_START);
-
-out_req:
+ out_req:
         ptlrpc_req_finished(request);
         RETURN(rc);
 
@@ -478,15 +519,13 @@ out_unmap:
         while (mapped-- > 0)
                 kunmap(pga[mapped].pg);
         obd_kmap_put(page_count);
-        OBD_FREE(cb_data, sizeof(*cb_data));
-out_desc:
         ptlrpc_bulk_decref(desc);
         goto out_req;
 }
 
 static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                          obd_count page_count, struct brw_page *pga,
-                         brw_cb_t callback, struct brw_cb_data *data)
+                         struct obd_brw_set *set)
 {
         struct ptlrpc_connection *connection =
                 client_conn2cli(conn)->cl_import.imp_connection;
@@ -495,10 +534,8 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         struct ost_body *body;
         struct niobuf_local *local = NULL;
         struct niobuf_remote *remote;
-        struct osc_brw_cb_data *cb_data = NULL;
-        int rc, j, size[3] = {sizeof(*body)};
+        int rc, j, size[3] = {sizeof(*body)}, mapped = 0;
         void *iooptr, *nioptr;
-        int mapped = 0;
         ENTRY;
 
         size[1] = sizeof(struct obd_ioobj);
@@ -516,15 +553,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                 GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OSC_BULK_PORTAL;
         desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
-        OBD_ALLOC(cb_data, sizeof(*cb_data));
-        if (!cb_data)
-                GOTO(out_desc, rc = -ENOMEM);
-
-        cb_data->callback = callback;
-        cb_data->cb_data = data;
-        CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
-        data->brw_desc = desc;
-        desc->bd_ptl_ev_data = cb_data;
+        CDEBUG(D_PAGE, "desc = %p\n", desc);
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -533,10 +562,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         OBD_ALLOC(local, page_count * sizeof(*local));
         if (!local)
-                GOTO(out_cb, rc = -ENOMEM);
-
-        cb_data->obd_data = local;
-        cb_data->obd_size = page_count * sizeof(*local);
+                GOTO(out_desc, rc = -ENOMEM);
 
         obd_kmap_get(page_count, 0);
 
@@ -593,16 +619,14 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_WRITE_BULK))
                 GOTO(out_unmap, rc = 0);
 
-        /* Our reference is released when brw_finish is complete. */
+        OBD_FREE(local, page_count * sizeof(*local));
+
+        /* One reference is released when brw_finish is complete, the other
+         * when the caller removes it from the "set" list. */
+        obd_brw_set_add(set, desc);
         rc = ptlrpc_send_bulk(desc);
 
         /* XXX: Mike, same question as in osc_brw_read. */
-        if (rc)
-                GOTO(out_req, rc);
-
-        /* Callbacks cause asynchronous handling. */
-        rc = callback(data, 0, CB_PHASE_START);
-
 out_req:
         ptlrpc_req_finished(request);
         RETURN(rc);
@@ -615,8 +639,6 @@ out_unmap:
         obd_kmap_put(page_count);
 
         OBD_FREE(local, page_count * sizeof(*local));
-out_cb:
-        OBD_FREE(cb_data, sizeof(*cb_data));
 out_desc:
         ptlrpc_bulk_decref(desc);
         goto out_req;
@@ -624,8 +646,7 @@ out_desc:
 
 static int osc_brw(int cmd, struct lustre_handle *conn,
                    struct lov_stripe_md *md, obd_count page_count,
-                   struct brw_page *pga, brw_cb_t callback,
-                   struct brw_cb_data *data)
+                   struct brw_page *pga, struct obd_brw_set *set)
 {
         ENTRY;
 
@@ -639,11 +660,9 @@ static int osc_brw(int cmd, struct lustre_handle *conn,
                         pages_per_brw = page_count;
 
                 if (cmd & OBD_BRW_WRITE)
-                        rc = osc_brw_write(conn, md, pages_per_brw, pga,
-                                           callback, data);
+                        rc = osc_brw_write(conn, md, pages_per_brw, pga, set);
                 else
-                        rc = osc_brw_read(conn, md, pages_per_brw, pga,
-                                          callback, data);
+                        rc = osc_brw_read(conn, md, pages_per_brw, pga, set);
 
                 if (rc != 0)
                         RETURN(rc);
@@ -671,7 +690,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
          * fixup the lock to start and end on page boundaries. */
         if (extent->end != OBD_OBJECT_EOF) {
                 extent->start &= PAGE_MASK;
-                extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
+                extent->end = (extent->end & PAGE_MASK) + PAGE_SIZE - 1;
         }
 
         /* Next, search for already existing extent locks that will cover us */
@@ -858,6 +877,8 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 memcpy(uuidp,  obddev->obd_uuid, sizeof(*uuidp));
 
                 err = copy_to_user((void *)uarg, buf, len);
+                if (err)
+                        err = -EFAULT;
                 OBD_FREE(buf, len);
                 GOTO(out, err);
         }
@@ -868,29 +889,22 @@ out:
         return err;
 }
 
-int osc_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        return lprocfs_reg_obd(dev, status_var_nm_1, dev);
-}
-
-int osc_detach(struct obd_device *dev)
-{
-        return lprocfs_dereg_obd(dev);
-}
 struct obd_ops osc_obd_ops = {
         o_attach:       osc_attach,
         o_detach:       osc_detach,
         o_setup:        client_obd_setup,
         o_cleanup:      client_obd_cleanup,
+        o_connect:      client_obd_connect,
+        o_disconnect:   client_obd_disconnect,
         o_statfs:       osc_statfs,
+        o_packmd:       osc_packmd,
+        o_unpackmd:     osc_unpackmd,
         o_create:       osc_create,
         o_destroy:      osc_destroy,
         o_getattr:      osc_getattr,
         o_setattr:      osc_setattr,
         o_open:         osc_open,
         o_close:        osc_close,
-        o_connect:      client_obd_connect,
-        o_disconnect:   client_obd_disconnect,
         o_brw:          osc_brw,
         o_punch:        osc_punch,
         o_enqueue:      osc_enqueue,
@@ -901,11 +915,8 @@ struct obd_ops osc_obd_ops = {
 
 static int __init osc_init(void)
 {
-        int rc;
-        rc = class_register_type(&osc_obd_ops, status_class_var, 
-                                 LUSTRE_OSC_NAME);
-        RETURN(rc);
-               
+        RETURN(class_register_type(&osc_obd_ops, status_class_var,
+                                   LUSTRE_OSC_NAME));
 }
 
 static void __exit osc_exit(void)

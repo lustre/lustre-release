@@ -1125,6 +1125,27 @@ class OSC(Module):
             Module.cleanup(self)
             
 
+class ECHO_CLIENT(Module):
+    def __init__(self,dom_node):
+        Module.__init__(self, 'ECHO_CLIENT', dom_node)
+        self.obd_uuid = get_first_ref(dom_node, 'osc')
+        debug("HERE",self.obd_uuid)
+        self.add_module('lustre/obdecho', 'obdecho')
+
+    def prepare(self):
+        if is_prepared(self.uuid):
+            return
+        self.info(self.obd_uuid)
+            
+        lctl.newdev(attach="echo_client %s %s" % (self.name, self.uuid),
+                    setup = self.obd_uuid)
+
+    def cleanup(self):
+        if not is_prepared(self.uuid):
+            return
+        Module.cleanup(self)
+
+
 class Mountpoint(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'MTPT', dom_node)
@@ -1303,7 +1324,7 @@ def getServiceLevel(dom_node):
         ret = 50
     elif type in ('lov', 'lovconfig'):
         ret = 60
-    elif type in ('mountpoint',):
+    elif type in ('mountpoint', 'echo_client'):
         ret = 70
 
     if ret < config.minlevel() or ret > config.maxlevel():
@@ -1464,6 +1485,8 @@ def startService(dom_node, module_flag):
         n = MDS(dom_node)
     elif type == 'osc':
         n = VOSC(dom_node)
+    elif type == 'echo_client':
+        n = ECHO_CLIENT(dom_node)
     elif type == 'mdc':
         n = MDC(dom_node)
     elif type == 'mountpoint':

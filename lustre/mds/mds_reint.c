@@ -217,19 +217,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
-                if (S_ISREG(inode->i_mode)) {
-                        struct lov_mds_md *lmm;
-
-                        lmm = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        lmm->lmm_easize = mds->mds_max_mdsize;
-
-                        if (mds_fs_get_md(mds, inode, lmm) < 0) {
-                                CDEBUG(D_INFO,"No md for %ld: rc %d\n",
-                                       inode->i_ino, rc);
-                                memset(lmm, 0, lmm->lmm_easize);
-                        } else
-                                body->valid |= OBD_MD_FLEASIZE;
-                }
+                if (S_ISREG(inode->i_mode))
+                        rc = mds_pack_md(mds, req, offset + 1, body, inode);
 
                 /* This isn't an error for RECREATE. */
                 if (rec->ur_opcode & REINT_REPLAYING) {
@@ -452,18 +441,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 break;
         case S_IFREG:
                 /* get OBD EA data first so client can also destroy object */
-                if ((inode->i_mode & S_IFMT) == S_IFREG && offset) {
-                        struct lov_mds_md *lmm;
-
-                        lmm = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        lmm->lmm_easize = mds->mds_max_mdsize;
-                        if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
-                                CDEBUG(D_INFO, "No md for ino %ld: rc = %d\n",
-                                       inode->i_ino, rc);
-                                memset(lmm, 0, lmm->lmm_easize);
-                        } else
-                                body->valid |= OBD_MD_FLEASIZE;
-                }
+                if ((inode->i_mode & S_IFMT) == S_IFREG && offset)
+                        rc = mds_pack_md(mds, req, offset + 1, body, inode);
                 /* no break */
         case S_IFLNK:
         case S_IFCHR:
@@ -591,18 +570,8 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
-                        if (S_ISREG(inode->i_mode)) {
-                                struct lov_mds_md *lmm;
-
-                                lmm = lustre_msg_buf(req->rq_repmsg, 2);
-                                lmm->lmm_easize = mds->mds_max_mdsize;
-                                if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
-                                        CDEBUG(D_INFO,"No md for %ld: rc %d\n",
-                                               inode->i_ino, rc);
-                                        memset(lmm, 0, lmm->lmm_easize);
-                                } else
-                                        body->valid |= OBD_MD_FLEASIZE;
-                        }
+                        if (S_ISREG(inode->i_mode))
+                                rc = mds_pack_md(mds, req, 2, body, inode);
                 }
                 if (rec->ur_opcode & REINT_REPLAYING) {
                         /* XXX verify that the link is to the the right file? */
@@ -744,18 +713,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 } else {
                         mds_pack_inode2fid(&body->fid1, inode);
                         mds_pack_inode2body(body, inode);
-                        if (S_ISREG(inode->i_mode)) {
-                                struct lov_mds_md *lmm;
-
-                                lmm = lustre_msg_buf(req->rq_repmsg, 2);
-                                lmm->lmm_easize = mds->mds_max_mdsize;
-                                if ((rc = mds_fs_get_md(mds, inode, lmm)) < 0) {
-                                        CDEBUG(D_INFO,"No md for %ld: rc %d\n",
-                                               inode->i_ino, rc);
-                                        memset(lmm, 0, lmm->lmm_easize);
-                                } else
-                                        body->valid |= OBD_MD_FLEASIZE;
-                        }
+                        if (S_ISREG(inode->i_mode))
+                                rc = mds_pack_md(mds, req, 2, body, inode);
                 }
         }
 

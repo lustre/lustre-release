@@ -11,7 +11,7 @@
   uuid CDATA #REQUIRED">
 
 <!-- main elements -->
-<!ELEMENT lustre (node | mountpoint | ldlm |
+<!ELEMENT lustre (node | mountpoint | ldlm | echo_client |
                   mds | mdc | obd | ost | osc | lov | lovconfig)*>
 
 <!ELEMENT node (network | profile)*>
@@ -29,11 +29,14 @@
                 hi CDATA #IMPLIED >
 
 <!ELEMENT profile (ldlm_ref | network_ref | obd_ref | ost_ref | osc_ref |
-                   mds_ref | mdc_ref | lov_ref | lovconfig_ref| mountpoint_ref)*>
+                   echo_client_ref | mds_ref | mdc_ref | lov_ref |
+                   lovconfig_ref| mountpoint_ref)*>
 <!ATTLIST profile >
 
 <!ELEMENT mountpoint (path | fileset | mds_ref | osc_ref)*>
 <!ATTLIST mountpoint %tag.attr;>
+<!ELEMENT echo_client (osc_ref)*>
+<!ATTLIST echo_client %tag.attr;>
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %tag.attr;>
 
@@ -95,6 +98,8 @@
 <!ATTLIST mdc_ref        %tag.ref;>
 <!ELEMENT mountpoint_ref %tag.content;>
 <!ATTLIST mountpoint_ref %tag.ref;>
+<!ELEMENT echo_client_ref %tag.content;>
+<!ATTLIST echo_client_ref %tag.ref;>
 <!ELEMENT server_ref     %tag.content;>
 <!ATTLIST server_ref     %tag.ref;>
 <!ELEMENT failover_ref   %tag.content;>

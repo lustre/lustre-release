@@ -30,7 +30,6 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
-#include <linux/obd_lov.h>
 
 static int mdc_reint(struct ptlrpc_request *request, int level)
 {
@@ -77,10 +76,9 @@ int mdc_setattr(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-int mdc_create(struct lustre_handle *conn,
-               struct inode *dir, const char *name, int namelen,
-               const char *tgt, int tgtlen, int mode, __u32 uid,
-               __u32 gid, __u64 time, __u64 rdev, struct lov_stripe_md *lsm,
+int mdc_create(struct lustre_handle *conn, struct inode *dir,
+               const char *name, int namelen, const void *data, int datalen,
+               int mode, __u32 uid, __u32 gid, __u64 time, __u64 rdev,
                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -88,9 +86,9 @@ int mdc_create(struct lustre_handle *conn,
         int level, bufcount = 2;
         ENTRY;
 
-        if (S_ISLNK(mode)) {
-                size[2] = tgtlen + 1;
-                bufcount = 3;
+        if (data && datalen) {
+                size[bufcount] = datalen;
+                bufcount++;
         }
 
         req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_REINT, bufcount,
@@ -99,9 +97,9 @@ int mdc_create(struct lustre_handle *conn,
                 RETURN(-ENOMEM);
 
         /* mds_create_pack fills msg->bufs[1] with name
-         * and msg->bufs[2] with tgt, for symlinks */
+         * and msg->bufs[2] with tgt, for symlinks or lov MD data */
         mds_create_pack(req, 0, dir, mode, rdev, uid, gid, time,
-                        name, namelen, tgt, tgtlen);
+                        name, namelen, data, datalen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -193,7 +191,7 @@ int mdc_rename(struct lustre_handle *conn,
 
         rc = mdc_reint(req, LUSTRE_CONN_FULL);
         *request = req;
-        if (rc == -ERESTARTSYS )
+        if (rc == -ERESTARTSYS)
                 rc = 0;
 
         RETURN(rc);

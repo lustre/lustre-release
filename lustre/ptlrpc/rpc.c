@@ -166,6 +166,7 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 {
         return class_connect(conn, src, cluuid);
 }
+
 int connmgr_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
@@ -233,6 +234,9 @@ EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
 EXPORT_SYMBOL(ptlrpc_link_svc_me);
+EXPORT_SYMBOL(obd_brw_set_free);
+EXPORT_SYMBOL(obd_brw_set_new);
+EXPORT_SYMBOL(obd_brw_set_add);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);
@@ -251,6 +255,7 @@ EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_free_bulk_page);
 EXPORT_SYMBOL(ptlrpc_check_status);
+EXPORT_SYMBOL(ll_brw_sync_wait);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);

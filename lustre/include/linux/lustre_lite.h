@@ -33,11 +33,11 @@ struct ll_file_data {
         __u32 fd_flags;
 };
 
-struct lustre_intent_data { 
-	__u64 it_lock_handle[2];
-	__u32 it_disposition;
-	__u32 it_status;
-	__u32 it_lock_mode;
+struct lustre_intent_data {
+        __u64 it_lock_handle[2];
+        __u32 it_disposition;
+        __u32 it_status;
+        __u32 it_lock_mode;
 };
 
 struct ll_dentry_data {
@@ -127,7 +127,7 @@ static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
 static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-       	return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+        return container_of(inode, struct ll_inode_info, lli_vfs_inode);
 #else
         return (struct ll_inode_info *)&(inode->u.generic_ip);
 #endif
@@ -152,14 +152,9 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
                    inode->i_mode & S_IFMT);
 }
 
-static inline int ll_mds_easize(struct super_block *sb)
+static inline int ll_mds_max_easize(struct super_block *sb)
 {
         return sbi2mdc(ll_s2sbi(sb))->cl_max_mds_easize;
-}
-
-static inline int ll_ost_easize(struct super_block *sb)
-{
-        return sbi2mdc(ll_s2sbi(sb))->cl_max_ost_easize;
 }
 
 /* namei.c */
@@ -259,20 +254,6 @@ void ll_sysctl_clean(void);
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
 #define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
-
-struct lov_user_oinfo {
-        __u64 luo_id;   /* object ID on the target OBD */
-        __u32 luo_idx;  /* OBD stripe index in lmd_objects array */
-        __u32 luo_pad;
-};
-
-struct lov_user_md {
-        __u64 lum_stripe_size;
-        __u32 lum_stripe_pattern;
-        __u32 lum_stripe_offset;
-        __u32 lum_stripe_count;
-        struct lov_user_oinfo lum_luoinfo[0];
-};
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 

@@ -32,7 +32,6 @@
 #include <linux/lustre_idl.h>
 
 struct ldlm_lock_desc;
-struct lov_stripe_md;
 struct mds_obd;
 struct ptlrpc_connection;
 struct ptlrpc_client;
@@ -122,10 +121,10 @@ void mds_getattr_pack(struct ptlrpc_request *req, int offset,
                       struct inode *inode, const char *name, int namelen);
 void mds_setattr_pack(struct ptlrpc_request *, int offset, struct inode *,
                       struct iattr *, const char *name, int namelen);
-void mds_create_pack(struct ptlrpc_request *, int offset, struct inode *,
-                     __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time,
-                     const char *name, int namelen, const char *tgt,
-                     int tgtlen);
+void mds_create_pack(struct ptlrpc_request *, int offset, struct inode *dir,
+                     __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
+                     const char *name, int namelen, const void *data,
+                     int datalen);
 void mds_unlink_pack(struct ptlrpc_request *, int offset, struct inode *inode,
                      struct inode *child, __u32 mode, const char *name,
                      int namelen);
@@ -148,7 +147,9 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct lustre_handle *lockh);
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt);
-int mds_reint(int offset, struct ptlrpc_request *req);
+int mds_reint(struct ptlrpc_request *req, int offset);
+int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
+                int offset, struct mds_body *body, struct inode *inode);
 
 /* mdc/mdc_request.c */
 int mdc_enqueue(struct lustre_handle *conn, int lock_type,
@@ -165,7 +166,7 @@ int mdc_getattr(struct lustre_handle *conn,
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
-             struct lov_stripe_md *, struct lustre_handle *fh,
+             struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
 int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
               struct lustre_handle *fh,  struct ptlrpc_request **req);
@@ -173,9 +174,8 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
 int mdc_create(struct lustre_handle *conn,
                struct inode *dir, const char *name, int namelen,
-               const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
-               __u64 time, __u64 rdev, struct lov_stripe_md *md,
-               struct ptlrpc_request **);
+               const void *data, int datalen, int mode, __u32 uid, __u32 gid,
+               __u64 time, __u64 rdev, struct ptlrpc_request **);
 int mdc_unlink(struct lustre_handle *, struct inode *dir, struct inode *child,
                __u32 mode, const char *name, int namelen,
                struct ptlrpc_request **);
@@ -203,9 +203,9 @@ struct mds_fs_operations {
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
         int     (* fs_set_md)(struct inode *inode, void *handle,
-                              struct lov_mds_md *md);
-        int     (* fs_get_md)(struct inode *inode,
-                              struct lov_mds_md *md);
+                              struct lov_mds_md *md, int size);
+        int     (* fs_get_md)(struct inode *inode, struct lov_mds_md *md,
+                              int size);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);

@@ -132,10 +132,10 @@ void mds_pack_rep_body(struct ptlrpc_request *req)
 
 
 /* packing of MDS records */
-void mds_create_pack(struct ptlrpc_request *req, int offset,
-                     struct inode *dir, __u32 mode, __u64 rdev, __u32 uid,
-                     __u32 gid, __u64 time, const char *name, int namelen,
-                     const char *tgt, int tgtlen)
+void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
+                     __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
+                     const char *name, int namelen,
+                     const void *data, int datalen)
 {
         struct mds_rec_create *rec;
         char *tmp;
@@ -147,7 +147,7 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsgid = HTON__u32(current->fsgid);
         rec->cr_cap = HTON__u32(current->cap_effective);
         ll_inode2fid(&rec->cr_fid, dir);
-        memset(&rec->cr_replayfid, 0, sizeof rec->cr_replayfid);
+        memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = HTON__u32(mode);
         rec->cr_rdev = HTON__u64(rdev);
         rec->cr_uid = HTON__u32(uid);
@@ -157,9 +157,9 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         LOGL0(name, namelen, tmp);
 
-        if (tgt) {
+        if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2);
-                LOGL0(tgt, tgtlen, tmp);
+                LOGL0(data, datalen, tmp);
         }
 }
 
@@ -351,10 +351,10 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
 
-        if (req->rq_reqmsg->bufcount == offset + 3) { 
+        if (req->rq_reqmsg->bufcount == offset + 3) {
                 r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, offset + 2);
                 r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
-        } else { 
+        } else {
                 r->ur_tgt = NULL;
                 r->ur_tgtlen = 0;
         }

@@ -35,7 +35,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd.h>
 #include <linux/module.h>
-#include <linux/obd_lov.h>
 
 static struct mds_fs_operations mds_extN_fs_ops;
 static kmem_cache_t *mcb_cache;
@@ -49,8 +48,6 @@ struct mds_cb_data {
 
 #define EXTN_XATTR_INDEX_LUSTRE         5
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
-
-#define XATTR_MDS_MO_MAGIC              0xEA0BD047
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -128,15 +125,14 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
 }
 
 static int mds_extN_set_md(struct inode *inode, void *handle,
-                           struct lov_mds_md *lmm)
+                           struct lov_mds_md *lmm, int lmm_size)
 {
         int rc;
 
         down(&inode->i_sem);
         lock_kernel();
         rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, lmm,
-                            lmm ? lmm->lmm_easize : 0, 0);
+                            XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
         unlock_kernel();
         up(&inode->i_sem);
 
@@ -148,10 +144,9 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
-static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm)
+static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
 {
         int rc;
-        int size = lmm->lmm_easize;
 
         down(&inode->i_sem);
         lock_kernel();
@@ -215,7 +210,7 @@ static void mds_extN_delete_inode(struct inode *inode)
                         EXIT;
                         return;
                 }
-                if (mds_extN_set_md(inode, handle, NULL))
+                if (mds_extN_set_md(inode, handle, NULL, 0))
                         CERROR("error clearing objid on %ld\n", inode->i_ino);
 
                 if (mds_extN_fs_ops.cl_delete_inode)

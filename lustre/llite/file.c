@@ -27,13 +27,14 @@
 
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_lite.h>
+#include <linux/obd_lov.h>      /* for lov_mds_md_size() in lov_setstripe() */
 #include <linux/random.h>
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
 int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid, gid_t gid,
-                             struct lov_stripe_md **lsmp)
+                      struct lov_stripe_md **lsmp)
 {
         struct obdo *oa;
         int rc;
@@ -44,12 +45,11 @@ int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid, gid_t gid,
                 RETURN(-ENOMEM);
 
         oa->o_mode = S_IFREG | 0600;
-        oa->o_easize = ll_mds_easize(sb);
         oa->o_id = id;
         oa->o_uid = uid;
         oa->o_gid = gid;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                OBD_MD_FLEASIZE | OBD_MD_FLUID | OBD_MD_FLGID;
+                OBD_MD_FLUID | OBD_MD_FLGID;
         rc = obd_create(ll_s2obdconn(sb), oa, lsmp);
         obdo_free(oa);
 
@@ -60,12 +60,15 @@ int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid, gid_t gid,
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lustre_handle *conn = ll_i2obdconn(inode);
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa;
-        struct lov_stripe_md *lsm = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm;
+        struct lov_mds_md *lmm = NULL;
+        int lmm_size = 0;
         int rc = 0;
         ENTRY;
 
@@ -93,16 +96,30 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 lsm = lli->lli_smd;
         }
 
+        /* XXX We should only send this to MDS if we just created these
+         *     objects, except we also need to handle the user-stripe case.
+         */
+        rc = obd_packmd(conn, &lmm, lli->lli_smd);
+        if (rc < 0)
+                GOTO(out, rc);
+
+        lmm_size = rc;
+
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL);
-        if (!fd)
+        if (!fd) {
+                if (lmm)
+                        obd_free_wiremd(conn, &lmm);
                 GOTO(out, rc = -ENOMEM);
+        }
         memset(fd, 0, sizeof(*fd));
 
         fd->fd_mdshandle.addr = (__u64)(unsigned long)file;
         get_random_bytes(&fd->fd_mdshandle.cookie,
                          sizeof(fd->fd_mdshandle.cookie));
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
-                      file->f_flags, lsm, &fd->fd_mdshandle, &req);
+                      file->f_flags, lmm, lmm_size, &fd->fd_mdshandle, &req);
+        if (lmm)
+                obd_free_wiremd(conn, &lmm);
         fd->fd_req = req;
 
         /* This is the "reply" refcount. */
@@ -261,8 +278,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
         fd = (struct ll_file_data *)file->private_data;
         if (!fd) {
-                LBUG();
-                GOTO(out, rc = -EINVAL);
+                LASSERT(file->f_flags & O_LOV_DELAY_CREATE);
+                GOTO(out, rc = 0);
         }
 
         memset(&oa, 0, sizeof(oa));
@@ -578,96 +595,121 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         return retval;
 }
 
+/* Retrieve object striping information.
+ *
+ * @arg is a pointer to a user struct with one or more of the fields set to
+ * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
+ * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
+ */
 static int ll_lov_setstripe(struct inode *inode, struct file *file,
-                            struct lov_user_md *lum)
+                            unsigned long arg)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm;
-        int size = ll_mds_easize(inode->i_sb);
+        struct lov_mds_md *lmm = NULL, *lmmu = (void *)arg;
+        struct lustre_handle *conn = ll_i2obdconn(inode);
         int rc;
 
-        rc = verify_area(VERIFY_READ, lum, sizeof(*lum));
-        if (rc)
+        rc = obd_alloc_wiremd(conn, &lmm);
+        if (rc < 0)
                 RETURN(rc);
+
+        rc = copy_from_user(lmm, lmmu, sizeof(*lmm));
+        if (rc)
+                GOTO(out_free, rc = -EFAULT);
+
+        if (lmm->lmm_magic != LOV_MAGIC) {
+                CERROR("bad LOV magic %X\n", lmm->lmm_magic);
+                GOTO(out_free, rc = -EINVAL);
+        }
 
         down(&lli->lli_open_sem);
         if (lli->lli_smd) {
                 CERROR("striping data already set for %d\n", inode->i_ino);
                 GOTO(out_lov_up, rc = -EPERM);
         }
+        rc = obd_unpackmd(conn, &lli->lli_smd, lmm);
+        if (rc < 0) {
+                CERROR("error setting LOV striping on %d: rc = %d\n",
+                       inode->i_ino, rc);
+                GOTO(out_lov_up, rc);
+        }
 
-        OBD_ALLOC(lli->lli_smd, size);
-        if (!lli->lli_smd)
-                GOTO(out_lov_up, rc = -ENOMEM);
-
-        lsm = lli->lli_smd;
-        lsm->lsm_magic = LOV_MAGIC;
-        lsm->lsm_stripe_size = lum->lum_stripe_size;
-        lsm->lsm_stripe_pattern = lum->lum_stripe_pattern;
-        lsm->lsm_stripe_offset = lum->lum_stripe_offset;
-        lsm->lsm_stripe_count = lum->lum_stripe_count;
-        lsm->lsm_mds_easize = size;
-
-        file->f_flags &= ~O_LOV_DELAY_CREATE;
-        rc = ll_create_objects(inode->i_sb, inode->i_ino, 0, 0, &lsm);
-        if (rc)
-                OBD_FREE(lli->lli_smd, size);
-        else
+        rc = ll_create_objects(inode->i_sb, inode->i_ino, 0, 0, &lli->lli_smd);
+        if (rc) {
+                obd_free_memmd(conn, &lli->lli_smd);
+        } else {
+                file->f_flags &= ~O_LOV_DELAY_CREATE;
                 rc = ll_file_open(inode, file);
+        }
 out_lov_up:
         up(&lli->lli_open_sem);
+out_free:
+        obd_free_wiremd(conn, &lmm);
         return rc;
 }
 
+/* Retrieve object striping information.
+ *
+ * @arg is a pointer to a user struct with lmm_ost_count indicating
+ * the maximum number of OST indices which will fit in the user buffer.
+ * lmm_magic must be LOV_MAGIC.
+ */
 static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 {
-        struct lov_user_md lum;
-        struct lov_user_md *lump;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lov_user_oinfo *luoip;
-        struct lov_oinfo *loip;
-        int count, len, i, rc;
+        struct lov_mds_md lmm, *lmmu = (void *)arg, *lmmk = NULL;
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct lustre_handle *conn = ll_i2obdconn(inode);
+        int ost_count, rc, lmm_size;
 
-        rc = copy_from_user(&lum, (void *)arg, sizeof(lum));
+        if (!lsm)
+                RETURN(-ENODATA);
+
+        rc = copy_from_user(&lmm, lmmu, sizeof(lmm));
         if (rc)
-                RETURN(rc);
+                RETURN(-EFAULT);
 
-        if ((count = lsm->lsm_stripe_count) == 0)
-                count = 1;
-
-        if (lum.lum_stripe_count < count)
+        if (lmm.lmm_magic != LOV_MAGIC)
                 RETURN(-EINVAL);
 
-        len = sizeof(*lump) + count * sizeof(*luoip);
+        if (lsm->lsm_stripe_count == 0)
+                ost_count = 1;
+        else {
+                struct obd_device *obd = class_conn2obd(conn);
+                struct lov_obd *lov = &obd->u.lov;
+                ost_count = lov->desc.ld_tgt_count;
+        }
 
-        rc = verify_area(VERIFY_WRITE, (void *)arg, len);
-        if (rc)
+        /* XXX we _could_ check if indices > user lmm_ost_count are zero */
+        if (lmm.lmm_ost_count < ost_count)
+                RETURN(-EOVERFLOW);
+
+        rc = obd_packmd(conn, &lmmk, lsm);
+        if (rc < 0)
                 RETURN(rc);
 
-        lump = (struct lov_user_md *)arg;
-        lump->lum_stripe_count = count;
-        luoip = lump->lum_luoinfo;
+        lmm_size = rc;
 
+        /* LOV STACKING layering violation to make LOV/OSC return same data */
         if (lsm->lsm_stripe_count == 0) {
-                lump->lum_stripe_size = 0;
-                lump->lum_stripe_pattern = 0;
-                lump->lum_stripe_offset = 0;
-                luoip->luo_idx = 0;
-                luoip->luo_id = lsm->lsm_object_id;
-        } else {
-                lump->lum_stripe_size = lsm->lsm_stripe_size;
-                lump->lum_stripe_pattern = lsm->lsm_stripe_pattern;
-                lump->lum_stripe_offset = lsm->lsm_stripe_offset;
+                struct lov_object_id *loi;
 
-                loip = lsm->lsm_oinfo;
-                for (i = 0; i < count; i++, luoip++, loip++) {
-                        luoip->luo_idx = loip->loi_ost_idx;
-                        luoip->luo_id = loip->loi_id;
+                loi = (void *)lmmu + offsetof(typeof(*lmmu), lmm_objects);
+                rc = copy_to_user(loi, &lsm->lsm_object_id, sizeof(*loi));
+                if (rc) {
+                        lmm_size = 0;
+                        rc = -EFAULT;
+                } else {
+                        lmmk->lmm_magic = LOV_MAGIC;
+                        lmmk->lmm_ost_count = lmmk->lmm_stripe_count = 1;
                 }
         }
 
-        RETURN(0);
+        if (lmm_size && copy_to_user(lmmu, lmmk, lmm_size))
+                rc = -EFAULT;
+
+        obd_free_wiremd(conn, &lmmk);
+
+        RETURN(rc);
 }
 
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
@@ -696,7 +738,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                         fd->fd_flags &= ~flags;
                 return 0;
         case LL_IOC_LOV_SETSTRIPE:
-                return ll_lov_setstripe(inode, file, (struct lov_user_md *)arg);
+                return ll_lov_setstripe(inode, file, arg);
         case LL_IOC_LOV_GETSTRIPE:
                 return ll_lov_getstripe(inode, arg);
 

@@ -3,7 +3,22 @@
  *
  * Lustre Lite I/O Page Cache
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include <linux/config.h>
@@ -75,29 +90,38 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
+        struct obd_brw_set *set;
         struct brw_page pg;
-        int err;
+        int rc;
         ENTRY;
 
-        if (!brw_cbd)
+        set = obd_brw_set_new();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
         pg.pg = page;
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
 
         if (cmd == OBD_BRW_WRITE && (pg.off + PAGE_SIZE > inode->i_size))
-                pg.count = inode->i_size % PAGE_SIZE; 
+                pg.count = inode->i_size % PAGE_SIZE;
         else
                 pg.count = PAGE_SIZE;
 
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb,
-                      brw_cbd);
+        set->brw_callback = ll_brw_sync_wait;
+        rc = obd_brw(cmd, ll_i2obdconn(inode), lsm, 1, &pg, set);
+        if (rc)
+                CERROR("error from obd_brw: rc = %d\n", rc);
+        else {
+                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+                if (rc)
+                        CERROR("error from callback: rc = %d\n", rc);
+        }
+        obd_brw_set_free(set);
 
-        RETURN(err);
-} /* ll_brw */
+        RETURN(rc);
+}
 
 /* returns the page unlocked, but with a reference */
 static int ll_readpage(struct file *file, struct page *page)
@@ -241,14 +265,13 @@ static int ll_writepage(struct page *page)
 static int ll_commit_write(struct file *file, struct page *page,
                            unsigned from, unsigned to)
 {
-        int create = 1;
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *md = lli->lli_smd;
         struct brw_page pg;
-        int err;
+        struct obd_brw_set *set;
+        int rc, create = 1;
         loff_t size;
-        struct brw_cb_data *cbd = ll_init_brw_cb_data();
         ENTRY;
 
         pg.pg = page;
@@ -256,7 +279,8 @@ static int ll_commit_write(struct file *file, struct page *page,
         pg.off = (((obd_off)page->index) << PAGE_SHIFT);
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        if (!cbd)
+        set = obd_brw_set_new();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
         SetPageUptodate(page);
@@ -267,8 +291,16 @@ static int ll_commit_write(struct file *file, struct page *page,
         CDEBUG(D_INODE, "commit_page writing (off "LPD64"), count "LPD64"\n",
                pg.off, pg.count);
 
-        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
-                      1, &pg, ll_sync_brw_cb, cbd);
+        set->brw_callback = ll_brw_sync_wait;
+        rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md, 1, &pg, set);
+        if (rc)
+                CERROR("error from obd_brw: rc = %d\n", rc);
+        else {
+                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+                if (rc)
+                        CERROR("error from callback: rc = %d\n", rc);
+        }
+        obd_brw_set_free(set);
         kunmap(page);
 
         size = pg.off + pg.count;
@@ -276,7 +308,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         if (size > inode->i_size)
                 inode->i_size = size;
 
-        RETURN(err);
+        RETURN(rc);
 } /* ll_commit_write */
 
 
@@ -287,10 +319,10 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
+        struct obd_brw_set *set;
         int i, rc = 0;
-        struct brw_cb_data *cbd;
-
         ENTRY;
+
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-ENOMEM);
 
@@ -299,13 +331,13 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 RETURN(-EINVAL);
         }
 
-        cbd = ll_init_brw_cb_data();
-        if (!cbd)
+        set = obd_brw_set_new();
+        if (set == NULL)
                 RETURN(-ENOMEM);
 
         OBD_ALLOC(pga, sizeof(*pga) * bufs_per_obdo);
         if (!pga) {
-                OBD_FREE(cbd, sizeof(*cbd));
+                obd_brw_set_free(set);
                 RETURN(-ENOMEM);
         }
 
@@ -319,9 +351,17 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 pga[i].flag = OBD_BRW_CREATE;
         }
 
+        set->brw_callback = ll_brw_sync_wait;
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                     ll_i2obdconn(inode), lsm, bufs_per_obdo, pga,
-                     ll_sync_brw_cb, cbd);
+                     ll_i2obdconn(inode), lsm, bufs_per_obdo, pga, set);
+        if (rc)
+                CERROR("error from obd_brw: rc = %d\n", rc);
+        else {
+                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+                if (rc)
+                        CERROR("error from callback: rc = %d\n", rc);
+        }
+        obd_brw_set_free(set);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
