@@ -182,7 +182,7 @@ int llog_close(struct llog_handle *loghandle)
         if (rc)
                 GOTO(out, rc);
         if (lop->lop_close == NULL)
-                GOTO(out, -EOPNOTSUPP);
+                GOTO(out, rc = -EOPNOTSUPP);
         rc = lop->lop_close(loghandle);
  out:
         llog_free_handle(loghandle);
