@@ -661,7 +661,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         tmp = lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn);
         if (tmp == NULL)
-                GOTO(out, -EPROTO);
+                GOTO(out, rc = -EPROTO);
 
         memcpy(&conn, tmp, sizeof conn);
 
