@@ -49,7 +49,7 @@ struct fsfilt_cb_data {
         __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
 };
 
-#define EXT3_XATTR_INDEX_LUSTRE         5
+#define EXT3_XATTR_INDEX_LUSTRE         9
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
 /*
