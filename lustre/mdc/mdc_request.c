@@ -175,8 +175,8 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
                 if (rc < 0) {
-                        CERROR("ldlm_cli_cancel: %d\n", rc);
-                        LBUG();
+                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        RETURN(rc);
                 }
                 break;
         case LDLM_CB_CANCELING:

@@ -90,6 +90,8 @@ int target_handle_connect(struct ptlrpc_request *req)
         spin_lock(&export->exp_connection->c_lock);
         list_add(&export->exp_conn_chain, &export->exp_connection->c_exports);
         spin_unlock(&export->exp_connection->c_lock);
+        recovd_conn_manage(export->exp_connection, ptlrpc_recovd,
+                           target_revoke_connection);
 
         dlmimp = &export->exp_ldlm_data.led_import;
         dlmimp->imp_connection = req->rq_connection;
@@ -98,7 +100,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;
         
-#warning Peter: is this the right place to upgrade the server connection level?
         req->rq_connection->c_level = LUSTRE_CONN_FULL;
 out:
         req->rq_status = rc;
@@ -137,6 +138,8 @@ static int target_disconnect_client(struct ptlrpc_connection *conn)
                 if (rc)
                         CERROR("disconnecting export %p failed: %d\n", exp, rc);
         }
+
+        /* XXX spank the connection (it's frozen in _RECOVD for now!) */
         RETURN(0);
 }
 

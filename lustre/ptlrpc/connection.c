@@ -121,6 +121,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
         CDEBUG(D_INFO, "connection=%p refcount %d\n",
                c, atomic_read(&c->c_refcount) - 1);
         if (atomic_dec_and_test(&c->c_refcount)) {
+                recovd_conn_unmanage(c);
                 spin_lock(&conn_lock);
                 list_del(&c->c_link);
                 list_add(&c->c_link, &conn_unused_list);

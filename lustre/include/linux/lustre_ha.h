@@ -9,6 +9,7 @@
 
 struct recovd_data;
 struct recovd_obd;
+struct obd_import;
 struct ptlrpc_connection;
 
 /* rd_phase/rd_next_phase values */
@@ -32,6 +33,7 @@ struct ptlrpc_connection;
 typedef int (*ptlrpc_recovery_cb_t)(struct recovd_data *, int);
 
 struct recovd_data {
+        /* you must hold recovd->recovd_lock when touching rd_managed_chain */
         struct list_head     rd_managed_chain;
         ptlrpc_recovery_cb_t rd_recover;
         struct recovd_obd   *rd_recovd;
@@ -50,6 +52,7 @@ int recovd_cleanup(struct recovd_obd *mgr);
 extern struct recovd_obd *ptlrpc_recovd;
 
 int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn);
-int ptlrpc_reconnect_and_replay(struct ptlrpc_connection *conn);
+int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc);
+int ptlrpc_replay(struct ptlrpc_connection *conn);
 
 #endif

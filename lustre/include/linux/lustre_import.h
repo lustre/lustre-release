@@ -20,7 +20,6 @@ struct obd_import {
         struct list_head          imp_chain;
         struct obd_device        *imp_obd;
         /* XXX need a UUID here, I think
-         * XXX what about client_obd.cl_target_uuid?
          */
 };
 

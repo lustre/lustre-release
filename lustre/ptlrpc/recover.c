@@ -24,63 +24,50 @@
 #include <linux/lustre_net.h>
 #include <linux/obd.h>
 
-static int ptlrpc_reconnect(struct ptlrpc_connection *conn) 
+int ptlrpc_reconnect_import(struct obd_import *imp, int rq_opc)
 {
-        struct list_head *tmp;
-        int rc = -EINVAL;
+        struct obd_device *obd = imp->imp_obd;
+        struct client_obd *cli = &obd->u.cli;
+        int size[] = { sizeof(cli->cl_target_uuid), sizeof(obd->obd_uuid) };
+        char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
+        struct ptlrpc_connection *conn = imp->imp_connection;
+        struct lustre_handle old_hdl;
+        struct ptlrpc_request *request; 
+        struct obd_export *ldlmexp;
+        int rc;
 
-        /* XXX c_lock semantics! */
-        conn->c_level = LUSTRE_CONN_CON;
+        request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
+        request->rq_level = LUSTRE_CONN_NEW;
+        request->rq_replen = lustre_msg_size(0, NULL);
+        /*
 
-        /* XXX this code MUST be shared with class_obd_connect! */
-        list_for_each(tmp, &conn->c_imports) {
-                struct obd_import *imp = list_entry(tmp, struct obd_import,
-                                                    imp_chain);
-                struct obd_device *obd = imp->imp_obd;
-                struct client_obd *cli = &obd->u.cli;
-                int rq_opc = (obd->obd_type->typ_ops->o_brw)
-                        ? OST_CONNECT : MDS_CONNECT;
-                int size[] = { sizeof(cli->cl_target_uuid),
-                               sizeof(obd->obd_uuid) };
-                char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid };
-                struct lustre_handle old_hdl;
-                struct ptlrpc_request *request; 
-                struct obd_export *ldlmexp;
-
-                LASSERT(imp->imp_connection == conn);
-                request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
-                request->rq_level = LUSTRE_CONN_NEW;
-                request->rq_replen = lustre_msg_size(0, NULL);
-                /*
-                 * This address is the export that represents our client-side
-                 * LDLM service (for ASTs).  We should only have one on this
-                 * list, so we just grab the first one.
-                 *
-                 * XXX tear down export, call class_obd_connect!
-                 */
-                ldlmexp = list_entry(obd->obd_exports.next, struct obd_export,
-                                     exp_obd_chain);
-                request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
-                request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
-                rc = ptlrpc_queue_wait(request);
-                rc = ptlrpc_check_status(request, rc);
-                if (rc) {
-                        CERROR("cannot connect to %s@%s: rc = %d\n",
-                               cli->cl_target_uuid, conn->c_remote_uuid, rc);
-                        ptlrpc_free_req(request);
-                        GOTO(out_disc, rc = -ENOTCONN);
-                }
-
-                old_hdl = imp->imp_handle;
-                imp->imp_handle.addr = request->rq_repmsg->addr;
-                imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
-                       cli->cl_target_uuid, conn->c_remote_uuid,
-                       imp->imp_handle.addr, imp->imp_handle.cookie,
-                       old_hdl.addr, old_hdl.cookie);
-                ptlrpc_req_finished(request);
+         * This address is the export that represents our client-side LDLM
+         * service (for ASTs).  We should only have one on this list, so we
+         * just grab the first one.
+         *
+         * XXX tear down export, call class_obd_connect?
+         */
+        ldlmexp = list_entry(obd->obd_exports.next, struct obd_export,
+                             exp_obd_chain);
+        request->rq_reqmsg->addr = (__u64)(unsigned long)ldlmexp;
+        request->rq_reqmsg->cookie = ldlmexp->exp_cookie;
+        rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
+        if (rc) {
+                CERROR("cannot connect to %s@%s: rc = %d\n",
+                       cli->cl_target_uuid, conn->c_remote_uuid, rc);
+                ptlrpc_free_req(request);
+                GOTO(out_disc, rc = -ENOTCONN);
         }
-        conn->c_level = LUSTRE_CONN_RECOVD;
+        
+        old_hdl = imp->imp_handle;
+        imp->imp_handle.addr = request->rq_repmsg->addr;
+        imp->imp_handle.cookie = request->rq_repmsg->cookie;
+        CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+               cli->cl_target_uuid, conn->c_remote_uuid,
+               imp->imp_handle.addr, imp->imp_handle.cookie,
+               old_hdl.addr, old_hdl.cookie);
+        ptlrpc_req_finished(request);
 
  out_disc:
         return rc;
@@ -121,19 +108,13 @@ int ptlrpc_run_recovery_upcall(struct ptlrpc_connection *conn)
         RETURN(0);
 }
 
-int ptlrpc_reconnect_and_replay(struct ptlrpc_connection *conn)
+int ptlrpc_replay(struct ptlrpc_connection *conn)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
         ENTRY;
 
-        /* 1. reconnect */
-        rc = ptlrpc_reconnect(conn);
-        if (rc)
-                RETURN(rc);
-        
-        /* 2. walk the request list */
         spin_lock(&conn->c_lock);
 
         CDEBUG(D_HA, "connection %p to %s has last_xid "LPD64"\n",

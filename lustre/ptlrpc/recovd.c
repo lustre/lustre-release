@@ -85,6 +85,24 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
         EXIT;
 }
 
+void recovd_conn_unmanage(struct ptlrpc_connection *conn)
+{
+        struct recovd_data *rd = &conn->c_recovd_data;
+        struct recovd_obd *recovd = rd->rd_recovd;
+        ENTRY;
+
+        if (recovd) {
+                spin_lock(&recovd->recovd_lock);
+                list_del(&rd->rd_managed_chain);
+                spin_unlock(&recovd->recovd_lock);
+                rd->rd_recovd = NULL;
+        }
+        /* should be safe enough, right? */
+        rd->rd_recover = NULL;
+        rd->rd_next_phase = RD_IDLE;
+        rd->rd_next_phase = RD_TROUBLED;
+}
+
 void recovd_conn_fail(struct ptlrpc_connection *conn)
 {
         struct recovd_data *rd = &conn->c_recovd_data;
@@ -136,7 +154,6 @@ void recovd_conn_fixed(struct ptlrpc_connection *conn)
 
         EXIT;
 }
-
 
 static int recovd_check_event(struct recovd_obd *recovd)
 {

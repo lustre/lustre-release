@@ -251,6 +251,21 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         int rc = 0;
 
         if (req->rq_repmsg != NULL) {
+                struct ptlrpc_connection *conn = req->rq_import->imp_connection;
+                spin_lock(&conn->c_lock);
+                if (req->rq_level > conn->c_level) {
+                        CDEBUG(D_HA,
+                               "rep to xid "LPD64" op %d to %s:%d: "
+                               "recovery started, ignoring (%d > %d)\n",
+                               (unsigned long long)req->rq_xid,
+                               req->rq_reqmsg->opc, conn->c_remote_uuid,
+                               req->rq_import->imp_client->cli_request_portal,
+                               req->rq_level, conn->c_level);
+                        req->rq_repmsg = NULL;
+                        spin_unlock(&conn->c_lock);
+                        GOTO(out, rc = 0);
+                }
+                spin_unlock(&conn->c_lock);
                 req->rq_transno = NTOH__u64(req->rq_repmsg->transno);
                 req->rq_flags |= PTL_RPC_FL_REPLIED;
                 GOTO(out, rc = 1);
@@ -258,6 +273,11 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 
         if (req->rq_flags & PTL_RPC_FL_RESEND) { 
                 CERROR("-- RESTART --\n");
+                GOTO(out, rc = 1);
+        }
+
+        if (req->rq_flags & PTL_RPC_FL_ERR) {
+                CERROR("-- ABORTED --\n");
                 GOTO(out, rc = 1);
         }
 
@@ -574,6 +594,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal);
+
+        if (req->rq_flags & PTL_RPC_FL_ERR) {
+                ptlrpc_abort(req);
+                GOTO(out, rc = -EIO);
+        }
 
         /* Don't resend if we were interrupted. */
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==

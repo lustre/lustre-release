@@ -533,7 +533,7 @@ static inline void invalidate_request_list(struct list_head *req_list)
         list_for_each_safe(tmp, n, req_list) {
                 struct ptlrpc_request *req = 
                         list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("invalidating req xid %d op %d to %s:%d\n",
+                CERROR("invalidating req xid "LPD64" op %d to %s:%d\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal);

@@ -353,8 +353,11 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 static int filter_disconnect(struct lustre_handle *conn)
 {
+        struct obd_export *export = class_conn2export(conn);
         int rc;
         ENTRY;
+
+        ldlm_cancel_locks_for_export(export);
 
         rc = class_disconnect(conn);
         if (!rc)

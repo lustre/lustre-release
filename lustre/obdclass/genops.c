@@ -342,8 +342,8 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
                 RETURN(NULL);
 
         if (export->exp_cookie != conn->cookie)
-                return NULL;
-        return export;
+                RETURN(NULL);
+        RETURN(export);
 } /* class_conn2export */
 
 struct obd_device *class_conn2obd(struct lustre_handle *conn)
