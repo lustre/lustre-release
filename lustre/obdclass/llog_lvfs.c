@@ -360,12 +360,35 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         RETURN(-EIO);
 }
 
+static struct file *llog_filp_open(char *name, int flags, int mode)
+{
+        char *logname;
+        struct file *filp;
+        int len;
+
+        OBD_ALLOC(logname, PATH_MAX);
+        if (logname == NULL)
+                return ERR_PTR(-ENOMEM);
+
+        len = snprintf(logname, PATH_MAX, "LOGS/%s", name);
+        if (len >= PATH_MAX - 1) {
+                filp = ERR_PTR(-ENAMETOOLONG);
+        } else {
+                filp = l_filp_open(logname, flags, mode);
+                if (IS_ERR(filp))
+                        CERROR("logfile creation %s: %ld\n", logname, 
+                               PTR_ERR(filp));
+        }
+
+        OBD_FREE(logname, PATH_MAX); 
+        return filp;
+}
+
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
-        char logname[24];
         struct llog_handle *handle;
         struct obd_device *obd;
         struct l_dentry *dchild = NULL;
@@ -415,16 +438,9 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                //LASSERT(strlen(name) <= 18);
-                //sprintf(logname, "LOGS/%s", name);
-                LOG_NAME_LIMIT(logname, name);
-
-                handle->lgh_file = l_filp_open(logname, open_flags, 0644);
-                if (IS_ERR(handle->lgh_file)) {
-                        rc = PTR_ERR(handle->lgh_file);
-                        CERROR("logfile creation %s: %d\n", logname, rc);
-                        GOTO(cleanup, rc);
-                }
+                handle->lgh_file = llog_filp_open(name, open_flags, 0644);
+                if (IS_ERR(handle->lgh_file))
+                        GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
                 handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =
