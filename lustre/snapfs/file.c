@@ -102,7 +102,7 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 	for( i=0; i<2; i++ ){
 		if(block[i]!=-1 && aops->bmap(inode->i_mapping, block[i])) {
 			table = &snap_tables[cache->cache_snap_tableno];
-        		for (slot = table->tbl_count ; slot >= 1; slot--) {
+        		for (slot = table->tbl_count - 1; slot >= 1; slot--) {
 				struct address_space_operations *c_aops = 
 					cache_inode->i_mapping->a_ops;
 				cache_inode = NULL;
@@ -179,7 +179,7 @@ static int currentfs_readpage(struct file *file, struct page *page)
 
 	table = &snap_tables[cache->cache_snap_tableno];
 
-        for (slot = table->tbl_count ; slot >= 1; slot--)
+        for (slot = table->tbl_count - 1; slot >= 1; slot--)
         {
 		struct address_space_operations *c_aops = 
 					cache_inode->i_mapping->a_ops;
