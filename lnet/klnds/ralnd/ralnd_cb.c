@@ -278,9 +278,9 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
 }
 
 static inline int
-kranal_setup_buffer (kra_tx_t *tx, int niov, 
-                     struct iovec *iov, ptl_kiov_t *kiov,
-                     int offset, int nob)
+kranal_setup_rdma_buffer (kra_tx_t *tx, int niov, 
+                          struct iovec *iov, ptl_kiov_t *kiov,
+                          int offset, int nob)
 {
         LASSERT ((iov == NULL) != (kiov == NULL));
         
@@ -633,7 +633,7 @@ kranal_do_send (lib_nal_t    *nal,
                 if (tx == NULL)
                         return PTL_FAIL;
 
-                rc = kranal_setup_buffer(tx, niov, iov, kiov, offset, nob);
+                rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
@@ -650,16 +650,31 @@ kranal_do_send (lib_nal_t    *nal,
         }
 
         case PTL_MSG_GET:
-                if (kiov == NULL &&             /* not paged */
-                    nob <= RANAL_FMA_MAX_DATA && /* small enough */
-                    nob <= kranal_tunables.kra_max_immediate)
-                        break;                  /* send IMMEDIATE */
+                LASSERT (niov == 0);
+                LASSERT (nob == 0);
+                /* We have to consider the eventual sink buffer rather than any
+                 * payload passed here (there isn't any, and strictly, looking
+                 * inside libmsg is a layering violation).  We send a simple
+                 * IMMEDIATE GET if the sink buffer is mapped already and small
+                 * enough for FMA */
+
+                if ((libmsg->md->options & PTL_MD_KIOV) == 0 &&
+                    libmsg->md->length <= RANAL_FMA_MAX_DATA &&
+                    libmsg->md->length <= kranal_tunables.kra_max_immediate)
+                        break;
 
                 tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_GET_REQ);
                 if (tx == NULL)
                         return PTL_NO_SPACE;
 
-                rc = kranal_setup_buffer(tx, niov, iov, kiov, offset, nob);
+                if ((libmsg->md->options & PTL_MD_KIOV) == 0)
+                        rc = kranal_setup_virt_buffer(tx, libmsg->md->md_niov,
+                                                      libmsg->md->md_iov.iov,
+                                                      0, libmsg->md->length);
+                else
+                        rc = kranal_setup_phys_buffer(tx, libmsg->md->md_niov,
+                                                      libmsg->md->md_iov.kiov,
+                                                      0, libmsg->md->length);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
@@ -692,7 +707,7 @@ kranal_do_send (lib_nal_t    *nal,
                 if (tx == NULL)
                         return PTL_NO_SPACE;
 
-                rc = kranal_setup_buffer(tx, niov, iov, kiov, offset, nob);
+                rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
@@ -815,7 +830,7 @@ kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                 if (tx == NULL)
                         return PTL_NO_SPACE;
 
-                rc = kranal_setup_buffer(tx, niov, iov, kiov, offset, mlen);
+                rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, mlen);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
