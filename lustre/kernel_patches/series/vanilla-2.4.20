@@ -1,3 +1,4 @@
+configurable-x86-stack-2.4.20.patch
 uml-patch-2.4.20-6.patch
 uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-2.4.20-fixes-1.patch
@@ -45,4 +46,5 @@ ext3-ea-in-inode-2.4.20.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.20-vanilla.patch 
-ext3-xattr-ptr-arith-fix.patch 
+ext3-xattr-ptr-arith-fix.patch
+gfp_memalloc-2.4.22.patch
