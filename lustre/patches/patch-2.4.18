@@ -169,10 +169,10 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
  	return bh->b_private;
  }
  
-+#define HAVE_JOURNAL_CALLBACK
++#define HAVE_JOURNAL_CALLBACK_STATUS
 +struct journal_callback {
 +	struct list_head jcb_list;
-+	void (*jcb_func)(void *);
++	void (*jcb_func)(void *cb_data, int error);
 +	/* user data goes here */
 +};
 +
@@ -203,26 +203,17 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
  };
  
  
-@@ -547,7 +563,7 @@
- #define JFS_FLUSHED	0x008	/* The journal superblock has been flushed */
- #define JFS_LOADED	0x010	/* The journal superblock has been loaded */
- 
--/* 
-+/*
-  * Function declarations for the journaling transaction and buffer
-  * management
-  */
 @@ -646,6 +662,8 @@
  extern int	 journal_try_to_free_buffers(journal_t *, struct page *, int);
  extern int	 journal_stop(handle_t *);
  extern int	 journal_flush (journal_t *);
-+extern void	 journal_callback_set(handle_t *handle, void (*func)(void *),
++extern void	 journal_callback_set(handle_t *handle, void (*fn)(void *, int),
 +				      void *cb_data);
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
 --- lum/fs/jbd/commit.c.orig	Fri Apr 12 10:27:52 2002
-+++ lum/fs/jbd/commit.c	Wed Apr 24 05:18:07 2002
++++ lum/fs/jbd/commit.c	Thu May 23 16:53:16 2002
 @@ -475,7 +475,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
@@ -232,28 +223,64 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
  	   less likely to be woken up until all IOs have completed, and
  	   so we incur less scheduling load.
  	*/
-@@ -602,6 +602,21 @@
+@@ -566,8 +566,10 @@
+ 
+ 	jbd_debug(3, "JBD: commit phase 6\n");
+ 
+-	if (is_journal_aborted(journal))
++	if (is_journal_aborted(journal)) {
++		unlock_journal(journal);
+ 		goto skip_commit;
++	}
+ 
+ 	/* Done it all: now write the commit record.  We should have
+ 	 * cleaned up our previous buffers by now, so if we are in abort
+@@ -577,9 +579,10 @@
+ 	descriptor = journal_get_descriptor_buffer(journal);
+ 	if (!descriptor) {
+ 		__journal_abort_hard(journal);
++		unlock_journal(journal);
+ 		goto skip_commit;
  	}
- 	lock_journal(journal);
+-	
++
+ 	/* AKPM: buglet - add `i' to tmp! */
+ 	for (i = 0; i < jh2bh(descriptor)->b_size; i += 512) {
+ 		journal_header_t *tmp =
+@@ -600,7 +603,6 @@
+ 		put_bh(bh);		/* One for getblk() */
+ 		journal_unlock_journal_head(descriptor);
+ 	}
+-	lock_journal(journal);
+ 
+ 	/* End of a transaction!  Finally, we can do checkpoint
+            processing: any buffers committed as a result of this
+@@ -609,6 +611,25 @@
+ 
+ skip_commit:
  
 +	/* Call any callbacks that had been registered for handles in this
 +	 * transaction.  It is up to the callback to free any allocated
 +	 * memory.
 +	 */
-+	{
++	if (!list_empty(&commit_transaction->t_jcb)) {
 +		struct list_head *p, *n;
++		int error = is_journal_aborted(journal);
++
 +		list_for_each_safe(p, n, &commit_transaction->t_jcb) {
 +			struct journal_callback *jcb;
 +
 +			jcb = list_entry(p, struct journal_callback, jcb_list);
 +			list_del(p);
-+			jcb->jcb_func(jcb);
++			jcb->jcb_func(jcb, error);
 +		}
 +	}
 +
- 	/* End of a transaction!  Finally, we can do checkpoint
-            processing: any buffers committed as a result of this
-            transaction can be removed from any checkpoint list it was on
++	lock_journal(journal);
++
+ 	jbd_debug(3, "JBD: commit phase 7\n");
+ 
+ 	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
 --- lum/fs/jbd/journal.c.orig	Fri Apr 12 10:27:52 2002
 +++ lum/fs/jbd/journal.c	Wed Apr 24 05:18:49 2002
 @@ -58,6 +58,7 @@
@@ -329,23 +356,25 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
  	current->journal_info = handle;
  
  	err = try_start_this_handle(journal, handle);
-@@ -1328,6 +1337,27 @@
+@@ -1328,6 +1337,28 @@
  #endif
  
  /*
 + * Register a callback function for this handle.  The function will be
 + * called when the transaction that this handle is part of has been
-+ * committed to disk.  There is no guarantee of ordering between handles
-+ * within a single transaction, nor between callbacks registered on the
-+ * same handle.
++ * committed to disk with the original callback data struct and the
++ * error status of the journal as parameters.  There is no guarantee of
++ * ordering between handles within a single transaction, nor between
++ * callbacks registered on the same handle.
 + *
 + * The caller is responsible for allocating the journal_callback struct.
 + * This is to allow the caller to add as much extra data to the callback
 + * as needed, but reduce the overhead of multiple allocations.  The caller
-+ * should use the journal_callback_size() function to reserve enough space
-+ * for the JBD-private part of the callback struct.
++ * allocated struct must start with a struct journal_callback at offset 0,
++ * and has the caller-specific data afterwards.
 + */
-+void journal_callback_set(handle_t *handle, void (*func)(void *), void *cb_data)
++void journal_callback_set(handle_t *handle, void (*func)(void *, int),
++			  void *cb_data)
 +{
 +	struct journal_callback *jcb = cb_data;
 +
@@ -357,14 +386,13 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
   * All done for a particular handle.
   *
   * There is not much action needed here.  We just return any remaining
-@@ -1393,7 +1423,11 @@
+@@ -1393,7 +1423,10 @@
  			wake_up(&journal->j_wait_transaction_locked);
  	}
  
 -	/* 
 +	/* Move callbacks from the handle to the transaction. */
 +	list_splice(&handle->h_jcb, &transaction->t_jcb);
-+	INIT_LIST_HEAD(&handle->h_jcb);
 +
 +	/*
  	 * If the handle is marked SYNC, we need to set another commit
