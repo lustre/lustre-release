@@ -635,11 +635,13 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
 
         if (!page)
                 return -ENOMEM;
+        base = kmap(page);
+        if (!base) 
+                return -ENOMEM;
+
         err = mapping->a_ops->prepare_write(NULL, page, 0, chunk_size);
         if (err)
                 goto fail;
-
-        base = page_address(page);
 
         de = (struct ext2_dir_entry_2 *) base;
         de->name_len = 1;
@@ -657,6 +659,7 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
 
         err = ext2_commit_chunk(page, 0, chunk_size);
 fail:
+        kunmap(page);
         UnlockPage(page);
         page_cache_release(page);
         ENTRY;
