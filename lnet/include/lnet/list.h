@@ -1,6 +1,4 @@
 #ifndef _LINUX_LIST_H
-#define _LINUX_LIST_H
-
 
 /*
  * Simple doubly linked list implementation.
@@ -101,7 +99,9 @@ static inline void list_del_init(struct list_head *entry)
 	__list_del(entry->prev, entry->next);
 	INIT_LIST_HEAD(entry);
 }
+#endif
 
+#ifndef list_for_each_entry
 /**
  * list_move - delete from one list and add as another's head
  * @list: the entry to move
@@ -124,7 +124,10 @@ static inline void list_move_tail(struct list_head *list,
 	__list_del(list->prev, list->next);
 	list_add_tail(list, head);
 }
+#endif
 
+#ifndef _LINUX_LIST_H
+#define _LINUX_LIST_H
 /**
  * list_empty - tests whether a list is empty
  * @head: the list to test.

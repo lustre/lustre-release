@@ -139,7 +139,6 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current->fsgid = saved->ouc.ouc_fsgid;
                 current->cap_effective = saved->ouc.ouc_cap;
                 current->ngroups = saved->ngroups;
-
                 current->groups[0] = saved->ouc.ouc_suppgid1;
                 current->groups[1] = saved->ouc.ouc_suppgid2;
         }

@@ -124,6 +124,14 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                 r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 1];
         }
 
+        if (req->rq_reqmsg->bufcount > offset + 2) {
+                r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
+                if (r->ur_eadata == NULL)
+                        RETURN (-EFAULT);
+
+                r->ur_cookielen = req->rq_reqmsg->buflens[offset + 2];
+        }
+
         RETURN(0);
 }
 
