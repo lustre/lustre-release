@@ -1223,6 +1223,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                        (struct lov_stripe_md **) &mea);
         }
 
+	/* MDS is supposed to return correct fid always. */
         LASSERT(id_fid(&body->id1) != 0);
         id_assign_fid(&lli->lli_id, &body->id1);
         
@@ -1277,7 +1278,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         inode->i_dev = (kdev_t)id_group(&lli->lli_id);
 #endif
-        LASSERT(id_fid(&lli->lli_id) != 0);
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))

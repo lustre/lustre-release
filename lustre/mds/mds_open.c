@@ -527,7 +527,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 GOTO(out_dput, 0);
 
         /* get lock (write for O_CREAT, read otherwise) */
-        mds_pack_inode2body(obd, body, dchild->d_inode, 0);
+        mds_pack_inode2body(obd, body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 1);
@@ -721,7 +721,7 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         if (dchild->d_inode != NULL) {
                 up(&pending_dir->i_sem);
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2body(req2obd(req), body, dchild->d_inode, 0);
+                mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
@@ -739,7 +739,7 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
 
-        mds_pack_inode2body(req2obd(req), body, dchild->d_inode, 0);
+        mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
@@ -977,7 +977,7 @@ got_child:
                 ldlm_policy_data_t policy;
                 int flags = 0;
 
-                mds_pack_dentry2body(obd, body, dchild, 1);
+                mds_pack_dentry2body(obd, body, dchild);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
 
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
@@ -1128,15 +1128,9 @@ got_child:
                 }
 
                 acc_mode = 0;           /* Don't check for permissions */
-                
-                /* 
-                 * we do not read fid from EA here, because it is already
-                 * updated and thus we avoid not needed IO, locking, etc.
-                 */
-                mds_pack_inode2body(obd, body, dchild->d_inode, 0);
-        } else {
-                mds_pack_inode2body(obd, body, dchild->d_inode, 1);
         }
+        mds_pack_inode2body(obd, body, dchild->d_inode);
+	
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
                  "dchild %*s (%p) inode %p\n", dchild->d_name.len,
                  dchild->d_name.name, dchild, dchild->d_inode);
@@ -1489,8 +1483,9 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 LASSERT(body != NULL);
 
-                mds_pack_inode2body(obd, body, inode, 0);
-                mds_pack_md(obd, req->rq_repmsg, 1, body, inode, MDS_PACK_MD_LOCK);
+                mds_pack_inode2body(obd, body, inode);
+                mds_pack_md(obd, req->rq_repmsg, 1, body, 
+			    inode, MDS_PACK_MD_LOCK);
         }
         spin_lock(&med->med_open_lock);
         list_del(&mfd->mfd_list);

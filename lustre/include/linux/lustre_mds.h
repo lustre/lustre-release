@@ -290,7 +290,7 @@ int mdc_done_writing(struct obd_export *, struct obdo *);
                         req->rq_export->exp_mds_data.med_mcd;                  \
                 if (mcd->mcd_last_xid == req->rq_xid) {                        \
                         reconstruct;                                           \
-                        RETURN(0);                                             \
+                        RETURN(req->rq_repmsg->status);                        \
                 }                                                              \
                 DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")", \
                           mcd->mcd_last_xid);                                  \

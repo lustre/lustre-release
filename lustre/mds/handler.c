@@ -756,13 +756,13 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         LASSERT(body != NULL);                 /* caller prepped reply */
 
         if (dentry->d_flags & DCACHE_CROSS_REF) {
-                mds_pack_dentry2body(obd, body, dentry, 1);
+                mds_pack_dentry2body(obd, body, dentry);
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
         
-        mds_pack_inode2body(obd, body, inode, 1);
+        mds_pack_inode2body(obd, body, inode);
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
@@ -1271,7 +1271,7 @@ static int mds_sync(struct ptlrpc_request *req, int offset)
                         GOTO(out, rc);
 
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                mds_pack_inode2body(obd, body, de->d_inode, 0);
+                mds_pack_inode2body(obd, body, de->d_inode);
                 l_dput(de);
         }
 

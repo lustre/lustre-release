@@ -160,47 +160,39 @@ void groups_from_buffer(struct group_info *ginfo, __u32 *gids)
 
 void mds_pack_dentry2id(struct obd_device *obd,
                         struct lustre_id *id,
-                        struct dentry *dentry,
-                        int read_fid)
+                        struct dentry *dentry)
 {
         id_ino(id) = dentry->d_inum;
         id_gen(id) = dentry->d_generation;
-
-        if (read_fid) {
-                id_fid(id) = dentry->d_fid;
-                id_group(id) = dentry->d_mdsnum;
-        }
+        id_fid(id) = dentry->d_fid;
+        id_group(id) = dentry->d_mdsnum;
 }
 
 void mds_pack_dentry2body(struct obd_device *obd,
                           struct mds_body *b,
-                          struct dentry *dentry,
-                          int read_fid)
+                          struct dentry *dentry)
 {
         b->valid |= OBD_MD_FLID | OBD_MD_FLGENER |
                 OBD_MD_MDS;
 
-        mds_pack_dentry2id(obd, &b->id1, dentry,
-                           read_fid);
+        mds_pack_dentry2id(obd, &b->id1, dentry);
 }
 
 int mds_pack_inode2id(struct obd_device *obd,
                       struct lustre_id *id,
-                      struct inode *inode,
-                      int read_fid)
+                      struct inode *inode)
 {
         int rc = 0;
         ENTRY;
         
-        if (read_fid) {
-                /* we have to avoid deadlock. */
-                if (!down_trylock(&inode->i_sem)) {
-                        rc = mds_read_inode_sid(obd, inode, id);
-                        up(&inode->i_sem);
-                } else {
-                        rc = mds_read_inode_sid(obd, inode, id);
-                }
+        /* we have to avoid deadlock. */
+        if (!down_trylock(&inode->i_sem)) {
+                rc = mds_read_inode_sid(obd, inode, id);
+                up(&inode->i_sem);
+        } else {
+                rc = mds_read_inode_sid(obd, inode, id);
         }
+
         if (rc == 0) {
                 id_ino(id) = inode->i_ino;
                 id_gen(id) = inode->i_generation;
@@ -211,7 +203,7 @@ int mds_pack_inode2id(struct obd_device *obd,
 
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
-                         struct inode *inode, int read_fid)
+                         struct inode *inode)
 {
         b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
                 OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
@@ -242,7 +234,7 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         } else {
                 b->nlink = inode->i_nlink;
         }
-        mds_pack_inode2id(obd, &b->id1, inode, read_fid);
+        mds_pack_inode2id(obd, &b->id1, inode);
 }
 
 /* unpacking */

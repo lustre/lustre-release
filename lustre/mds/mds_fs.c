@@ -476,7 +476,7 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         inode = dentry->d_inode;
         LASSERT(dentry->d_inode);
 
-        rc = mds_pack_inode2id(obd, &mds->mds_rootid, inode, 1);
+        rc = mds_pack_inode2id(obd, &mds->mds_rootid, inode);
         if (rc < 0) {
                 if (rc != -ENODATA)
                         GOTO(out_dentry, rc);

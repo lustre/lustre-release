@@ -357,7 +357,7 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-        mds_pack_inode2body(req2obd(req), body, de->d_inode, 0);
+        mds_pack_inode2body(req2obd(req), body, de->d_inode);
 
         /* Don't return OST-specific attributes if we didn't just set them */
         if (rec->ur_iattr.ia_valid & ATTR_SIZE)
@@ -465,8 +465,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
-        mds_pack_inode2body(obd, body, inode, 0);
-        body->id1 = *rec->ur_id1;
+        mds_pack_inode2body(obd, body, inode);
 
         /* Don't return OST-specific attributes if we didn't just set them */
         if (rec->ur_iattr.ia_valid & ATTR_SIZE)
@@ -552,14 +551,14 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         if ((child->d_flags & DCACHE_CROSS_REF)) {
                 LASSERTF(child->d_inode == NULL, "BUG 3869\n");
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                mds_pack_dentry2body(req2obd(req), body, child, 1);
+                mds_pack_dentry2body(req2obd(req), body, child);
         } else if (child->d_inode == NULL) {
                 DEBUG_REQ(D_ERROR, req, "parent "DLID4" name %s mode %o",
                           OLID4(rec->ur_id1), rec->ur_name, rec->ur_mode);
                 LASSERTF(child->d_inode != NULL, "BUG 3869\n");
         } else {
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                mds_pack_inode2body(req2obd(req), body, child->d_inode, 1);
+                mds_pack_inode2body(req2obd(req), body, child->d_inode);
         }
         l_dput(parent);
         l_dput(child);
@@ -992,7 +991,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         MD_COUNTER_INCREMENT(obd, create);
 
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                mds_pack_inode2body(obd, body, inode, 1);
+                mds_pack_inode2body(obd, body, inode);
         }
 
         EXIT;
@@ -1821,7 +1820,7 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
                 RETURN(-ENOMEM);
         
         memset(op_data, 0, sizeof(*op_data));
-        mds_pack_dentry2id(obd, &op_data->id1, dchild, 1);
+        mds_pack_dentry2id(obd, &op_data->id1, dchild);
         op_data->create_mode = rec->ur_mode;
 
         DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode "DLID4")",
@@ -2032,7 +2031,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         down(&mds->mds_pending_dir->d_inode->i_sem);
                         cleanup_phase = 5; /* up(&pending_dir->i_sem) */
                 } else if (S_ISREG(child_inode->i_mode)) {
-                        mds_pack_inode2body(obd, body, child_inode, 0);
+                        mds_pack_inode2body(obd, body, child_inode);
                         mds_pack_md(obd, req->rq_repmsg, offset + 1,
                                     body, child_inode, MDS_PACK_MD_LOCK);
                 }
@@ -2828,7 +2827,7 @@ static int mds_check_for_rename(struct obd_device *obd,
                         RETURN(-ENOMEM);
                 }
                 memset(op_data, 0, sizeof(*op_data));
-                mds_pack_dentry2id(obd, &op_data->id1, dentry, 1);
+                mds_pack_dentry2id(obd, &op_data->id1, dentry);
 
                 it.it_op = IT_UNLINK;
                 rc = md_enqueue(mds->mds_md_exp, LDLM_IBITS, &it, LCK_EX,
@@ -3068,7 +3067,7 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
         if (de_old->d_flags & DCACHE_CROSS_REF) {
                 LASSERT(de_old->d_inode == NULL);
                 CDEBUG(D_OTHER, "request to move remote name\n");
-                mds_pack_dentry2id(obd, &op_data->id1, de_old, 1);
+                mds_pack_dentry2id(obd, &op_data->id1, de_old);
         } else if (de_old->d_inode == NULL) {
                 /* oh, source doesn't exist */
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -3270,7 +3269,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         down(&mds->mds_pending_dir->d_inode->i_sem);
                         cleanup_phase = 3; /* up(&pending_dir->i_sem) */
                 } else if (S_ISREG(new_inode->i_mode)) {
-                        mds_pack_inode2body(obd, body, new_inode, 0);
+                        mds_pack_inode2body(obd, body, new_inode);
                         mds_pack_md(obd, req->rq_repmsg, 1, body, 
                                     new_inode, MDS_PACK_MD_LOCK);
                  }
@@ -3282,7 +3281,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (de_old->d_flags & DCACHE_CROSS_REF) {
                 struct lustre_id old_id;
 
-                mds_pack_dentry2id(obd, &old_id, de_old, 1);
+                mds_pack_dentry2id(obd, &old_id, de_old);
                 
                 rc = mds_add_local_dentry(rec, offset, req, &old_id,
                                           de_tgtdir, de_new, 1);
