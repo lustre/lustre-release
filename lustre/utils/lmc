@@ -113,6 +113,10 @@ def error(*args):
     print "Error: ", msg
     sys.exit(1)
     
+def warning(*args):
+    msg = string.join(map(str,args))
+    print "Warning: ", msg
+    
 #
 # manage names and uuids
 # need to initialize this by walking tree to ensure
@@ -481,6 +485,8 @@ def add_mds(gen, lustre, options, args):
         error("--mds requires a --node argument")
 
     mds_name = new_name(options['mds'])
+    if mds_name != options['mds']:
+        warning("name:", options['mds'], "already used. using:", mds_name)
     devname = args[0]
     if len(args) > 1:
         size = args[1]
@@ -585,7 +591,10 @@ def add_lov(gen, lustre, options, args):
     if len(args) < 4:
         usage()
 
-    name = options['lov']
+    name = new_name(options['lov'])
+    if name != options['lov']:
+        warning("name:", options['lov'], "already used. using:", name)
+
     mds_name = args[0]
     stripe_sz = args[1]
     stripe_count = args[2]
