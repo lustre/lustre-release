@@ -20,6 +20,7 @@ SRC=/etc
 [ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
 
 [ "$MCREATE" ] || MCREATE=$SRCDIR/../tests/mcreate
+[ "$MKDIRMANY" ] || MKDIRMANY=$SRCDIR/../tests/mkdirmany
 
 while [ "$1" ]; do
 	case $1 in
@@ -106,7 +107,7 @@ rm -r $V $DST || fail "can't remove $DST" 37
 
 # mkdirmany test (bug 589)
 echo "running mkdirmany $OSCMT/base$$ 100"
-./mkdirmany $OSCMT/base$$ 100 || fail "mkdirmany failed"
+$MKDIRMANY $OSCMT/base$$ 100 || fail "mkdirmany failed"
 echo "removing mkdirmany directories"
 rmdir $OSCMT/base$$* || fail "mkdirmany cleanup failed"
 

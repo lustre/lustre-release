@@ -9,7 +9,7 @@ EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	client-echo.cfg    elan-server.cfg  net-client.cfg  obdecho.cfg \
 	client-mount.cfg   ldlm.cfg         net-local.cfg   obdfilter.cfg \
 	client-mount2.cfg  lustre.cfg       net-server.cfg  sanity.sh \
-	rundbench          mcreate \
+	rundbench          \
 	elan-client.cfg    mds.cfg 	trivial.sh
 pkgexampledir = '${exec_prefix}/usr/lib/$(PACKAGE)/examples'
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh local.sh echo.sh uml.sh lov.sh
@@ -24,10 +24,10 @@ noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	runtests runvmstat snaprun.sh tbox.sh  common.sh
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany mkdirmany multifstat createtest
+noinst_PROGRAMS += stat createmany statmany multifstat createtest
 # noinst_PROGRAMS += ldaptest 
 noinst_PROGRAMS += checkstat wantedi
-sbin_PROGRAMS = mcreate
+sbin_PROGRAMS = mcreate mkdirmany
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
