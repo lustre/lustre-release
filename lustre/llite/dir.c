@@ -257,7 +257,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
                                 (filler_t*)mapping->a_ops->readpage, NULL);
         if (!IS_ERR(page)) {
                 wait_on_page(page);
-                kmap(page);
+                (void)kmap(page);
                 if (!PageUptodate(page))
                         goto fail;
                 if (!PageChecked(page))
