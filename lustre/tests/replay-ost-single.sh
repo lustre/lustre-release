@@ -105,6 +105,20 @@ test_3() {
 }
 run_test 3 "Fail OST during write, with verification"
 
+test_4() {
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile
+    # invalidate cache, so that we're reading over the wire
+    for i in /proc/fs/lustre/ldlm/namespaces/OSC_*MNT*; do
+        echo -n clear > $i/lru_size
+    done
+    cmp $verify $DIR/$tfile &
+    cmppid=$!
+    fail ost
+    wait $cmppid || return 1
+    rm $verify
+}
+run_test 4 "Fail OST during read, with verification"
+
 equals_msg test complete, cleaning up
 cleanup
-
