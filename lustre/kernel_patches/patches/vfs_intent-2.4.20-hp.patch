@@ -4,17 +4,17 @@
  fs/namespace.c            |   28 ++-
  fs/open.c                 |  172 +++++++++++++++++------
  fs/proc/base.c            |    3 
- fs/stat.c                 |   50 ++++--
+ fs/stat.c                 |   52 ++++---
  include/linux/dcache.h    |   60 ++++++++
  include/linux/fs.h        |   32 ++++
  include/linux/fs_struct.h |    4 
  kernel/exit.c             |    3 
  kernel/fork.c             |    3 
  kernel/ksyms.c            |    1 
- 13 files changed, 589 insertions(+), 133 deletions(-)
+ 13 files changed, 591 insertions(+), 133 deletions(-)
 
 --- linux-2.4.20-hp4-pnnl13/fs/exec.c~vfs_intent-2.4.20-hp	2003-09-13 15:19:27.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/exec.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/exec.c	2003-09-14 17:33:51.000000000 +0400
 @@ -116,8 +116,10 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -77,7 +77,7 @@
  
  	retval = binfmt->core_dump(signr, regs, file);
 --- linux-2.4.20-hp4-pnnl13/fs/dcache.c~vfs_intent-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/dcache.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/dcache.c	2003-09-14 17:33:51.000000000 +0400
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -116,7 +116,7 @@
  
  #define do_switch(x,y) do { \
 --- linux-2.4.20-hp4-pnnl13/fs/namespace.c~vfs_intent-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/namespace.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/namespace.c	2003-09-14 17:33:51.000000000 +0400
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -231,7 +231,7 @@
  out0:
  	unlock_kernel();
 --- linux-2.4.20-hp4-pnnl13/fs/namei.c~vfs_intent-2.4.20-hp	2003-09-13 15:19:23.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/namei.c	2003-09-13 17:00:57.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/namei.c	2003-09-14 17:33:51.000000000 +0400
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -1040,7 +1040,7 @@
  		kunmap(page);
  		page_cache_release(page);
 --- linux-2.4.20-hp4-pnnl13/fs/open.c~vfs_intent-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/open.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/open.c	2003-09-14 17:33:51.000000000 +0400
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1440,8 +1440,8 @@
   * Find an empty file descriptor entry, and mark it busy.
   */
 --- linux-2.4.20-hp4-pnnl13/fs/stat.c~vfs_intent-2.4.20-hp	2001-09-14 03:04:43.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/stat.c	2003-09-13 17:00:49.000000000 +0400
-@@ -17,10 +17,12 @@
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/stat.c	2003-09-14 17:34:07.000000000 +0400
+@@ -17,10 +17,14 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
  static __inline__ int
@@ -1450,13 +1450,15 @@
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
++        if (!inode)
++                return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
  		return inode->i_op->revalidate(dentry);
  	return 0;
  }
-@@ -135,13 +137,15 @@ static int cp_new_stat(struct inode * in
+@@ -135,13 +139,15 @@ static int cp_new_stat(struct inode * in
  asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1474,7 +1476,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -151,13 +155,15 @@ asmlinkage long sys_stat(char * filename
+@@ -151,13 +157,15 @@ asmlinkage long sys_stat(char * filename
  asmlinkage long sys_newstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1492,7 +1494,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -172,13 +178,15 @@ asmlinkage long sys_newstat(char * filen
+@@ -172,13 +180,15 @@ asmlinkage long sys_newstat(char * filen
  asmlinkage long sys_lstat(char * filename, struct __old_kernel_stat * statbuf)
  {
  	struct nameidata nd;
@@ -1510,7 +1512,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -189,13 +197,15 @@ asmlinkage long sys_lstat(char * filenam
+@@ -189,13 +199,15 @@ asmlinkage long sys_lstat(char * filenam
  asmlinkage long sys_newlstat(char * filename, struct stat * statbuf)
  {
  	struct nameidata nd;
@@ -1528,7 +1530,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -216,7 +226,7 @@ asmlinkage long sys_fstat(unsigned int f
+@@ -216,7 +228,7 @@ asmlinkage long sys_fstat(unsigned int f
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1537,7 +1539,7 @@
  		if (!err)
  			err = cp_old_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -235,7 +245,7 @@ asmlinkage long sys_newfstat(unsigned in
+@@ -235,7 +247,7 @@ asmlinkage long sys_newfstat(unsigned in
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1546,7 +1548,7 @@
  		if (!err)
  			err = cp_new_stat(dentry->d_inode, statbuf);
  		fput(f);
-@@ -257,7 +267,7 @@ asmlinkage long sys_readlink(const char 
+@@ -257,7 +269,7 @@ asmlinkage long sys_readlink(const char 
  
  		error = -EINVAL;
  		if (inode->i_op && inode->i_op->readlink &&
@@ -1555,7 +1557,7 @@
  			UPDATE_ATIME(inode);
  			error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
  		}
-@@ -333,12 +343,14 @@ asmlinkage long sys_stat64(char * filena
+@@ -333,12 +345,14 @@ asmlinkage long sys_stat64(char * filena
  {
  	struct nameidata nd;
  	int error;
@@ -1572,7 +1574,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -348,12 +360,14 @@ asmlinkage long sys_lstat64(char * filen
+@@ -348,12 +362,14 @@ asmlinkage long sys_lstat64(char * filen
  {
  	struct nameidata nd;
  	int error;
@@ -1589,7 +1591,7 @@
  		path_release(&nd);
  	}
  	return error;
-@@ -368,7 +382,7 @@ asmlinkage long sys_fstat64(unsigned lon
+@@ -368,7 +384,7 @@ asmlinkage long sys_fstat64(unsigned lon
  	if (f) {
  		struct dentry * dentry = f->f_dentry;
  
@@ -1599,7 +1601,7 @@
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
 --- linux-2.4.20-hp4-pnnl13/fs/proc/base.c~vfs_intent-2.4.20-hp	2003-09-13 15:19:19.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/fs/proc/base.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/fs/proc/base.c	2003-09-14 17:33:51.000000000 +0400
 @@ -481,6 +481,9 @@ static int proc_pid_follow_link(struct d
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
@@ -1611,7 +1613,7 @@
  	return error;
  }
 --- linux-2.4.20-hp4-pnnl13/include/linux/dcache.h~vfs_intent-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
-+++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/dcache.h	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/dcache.h	2003-09-14 17:33:51.000000000 +0400
 @@ -6,6 +6,51 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1695,8 +1697,8 @@
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.20-hp4-pnnl13/include/linux/fs.h~vfs_intent-2.4.20-hp	2003-09-13 17:00:47.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/fs.h	2003-09-13 17:00:49.000000000 +0400
+--- linux-2.4.20-hp4-pnnl13/include/linux/fs.h~vfs_intent-2.4.20-hp	2003-09-14 17:33:50.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/fs.h	2003-09-14 17:33:51.000000000 +0400
 @@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
  
  #define FMODE_READ 1
@@ -1825,7 +1827,7 @@
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
 --- linux-2.4.20-hp4-pnnl13/include/linux/fs_struct.h~vfs_intent-2.4.20-hp	2001-07-14 02:10:44.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/fs_struct.h	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/include/linux/fs_struct.h	2003-09-14 17:33:51.000000000 +0400
 @@ -34,10 +34,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1852,8 +1854,8 @@
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
---- linux-2.4.20-hp4-pnnl13/kernel/ksyms.c~vfs_intent-2.4.20-hp	2003-09-13 17:00:48.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/kernel/ksyms.c	2003-09-13 17:00:49.000000000 +0400
+--- linux-2.4.20-hp4-pnnl13/kernel/ksyms.c~vfs_intent-2.4.20-hp	2003-09-14 17:33:50.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/kernel/ksyms.c	2003-09-14 17:33:51.000000000 +0400
 @@ -296,6 +296,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1863,7 +1865,7 @@
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
 --- linux-2.4.20-hp4-pnnl13/kernel/fork.c~vfs_intent-2.4.20-hp	2003-09-13 15:19:27.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/kernel/fork.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/kernel/fork.c	2003-09-14 17:33:51.000000000 +0400
 @@ -388,10 +388,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1879,7 +1881,7 @@
  			fs->altroot = dget(old->altroot);
  		} else {
 --- linux-2.4.20-hp4-pnnl13/kernel/exit.c~vfs_intent-2.4.20-hp	2003-09-13 15:19:27.000000000 +0400
-+++ linux-2.4.20-hp4-pnnl13-alexey/kernel/exit.c	2003-09-13 17:00:49.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13-alexey/kernel/exit.c	2003-09-14 17:33:51.000000000 +0400
 @@ -239,11 +239,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
