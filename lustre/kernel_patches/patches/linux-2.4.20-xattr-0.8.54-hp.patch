@@ -30,14 +30,15 @@
  fs/ext2/symlink.c             |   14 
  fs/ext2/xattr.c               | 1212 +++++++++++++++++++++++++++++++++++++++++
  fs/ext2/xattr_user.c          |  103 +++
- fs/ext3/Makefile              |    6 
+ fs/ext3/Makefile              |    9 
+ fs/ext3/ext3-exports.c        |   13 
  fs/ext3/file.c                |    5 
  fs/ext3/ialloc.c              |    2 
  fs/ext3/inode.c               |   35 -
  fs/ext3/namei.c               |   21 
- fs/ext3/super.c               |   33 +
+ fs/ext3/super.c               |   36 +
  fs/ext3/symlink.c             |   14 
- fs/ext3/xattr.c               | 1232 ++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/xattr.c               | 1225 ++++++++++++++++++++++++++++++++++++++++++
  fs/ext3/xattr_user.c          |  111 +++
  fs/jfs/jfs_xattr.h            |    6 
  fs/jfs/xattr.c                |    6 
@@ -59,10 +60,10 @@
  include/linux/mbcache.h       |   69 ++
  kernel/ksyms.c                |    4 
  mm/vmscan.c                   |   35 +
- 61 files changed, 4336 insertions(+), 177 deletions(-)
+ 62 files changed, 4343 insertions(+), 182 deletions(-)
 
---- linux/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
-+++ linux-mmonroe/Documentation/Configure.help	Fri Apr 25 11:45:15 2003
+--- linux/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:23 2003
++++ linux-mmonroe/Documentation/Configure.help	Tue Apr 29 09:26:41 2003
 @@ -15309,6 +15309,39 @@ CONFIG_EXT2_FS
    be compiled as a module, and so this could be dangerous.  Most
    everyone wants to say Y here.
@@ -143,8 +144,8 @@
  Journal Block Device support (JBD for ext3) (EXPERIMENTAL)
  CONFIG_JBD
    This is a generic journalling layer for block devices.  It is
---- linux/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:58 2003
-+++ linux-mmonroe/arch/alpha/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:08 2003
++++ linux-mmonroe/arch/alpha/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -159,8 +160,8 @@
  CONFIG_ALPHA=y
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
---- linux/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
-+++ linux-mmonroe/arch/alpha/kernel/entry.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:08 2003
++++ linux-mmonroe/arch/alpha/kernel/entry.S	Tue Apr 29 09:26:41 2003
 @@ -1154,6 +1154,18 @@ sys_call_table:
  	.quad sys_readahead
  	.quad sys_ni_syscall			/* 380, sys_security */
@@ -180,8 +181,8 @@
  
  /* Remember to update everything, kids.  */
  .ifne (. - sys_call_table) - (NR_SYSCALLS * 8)
---- linux/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:09 2003
-+++ linux-mmonroe/arch/arm/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:16 2003
++++ linux-mmonroe/arch/arm/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -196,8 +197,8 @@
  CONFIG_ARM=y
  # CONFIG_EISA is not set
  # CONFIG_SBUS is not set
---- linux/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:09 2003
-+++ linux-mmonroe/arch/arm/kernel/calls.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:17 2003
++++ linux-mmonroe/arch/arm/kernel/calls.S	Tue Apr 29 09:26:41 2003
 @@ -240,18 +240,18 @@ __syscall_start:
  		.long	SYMBOL_NAME(sys_ni_syscall) /* Security */
  		.long	SYMBOL_NAME(sys_gettid)
@@ -229,8 +230,8 @@
  		.long	SYMBOL_NAME(sys_tkill)
  		/*
  		 * Please check 2.5 _before_ adding calls here,
---- linux/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:57 2003
-+++ linux-mmonroe/arch/i386/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:07 2003
++++ linux-mmonroe/arch/i386/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -245,8 +246,8 @@
  CONFIG_X86=y
  CONFIG_ISA=y
  # CONFIG_SBUS is not set
---- linux/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:12 2003
-+++ linux-mmonroe/arch/ia64/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:19 2003
++++ linux-mmonroe/arch/ia64/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -261,8 +262,8 @@
  
  #
  # Code maturity level options
---- linux/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:06 2003
-+++ linux-mmonroe/arch/m68k/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:14 2003
++++ linux-mmonroe/arch/m68k/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -277,8 +278,8 @@
  CONFIG_UID16=y
  
  #
---- linux/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:01 2003
-+++ linux-mmonroe/arch/mips/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:09 2003
++++ linux-mmonroe/arch/mips/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -293,8 +294,8 @@
  CONFIG_MIPS=y
  CONFIG_MIPS32=y
  # CONFIG_MIPS64 is not set
---- linux/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:13 2003
-+++ linux-mmonroe/arch/mips64/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:20 2003
++++ linux-mmonroe/arch/mips64/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -309,8 +310,8 @@
  CONFIG_MIPS=y
  # CONFIG_MIPS32 is not set
  CONFIG_MIPS64=y
---- linux/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:05 2003
-+++ linux-mmonroe/arch/ppc/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:12 2003
++++ linux-mmonroe/arch/ppc/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,20 @@
  #
  # Automatically generated make config: don't edit
@@ -332,8 +333,8 @@
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
  CONFIG_RWSEM_XCHGADD_ALGORITHM=y
---- linux/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:57 2003
-+++ linux-mmonroe/arch/ppc64/kernel/misc.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:06 2003
++++ linux-mmonroe/arch/ppc64/kernel/misc.S	Tue Apr 29 09:26:41 2003
 @@ -731,6 +731,7 @@ _GLOBAL(sys_call_table32)
  	.llong .sys_gettid		/* 207 */
  #if 0 /* Reserved syscalls */
@@ -350,8 +351,8 @@
  	.llong .sys_futex
  #endif
  	.llong .sys_perfmonctl   /* Put this here for now ... */
---- linux/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:14 2003
-+++ linux-mmonroe/arch/s390/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:20 2003
++++ linux-mmonroe/arch/s390/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -366,8 +367,8 @@
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:14 2003
-+++ linux-mmonroe/arch/s390/kernel/entry.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:20 2003
++++ linux-mmonroe/arch/s390/kernel/entry.S	Tue Apr 29 09:26:41 2003
 @@ -558,18 +558,18 @@ sys_call_table:
          .long  sys_fcntl64 
  	.long  sys_ni_syscall
@@ -399,8 +400,8 @@
  	.long  sys_gettid
  	.long  sys_tkill
  	.rept  255-237
---- linux/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
-+++ linux-mmonroe/arch/s390x/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:22 2003
++++ linux-mmonroe/arch/s390x/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -415,8 +416,8 @@
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
-+++ linux-mmonroe/arch/s390x/kernel/entry.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:22 2003
++++ linux-mmonroe/arch/s390x/kernel/entry.S	Tue Apr 29 09:26:41 2003
 @@ -591,18 +591,18 @@ sys_call_table:
  	.long  SYSCALL(sys_ni_syscall,sys32_fcntl64_wrapper)
  	.long  SYSCALL(sys_ni_syscall,sys_ni_syscall)
@@ -448,8 +449,8 @@
  	.long  SYSCALL(sys_gettid,sys_gettid)
  	.long  SYSCALL(sys_tkill,sys_tkill)
  	.rept  255-237
---- linux/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
-+++ linux-mmonroe/arch/s390x/kernel/wrapper32.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:22 2003
++++ linux-mmonroe/arch/s390x/kernel/wrapper32.S	Tue Apr 29 09:26:41 2003
 @@ -1091,3 +1091,95 @@ sys32_fstat64_wrapper:
  	llgtr	%r3,%r3			# struct stat64 *
  	llgfr	%r4,%r4			# long
@@ -546,8 +547,8 @@
 +	jg	sys_fremovexattr
 +
 +
---- linux/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
-+++ linux-mmonroe/arch/sparc/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:08 2003
++++ linux-mmonroe/arch/sparc/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -562,8 +563,8 @@
  CONFIG_UID16=y
  CONFIG_HIGHMEM=y
  
---- linux/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
-+++ linux-mmonroe/arch/sparc/kernel/systbls.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:08 2003
++++ linux-mmonroe/arch/sparc/kernel/systbls.S	Tue Apr 29 09:26:41 2003
 @@ -51,11 +51,11 @@ sys_call_table:
  /*150*/	.long sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  /*155*/	.long sys_fcntl64, sys_nis_syscall, sys_statfs, sys_fstatfs, sys_oldumount
@@ -581,8 +582,8 @@
  /*190*/	.long sys_init_module, sys_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  /*195*/	.long sys_nis_syscall, sys_nis_syscall, sys_getppid, sparc_sigaction, sys_sgetmask
  /*200*/	.long sys_ssetmask, sys_sigsuspend, sys_newlstat, sys_uselib, old_readdir
---- linux/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:08 2003
-+++ linux-mmonroe/arch/sparc64/defconfig	Fri Apr 25 11:45:15 2003
+--- linux/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:15 2003
++++ linux-mmonroe/arch/sparc64/defconfig	Tue Apr 29 09:26:41 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -597,8 +598,8 @@
  
  #
  # Code maturity level options
---- linux/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:08 2003
-+++ linux-mmonroe/arch/sparc64/kernel/systbls.S	Fri Apr 25 11:45:15 2003
+--- linux/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:24:16 2003
++++ linux-mmonroe/arch/sparc64/kernel/systbls.S	Tue Apr 29 09:26:41 2003
 @@ -52,11 +52,11 @@ sys_call_table32:
  /*150*/	.word sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  	.word sys32_fcntl64, sys_nis_syscall, sys32_statfs, sys32_fstatfs, sys_oldumount
@@ -633,8 +634,8 @@
  /*190*/	.word sys_init_module, sparc64_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  	.word sys_nis_syscall, sys_nis_syscall, sys_getppid, sys_nis_syscall, sys_sgetmask
  /*200*/	.word sys_ssetmask, sys_nis_syscall, sys_newlstat, sys_uselib, sys_nis_syscall
---- linux/fs/Config.in~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/Config.in	Fri Apr 25 11:45:15 2003
+--- linux/fs/Config.in~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:10 2003
++++ linux-mmonroe/fs/Config.in	Tue Apr 29 09:26:41 2003
 @@ -35,6 +35,11 @@ dep_mbool '  Debug Befs' CONFIG_BEFS_DEB
  dep_tristate 'BFS file system support (EXPERIMENTAL)' CONFIG_BFS_FS $CONFIG_EXPERIMENTAL
  
@@ -670,8 +671,8 @@
  mainmenu_option next_comment
  comment 'Partition Types'
  source fs/partitions/Config.in
---- linux/fs/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/Makefile	Fri Apr 25 11:45:15 2003
+--- linux/fs/Makefile~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:26 2003
++++ linux-mmonroe/fs/Makefile	Tue Apr 29 09:26:41 2003
 @@ -80,6 +80,9 @@ obj-y				+= binfmt_script.o
  
  obj-$(CONFIG_BINFMT_ELF)	+= binfmt_elf.o
@@ -682,8 +683,8 @@
  # persistent filesystems
  obj-y += $(join $(subdir-y),$(subdir-y:%=/%.o))
  
---- linux/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/Makefile	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/Makefile	Tue Apr 29 09:26:41 2003
 @@ -13,4 +13,8 @@ obj-y    := balloc.o bitmap.o dir.o file
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
@@ -693,8 +694,8 @@
 +obj-$(CONFIG_EXT2_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/file.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/file.c	Tue Apr 29 09:26:41 2003
 @@ -20,6 +20,7 @@
  
  #include <linux/fs.h>
@@ -712,8 +713,8 @@
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/ialloc.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/ialloc.c	Tue Apr 29 09:26:41 2003
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <linux/fs.h>
@@ -730,8 +731,8 @@
  	    	DQUOT_FREE_INODE(inode);
  		DQUOT_DROP(inode);
  	}
---- linux/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/inode.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/inode.c	Tue Apr 29 09:26:41 2003
 @@ -39,6 +39,18 @@ MODULE_LICENSE("GPL");
  static int ext2_update_inode(struct inode * inode, int do_sync);
  
@@ -814,8 +815,8 @@
  	brelse (bh);
  	inode->i_attr_flags = 0;
  	if (inode->u.ext2_i.i_flags & EXT2_SYNC_FL) {
---- linux/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/namei.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/namei.c	Tue Apr 29 09:26:41 2003
 @@ -31,6 +31,7 @@
  
  #include <linux/fs.h>
@@ -849,8 +850,8 @@
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/super.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/super.c	Tue Apr 29 09:26:41 2003
 @@ -21,6 +21,7 @@
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -920,8 +921,8 @@
  }
  
  EXPORT_NO_SYMBOLS;
---- linux/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
-+++ linux-mmonroe/fs/ext2/symlink.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:11 2003
++++ linux-mmonroe/fs/ext2/symlink.c	Tue Apr 29 09:26:41 2003
 @@ -19,6 +19,7 @@
  
  #include <linux/fs.h>
@@ -952,7 +953,7 @@
 +	removexattr:	ext2_removexattr,
  };
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/fs/ext2/xattr.c	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/fs/ext2/xattr.c	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,1212 @@
 +/*
 + * linux/fs/ext2/xattr.c
@@ -2167,7 +2168,7 @@
 +
 +#endif  /* CONFIG_EXT2_FS_XATTR_SHARING */
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/fs/ext2/xattr_user.c	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/fs/ext2/xattr_user.c	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,103 @@
 +/*
 + * linux/fs/ext2/xattr_user.c
@@ -2272,8 +2273,8 @@
 +	ext2_xattr_unregister(EXT2_XATTR_INDEX_USER,
 +			      &ext2_xattr_user_handler);
 +}
---- linux/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/Makefile	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:28 2003
++++ linux-mmonroe/fs/ext3/Makefile	Tue Apr 29 09:35:44 2003
 @@ -1,5 +1,5 @@
  #
 -# Makefile for the linux ext2-filesystem routines.
@@ -2281,17 +2282,24 @@
  #
  # Note! Dependencies are done automagically by 'make dep', which also
  # removes any old dependencies. DON'T put your own dependencies here
-@@ -15,4 +15,8 @@ obj-y    := balloc.o bitmap.o dir.o file
- 		ioctl.o namei.o super.o symlink.o hash.o
+@@ -9,10 +9,13 @@
+ 
+ O_TARGET := ext3.o
+ 
+-export-objs :=	super.o inode.o
++export-objs := ext3-exports.o
+ 
+ obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
+-		ioctl.o namei.o super.o symlink.o hash.o
++		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
-+export-objs += xattr.o
 +obj-$(CONFIG_EXT3_FS_XATTR) += xattr.o
 +obj-$(CONFIG_EXT3_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/file.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:28 2003
++++ linux-mmonroe/fs/ext3/file.c	Tue Apr 29 09:26:41 2003
 @@ -23,6 +23,7 @@
  #include <linux/locks.h>
  #include <linux/jbd.h>
@@ -2310,8 +2318,8 @@
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
  
---- linux/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/ialloc.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:15 2003
++++ linux-mmonroe/fs/ext3/ialloc.c	Tue Apr 29 09:26:41 2003
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2328,8 +2336,8 @@
  	DQUOT_FREE_INODE(inode);
  	DQUOT_DROP(inode);
  
---- linux/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/inode.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:15 2003
++++ linux-mmonroe/fs/ext3/inode.c	Tue Apr 29 09:26:41 2003
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -2420,8 +2428,8 @@
  	/* inode->i_attr_flags = 0;				unused */
  	if (inode->u.ext3_i.i_flags & EXT3_SYNC_FL) {
  		/* inode->i_attr_flags |= ATTR_FLAG_SYNCRONOUS; unused */
---- linux/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/namei.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:34 2003
++++ linux-mmonroe/fs/ext3/namei.c	Tue Apr 29 09:26:41 2003
 @@ -29,6 +29,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -2483,8 +2491,8 @@
 +	removexattr:	ext3_removexattr,	/* BKL held */
 +};
 +
---- linux/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/super.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:28 2003
++++ linux-mmonroe/fs/ext3/super.c	Tue Apr 29 09:36:30 2003
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -2536,7 +2544,7 @@
  	if (!parse_options ((char *) data, &sb_block, sbi, &journal_inum, 0)) {
  		sb->s_dev = 0;
  		goto out_fail;
-@@ -1768,12 +1784,27 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
+@@ -1768,17 +1784,29 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
  
  static int __init init_ext3_fs(void)
  {
@@ -2564,9 +2572,14 @@
 +	exit_ext3_xattr();
  }
  
- EXPORT_SYMBOL(ext3_force_commit);
---- linux/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
-+++ linux-mmonroe/fs/ext3/symlink.c	Fri Apr 25 11:45:15 2003
+-EXPORT_SYMBOL(ext3_force_commit);
+-EXPORT_SYMBOL(ext3_bread);
+-
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+ MODULE_LICENSE("GPL");
+--- linux/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:15 2003
++++ linux-mmonroe/fs/ext3/symlink.c	Tue Apr 29 09:26:41 2003
 @@ -20,6 +20,7 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -2597,8 +2610,8 @@
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/fs/ext3/xattr.c	Fri Apr 25 11:45:15 2003
-@@ -0,0 +1,1232 @@
++++ linux-mmonroe/fs/ext3/xattr.c	Tue Apr 29 09:36:13 2003
+@@ -0,0 +1,1225 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -2670,13 +2683,6 @@
 +#include <linux/compatmac.h>
 +
 +#define EXT3_EA_USER "user."
-+
-+/* These symbols may be needed by a module. */
-+EXPORT_SYMBOL(ext3_xattr_register);
-+EXPORT_SYMBOL(ext3_xattr_unregister);
-+EXPORT_SYMBOL(ext3_xattr_get);
-+EXPORT_SYMBOL(ext3_xattr_list);
-+EXPORT_SYMBOL(ext3_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
@@ -3832,7 +3838,7 @@
 +
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/fs/ext3/xattr_user.c	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/fs/ext3/xattr_user.c	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,111 @@
 +/*
 + * linux/fs/ext3/xattr_user.c
@@ -3945,8 +3951,24 @@
 +	ext3_xattr_unregister(EXT3_XATTR_INDEX_USER,
 +			      &ext3_xattr_user_handler);
 +}
---- linux/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:51 2003
-+++ linux-mmonroe/fs/jfs/jfs_xattr.h	Fri Apr 25 11:45:15 2003
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/ext3/ext3-exports.c	Tue Apr 29 09:34:48 2003
+@@ -0,0 +1,13 @@
++#include <linux/config.h>
++#include <linux/module.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++#include <linux/ext3_xattr.h>
++
++EXPORT_SYMBOL(ext3_force_commit);
++EXPORT_SYMBOL(ext3_bread);
++EXPORT_SYMBOL(ext3_xattr_register);
++EXPORT_SYMBOL(ext3_xattr_unregister);
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_list);
++EXPORT_SYMBOL(ext3_xattr_set);
+--- linux/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:10 2003
++++ linux-mmonroe/fs/jfs/jfs_xattr.h	Tue Apr 29 09:26:41 2003
 @@ -52,8 +52,10 @@ struct jfs_ea_list {
  #define	END_EALIST(ealist) \
  	((struct jfs_ea *) (((char *) (ealist)) + EALIST_SIZE(ealist)))
@@ -3960,8 +3982,8 @@
  extern ssize_t __jfs_getxattr(struct inode *, const char *, void *, size_t);
  extern ssize_t jfs_getxattr(struct dentry *, const char *, void *, size_t);
  extern ssize_t jfs_listxattr(struct dentry *, char *, size_t);
---- linux/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:51 2003
-+++ linux-mmonroe/fs/jfs/xattr.c	Fri Apr 25 11:45:15 2003
+--- linux/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:10 2003
++++ linux-mmonroe/fs/jfs/xattr.c	Tue Apr 29 09:26:41 2003
 @@ -641,7 +641,7 @@ static int ea_put(struct inode *inode, s
  }
  
@@ -3990,7 +4012,7 @@
  {
  	if (value == NULL) {	/* empty EA, do not remove */
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/fs/mbcache.c	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/fs/mbcache.c	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,648 @@
 +/*
 + * linux/fs/mbcache.c
@@ -4640,8 +4662,8 @@
 +module_init(init_mbcache)
 +module_exit(exit_mbcache)
 +
---- linux/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:12 2003
-+++ linux-mmonroe/include/asm-arm/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:28 2003
++++ linux-mmonroe/include/asm-arm/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -244,7 +244,6 @@
  #define __NR_security			(__NR_SYSCALL_BASE+223)
  #define __NR_gettid			(__NR_SYSCALL_BASE+224)
@@ -4658,8 +4680,8 @@
  #define __NR_tkill			(__NR_SYSCALL_BASE+238)
  /*
   * Please check 2.5 _before_ adding calls here,
---- linux/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:59 2003
-+++ linux-mmonroe/include/asm-ppc64/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:18 2003
++++ linux-mmonroe/include/asm-ppc64/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -218,6 +218,7 @@
  #define __NR_gettid		207
  #if 0 /* Reserved syscalls */
@@ -4676,8 +4698,8 @@
  #define __NR_futex		221
  #endif
  
---- linux/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:19 2003
-+++ linux-mmonroe/include/asm-s390/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:34 2003
++++ linux-mmonroe/include/asm-s390/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -212,9 +212,18 @@
  #define __NR_madvise            219
  #define __NR_getdents64		220
@@ -4700,8 +4722,8 @@
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:21 2003
-+++ linux-mmonroe/include/asm-s390x/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:35 2003
++++ linux-mmonroe/include/asm-s390x/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -180,9 +180,18 @@
  #define __NR_pivot_root         217
  #define __NR_mincore            218
@@ -4724,8 +4746,8 @@
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:09 2003
-+++ linux-mmonroe/include/asm-sparc/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:25 2003
++++ linux-mmonroe/include/asm-sparc/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -4763,8 +4785,8 @@
  #define __NR_tkill              187 /* SunOS: fpathconf                            */
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
---- linux/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:11 2003
-+++ linux-mmonroe/include/asm-sparc64/unistd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:27 2003
++++ linux-mmonroe/include/asm-sparc64/unistd.h	Tue Apr 29 09:26:41 2003
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -4803,7 +4825,7 @@
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/include/linux/cache_def.h	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/include/linux/cache_def.h	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,15 @@
 +/*
 + * linux/cache_def.h
@@ -4820,8 +4842,8 @@
 +
 +extern void register_cache(struct cache_definition *);
 +extern void unregister_cache(struct cache_definition *);
---- linux/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
-+++ linux-mmonroe/include/linux/errno.h	Fri Apr 25 11:45:15 2003
+--- linux/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:19 2003
++++ linux-mmonroe/include/linux/errno.h	Tue Apr 29 09:26:41 2003
 @@ -23,4 +23,8 @@
  
  #endif
@@ -4831,8 +4853,8 @@
 +#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
 +
  #endif
---- linux/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:02 2003
-+++ linux-mmonroe/include/linux/ext2_fs.h	Fri Apr 25 11:45:15 2003
+--- linux/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:19 2003
++++ linux-mmonroe/include/linux/ext2_fs.h	Tue Apr 29 09:26:41 2003
 @@ -57,8 +57,6 @@
   */
  #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
@@ -4916,7 +4938,7 @@
  
  #endif	/* __KERNEL__ */
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/include/linux/ext2_xattr.h	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/include/linux/ext2_xattr.h	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext2_xattr.h
@@ -5075,8 +5097,8 @@
 +
 +#endif  /* __KERNEL__ */
 +
---- linux/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
-+++ linux-mmonroe/include/linux/ext3_fs.h	Fri Apr 25 11:45:15 2003
+--- linux/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:32 2003
++++ linux-mmonroe/include/linux/ext3_fs.h	Tue Apr 29 09:26:41 2003
 @@ -63,8 +63,6 @@
   */
  #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
@@ -5159,8 +5181,8 @@
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
  
---- linux/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:04 2003
-+++ linux-mmonroe/include/linux/ext3_jbd.h	Fri Apr 25 11:45:15 2003
+--- linux/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:28 2003
++++ linux-mmonroe/include/linux/ext3_jbd.h	Tue Apr 29 09:26:41 2003
 @@ -30,13 +30,19 @@
  
  #define EXT3_SINGLEDATA_TRANS_BLOCKS	8
@@ -5183,7 +5205,7 @@
  extern int ext3_writepage_trans_blocks(struct inode *inode);
  
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/include/linux/ext3_xattr.h	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/include/linux/ext3_xattr.h	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext3_xattr.h
@@ -5342,8 +5364,8 @@
 +
 +#endif  /* __KERNEL__ */
 +
---- linux/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
-+++ linux-mmonroe/include/linux/fs.h	Fri Apr 25 11:45:15 2003
+--- linux/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:24 2003
++++ linux-mmonroe/include/linux/fs.h	Tue Apr 29 09:26:41 2003
 @@ -909,7 +909,7 @@ struct inode_operations {
  	int (*setattr) (struct dentry *, struct iattr *);
  	int (*setattr_raw) (struct inode *, struct iattr *);
@@ -5354,7 +5376,7 @@
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
  	int (*removexattr) (struct dentry *, const char *);
 --- /dev/null	Mon May 20 21:11:23 2002
-+++ linux-mmonroe/include/linux/mbcache.h	Fri Apr 25 11:45:15 2003
++++ linux-mmonroe/include/linux/mbcache.h	Tue Apr 29 09:26:41 2003
 @@ -0,0 +1,69 @@
 +/*
 +  File: linux/mbcache.h
@@ -5425,8 +5447,8 @@
 +struct mb_cache_entry *mb_cache_entry_find_next(struct mb_cache_entry *, int,
 +						kdev_t, unsigned int);
 +#endif
---- linux/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:58 2003
-+++ linux-mmonroe/kernel/ksyms.c	Fri Apr 25 11:45:37 2003
+--- linux/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:26:22 2003
++++ linux-mmonroe/kernel/ksyms.c	Tue Apr 29 09:26:41 2003
 @@ -11,6 +11,7 @@
  
  #include <linux/config.h>
@@ -5452,8 +5474,8 @@
  EXPORT_SYMBOL(kmalloc);
  EXPORT_SYMBOL(kfree);
  EXPORT_SYMBOL(vfree);
---- linux/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:58 2003
-+++ linux-mmonroe/mm/vmscan.c	Fri Apr 25 11:45:15 2003
+--- linux/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-hp	Tue Apr 29 09:23:17 2003
++++ linux-mmonroe/mm/vmscan.c	Tue Apr 29 09:26:41 2003
 @@ -18,6 +18,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>

@@ -39,6 +39,7 @@ fs/ext3/super.c
 fs/ext3/symlink.c
 fs/ext3/xattr.c
 fs/ext3/xattr_user.c
+fs/ext3/ext3-exports.c
 fs/jfs/jfs_xattr.h
 fs/jfs/xattr.c
 fs/mbcache.c
