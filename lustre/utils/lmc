@@ -162,6 +162,11 @@ Object creation command summary:
   --real_obd obd_name
   --cache_obd obd_name
 
+--add cmobd
+  --node node_name
+  --master_dev obd_name
+  --cache_dev  obd_name
+
 --commit - Close a configuration version, and start a new one
 """
 
@@ -244,6 +249,12 @@ lmc_options = [
     ('real_obd', "Specify the real device for the cache obd system.", PARAM),
     ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
     ('cobd', "Specify COBD name", PARAM),
+
+    # cmobd
+    ('master_dev', "Specify the master device for the cmobd system.", PARAM),
+    ('cache_dev',  "Specify the cache device for the cmobd obd system.", PARAM),
+    ('cmobd',      "Specify COBD name", PARAM),
+
 
     ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
 
@@ -339,6 +350,12 @@ class GenConfig:
         ref = self.doc.createElement(tag)
         ref.setAttribute("uuidref", uuid)
         return ref
+	
+    def dev(self, devname):
+        """ generate <dev devpath="[devname]"/> """
+	tgt = self.doc.createElement('dev')
+        tgt.setAttribute("dev", devname)
+	return tgt
 
     def newService(self, tag, name, uuid):
         """ create a new  service elmement, which requires name and uuid attributes """
@@ -419,7 +436,9 @@ class GenConfig:
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
         osd.appendChild(self.ref("node", node_uuid))
-        if fstype:
+	osd.appendChild(self.dev(devname)) 
+
+	if fstype:
             self.addElement(osd, "fstype", fstype)
         if backfstype:
             self.addElement(osd, "backfstype", backfstype)
@@ -447,6 +466,12 @@ class GenConfig:
         cobd.appendChild(self.ref("realobd",real_uuid))
         cobd.appendChild(self.ref("cacheobd",cache_uuid))
         return cobd
+
+    def cmobd(self, name, uuid, real_uuid, cache_uuid):
+        cmobd = self.newService("cmobd", name, uuid)
+        cmobd.appendChild(self.ref("masterobd",real_uuid))
+        cmobd.appendChild(self.ref("cacheobd",cache_uuid))
+        return cmobd
 
     def ost(self, name, uuid, osd_uuid, group=""):
         ost = self.newService("ost", name, uuid)
@@ -518,6 +543,8 @@ class GenConfig:
 
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
+	mdd.appendChild(self.dev(devname)) 
+	
 	if lmv_uuid:
             mdd.appendChild(self.ref("lmv", lmv_uuid))
 	    self.addElement(mdd, "lmv", lmv_uuid)
@@ -687,18 +714,19 @@ def lov_add_obd(gen, lustre, lov, osc_uuid, options):
                 addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid,
                                                str(lov_index), str(gener)))
                 return
-        lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
+        gener = 1
+	lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
         addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
                                        str(gener)))
         return
 
     index = -1
-    for tgt in lustre.getElementsByTagName('lov_tgt'):
+    for tgt in lov.getElementsByTagName('lov_tgt'):
         uuidref = tgt.getAttribute('uuidref')
         tmp = int(tgt.getAttribute('index'))
         if tmp != index + 1:
             error('malformed xml: LOV targets are not ordered; found index '+str(tmp)+', expected '+str(index + 1)+'.')
-        index = tmp
+	index = tmp
 
     lov.appendChild(gen.lov_tgt(osc_uuid, str(index + 1), '1'))
     addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(index + 1), '1'))
@@ -768,6 +796,40 @@ def node_add_profile(gen, node, ref, uuid):
         return 0
     profile.appendChild(gen.ref(ref, uuid))
     return 1
+
+# ensure that uuid is not already in the profile
+# return true if uuid is added
+def node_found_target_by_dev(gen, lustre, node, devname):
+    refname = "%s_ref" % "profile"
+    ret = node.getElementsByTagName(refname)
+    if not ret:
+        error('node has no profile ref:', node)
+    prof_uuid = ret[0].getAttribute('uuidref')
+    profile = lookup(node.parentNode, prof_uuid)
+    if not profile:
+        error("no profile found:", prof_uuid)
+   
+    osd_list = lustre.getElementsByTagName('osd')
+
+    for osd in osd_list:
+	obd_dev = osd.getElementsByTagName('dev') 
+	if obd_dev and obd_dev[0].getAttribute('dev') == devname:
+	    for ost in lustre.getElementsByTagName('ost'):
+		active_ret = ost.getElementsByTagName('active_ref')
+		if active_ret[0].getAttribute('uuidref') == osd.getAttribute('uuid'):
+			return ost.getAttribute('uuid')
+ 
+    mdsdev_list = lustre.getElementsByTagName('mdsdev')
+
+    for mdsdev in mdsdev_list:
+	obd_dev = mdsdev.getElementsByTagName('dev') 
+	if obd_dev and obd_dev[0].getAttribute('dev') == devname:
+	    for mds in lustre.getElementsByTagName('mds'):
+		active_ret = mds.getElementsByTagName('active_ref')
+		if active_ret[0].getAttribute('uuidref') == mdsdev.getAttribute('uuid'):
+			return mds.getAttribute('uuid')
+   
+    return "" 
 
 def get_attr(dom_node, attr, default=""):
     v = dom_node.getAttribute(attr)
@@ -1081,6 +1143,25 @@ def del_ost(gen, lustre, options):
     # delete the OST
     lustre.removeChild(ost)
 
+def add_cmobd(gen, lustre, options):
+    node_name = get_option(options, 'node')
+    name = get_option(options, 'cmobd')
+    uuid = new_uuid(name)
+
+    real_name = get_option(options, 'master_dev')
+    cache_name = get_option(options, 'cache_dev')
+
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, "cmobd", uuid)
+    real_uuid = node_found_target_by_dev(gen, lustre, node, real_name)     
+    cache_uuid = node_found_target_by_dev(gen, lustre, node, cache_name)
+    if not real_uuid: 
+	panic("add_cmobd", "can not find real_uuid")
+    if not cache_uuid: 
+	panic("add_cmobd", "can not find cache_uuid")
+    cmobd = gen.cmobd(name, uuid, real_uuid, cache_uuid)
+    lustre.appendChild(cmobd)
+
 def add_cobd(gen, lustre, options):
     node_name = get_option(options, 'node')
     name = get_option(options, 'cobd')
@@ -1094,7 +1175,7 @@ def add_cobd(gen, lustre, options):
 
     if real_uuid:
         node = lookup(lustre, real_uuid)
-        rets = node.getElementsByTagName('obd_ref')
+        rets = node.getElementsByTagName('lov_tgt')
         for ret in rets:
             ost_uuid = ret.getAttribute('uuidref')
             ost_node = lookup(lustre, ost_uuid)
@@ -1106,7 +1187,7 @@ def add_cobd(gen, lustre, options):
 
     if cache_uuid:
         node = lookup(lustre, cache_uuid)
-        rets = node.getElementsByTagName('obd_ref')
+        rets = node.getElementsByTagName('lov_tgt')
         for ret in rets:
             ost_uuid = ret.getAttribute('uuidref')
             ost_node = lookup(lustre, ost_uuid)
@@ -1464,6 +1545,8 @@ def add(devtype, gen, lustre, options):
         add_echo_client(gen, lustre, options)
     elif devtype == 'cobd':
         add_cobd(gen, lustre, options)
+    elif devtype == 'cmobd':
+        add_cmobd(gen, lustre, options)
     elif devtype == 'mgmt':
         add_mgmt(gen, lustre, options)
     elif devtype == 'lmv':

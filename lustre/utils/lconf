@@ -115,6 +115,7 @@ subsystem_names = {
     "ptlrouter" :    (1 << 20),
     "cobd" :         (1 << 21),
     "ibnal" :        (1 << 22),
+    "cmobd" :        (1 << 23),
     }
 
 
@@ -570,7 +571,7 @@ class LCTLInterface:
         self.run(cmds)
 
     # create an lov
-    def lov_setup(self, name, uuid, desc_uuid, mdsuuid, stripe_cnt,
+    def lov_setup(self, name, uuid, desc_uuid, stripe_cnt,
                   stripe_sz, stripe_off, pattern):
         cmds = """
   attach lov %s %s
@@ -1383,8 +1384,7 @@ class LOV(Module):
         self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
                   self.stripe_off, self.pattern, self.devlist,
                   self.mds_name)
-        lctl.lov_setup(self.name, self.uuid,
-                       self.desc_uuid, self.mds_name, self.stripe_cnt,
+        lctl.lov_setup(self.name, self.uuid, self.desc_uuid,  self.stripe_cnt,
                        self.stripe_sz, self.stripe_off, self.pattern)
         for (osc, index, gen, active) in self.osclist:
             target_uuid = osc.target_uuid
@@ -2152,6 +2152,116 @@ class ManagementClient(Client):
         Client.__init__(self, db, uuid, 'mgmt_cli', '',
                         self_name = mgmtcli_name_for_uuid(db.getUUID()),
                         module_dir = 'mgmt')
+class VLOV(Module):
+    def __init__(self, db, uuid, fs_name, name_override = None, config_only = None):
+        Module.__init__(self, 'VLOV', db)
+        if name_override != None:
+            self.name = "lov_%s" % name_override
+        self.add_lustre_module('lov', 'lov')
+        self.stripe_sz = 65536 
+        self.stripe_off = 0 
+        self.pattern =  0
+        self.stripe_cnt = 1 
+        self.desc_uuid = self.uuid
+        self.uuid = generate_client_uuid(self.name)
+        self.fs_name = fs_name
+        self.osc = get_osc(db, self.uuid, fs_name)
+        if not self.osc:        
+	    panic('osc not found:', self.uuid)
+	if config_only:
+            self.config_only = 1
+            return
+        self.config_only = None
+    def get_uuid(self):
+        return self.uuid
+    def get_name(self):
+        return self.name
+    def prepare(self):
+        if not config.record and is_prepared(self.name):
+            return
+        lctl.lov_setup(self.name, self.uuid, self.desc_uuid, self.stripe_cnt,
+                       self.stripe_sz, self.stripe_off, self.pattern)
+        target_uuid = self.osc.target_uuid
+        try:
+	    self.osc.active = 1 
+            self.osc.prepare(ignore_connect_failure=0)
+        except CommandError, e:
+            print "Error preparing OSC %s\n" % osc.uuid
+            raise e
+        lctl.lov_add_obd(self.name, self.uuid, target_uuid, 0, 1)
+
+    def cleanup(self):
+        target_uuid = self.osc.target_uuid
+        self.osc.cleanup()
+        if is_prepared(self.name):
+            Module.cleanup(self)
+        if self.config_only:
+            panic("Can't clean up config_only LOV ", self.name)
+
+    def load_module(self):
+        if self.config_only:
+            panic("Can't load modules for config_only LOV ", self.name)
+        self.osc.load_module()
+        Module.load_module(self)
+
+    def cleanup_module(self):
+        if self.config_only:
+            panic("Can't cleanup modules for config_only LOV ", self.name)
+        Module.cleanup_module(self)
+        self.osc.cleanup_module()
+
+    def correct_level(self, level, op=None):
+        return level
+
+class CMOBD(Module):
+    def __init__(self,db):
+	Module.__init__(self, 'CMOBD', db)
+	self.name = self.db.getName(); 
+	self.uuid = generate_client_uuid(self.name)
+	self.master_uuid = self.db.get_first_ref('masterobd')
+	self.cache_uuid = self.db.get_first_ref('cacheobd')
+	self.add_lustre_module('cmobd', 'cmobd')
+	master_obd = self.db.lookup(self.master_uuid)
+	if not master_obd:
+	    panic('master obd not found:', self.master_uuid)
+	cache_obd = self.db.lookup(self.cache_uuid)
+	if not cache_obd:
+	    panic('cache obd not found:', self.cache_uuid)
+	
+	if master_obd.get_class() == 'ost':
+	    self.client_uuid = generate_client_uuid(self.name) 
+	    self.master= VLOV(master_obd, self.client_uuid, self.name, 
+			    "%s_master" % (self.name))
+	    self.master_uuid = self.master.get_uuid()
+	else:
+	    self.master = get_mdc(db, self.name, self.master_uuid) 
+    # need to check /proc/mounts and /etc/mtab before
+    # formatting anything.
+    # FIXME: check if device is already formatted.
+    def prepare(self):
+        self.master.prepare()
+        if not config.record and is_prepared(self.name):
+            return
+        self.info(self.master_uuid, self.cache_uuid)
+        lctl.newdev("cmobd", self.name, self.uuid,
+                    setup ="%s %s" %(self.master_uuid,
+                                     self.cache_uuid))
+
+    def cleanup(self):
+        if is_prepared(self.name):
+            Module.cleanup(self)
+        self.master.cleanup()
+
+    def load_module(self):
+        self.master.load_module()
+        Module.load_module(self)
+
+    def cleanup_module(self):
+        Module.cleanup_module(self)
+        self.master.cleanup_module()
+                                                                                                                                                                                                     
+    def correct_level(self, level, op=None):
+        return level
 
 class COBD(Module):
     def __init__(self, db, uuid, name, type, name_override = None):
@@ -2173,8 +2283,8 @@ class COBD(Module):
             self.cache = LOV(cache_obd, self.cache_uuid, name, 
                             "%s_cache" % (self.name));
         else:
-            self.real = get_mdc(db, uuid, name, self.real_uuid) 
-            self.cache = get_mdc(db, uuid, name, self.cache_uuid) 
+            self.real = get_mdc(db,  name, self.real_uuid) 
+            self.cache = get_mdc(db, name, self.cache_uuid) 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
     # FIXME: check if device is already formatted.
@@ -2437,6 +2547,8 @@ def getServiceLevel(self):
         ret = 40
     elif type in ('lmv',):
         ret = 45
+    elif type in ('cmobd',):
+        ret = 50 
     elif type in ('mountpoint', 'echoclient'):
         ret = 70
     else:
@@ -2474,7 +2586,7 @@ def get_osc(ost_db, uuid, fs_name):
     osc = OSC(ost_db, uuid, fs_name)
     return osc
 
-def get_mdc(db, uuid, fs_name, mds_uuid):
+def get_mdc(db, fs_name, mds_uuid):
     mds_db = db.lookup(mds_uuid);
     if not mds_db:
         error("no mds:", mds_uuid)
@@ -2611,6 +2723,8 @@ def newService(db):
         n = OSD(db)
     elif type == 'cobd':
         n = COBD(db, "YOU_SHOULD_NEVER_SEE_THIS_UUID")
+    elif type == 'cmobd':
+        n = CMOBD(db)
     elif type == 'mdsdev':
         n = MDSDEV(db)
     elif type == 'mountpoint':

@@ -8,6 +8,11 @@ TMP=${TMP:-/tmp}
 
 COBD_MDS=${COBD_MDS:-"cobd1"}
 COBD_OST=${COBD_OST:-"cobd2"}
+
+CMOBD_MDS=${CMOBD_MDS:-"cmobd1"}
+CMOBD_OST=${CMOBD_OST:-"cmobd2"}
+
+
 CACHE_MDS=${CACHE_MDS:-"mds1"}
 REAL_MDS=${REAL_MDS:-"mds2"}
 MDS_CACHE_DEV=$TMP/mds1-`hostname`
@@ -84,9 +89,13 @@ echo "add real ost on $OSTNODE"
 ${LMC} -m $config --add ost --node $NODE --lov $REAL_LOV \
 --fstype $BACKUP_FSTYPE --dev $OST_REAL_DEV --size $OSTSIZE  || exit 21
 
-echo "add mds lov: $MDS_COBD"
-${LMC} -m $config --add cobd --node $NODE --cobd $COBD_OST --real_obd $REAL_LOV --cache_obd $CACHE_LOV 
-${LMC} -m $config --add cobd --node $NODE --cobd $COBD_MDS --real_obd $REAL_MDS --cache_obd $CACHE_MDS 
+echo "add mds lov: $COBD_MDS $COBD_OST"
+${LMC} -m $config --add cobd --node $NODE --cobd $COBD_OST --real_obd $REAL_LOV --cache_obd $CACHE_LOV || exit 22 
+${LMC} -m $config --add cobd --node $NODE --cobd $COBD_MDS --real_obd $REAL_MDS --cache_obd $CACHE_MDS || exit 22
 # create client config(s)
+
+echo "add cmobd: $CMOBD_MDS $CMOBD_OST"
+${LMC} -m $config --add cmobd --node $NODE --cmobd $CMOBD_MDS --master_dev $MDS_REAL_DEV --cache_dev $MDS_DEV || exit 23 
+${LMC} -m $config --add cmobd --node $NODE --cmobd $CMOBD_OST --master_dev $OST_REAL_DEV --cache_dev $OST_DEV || exit 23
 
 ${LMC} -m $config --add mtpt --node $NODE --path /mnt/lustre --mds $COBD_MDS --lov $COBD_OST || exit 30
