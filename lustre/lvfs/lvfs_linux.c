@@ -36,15 +36,7 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
-#include <linux/ext3_fs.h>
-#include <linux/ext3_jbd.h>
 #include <linux/version.h>
-/* XXX ugh */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
- #include <linux/ext3_xattr.h>
-#else 
- #include <linux/../../fs/ext3/xattr.h>
-#endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>

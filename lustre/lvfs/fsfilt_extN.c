@@ -70,7 +70,10 @@ static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
         int nblocks = EXTN_DATA_TRANS_BLOCKS;
         void *handle;
 
-        LASSERT(current->journal_info == NULL);
+        if (current->journal_info) {
+                CDEBUG(D_INODE, "increasing refcount on %p\n", current->journal_info);
+                goto journal_start;
+        }
 
         switch(op) {
         case FSFILT_OP_CREATE_LOG:
@@ -115,6 +118,8 @@ static void *fsfilt_extN_start(struct inode *inode, int op, void *desc_private)
         }
 
         LASSERT(current->journal_info == desc_private);
+
+ journal_start:
         lock_kernel();
         handle = journal_start(EXTN_JOURNAL(inode), nblocks);
         unlock_kernel();
@@ -260,8 +265,55 @@ static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
         rc = journal_stop(handle);
         unlock_kernel();
 
-        LASSERT(current->journal_info == NULL);
+        // LASSERT(current->journal_info == NULL);
         return rc;
+}
+
+static int fsfilt_extN_commit_async(struct inode *inode, void **h)
+{
+        transaction_t *transaction;
+        unsigned long tid, rtid;
+        handle_t *handle = *h;
+        journal_t *journal;
+        int rc;
+
+        LASSERT(current->journal_info == handle);
+
+        lock_kernel();
+        transaction = handle->h_transaction;
+        journal = transaction->t_journal;
+        tid = transaction->t_tid;
+        /* we don't want to be blocked */
+        handle->h_sync = 0;
+        rc = journal_stop(handle);
+        if (rc) {
+                CERROR("error while stopping transaction: %d\n", rc);
+                unlock_kernel();
+                return rc;
+        }
+
+        rtid = log_start_commit(journal, transaction);
+        if (rtid != tid)
+                CERROR("strange race: %lu != %lu\n",
+                       (unsigned long) tid, (unsigned long) rtid);
+        unlock_kernel();
+
+        *h = (void *) tid;
+        CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
+        return 0;
+}
+
+static int fsfilt_extN_commit_wait(struct inode *inode, void *h)
+{
+        tid_t tid = (tid_t) h;
+
+        CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
+	if (is_journal_aborted(EXTN_JOURNAL(inode)))
+                return -EIO;
+
+        log_wait_commit(EXTN_JOURNAL(inode), tid);
+
+        return 0;
 }
 
 static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
@@ -310,6 +362,20 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         return rc;
 }
 
+static int fsfilt_extN_iocontrol(struct inode * inode, struct file *file,
+                                 unsigned int cmd, unsigned long arg)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (inode->i_fop->ioctl)
+                rc = inode->i_fop->ioctl(inode, file, cmd, arg);
+        else
+                RETURN(-ENOTTY);
+
+        RETURN(rc);
+}
+
 #undef INLINE_EA
 #undef OLD_EA
 static int fsfilt_extN_set_md(struct inode *inode, void *handle,
@@ -317,7 +383,7 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
 {
         int rc, old_ea = 0;
 
-#ifdef INLINE_EA
+#ifdef INLINE_EA  /* can go away before 1.0 - just for testing bug 2097 now */
         /* Nasty hack city - store stripe MD data in the block pointers if
          * it will fit, because putting it in an EA currently kills the MDS
          * performance.  We'll fix this with "fast EAs" in the future.
@@ -383,6 +449,7 @@ static int fsfilt_extN_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
+/* Must be called with i_sem held */
 static int fsfilt_extN_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
@@ -552,15 +619,6 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         return 0;
 }
 
-static int fsfilt_extN_journal_data(struct file *filp)
-{
-        struct inode *inode = filp->f_dentry->d_inode;
-
-        EXTN_I(inode)->i_flags |= EXTN_JOURNAL_DATA_FL;
-
-        return 0;
-}
-
 /*
  * We need to hack the return value for the free inode counts because
  * the current EA code requires one filesystem block per inode with EAs,
@@ -701,23 +759,40 @@ out:
         return err;
 }
 
+static int fsfilt_extN_setup(struct super_block *sb)
+{
+#if 0
+        EXTN_SB(sb)->dx_lock = fsfilt_extN_dx_lock;
+        EXTN_SB(sb)->dx_unlock = fsfilt_extN_dx_unlock;
+#endif
+#ifdef S_PDIROPS
+        CERROR("Enabling PDIROPS\n");
+        set_opt(EXTN_SB(sb)->s_mount_opt, PDIROPS);
+        sb->s_flags |= S_PDIROPS;
+#endif
+        return 0;
+}
+
 static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
         fs_start:               fsfilt_extN_start,
         fs_brw_start:           fsfilt_extN_brw_start,
         fs_commit:              fsfilt_extN_commit,
+        fs_commit_async:        fsfilt_extN_commit_async,
+        fs_commit_wait:         fsfilt_extN_commit_wait,
         fs_setattr:             fsfilt_extN_setattr,
+        fs_iocontrol:           fsfilt_extN_iocontrol,
         fs_set_md:              fsfilt_extN_set_md,
         fs_get_md:              fsfilt_extN_get_md,
         fs_readpage:            fsfilt_extN_readpage,
-        fs_journal_data:        fsfilt_extN_journal_data,
         fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
         fs_statfs:              fsfilt_extN_statfs,
         fs_sync:                fsfilt_extN_sync,
         fs_prep_san_write:      fsfilt_extN_prep_san_write,
         fs_write_record:        fsfilt_extN_write_record,
         fs_read_record:         fsfilt_extN_read_record,
+        fs_setup:               fsfilt_extN_setup,
 };
 
 static int __init fsfilt_extN_init(void)
@@ -756,9 +831,9 @@ static void __exit fsfilt_extN_exit(void)
         //rc = extN_xattr_unregister();
 }
 
+module_init(fsfilt_extN_init);
+module_exit(fsfilt_extN_exit);
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre extN Filesystem Helper v0.1");
 MODULE_LICENSE("GPL");
-
-module_init(fsfilt_extN_init);
-module_exit(fsfilt_extN_exit);
