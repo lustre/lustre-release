@@ -672,9 +672,9 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
         struct inode *inode = file->f_dentry->d_inode;
-        unsigned long block, boffs;
+        unsigned long block;
         struct buffer_head *bh;
-        int err, blocksize;
+        int err, blocksize, csize, boffs;
 
         /* prevent reading after eof */
         if (inode->i_size < *offs + size) {
@@ -690,10 +690,9 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
         blocksize = 1 << inode->i_blkbits;
 
         while (size > 0) {
-                int csize = min(blocksize, size);
-                
                 block = *offs >> inode->i_blkbits;
                 boffs = *offs & (blocksize - 1);
+                csize = min(blocksize - boffs, size);
                 bh = ext3_bread(NULL, inode, block, 0, &err);
                 if (!bh) {
                         CERROR("can't read block: %d\n", err);
@@ -714,13 +713,13 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                     loff_t *offs, int force_sync)
 {
         struct buffer_head *bh = NULL;
-        unsigned long block, boffs;
+        unsigned long block;
         struct inode *inode = file->f_dentry->d_inode;
         loff_t old_size = inode->i_size, offset = *offs;
         loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err, block_count = 0, blocksize;
+        int err, block_count = 0, blocksize, size, boffs;
 
         /* Determine how many transaction credits are needed */
         blocksize = 1 << inode->i_blkbits;
@@ -736,13 +735,12 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         }
 
         while (bufsize > 0) {
-                int size = min(blocksize, bufsize);
-
                 if (bh != NULL)
                         brelse(bh);
 
                 block = offset >> inode->i_blkbits;
                 boffs = offset & (blocksize - 1);
+                size = min(blocksize - boffs, bufsize);
                 bh = ext3_bread(handle, inode, block, 1, &err);
                 if (!bh) {
                         CERROR("can't read/create block: %d\n", err);
@@ -755,6 +753,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                err);
                         goto out;
                 }
+                LASSERT(bh->b_data + boffs + size <= bh->b_data + bh->b_size);
                 memcpy(bh->b_data + boffs, buf, size);
                 err = ext3_journal_dirty_metadata(handle, bh);
                 if (err) {
