@@ -373,6 +373,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         cb_data->callback = callback;
         cb_data->cb_data = data;
+        data->desc = desc;
         desc->b_cb_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
@@ -488,6 +489,7 @@ static int osc_brw_write(struct lustre_handle *conn,
 
         cb_data->callback = callback;
         cb_data->cb_data = data;
+        data->desc = desc;
         desc->b_cb_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
