@@ -37,3 +37,10 @@ void remove_io_handler (io_handler i);
 void init_unix_timer(void);
 void select_timer_block(when until);
 when now(void);
+
+/*
+ * hacking for CFS internal MPI testing
+ */ 
+#if !CRAY_PORTALS
+#define ENABLE_SELECT_DISPATCH
+#endif
