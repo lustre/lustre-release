@@ -335,7 +335,6 @@ typedef struct ksock_route
         int                 ksnr_port;          /* port to connect to */
         int                 ksnr_buffer_size;   /* size of socket buffers */
         unsigned int        ksnr_irq_affinity:1; /* set affinity? */
-        unsigned int        ksnr_nonagel:1;     /* disable nagle? */
         unsigned int        ksnr_eager:1;       /* connect eagery? */
         unsigned int        ksnr_connecting:4;  /* autoconnects in progress by type */
         unsigned int        ksnr_connected:4;   /* connections established by type */
