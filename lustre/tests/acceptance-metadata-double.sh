@@ -8,6 +8,7 @@ set -e
 
 SRCDIR="`dirname $0`"
 CREATE=$SRCDIR/create.pl
+RENAME=$SRCDIR/rename.pl
 
 debug_client_on()
 {
@@ -23,118 +24,71 @@ MNT=${MNT:-/mnt/lustre}
 
 debug_client_on
 echo "create.pl, 2 mounts, 1 thread, 10 ops, debug on"
-perl $CREATE -- $MNT 2 10
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=10
 echo "create.pl, 2 mounts, 1 thread, 100 ops, debug on"
-perl $CREATE --silent -- $MNT 2 100
-echo "create.pl --mcreate=0, 2 mounts, 1 thread, 10 ops, debug on"
-perl $CREATE --mcreate=0 -- $MNT 2 10
-echo "create.pl --mcreate=0, 2 mounts, 1 thread, 100 ops, debug on"
-perl $CREATE --mcreate=0 --silent -- $MNT 2 100
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 1 thread, 10 ops, debug on"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=10 --use_mcreate=0
+echo "create.pl --use_mcreate=0, 2 mounts, 1 thread, 100 ops, debug on"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 1 thread, 10 ops, debug on"
-perl rename.pl --count=2 $MNT 10
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=10
 echo "rename.pl, 2 mounts, 1 thread, 100 ops, debug on"
-perl rename.pl --count=2 --silent $MNT 100
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=100 --silent
 
 debug_client_off
 echo "create.pl, 2 mounts, 1 thread, 1000 ops, debug off"
-perl $CREATE --silent -- $MNT 2 1000
-echo "create.pl --mcreate=0, 2 mounts, 1 thread, 1000 ops, debug off"
-perl $CREATE --silent --mcreate=0 -- $MNT 2 1000
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=1000 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 1 thread, 1000 ops, debug off"
+perl $CREATE --silent --use_mcreate=0 -- $MNT 2 1000
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=1000 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 1 thread, 1000 ops, debug off"
-perl rename.pl --count=2 --silent $MNT 1000
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=1000 --silent
 
 debug_client_on
 echo "create.pl, 2 mounts, 2 threads, 100 ops, debug on"
-perl $CREATE --silent -- $MNT 2 100 &
-perl $CREATE --silent -- $MNT 2 100 &
-wait
-echo "create.pl --mcreate=0, 2 mounts, 2 threads, 100 ops, debug on"
-perl $CREATE --silent --mcreate=0 -- $MNT 2 100 &
-perl $CREATE --silent --mcreate=0 -- $MNT 2 100 &
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --num_threads=2 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 2 threads, 100 ops, debug on"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --num_threads=2 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 2 thread, 1000 ops, debug on"
-perl rename.pl --count=2 --silent $MNT 1000 &
-perl rename.pl --count=2 --silent $MNT 1000 &
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=1000 --num_threads=2 --silent
 
 debug_client_off
 echo "create.pl, 2 mounts, 2 threads, 2000 ops, debug off"
-perl $CREATE --silent -- $MNT 2 2000 &
-perl $CREATE --silent -- $MNT 2 2000 &
-wait
-echo "create.pl --mcreate=0, 2 mounts, 2 threads, 2000 ops, debug off"
-perl $CREATE --silent --mcreate=0 -- $MNT 2 2000 &
-perl $CREATE --silent --mcreate=0 -- $MNT 2 2000 &
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=2 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 2 threads, 2000 ops, debug off"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=2 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 2 threads, 2000 ops, debug off"
-perl rename.pl --count=2 --silent $MNT 2000 &
-perl rename.pl --count=2 --silent $MNT 2000 &
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=2 --silent
 
 debug_client_on
 echo "create.pl, 2 mounts, 4 threads, 100 ops, debug on"
-for i in `seq 1 4`; do
-  perl $CREATE --silent -- $MNT 2 100 &
-done
-wait
-echo "create.pl --mcreate=0, 2 mounts, 4 threads, 100 ops, debug on"
-for i in `seq 1 4`; do
-  perl $CREATE --silent --mcreate=0 -- $MNT 2 100 &
-done
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --num_threads=4 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 4 threads, 100 ops, debug on"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=100 --num_threads=4 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 4 threads, 2000 ops, debug on"
-for i in `seq 1 4`; do
-  perl rename.pl --count=2 --silent $MNT 2000 &
-done
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=4 --silent
 
 debug_client_off
 echo "create.pl, 2 mounts, 4 threads, 2000 ops, debug off"
-for i in `seq 1 4`; do
-  perl $CREATE --silent -- $MNT 2 2000 &
-done
-wait
-echo "create.pl --mcreate=0, 2 mounts, 4 threads, 2000 ops, debug off"
-for i in `seq 1 4`; do
-  perl $CREATE --silent --mcreate=0 -- $MNT 2 2000 &
-done
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=4 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 4 threads, 2000 ops, debug off"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=4 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 4 threads, 2000 ops, debug off"
-for i in `seq 1 4`; do
-  perl rename.pl --count=2 --silent $MNT 2000 &
-done
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=4 --silent
 
 debug_client_on
 echo "create.pl, 2 mounts, 8 threads, 500 ops, debug on"
-for i in `seq 1 8`; do
-  perl $CREATE --silent -- $MNT 2 500 &
-done
-wait
-echo "create.pl --mcreate=0, 2 mounts, 8 threads, 500 ops, debug on"
-for i in `seq 1 8`; do
-  perl $CREATE --silent --mcreate=0 -- $MNT 2 500 &
-done
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=500 --num_threads=8 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 8 threads, 500 ops, debug on"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=500 --num_threads=8 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 8 threads, 2000 ops, debug on"
-for i in `seq 1 8`; do
-  perl rename.pl --count=2 --silent $MNT 2000 &
-done
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=8 --silent
 
 debug_client_off
 echo "create.pl, 2 mounts, 8 threads, 2000 ops, debug off"
-for i in `seq 1 8`; do
-  perl $CREATE --silent -- $MNT 2 2000 &
-done
-wait
-echo "create.pl --mcreate=0, 2 mounts, 8 threads, 2000 ops, debug off"
-for i in `seq 1 8`; do
-  perl $CREATE --silent --mcreate=0 -- $MNT 2 2000 &
-done
-wait
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=8 --silent
+echo "create.pl --use_mcreate=0, 2 mounts, 8 threads, 2000 ops, debug off"
+perl $CREATE --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=8 --use_mcreate=0 --silent
 echo "rename.pl, 2 mounts, 8 threads, 2000 ops, debug off"
-for i in `seq 1 8`; do
-  perl rename.pl --count=2 --silent $MNT 2000 &
-done
-wait
+perl $RENAME --mountpt=${MNT} --num_mounts=2 --iterations=2000 --num_threads=8 --silent
