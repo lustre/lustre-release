@@ -40,9 +40,8 @@ extern struct ptlrpc_request *mds_prep_req(int size, int opcode, int namelen, ch
 
 static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_request *req)
 {
-        struct dentry *de;
-        struct inode *inode;
         struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct dentry *de;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
@@ -50,17 +49,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
                 RETURN(0);
         }
 
-        inode = de->d_inode;
-        CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
+        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
-        mds_fs_setattr(mds, inode, NULL, &rec->ur_iattr);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
+                       de->d_inode->i_sb->s_dev);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb->s_dev);
-
-        if (inode->i_op->setattr)
-                req->rq_rephdr->status = inode->i_op->setattr(de, &rec->ur_iattr);
-        else
-                req->rq_rephdr->status = inode_setattr(inode, &rec->ur_iattr);
+        req->rq_rephdr->status = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
 
         l_dput(de);
         RETURN(0);
@@ -75,6 +69,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *dchild = NULL;
         struct inode *dir;
+        void *handle;
         int rc = 0;
         ENTRY;
 
@@ -104,16 +99,25 @@ static int mds_reint_create(struct mds_update_record *rec,
 
         switch (type) {
         case S_IFREG: {
+                handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
+                if (!handle)
+                        GOTO(out_reint_create, PTR_ERR(handle));
                 rc = vfs_create(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFDIR: {
+                handle = mds_fs_start(mds, dir, MDS_FSOP_MKDIR);
+                if (!handle)
+                        GOTO(out_reint_create, PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                 EXIT;
                 break;
         }
         case S_IFLNK: {
+                handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
+                if (!handle)
+                        GOTO(out_reint_create, PTR_ERR(handle));
                 rc = vfs_symlink(dir, dchild, rec->ur_tgt);
                 EXIT;
                 break;
@@ -123,27 +127,46 @@ static int mds_reint_create(struct mds_update_record *rec,
         case S_IFIFO:
         case S_IFSOCK: {
                 int rdev = rec->ur_id;
+                handle = mds_fs_start(mds, dir, MDS_FSOP_MKNOD);
+                if (!handle)
+                        GOTO(out_reint_create, PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
                 EXIT;
                 break;
         }
         }
 
-        if (!rc) {
-                if (type == S_IFREG)
-                        rc = mds_fs_set_objid(mds, dchild->d_inode,
-                                              NULL, rec->ur_id);
-                dchild->d_inode->i_atime = rec->ur_time;
-                dchild->d_inode->i_ctime = rec->ur_time;
-                dchild->d_inode->i_mtime = rec->ur_time;
-                dchild->d_inode->i_uid = rec->ur_uid;
-                dchild->d_inode->i_gid = rec->ur_gid;
-                rep->ino = dchild->d_inode->i_ino;
-                rep->generation = dchild->d_inode->i_generation;
-        } else {
+        if (rc) {
                 CERROR("error during create: %d\n", rc);
                 LBUG();
+                GOTO(out_reint_commit, rc);
+        } else {
+                struct iattr iattr;
+                struct inode *inode = dchild->d_inode;
+
+                if (type == S_IFREG) {
+                        rc = mds_fs_set_objid(mds, inode, handle, rec->ur_id);
+                        if (rc)
+                                CERROR("error setting objid for %ld\n",
+                                       inode->i_ino);
+                }
+
+                iattr.ia_atime = rec->ur_time;
+                iattr.ia_ctime = rec->ur_time;
+                iattr.ia_mtime = rec->ur_time;
+                iattr.ia_uid = rec->ur_uid;
+                iattr.ia_gid = rec->ur_gid;
+                iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
+                                 ATTR_MTIME | ATTR_CTIME;
+
+                rc = mds_fs_setattr(mds, dchild, handle, &iattr);
+
+                rep->ino = inode->i_ino;
+                rep->generation = inode->i_generation;
         }
+
+out_reint_commit:
+        rc = mds_fs_commit(mds, dir, handle);
 
 out_reint_create:
         req->rq_rephdr->status = rc;

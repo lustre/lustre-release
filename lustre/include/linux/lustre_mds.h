@@ -112,7 +112,7 @@ int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 struct mds_fs_operations {
         void   *(* fs_start)(struct inode *inode, int op);
         int     (* fs_commit)(struct inode *inode, void *handle);
-        int     (* fs_setattr)(struct inode *inode, void *handle,
+        int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
         int     (* fs_set_objid)(struct inode *inode, void *handle, obd_id id);
         void    (* fs_get_objid)(struct inode *inode, obd_id *id);
@@ -122,8 +122,13 @@ struct mds_fs_operations {
         void    (* cl_delete_inode)(struct inode *inode);
 };
 
-#define MDS_FSOP_UNLINK           1
-#define MDS_FSOP_RMDIR            2
+#define MDS_FSOP_UNLINK         1
+#define MDS_FSOP_RMDIR          2
+#define MDS_FSOP_RENAME         3
+#define MDS_FSOP_CREATE         4
+#define MDS_FSOP_MKDIR          5
+#define MDS_FSOP_SYMLINK        6
+#define MDS_FSOP_MKNOD          7
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
                                  int op)
@@ -137,10 +142,10 @@ static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
         return mds->mds_fsops->fs_commit(inode, handle);
 }
 
-static inline int mds_fs_setattr(struct mds_obd *mds, struct inode *inode,
+static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
                                  void *handle, struct iattr *iattr)
 {
-        return mds->mds_fsops->fs_setattr(inode, handle, iattr);
+        return mds->mds_fsops->fs_setattr(dentry, handle, iattr);
 }
 
 static inline int mds_fs_set_objid(struct mds_obd *mds, struct inode *inode,

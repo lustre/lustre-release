@@ -21,7 +21,7 @@
 
 static void *mds_ext2_start(struct inode *inode, int nblocks)
 {
-        return 0;
+        return (void *)1;
 }
 
 static int mds_ext2_stop(struct inode *inode, void *handle)
@@ -29,9 +29,11 @@ static int mds_ext2_stop(struct inode *inode, void *handle)
         return 0;
 }
 
-static int mds_ext2_setattr(struct inode *inode, void *handle,
+static int mds_ext2_setattr(struct dentry *dentry, void *handle,
                             struct iattr *iattr)
 {
+        struct inode *inode = dentry->d_inode;
+
         /* a _really_ horrible hack to avoid removing the data stored
            in the block pointers; this data is the object id
            this will go into an extended attribute at some point.
@@ -49,7 +51,10 @@ static int mds_ext2_setattr(struct inode *inode, void *handle,
                 }
         }
 
-        return 0;
+        if (inode->i_op->setattr)
+                return inode->i_op->setattr(dentry, iattr);
+        else
+                return inode_setattr(inode, iattr);
 }
 
 /*

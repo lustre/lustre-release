@@ -459,6 +459,8 @@ static int mds_prep(struct obd_device *obddev)
         push_ctxt(&saved, &mds->mds_ctxt);
         err = simple_mkdir(current->fs->pwd, "ROOT", 0700);
         err = simple_mkdir(current->fs->pwd, "FH", 0700);
+        pop_ctxt(&saved);
+
         /*
          * Replace the client filesystem delete_inode method with our own,
          * so that we can clear the object ID before the inode is deleted.
@@ -491,7 +493,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_ioctl_data* data = buf;
         struct mds_obd *mds = &obddev->u.mds;
         struct vfsmount *mnt;
-        int err;
+        int err = 0;
         ENTRY;
 
 #ifdef CONFIG_DEV_RDONLY

@@ -25,16 +25,29 @@
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
  * the inode (which we will be changing anyways as part of this
- * transaction).  When we store the oa_id in an EA (which may be
- * in an external block) we need to increase nblocks by 1.
+ * transaction).
  */
 static void *mds_ext3_start(struct inode *inode, int op)
 {
-        int nblocks = 0;
+        /* For updates to the last recieved file */
+        int nblocks = EXT3_DATA_TRANS_BLOCKS;
 
         switch(op) {
         case MDS_FSOP_RMDIR:
-        case MDS_FSOP_UNLINK:   nblocks = EXT3_DELETE_TRANS_BLOCKS; break;
+        case MDS_FSOP_UNLINK:
+                nblocks += EXT3_DELETE_TRANS_BLOCKS; break;
+        case MDS_FSOP_RENAME:
+                nblocks += EXT3_DATA_TRANS_BLOCKS;
+        case MDS_FSOP_CREATE:
+                // FIXME: when we store oa_id in an EA we need more blocks
+                // nblocks += 0;
+        case MDS_FSOP_MKDIR:
+        case MDS_FSOP_SYMLINK:
+                /* Create new directory or symlink (more data blocks) */
+                nblocks += 2;
+        case MDS_FSOP_MKNOD:
+                /* Change parent directory + setattr on new inode */
+                nblocks += EXT3_DATA_TRANS_BLOCKS + 3;
         }
 
         return journal_start(EXT3_JOURNAL(inode), nblocks);
@@ -45,9 +58,11 @@ static int mds_ext3_commit(struct inode *inode, void *handle)
         return journal_stop((handle_t *)handle);
 }
 
-static int mds_ext3_setattr(struct inode *inode, void *handle,
+static int mds_ext3_setattr(struct dentry *dentry, void *handle,
                             struct iattr *iattr)
 {
+        struct inode *inode = dentry->d_inode;
+
         /* a _really_ horrible hack to avoid removing the data stored
            in the block pointers; this data is the object id
            this will go into an extended attribute at some point.
@@ -72,12 +87,18 @@ static int mds_ext3_setattr(struct inode *inode, void *handle,
                 }
         }
 
-        return 0;
+        if (inode->i_op->setattr)
+                return inode->i_op->setattr(dentry, iattr);
+        else
+                return inode_setattr(inode, iattr);
 }
 
 /*
  * FIXME: nasty hack - store the object id in the first two
  *        direct block spots.  This should be done with EAs...
+ *        Note also that this does not currently mark the inode
+ *        dirty (it currently is used with other operations that
+ *        subsequently also mark the inode dirty).
  */
 #define EXT3_OBJID_FL   0x40000000
 static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
