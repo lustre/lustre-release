@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.33 2002/09/06 22:23:49 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.33 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.34 2002/09/08 07:59:39 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.34 $"
 
 #define EXPORT_SYMTAB
 
@@ -177,6 +177,18 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         atomic_inc(&obd->u.echo.eo_destroy);
 
+        return 0;
+}
+
+static int echo_open(struct lustre_handle *conn, struct obdo *oa,
+                     struct lov_stripe_md *md)
+{
+        return 0;
+}
+
+static int echo_close(struct lustre_handle *conn, struct obdo *oa,
+                      struct lov_stripe_md *md)
+{
         return 0;
 }
 
@@ -415,6 +427,8 @@ struct obd_ops echo_obd_ops = {
         o_disconnect:   echo_disconnect,
         o_create:       echo_create,
         o_destroy:      echo_destroy,
+        o_open:         echo_open,
+        o_close:        echo_close,
         o_getattr:      echo_getattr,
         o_setattr:      echo_setattr,
         o_preprw:       echo_preprw,
