@@ -129,7 +129,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++) {
                 /* XXX call down to osc_packmd() to do the packing */
                 LASSERT (loi->loi_id);
-                lmm->lmm_objects[loi->loi_ost_idx].l_object_id = 
+                lmm->lmm_objects[loi->loi_ost_idx].l_object_id =
                         cpu_to_le64 (loi->loi_id);
         }
 
@@ -164,30 +164,30 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         ENTRY;
 
         if (lmm) {
-                if (lmm_bytes < sizeof (*lmm)) {
-                        CERROR("lov_mds_md too small: %d, need %d\n",
-                                lmm_bytes, (int)sizeof(*lmm));
+                if (lmm_bytes < sizeof(*lmm)) {
+                        CERROR("lov_mds_md too small: %d, need at least %d\n",
+                               lmm_bytes, (int)sizeof(*lmm));
                         RETURN(-EINVAL);
                 }
-                if (le32_to_cpu (lmm->lmm_magic) != LOV_MAGIC) {
+                if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC) {
                         CERROR("bad disk LOV MAGIC: %#08x != %#08x\n",
-                               le32_to_cpu (lmm->lmm_magic), LOV_MAGIC);
+                               le32_to_cpu(lmm->lmm_magic), LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
 
-                ost_count = le16_to_cpu (lmm->lmm_ost_count);
-                stripe_count = le16_to_cpu (lmm->lmm_stripe_count);
+                ost_count = le16_to_cpu(lmm->lmm_ost_count);
+                stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
 
                 if (ost_count == 0 || stripe_count == 0) {
-                        CERROR ("zero ost %d or stripe %d count\n",
-                                ost_count, stripe_count);
-                        RETURN (-EINVAL);
+                        CERROR("zero ost %d or stripe %d count\n",
+                               ost_count, stripe_count);
+                        RETURN(-EINVAL);
                 }
 
                 if (lmm_bytes < lov_mds_md_size (ost_count)) {
-                        CERROR ("lov_mds_md too small: %d, need %d\n",
-                                lmm_bytes, lov_mds_md_size (ost_count));
-                        RETURN (-EINVAL);
+                        CERROR("lov_mds_md too small: %d, need %d\n",
+                               lmm_bytes, lov_mds_md_size (ost_count));
+                        RETURN(-EINVAL);
                 }
         } else
                 stripe_count = lov_get_stripecnt(lov, 0);
@@ -219,9 +219,9 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         if (!lmm)
                 RETURN(lsm_size);
 
-        lsm->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
-        lsm->lsm_stripe_size = le32_to_cpu (lmm->lmm_stripe_size);
-        ost_offset = lsm->lsm_stripe_offset = le32_to_cpu (lmm->lmm_stripe_offset);
+        lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
+        lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+        ost_offset =lsm->lsm_stripe_offset =le32_to_cpu(lmm->lmm_stripe_offset);
 
         LMM_ASSERT(lsm->lsm_object_id);
         LMM_ASSERT(ost_count);
