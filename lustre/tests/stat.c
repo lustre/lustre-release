@@ -233,11 +233,7 @@ void print_human_fstype(struct statfs *statfsbuf)
 		perror("malloc error");
 		return;
           }
-#ifdef __USE_FILE_OFFSET64
-	  sprintf (type, "UNKNOWN (0x%x)\n", statfsbuf->f_type);
-#else
-	  sprintf (type, "UNKNOWN (0x%x)\n", statfsbuf->f_type);
-#endif
+	  sprintf (type, "UNKNOWN (0x%x)\n", (int)statfsbuf->f_type);
   }
 
   printf("%s", type);
