@@ -1,0 +1,14 @@
+reboot_cluster() {
+    echo "*** Rebooting cluster ***"
+    echo "Sending shutdown command"
+    pdsh -w $ALLNODES /sbin/shutdown -f -h now "Automated Lustre Buffalo Testing"
+    sleep 300
+    echo "Sending power off command"
+    rsh mdevi powerman --off $ALLNODES &> /dev/null
+    sleep 5
+    echo "Sending power on command"
+    rsh mdevi powerman --on $ALLNODES &> /dev/null
+    # The following line waits until pdsh can run "true" on every node
+    until pdsh -S -w $ALLNODES /bin/true &> /dev/null; do /bin/true; done
+    echo "Reboot complete!"
+}

@@ -1,0 +1,63 @@
+#!/bin/sh
+
+MAIL=$BASEDIR/tmp/$TESTUSER.name
+OUT=$BASEDIR/tmp/$TESTUSER.ior
+DATE=`date +"%Y%m%d %H:%M:%S"`
+TESTNAME=ior-multi-file-O_DIRECT
+TESTDESC="IOR w/ O_DIRECT, File per process"
+
+nodecnt=4
+mb_per_processor=10
+timeout=600
+export REPORT_FILE_NAME=$OUT
+export TEST_FILE_PATH=$MOUNT/$TESTUSER
+filesize_mb=$(($mb_per_processor * $nodecnt))
+#blocksize=( 1024 * 1024 * $mb_per_processor)
+export TEST_REPETITIONS=1
+export INTERTEST_DELAY_SECS=1
+export TEST_FILE_NAME=testData.out
+export TEST_FILE_SIZE_MB=$filesize_mb
+export BLOCK_SIZE_MIN=524288
+export BLOCK_SIZE_MAX=524288
+export DELETE_TEST_FILE=1
+export DO_CHECK_READ=1
+export DO_CHECK_WRITE=1
+
+export TEST_FILECREATE_PATTERN=2
+
+#export TEST_PROCS_MIN=4
+#export TEST_PROCS_MAX=4
+
+echo "nodes=$nodecnt" > $OUT.2
+echo "filesize=$TEST_FILE_SIZE_MB" >> $OUT.2
+echo "TEST_REPETITIONS=$TEST_REPETITIONS" >> $OUT.2
+echo "INTERTEST_DELAY_SECS=$INTERTEST_DELAY_SECS" >> $OUT.2
+echo "TEST_FILE_NAME=$TEST_FILE_NAME" >> $OUT.2
+echo "TEST_FILE_SIZE_MB=$TEST_FILE_SIZE_MB" >> $OUT.2
+echo "BLOCK_SIZE_MIN=$BLOCK_SIZE_MIN" >> $OUT.2
+echo "DO_CHECK_READ=$DO_CHECK_READ" >> $OUT.2
+echo "DO_CHECK_WRITE=$DO_CHECK_WRITE" >> $OUT.2
+echo "TEST_FILECREATE_PATTERN=$TEST_FILECREATE_PATTERN" >> $OUT.2
+
+IORNODES=`unglobhosts.py -n $nodecnt $CLIENTS`
+timed_run $timeout pdsh -E -S -s -w $IORNODES ior_O_DIRECT &> $OUT.2
+
+rc=$?
+
+if [ $rc -eq 0 ]
+	then RESULT="pass"
+        else RESULT="fail"
+fi
+
+. $BASEDIR/tests/begin_buffalo_email
+echo "Log: $TESTNAME" >> $MAIL
+/bin/cat $OUT.2 >> $MAIL
+echo "" >> $MAIL
+/bin/cat $OUT >> $MAIL
+echo "LogEnd: $TESTNAME" >> $MAIL
+/bin/rm $OUT.2
+/bin/rm $OUT
+$SENDMAIL < $MAIL
+/bin/rm $MAIL
+
+exit $rc

@@ -1,0 +1,19 @@
+echo "To: $RECIPIENTS" > $MAIL
+echo "From: $SENDER" >> $MAIL
+echo "Subject: Lustre Test $TESTNAME $RESULT - $DATE" >> $MAIL
+echo "" >> $MAIL
+echo "TestDesc: $TESTDESC" >> $MAIL
+echo "TestName: $TESTNAME" >> $MAIL
+echo "TestBranch: $LUSTRE_TAG" >> $MAIL
+echo "TestHost: $MACHINENAME" >> $MAIL 
+TESTGROUP=${TESTGROUP:-io}
+echo "TestGroup: $TESTGROUP" >> $MAIL
+echo "Kernel:" `uname -r` >> $MAIL
+#echo "LustreBuild: $LUSTRE_TAG" >> $MAIL
+echo "Arch:" `uname -m`$CONFIGDESC >> $MAIL
+echo "Network: elan" >> $MAIL 
+echo "Test: $RESULT: $TESTNAME" >> $MAIL
+echo "TotalStatus: $RESULT" >> $MAIL
+echo "Config: $TESTNAME" >> $MAIL
+/bin/cat $BASEDIR/configs/$LUSTRE_CONFIG >> $MAIL
+echo "ConfigEnd: $TESTNAME" >> $MAIL
