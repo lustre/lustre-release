@@ -15,9 +15,11 @@
 #ifndef _LPROCFS_H
 #define _LPROCFS_H
 
+/*
 #ifndef LPROCFS_EXISTS
 #define LPROCFS_EXISTS
 #endif
+*/
 
 #define LPROCFS_SUCCESS 1
 #define LPROCFS_FAILURE -1
