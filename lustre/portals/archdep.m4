@@ -1,6 +1,6 @@
 
 # -------- in kernel compilation? (2.5 only) -------------
-AC_ARG_ENABLE(inkernel, [ --enable-inkernel set up 2.5 kernel makefiles])
+AC_ARG_ENABLE(inkernel, [  --enable-inkernel set up 2.5 kernel makefiles])
 AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
 echo "Makefile for in kernel build: $INKERNEL"
 
@@ -262,21 +262,6 @@ if test -d $LINUX/drivers/net/qsnet ; then
 	with_quadrics="-I$LINUX/drivers/net/qsnet/include"
   fi
   :
-elif test -d $LINUX/drivers/qsnet1 ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/qsnet1/include -DPROPRIETARY_ELAN"
-  :
-elif test -d $LINUX/drivers/quadrics ; then
-  AC_MSG_RESULT(yes)
-  QSWNAL="qswnal"
-  with_quadrics="-I$LINUX/drivers/quadrics/include -DPROPRIETARY_ELAN"
-  :
-#elif test -d /usr/include/elan3 ; then
-#  AC_MSG_RESULT(yes)
-#  QSWNAL="qswnal"
-#  with_quadrics=""
-#  :
 else
   AC_MSG_RESULT(no)
   QSWNAL=""
@@ -308,7 +293,7 @@ AC_SUBST(GMNAL)
 default_ib_include_dir=/usr/local/ib/include
 an_ib_include_file=vapi.h
 
-AC_ARG_WITH(ib, [ --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
+AC_ARG_WITH(ib, [  --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
 AC_MSG_CHECKING(if IB headers are present)
 if test "$with_ib" = yes; then
     with_ib=$default_ib_include_dir
@@ -348,6 +333,7 @@ AC_SUBST(SCIMACNAL)
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
 
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
@@ -369,3 +355,23 @@ if test $RH_2_4_20 = 1; then
 else
 	AC_MSG_RESULT($LINUXRELEASE)
 fi 
+
+# ---------- Red Hat 2.4.21 backports some more 2.5 bits --------
+
+AC_MSG_CHECKING(if kernel defines PDE)
+HAVE_PDE="`grep -c 'proc_dir_entry..PDE' $LINUX/include/linux/proc_fs.h`"
+if test "$HAVE_PDE" != 0 ; then
+  CPPFLAGS="$CPPFLAGS -DHAVE_PDE"
+  AC_MSG_RESULT(yes)
+else
+  AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(if kernel passes struct file to direct_IO)
+HAVE_DIO_FILE="`grep -c 'direct_IO.*struct file' $LINUX/include/linux/fs.h`"
+if test "$HAVE_DIO_FILE" != 0 ; then
+  CPPFLAGS="$CPPFLAGS -DHAVE_DIO_FILE"
+  AC_MSG_RESULT(yes)
+else
+  AC_MSG_RESULT(no)
+fi
