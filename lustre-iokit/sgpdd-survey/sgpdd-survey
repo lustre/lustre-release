@@ -23,12 +23,12 @@ rszhi=1024
 
 # Concurrent regions per device
 crglo=1
-crghi=128
+crghi=256
 
 # threads to share between concurrent regions per device
-# NB survey skips over #thr < #regions
+# NB survey skips over #thr < #regions and #thr > SG_MAX_QUEUE
 thrlo=1
-thrhi=128
+thrhi=8192
 
 #####################################################################
 
@@ -131,7 +131,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    print_summary -n "$((ndevs*crg - ok)) failed "
 		else
 	            # compute MB/sec from elapsed
-		    bw=`awk "BEGIN {printf \"%7.2f MB/s\", $actual_size / (( $t1 - $t0 ) * 1024); exit}"`
+		    bw=`awk "BEGIN {printf \"%7.2f MB/s\", $actual_size * $ndevs / (( $t1 - $t0 ) * 1024); exit}"`
 	            # compute MB/sec from nregions*slowest
 		    check=`awk < $tmpf \
 			'/time to transfer data/ {mb=$8/1.048576; if (n == 0 || mb < min) min = mb; n++}\
