@@ -372,23 +372,16 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && !param->quiet)
-                                fprintf(stderr,
-                                        "%s/%s has no stripe info\n",
-                                        dname, "");
+                                printf("%s/%s has no stripe info\n", 
+                                       dname, "");
                         rc = 0;
-                } else if (errno == EISDIR) {
-                        fprintf(stderr, "process_file on directory %s/%s!\n",
-                                dname, "");
-                        /* add fname to directory list; */
-                        rc = errno;
                 } else {
                         err_msg("IOC_MDC_GETSTRIPE ioctl failed");
-                        rc = errno;
+                        return errno;
                 }
-                return rc;
+        } else {
+               lov_dump_user_lmm(param, dname, "");
         }
-
-        lov_dump_user_lmm(param, dname, "");
 
         /* Handle the contents of the directory */
         while ((dirp = readdir64(dir)) != NULL) {
