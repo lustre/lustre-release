@@ -103,7 +103,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 if (handle->lgh_ctxt == NULL)
                         RETURN(-EOPNOTSUPP);
                 llog_cat_id2handle(handle, &log_handle, &lir->lid_id);
-                rc = llog_process(log_handle, llog_check_cb, NULL); 
+                rc = llog_process(log_handle, llog_check_cb, NULL, NULL); 
                 llog_close(log_handle);
         } else {
                 switch (le32_to_cpu(rec->lrh_type)) {
@@ -220,6 +220,7 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
                 CDEBUG(D_IOCTL, "cannot destroy log\n");
                 GOTO(out, rc);
         }
+        llog_cat_set_first_idx(cat, index);
         rc = llog_cancel_rec(cat, index);
 out:
         llog_free_handle(log);
@@ -295,7 +296,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         }
         case OBD_IOC_LLOG_CHECK: {
                 LASSERT(data->ioc_inllen1);
-                err = llog_process(handle, llog_check_cb, data);
+                err = llog_process(handle, llog_check_cb, data, NULL);
                 if (err == -LLOG_EEMPTY)
                         err = 0;
                 GOTO(out_close, err);
@@ -303,7 +304,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
         case OBD_IOC_LLOG_PRINT: {
                 LASSERT(data->ioc_inllen1);
-                err = llog_process(handle, llog_print_cb, data);
+                err = llog_process(handle, llog_print_cb, data, NULL);
                 if (err == -LLOG_EEMPTY)
                         err = 0;
 
@@ -343,7 +344,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                         err = llog_remove_log(handle, &plain);
                 } else {
                         /*remove all the log of the catalog*/
-                        llog_process(handle, llog_delete_cb, NULL);
+                        llog_process(handle, llog_delete_cb, NULL, NULL);
                 }
                 GOTO(out_close, err);
         }

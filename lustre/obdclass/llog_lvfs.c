@@ -147,7 +147,6 @@ static int llog_lvfs_read_blob(struct obd_device *obd, struct l_file *file,
 
 static int llog_lvfs_read_header(struct llog_handle *handle)
 {
-        struct llog_rec_tail tail;
         struct obd_device *obd;
         int rc;
         ENTRY;
@@ -166,13 +165,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         if (rc)
                 CERROR("error reading log header\n");
 
-        rc = llog_lvfs_read_blob(obd, handle->lgh_file, &tail, sizeof(tail),
-                                 handle->lgh_file->f_dentry->d_inode->i_size -
-                                 sizeof(tail));
-        if (rc)
-                CERROR("error reading log tail\n");
-
-        handle->lgh_last_idx = le32_to_cpu(tail.lrt_index);
+        handle->lgh_last_idx = le32_to_cpu(handle->lgh_hdr->llh_tail.lrt_index);
         handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
 
         RETURN(rc);
@@ -268,6 +261,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 LBUG(); /* should never happen */
         }
         llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
+        llh->llh_tail.lrt_index = cpu_to_le32(index);
 
         offset = 0;
         rc = llog_lvfs_write_blob(obd, file, &llh->llh_hdr, NULL, 0);
@@ -293,6 +287,9 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         reccookie->lgc_subsys = -1;
                 rc = 1;
         }
+        if (rc == 0 && le32_to_cpu(rec->lrh_type) == LLOG_GEN_REC)
+                rc = 1;
+
         RETURN(rc);
 }
 
