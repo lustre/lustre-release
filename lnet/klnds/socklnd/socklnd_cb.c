@@ -1811,14 +1811,28 @@ ksocknal_write_space (struct sock *sk)
 }
 
 int
-ksocknal_sock_write (int fd, void *buffer, int nob)
+ksocknal_sock_write (struct socket *sock, void *buffer, int nob)
 {
-        int          rc;
-        mm_segment_t oldmm = get_fs();
+        int           rc;
+        mm_segment_t  oldmm = get_fs();
+        struct iovec  iov = {
+                .iov_base = buffer,
+                .iov_len  = nob
+        };
 
         while (nob > 0) {
+                struct msghdr msg = {
+                        .msg_name       = NULL,
+                        .msg_namelen    = 0,
+                        .msg_iov        = &iov,
+                        .msg_iovlen     = 1,
+                        .msg_control    = NULL,
+                        .msg_controllen = 0,
+                        .msg_flags      = 0
+                };
+
                 set_fs (KERNEL_DS);
-                rc = sys_write (fd, buffer, nob);
+                rc = sock_sendmsg (sock, &msg, iov.iov_len);
                 set_fs (oldmm);
                 
                 if (rc < 0)
@@ -1828,23 +1842,37 @@ ksocknal_sock_write (int fd, void *buffer, int nob)
                         CERROR ("Unexpected zero rc\n");
                         return (-ECONNABORTED);
                 }
-                
-                nob -= rc;
-                buffer = (char *)buffer + nob;
+
+                iov.iov_len -= rc;
+                iov.iov_base = ((char *)iov.iov_base) + rc;
         }
         
         return (0);
 }
 
 int
-ksocknal_sock_read (int fd, void *buffer, int nob)
+ksocknal_sock_read (struct socket *sock, void *buffer, int nob)
 {
-        int          rc;
-        mm_segment_t oldmm = get_fs();
-
+        int           rc;
+        mm_segment_t  oldmm = get_fs();
+        struct iovec  iov = {
+                .iov_base = buffer,
+                .iov_len  = nob
+        };
+        
         while (nob > 0) {
+                struct msghdr msg = {
+                        .msg_name       = NULL,
+                        .msg_namelen    = 0,
+                        .msg_iov        = &iov,
+                        .msg_iovlen     = 1,
+                        .msg_control    = NULL,
+                        .msg_controllen = 0,
+                        .msg_flags      = 0
+                };
+
                 set_fs (KERNEL_DS);
-                rc = sys_read (fd, buffer, nob);
+                rc = sock_recvmsg (sock, &msg, iov.iov_len, 0);
                 set_fs (oldmm);
                 
                 if (rc < 0)
@@ -1853,15 +1881,15 @@ ksocknal_sock_read (int fd, void *buffer, int nob)
                 if (rc == 0)
                         return (-ECONNABORTED);
 
-                nob -= rc;
-                buffer = (char *)buffer + nob;
+                iov.iov_len -= rc;
+                iov.iov_base = ((char *)iov.iov_base) + rc;
         }
         
         return (0);
 }
 
 int
-ksocknal_exchange_nids (int fd, ptl_nid_t nid)
+ksocknal_exchange_nids (struct socket *sock, ptl_nid_t nid)
 {
         int                 rc;
         ptl_hdr_t           hdr;
@@ -1878,13 +1906,13 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
         
         /* Assume sufficient socket buffering for this message */
-        rc = ksocknal_sock_write (fd, &hdr, sizeof (hdr));
+        rc = ksocknal_sock_write (sock, &hdr, sizeof (hdr));
         if (rc != 0) {
                 CERROR ("Error %d sending HELLO to "LPX64"\n", rc, nid);
                 return (rc);
         }
 
-        rc = ksocknal_sock_read (fd, hmv, sizeof (*hmv));
+        rc = ksocknal_sock_read (sock, hmv, sizeof (*hmv));
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from "LPX64"\n", rc, nid);
                 return (rc);
@@ -1912,7 +1940,7 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
         /* version 0 sends magic/version as the dest_nid of a 'hello' header,
          * so read the rest of it in now... */
 
-        rc = ksocknal_sock_read (fd, hmv + 1, sizeof (hdr) - sizeof (*hmv));
+        rc = ksocknal_sock_read (sock, hmv + 1, sizeof (hdr) - sizeof (*hmv));
         if (rc != 0) {
                 CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
                         rc, nid);
@@ -1939,7 +1967,7 @@ ksocknal_exchange_nids (int fd, ptl_nid_t nid)
 }
 
 int
-ksocknal_set_linger (int fd) 
+ksocknal_set_linger (struct socket *sock) 
 {
         mm_segment_t    oldmm = get_fs ();
         int             rc;
@@ -1953,8 +1981,8 @@ ksocknal_set_linger (int fd)
         linger.l_linger = 0;
 
         set_fs (KERNEL_DS);
-        rc = sys_setsockopt (fd, SOL_SOCKET, SO_LINGER, 
-                             (char *)&linger, sizeof (linger));
+        rc = sock_setsockopt (sock, SOL_SOCKET, SO_LINGER, 
+                              (char *)&linger, sizeof (linger));
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set SO_LINGER: %d\n", rc);
@@ -1963,8 +1991,8 @@ ksocknal_set_linger (int fd)
         
         option = -1;
         set_fs (KERNEL_DS);
-        rc = sys_setsockopt (fd, SOL_TCP, TCP_LINGER2,
-                             (char *)&option, sizeof (option));
+        rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_LINGER2,
+                                    (char *)&option, sizeof (option));
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set SO_LINGER2: %d\n", rc);
@@ -1982,16 +2010,26 @@ ksocknal_connect_peer (ksock_route_t *route)
         __u64               n;
         struct timeval      tv;
         int                 fd;
+        struct socket      *sock;
         int                 rc;
 
-        set_fs (KERNEL_DS);
-        fd = sys_socket (PF_INET, SOCK_STREAM, 0);
-        set_fs (oldmm);
-        if (fd < 0) {
-                CERROR ("Can't create autoconnect socket: %d\n", fd);
-                return (fd);
+        rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
+        if (rc != 0) {
+                CERROR ("Can't create autoconnect socket: %d\n", rc);
+                return (rc);
         }
 
+        /* Ugh; have to map_fd for compatibility with sockets passed in
+         * from userspace.  And we actually need the refcounting that
+         * this gives you :) */
+
+        fd = sock_map_fd (sock);
+        if (fd < 0) {
+                sock_release (sock);
+                CERROR ("sock_map_fd error %d\n", fd);
+                return (fd);
+        }
+        
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
         tv.tv_sec = ksocknal_io_timeout / HZ;
@@ -2001,35 +2039,35 @@ ksocknal_connect_peer (ksock_route_t *route)
         tv.tv_usec = n;
 
         set_fs (KERNEL_DS);
-        rc = sys_setsockopt (fd, SOL_SOCKET, SO_SNDTIMEO,
-                             (char *)&tv, sizeof (tv));
+        rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO,
+                              (char *)&tv, sizeof (tv));
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set send timeout %d (in HZ): %d\n", 
                         ksocknal_io_timeout, rc);
-                goto out;
+                goto failed;
         }
         
         set_fs (KERNEL_DS);
-        rc = sys_setsockopt (fd, SOL_SOCKET, SO_RCVTIMEO,
-                             (char *)&tv, sizeof (tv));
+        rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO,
+                              (char *)&tv, sizeof (tv));
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set receive timeout %d (in HZ): %d\n",
                         ksocknal_io_timeout, rc);
-                goto out;
+                goto failed;
         }
 
         if (route->ksnr_nonagel) {
                 int  option = 1;
                 
                 set_fs (KERNEL_DS);
-                rc = sys_setsockopt (fd, SOL_TCP, TCP_NODELAY,
-                                     (char *)&option, sizeof (option));
+                rc = sock->ops->setsockopt (sock, SOL_TCP, TCP_NODELAY,
+                                            (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
                         CERROR ("Can't disable nagel: %d\n", rc);
-                        goto out;
+                        goto failed;
                 }
         }
         
@@ -2037,23 +2075,23 @@ ksocknal_connect_peer (ksock_route_t *route)
                 int option = route->ksnr_buffer_size;
                 
                 set_fs (KERNEL_DS);
-                rc = sys_setsockopt (fd, SOL_SOCKET, SO_SNDBUF,
-                                     (char *)&option, sizeof (option));
+                rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDBUF,
+                                      (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
                         CERROR ("Can't set send buffer %d: %d\n",
                                 route->ksnr_buffer_size, rc);
-                        goto out;
+                        goto failed;
                 }
 
                 set_fs (KERNEL_DS);
-                rc = sys_setsockopt (fd, SOL_SOCKET, SO_RCVBUF,
-                                     (char *)&option, sizeof (option));
+                rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVBUF,
+                                      (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
                         CERROR ("Can't set receive buffer %d: %d\n",
                                 route->ksnr_buffer_size, rc);
-                        goto out;
+                        goto failed;
                 }
         }
         
@@ -2062,27 +2100,27 @@ ksocknal_connect_peer (ksock_route_t *route)
         peer_addr.sin_port = htons (route->ksnr_port);
         peer_addr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
         
-        set_fs (KERNEL_DS);
-        rc = sys_connect (fd, (struct sockaddr *)&peer_addr, sizeof (peer_addr));
-        set_fs (oldmm);
-        if (rc < 0) {
+        rc = sock->ops->connect (sock, (struct sockaddr *)&peer_addr, 
+                                 sizeof (peer_addr), sock->file->f_flags);
+        if (rc != 0) {
                 CERROR ("Error %d connecting to "LPX64"\n", rc,
                         route->ksnr_peer->ksnp_nid);
-                goto out;
+                goto failed;
         }
         
         if (route->ksnr_xchange_nids) {
-                rc = ksocknal_exchange_nids (fd, route->ksnr_peer->ksnp_nid);
-                if (rc < 0)
-                        goto out;
+                rc = ksocknal_exchange_nids (sock, route->ksnr_peer->ksnp_nid);
+                if (rc != 0)
+                        goto failed;
         }
 
         rc = ksocknal_create_conn (route->ksnr_peer->ksnp_nid,
-                                   route, fd, route->ksnr_irq_affinity);
- out:
-        set_fs (KERNEL_DS);
-        sys_close (fd);
-        set_fs (oldmm);
+                                   route, sock, route->ksnr_irq_affinity);
+        if (rc == 0)
+                return (0);
+
+ failed:
+        fput (sock->file);
         return (rc);
 }
 
