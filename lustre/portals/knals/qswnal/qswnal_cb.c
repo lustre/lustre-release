@@ -421,7 +421,9 @@ static void
 kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 {
         kqswnal_tx_t      *ktx = (kqswnal_tx_t *)arg;
-
+        struct timeval     now;
+        time_t             then;
+        
         LASSERT (txd != NULL);
         LASSERT (ktx != NULL);
 
@@ -432,7 +434,15 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 
         if (status != EP_SUCCESS)
         {
-                CERROR ("kqswnal: Transmit failed with %d\n", status);
+                CERROR ("Tx completion to "LPX64" failed: %d\n", 
+                        ktx->ktx_nid, status);
+
+                do_gettimeofday (&now);
+                then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
+        
+                kpr_notify (&kqswnal_data.kqn_router, 
+                            ktx->ktx_nid, 0, then);
+
                 status = -EIO;
         }
 
@@ -447,32 +457,39 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
         long  flags;
         int   rc;
-        
+
+        ktx->ktx_launchtime = jiffies;
+
         LASSERT (dest >= 0);                    /* must be a peer */
         rc = ep_transmit_large(kqswnal_data.kqn_eptx, dest,
                                ktx->ktx_port, attr, kqswnal_txhandler,
                                ktx, ktx->ktx_iov, ktx->ktx_niov);
-        if (rc == 0)
+        switch (rc) {
+        case 0: /* success */
                 atomic_inc (&kqswnal_packets_launched);
+                return (0);
 
-        if (rc != ENOMEM)
+        case ENOMEM: /* can't allocate ep txd => queue for later */
+                LASSERT (in_interrupt());
+
+                spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+
+                list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
+                if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
+                        wake_up (&kqswnal_data.kqn_sched_waitq);
+
+                spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
+                return (0);
+
+        default: /* fatal error */
+                CERROR ("Tx to "LPX64" failed: %d\n", ktx->ktx_nid, rc);
+
+                /* Tell router I think a node is down */
+                kpr_notify (&kqswnal_data.kqn_router, ktx->ktx_nid,
+                            0, ktx->ktx_launchtime);
                 return (rc);
-
-        /* can't allocate ep txd => queue for later */
-
-        LASSERT (in_interrupt());      /* not called by thread (not looping) */
-
-        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
-
-        list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
-        if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
-                wake_up (&kqswnal_data.kqn_sched_waitq);
-
-        spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
-
-        return (0);
+        }
 }
-
 
 static char *
 hdr_type_string (ptl_hdr_t *hdr)
@@ -584,7 +601,8 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         }
 
         if (kqswnal_nid2elanid (nid) < 0) {     /* Can't send direct: find gateway? */
-                rc = kpr_lookup (&kqswnal_data.kqn_router, nid, &gatewaynid);
+                rc = kpr_lookup (&kqswnal_data.kqn_router, nid, 
+                                 sizeof (ptl_hdr_t) + payload_nob, &gatewaynid);
                 if (rc != 0) {
                         CERROR("Can't route to "LPX64": router error %d\n",
                                nid, rc);
@@ -678,7 +696,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 return (PTL_FAIL);
         }
 
-        CDEBUG(D_NET, "send to "LPSZ" bytes to "LPX64"\n", payload_nob, nid);
+        CDEBUG(D_NET, "sent "LPSZ" bytes to "LPX64"\n", payload_nob, nid);
         return (PTL_OK);
 }
 

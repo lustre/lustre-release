@@ -122,8 +122,8 @@ static inline void freedata(void *data, int len)
 }
 
 static int
-kportal_add_route(int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
-                  ptl_nid_t hi_nid)
+kportal_add_route(int gateway_nalid, ptl_nid_t gateway_nid, 
+                  ptl_nid_t lo_nid, ptl_nid_t hi_nid)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -139,7 +139,8 @@ kportal_add_route(int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 }
 
 static int
-kportal_del_route(ptl_nid_t target)
+kportal_del_route(int gw_nalid, ptl_nid_t gw_nid, 
+                  ptl_nid_t lo, ptl_nid_t hi)
 {
         int rc;
         kpr_control_interface_t *ci;
@@ -148,7 +149,24 @@ kportal_del_route(ptl_nid_t target)
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_del_route (target);
+        rc = ci->kprci_del_route (gw_nalid, gw_nid, lo, hi);
+
+        PORTAL_SYMBOL_PUT(kpr_control_interface);
+        return (rc);
+}
+
+static int
+kportal_notify_router (int gw_nalid, ptl_nid_t gw_nid,
+                       int alive, time_t when)
+{
+        int rc;
+        kpr_control_interface_t *ci;
+
+        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
+        if (ci == NULL)
+                return (-ENODEV);
+
+        rc = ci->kprci_notify (gw_nalid, gw_nid, alive, when);
 
         PORTAL_SYMBOL_PUT(kpr_control_interface);
         return (rc);
@@ -156,12 +174,13 @@ kportal_del_route(ptl_nid_t target)
 
 static int
 kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
-                  ptl_nid_t *lo_nidp, ptl_nid_t *hi_nidp)
+                  ptl_nid_t *lo_nidp, ptl_nid_t *hi_nidp, int *alivep)
 {
         int       gateway_nalid;
         ptl_nid_t gateway_nid;
         ptl_nid_t lo_nid;
         ptl_nid_t hi_nid;
+        int       alive;
         int       rc;
         kpr_control_interface_t *ci;
 
@@ -169,17 +188,19 @@ kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_get_route(index, &gateway_nalid, &gateway_nid, &lo_nid,
-                                 &hi_nid);
+        rc = ci->kprci_get_route(index, &gateway_nalid, &gateway_nid,
+                                 &lo_nid, &hi_nid, &alive);
 
         if (rc == 0) {
-                CDEBUG(D_IOCTL, "got route [%d] %d "LPX64":"LPX64" - "LPX64"\n",
-                       index, gateway_nalid, gateway_nid, lo_nid, hi_nid);
+                CDEBUG(D_IOCTL, "got route [%d] %d "LPX64":"LPX64" - "LPX64", %s\n",
+                       index, gateway_nalid, gateway_nid, lo_nid, hi_nid,
+                       alive ? "up" : "down");
 
                 *gateway_nalidp = (__u32)gateway_nalid;
-                *gateway_nidp   = (__u32)gateway_nid;
-                *lo_nidp        = (__u32)lo_nid;
-                *hi_nidp        = (__u32)hi_nid;
+                *gateway_nidp   = gateway_nid;
+                *lo_nidp        = lo_nid;
+                *hi_nidp        = hi_nid;
+                *alivep         = alive;
         }
 
         PORTAL_SYMBOL_PUT (kpr_control_interface);
@@ -367,23 +388,38 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
 
         case IOC_PORTAL_ADD_ROUTE:
                 CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
-                       data->ioc_nal, data->ioc_nid, data->ioc_nid2,
-                       data->ioc_nid3);
+                       data->ioc_nal, data->ioc_nid, 
+                       data->ioc_nid2, data->ioc_nid3);
                 err = kportal_add_route(data->ioc_nal, data->ioc_nid,
-                                        MIN (data->ioc_nid2, data->ioc_nid3),
-                                        MAX (data->ioc_nid2, data->ioc_nid3));
+                                        data->ioc_nid2, data->ioc_nid3);
                 break;
 
         case IOC_PORTAL_DEL_ROUTE:
-                CDEBUG (D_IOCTL, "Removing route to "LPU64"\n", data->ioc_nid);
-                err = kportal_del_route (data->ioc_nid);
+                CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                        data->ioc_nal, data->ioc_nid, 
+                        data->ioc_nid2, data->ioc_nid3);
+                err = kportal_del_route (data->ioc_nal, data->ioc_nid,
+                                         data->ioc_nid2, data->ioc_nid3);
                 break;
 
+        case IOC_PORTAL_NOTIFY_ROUTER: {
+                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
+                        data->ioc_nal, data->ioc_nid,
+                        data->ioc_flags ? "Enabling" : "Disabling",
+                        (time_t)data->ioc_nid3);
+                
+                err = kportal_notify_router (data->ioc_nal, data->ioc_nid,
+                                             data->ioc_flags, 
+                                             (time_t)data->ioc_nid3);
+                break;
+        }
+                
         case IOC_PORTAL_GET_ROUTE:
                 CDEBUG (D_IOCTL, "Getting route [%d]\n", data->ioc_count);
                 err = kportal_get_route(data->ioc_count, &data->ioc_nal,
-                                        &data->ioc_nid, &data->ioc_nid2,
-                                        &data->ioc_nid3);
+                                        &data->ioc_nid, 
+                                        &data->ioc_nid2, &data->ioc_nid3,
+                                        &data->ioc_flags);
                 if (err == 0)
                         if (copy_to_user((char *)arg, data, sizeof (*data)))
                                 err = -EFAULT;
@@ -432,7 +468,27 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 kportal_put_ni (data->ioc_nal);
                 break;
         }
-
+#if LWT_SUPPORT
+        case IOC_PORTAL_LWT_CONTROL: 
+                err = lwt_control (data->ioc_flags, data->ioc_misc);
+                break;
+                
+        case IOC_PORTAL_LWT_SNAPSHOT:
+                err = lwt_snapshot (&data->ioc_count, &data->ioc_misc,
+                                    data->ioc_pbuf1, data->ioc_plen1);
+                if (err == 0 &&
+                    copy_to_user((char *)arg, data, sizeof (*data)))
+                        err = -EFAULT;
+                break;
+                
+        case IOC_PORTAL_LWT_LOOKUP_STRING:
+                err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
+                                         data->ioc_pbuf2, data->ioc_plen2);
+                if (err == 0 &&
+                    copy_to_user((char *)arg, data, sizeof (*data)))
+                        err = -EFAULT;
+                break;
+#endif                        
         default:
                 err = -EINVAL;
                 break;
@@ -471,12 +527,19 @@ static int init_kportals_module(void)
                 return (rc);
         }
 
+#if LWT_SUPPORT
+        rc = lwt_init();
+        if (rc != 0) {
+                CERROR("lwt_init: error %d\n", rc);
+                goto cleanup_debug;
+        }
+#endif
         sema_init(&nal_cmd_sem, 1);
 
         rc = misc_register(&portal_dev);
         if (rc) {
                 CERROR("misc_register: error %d\n", rc);
-                goto cleanup_debug;
+                goto cleanup_lwt;
         }
 
         rc = PtlInit();
@@ -498,6 +561,10 @@ static int init_kportals_module(void)
         PtlFini();
  cleanup_deregister:
         misc_deregister(&portal_dev);
+ cleanup_lwt:
+#if LWT_SUPPORT
+        lwt_fini();
+#endif
  cleanup_debug:
         portals_debug_cleanup();
         return rc;
@@ -517,6 +584,10 @@ static void exit_kportals_module(void)
         rc = misc_deregister(&portal_dev);
         if (rc)
                 CERROR("misc_deregister error %d\n", rc);
+
+#if LWT_SUPPORT
+        lwt_fini();
+#endif
 
         if (atomic_read(&portal_kmemory) != 0)
                 CERROR("Portals memory leaked: %d bytes\n",

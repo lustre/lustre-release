@@ -63,12 +63,14 @@ command_t cmdlist[] = {
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
+        {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
+         "usage: --net <tcp/elan/myrinet/scimac> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet/scimac>"},
         {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
          "usage: print_autoconns"},
         {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
-         "usage: add_autoconn <nid> <host> <port> [ixs]"},
+         "usage: add_autoconn <nid> <host> <port> [ixse]"},
         {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
@@ -92,12 +94,15 @@ command_t cmdlist[] = {
         {"del_uuid", jt_obd_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
-         "add an entry to the routing table\n"
-         "usage: add_route <gateway> <target> [target]"},
+         "add an entry to the portals routing table\n"
+         "usage: add_route <gateway> <target> [<target>]"},
         {"del_route", jt_ptl_del_route, 0,
-         "delete an entry from the routing table\n"
-         "usage: del_route <target>"},
-        {"route_list", jt_ptl_print_routes, 0, "print the routing table\n"
+         "delete the route via the given gateway to the given targets from the portals routing table\n"
+         "usage: del_route <gateway> [<target>] [<target>]"},
+        {"set_route", jt_ptl_notify_router, 0,
+         "enable/disable routes via the given gateway in the portals routing table\n"
+         "usage: set_gw <gateway> <up/down> [<time>]"},
+        {"route_list", jt_ptl_print_routes, 0, "print the portals routing table\n"
          "usage: route_list"},
         {"recv_mem", jt_ptl_rxmem, 0, "set socket receive buffer size, "
          "if size is omited the current size is reported.\n"
@@ -236,7 +241,11 @@ command_t cmdlist[] = {
          "usage: modules <path>"},
         {"panic", jt_dbg_panic, 0, "force the kernel to panic\n"
          "usage: panic"},
-
+        {"lwt", jt_ptl_lwt, 0,
+         "light-weight tracing\n"
+         "usage: lwt start\n"
+         "       lwt stop [file]"},
+                
         /* User interface commands */
         {"======= control ========", jt_noop, 0, "control commands"},
         {"help", Parser_help, 0, "help"},

@@ -50,17 +50,40 @@ typedef struct
 
 typedef struct
 {
+        struct list_head        kpge_list;
+        atomic_t                kpge_weight;
+        time_t                  kpge_timestamp;
+        int                     kpge_alive;
+        int                     kpge_nalid;
+        int                     kpge_refcount;
+        ptl_nid_t               kpge_nid;
+} kpr_gateway_entry_t;
+
+typedef struct
+{
 	struct list_head   	kpre_list;
-	int                     kpre_gateway_nalid;
-	ptl_nid_t           	kpre_gateway_nid;
+        kpr_gateway_entry_t    *kpre_gateway;
 	ptl_nid_t           	kpre_lo_nid;
         ptl_nid_t               kpre_hi_nid;
 } kpr_route_entry_t;
 
+typedef struct
+{
+        struct tq_struct        kpru_tq;
+        int                     kpru_nal_id;
+        ptl_nid_t               kpru_nid;
+        int                     kpru_alive;
+        time_t                  kpru_when;
+} kpr_upcall_t;
+
 extern int kpr_register_nal (kpr_nal_interface_t *nalif, void **argp);
-extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, ptl_nid_t *gateway_nidp);
+extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob, 
+                              ptl_nid_t *gateway_nidp);
+extern kpr_nal_entry_t *kpr_find_nal_entry_locked (int nal_id);
 extern void kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd);
 extern void kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error);
+extern void kpr_nal_notify (void *arg, ptl_nid_t peer,
+                            int alive, time_t when);
 extern void kpr_shutdown_nal (void *arg);
 extern void kpr_deregister_nal (void *arg);
 
@@ -69,9 +92,12 @@ extern void kpr_proc_fini (void);
 
 extern int kpr_add_route (int gateway_nal, ptl_nid_t gateway_nid, 
                           ptl_nid_t lo_nid, ptl_nid_t hi_nid);
-extern int kpr_del_route (ptl_nid_t nid);
+extern int kpr_del_route (int gw_nal, ptl_nid_t gw_nid,
+                          ptl_nid_t lo, ptl_nid_t hi);
 extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid, 
-                          ptl_nid_t *lo_nid, ptl_nid_t *hi_nid);
+                          ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive);
+extern int kpr_sys_notify (int gw_nalid, ptl_nid_t gw_nid,
+                           int alive, time_t when);
 
 extern unsigned long long kpr_fwd_bytes;
 extern unsigned long      kpr_fwd_packets;

@@ -164,6 +164,7 @@ typedef struct
         void             *ktx_args[2];          /* completion passthru */
         E3_Addr           ktx_ebuffer;          /* elan address of ktx_buffer */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
+        unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
 
         /* debug/info fields */
         pid_t             ktx_launcher;         /* pid of launching process */

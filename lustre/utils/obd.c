@@ -677,6 +677,25 @@ int jt_opt_threads(int argc, char **argv)
         return rc;
 }
 
+int jt_opt_net(int argc, char **argv)
+{
+        char *arg2[3];
+        int rc;
+
+        if (argc < 3)
+                return CMD_HELP;
+
+        arg2[0] = argv[0];
+        arg2[1] = argv[1];
+        arg2[2] = NULL;
+        rc = jt_ptl_network (2, arg2);
+
+        if (!rc)
+                rc = Parser_execarg(argc - 2, argv + 2, cmdlist);
+
+        return rc;
+}
+
 int jt_obd_detach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -1960,7 +1979,7 @@ int jt_obd_add_uuid(int argc, char **argv)
 
         nal = ptl_name2nal(argv[3]);
 
-        if (nal == 0) {
+        if (nal <= 0) {
                 fprintf (stderr, "Can't parse NAL %s\n", argv[3]);
                 return -1;
         }
@@ -1980,7 +1999,7 @@ int jt_obd_close_uuid(int argc, char **argv)
 
         nal = ptl_name2nal(argv[2]);
 
-        if (nal == 0) {
+        if (nal <= 0) {
                 fprintf (stderr, "Can't parse NAL %s\n", argv[2]);
                 return -1;
         }

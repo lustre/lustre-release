@@ -32,6 +32,7 @@ void obd_cleanup(int argc, char **argv);
 
 int jt_opt_device(int argc, char **argv);
 int jt_opt_threads(int argc, char **argv);
+int jt_opt_net(int argc, char **argv);
 
 int jt_obd_device(int argc, char **argv);
 int jt_obd_connect(int argc, char **argv);

@@ -145,7 +145,6 @@ def debug(*args):
         msg = string.join(map(str,args))
         print msg
 
-
 # ack, python's builtin int() does not support '0x123' syntax.
 # eval can do it, although what a hack!
 def my_int(s):
@@ -436,8 +435,8 @@ class LCTLInterface:
         cmds =  """
   ignore_errors
   network %s
-  del_route %s
-  quit  """ % (net, lo)
+  del_route %s %s %s
+  quit  """ % (net, gw, lo, hi)
         self.run(cmds)
 
     # add a route to a host
@@ -461,8 +460,8 @@ class LCTLInterface:
   ignore_errors
   network %s
   del_uuid %s
-  del_route %s
-  quit  """ % (net, uuid, tgt)
+  del_route %s %s
+  quit  """ % (net, uuid, gw, tgt)
         self.run(cmds)
 
     # disconnect one connection
@@ -1002,16 +1001,7 @@ class Network(Module):
                     gw = Network(net)
                     if (gw.cluster_id == self.cluster_id and
                         gw.net_type == self.net_type):
-                        # hack: compare as numbers if possible, this should all
-                        # go away once autoconnect is done.
-                        # This also conveniently prevents us from connecting to ourself.
-                        try:
-                            gw_nid = my_int(gw.nid)
-                            self_nid = my_int(self.nid)
-                        except ValueError, e:
-                            gw_nid = gw.nid
-                            self_nid = self.nid
-                        if gw_nid != self_nid:
+                        if gw.nid != self.nid:
                             lctl.connect(gw)
 
     def disconnect_peer_gateways(self):
@@ -1022,16 +1012,7 @@ class Network(Module):
                     gw = Network(net)
                     if (gw.cluster_id == self.cluster_id and
                         gw.net_type == self.net_type):
-                        # hack: compare as numbers if possible, this should all
-                        # go away once autoconnect is done.
-                        # This also conveniently prevents us from connecting to ourself.
-                        try:
-                            gw_nid = my_int(gw.nid)
-                            self_nid = my_int(self.nid)
-                        except ValueError, e:
-                            gw_nid = gw.nid
-                            self_nid = self.nid
-                        if gw_nid != self_nid:
+                        if gw.nid != self.nid:
                             try:
                                 lctl.disconnect(gw)
                             except CommandError, e:
@@ -1048,33 +1029,51 @@ class Network(Module):
             stop_acceptor(self.port)
         if  node_is_router():
             self.disconnect_peer_gateways()
-#
-# This commented out so connections not created by this
-# config are not disturbed
-#
-#        try:
-#            lctl.disconnectAll(self.net_type)
-#        except CommandError, e:
-#            print "disconnectAll failed: ", self.name
-#            e.dump()
-#            cleanup_error(e.rc)
+
+        try:
+            lctl.disconnectAll(self.net_type)
+        except CommandError, e:
+            print "disconnectAll failed: ", self.name
+            e.dump()
+            cleanup_error(e.rc)
 
 class RouteTable(Module):
     def __init__(self,db):
         Module.__init__(self, 'ROUTES', db)
+
+    def server_for_route(self, net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi):
+        # only setup connections for tcp NALs
+        srvdb = None
+        if not net_type in ('tcp', 'toe'):
+            return None
+
+        # connect to target if route is to single node and this node is the gw
+        if lo == hi and local_interface(net_type, gw_cluster_id, gw):
+            if not local_cluster(net_type, tgt_cluster_id):
+                panic("target", lo, " not on the local cluster")
+            srvdb = self.db.nid2server(lo, net_type)
+        # connect to gateway if this node is not the gw
+        elif (local_cluster(net_type, gw_cluster_id)
+              and not local_interface(net_type, gw_cluster_id, gw)):
+            srvdb = self.db.nid2server(gw, net_type)
+        else:
+            return None
+
+        if not srvdb:
+            panic("no server for nid", lo)
+            return None
+
+        return Network(srvdb)
+        
     def prepare(self):
         if is_network_prepared():
             return
         self.info()
         for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
             lctl.add_route(net_type, gw, lo, hi)
-            if net_type in ('tcp', 'toe') and local_net_type(net_type, tgt_cluster_id) and lo == hi:
-                srvdb = self.db.nid2server(lo, net_type)
-                if not srvdb:
-                    panic("no server for nid", lo)
-                else:
-                    srv = Network(srvdb)
-                    lctl.connect(srv)
+            srv = self.server_for_route(net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi)
+            if srv:
+                lctl.connect(srv)
 
     def safe_to_clean(self):
         return not is_network_prepared()
@@ -1084,18 +1083,15 @@ class RouteTable(Module):
             # the network is still being used, don't clean it up
             return
         for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
-            if net_type in ('tcp', 'toe') and local_net_type(net_type, tgt_cluster_id) and lo == hi:
-                srvdb = self.db.nid2server(lo, net_type)
-                if not srvdb:
-                    panic("no server for nid", lo)
-                else:
-                    srv = Network(srvdb)
-                    try:
-                        lctl.disconnect(srv)
-                    except CommandError, e:
-                        print "disconnect failed: ", self.name
-                        e.dump()
-                        cleanup_error(e.rc)
+            srv = self.server_for_route(net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi)
+            if srv:
+                try:
+                    lctl.disconnect(srv)
+                except CommandError, e:
+                    print "disconnect failed: ", self.name
+                    e.dump()
+                    cleanup_error(e.rc)
+
             try:
                 lctl.del_route(net_type, gw, lo, hi)
             except CommandError, e:
@@ -1611,11 +1607,13 @@ class ECHO_CLIENT(Module):
         self.add_lustre_module('obdecho', 'obdecho')
         self.obd_uuid = self.db.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
+        self.uuid = generate_client_uuid(self.name)
         self.osc = VOSC(obd, self.uuid, self.name)
 
     def prepare(self):
         if is_prepared(self.name):
             return
+        run_acceptors()
         self.osc.prepare() # XXX This is so cheating. -p
         self.info(self.obd_uuid)
 
@@ -1670,6 +1668,7 @@ class Mountpoint(Module):
         if fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
+        run_acceptors()
         if self.mgmtcli:
             self.mgmtcli.prepare()
         self.vosc.prepare()
@@ -1810,7 +1809,7 @@ def get_mdc(db, uuid, fs_name, mds_uuid):
 ############################################################
 # routing ("rooting")
 
-# list of (nettype, cluster_id)
+# list of (nettype, cluster_id, nid)
 local_clusters = []
 
 def find_local_clusters(node_db):
@@ -1819,7 +1818,7 @@ def find_local_clusters(node_db):
         net = node_db.lookup(netuuid)
         srv = Network(net)
         debug("add_local", netuuid)
-        local_clusters.append((srv.net_type, srv.cluster_id))
+        local_clusters.append((srv.net_type, srv.cluster_id, srv.nid))
         if srv.port > 0:
             if acceptors.has_key(srv.port):
                 panic("duplicate port:", srv.port)
@@ -1855,7 +1854,7 @@ def find_local_routes(lustre):
     for router in list:
         if router.get_val_int('router', 0):
             needs_router = 1
-            for (local_type, local_cluster_id) in local_clusters:
+            for (local_type, local_cluster_id, local_nid) in local_clusters:
                 gw = None
                 for netuuid in router.get_networks():
                     db = router.lookup(netuuid)
@@ -1872,21 +1871,28 @@ def find_local_routes(lustre):
 
 def choose_local_server(srv_list):
     for srv in srv_list:
-        if local_net_type(srv.net_type, srv.cluster_id):
+        if local_cluster(srv.net_type, srv.cluster_id):
             return srv
 
-def local_net_type(net_type, cluster_id):
+def local_cluster(net_type, cluster_id):
     for cluster in local_clusters:
         if net_type == cluster[0] and cluster_id == cluster[1]:
+            return 1
+    return 0
+
+def local_interface(net_type, cluster_id, nid):
+    for cluster in local_clusters:
+        if (net_type == cluster[0] and cluster_id == cluster[1]
+            and nid == cluster[2]):
             return 1
     return 0
 
 def find_route(srv_list):
     frm_type = local_clusters[0][0]
     for srv in srv_list:
-        debug("find_route: srv:", srv.hostaddr, "type: ", srv.net_type)
+        debug("find_route: srv:", srv.nid, "type: ", srv.net_type)
         to_type = srv.net_type
-        to = srv.hostaddr  # XXX should this be hostaddr, or nid?
+        to = srv.nid
         cluster_id = srv.cluster_id
         debug ('looking for route to', to_type, to)
         for r in local_routes:
