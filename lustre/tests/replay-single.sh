@@ -10,7 +10,6 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
-set -xv
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 

@@ -93,7 +93,7 @@ setup() {
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS ${REFORMAT}
     for node in $CLIENTS; do
-	$PDSH $node lconf --node client_facet --ptldebug $PTLDEBUG --select mds_service=$ACTIVEMDS $XMLCONFIG
+	do_node $node lconf --node client_facet --ptldebug $PTLDEBUG --select mds_service=$ACTIVEMDS $XMLCONFIG
     done
 }
 
@@ -105,7 +105,7 @@ cleanup() {
         fail mds
     fi
     for node in $CLIENTS; do
-	$PDSH $node lconf ${FORCE} --cleanup --node client_facet $XMLCONFIG
+	do_node $node lconf ${FORCE} --cleanup --node client_facet $XMLCONFIG || true
     done
 
     stop mds ${FORCE} $MDSLCONFARGS
@@ -172,6 +172,7 @@ test_0() {
     # prepare for MDS failover
     change_active mds
     reboot_facet mds
+    wait_for mds
     start mds
     client_df
 
