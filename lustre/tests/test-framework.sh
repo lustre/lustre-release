@@ -56,6 +56,9 @@ init_test_env() {
 	esac
     done
     
+    shift $((OPTIND - 1))
+    ONLY=${ONLY:-$*}
+    
     # save the name of the config file for the upcall
     echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
 #    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG
@@ -276,21 +279,24 @@ do_node() {
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
+
+mds_list() {
+    seq -f mds%g $MDSCOUNT
+}
+
 do_facet() {
     facet=$1
     shift
 
     if [ "$facet" == "mds" ]; then
-        if [ "$MDSCOUNT" -gt 1 ]; then
-            for num in `seq $MDSCOUNT`; do
-                HOST=`facet_active_host $facet$num`
-                do_node $HOST $@
-            done
-           return
-        fi
+	for mds in `mds_list`; do
+           HOST=`facet_active_host $mds`
+           do_node $HOST $@
+	done
+    else
+	HOST=`facet_active_host $facet`
+	do_node $HOST $@
     fi
-    HOST=`facet_active_host $facet`
-    do_node $HOST $@
 }
 
 add_facet() {

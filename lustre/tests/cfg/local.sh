@@ -3,8 +3,9 @@ MDSNODE=${MDSNODE:-`hostname`}
 OSTNODE=${OSTNODE:-`hostname`}
 CLIENT=${CLIENT:-client}
 
-mds_HOST=${mds_HOST:-$MDSNODE}
-mdsfailover_HOST=${mdsfailover_HOST}
+MDSCOUNT=1
+mds1_HOST=${mds1_HOST:-$MDSNODE}
+mds1failover_HOST=${mds1failover_HOST}
 ost_HOST=${ost_HOST:-$OSTNODE}
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 client_HOST=${client_HOST:-$CLIENT}
