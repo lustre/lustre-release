@@ -33,4 +33,4 @@ ${LMC} -m $config --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $M
 ${LMC} -m $config --add ost --node localhost --obd obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
 
 # create client config
-${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --lov OSC_localhost || exit 40
+${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --obd obd1 || exit 40
