@@ -895,8 +895,10 @@ static int target_recovery_thread(void *arg)
                 LASSERT(trd->trd_processing_task == current->pid);
                 req = target_next_replay_req(obd);
                 if (req != NULL) {
-                        DEBUG_REQ(D_HA, req, "processing t"LPD64" : ", 
-                                  req->rq_reqmsg->transno);
+                        char peer_str[PTL_NALFMT_SIZE];
+                        DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s: ", 
+                                  req->rq_reqmsg->transno, 
+                                  ptlrpc_peernid2str(&req->rq_peer, peer_str));
                         (void)trd->trd_recovery_handler(req);
                         obd->obd_replayed_requests++;
                         reset_recovery_timer(obd);
