@@ -448,7 +448,7 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
                 if (bulk->b_buf != NULL)
-                        kunmap(bulk->b_buf);
+                        kunmap(bulk->b_page);
         }
         ptlrpc_free_bulk(desc);
  out2:
@@ -459,7 +459,7 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
 
 static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
                          struct obdo **oa, obd_count *oa_bufs,
-                         struct page **buf, obd_size *count, obd_off *offset,
+                         struct page **pagearray, obd_size *count, obd_off *offset,
                          obd_flag *flags)
 {
         struct ptlrpc_client *cl;
@@ -497,7 +497,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         for (pages = 0, i = 0; i < num_oa; i++) {
                 ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]);
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        local[pages].addr = (__u64)(long)kmap(buf[pages]);
+                        local[pages].addr = (__u64)(long)kmap(pagearray[pages]);
                         local[pages].offset = offset[pages];
                         local[pages].len = count[pages];
                         ost_pack_niobuf(&ptr2, offset[pages], count[pages],
@@ -546,7 +546,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         ptlrpc_free_req(request);
         for (pages = 0, i = 0; i < num_oa; i++)
                 for (j = 0; j < oa_bufs[i]; j++, pages++)
-                        kunmap(buf[pages]);
+                        kunmap(pagearray[pages]);
  out:
         OBD_FREE(local, pages * sizeof(*local));
 
