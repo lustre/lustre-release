@@ -281,8 +281,16 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         if (rc == 0 && reccookie) {
                 if (llog_cookie_get_flags(reccookie) & LLOG_COOKIE_REPLAY) {
-                        LASSERT(EQ_LOGID(reccookie->lgc_lgl, loghandle->lgh_id));
-                        LASSERT(reccookie->lgc_index == index);        
+                        LASSERTF(EQ_LOGID(reccookie->lgc_lgl,loghandle->lgh_id),
+                                 "lgc_lgl.oid/gr "LPU64"/"LPU64" lgh_id.oid/gr"
+                                 LPU64"/"LPU64"\n",
+                                 reccookie->lgc_lgl.lgl_oid,
+                                 reccookie->lgc_lgl.lgl_ogr,
+                                 loghandle->lgh_id.lgl_oid,
+                                 loghandle->lgh_id.lgl_oid);
+                        LASSERTF(reccookie->lgc_index == index,
+                                 "lgc_index %u != index %u\n",
+                                 reccookie->lgc_index, index);
                 } else {
                         reccookie->lgc_lgl = loghandle->lgh_id;
                         reccookie->lgc_index = index;
