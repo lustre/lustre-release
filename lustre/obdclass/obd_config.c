@@ -102,7 +102,7 @@ int class_attach(struct lustre_cfg *lcfg)
         }
 
 	obd = class_newdev(&dev);
-	if (dev == -1)
+	if (obd == NULL)
 		RETURN(-EINVAL);
 
 	/* have we attached a type to this device */

@@ -120,13 +120,14 @@ int
 set_peer(char *hostname, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0;
-
+ 
         if (lmd->lmd_server_nid == 0) {
                 if (ptl_parse_nid (&nid, hostname) != 0) {
                         fprintf (stderr, "mount: can't parse NID %s\n", 
                                  hostname);
                         return (-1);
                 }
+                lmd->lmd_server_nid = nid;
         }
 
         if (!lmd->lmd_nal) 
@@ -142,11 +143,10 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 }
         }
 
-        if (verbose)
+        if (verbose) {
                 printf("nal %d\n", lmd->lmd_nal);
-        
-        
-        lmd->lmd_server_nid = nid;
+                printf("server_nid: %d\n", lmd->lmd_server_nid); 
+        }        
 
         return 0;
 }
