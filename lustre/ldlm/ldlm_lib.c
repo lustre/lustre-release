@@ -1045,65 +1045,56 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         LASSERT (rs->rs_export == NULL);
         LASSERT (rs->rs_notified_callback == NULL);
         LASSERT (rs->rs_scheduled == 0 &&
-                 rs->rs_sent == 0 &&
-                 rs->rs_acked == 0 &&
-                 rs->rs_committed == 0 &&
-                 rs->rs_resent == 0);
+                 rs->rs_unlinked == 0 &&
+                 rs->rs_on_net == 0 &&
+                 list_empty(&rs->rs_obd_list) &&
+                 list_empty(&rs->rs_exp_list));
 
         exp = class_export_get (req->rq_export);
         obd = exp->exp_obd;
 
         /* disably reply scheduling onto srv_reply_queue while I'm setting up */
         rs->rs_scheduled = 1;
+        rs->rs_on_net    = 1;
         rs->rs_xid       = req->rq_xid;
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
+        
         /* Hack to get past circular module dependency */
         rs->rs_notified_callback = target_notified_reply_callback;
 
-        local_irq_save (flags);
+        spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
 
-        spin_lock (&obd->obd_uncommitted_replies_lock);
-        if (rs->rs_transno <= obd->obd_last_committed) {
-                /* already committed */
-                /* No contention, so no need to hold srv_lock */
-                rs->rs_committed = 1;
-        } else {
+        if (rs->rs_transno > obd->obd_last_committed) {
+                /* not committed already */ 
                 list_add_tail (&rs->rs_obd_list, 
                                &obd->obd_uncommitted_replies);
         }
+
         spin_unlock (&obd->obd_uncommitted_replies_lock);
-
         spin_lock (&exp->exp_lock);
-        list_add_tail (&rs->rs_exp_list, &exp->exp_outstanding_replies);
-        spin_unlock (&exp->exp_lock);
 
-        local_irq_restore (flags);
+        list_add_tail (&rs->rs_exp_list, &exp->exp_outstanding_replies);
+
+        spin_unlock_irqrestore (&exp->exp_lock, flags);
 
         netrc = target_send_reply_msg (req, rc, fail_id);
 
         spin_lock_irqsave (&svc->srv_lock, flags);
         
-        if (netrc != 0) {
-                /* error sending: ptlrpc_handle_server_reply will believe
-                 * the reply is off the net */
-                rs->rs_sent = 1;
-                /* XXX maybe we want to hang on to this reply and retry
-                 * when the client resends? */
-                rs->rs_acked = 1;
-        }
+        if (netrc != 0) /* error sending: reply is off the net */
+                rs->rs_on_net = 0;
 
-        if (!(rs->rs_acked ||                   /* no notifiers */
-              rs->rs_committed ||               /* completed already */
-              rs->rs_resent ||
-              rs->rs_aborted)) {
-                list_add (&rs->rs_list, &sni->sni_active_replies);
-                rs->rs_scheduled = 0;           /* allow notifier to schedule */
-        } else {
+        if (!rs->rs_on_net ||                   /* some notifier */
+            list_empty(&rs->rs_exp_list) ||     /* completed already */
+            list_empty(&rs->rs_obd_list)) {
                 list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
                 wake_up (&svc->srv_waitq);
+        } else {
+                list_add (&rs->rs_list, &sni->sni_active_replies);
+                rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
-        
+
         spin_unlock_irqrestore (&svc->srv_lock, flags);
 }
 
