@@ -1612,3 +1612,75 @@
  
  	f = fget(fd);
  	if (f) {
+--- linux-2.4.18-chaos2-pristine/kernel/panic.c	Fri Jun 14 09:33:02 2002
++++ linux-2.4.18-chaos2/kernel/panic.c	Fri Jun 21 16:49:27 2002
+@@ -9,6 +9,7 @@
+  * to indicate a major problem.
+  */
+ #include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/sched.h>
+ #include <linux/delay.h>
+ #include <linux/reboot.h>
+@@ -24,9 +25,23 @@
+ asmlinkage void sys_sync(void);	/* it's really int */
+ 
+ int panic_timeout;
+-
++static void (*dumplustre)(void);
+ struct notifier_block *panic_notifier_list;
+ 
++static void register_dumplog(void)
++{
++	dumplustre = inter_module_get_request("portals_debug_dumplog", "portals");
++}
++
++static void unregister_dumplog(void)
++{
++  if(dumplustre)
++	inter_module_put("portals_debug_dumplog");
++}
++
++EXPORT_SYMBOL(register_dumplog);
++EXPORT_SYMBOL(unregister_dumplog);
++
+ static int __init panic_setup(char *str)
+ {
+ 	panic_timeout = simple_strtoul(str, NULL, 0);
+@@ -49,10 +64,17 @@
+ {
+ 	static char buf[1024];
+ 	va_list args;
++
+ #if defined(CONFIG_ARCH_S390)
+         unsigned long caller = (unsigned long) __builtin_return_address(0);
+ #endif
+ 
++	if(dumplustre) { 
++	        void (*dodump)(void) = dumplustre;
++		dumplustre = NULL;
++		dodump();
++	}
++
+ #ifdef CONFIG_MCL_COREDUMP
+ 	crash_save_regs();
+ #endif
+@@ -63,6 +85,7 @@
+ 	va_end(args);
+ 	printk(KERN_EMERG "Kernel panic: %s\n",buf);
+ 
++
+ #ifdef CONFIG_MCL_COREDUMP
+ 	if (!panicmsg) {
+ 		panicmsg = buf;
+--- linux-2.4.18-chaos2-pristine/kernel/Makefile	Fri Jun 14 09:33:02 2002
++++ linux-2.4.18-chaos2/kernel/Makefile	Fri Jun 21 15:04:01 2002
+@@ -9,7 +9,7 @@
+ 
+ O_TARGET := kernel.o
+ 
+-export-objs = signal.o sys.o kmod.o context.o ksyms.o pm.o exec_domain.o printk.o \
++export-objs = panic.o signal.o sys.o kmod.o context.o ksyms.o pm.o exec_domain.o printk.o \
+ 	      syscall_ksyms.o
+ 
+ obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
