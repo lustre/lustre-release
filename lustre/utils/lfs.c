@@ -70,39 +70,39 @@ static int lfs_setstripe(int argc, char **argv)
         int result;
         long st_size;
         int  st_offset, st_count;
-	char *end;
+        char *end;
 
         if (argc != 5)
-		return CMD_HELP;
+                return CMD_HELP;
 
-	// get the stripe size
-	st_size = strtoul(argv[2], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe size '%s'\n",
+        // get the stripe size
+        st_size = strtoul(argv[2], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
-		return CMD_HELP;
-	}
-	// get the stripe offset
-	st_offset = strtoul(argv[3], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
+                return CMD_HELP;
+        }
+        // get the stripe offset
+        st_offset = strtoul(argv[3], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
-		return CMD_HELP;
-	}
-	// get the stripe count
-	st_count = strtoul(argv[4], &end, 0);
-	if (*end != '\0') {
-		fprintf(stderr, "error: %s: bad stripe count '%s'\n",
+                return CMD_HELP;
+        }
+        // get the stripe count
+        st_count = strtoul(argv[4], &end, 0);
+        if (*end != '\0') {
+                fprintf(stderr, "error: %s: bad stripe count '%s'\n",
                                 argv[0], argv[4]);
-		return CMD_HELP;
-	}
+                return CMD_HELP;
+        }
 
-	result = op_create_file(argv[1], st_size, st_offset, st_count);
+        result = op_create_file(argv[1], st_size, st_offset, st_count);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
 
-	return result;
+        return result;
 }
 
 static int lfs_find(int argc, char **argv)
@@ -122,39 +122,39 @@ static int lfs_find(int argc, char **argv)
         quiet = verbose = recursive = 0;
         while ((c = getopt_long(argc, argv, short_opts,
                                         long_opts, NULL)) != -1) {
-		switch (c) {
-		case 'o':
-			if (obduuid) {
-				fprintf(stderr,
+                switch (c) {
+                case 'o':
+                        if (obduuid) {
+                                fprintf(stderr,
                                         "error: %s: only one obduuid allowed",
                                         argv[0]);
-				return CMD_HELP;
-			}
-			obduuid = (struct obd_uuid *)optarg;
-			break;
-		case 'q':
-			quiet++;
-			verbose = 0;
-			break;
+                                return CMD_HELP;
+                        }
+                        obduuid = (struct obd_uuid *)optarg;
+                        break;
+                case 'q':
+                        quiet++;
+                        verbose = 0;
+                        break;
                 case 'r':
                         recursive = 1;
                         break;
-		case 'v':
-			verbose++;
-			quiet = 0;
-			break;
-		case '?':
+                case 'v':
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
                         return CMD_HELP;
                         break;
-		default:
-			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[optind - 1]);
                         return CMD_HELP;
                         break;
-		}
-	}
+                }
+        }
 
-	if (optind >= argc)
+        if (optind >= argc)
                 return CMD_HELP;
 
         do {
