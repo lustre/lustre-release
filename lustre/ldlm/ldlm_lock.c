@@ -264,12 +264,13 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
         if (req->rq_reqmsg->bufcount > 1) {
                 /* an intent needs to be considered */
                 struct ldlm_intent *it = lustre_msg_buf(req->rq_reqmsg, 1);
+                struct mds_obd *mds= &req->rq_export->export_obd->u.mds;
                 struct mds_body *mds_rep;
                 struct ldlm_reply *rep;
                 __u64 new_resid[3] = {0, 0, 0}, old_res;
                 int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
                                                   sizeof(struct mds_body),
-                                                  sizeof(struct obdo)};
+                                                  mds->mds_max_mdsize};
 
                 it->opc = NTOH__u64(it->opc);
 
@@ -290,13 +291,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_RENAME:
                 case IT_SETATTR:
                 case IT_LOOKUP:
+                case IT_UNLINK:
+                case IT_RMDIR:
                         bufcount = 3;
                         break;
-                case IT_UNLINK:
-                        bufcount = 2;
-                        size[1] = sizeof(struct obdo);
-                        break;
-                case IT_RMDIR:
                 case IT_RENAME2:
                         bufcount = 1;
                         break;

@@ -30,7 +30,7 @@ struct ll_file_data {
 
 struct ll_inode_md {
         struct mds_body *body;
-        struct obdo *obdo;
+        struct lov_stripe_md *md;
 };
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
@@ -42,7 +42,10 @@ struct ll_inode_md {
 #define LL_INLINESZ      60
 struct ll_inode_info {
         int              lli_flags;
-        struct obdo     *lli_obdo;
+        //        struct obdo     *lli_obdo;
+        struct  lov_stripe_md *lli_smd;
+        //        int              lli_obdo_mdsz;
+        //void            *lli_obdo_md;
         char            *lli_symlink_name;
         char             lli_inline[LL_INLINESZ];
         struct lustre_handle lli_intent_lock_handle;

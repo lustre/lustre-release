@@ -166,8 +166,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 GOTO(negative, NULL);
 
         if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR |
-                          IT_SETATTR | IT_LOOKUP)) && it->it_disposition &&
-            it->it_status)
+                          IT_SETATTR | IT_LOOKUP)) && 
+            it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
         request = (struct ptlrpc_request *)it->it_data;
@@ -185,51 +185,20 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         RETURN(ERR_PTR(-abs(err)));
                 }
                 offset = 0;
-        } else if (it->it_op == IT_UNLINK) {
-                struct obdo *obdo;
-                obdo = lustre_msg_buf(request->rq_repmsg, 1);
-                inode = new_inode(dir->i_sb);
-
-                ll_i2info(inode)->lli_obdo = obdo_alloc();
-                /* XXX fix mem allocation error */
-                memcpy(ll_i2info(inode)->lli_obdo, obdo, sizeof(*obdo));
-
-                if (!inode)
-                        GOTO(out_req, -ENOMEM);
-                inode->i_mode = S_IFREG;
-                inode->i_nlink = 1;
-                GOTO(out_req, 0);
-        } else if (it->it_op == IT_RMDIR) {
-                inode = new_inode(dir->i_sb);
-                if (!inode)
-                        GOTO(out_req, -ENOMEM);
-                ll_i2info(inode)->lli_obdo = NULL;
-                inode->i_mode = S_IFDIR;
-                inode->i_nlink = 1;
-                GOTO(out_req, 0);
         } else if (it->it_op == IT_RENAME2) {
-                LBUG();
+                inode = ((struct dentry *)(it->it_data))->d_inode;
+                GOTO(out_req, NULL); 
         } else {
-                struct mds_body *body;
-
                 offset = 1;
-                body = lustre_msg_buf(request->rq_repmsg, 1);
-                type = body->mode;
-                ino = body->fid1.id;
         }
 
-        if (S_ISREG(type)) {
-                if (request->rq_repmsg->bufcount < offset + 2 ||
-                    request->rq_repmsg->buflens[offset + 1] !=
-                    sizeof(struct obdo))
+        md.body = lustre_msg_buf(request->rq_repmsg, offset);
+        if (S_ISREG(md.body->mode)) {
+                if (request->rq_repmsg->bufcount < offset + 1)
                         LBUG();
-
-                md.obdo = lustre_msg_buf(request->rq_repmsg, offset + 1);
+                md.md = lustre_msg_buf(request->rq_repmsg, offset + 1);
         } else
-                md.obdo = NULL;
-
-        if (!(it->it_op & IT_RENAME2))
-                md.body = lustre_msg_buf(request->rq_repmsg, offset);
+                md.md = NULL;
 
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
 
@@ -254,7 +223,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int namelen, const char *tgt, int tgtlen,
                                     int mode, __u64 extra,
-                                    struct lookup_intent *it, struct obdo *obdo)
+                                    struct lookup_intent *it, 
+                                    struct lov_stripe_md *smd)
 {
         struct inode *inode;
         struct ptlrpc_request *request = NULL;
@@ -276,17 +246,17 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (!it->it_disposition) {
                 rc = mdc_create(&sbi->ll_mdc_conn, dir, name, namelen, tgt,
                                  tgtlen, mode, current->fsuid,
-                                 gid, time, extra, obdo, &request);
+                                 gid, time, extra, smd, &request);
                 if (rc) {
                         inode = ERR_PTR(rc);
                         GOTO(out, rc);
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
-                md.obdo = obdo;
+                md.md = smd;
         } else {
                 request = it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
-                md.obdo = NULL;
+                md.md = NULL;
         }
 
         body->valid = OBD_MD_FLNOTOBD;
@@ -386,12 +356,14 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         int err, rc = 0;
         struct obdo oa;
         struct inode *inode;
+        struct lov_stripe_md *smd;
+        struct ll_inode_info *ii;
 
         if (dentry->d_it->it_disposition == 0) {
                 memset(&oa, 0, sizeof(oa));
                 oa.o_valid = OBD_MD_FLMODE;
                 oa.o_mode = S_IFREG | 0600;
-                rc = obd_create(ll_i2obdconn(dir), &oa);
+                rc = obd_create(ll_i2obdconn(dir), &oa, &smd);
                 if (rc)
                         RETURN(rc);
         }
@@ -400,7 +372,7 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
                dentry->d_name.name, mode, (unsigned long long)oa.o_id);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, 0, dentry->d_it, &oa);
+                               NULL, 0, mode, 0, dentry->d_it, smd);
 
         if (IS_ERR(inode)) {
                 rc = PTR_ERR(inode);
@@ -425,7 +397,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-        err = obd_destroy(ll_i2obdconn(dir), &oa);
+        oa.o_easize = ii->lli_smd->lmd_size;
+        err = obd_destroy(ll_i2obdconn(dir), &oa, ii->lli_smd);
         if (err)
                 CERROR("error destroying object %Ld in error path: err = %d\n",
                        (unsigned long long)oa.o_id, err);

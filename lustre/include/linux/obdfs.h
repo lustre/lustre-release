@@ -97,17 +97,14 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 
         obdo_to_inode(inode, oa);
 
+        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
+            S_ISFIFO(inode->i_mode)) {
+                obd_rdev rdev = *((obd_rdev *)oa->o_inline);
+                init_special_inode(inode, inode->i_mode, rdev);
+        }
         if (obdo_has_inline(oa)) {
-		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
-		    S_ISFIFO(inode->i_mode)) {
-			obd_rdev rdev = *((obd_rdev *)oa->o_inline);
-			CDEBUG(D_INODE,
-			       "copying device %x from obdo to inode\n", rdev);
-			init_special_inode(inode, inode->i_mode, rdev);
-		} else {
-			CDEBUG(D_INFO, "copying inline from obdo to inode\n");
-			memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
-		}
+                CDEBUG(D_INFO, "copying inline from obdo to inode\n");
+                memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
                 oinfo->oi_flags |= OBD_FL_INLINEDATA;
         }
 } /* obdfs_to_inode */

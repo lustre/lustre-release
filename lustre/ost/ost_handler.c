@@ -51,7 +51,7 @@ static int ost_destroy(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        req->rq_status = obd_destroy(conn, &body->oa);
+        req->rq_status = obd_destroy(conn, &body->oa, NULL);
         RETURN(0);
 }
 
@@ -114,7 +114,7 @@ static int ost_open(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_open(conn, &repbody->oa);
+        req->rq_status = obd_open(conn, &repbody->oa, NULL);
         RETURN(0);
 }
 
@@ -133,7 +133,7 @@ static int ost_close(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_close(conn, &repbody->oa);
+        req->rq_status = obd_close(conn, &repbody->oa, NULL);
         RETURN(0);
 }
 
@@ -152,7 +152,7 @@ static int ost_create(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_create(conn, &repbody->oa);
+        req->rq_status = obd_create(conn, &repbody->oa, NULL);
         RETURN(0);
 }
 
@@ -171,7 +171,7 @@ static int ost_punch(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_punch(conn, &repbody->oa,
+        req->rq_status = obd_punch(conn, &repbody->oa, NULL, 
                                    repbody->oa.o_blocks, repbody->oa.o_size);
         RETURN(0);
 }

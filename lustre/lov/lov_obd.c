@@ -62,6 +62,9 @@ static int lov_getinfo(struct obd_device *obd,
                 *uuids = lustre_msg_buf(req->rq_repmsg, 1);
                 lov_unpackdesc(desc); 
         }
+        mdc->mdc_max_mdsize = sizeof(*desc) + 
+                desc->ld_tgt_count * sizeof(uuid_t);
+
         EXIT;
  out:
         return rc;
@@ -135,10 +138,11 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
  out_mem:
         if (rc) { 
                 for (i = 0 ; i < lov->desc.ld_tgt_count; i++) { 
-                        rc = obd_disconnect(&lov->tgts[i].conn);
-                        if (rc)
-                                CERROR("Target %s disconnect error %d\n", 
-                                       uuidarray[i], rc); 
+                        int rc2;
+                        rc2 = obd_disconnect(&lov->tgts[i].conn);
+                        if (rc2)
+                                CERROR("BAD: Target %s disconnect error %d\n", 
+                                       uuidarray[i], rc2); 
                 }
                 OBD_FREE(lov->tgts, lov->bufsize);
         }
@@ -164,9 +168,11 @@ static int lov_disconnect(struct lustre_handle *conn)
 
         for (i = 0 ; i < lov->desc.ld_tgt_count; i++) { 
                 rc = obd_disconnect(&lov->tgts[i].conn);
-                if (rc)
+                if (rc) { 
                         CERROR("Target %s disconnect error %d\n", 
                                lov->tgts[i].uuid, rc); 
+                        RETURN(rc);
+                }
         }
         OBD_FREE(lov->tgts, lov->bufsize);
         lov->bufsize = 0;
@@ -208,6 +214,111 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         RETURN(rc); 
 } 
+
+
+static inline int lov_stripe_md_size(struct obd_device *obd)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        int size;
+
+        size = sizeof(struct lov_stripe_md) + 
+                lov->desc.ld_tgt_count * sizeof(struct lov_object_id); 
+        return size;
+}
+
+static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_stripe_md **ea)
+{
+        int rc, i;
+        struct obdo tmp;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct lov_stripe_md *md;
+        ENTRY;
+
+        if (!ea) { 
+                CERROR("lov_create needs EA for striping information\n"); 
+                RETURN(-EINVAL); 
+        }
+
+        if (!export)
+                RETURN(-EINVAL);
+        lov = &export->export_obd->u.lov;
+
+        oa->o_easize =  lov_stripe_md_size(export->export_obd); 
+        if (! *ea) { 
+                OBD_ALLOC(*ea, oa->o_easize); 
+                if (! *ea) 
+                        RETURN(-ENOMEM); 
+        }
+
+        md = *ea; 
+        md->lmd_size = oa->o_easize;
+        md->lmd_object_id = oa->o_id;
+        if (!md->lmd_stripe_count) { 
+                md->lmd_stripe_count = lov->desc.ld_default_stripecount;
+        }
+
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                struct lov_stripe_md obj_md; 
+                struct lov_stripe_md *obj_mdp = &obj_md; 
+                /* create data objects with "parent" OA */ 
+                memcpy(&tmp, oa, sizeof(tmp));
+                tmp.o_easize = sizeof(struct lov_stripe_md);
+                rc = obd_create(&lov->tgts[i].conn, &tmp, &obj_mdp);
+                if (rc) 
+                        GOTO(out_cleanup, rc); 
+                md->lmd_objects[i].l_object_id = tmp.o_id;
+        }
+
+ out_cleanup: 
+        if (rc) { 
+                int i2, rc2;
+                for (i2 = 0 ; i2 < i ; i2++) { 
+                        /* destroy already created objects here */ 
+                        tmp.o_id = md->lmd_objects[i].l_object_id;
+                        rc2 = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
+                        if (rc2) { 
+                                CERROR("Failed to remove object from target %d\n", 
+                                       i2); 
+                        }
+                }
+        }
+        return rc;
+}
+
+static int lov_destroy(struct lustre_handle *conn, struct obdo *oa, 
+struct lov_stripe_md *ea)
+{
+        int rc, i;
+        struct obdo tmp;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct lov_stripe_md *md;
+        ENTRY;
+
+        if (!ea) { 
+                CERROR("LOV requires striping ea for desctruction\n"); 
+                RETURN(-EINVAL); 
+        }
+
+        if (!export || !export->export_obd) 
+                RETURN(-ENODEV); 
+
+        lov = &export->export_obd->u.lov;
+        md = ea;
+
+        for (i = 0; i < md->lmd_stripe_count; i++) {
+                /* create data objects with "parent" OA */ 
+                memcpy(&tmp, oa, sizeof(tmp));
+                oa->o_id = md->lmd_objects[i].l_object_id; 
+                rc = obd_destroy(&lov->tgts[i].conn, &tmp, NULL);
+                if (!rc) { 
+                        CERROR("Error destroying object %Ld on %d\n",
+                               oa->o_id, i); 
+                }
+        }
+        RETURN(rc);
+}
 
 #if 0
 static int lov_getattr(struct lustre_handle *conn, struct obdo *oa)
@@ -279,73 +390,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa)
         RETURN(rc);
 }
 
-static int lov_create(struct lustre_handle *conn, struct obdo *oa)
-{
-        int rc, retval, i, offset;
-        struct obdo tmp;
-        struct lov_md md;
-        ENTRY;
 
-        if (!class_conn2export(conn))
-                RETURN(-EINVAL);
-
-        md.lmd_object_id = oa->o_id;
-        md.lmd_stripe_count = conn->oc_dev->obd_multi_count;
-
-        memset(oa->o_inline, 0, sizeof(oa->o_inline));
-        offset = sizeof(md);
-        for (i = 0; i < md.lmd_stripe_count; i++) {
-                struct lov_object_id lov_id;
-                rc = obd_create(&conn->oc_dev->obd_multi_conn[i], &tmp);
-                if (i == 0) {
-                        memcpy(oa, &tmp, sizeof(tmp));
-                        retval = rc;
-                } else if (retval != rc)
-                        CERROR("return codes didn't match (%d, %d)\n",
-                               retval, rc);
-                lov_id = (struct lov_object_id *)(oa->o_inline + offset);
-                lov_id->l_device_id = i;
-                lov_id->l_object_id = tmp.o_id;
-                offset += sizeof(*lov_id);
-        }
-        memcpy(oa->o_inline, &md, sizeof(md));
-
-        return rc;
-}
-
-static int lov_destroy(struct lustre_handle *conn, struct obdo *oa)
-{
-        int rc, retval, i, offset;
-        struct obdo tmp;
-        struct lov_md *md;
-        struct lov_object_id lov_id;
-        ENTRY;
-
-        if (!class_conn2export(conn))
-                RETURN(-EINVAL);
-
-        md = (struct lov_md *)oa->o_inline;
-
-        memcpy(&tmp, oa, sizeof(tmp));
-
-        offset = sizeof(md);
-        for (i = 0; i < md->lmd_stripe_count; i++) {
-                struct lov_object_id *lov_id;
-                lov_id = (struct lov_object_id *)(oa->o_inline + offset);
-
-                tmp.o_id = lov_id->l_object_id;
-
-                rc = obd_destroy(&conn->oc_dev->obd_multi_conn[i], &tmp);
-                if (i == 0)
-                        retval = rc;
-                else if (retval != rc)
-                        CERROR("return codes didn't match (%d, %d)\n",
-                               retval, rc);
-                offset += sizeof(*lov_id);
-        }
-
-        return rc;
-}
 
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
  * we can send this 'punch' to just the authoritative node and the nodes
@@ -556,13 +601,13 @@ struct obd_ops lov_obd_ops = {
         o_setup:       lov_setup,
         o_connect:     lov_connect,
         o_disconnect:  lov_disconnect,
-#if 0
         o_create:      lov_create,
+        o_destroy:     lov_destroy,
+#if 0
         o_getattr:     lov_getattr,
         o_setattr:     lov_setattr,
         o_open:        lov_open,
         o_close:       lov_close,
-        o_destroy:     lov_destroy,
         o_brw:         lov_pgcache_brw,
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,

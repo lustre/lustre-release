@@ -157,7 +157,7 @@ typedef uint32_t        obd_blksize;
 typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
-typedef uint32_t        obd_rdev;
+typedef uint64_t        obd_rdev;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
@@ -176,6 +176,7 @@ struct obdo {
         obd_time                o_ctime;
         obd_size                o_size;
         obd_blocks              o_blocks;
+        obd_rdev                o_rdev;
         obd_blksize             o_blksize;
         obd_mode                o_mode;
         obd_uid                 o_uid;
@@ -183,10 +184,24 @@ struct obdo {
         obd_flag                o_flags;
         obd_count               o_nlink;
         obd_count               o_generation;
-        obd_rdev                o_rdev;
         obd_flag                o_valid;        /* hot fields in this obdo */
         obd_flag                o_obdflags;
+        __u32                   o_easize; 
         char                    o_inline[OBD_INLINESZ];
+};
+
+struct lov_object_id { /* per-child structure */
+        __u64 l_object_id;
+};
+
+struct lov_stripe_md {
+        __u64 lmd_magic;
+        __u64 lmd_object_id;     /* lov object id */
+        __u64 lmd_stripe_count;
+        __u32 lmd_size;
+        __u32 lmd_stripe_size;
+        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
+        struct lov_object_id lmd_objects[0];
 };
 
 #define OBD_MD_FLALL    (0xffffffff)
@@ -206,11 +221,10 @@ struct obdo {
 #define OBD_MD_FLNLINK  (0x00002000)
 #define OBD_MD_FLGENER  (0x00004000)
 #define OBD_MD_FLINLINE (0x00008000)
-#define OBD_MD_FLOBDMD  (0x00010000)
+#define OBD_MD_FLRDEV   (0x00010000)
 #define OBD_MD_FLOBJID  (0x00020000)
 #define OBD_MD_LINKNAME (0x00040000)
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS |\
-                           OBD_MD_LINKNAME))
+#define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME))
 
 struct obd_statfs {
         __u64           os_type;
@@ -457,5 +471,4 @@ struct ldlm_reply {
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
 };
-
 #endif

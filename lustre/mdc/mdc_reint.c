@@ -76,7 +76,7 @@ int mdc_setattr(struct lustre_handle *conn,
 int mdc_create(struct lustre_handle *conn,
                struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u32 uid,
-               __u32 gid, __u64 time, __u64 rdev, struct obdo *obdo,
+               __u32 gid, __u64 time, __u64 rdev, struct lov_stripe_md *md,
                struct ptlrpc_request **request)
 {
         struct mds_rec_create *rec;
@@ -88,8 +88,13 @@ int mdc_create(struct lustre_handle *conn,
         ENTRY;
 
         if (S_ISREG(mode)) {
-                size[2] = sizeof(*obdo);
-                bufs[2] = (char *)obdo;
+                if (!md) {
+                        CERROR("File create, but no md (%ld, %*s)\n",
+                               dir->i_ino, namelen, name); 
+                        LBUG();
+                }
+                size[2] = md->lmd_size;
+                bufs[2] = (char *)md;
                 bufcount = 3;
         } else if (S_ISLNK(mode)) {
                 size[2] = tgtlen + 1;
@@ -102,13 +107,14 @@ int mdc_create(struct lustre_handle *conn,
         if (!req)
                 RETURN(-ENOMEM);
 
+        /* mds_create_pack fills bufs[1] with name */
         rec = lustre_msg_buf(req->rq_reqmsg, 0);
         mds_create_pack(req, 0, dir, mode, rdev, uid, gid, time,
                         name, namelen, NULL, 0);
 
         if (S_ISREG(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
-                memcpy(tmp, obdo, sizeof(*obdo));
+                memcpy(tmp, md, md->lmd_size);
         } else if (S_ISLNK(mode)) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, 2);
                 LOGL0(tgt, tgtlen, tmp);

@@ -111,10 +111,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 struct lustre_handle dir_lockh;
                 char *name;
                 int namelen;
-                /* a name was supplied by the client; fid1 is the directory */
 
-                name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
-                namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
+                /* a name was supplied by the client; fid1 is the directory */
                 dir = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, LCK_PR,
                                             &dir_lockh);
                 if (!dir || IS_ERR(dir)) {
@@ -123,8 +121,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(out_setattr, rc = -ESTALE);
                 }
 
+                name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+                namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
                 de = mds_name2locked_dentry(mds, dir, NULL, name, namelen,
-                                            0, &child_lockh);
+                                            0, &child_lockh, LCK_PR);
                 l_dput(dir);
                 if (!de || IS_ERR(de)) {
                         LBUG();
@@ -277,8 +277,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         if (dchild->d_inode) {
                 struct mds_body *body;
-                struct obdo *obdo;
                 struct inode *inode = dchild->d_inode;
+                struct lov_stripe_md *md;
                 CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
 
@@ -288,8 +288,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 #warning FIXME: This ext3/N-specific code does not belong here
                 /* If i_file_acl is set, this inode has an EA */
                 if (S_ISREG(inode->i_mode) && inode->u.ext3_i.i_file_acl) {
-                        obdo = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        mds_fs_get_obdo(mds, inode, obdo);
+                        md = lustre_msg_buf(req->rq_repmsg, offset + 1);
+                        md->lmd_size = mds->mds_max_mdsize;
+                        mds_fs_get_md(mds, inode, md);
                 }
                 /* now a normal case for intent locking */
                 GOTO(out_create_dchild, rc = -EEXIST);
@@ -357,9 +358,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
                 if (!offset && type == S_IFREG) {
-                        struct obdo *obdo;
-                        obdo = lustre_msg_buf(req->rq_reqmsg, 2);
-                        rc = mds_fs_set_obdo(mds, inode, handle, obdo);
+                        struct lov_stripe_md *md;
+                        md = lustre_msg_buf(req->rq_reqmsg, 2);
+                        rc = mds_fs_set_md(mds, inode, handle, md);
                         if (rc) {
                                 CERROR("error %d setting obdo for %ld\n",
                                        rc, inode->i_ino);
@@ -434,73 +435,49 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct dentry *de = NULL;
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
-        struct obdo *obdo;
+        char *name;
+        int namelen;
         struct inode *dir, *inode;
-        int lock_mode, flags;
-        __u64 res_id[3] = {0};
-        struct lustre_handle lockh;
+        int lock_mode;
+        struct lustre_handle lockh, child_lockh;
         void *handle;
         int rc = 0;
         int err;
         ENTRY;
 
-        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
+        /* a name was supplied by the client; fid1 is the directory */
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        de = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, lock_mode,
+                                    &lockh);
+        if (!de || IS_ERR(de)) {
+                LBUG();
+                RETURN(-ESTALE);
+        }
+        
+        name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
+        dchild = mds_name2locked_dentry(mds, de, NULL, name, namelen,
+                                    LCK_EX, &child_lockh, lock_mode);
+
+        if (!dchild || IS_ERR(dchild) 
+            || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
                 GOTO(out_unlink, rc = -ESTALE);
         }
 
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
-        res_id[0] = dir->i_ino;
-
-        rc = ldlm_lock_match(mds->mds_local_namespace, res_id, LDLM_PLAIN,
-                                   NULL, 0, lock_mode, &lockh);
-        if (rc == 0) {
-                LDLM_DEBUG_NOLOCK("enqueue res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL,
-                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
-                                      &flags, (void *)mds_lock_callback, NULL,
-                                      0, &lockh);
-                if (rc != ELDLM_OK) {
-                        CERROR("lock enqueue: err: %d\n", rc);
-                        GOTO(out_unlink_de, rc = -EIO);
-                }
-        } else
-                ldlm_lock_dump((void *)(unsigned long)lockh.addr);
-
-        down(&dir->i_sem);
-        dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
-        if (IS_ERR(dchild)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                LBUG();
-                GOTO(out_unlink_de, rc = -ESTALE);
-        }
-
         inode = dchild->d_inode;
+        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
+
         if (!inode) {
-                CERROR("child doesn't exist (dir %ld, name %s\n",
+                CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
                 GOTO(out_unlink_dchild, rc = -ENOENT);
+        } else if (offset) {
+                struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1); 
+                mds_pack_inode2fid(&body->fid1, inode);
+                mds_pack_inode2body(body, inode);
         }
-
-#if 0 /* in intent case the client doesn't have the inode */
-        if (inode->i_ino != rec->ur_fid2->id) {
-                CERROR("inode and FID ID do not match (%ld != %Ld)\n",
-                       inode->i_ino, rec->ur_fid2->id);
-                LBUG();
-                GOTO(out_unlink_dchild, rc = -ESTALE);
-        }
-        if (inode->i_generation != rec->ur_fid2->generation) {
-                CERROR("inode and FID GENERATION do not match (%d != %d)\n",
-                       inode->i_generation, rec->ur_fid2->generation);
-                LBUG();
-                GOTO(out_unlink_dchild, rc = -ESTALE);
-        }
-#endif
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
 
@@ -511,15 +488,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dir, dchild);
                 break;
-        default:
-                if (offset) {
-                        obdo = lustre_msg_buf(req->rq_repmsg, 1); 
-                        rc = mds_fs_get_obdo(mds, inode, obdo);
-                        if (rc < 0)
-                                CDEBUG(D_INFO, "No obdo for ino %ld err %d\n",
+        case S_IFREG:
+                if (inode->u.ext3_i.i_file_acl && offset) {
+                        struct lov_stripe_md *md;
+                        md = lustre_msg_buf(req->rq_repmsg, 2); 
+                        rc = mds_fs_get_md(mds, inode, md);
+                        if (rc < 0) { 
+                                CDEBUG(D_INFO, "No md for ino %ld err %d\n",
                                        inode->i_ino, rc);
+                                memset(md, 0, md->lmd_size); 
+                        }
                 }
-
+        default:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
                 if (!handle)
                         GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
@@ -537,42 +517,17 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         }
 
         EXIT;
+
 out_unlink_dchild:
-        if (!rc)
-                res_id[0] = inode->i_ino;
         l_dput(dchild);
-out_unlink_de:
+        ldlm_lock_decref(&child_lockh, LCK_EX);
+        rc = ldlm_cli_cancel(&child_lockh);
+        if (rc < 0)
+                CERROR("failed to cancel child inode lock ino\n"); 
+out_unlink:
         up(&dir->i_sem);
         ldlm_lock_decref(&lockh, lock_mode);
-        if (!rc) { 
-                /* Take an exclusive lock on the resource that we're
-                 * about to free, to force everyone to drop their
-                 * locks. */
-                LDLM_DEBUG_NOLOCK("getting EX lock res %Lu", res_id[0]);
-                rc = ldlm_cli_enqueue(mds->mds_ldlm_client, mds->mds_ldlm_conn,
-                                      (struct lustre_handle *)&mds->mds_connh,
-                                      NULL, mds->mds_local_namespace, NULL, 
-                                      res_id,
-                                      LDLM_PLAIN, NULL, 0, LCK_EX, &flags,
-                                      (void *)mds_lock_callback, NULL, 0, 
-                                      &lockh);
-                if (rc) 
-                        CERROR("failed to get child inode lock (child ino %Ld, "
-                               "dir ino %ld)\n",
-                               res_id[0], de->d_inode->i_ino);
-        }
-
         l_dput(de);
-
-        if (!rc) { 
-                ldlm_lock_decref(&lockh, LCK_EX);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc < 0)
-                        CERROR("failed to cancel child inode lock ino "
-                               "%Ld: %d\n", res_id[0], rc);
-        }
-
-out_unlink:
         req->rq_status = rc;
         return 0;
 }

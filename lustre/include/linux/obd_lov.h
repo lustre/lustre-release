@@ -12,18 +12,6 @@
 void lov_unpackdesc(struct lov_desc *ld);
 void lov_packdesc(struct lov_desc *ld);
 
-struct lov_object_id { /* per-child structure */
-        __u64 l_object_id;
-        __u32 l_device_id;
-};
-
-struct lov_md {
-        __u64 lmd_object_id;     /* lov object id */
-        __u64 lmd_stripe_count;
-        __u32 lmd_stripe_size;
-        __u32 lmd_stripe_pattern;  /* per-lov object stripe pattern */
-        struct lov_object_id lmd_objects[0];
-};
 
 #endif
 #endif

@@ -63,6 +63,7 @@ struct mdc_obd {
         struct ptlrpc_client *mdc_client;
         struct ptlrpc_client *mdc_ldlm_client;
         struct ptlrpc_connection *mdc_conn;
+        int mdc_max_mdsize;
         __u8 mdc_target_uuid[37];
 };
 
@@ -90,6 +91,7 @@ struct mds_obd {
         struct inode_operations *mds_iop;
         struct address_space_operations *mds_aops;
         struct mds_fs_operations *mds_fsops;
+        int mds_max_mdsize;
         struct file *mds_rcvd_filp;
         __u64 mds_last_committed;
         __u64 mds_last_rcvd;
@@ -212,9 +214,11 @@ struct obd_device {
 struct obd_ops {
         int (*o_iocontrol)(long cmd, struct lustre_handle *, int len, void *karg,
                            void *uarg);
-        int (*o_get_info)(struct lustre_handle *, obd_count keylen, void *key,
+        int (*o_get_info)(struct lustre_handle *, 
+                          obd_count keylen, void *key,
                           obd_count *vallen, void **val);
-        int (*o_set_info)(struct lustre_handle *, obd_count keylen, void *key,
+        int (*o_set_info)(struct lustre_handle *, 
+                          obd_count keylen, void *key,
                           obd_count vallen, void *val);
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
@@ -226,17 +230,24 @@ struct obd_ops {
 
         int (*o_statfs)(struct lustre_handle *conn, struct statfs *statfs);
         int (*o_preallocate)(struct lustre_handle *, obd_count *req, obd_id *ids);
-        int (*o_create)(struct lustre_handle *conn,  struct obdo *oa);
-        int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa);
+        int (*o_create)(struct lustre_handle *conn,  struct obdo *oa, 
+                        struct lov_stripe_md **ea);
+        int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa, 
+                         struct lov_stripe_md *ea);
         int (*o_setattr)(struct lustre_handle *conn, struct obdo *oa);
         int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa);
-        int (*o_open)(struct lustre_handle *conn, struct obdo *oa);
-        int (*o_close)(struct lustre_handle *conn, struct obdo *oa);
-        int (*o_brw)(int rw, struct lustre_handle *conn, obd_count num_oa,
-                     struct obdo **oa, obd_count *oa_bufs, struct page **buf,
-                     obd_size *count, obd_off *offset, obd_flag *flags,
+        int (*o_open)(struct lustre_handle *conn, struct obdo *oa,
+                      struct lov_stripe_md *);
+        int (*o_close)(struct lustre_handle *conn, struct obdo *oa,
+                       struct lov_stripe_md *);
+        int (*o_brw)(int rw, struct lustre_handle *conn, 
+                     struct lov_stripe_md *md, obd_count oa_bufs, 
+                     struct page **buf,
+                     obd_size *count, 
+                     obd_off *offset, 
+                     obd_flag *flags,
                      void *);
-        int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt, obd_size count,
+        int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt, struct lov_stripe_md *md, obd_size count,
                        obd_off offset);
         int (*o_sync)(struct lustre_handle *conn, struct obdo *tgt, obd_size count,
                       obd_off offset);

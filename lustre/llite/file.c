@@ -37,6 +37,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa = NULL;
+        struct lov_stripe_md *md = NULL; 
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
@@ -47,15 +48,22 @@ static int ll_file_open(struct inode *inode, struct file *file)
         /*  delayed create of object (intent created inode) */
         /*  XXX object needs to be cleaned up if mdc_open fails */
         /*  XXX error handling appropriate here? */
-        if (lli->lli_obdo == NULL) {
+        if (lli->lli_smd == NULL || lli->lli_smd->lmd_object_id == 0) {
+                struct mdc_obd *mdc = sbi2mdc(ll_s2sbi(inode->i_sb));
                 struct inode * inode = file->f_dentry->d_inode;
 
-                oa = lli->lli_obdo = obdo_alloc();
+                lli->lli_smd = NULL; 
+                oa =  obdo_alloc();
+                if (!oa) { 
+                        RETURN(-ENOMEM);
+                }
                 oa->o_valid = OBD_MD_FLMODE;
                 oa->o_mode = S_IFREG | 0600;
-                rc = obd_create(ll_i2obdconn(inode), oa);
+                oa->o_easize = mdc->mdc_max_mdsize;
+                rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
                 if (rc)
                         RETURN(rc);
+                md = lli->lli_smd;
                 lli->lli_flags &= ~OBD_FL_CREATEONOPEN;
         }
 
@@ -65,8 +73,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
         memset(fd, 0, sizeof(*fd));
 
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
-                      file->f_flags,
-                      oa, (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
+                      file->f_flags, md,
+                      (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
@@ -78,13 +86,17 @@ static int ll_file_open(struct inode *inode, struct file *file)
         if (!fd->fd_mdshandle)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
 
-        oa = lli->lli_obdo;
         if (oa == NULL) {
-                LBUG();
-                GOTO(out_mdc, rc = -EINVAL);
+                oa =  obdo_alloc();
+                if (!oa)
+                        GOTO(out_mdc, rc = -EINVAL);
         }
+        oa->o_id = lli->lli_smd->lmd_object_id;
+        oa->o_mode = S_IFREG | inode->i_mode;
+        rc = obd_open(ll_i2obdconn(inode), oa, lli->lli_smd);
+        obdo_free(oa);
+        oa = NULL;
 
-        rc = obd_open(ll_i2obdconn(inode), oa);
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
 
@@ -99,6 +111,8 @@ out_mdc:
 out_req:
         ptlrpc_free_req(req);
 //out_fd:
+        if (oa)
+                obdo_free(oa);
         kmem_cache_free(ll_file_data_slab, fd);
         file->private_data = NULL;
 out:
@@ -112,6 +126,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
 
         ENTRY;
 
@@ -121,12 +136,13 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 GOTO(out, rc = -EINVAL);
         }
 
-        oa = ll_i2info(inode)->lli_obdo;
+        oa = obdo_alloc();
         if (oa == NULL) {
                 LBUG();
                 GOTO(out_fd, rc = -ENOENT);
         }
-        rc = obd_close(ll_i2obdconn(inode), oa);
+        rc = obd_close(ll_i2obdconn(inode), oa, lli->lli_smd);
+        obdo_free(oa); 
         if (rc)
                 GOTO(out_fd, abs(rc));
 

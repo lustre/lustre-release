@@ -36,7 +36,7 @@
 void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,
                      __u32 xid);
 void ost_unpack_niobuf(void **tmp, struct niobuf_remote **nbp);
-void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt);
+void ost_pack_ioo(void **tmp, struct lov_stripe_md *oa, int bufcnt);
 void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop);
 
 #endif

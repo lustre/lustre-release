@@ -213,25 +213,25 @@ static inline int obd_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
-static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo, struct lov_stripe_md **ea)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,create);
 
-        rc = OBP(export->export_obd, create)(conn, obdo);
+        rc = OBP(export->export_obd, create)(conn, obdo, ea);
         RETURN(rc);
 }
 
-static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo, struct lov_stripe_md *ea)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,destroy);
 
-        rc = OBP(export->export_obd, destroy)(conn, obdo);
+        rc = OBP(export->export_obd, destroy)(conn, obdo, ea);
         RETURN(rc);
 }
 
@@ -246,24 +246,25 @@ static inline int obd_getattr(struct lustre_handle *conn, struct obdo *obdo)
         RETURN(rc);
 }
 
-static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo, struct lov_stripe_md *md)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,close);
 
-        rc = OBP(export->export_obd, close)(conn, obdo);
+        rc = OBP(export->export_obd, close)(conn, obdo, md);
         RETURN(rc);
 }
-static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo)
+static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo, 
+                           struct lov_stripe_md *md)
 {
         int rc;
         struct obd_export *export;
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,open);
 
-        rc = OBP(export->export_obd, open) (conn, obdo);
+        rc = OBP(export->export_obd, open) (conn, obdo, md);
         RETURN(rc);
 }
 
@@ -311,6 +312,7 @@ static inline int obd_statfs(struct lustre_handle *conn, struct statfs *buf)
 }
 
 static inline int obd_punch(struct lustre_handle *conn, struct obdo *tgt,
+                            struct lov_stripe_md *md, 
                             obd_size count, obd_off offset)
 {
         int rc;
@@ -318,14 +320,18 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *tgt,
         OBD_CHECK_SETUP(conn, export);
         OBD_CHECK_OP(export->export_obd,punch);
 
-        rc = OBP(export->export_obd, punch)(conn, tgt, count, offset);
+        rc = OBP(export->export_obd, punch)(conn, tgt, md, count, offset);
         RETURN(rc);
 }
 
-static inline int obd_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
-                          struct obdo **oa, obd_count *oa_bufs,
-                          struct page **buf, obd_size *count, obd_off *offset,
-                          obd_flag *flags, void *callback)
+static inline int obd_brw(int cmd, struct lustre_handle *conn, 
+                          struct lov_stripe_md *md, 
+                          obd_count oa_bufs,
+                          struct page **buf, 
+                          obd_size *count, 
+                          obd_off *offset,
+                          obd_flag *flags, 
+                          void *callback)
 {
         int rc;
         struct obd_export *export;
@@ -337,7 +343,7 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
                 LBUG();
         }
 
-        rc = OBP(export->export_obd, brw)(cmd, conn, num_oa, oa, oa_bufs, buf,
+        rc = OBP(export->export_obd, brw)(cmd, conn, md, oa_bufs, buf,
                                     count, offset, flags, callback);
         RETURN(rc);
 }
@@ -558,6 +564,8 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src)
                 dst->o_nlink = src->i_nlink;
         if ( dst->o_valid & OBD_MD_FLGENER ) 
                 dst->o_generation = src->i_generation;
+        if ( dst->o_valid & OBD_MD_FLRDEV ) 
+                dst->o_rdev = src->i_rdev;
 }
 
 static inline void obdo_to_inode(struct inode *dst, struct obdo *src)
@@ -589,6 +597,8 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src)
                 dst->i_nlink = src->o_nlink;
         if ( src->o_valid & OBD_MD_FLGENER )
                 dst->i_generation = src->o_generation;
+        if ( src->o_valid & OBD_MD_FLRDEV )
+                dst->i_rdev = src->o_rdev;
 }
 
 #endif 
@@ -628,6 +638,8 @@ static inline void obdo_cpy_md(struct obdo *dst, struct obdo *src)
                 dst->o_nlink = src->o_nlink;
         if ( src->o_valid & OBD_MD_FLGENER ) 
                 dst->o_generation = src->o_generation;
+        if ( src->o_valid & OBD_MD_FLRDEV ) 
+                dst->o_rdev = src->o_rdev;
         if ( src->o_valid & OBD_MD_FLINLINE &&
              src->o_obdflags & OBD_FL_INLINEDATA) {
                 memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
@@ -671,8 +683,6 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
         /* XXX Don't know if thses should be included here - wasn't previously
         if ( compare & OBD_MD_FLINLINE )
                 res = (res || memcmp(dst->o_inline, src->o_inline));
-        if ( compare & OBD_MD_FLOBDMD )
-                res = (res || memcmp(dst->o_obdmd, src->o_obdmd));
         */
         return res;
 }

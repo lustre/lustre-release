@@ -97,46 +97,42 @@ static int mds_extN_setattr(struct dentry *dentry, void *handle,
                 return inode_setattr(inode, iattr);
 }
 
-static int mds_extN_set_obdo(struct inode *inode, void *handle,
-                             struct obdo *obdo)
+static int mds_extN_set_md(struct inode *inode, void *handle,
+                             struct lov_stripe_md *md)
 {
-        struct mds_objid *data; 
         int rc;
 
 
 
         lock_kernel();
         down(&inode->i_sem);
-        if (obdo == NULL)
+        if (md == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
         else { 
-                data = (struct mds_objid *)obdo->o_inline;       
-                data->mo_magic = cpu_to_le64(XATTR_MDS_MO_MAGIC);
+                md->lmd_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, obdo->o_inline,
-                                    OBD_INLINESZ, XATTR_CREATE);
+                                    XATTR_LUSTRE_MDS_OBJID, md, 
+                                    md->lmd_size, XATTR_CREATE);
         }
         up(&inode->i_sem);
         unlock_kernel();
 
         if (rc)
                 CERROR("error adding objectid %Ld to inode %ld\n",
-                       (unsigned long long)obdo->o_id, inode->i_ino);
+                       (unsigned long long)md->lmd_object_id, inode->i_ino);
         return rc;
 }
 
-static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
+static int mds_extN_get_md(struct inode *inode, struct lov_stripe_md *md)
 {
-        struct mds_objid *data;
         int rc;
+        int size = md->lmd_size;
 
         lock_kernel();
         down(&inode->i_sem);
         rc = extN_xattr_get(inode, EXTN_XATTR_INDEX_LUSTRE,
-                            XATTR_LUSTRE_MDS_OBJID, obdo->o_inline,
-                            OBD_INLINESZ);
-        data = (struct mds_objid *)obdo->o_inline;
+                            XATTR_LUSTRE_MDS_OBJID, md, size);
 
         up(&inode->i_sem);
         unlock_kernel();
@@ -144,21 +140,17 @@ static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
-                obdo->o_id = 0;
-        } else if (data->mo_magic != cpu_to_le64(XATTR_MDS_MO_MAGIC)) {
-                CERROR("MDS object id %Ld has bad magic %Lx\n",
-                       (unsigned long long)obdo->o_id,
-                       (unsigned long long)le64_to_cpu(data->mo_magic));
+                memset(md, 0, size); 
+        } else if (md->lmd_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
+                CERROR("MDS striping md for ino %ld has bad magic\n",
+                       inode->i_ino);
                 rc = -EINVAL;
         } else {
                 /* This field is byteswapped because it appears in the
                  * catalogue.  All others are opaque to the MDS */
-                obdo->o_id = le64_to_cpu(data->mo_lov_md.lmd_object_id);
-                obdo->o_mode = S_IFREG;
-                obdo->o_valid |= OBD_MD_FLID | OBD_MD_FLINLINE | OBD_MD_FLMODE;
+                md->lmd_object_id = le64_to_cpu(md->lmd_object_id);
         }
 
-#warning FIXME: pass this buffer to caller for transmission when size exceeds OBD_INLINESZ
         return rc;
 }
 
@@ -199,7 +191,7 @@ static void mds_extN_delete_inode(struct inode *inode)
                         EXIT;
                         return;
                 }
-                if (mds_extN_set_obdo(inode, handle, NULL))
+                if (mds_extN_set_md(inode, handle, NULL))
                         CERROR("error clearing obdo on %ld\n", inode->i_ino);
 
                 if (mds_extN_fs_ops.cl_delete_inode)
@@ -300,8 +292,8 @@ static struct mds_fs_operations mds_extN_fs_ops = {
         fs_start:               mds_extN_start,
         fs_commit:              mds_extN_commit,
         fs_setattr:             mds_extN_setattr,
-        fs_set_obdo:            mds_extN_set_obdo,
-        fs_get_obdo:            mds_extN_get_obdo,
+        fs_set_md:            mds_extN_set_md,
+        fs_get_md:            mds_extN_get_md,
         fs_readpage:            mds_extN_readpage,
         fs_delete_inode:        mds_extN_delete_inode,
         cl_delete_inode:        clear_inode,

@@ -148,11 +148,11 @@ inline void set_page_clean(struct page *page)
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
+static int obdfs_brw(int rw, struct inode *inode2, 
+                     struct page *page, int create)
 {
-        obd_count        num_obdo = 1;
-        obd_count        bufs_per_obdo = 1;
-        struct obdo     *oa;
+        struct inode *inode = page->mapping->host;
+        struct ll_inode_info *lii = ll_i2info(inode);
         obd_size         count = PAGE_SIZE;
         obd_off          offset = ((obd_off)page->index) << PAGE_SHIFT;
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
@@ -160,16 +160,8 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 
         ENTRY;
 
-        oa = obdo_alloc();
-        if ( !oa ) {
-                EXIT;
-                return -ENOMEM;
-        }
-        oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
-        obdfs_from_inode(oa, inode);
-
         err = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, IID(inode),
-		      num_obdo, &oa, &bufs_per_obdo, &page, &count, &offset,
+                      md, 1, &page, &count, &offset,
 		      &flags, NULL);
         //if ( !err )
         //      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
@@ -194,18 +186,11 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
         int              err;
 
         ENTRY;
-        oa = obdo_alloc();
-        if ( !oa ) {
-                EXIT;
-                return -ENOMEM;
-        }
-        oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
-        obdfs_from_inode(oa, inode);
 
         CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n",
                from, to, (unsigned long long)count);
 
-        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(OBD_BRW_WRITE, IID(inode), md, 1,
 		      &page, &count, &offset, &flags, NULL);
         if ( !err ) {
                 SetPageUptodate(page);

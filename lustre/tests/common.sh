@@ -259,6 +259,7 @@ setup_lustre() {
 		echo "$0: RPCDEV is already configured, skipping"
 		return 0
 	fi
+        list_mods
 
 	$OBDCTL <<- EOF || return $?
 	newdev
@@ -266,7 +267,6 @@ setup_lustre() {
 	setup
 	quit
 	EOF
-        list_mods
 
 	[ -d /mnt/lustre ] || mkdir /mnt/lustre
 }
@@ -282,7 +282,6 @@ setup_ldlm() {
 	setup
 	quit
 	EOF
-        list_mods
 }
 
 find_devno() {
@@ -322,7 +321,6 @@ setup_mds() {
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
-        list_mods
 }
 
 setup_mds_lov() { 
@@ -341,8 +339,6 @@ setup_mds_lov() {
         disconnect
 	quit
 	EOF
-
-        list_mods
 }
 
 
@@ -397,7 +393,6 @@ setup_ost() {
 	setup ${OBD} ${OBDARG}
 	quit
 	EOF
-        list_mods
 
 	$OBDCTL <<- EOF || return $?
 	newdev
@@ -405,7 +400,6 @@ setup_ost() {
 	setup \$OBDDEV
 	quit
 	EOF
-        list_mods
 }
 
 setup_server() {
@@ -432,7 +426,6 @@ setup_osc() {
 	quit
 	EOF
         done
-        list_mods
 }
 
 setup_mdc() {
@@ -454,7 +447,6 @@ setup_mdc() {
 	quit
 	EOF
         done
-        list_mods
 }
 
 setup_lov () { 
@@ -471,7 +463,6 @@ setup_lov () {
 	setup  MDCDEV-UUID
 	quit
 	EOF
-        list_mods
 }        
 
 

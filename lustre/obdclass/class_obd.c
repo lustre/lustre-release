@@ -274,7 +274,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                        MKSTR(data->ioc_inlbuf2), MKSTR(data->ioc_inlbuf3));
 
                 /* find the type */
-
                 type = class_nm_to_type(data->ioc_inlbuf1);
                 if (!type) {
                         CERROR("OBD: unknown type dev %d\n", obd->obd_minor);
@@ -426,10 +425,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CREATE: {
+                struct lov_stripe_md *ea;
                 obd_data2conn(&conn, data);
 
 
-                err = obd_create(&conn, &data->ioc_obdo1);
+                err = obd_create(&conn, &data->ioc_obdo1, &ea);
                 if (err)
                         GOTO(out, err);
 
@@ -459,9 +459,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_DESTROY: {
+                void *ea;
                 obd_data2conn(&conn, data);
 
-                err = obd_destroy(&conn, &data->ioc_obdo1);
+                err = obd_destroy(&conn, &data->ioc_obdo1, ea);
                 if (err)
                         GOTO(out, err);
 
@@ -476,28 +477,25 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                  *        We don't really support multiple-obdo I/Os here,
                  *        for example offset and count are not per-obdo.
                  */
-                struct obdo     *obdos[2] = { NULL, NULL };
-                obd_count       oa_bufs[2] = { 0, 0 };
+                struct lov_stripe_md *md;
+                obd_count       oa_bufs = 0;
                 struct page     **bufs = NULL;
                 obd_size        *counts = NULL;
                 obd_off         *offsets = NULL;
                 obd_flag        *flags = NULL;
-                int             num = 1;
                 int             pages;
-                int             i, j;
+                int             j;
+                unsigned long off;
+                void *from;
+                        
 
                 obd_data2conn(&conn, data);
 
-                pages = oa_bufs[0] = data->ioc_plen1 / PAGE_SIZE;
-                if (data->ioc_obdo2.o_id) {
-                        num = 2;
-                        oa_bufs[1] = data->ioc_plen2 / PAGE_SIZE;
-                        pages += oa_bufs[1];
-                }
+                pages = oa_bufs = data->ioc_plen1 / PAGE_SIZE;
 
-                CDEBUG(D_INODE, "BRW %s with %dx%d pages\n",
+                CDEBUG(D_INODE, "BRW %s with %d pages\n",
                        rw == OBD_BRW_READ ? "read" : "write",
-                       num, oa_bufs[0]);
+                       oa_bufs);
                 OBD_ALLOC(bufs, pages * sizeof(*bufs));
                 OBD_ALLOC(counts, pages * sizeof(*counts));
                 OBD_ALLOC(offsets, pages * sizeof(*offsets));
@@ -508,46 +506,40 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(brw_free, err);
                 }
 
-                obdos[0] = &data->ioc_obdo1;
-                if (num > 1)
-                        obdos[1] = &data->ioc_obdo2;
+                md = &data->ioc_obdo1;
 
-                for (i = 0, pages = 0; i < num; i++) {
-                        unsigned long off;
-                        void *from;
-
-                        from = (&data->ioc_pbuf1)[i];
-                        off = data->ioc_offset;
-
-                        for (j = 0; j < oa_bufs[i];
-                             j++, pages++, off += PAGE_SIZE, from += PAGE_SIZE){
-                                unsigned long to;
-
-                                to = __get_free_pages(GFP_KERNEL, 0);
-                                if (!to) {
+                from = (&data->ioc_pbuf1)[0];
+                off = data->ioc_offset;
+                
+                for (j = 0; j < oa_bufs;
+                     j++, pages++, off += PAGE_SIZE, from += PAGE_SIZE){
+                        unsigned long to;
+                        
+                        to = __get_free_pages(GFP_KERNEL, 0);
+                        if (!to) {
                                 /*      ||
-                                    copy_from_user((void *)to,from,PAGE_SIZE))
+                                        copy_from_user((void
+                                        *)to,from,PAGE_SIZE))
                                         free_pages(to, 0);
-                                 */
-                                        CERROR("no memory for brw pages\n");
-                                        err = -ENOMEM;
-                                        GOTO(brw_cleanup, err);
-                                }
-                                bufs[pages] = virt_to_page(to);
-                                counts[pages] = PAGE_SIZE;
-                                offsets[pages] = off;
-                                flags[pages] = 0;
+                                */
+                                CERROR("no memory for brw pages\n");
+                                err = -ENOMEM;
+                                GOTO(brw_cleanup, err);
                         }
+                        bufs[pages] = virt_to_page(to);
+                        counts[pages] = PAGE_SIZE;
+                        offsets[pages] = off;
+                        flags[pages] = 0;
                 }
-
-                err = obd_brw(rw, &conn, num, obdos, oa_bufs, bufs,
+                
+                err = obd_brw(rw, &conn, md, oa_bufs, bufs,
                               counts, offsets, flags, NULL);
-
+                
                 EXIT;
         brw_cleanup:
-                i = pages;
-                while (i-- > 0)
-                        __free_pages(bufs[i], 0);
+                j = pages;
+                while (j-- > 0)
+                        __free_pages(bufs[j], 0);
         brw_free:
                 OBD_FREE(bufs, pages * sizeof(*bufs));
                 OBD_FREE(counts, pages * sizeof(*counts));

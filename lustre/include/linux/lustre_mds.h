@@ -53,11 +53,6 @@ struct mds_update_record {
         __u64 ur_time;
 };
 
-struct mds_objid {
-        __u64 mo_magic;
-        struct lov_md mo_lov_md;
-};
-
 #define MDS_LR_CLIENT  8192
 #define MDS_LR_SIZE     128
 
@@ -134,7 +129,8 @@ void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                                       struct vfsmount **mnt, char *name,
                                       int namelen, int lock_mode,
-                                      struct lustre_handle *lockh);
+                                      struct lustre_handle *lockh,
+                                      int dir_lock_mode);
 struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh);
@@ -165,8 +161,7 @@ int mdc_statfs(struct lustre_handle *conn,
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn,
-             obd_id ino, int type, int flags, struct obdo *obdo, __u64 cookie,
-             __u64 *fh, struct ptlrpc_request **request);
+             obd_id ino, int type, int flags, struct lov_stripe_md *md, __u64 cookie,  __u64 *fh, struct ptlrpc_request **request);
 int mdc_close(struct lustre_handle *conn,
               obd_id ino, int type, __u64 fh,  struct ptlrpc_request **req);
 int mdc_readpage(struct lustre_handle *conn, obd_id ino,
@@ -174,7 +169,7 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino,
 int mdc_create(struct lustre_handle *conn,
                struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
-               __u64 time, __u64 rdev, struct obdo *obdo,
+               __u64 time, __u64 rdev, struct lov_stripe_md *md, 
                struct ptlrpc_request **);
 int mdc_unlink(struct lustre_handle *conn,
                struct inode *dir, struct inode *child, const char *name,
@@ -197,9 +192,10 @@ struct mds_fs_operations {
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
-        int     (* fs_set_obdo)(struct inode *inode, void *handle,
-                                struct obdo *obdo);
-        int     (* fs_get_obdo)(struct inode *inode, struct obdo *obdo);
+        int     (* fs_set_md)(struct inode *inode, void *handle,
+                              struct lov_stripe_md *md);
+        int     (* fs_get_md)(struct inode *inode, 
+                              struct lov_stripe_md *md);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);
@@ -239,16 +235,16 @@ static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
         return mds->mds_fsops->fs_setattr(dentry, handle, iattr);
 }
 
-static inline int mds_fs_set_obdo(struct mds_obd *mds, struct inode *inode,
-                                  void *handle, struct obdo *obdo)
+static inline int mds_fs_set_md(struct mds_obd *mds, struct inode *inode,
+                                  void *handle, struct lov_stripe_md *md)
 {
-        return mds->mds_fsops->fs_set_obdo(inode, handle, obdo);
+        return mds->mds_fsops->fs_set_md(inode, handle, md);
 }
 
-static inline int mds_fs_get_obdo(struct mds_obd *mds, struct inode *inode,
-                                  struct obdo *obdo)
+static inline int mds_fs_get_md(struct mds_obd *mds, struct inode *inode,
+                                  struct lov_stripe_md *md)
 {
-        return mds->mds_fsops->fs_get_obdo(inode, obdo);
+        return mds->mds_fsops->fs_get_md(inode, md);
 }
 
 static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,

@@ -36,17 +36,15 @@
 /* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
-        obd_count        num_obdo = 1;
-        obd_count        bufs_per_obdo = 1;
-        struct obdo     *oa;
+        struct ll_inode_info *lii = ll_i2info(inode);
+        struct lov_stripe_md *md = lii->lli_smd;
         obd_size         count = PAGE_SIZE;
         obd_off          offset = ((obd_off)page->index) << PAGE_SHIFT;
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
         ENTRY;
 
-        oa = ll_i2info(inode)->lli_obdo;
-        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(rw, ll_i2obdconn(inode), md, 1,
                       &page, &count, &offset, &flags, NULL);
         RETURN(err);
 } /* ll_brw */
@@ -105,6 +103,10 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
          * to date until commit_write */
         if (from == 0 && to == PAGE_SIZE)
                 RETURN(0);
+        
+        /* prepare write should not read what lies beyond the end of
+           the file */
+
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
@@ -144,9 +146,8 @@ static int ll_commit_write(struct file *file, struct page *page,
 {
         int create = 1;
         struct inode *inode = page->mapping->host;
-        obd_count        num_obdo = 1;
-        obd_count        bufs_per_obdo = 1;
-        struct obdo     *oa;
+        struct ll_inode_info *lii = ll_i2info(inode);
+        struct lov_stripe_md *md = lii->lli_smd;
         obd_size         count = to;
         obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT);
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
@@ -154,7 +155,6 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct iattr     iattr;
 
         ENTRY;
-        oa = ll_i2info(inode)->lli_obdo;
 
         SetPageUptodate(page);
 
@@ -164,8 +164,8 @@ static int ll_commit_write(struct file *file, struct page *page,
         CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
                from, to, (unsigned long long)count);
 
-        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
-                      &bufs_per_obdo, &page, &count, &offset, &flags, NULL);
+        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md, 
+                      1, &page, &count, &offset, &flags, NULL);
         kunmap(page);
 
         iattr.ia_size = offset + to;
@@ -187,22 +187,24 @@ static int ll_commit_write(struct file *file, struct page *page,
 
 void ll_truncate(struct inode *inode)
 {
-        struct obdo *oa;
+        struct obdo oa = {0};
+        struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
         int err;
         ENTRY;
 
-        oa = ll_i2info(inode)->lli_obdo;
-        if (!oa) { 
+        if (!md) { 
                 /* object not yet allocated */
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
                 return;
         }
+
         CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Ld)\n",
-               (long)oa->o_id, (unsigned long long)oa->o_size);
-        oa->o_size = inode->i_size;
-        oa->o_valid = OBD_MD_FLSIZE | OBD_MD_FLID;
+               (long)oa.o_id, (unsigned long long)oa.o_size);
+        oa.o_size = inode->i_size;
+        oa.o_id = md->lmd_object_id;
+        oa.o_valid = OBD_MD_FLSIZE | OBD_MD_FLID;
         /* truncate == punch from i_size onwards */
-        err = obd_punch(ll_i2obdconn(inode), oa, -1 - oa->o_size, oa->o_size);
+        err = obd_punch(ll_i2obdconn(inode), &oa, md, -1 - oa.o_size, oa.o_size);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
@@ -219,9 +221,9 @@ void ll_truncate(struct inode *inode)
 int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                  unsigned long blocknr, int blocksize)
 {
-        obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = iobuf->nr_pages;
-        struct obdo      *oa = NULL;
+        struct ll_inode_info *lii = ll_i2info(inode);
+        struct lov_stripe_md *md = lii->lli_smd;
         obd_size         *count = NULL;
         obd_off          *offset = NULL;
         obd_flag         *flags = NULL;
@@ -250,12 +252,11 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
                 flags[i] = OBD_BRW_CREATE;
         }
 
-        oa = ll_i2info(inode)->lli_obdo;
-        if (!oa)
+        if (!md || !md->lmd_object_id)
                 GOTO(out, rc = -ENOMEM);
 
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                     ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+                     ll_i2obdconn(inode), md, bufs_per_obdo,
                      iobuf->maplist, count, offset, flags, NULL);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;

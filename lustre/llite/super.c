@@ -191,7 +191,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         md.body = lustre_msg_buf(request->rq_repmsg, 0);
-        md.obdo = NULL;
+        md.md = NULL;
         root = iget4(sb, sbi->ll_rootino, NULL, &md);
                      
         if (root) {
@@ -242,10 +242,10 @@ static void ll_put_super(struct super_block *sb)
 static void ll_clear_inode(struct inode *inode)
 {
         if (atomic_read(&inode->i_count) == 0) {
-                struct obdo *oa = ll_i2info(inode)->lli_obdo;
-                if (oa) {
-                        obdo_free(oa);
-                        ll_i2info(inode)->lli_obdo = NULL;
+                struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+                if (md) {
+                        OBD_FREE(md, md->lmd_size); 
+                        ll_i2info(inode)->lli_smd = NULL;
                 }
                 if (ll_i2info(inode)->lli_symlink_name) {
                         OBD_FREE(ll_i2info(inode)->lli_symlink_name,
@@ -259,19 +259,23 @@ static void ll_delete_inode(struct inode *inode)
 {
         if (S_ISREG(inode->i_mode)) { 
                 int err;
-                struct obdo *oa;
-                oa = ll_i2info(inode)->lli_obdo;
-
-                if (!oa)
+                struct obdo oa;
+                struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+ 
+               if (!md)
                         GOTO(out, -EINVAL);
 
-                if (oa->o_id == 0)
+                oa.o_id = md->lmd_object_id;
+                oa.o_easize = md->lmd_size;
+                if (oa.o_id == 0) { 
+                        CERROR("This really happens\n"); 
                         /* No obdo was ever created */
                         GOTO(out, 0);
+                }
 
-                err = obd_destroy(ll_i2obdconn(inode), oa);
-                CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
-                       (unsigned long long)oa->o_id, err);
+                err = obd_destroy(ll_i2obdconn(inode), &oa, md);
+                CDEBUG(D_SUPER, "obd destroy of %Ld error %d\n",
+                       md->lmd_object_id, err);
         }
 out:
         clear_inode(inode);
@@ -380,6 +384,12 @@ out:
         RETURN(rc);
 }
 
+inline int ll_stripe_md_size(struct super_block *sb)
+{
+        struct mdc_obd *mdc = sbi2mdc(ll_s2sbi(sb));
+        return mdc->mdc_max_mdsize;
+}
+
 static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
 {
         struct mds_body *body = md->body;
@@ -408,28 +418,23 @@ static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
                 dst->i_nlink = body->nlink;
         if (body->valid & OBD_MD_FLGENER)
                 dst->i_generation = body->generation;
-
-        /* this will become more elaborate for striping etc */
-        if (md->obdo != NULL && md->obdo->o_valid != 0) {
-                ii->lli_obdo = obdo_alloc();
-                memcpy(ii->lli_obdo, md->obdo, sizeof(*md->obdo));
-        }
-#if 0
-
-        if (obdo_has_inline(oa)) {
-                if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
-                    S_ISFIFO(inode->i_mode)) {
-                        obd_rdev rdev = *((obd_rdev *)oa->o_inline);
-                        CDEBUG(D_INODE,
-                               "copying device %x from obdo to inode\n", rdev);
-                        init_special_inode(inode, inode->i_mode, rdev);
-                } else {
-                        CDEBUG(D_INFO, "copying inline from obdo to inode\n");
-                        memcpy(oinfo->lli_inline, oa->o_inline, OBD_INLINESZ);
+        if (body->valid & OBD_MD_FLRDEV)
+                dst->i_rdev = body->extra;
+        if (md && md->md && md->md->lmd_stripe_count) { 
+                struct lov_stripe_md *smd = md->md;
+                int size = ll_stripe_md_size(dst->i_sb);
+                if (md->md->lmd_size != size) { 
+                        CERROR("Striping metadata size error %ld\n",
+                               dst->i_ino); 
+                        LBUG();
                 }
-                oinfo->lli_flags |= OBD_FL_INLINEDATA;
+                OBD_ALLOC(ii->lli_smd, size);
+                if (!ii->lli_smd){ 
+                        CERROR("No memory for %d\n", size);
+                        LBUG();
+                }
+                memcpy(ii->lli_smd, smd, size);
         }
-#endif 
 } /* ll_to_inode */
 
 static void ll_read_inode2(struct inode *inode, void *opaque)

@@ -1077,7 +1077,7 @@ static int do_name2dev(char *func, char *name)
 static int jt_name2dev(int argc, char **argv)
 {
         if (argc != 2) {
-                fprintf(stderr, "usage: %s name\n", cmdname(argv[0]));
+                Parser_printhelp("name2dev"); 
                 return -1;
         }
 
@@ -1538,11 +1538,11 @@ command_t cmdlist[] = {
 
         /* Device configuration commands */
         {"lovconfig", jt_lov_config, 0, "configure lov data on MDS "
-         "(usage: lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...])"}, 
+         "[usage: lovconfig lov-uuid stripecount, stripesize, pattern, UUID1, [UUID2, ...]"}, 
         {"list", jt_list, 0, "list the devices (no args)"},
         {"newdev", jt_newdev, 0, "set device to a new unused obd (no args)"},
         {"device", jt_device, 0, "set current device (args device_no name)"},
-        {"name2dev", jt_name2dev, 0, "set device by name (args name)"},
+        {"name2dev", jt_name2dev, 0, "set device by name [usage: name2dev devname]"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},
         {"setup", jt_setup, 0, "setup device (args: <blkdev> [data]"},
         {"detach", jt_detach, 0, "detach the current device (arg: )"},

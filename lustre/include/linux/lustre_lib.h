@@ -391,6 +391,10 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 133      )
 
+
+
+
+
 /* XXX this should be one mask-check */
 #define l_killable_pending(task)                                               \
 (sigismember(&(task->pending.signal), SIGKILL) ||                              \

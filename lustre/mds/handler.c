@@ -95,7 +95,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                                       struct vfsmount **mnt, char *name,
                                       int namelen, int lock_mode,
-                                      struct lustre_handle *lockh)
+                                      struct lustre_handle *lockh, 
+                                      int dir_lock_mode)
 {
         struct dentry *dchild;
         int flags, rc;
@@ -109,9 +110,12 @@ struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                 up(&dir->d_inode->i_sem);
                 LBUG();
         }
-        up(&dir->d_inode->i_sem);
+        if (dir_lock_mode != LCK_EX && dir_lock_mode != LCK_PW) { 
+                up(&dir->d_inode->i_sem);
+                ldlm_lock_decref(lockh, dir_lock_mode); 
+        }
 
-        if (lock_mode == 0)
+        if (lock_mode == 0 || !dchild->d_inode)
                 RETURN(dchild);
 
         res_id[0] = dchild->d_inode->i_ino;
@@ -302,6 +306,7 @@ static int mds_getstatus(struct ptlrpc_request *req)
 
 static int mds_lovinfo(struct ptlrpc_request *req)
 {
+        struct mds_obd *mds = mds_req2mds(req);
         struct mds_status_req *streq;
         struct lov_desc *desc; 
         int rc, size[2] = {sizeof(*desc)};
@@ -333,6 +338,8 @@ static int mds_lovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+        mds->mds_max_mdsize = sizeof(desc) + 
+                desc->ld_tgt_count * sizeof(uuid_t);
         rc = mds_get_lovtgts(req->rq_obd, lustre_msg_buf(req->rq_repmsg, 1));
         if (rc) { 
                 CERROR("get_lovtgts error %d", rc);
@@ -418,7 +425,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         down(&dir->i_sem);
         dchild = lookup_one_len(name, de, namelen - 1);
         if (IS_ERR(dchild)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+                CDEBUG(D_INODE, "child lookup error %ld\n", PTR_ERR(dchild));
                 up(&dir->i_sem);
                 LBUG();
                 GOTO(out_create_dchild, rc = -ESTALE);
@@ -426,17 +433,18 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 
         if (dchild->d_inode) {
                 struct mds_body *body;
-                struct obdo *obdo;
                 struct inode *inode = dchild->d_inode;
-                CERROR("child exists (dir %ld, name %s, ino %ld)\n",
+                CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, name, dchild->d_inode->i_ino);
 
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 if (S_ISREG(inode->i_mode)) {
-                        obdo = lustre_msg_buf(req->rq_repmsg, offset + 1);
-                        mds_fs_get_obdo(mds, inode, obdo);
+                        struct lov_stripe_md *md;
+                        md = lustre_msg_buf(req->rq_repmsg, offset + 1);
+                        md->lmd_size = mds->mds_max_mdsize;
+                        mds_fs_get_md(mds, inode, md);
                 }
                 /* now a normal case for intent locking */
                 rc = 0;
@@ -477,7 +485,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
                 bufcount = 2;
-                size[1] = sizeof(struct obdo);
+                size[1] = mds->mds_max_mdsize;
         } else if (body->valid & OBD_MD_LINKNAME) {
                 bufcount = 2;
                 size[1] = inode->i_size;
@@ -515,10 +523,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         body->valid = ~0; /* FIXME: should be more selective */
 
         if (S_ISREG(inode->i_mode)) {
-                rc = mds_fs_get_obdo(mds, inode,
+                rc = mds_fs_get_md(mds, inode,
                                      lustre_msg_buf(req->rq_repmsg, 1));
                 if (rc < 0) {
-                        CERROR("mds_fs_get_obdo failed: %d\n", rc);
+                        CERROR("mds_fs_get_md failed: %d\n", rc);
                         GOTO(out, rc);
                 }
         }
@@ -617,13 +625,12 @@ static int mds_open(struct ptlrpc_request *req)
         /* check if this inode has seen a delayed object creation */
         if (req->rq_reqmsg->bufcount > 1) {
                 void *handle;
+                struct lov_stripe_md *md;
                 struct inode *inode = de->d_inode;
                 //struct iattr iattr;
-                struct obdo *obdo;
                 int rc;
 
-                obdo = lustre_msg_buf(req->rq_reqmsg, 1);
-                //iattr.ia_valid = ATTR_MODE;
+                md = lustre_msg_buf(req->rq_reqmsg, 1);
                 //iattr.ia_mode = inode->i_mode;
 
                 handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
@@ -633,7 +640,7 @@ static int mds_open(struct ptlrpc_request *req)
                 }
 
                 /* XXX error handling */
-                rc = mds_fs_set_obdo(mds, inode, handle, obdo);
+                rc = mds_fs_set_md(mds, inode, handle, md);
                 //                rc = mds_fs_setattr(mds, de, handle, &iattr);
                 if (!rc) {
                         struct obd_run_ctxt saved;
@@ -980,6 +987,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (!mds->mds_sb)
                 GOTO(err_put, rc = -ENODEV);
 
+        mds->mds_max_mdsize = sizeof(struct lov_stripe_md);
         rc = mds_fs_setup(mds, mnt);
         if (rc) {
                 CERROR("MDS filesystem method init failed: rc = %d\n", rc);

@@ -91,13 +91,11 @@ int class_unregister_type(char *nm)
         ENTRY;
 
         if ( !type ) {
-                MOD_DEC_USE_COUNT;
                 CERROR("unknown obd type\n");
                 RETURN(-EINVAL);
         }
 
         if ( type->typ_refcnt ) {
-                MOD_DEC_USE_COUNT;
                 CERROR("type %s has refcount (%d)\n", nm, type->typ_refcnt);
                 RETURN(-EBUSY);
         }

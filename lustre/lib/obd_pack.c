@@ -27,14 +27,14 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 
-void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt)
+void ost_pack_ioo(void **tmp, struct lov_stripe_md *md, int bufcnt)
 {
         struct obd_ioobj *ioo = *tmp;
         char *c = *tmp;
 
-        ioo->ioo_id = HTON__u64(oa->o_id);
-        ioo->ioo_gr = HTON__u64(oa->o_gr);
-        ioo->ioo_type = HTON__u32(oa->o_mode);
+        ioo->ioo_id = HTON__u64(md->lmd_object_id);
+        ioo->ioo_gr = HTON__u64(0);
+        ioo->ioo_type = HTON__u32(S_IFREG);
         ioo->ioo_bufcnt = HTON__u32(bufcnt);
         *tmp = c + sizeof(*ioo);
 }

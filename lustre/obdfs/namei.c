@@ -152,7 +152,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         oa->o_mode = mode;
         oa->o_valid |= OBD_MD_FLMODE;
         CDEBUG(D_INODE, "\n");
-        err = obd_create(IID(dir), oa);
+        err = obd_create(IID(dir), oa, NULL);
         CDEBUG(D_INODE, "\n");
 
         if ( err ) {
@@ -168,7 +168,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 
         if (!inode) {
                 CERROR("new_inode -fatal:  %ld\n", (long)oa->o_id);
-                obd_destroy(IID(dir), oa);
+                obd_destroy(IID(dir), oa, NULL);
                 obdo_free(oa);
                 EXIT;
                 return ERR_PTR(-EIO);
@@ -180,7 +180,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
                        (long)oa->o_id,
                        atomic_read(&inode->i_count), 
                        inode->i_nlink);
-                obd_destroy(IID(dir), oa);
+                obd_destroy(IID(dir), oa, NULL);
                 iput(inode);
                 EXIT;
                 return ERR_PTR(-EIO);

@@ -359,7 +359,6 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd)
         ENTRY;
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
-
         if (rc)
                 MOD_DEC_USE_COUNT;
         RETURN(rc);
@@ -483,23 +482,10 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
 
         if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
                 obd_rdev rdev = kdev_t_to_nr(inode->i_rdev);
-                CDEBUG(D_INODE, "copying device %x from inode to obdo\n",
-                       rdev);
-                *((obd_rdev *)oa->o_inline) = rdev;
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
+                oa->o_rdev = rdev;
+                oa->o_valid |= OBD_MD_FLRDEV;
         }
 
-#if 0
-        else if (filter_has_inline(inode)) {
-                CDEBUG(D_INFO, "copying inline from inode to obdo\n");
-                memcpy(oa->o_inline, inode->u.ext2_i.i_data,
-                       MIN(sizeof(inode->u.ext2_i.i_data),OBD_INLINESZ));
-                oa->o_obdflags |= OBD_FL_INLINEDATA;
-                oa->o_valid |= OBD_MD_FLINLINE;
-        }
-
-#endif
         EXIT;
 }
 
@@ -567,7 +553,8 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa)
         RETURN(rc);
 }
 
-static int filter_open(struct lustre_handle *conn, struct obdo *oa)
+static int filter_open(struct lustre_handle *conn, struct obdo *oa,
+                          struct lov_stripe_md *ea)
 {
         struct obd_device *obd;
         struct dentry *dentry;
@@ -587,7 +574,8 @@ static int filter_open(struct lustre_handle *conn, struct obdo *oa)
         return 0;
 } /* filter_open */
 
-static int filter_close(struct lustre_handle *conn, struct obdo *oa)
+static int filter_close(struct lustre_handle *conn, struct obdo *oa,
+                          struct lov_stripe_md *ea)
 {
         struct obd_device *obd;
         struct dentry *dentry;
@@ -613,7 +601,8 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa)
         return 0;
 } /* filter_close */
 
-static int filter_create(struct lustre_handle* conn, struct obdo *oa)
+static int filter_create(struct lustre_handle* conn, struct obdo *oa, 
+                         struct lov_stripe_md **ea)
 {
         char name[64];
         struct obd_run_ctxt saved;
@@ -654,7 +643,8 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa)
         return 0;
 }
 
-static int filter_destroy(struct lustre_handle *conn, struct obdo *oa)
+static int filter_destroy(struct lustre_handle *conn, struct obdo *oa, 
+                          struct lov_stripe_md *ea)
 {
         struct obd_device *obd;
         struct filter_obd *filter;
@@ -706,6 +696,7 @@ out:
 
 /* NB count and offset are used for punch, but not truncate */
 static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
+                           struct lov_stripe_md *md,
                            obd_size count, obd_off offset)
 {
         int error;
@@ -718,8 +709,8 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
         RETURN(error);
 }
 
-static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, obd_count num_oa,
-                               struct obdo **oa, obd_count *oa_bufs,
+static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, 
+                               struct lov_stripe_md *md, obd_count oa_bufs,
                                struct page **pages, obd_size *count,
                                obd_off *offset, obd_flag *flags, void *callback)
 {
@@ -731,6 +722,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, obd_count num
         int                      error;
         struct file             *file;
         struct obd_device      *obd = class_conn2obd(conn);
+        int pg;
         ENTRY;
 
         if (!class_conn2export(conn)) {
@@ -741,53 +733,51 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, obd_count num
         sb = obd->u.filter.fo_sb;
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
         pnum = 0; /* pnum indexes buf 0..num_pages */
-        for (onum = 0; onum < num_oa; onum++) {
-                int pg;
 
-                file = filter_obj_open(obd, oa[onum]->o_id, oa[onum]->o_mode);
-                if (IS_ERR(file))
-                        GOTO(out, retval = PTR_ERR(file));
-
-                /* count doubles as retval */
-                for (pg = 0; pg < oa_bufs[onum]; pg++) {
-                        CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
-                               "off count (%Ld,%Ld)\n",
-                               cmd, onum, pnum, file->f_dentry->d_inode->i_ino,
-                               (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
-                               (unsigned long long)offset[pnum],
-                               (unsigned long long)count[pnum]);
-                        if (cmd & OBD_BRW_WRITE) {
-                                loff_t off;
-                                char *buffer;
-                                off = offset[pnum];
-                                buffer = kmap(pages[pnum]);
-                                retval = file->f_op->write(file, buffer, count[pnum], &off);
-                                kunmap(pages[pnum]);
-                                CDEBUG(D_INODE, "retval %ld\n", retval);
+        file = filter_obj_open(obd, md->lmd_object_id, S_IFREG);
+        if (IS_ERR(file))
+                GOTO(out, retval = PTR_ERR(file));
+        
+        /* count doubles as retval */
+        for (pg = 0; pg < oa_bufs; pg++) {
+                CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
+                       "off count (%Ld,%Ld)\n",
+                       cmd, onum, pnum, file->f_dentry->d_inode->i_ino,
+                       (unsigned long)offset[pnum] >> PAGE_CACHE_SHIFT,
+                       (unsigned long long)offset[pnum],
+                       (unsigned long long)count[pnum]);
+                if (cmd & OBD_BRW_WRITE) {
+                        loff_t off;
+                        char *buffer;
+                        off = offset[pnum];
+                        buffer = kmap(pages[pnum]);
+                        retval = file->f_op->write(file, buffer, count[pnum], &off);
+                        kunmap(pages[pnum]);
+                        CDEBUG(D_INODE, "retval %ld\n", retval);
+                } else {
+                        loff_t off = offset[pnum];
+                        char *buffer = kmap(pages[pnum]);
+                        
+                        if (off >= file->f_dentry->d_inode->i_size) {
+                                memset(buffer, 0, count[pnum]);
+                                retval = count[pnum];
                         } else {
-                                loff_t off = offset[pnum];
-                                char *buffer = kmap(pages[pnum]);
-
-                                if (off >= file->f_dentry->d_inode->i_size) {
-                                        memset(buffer, 0, count[pnum]);
-                                        retval = count[pnum];
-                                } else {
-                                        retval = file->f_op->read(file, buffer, count[pnum], &off);
-                                }
-                                kunmap(pages[pnum]);
-
-                                if (retval != count[pnum]) {
-                                        filp_close(file, 0);
-                                        GOTO(out, retval = -EIO);
-                                }
-                                CDEBUG(D_INODE, "retval %ld\n", retval);
+                                retval = file->f_op->read(file, buffer, count[pnum], &off);
                         }
-                        pnum++;
+                        kunmap(pages[pnum]);
+                        
+                        if (retval != count[pnum]) {
+                                filp_close(file, 0);
+                                GOTO(out, retval = -EIO);
+                        }
+                        CDEBUG(D_INODE, "retval %ld\n", retval);
                 }
-                /* sizes and blocks are set by generic_file_write */
-                /* ctimes/mtimes will follow with a setattr call */
-                filp_close(file, 0);
+                pnum++;
         }
+        /* sizes and blocks are set by generic_file_write */
+        /* ctimes/mtimes will follow with a setattr call */
+        filp_close(file, 0);
+
 
         EXIT;
 out:
@@ -1338,8 +1328,14 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                   obd_size count, obd_off offset)
 {
         struct page *page;
+        struct lov_stripe_md srcmd, dstmd; 
         unsigned long index = 0;
         int err = 0;
+
+        memset(&srcmd, 0, sizeof(srcmd));
+        memset(&dstmd, 0, sizeof(dstmd));
+        srcmd.lmd_object_id = src->o_id;
+        dstmd.lmd_object_id = dst->o_id;
 
         ENTRY;
         CDEBUG(D_INFO, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n",
@@ -1357,15 +1353,13 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
          *     and arrays to handle the request parameters.
          */
         while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-                obd_count        num_oa = 1;
-                obd_count        num_buf = 1;
                 obd_size         brw_count = PAGE_SIZE;
                 obd_off          brw_offset = (page->index) << PAGE_SHIFT;
                 obd_flag         flagr = 0;
                 obd_flag         flagw = OBD_BRW_CREATE;
 
                 page->index = index;
-                err = obd_brw(OBD_BRW_READ, src_conn, num_oa, &src, &num_buf,
+                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1,
 			      &page, &brw_count, &brw_offset, &flagr, NULL);
 
                 if ( err ) {
@@ -1374,7 +1368,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 }
                 CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
-                err = obd_brw(OBD_BRW_WRITE, dst_conn, num_oa, &dst, &num_buf,
+                err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1,
 			      &page, &brw_count, &brw_offset, &flagw, NULL);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
