@@ -402,6 +402,7 @@ static int mds_prep(struct obd_device *obddev)
         struct obd_run_ctxt saved;
         struct mds_obd *mds = &obddev->u.mds;
         struct super_operations *s_ops;
+        struct file *f;
         int err;
 
         mds->mds_service = ptlrpc_init_svc(128 * 1024,
@@ -421,7 +422,21 @@ static int mds_prep(struct obd_device *obddev)
 
         push_ctxt(&saved, &mds->mds_ctxt);
         err = simple_mkdir(current->fs->pwd, "ROOT", 0700);
+        if (err && err != -EEXIST) {
+                CERROR("cannot create ROOT directory\n");
+                GOTO(err_svc, err);
+        }
         err = simple_mkdir(current->fs->pwd, "FH", 0700);
+        if (err && err != -EEXIST) {
+                CERROR("cannot create FH directory\n");
+                GOTO(err_svc, err);
+        }
+        f = filp_open("last_rcvd", O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(f)) {
+                CERROR("cannot open/create last_rcvd file\n");
+                GOTO(err_svc, err = PTR_ERR(f));
+        }
+        mds->last_rcvd = f;
         pop_ctxt(&saved);
 
         /*
@@ -532,6 +547,13 @@ static int mds_cleanup(struct obd_device * obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
+        if (mds->last_rcvd) {
+                int rc = filp_close(mds->last_rcvd, 0);
+                mds->last_rcvd = NULL;
+
+                if (rc)
+                        CERROR("last_rcvd file won't close, rc=%d\n", rc);
+        }
         s_ops = sb->s_op;
 
         unlock_kernel();
