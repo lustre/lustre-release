@@ -24,6 +24,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_lib.h>
 
 extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
         bulk_source_eq, bulk_sink_eq;
@@ -36,8 +37,23 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
         if (bulk->b_flags & PTL_BULK_FL_SENT)
                 RETURN(1);
 
-        if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGINT)) {
+        if (l_killable_pending(current)) {
+                bulk->b_flags |= PTL_RPC_FL_INTR;
+                RETURN(1);
+        }
+
+        CDEBUG(D_NET, "no event yet\n");
+        RETURN(0);
+}
+
+int ptlrpc_check_bulk_received(struct ptlrpc_bulk_desc *bulk)
+{
+        ENTRY;
+
+        if (bulk->b_flags & PTL_BULK_FL_RCVD)
+                RETURN(1);
+        
+        if (l_killable_pending(current)) {
                 bulk->b_flags |= PTL_RPC_FL_INTR;
                 RETURN(1);
         }

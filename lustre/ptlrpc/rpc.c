@@ -147,6 +147,7 @@ static void __exit ptlrpc_exit(void)
 
 /* events.c */
 EXPORT_SYMBOL(ptlrpc_check_bulk_sent);
+EXPORT_SYMBOL(ptlrpc_check_bulk_received);
 
 /* connmgr.c */
 EXPORT_SYMBOL(ptlrpc_connmgr);

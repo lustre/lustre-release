@@ -162,6 +162,7 @@ struct ptlrpc_bulk_desc {
         struct list_head b_page_list;
         __u32 b_page_count;
         atomic_t b_pages_remaining;
+        atomic_t b_refcount;
         void *b_desc_private;
 };
 
@@ -226,6 +227,7 @@ void ptlrpc_cleanup_connection(void);
 
 /* rpc/niobuf.c */
 int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk);
+int ptlrpc_check_bulk_received(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
@@ -282,4 +284,16 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
 int lustre_msg_size(int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
 void *lustre_msg_buf(struct lustre_msg *m, int n);
+
+static inline void ptlrpc_bulk_decref(struct ptlrpc_bulk_desc *desc)
+{
+        if (atomic_dec_and_test(&desc->b_refcount)) {
+                CDEBUG(D_PAGE, "Released last ref on %p, freeing\n", desc);
+                ptlrpc_free_bulk(desc);
+        } else {
+                CDEBUG(D_PAGE, "%p -> %d\n", desc,
+                       atomic_read(&desc->b_refcount));
+        }
+}
+
 #endif

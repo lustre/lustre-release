@@ -469,7 +469,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > req->rq_connection->c_level) { 
-                CERROR("process %d waiting for recovery\n", current->pid);
+                CERROR("process %d waiting for recovery (%d > %d)\n", 
+                       current->pid, req->rq_level, req->rq_connection->c_level);
                 spin_lock(&cli->cli_lock);
                 list_del_init(&req->rq_list);
                 list_add(&req->rq_list, cli->cli_delayed_head.prev); 

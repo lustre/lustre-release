@@ -134,6 +134,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
                            " sleeping");
                 ldlm_lock_dump(lock);
+#warning ldlm needs to time out
                 wait_event(lock->l_waitq,
                            lock->l_req_mode == lock->l_granted_mode);
                 LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
