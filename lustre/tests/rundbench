@@ -1,7 +1,0 @@
-#!/bin/sh
-
-echo 0 > /proc/sys/obd/trace 
-echo 0 > /proc/sys/obd/debug 
-cd /mnt/obd
-cp /usr/src/obd/demos/dbench/client.txt .
-/usr/src/obd/demos/dbench/dbench $1
