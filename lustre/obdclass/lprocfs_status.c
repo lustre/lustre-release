@@ -160,7 +160,7 @@ int lprocfs_rd_uuid(char* page, char **start, off_t off, int count,
         struct obd_device* dev = (struct obd_device*)data;
 
         *eof = 1;
-        return snprintf(page, count, "%s\n", dev->obd_uuid);
+        return snprintf(page, count, "%s\n", dev->obd_uuid.uuid);
 }
 
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,
@@ -232,7 +232,7 @@ int lprocfs_rd_server_uuid(char* page, char **start, off_t off, int count,
 {
         struct obd_device* obd = (struct obd_device*)data;
         struct client_obd* cli = &obd->u.cli;
-        return snprintf(page, count, "%s\n", cli->cl_target_uuid);
+        return snprintf(page, count, "%s\n", cli->cl_target_uuid.uuid);
 }
 
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
@@ -242,7 +242,7 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
         struct ptlrpc_connection *conn = obd->u.cli.cl_import.imp_connection;
 
         *eof = 1;
-        return snprintf(page, count, "%s\n", conn->c_remote_uuid);
+        return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
 }
 
 int lprocfs_rd_numrefs(char *page, char **start, off_t off, int count,
