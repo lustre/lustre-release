@@ -137,6 +137,7 @@ int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
 
         spin_lock(&cli->cl_loi_list_lock);
         cli->cl_dirty_max = (obd_count)val * 1024 * 1024;
+        osc_adjust_cache(cli);
         spin_unlock(&cli->cl_loi_list_lock);
 
         return count;

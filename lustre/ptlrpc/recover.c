@@ -221,9 +221,7 @@ inline void ptlrpc_invalidate_import_state(struct obd_import *imp)
 
         ptlrpc_abort_inflight(imp);
 
-#if 0
         obd_invalidate_import(obd, imp);
-#endif
 
         ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY | LDLM_FL_CANCEL);
 }

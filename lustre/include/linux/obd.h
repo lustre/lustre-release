@@ -141,8 +141,7 @@ struct filter_obd {
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
-        spinlock_t           fo_grant_lock;       /* protects tot_granted */
-        obd_size             fo_tot_granted;
+        obd_size             fo_tot_granted; /* protected by obd_osfs_lock */
         obd_size             fo_tot_cached;
 
         struct obd_import   *fo_mdc_imp;
@@ -180,7 +179,6 @@ struct client_obd {
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
-        struct semaphore         cl_dirty_sem;
         obd_size                 cl_dirty;  /* all _dirty_ in bytes */
         obd_size                 cl_dirty_granted; /* from ost */
         obd_size                 cl_dirty_max; /* allowed w/o rpc */
@@ -434,6 +432,7 @@ struct obd_device {
         spinlock_t             obd_dev_lock;
         __u64                  obd_last_committed;
         struct fsfilt_operations *obd_fsops;
+        spinlock_t              obd_osfs_lock;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;

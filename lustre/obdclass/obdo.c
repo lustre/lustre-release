@@ -183,21 +183,9 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
                 dst->o_flags = src->i_flags;
                 newvalid |= OBD_MD_FLFLAGS;
         }
-        if (valid & OBD_MD_FLNLINK) {
-                dst->o_nlink = src->i_nlink;
-                newvalid |= OBD_MD_FLNLINK;
-        }
         if (valid & OBD_MD_FLGENER) {
                 dst->o_generation = src->i_generation;
                 newvalid |= OBD_MD_FLGENER;
-        }
-        if (valid & OBD_MD_FLRDEV) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                dst->o_rdev = (__u32)kdev_t_to_nr(src->i_rdev);
-#else
-                dst->o_rdev = (__u32)old_decode_dev(src->i_rdev);
-#endif
-                newvalid |= OBD_MD_FLRDEV;
         }
 
         dst->o_valid |= newvalid;
@@ -265,16 +253,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 dst->i_gid = src->o_gid;
         if (valid & OBD_MD_FLFLAGS)
                 dst->i_flags = src->o_flags;
-        if (valid & OBD_MD_FLNLINK)
-                dst->i_nlink = src->o_nlink;
         if (valid & OBD_MD_FLGENER)
                 dst->i_generation = src->o_generation;
-        if (valid & OBD_MD_FLRDEV)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                dst->i_rdev = to_kdev_t(src->o_rdev);
-#else
-                dst->i_rdev = old_decode_dev(src->o_rdev);
-#endif
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif
@@ -307,16 +287,8 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
                 dst->o_gid = src->o_gid;
         if (valid & OBD_MD_FLFLAGS)
                 dst->o_flags = src->o_flags;
-        /*
-        if (valid & OBD_MD_FLOBDFLG)
-                dst->o_obdflags = src->o_obdflags;
-        */
-        if (valid & OBD_MD_FLNLINK)
-                dst->o_nlink = src->o_nlink;
         if (valid & OBD_MD_FLGENER)
                 dst->o_generation = src->o_generation;
-        if (valid & OBD_MD_FLRDEV)
-                dst->o_rdev = src->o_rdev;
         if (valid & OBD_MD_FLINLINE &&
              src->o_obdflags & OBD_FL_INLINEDATA) {
                 memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));

@@ -384,9 +384,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out, rc = -EFAULT);
         }
 
-        /* BUG 974: when we send back cache grants, don't clear this flag */
-        body->oa.o_valid &= ~OBD_MD_FLRDEV;
-
         ioo = lustre_swab_reqbuf(req, 1, sizeof(*ioo), lustre_swab_obd_ioobj);
         if (ioo == NULL) {
                 CERROR("Missing/short ioobj\n");
@@ -478,15 +475,15 @@ static int ost_brw_read(struct ptlrpc_request *req)
         rc = obd_commitrw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
                           ioo, npages, local_nb, &oti);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
+        if (rc == 0) {
+                repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
+                memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
 #if CHECKSUM_BULK
-        if (rc == 0) {
                 repbody->oa.o_nlink = ost_checksum_bulk(desc);
                 repbody->oa.o_valid |= OBD_MD_FLCKSUM;
-        }
 #endif
+        }
 
  out_bulk:
         ptlrpc_free_bulk(desc);
@@ -563,9 +560,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short ost_body\n");
                 GOTO(out, rc = -EFAULT);
         }
-
-        /* BUG 974: when we send back cache grants, don't clear this flag */
-        body->oa.o_valid &= ~OBD_MD_FLRDEV;
 
         LASSERT_REQSWAB(req, 1);
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);

@@ -265,7 +265,6 @@ typedef uint32_t        obd_blksize;
 typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
-typedef uint64_t        obd_rdev;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
@@ -286,7 +285,7 @@ struct obdo {
         obd_time                o_ctime;
         obd_size                o_size;
         obd_blocks              o_blocks; /* brw: clients sent cached bytes */
-        obd_rdev                o_rdev; /* brw: clients/servers sent grant */
+        obd_size                o_grant;
         obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;
         obd_uid                 o_uid;
@@ -372,6 +371,7 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLGROUP  (0x01000000)    /* group */
 #define OBD_MD_FLIFID   (0x02000000)    /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
+#define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
                            OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE))

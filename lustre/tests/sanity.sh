@@ -1373,6 +1373,8 @@ do_dirty_record() {
 }
 test_45() {
 	f="$DIR/45"
+	# Obtain grants from OST if it supports it
+	echo blah > ${f}_grant
 	stop_kupdated
 	sync
 	do_dirty_record "echo blah > $f"

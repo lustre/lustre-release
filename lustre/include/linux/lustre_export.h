@@ -57,6 +57,10 @@ struct filter_export_data {
         struct filter_client_data *fed_fcd;
         loff_t                     fed_lr_off;
         int                        fed_lr_idx;
+        int                        fed_grant_waiting;
+        __u64                      fed_cached; /* both in bytes */
+        __u64                      fed_grant;
+        __u64                      fed_grant_sent;
 };
 
 struct obd_export {

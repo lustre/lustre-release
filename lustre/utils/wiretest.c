@@ -148,8 +148,8 @@ void lustre_assert_wire_constants(void)
         LASSERT((int)sizeof(((struct obdo *)0)->o_size) == 8);
         LASSERT(offsetof(struct obdo, o_blocks) == 48);
         LASSERT((int)sizeof(((struct obdo *)0)->o_blocks) == 8);
-        LASSERT(offsetof(struct obdo, o_rdev) == 56);
-        LASSERT((int)sizeof(((struct obdo *)0)->o_rdev) == 8);
+        LASSERT(offsetof(struct obdo, o_grant) == 56);
+        LASSERT((int)sizeof(((struct obdo *)0)->o_grant) == 8);
         LASSERT(offsetof(struct obdo, o_blksize) == 64);
         LASSERT((int)sizeof(((struct obdo *)0)->o_blksize) == 4);
         LASSERT(offsetof(struct obdo, o_mode) == 68);
