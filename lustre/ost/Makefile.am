@@ -4,6 +4,9 @@
 # See the file COPYING in this distribution
 
 DEFS= 
+
+CFLAGS = -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
+
 MODULE = ost
 modulefs_DATA = ost.o
 EXTRA_PROGRAMS = ost
