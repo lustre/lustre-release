@@ -497,6 +497,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                int active)
 {
         struct obd_uuid *uuid; 
+        int rc = 0;
 
         if (!active)
                 RETURN(0);
@@ -508,10 +509,16 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                 RETURN(-EINVAL);
         }
 
-        uuid = &watched->u.cli.cl_import->imp_target_uuid;
-        CWARN("MDS %s: %s now active, resetting orphans\n",
-               obd->obd_name, uuid->uuid);
-        RETURN(mds_lov_clearorphans(&obd->u.mds, uuid));
+        if (obd->obd_recovering) {
+                CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
+                      obd->obd_name, uuid->uuid);
+        } else {
+                uuid = &watched->u.cli.cl_import->imp_target_uuid;
+                CWARN("MDS %s: %s now active, resetting orphans\n",
+                      obd->obd_name, uuid->uuid);
+                rc = mds_lov_clearorphans(&obd->u.mds, uuid);
+        }
+        RETURN(rc);
 }
 
 /* Convert the on-disk LOV EA structre.
