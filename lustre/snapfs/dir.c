@@ -187,17 +187,7 @@ static int currentfs_create(struct inode *dir, struct dentry *dentry, int mode)
                 CERROR("Error in currentfs_create, dentry->d_inode is NULL\n");
                 GOTO(exit, 0);
         }
-
-	if (S_ISDIR(dentry->d_inode->i_mode))
-                dentry->d_inode->i_op = filter_c2udiops(cache->cache_filter);
-        else if (S_ISREG(dentry->d_inode->i_mode)) {
-                if (!filter_c2cfiops(cache->cache_filter)) {
-                        filter_setup_file_ops(cache->cache_filter, dentry->d_inode,
-                                	      &currentfs_file_iops, &currentfs_file_fops,
-					      &currentfs_file_aops);
-                }
-                dentry->d_inode->i_op = filter_c2ufiops(cache->cache_filter);
-        }
+	set_filter_ops(cache, dentry->d_inode);
 	CDEBUG(D_INODE, "inode %lu, i_op %p\n", dentry->d_inode->i_ino, dentry->d_inode->i_op);
 	snap_debug_device_fail(dir->i_dev, SNAP_OP_CREATE, 3);
 	init_filter_data(dentry->d_inode, 0); 

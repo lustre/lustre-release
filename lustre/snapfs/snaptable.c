@@ -222,8 +222,8 @@ static int snaptable_add_item(struct ioc_snap_tbl_data *data)
 	if (!disk_snap_table)
 		GOTO(exit, rc = -ENOMEM);
 	disk_snap_table->magic = cpu_to_le32((__u32)DISK_SNAP_TABLE_MAGIC);
-	disk_snap_table->count = cpu_to_le32((__u32)table->tbl_count) - 1;
-	disk_snap_table->generation = cpu_to_le32((__u32)table->generation);
+	disk_snap_table->count = cpu_to_le32((__u32)table->tbl_count);
+	disk_snap_table->generation = cpu_to_le32((__u32)table->generation + 1);
 	memset(&disk_snap_table->snap_items[0], 0, 
 	       SNAP_MAX * sizeof(struct snap_disk));
 	

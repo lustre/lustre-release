@@ -70,16 +70,18 @@ struct inode *snap_redirect(struct inode *cache_inode,
 
 	/* first find if there are indirected at the clone_index */
 	redirected = snapops->get_indirect(cache_inode, NULL, 
-					clone_info->clone_index);
+					   clone_info->clone_index);
 	/* if not found, get the FIRST index after this and before NOW */
  	/* XXX fix this later, now use tbl_count, not NOW */
 	if (!redirected) {
 		int index;
+
+		memset(my_table, 0, sizeof(my_table));
 		clone_slot = snap_index2slot(table, clone_info->clone_index);
 		for (slot = table->tbl_count-1; slot >= clone_slot; slot --) {
-			my_table[slot-clone_slot+1] = table->snap_items[slot].index;
+			my_table[slot - clone_slot + 1] = table->snap_items[slot].index;
 		}
-		index = table->tbl_count - clone_slot + 1;
+		index = table->tbl_count - clone_slot;
 		redirected = snapops->get_indirect(cache_inode, my_table, index);
 	}
 

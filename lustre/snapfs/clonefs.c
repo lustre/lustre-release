@@ -183,6 +183,20 @@ static void d_unalloc(struct dentry *dentry)
 	dput(dentry); /* this will free the dentry memory */
 }
 
+static void prepare_parent_dentry(struct dentry *dentry, struct inode *inode)
+{
+	atomic_set(&dentry->d_count, 1);
+	dentry->d_vfs_flags = 0;
+	dentry->d_flags = 0;
+	dentry->d_inode = inode;
+	dentry->d_op = NULL;
+	dentry->d_fsdata = NULL;
+	dentry->d_mounted = 0;
+	INIT_LIST_HEAD(&dentry->d_hash);
+	INIT_LIST_HEAD(&dentry->d_lru);
+	INIT_LIST_HEAD(&dentry->d_subdirs);
+	INIT_LIST_HEAD(&dentry->d_alias);
+}
 /*
  * Return the underlying fs dentry with name in 'dentry' that points
  * to the right inode. 'dir' is the clone fs directory to search for
@@ -191,9 +205,10 @@ static void d_unalloc(struct dentry *dentry)
 struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 {
 	struct inode            *cache_dir = NULL;
-	struct dentry           *cache_dentry = NULL, *tmp = NULL;
+	struct dentry           *cache_dentry = NULL; 
 	struct inode            *cache_inode;
 	struct dentry           *result;
+	struct dentry           tmp;
 	struct inode            *inode;
 	struct snap_clone_info  *clone_sb;
 
@@ -202,20 +217,19 @@ struct dentry *clonefs_lookup(struct inode *dir,  struct dentry *dentry)
 	cache_dir = clonefs_get_inode(dir); 
   	if (!cache_dir) 
 		RETURN(ERR_PTR(-ENOENT));
-		
-	tmp = dget(list_entry(cache_dir->i_dentry.next, struct dentry, d_alias));
-
-	cache_dentry = d_alloc(tmp->d_parent, &dentry->d_name);
+	/*FIXME later, we make parent dentry here
+	 *there may some problems in lookup
+ 	 */	 
+	prepare_parent_dentry(&tmp, cache_dir);
+	cache_dentry = d_alloc(&tmp, &dentry->d_name);
 	
 	if (!cache_dentry) {
                 iput(cache_dir);
-		dput(tmp);
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
         /* Lock cache directory inode. */
 	down(&cache_dir->i_sem);
-	dput(tmp);
         /*
          * Call underlying fs lookup function to set the 'd_inode' pointer
          * to the corresponding directory inode.
@@ -378,13 +392,14 @@ static int clonefs_readpage(struct file *file, struct page *page)
 			      &open_dentry);
 	/* tell currentfs_readpage the primary inode number */
 	open_dentry.d_fsdata = (void*)inode->i_ino;
-
+	page->mapping->host = cache_inode;
 	/* potemkin case: we are handed a directory inode */
 	down(&cache_inode->i_sem);
         /* XXX - readpage NULL on directories... */
         result = cache_inode->i_mapping->a_ops->readpage(&open_file, page);
 
 	up(&cache_inode->i_sem);
+	page->mapping->host = inode;
 	clonefs_restore_snapfile(inode, file, cache_inode, &open_file);
 	iput(cache_inode);
 	RETURN(result);
