@@ -87,6 +87,68 @@ static name2num_t nalnames[] = {
 
 static cfg_record_cb_t g_record_cb;
 
+/* Convert a string boolean to an int; "enable" -> 1 */
+int ptl_parse_bool (int *b, char *str) {
+        if (!strcasecmp (str, "no") ||
+            !strcasecmp (str, "n") ||
+            !strcasecmp (str, "off") ||
+            !strcasecmp (str, "down") ||
+            !strcasecmp (str, "disable"))
+        {
+                *b = 0;
+                return (0);
+        }
+        
+        if (!strcasecmp (str, "yes") ||
+            !strcasecmp (str, "y") ||
+            !strcasecmp (str, "on") ||
+            !strcasecmp (str, "up") ||
+            !strcasecmp (str, "enable"))
+        {
+                *b = 1;
+                return (0);
+        }
+        
+        return (-1);
+}
+
+/* Convert human readable size string to and int; "1k" -> 1000 */
+int ptl_parse_size (int *sizep, char *str) {
+        int size;
+        char mod[32];
+
+        switch (sscanf (str, "%d%1[gGmMkK]", &size, mod)) {
+        default:
+                return (-1);
+
+        case 1:
+                *sizep = size;
+                return (0);
+
+        case 2:
+                switch (*mod) {
+                case 'g':
+                case 'G':
+                        *sizep = size << 30;
+                        return (0);
+
+                case 'm':
+                case 'M':
+                        *sizep = size << 20;
+                        return (0);
+
+                case 'k':
+                case 'K':
+                        *sizep = size << 10;
+                        return (0);
+
+                default:
+                        *sizep = size;
+                        return (0);
+                }
+        }
+}
+
 int 
 ptl_set_cfg_record_cb(cfg_record_cb_t cb)
 {
@@ -303,16 +365,40 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
         return (-1);
 }
 
+__u64 ptl_nid2u64(ptl_nid_t nid)
+{
+        switch (sizeof (nid)) {
+        case 8:
+                return (nid);
+        case 4:
+                return ((__u32)nid);
+        default:
+                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %d\n", sizeof(nid));
+                abort();
+                /* notreached */
+                return (-1);
+        }
+}
+
 char *
 ptl_nid2str (char *buffer, ptl_nid_t nid)
 {
-        __u32           addr = htonl((__u32)nid); /* back to NETWORK byte order */
-        struct hostent *he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
+        __u64           nid64 = ptl_nid2u64(nid);
+        struct hostent *he;
+
+        if ((nid64 & ~((__u64)((__u32)-1))) != 0) {
+                /* top bits set */
+                he = NULL;
+        } else {
+                __u32 addr = htonl((__u32)nid); /* back to NETWORK byte order */
+
+                he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
+        }
 
         if (he != NULL)
                 strcpy (buffer, he->h_name);
         else
-                sprintf (buffer, LPX64, nid);
+                sprintf (buffer, LPX64, nid64);
         
         return (buffer);
 }
@@ -1008,7 +1094,7 @@ int jt_ptl_mynid(int argc, char **argv)
         char *nidstr;
         struct portals_cfg pcfg;
         ptl_nid_t mynid;
-        
+
         if (argc > 2) {
                 fprintf(stderr, "usage: %s [NID]\n", argv[0]);
                 fprintf(stderr, "NID defaults to the primary IP address of the machine.\n");
@@ -1042,7 +1128,8 @@ int jt_ptl_mynid(int argc, char **argv)
                 fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));
         else
-                printf("registered my nid "LPX64" (%s)\n", mynid, hostname);
+                printf("registered my nid "LPX64" (%s)\n", 
+                       ptl_nid2u64(mynid), hostname);
         return 0;
 }
 
@@ -1100,7 +1187,7 @@ jt_ptl_rxmem (int argc, char **argv)
         
         if (argc > 1)
         {
-                if (Parser_size (&size, argv[1]) != 0 || size < 0)
+                if (ptl_parse_size (&size, argv[1]) != 0 || size < 0)
                 {
                         fprintf (stderr, "Can't parse size %s\n", argv[1]);
                         return (0);
@@ -1119,7 +1206,7 @@ jt_ptl_txmem (int argc, char **argv)
         
         if (argc > 1)
         {
-                if (Parser_size (&size, argv[1]) != 0 || size < 0)
+                if (ptl_parse_size (&size, argv[1]) != 0 || size < 0)
                 {
                         fprintf (stderr, "Can't parse size %s\n", argv[1]);
                         return (0);
@@ -1137,7 +1224,7 @@ jt_ptl_nagle (int argc, char **argv)
 
         if (argc > 1)
         {
-                if (Parser_bool (&enable, argv[1]) != 0)
+                if (ptl_parse_bool (&enable, argv[1]) != 0)
                 {
                         fprintf (stderr, "Can't parse boolean %s\n", argv[1]);
                         return (-1);
@@ -1260,7 +1347,8 @@ jt_ptl_del_route (int argc, char **argv)
         rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
-                fprintf (stderr, "NAL_CMD_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
+                fprintf (stderr, "NAL_CMD_DEL_ROUTE ("LPX64") failed: %s\n", 
+                         ptl_nid2u64(nid), strerror (errno));
                 return (-1);
         }
         
@@ -1290,7 +1378,7 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        if (Parser_bool (&enable, argv[2]) != 0) {
+        if (ptl_parse_bool (&enable, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse boolean %s\n", argv[2]);
                 return (-1);
         }
@@ -1322,7 +1410,7 @@ jt_ptl_notify_router (int argc, char **argv)
         if (rc != 0) 
         {
                 fprintf (stderr, "NAL_CMD_NOTIFY_ROUTER ("LPX64") failed: %s\n",
-                         nid, strerror (errno));
+                         ptl_nid2u64(nid), strerror (errno));
                 return (-1);
         }
         

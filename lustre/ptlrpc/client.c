@@ -519,6 +519,7 @@ static int after_reply(struct ptlrpc_request *req)
 
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
+        char                   str[PTL_NALFMT_SIZE];
         struct obd_import     *imp;
         unsigned long          flags;
         int rc;
@@ -563,11 +564,11 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         req->rq_reqmsg->status = current->pid;
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc"
-               " %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               " %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         rc = ptl_send_rpc(req);
@@ -581,6 +582,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
 int ptlrpc_check_set(struct ptlrpc_request_set *set)
 {
+        char str[PTL_NALFMT_SIZE];
         unsigned long flags;
         struct list_head *tmp;
         int force_timer_recalc = 0;
@@ -779,11 +781,11 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+                       "opc %s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                        imp->imp_obd->obd_uuid.uuid, req->rq_reqmsg->status,
                        req->rq_xid,
                        imp->imp_connection->c_peer.peer_ni->pni_name,
-                       imp->imp_connection->c_peer.peer_nid,
+                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                        req->rq_reqmsg->opc);
 
                 set->set_remaining--;
@@ -1292,6 +1294,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
+        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         int brc;
         struct l_wait_info lwi;
@@ -1308,11 +1311,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         req->rq_reqmsg->status = current->pid;
         LASSERT(imp->imp_obd != NULL);
         CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         /* Mark phase here for a little debug help */
@@ -1395,11 +1398,11 @@ restart:
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "
-               "%s:%s:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s:%d:"LPU64":%s:%s:%d\n", current->comm,
                imp->imp_obd->obd_uuid.uuid,
                req->rq_reqmsg->status, req->rq_xid,
                imp->imp_connection->c_peer.peer_ni->pni_name,
-               imp->imp_connection->c_peer.peer_nid,
+               ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                req->rq_reqmsg->opc);
 
         spin_lock_irqsave(&imp->imp_lock, flags);

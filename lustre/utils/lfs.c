@@ -29,7 +29,6 @@
 #include <getopt.h>
 #include <string.h>
 #include <mntent.h>
-#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 
 #include <liblustre.h>

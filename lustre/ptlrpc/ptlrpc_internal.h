@@ -108,11 +108,6 @@ enum {
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
 
-#if !defined(__KERNEL__) && defined(CRAY_PORTALS)
-/* forward ref in events.c */
-static void cray_portals_callback(ptl_event_t *ev);
-#endif
-
 /* pers.c */
 void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc);
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, struct page *page, 

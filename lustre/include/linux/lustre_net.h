@@ -509,6 +509,11 @@ struct ptlrpc_service {
         struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
+static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
+{
+        return (portals_nid2str(p->peer_ni->pni_number, p->peer_nid, str));
+}
+
 /* ptlrpc/events.c */
 extern struct ptlrpc_ni ptlrpc_interfaces[];
 extern int              ptlrpc_ninterfaces;

@@ -3,7 +3,6 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
 
 

@@ -406,8 +406,19 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
-        snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                 "NET_"LPX64"_UUID", req->rq_peer.peer_nid);
+        switch (sizeof(ptl_nid_t)) {
+                /* NB the casts only avoid compiler warnings */
+        case 8:
+                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_nid);
+                break;
+        case 4:
+                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                         "NET_%x_UUID", (__u32)req->rq_peer.peer_nid);
+                break;
+        default:
+                LBUG();
+        }
 
         spin_lock_bh(&target->obd_processing_task_lock);
         abort_recovery = target->obd_abort_recovery;

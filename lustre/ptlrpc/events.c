@@ -31,6 +31,12 @@
 #include <linux/lustre_net.h>
 #include "ptlrpc_internal.h"
 
+#if !defined(__KERNEL__) && defined(CRAY_PORTALS)
+/* forward ref in events.c */
+static void cray_portals_callback(ptl_event_t *ev);
+#endif
+
+
 struct ptlrpc_ni  ptlrpc_interfaces[NAL_MAX_NR];
 int               ptlrpc_ninterfaces;
 
@@ -158,6 +164,7 @@ void request_in_callback(ptl_event_t *ev)
         struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service             *service = srv_ni->sni_service;
         struct ptlrpc_request             *req;
+        char                              str[PTL_NALFMT_SIZE];
         unsigned long                     flags;
         ENTRY;
 
@@ -188,8 +195,10 @@ void request_in_callback(ptl_event_t *ev)
                 OBD_ALLOC_GFP(req, sizeof(*req), GFP_ATOMIC);
                 if (req == NULL) {
                         CERROR("Can't allocate incoming request descriptor: "
-                               "Dropping %s RPC from "LPX64"\n",
-                               service->srv_name, ev->initiator.nid);
+                               "Dropping %s RPC from %s\n",
+                               service->srv_name, 
+                               portals_nid2str(srv_ni->sni_ni->pni_number,
+                                               ev->initiator.nid, str));
                         return;
                 }
         }

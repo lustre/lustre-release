@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/queue.h>
 
@@ -42,7 +43,6 @@
  */
 #undef LIST_HEAD
 
-#include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
 #include <procbridge.h>
 

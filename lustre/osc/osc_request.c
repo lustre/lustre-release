@@ -859,7 +859,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 obd_count cksum = cksum_pages(rc, page_count, pga);
                 char str[PTL_NALFMT_SIZE];
 
-                portals_nid2str(peer->peer_ni->pni_number, peer->peer_nid, str);
+                ptlrpc_peernid2str(peer, str);
 
                 cksum_counter++;
                 if (server_cksum != cksum) {

@@ -517,23 +517,17 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                               "evicting %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",  
+                               "client reconnected %s@%s nid %s\n",  
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                 }
         }
 
@@ -666,8 +660,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
-                portals_nid2str(req->rq_connection->c_peer.peer_ni->pni_number,
-                                req->rq_connection->c_peer.peer_nid, str);
+                ptlrpc_peernid2str(&req->rq_connection->c_peer, str);
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x, client NID "
                                LPX64" (%s)\n", client_cksum, cksum,
@@ -727,23 +720,17 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 if (req->rq_reqmsg->conn_cnt == req->rq_export->exp_conn_cnt) {
                         CERROR("bulk IO comms error: "
-                               "evicting %s@%s nid "LPX64" (%s)\n",
+                               "evicting %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
-                               "client reconnected %s@%s nid "LPX64" (%s)\n",
+                               "client reconnected %s@%s nid %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peer.peer_nid,
-                               portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                               req->rq_peer.peer_nid,
-                                               str));
+                               ptlrpc_peernid2str(&req->rq_peer, str));
                 }        
         }
         RETURN(rc);

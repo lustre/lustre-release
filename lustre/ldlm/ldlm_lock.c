@@ -1166,20 +1166,16 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG(level, "  Node: NID "LPX64" (%s) on %s (rhandle: "LPX64")\n",
-                       lock->l_export->exp_connection->c_peer.peer_nid,
-                       portals_nid2str(lock->l_export->exp_connection->c_peer.peer_ni->pni_number,
-                                       lock->l_export->exp_connection->c_peer.peer_nid, str),
+                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
+                       ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str),
                        lock->l_export->exp_connection->c_peer.peer_ni->pni_name,
                        lock->l_remote_handle.cookie);
         } else if (obd == NULL) {
                 CDEBUG(level, "  Node: local\n");
         } else {
                 struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG(level, "  Node: NID "LPX64" (%s) on %s (rhandle: "LPX64")\n",
-                       imp->imp_connection->c_peer.peer_nid,
-                       portals_nid2str(imp->imp_connection->c_peer.peer_ni->pni_number,
-                                       imp->imp_connection->c_peer.peer_nid, str),
+                CDEBUG(level, "  Node: NID %s on %s (rhandle: "LPX64")\n",
+                       ptlrpc_peernid2str(&imp->imp_connection->c_peer, str),
                        imp->imp_connection->c_peer.peer_ni->pni_name,
                        lock->l_remote_handle.cookie);
         }

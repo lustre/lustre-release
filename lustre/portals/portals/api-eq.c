@@ -23,6 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/api-support.h>
 
 int ptl_get_event (ptl_eq_t *eq, ptl_event_t *ev)

@@ -171,7 +171,7 @@ AC_SUBST(INCLUDE_RULES)
 LUSTRE="$PWD"
 AC_SUBST(LUSTRE)
 
-# cray portals turns these off
+#
 AM_CONDITIONAL(UTILS, test x$enable_utils = xyes)
 AM_CONDITIONAL(TESTS, test x$enable_tests = xyes)
 

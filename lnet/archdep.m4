@@ -19,11 +19,20 @@ AC_ARG_WITH([cray-portals],
 	AC_HELP_STRING([--with-cray-portals=path],
 		       [path to cray portals]),
 	[
-		CRAY_PORTALS_INCLUDE="-I$with_cray_portals"
-		AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
+	        if test "$with_cray_portals" != no; then
+			if test -r $with_cray_portals/include/portals/api.h ; then
+				CRAY_PORTALS_INCLUDE="-I$with_cray_portals/include"
+				AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
+			else
+				AC_MSG_ERROR([--with-cray-portals specified badly])
+                        fi
+                fi
 	],[with_cray_portals=no])
 AC_MSG_RESULT([$with_cray_portals])
+
 AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
+
+# -------- enable tests and utils? -------
 if test x$enable_tests = xno ; then
 	AC_MSG_NOTICE([disabling tests])
 	enable_tests=no

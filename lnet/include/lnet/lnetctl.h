@@ -23,6 +23,10 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
+#include <portals/types.h>
+#include <linux/kp30.h>
+#include <linux/libcfs.h>
+
 #define PORTALS_DEV_ID 0
 #define PORTALS_DEV_PATH "/dev/portals"
 #define OBD_DEV_ID 1

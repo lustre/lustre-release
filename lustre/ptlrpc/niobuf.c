@@ -43,11 +43,9 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
 
         LASSERT (portal != 0);
         LASSERT (conn != NULL);
-        CDEBUG (D_INFO, "conn=%p ni %s nid "LPX64" (%s) on %s\n",
+        CDEBUG (D_INFO, "conn=%p ni %s nid %s on %s\n",
                 conn, conn->c_peer.peer_ni->pni_name,
-                conn->c_peer.peer_nid,
-                portals_nid2str(conn->c_peer.peer_ni->pni_number,
-                                conn->c_peer.peer_nid, str),
+                ptlrpc_peernid2str(&conn->c_peer, str),
                 conn->c_peer.peer_ni->pni_name);
 
         remote_id.nid = conn->c_peer.peer_nid,
@@ -83,8 +81,9 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
                 /* We're going to get an UNLINK event when I unlink below,
                  * which will complete just like any other failed send, so
                  * I fall through and return success here! */
-                CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n",
-                       remote_id.nid, portal, xid, rc);
+                CERROR("PtlPut(%s, %d, "LPD64") failed: %d\n",
+                       ptlrpc_peernid2str(&conn->c_peer, str),
+                       portal, xid, rc);
                 rc2 = PtlMDUnlink(*mdh);
                 LASSERT (rc2 == PTL_OK);
         }
@@ -100,6 +99,7 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         ptl_process_id_t    remote_id;
         ptl_md_t            md;
         __u64               xid;
+        char                str[PTL_NALFMT_SIZE];
         ENTRY;
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_PUT_NET)) 
@@ -138,9 +138,9 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         remote_id.pid = 0;
 
         CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d on %s "
-               "nid "LPX64" pid %d xid "LPX64"\n", desc->bd_iov_count,
+               "nid %s pid %d xid "LPX64"\n", desc->bd_iov_count,
                desc->bd_nob, desc->bd_portal, peer->peer_ni->pni_name,
-               remote_id.nid, remote_id.pid, xid);
+               ptlrpc_peernid2str(peer, str), remote_id.pid, xid);
 
         /* Network is about to get at the memory */
         desc->bd_network_rw = 1;
@@ -156,8 +156,9 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
                 /* Can't send, so we unlink the MD bound above.  The UNLINK
                  * event this creates will signal completion with failure,
                  * so we return SUCCESS here! */
-                CERROR("Transfer("LPU64", %d, "LPX64") failed: %d\n",
-                       remote_id.nid, desc->bd_portal, xid, rc);
+                CERROR("Transfer(%s, %d, "LPX64") failed: %d\n",
+                       ptlrpc_peernid2str(peer, str),
+                       desc->bd_portal, xid, rc);
                 rc2 = PtlMDUnlink(desc->bd_md_h);
                 LASSERT (rc2 == PTL_OK);
         }

@@ -27,7 +27,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include "obdctl.h"
 #include "parser.h"

@@ -360,6 +360,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         struct timeval         work_end;
         long                   timediff;
         int                    rc;
+        char                   str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -398,17 +399,18 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 #endif
         rc = lustre_unpack_msg (request->rq_reqmsg, request->rq_reqlen);
         if (rc != 0) {
-                CERROR ("error unpacking request: ptl %d from "LPX64
+                CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
-                       request->rq_peer.peer_nid, request->rq_xid);
+                        ptlrpc_peernid2str(&request->rq_peer, str),
+                       request->rq_xid);
                 goto out;
         }
 
         rc = -EINVAL;
         if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
-                CERROR("wrong packet type received (type=%u) from "
-                       LPX64"\n", request->rq_reqmsg->type,
-                       request->rq_peer.peer_nid);
+                CERROR("wrong packet type received (type=%u) from %s\n",
+                       request->rq_reqmsg->type,
+                       ptlrpc_peernid2str(&request->rq_peer, str));
                 goto out;
         }
 
@@ -418,9 +420,9 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
          * client's timeout is similar to mine, she'll be timing out this
          * REQ anyway (bug 1502) */
         if (timediff / 1000000 > (long)obd_timeout) {
-                CERROR("Dropping timed-out request from "LPX64
-                       ": %ld seconds old\n",
-                       request->rq_peer.peer_nid, timediff / 1000000);
+                CERROR("Dropping timed-out request from %s: %ld seconds old\n",
+                       ptlrpc_peernid2str(&request->rq_peer, str), 
+                       timediff / 1000000);
                 goto out;
         }
 
@@ -441,26 +443,26 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               request->rq_peer.peer_nid,
+               ptlrpc_peernid2str(&request->rq_peer, str),
                request->rq_reqmsg->opc);
 
         rc = svc->srv_handler(request);
         CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:"LPX64":%d\n", current->comm,
+               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
                request->rq_peer.peer_ni->pni_name,
-               request->rq_peer.peer_nid,
+               ptlrpc_peernid2str(&request->rq_peer, str),
                request->rq_reqmsg->opc);
 
 put_conn:
@@ -473,9 +475,9 @@ put_conn:
         timediff = timeval_sub(&work_end, &work_start);
 
         CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
-               "request "LPU64" opc %u from NID "LPX64" processed in %ldus "
+               "request "LPU64" opc %u from NID %s processed in %ldus "
                "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
-               request->rq_peer.peer_nid,
+               ptlrpc_peernid2str(&request->rq_peer, str),
                timediff, timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL) {
@@ -502,6 +504,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         struct obd_device         *obd;
         int                        nlocks;
         int                        been_handled;
+        char                       str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -546,10 +549,11 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
-                      " o%d NID"LPX64"\n",
+                      " o%d NID %s\n",
                       rs, 
                       rs->rs_xid, rs->rs_transno,
-                      rs->rs_msg.opc, exp->exp_connection->c_peer.peer_nid);
+                      rs->rs_msg.opc, 
+                      ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
         }
 
         if ((!been_handled && rs->rs_on_net) || 
