@@ -444,7 +444,7 @@ static int ptlbd_put_read(struct ptlrpc_request *req)
                 bulk->bp_buflen = niob->n_length;
         }
 
-        rc = ptlrpc_send_bulk(desc);
+        rc = ptlrpc_bulk_put(desc);
         if ( rc )
                 GOTO(out_bulk, rc);
 
