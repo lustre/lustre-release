@@ -216,13 +216,14 @@ static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
                 ctxt->gid1 = -1;
 
         if (i2) {
-        	lli2 = llu_i2info(i2);
+                lli2 = llu_i2info(i2);
                 if (in_group_p(lli2->lli_st_gid))
                         ctxt->gid2 = lli2->lli_st_gid;
                 else
                         ctxt->gid2 = -1;
-        } else 
-                ctxt->gid2 = 0;
+        } else {
+                ctxt->gid2 = -1;
+        }
 }
 
 

@@ -108,14 +108,13 @@ int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        int val;
-        int rc;
+        unsigned val;
 
         spin_lock(&cli->cl_loi_list_lock);
         val = cli->cl_dirty_max >> 20;
-        rc = snprintf(page, count, "%d\n", val);
         spin_unlock(&cli->cl_loi_list_lock);
-        return rc;
+
+        return snprintf(page, count, "%u\n", val);
 }
 
 int osc_wr_max_dirty_mb(struct file *file, const char *buffer,

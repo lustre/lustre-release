@@ -161,14 +161,6 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
 
 }
 
-#if 0
-static int ll_rd_path(char *page, char **start, off_t off, int count, int *eof,
-                      void *data)
-{
-        return 0;
-}
-#endif
-
 static int ll_rd_fstype(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {

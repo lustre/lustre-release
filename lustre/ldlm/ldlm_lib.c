@@ -46,7 +46,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
         char *mgmt_name = NULL;
-        int rc = 0;
+        int rc;
         struct obd_device *mgmt_obd;
         mgmtcli_register_for_events_t register_f;
         ENTRY;
@@ -111,7 +111,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
         cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
 
-        ldlm_get_ref();
+        rc = ldlm_get_ref();
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);
                 GOTO(err, rc);

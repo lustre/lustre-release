@@ -238,6 +238,8 @@ void lustre_common_put_super(struct super_block *sb)
         spin_lock(&dcache_lock);
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+                CWARN("orphan dentry %*s (%p) at unmount\n",
+                      dentry->d_name.len, dentry->d_name.name, dentry);
                 shrink_dcache_parent(dentry);
         }
         spin_unlock(&dcache_lock);

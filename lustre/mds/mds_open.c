@@ -333,14 +333,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
 
-        if (*handle == NULL)
-                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
-        if (IS_ERR(*handle)) {
-                rc = PTR_ERR(*handle);
-                *handle = NULL;
-                GOTO(out_ids, rc);
-        }
-
         /* replay case */
         if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 LASSERT (rec->ur_fid2->id);
@@ -348,6 +340,14 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
                 LASSERT(lmm);
+
+                if (*handle == NULL)
+                        *handle = fsfilt_start(obd,inode,FSFILT_OP_CREATE,NULL);
+                if (IS_ERR(*handle)) {
+                        rc = PTR_ERR(*handle);
+                        *handle = NULL;
+                        GOTO(out_ids, rc);
+                }
 
                 mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
 
@@ -398,7 +398,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                                         lmm, &lmm_size, 1);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   mds->mds_osc_exp, 
+                                                   mds->mds_osc_exp,
                                                    0, &lsm, lmm);
                         OBD_FREE(lmm, mds->mds_max_mdsize);
                         if (rc)
@@ -454,6 +454,15 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
+
+        if (*handle == NULL)
+                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
+        if (IS_ERR(*handle)) {
+                rc = PTR_ERR(*handle);
+                *handle = NULL;
+                GOTO(out_ids, rc);
+        }
+
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
         lmm_bufsize = req->rq_repmsg->buflens[offset];
@@ -588,6 +597,10 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                         GOTO(out_dput, req->rq_status = -ENOMEM);
                 }
                 put_child = 0;
+        } else {
+                body->handle.cookie = mfd->mfd_handle.h_cookie;
+                CDEBUG(D_INODE, "resend mfd %p, cookie "LPX64"\n", mfd,
+                       mfd->mfd_handle.h_cookie);
         }
 
  out_dput:
@@ -928,7 +941,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
 
-                acc_mode = 0;                  /* Don't check for permissions */
+                rc = mds_finish_transno(mds, dchild->d_inode, handle, req, 0,
+                                        rep ? rep->lock_policy_res1 : 0);
+                handle = NULL;
+                acc_mode = 0;           /* Don't check for permissions */
         }
 
         LASSERT(!mds_inode_is_orphan(dchild->d_inode));
@@ -1039,14 +1055,15 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
         void *handle = NULL;
         struct mds_body *request_body = NULL, *reply_body = NULL;
         struct dentry_params dp;
+        struct iattr iattr = { 0 };
         ENTRY;
 
-        if (req != NULL) {
+        if (req && req->rq_reqmsg != NULL)
                 request_body = lustre_msg_buf(req->rq_reqmsg, 0,
                                               sizeof(*request_body));
+        if (req && req->rq_repmsg != NULL)
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
                                             sizeof(*reply_body));
-        }
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
 
@@ -1081,7 +1098,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 LASSERT(pending_child->d_inode != NULL);
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
-                if (req != NULL) {
+                if (req != NULL && req->rq_repmsg != NULL) {
                         lmm = lustre_msg_buf(req->rq_repmsg, 1, 0);
                         stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
                 }
@@ -1094,7 +1111,8 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         GOTO(cleanup, rc);
                 }
 
-                if (req != NULL && (reply_body->valid & OBD_MD_FLEASIZE) &&
+                if (req != NULL && req->rq_repmsg != NULL &&
+                    (reply_body->valid & OBD_MD_FLEASIZE) &&
                     mds_log_op_unlink(obd, pending_child->d_inode, lmm,
                                       req->rq_repmsg->buflens[1],
                                       lustre_msg_buf(req->rq_repmsg, 2, 0),
@@ -1111,32 +1129,60 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                         rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)
                         CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
-        } else if (mfd->mfd_mode & FMODE_WRITE && rc == 0) {
+
+                goto out; /* Don't bother updating attrs on unlinked inode */
+        }
+
+        if (request_body != NULL && mfd->mfd_mode & FMODE_WRITE && rc == 0) {
                 /* Update the on-disk attributes if this was the last write
                  * close, and all information was provided (i.e., rc == 0)
                  *
                  * XXX this should probably be abstracted with mds_reint_setattr
                  */
+
 #if 0
-                struct iattr iattr;
+                if (request_body->valid & OBD_MD_FLMTIME &&
+                    LTIME_S(iattr.ia_mtime) > LTIME_S(inode->i_mtime)) {
+                        LTIME_S(iattr.ia_mtime) = request_body->mtime;
+                        iattr.ia_valid |= ATTR_MTIME;
+                }
+                if (request_body->valid & OBD_MD_FLCTIME &&
+                    LTIME_S(iattr.ia_ctime) > LTIME_S(inode->i_ctime)) {
+                        LTIME_S(iattr.ia_ctime) = request_body->ctime;
+                        iattr.ia_valid |= ATTR_CTIME;
+                }
 
                 /* XXX can't set block count with fsfilt_setattr (!) */
-                iattr.ia_valid = ATTR_CTIME | ATTR_ATIME |
-                        ATTR_MTIME | ATTR_SIZE;
-                iattr.ia_atime = request_body->atime;
-                iattr.ia_ctime = request_body->ctime;
-                iattr.ia_mtime = request_body->mtime;
-                iattr.ia_size = request_body->size;
+                if (request_body->valid & OBD_MD_FLSIZE) {
+                        iattr.ia_valid |= ATTR_SIZE;
+                        iattr.ia_size = request_body->size;
+                }
                 /* iattr.ia_blocks = request_body->blocks */
 
+#endif
+        }
+        if (request_body != NULL && request_body->valid & OBD_MD_FLATIME) {
+                /* Only start a transaction to write out only the atime if
+                 * it is more out-of-date than the specified limit.  If we
+                 * are already going to write out the atime then do it anyway.
+                 * */
+                LTIME_S(iattr.ia_atime) = request_body->atime;
+                if ((LTIME_S(iattr.ia_atime) >
+                     LTIME_S(inode->i_atime) + MAX_ATIME_DIFF) ||
+                    (iattr.ia_valid != 0 &&
+                     LTIME_S(iattr.ia_atime) > LTIME_S(inode->i_atime)))
+                        iattr.ia_valid |= ATTR_ATIME;
+        }
+
+        if (iattr.ia_valid != 0) {
                 handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = fsfilt_setattr(obd, mfd->mfd_dentry, handle, &iattr, 0);
                 if (rc)
                         CERROR("error in setattr(%s): rc %d\n", fidname, rc);
-#endif
         }
+out:
         /* If other clients have this file open for write, rc will be > 0 */
         if (rc > 0)
                 rc = 0;
@@ -1145,7 +1191,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
 
  cleanup:
         atomic_dec(&mds->mds_open_count);
-        if (req) {
+        if (req != NULL && reply_body != NULL) {
                 rc = mds_finish_transno(mds, pending_dir, handle, req, rc, 0);
         } else if (handle) {
                 int err = fsfilt_commit(obd, pending_dir, handle, 0);
@@ -1218,17 +1264,16 @@ int mds_close(struct ptlrpc_request *req)
         spin_unlock(&med->med_open_lock);
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        req->rq_status = mds_mfd_close(rc ? NULL : req, obd, mfd, 1);
+        req->rq_status = mds_mfd_close(req, obd, mfd, 1);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
+        mds_mfd_put(mfd);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");
                 req->rq_status = -ENOMEM;
-                mds_mfd_put(mfd);
                 RETURN(-ENOMEM);
         }
 
-        mds_mfd_put(mfd);
         RETURN(0);
 }
 

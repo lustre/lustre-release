@@ -49,11 +49,28 @@ static void ll_release(struct dentry *de)
         EXIT;
 }
 
+/* should NOT be called with the dcache lock, see fs/dcache.c */
+static int ll_ddelete(struct dentry *de)
+{
+        ENTRY;
+        LASSERT(de);
+        CDEBUG(D_DENTRY, "%s dentry %*s (%p, parent %p, inode %p) %s%s\n",
+               (de->d_flags & DCACHE_LUSTRE_INVALID ? "keeping" : "deleting"),
+               de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
+               d_unhashed(de) ? "" : "hashed,",
+               list_empty(&de->d_subdirs) ? "" : "subdirs");
+        //RETURN(de->d_flags & DCACHE_LUSTRE_INVALID);
+        RETURN(0);
+}
+
 void ll_set_dd(struct dentry *de)
 {
         ENTRY;
         LASSERT(de != NULL);
 
+        CDEBUG(D_DENTRY, "ldd on dentry %*s (%p) parent %p inode %p refc %d\n",
+               de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
+               atomic_read(&de->d_count));
         lock_kernel();
         if (de->d_fsdata == NULL) {
                 OBD_ALLOC(de->d_fsdata, sizeof(struct ll_dentry_data));
@@ -97,28 +114,36 @@ void ll_unhash_aliases(struct inode *inode)
         struct ll_sb_info *sbi;
         ENTRY;
 
-        sbi = ll_i2sbi(inode);
-
-        CDEBUG(D_INODE, "marking dentries for ino %lu/%u(%p) invalid\n",
-               inode->i_ino, inode->i_generation, inode);
-
         if (inode == NULL) {
                 CERROR("unexpected NULL inode, tell phil\n");
                 return;
         }
+
+        CDEBUG(D_INODE, "marking dentries for ino %lu/%u(%p) invalid\n",
+               inode->i_ino, inode->i_generation, inode);
+
+        sbi = ll_i2sbi(inode);
         head = &inode->i_dentry;
 restart:
 	spin_lock(&dcache_lock);
 	tmp = head;
 	while ((tmp = tmp->next) != head) {
 		struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
-		if (!atomic_read(&dentry->d_count)) {
+		if (atomic_read(&dentry->d_count) == 0) {
+                        CDEBUG(D_DENTRY, "deleting dentry %*s (%p) parent %p "
+                               "inode %p\n", dentry->d_name.len,
+                               dentry->d_name.name, dentry, dentry->d_parent,
+                               dentry->d_inode);
 			dget_locked(dentry);
 			__d_drop(dentry);
 			spin_unlock(&dcache_lock);
 			dput(dentry);
 			goto restart;
-		} else {
+		} else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
+                        CDEBUG(D_DENTRY, "unhashing dentry %*s (%p) parent %p "
+                               "inode %p refc %d\n", dentry->d_name.len,
+                               dentry->d_name.name, dentry, dentry->d_parent,
+                               dentry->d_inode, atomic_read(&dentry->d_count));
                         hlist_del_init(&dentry->d_hash);
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
                         hlist_add_head(&dentry->d_hash,
@@ -263,8 +288,13 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
-                de->d_flags |= DCACHE_LUSTRE_INVALID;
+                /* done in ll_unhash_aliases()
+                dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
         } else {
+                CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
+                               "inode %p refc %d\n", de->d_name.len,
+                               de->d_name.name, de, de->d_parent, de->d_inode,
+                               atomic_read(&de->d_count));
                 ll_lookup_finish_locks(it, de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
         }
@@ -377,6 +407,7 @@ struct dentry_operations ll_d_ops = {
         .d_revalidate_it = ll_revalidate_it,
 #endif
         .d_release = ll_release,
+        .d_delete = ll_ddelete,
 #if 0
         .d_pin = ll_pin,
         .d_unpin = ll_unpin,

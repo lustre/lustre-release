@@ -164,7 +164,7 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
         spin_unlock(&oscc->oscc_lock);
 
         osc_invalid = oscc->oscc_obd->u.cli.cl_import->imp_invalid;
-                      
+
         return have_objs || ost_full || osc_invalid;
 }
 
@@ -260,24 +260,23 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                    it is finished before we can continue with create. */
                 if (oscc_recovering(oscc)) {
                         struct l_wait_info lwi;
-                        
+
                         CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n", 
                                oscc);
-                        
-                        lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
-                        rc = l_wait_event(oscc->oscc_waitq, 
+
+                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        rc = l_wait_event(oscc->oscc_waitq,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA, "%p: timed out waiting for "
-                                       "recovery\n", 
+                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
                                        oscc);
                                 RETURN(rc);
                         }
                         CDEBUG(D_HA, "%p: oscc recovery over, waking up\n", 
                                oscc);
                 }
-                
+
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_last_id >= oscc->oscc_next_id) {
                         memcpy(oa, &oscc->oscc_oa, sizeof(*oa));

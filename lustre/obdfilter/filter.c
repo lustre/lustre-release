@@ -1204,6 +1204,10 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (rc)
                 GOTO(err_mntput, rc);
 
+        
+        filter->fo_destroy_in_progress = 0;
+        sema_init(&filter->fo_create_lock, 1);
+
         spin_lock_init(&filter->fo_translock);
         spin_lock_init(&filter->fo_objidlock);
         INIT_LIST_HEAD(&filter->fo_export_list);
@@ -1574,7 +1578,8 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
         }
 
         if (dchild->d_inode == NULL) {
-                CERROR("%s on non-existent object: "LPU64"\n", what, oa->o_id);
+                CERROR("%s: %s on non-existent object: "LPU64"\n", 
+                       obd->obd_name, what, oa->o_id);
                 f_dput(dchild);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -1754,6 +1759,16 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         }
         doa.o_mode = S_IFREG;
 
+        filter->fo_destroy_in_progress = 1;
+        down(&filter->fo_create_lock);
+        if (!filter->fo_destroy_in_progress) {
+                CERROR("%s: destroy_in_progress already cleared\n",
+                        exp->exp_obd->obd_name);
+                up(&filter->fo_create_lock);
+                EXIT;
+                return;
+        }
+
         last = filter_last_id(filter, &doa);
         CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
                exp->exp_obd->obd_name, oa->o_id + 1, last);
@@ -1768,6 +1783,10 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         spin_lock(&filter->fo_objidlock);
         filter->fo_last_objids[doa.o_gr] = oa->o_id;
         spin_unlock(&filter->fo_objidlock);
+
+        filter->fo_destroy_in_progress = 0;
+        up(&filter->fo_create_lock);
+
         EXIT;
 }
 
@@ -1824,12 +1843,10 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
 static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                             obd_gr group, int *num)
 {
-        struct dentry *dchild = NULL;
+        struct dentry *dchild = NULL, *dparent = NULL;
         struct filter_obd *filter;
-        struct dentry *dparent;
-        int err = 0, rc = 0, i;
+        int err = 0, rc = 0, recreate_obj = 0, i;
         __u64 next_id;
-        int recreate_obj = 0;
         void *handle = NULL;
         ENTRY;
 
@@ -1840,10 +1857,18 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 recreate_obj = 1;
         }
 
-        CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num); 
+        CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num);
+
+        down(&filter->fo_create_lock);
 
         for (i = 0; i < *num && err == 0; i++) {
                 int cleanup_phase = 0;
+
+                if (filter->fo_destroy_in_progress) {
+                        CWARN("%s: precreate aborted by destroy\n",
+                              obd->obd_name);
+                        break;
+                }
 
                 if (recreate_obj) {
                         __u64 last_id;
@@ -1853,7 +1878,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                 CERROR("Error: Trying to recreate obj greater"
                                        "than last id "LPD64" > "LPD64"\n",
                                        next_id, last_id);
-                                RETURN(-EINVAL);
+                                GOTO(cleanup, rc = -EINVAL);
                         }
                 } else
                         next_id = filter_last_id(filter, oa) + 1;
@@ -1878,13 +1903,13 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         if (recreate_obj) {
                                 CERROR("%s: Serious error: recreating obj %*s "
                                        "but obj already exists \n",
-                                       obd->obd_name, dchild->d_name.len, 
+                                       obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
                                 LBUG();
                         } else {
                                 CERROR("%s: Serious error: objid %*s already "
                                        "exists; is this filesystem corrupt?\n",
-                                       obd->obd_name, dchild->d_name.len, 
+                                       obd->obd_name, dchild->d_name.len,
                                        dchild->d_name.name);
                                 LBUG();
                         }
@@ -1933,10 +1958,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         }
         *num = i;
 
+        up(&filter->fo_create_lock);
+
         CDEBUG(D_HA, "%s: server last_objid for group "LPU64": "LPU64"\n",
                obd->obd_name, group, filter->fo_last_objids[group]);
 
-        CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n", 
+        CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n",
                obd->obd_name, i);
         RETURN(rc);
 }

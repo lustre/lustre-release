@@ -154,15 +154,20 @@ warn(const char * fmt, ...)
 
 
 void
+__attribute__((format(printf, 1, 2)))
 prt(char *fmt, ...)
 {
 	va_list args;
 
 	va_start(args, fmt);
 	vfprintf(stdout, fmt, args);
-	if (fsxlogf)
-		vfprintf(fsxlogf, fmt, args);
 	va_end(args);
+
+	if (fsxlogf) {
+		va_start(args, fmt);
+		vfprintf(fsxlogf, fmt, args);
+		va_end(args);
+	}
 }
 
 void
@@ -545,31 +550,41 @@ alloc_tf_buf(void)
 	int len;
 
 	len = snprintf(&dummy, 0, "%u ", highest);
-	if (len < 0) {
+	if (len < 1) {
 		prterr("finding max tf_buf");
 		exit(1);
 	}
-	tf_buf = malloc(len + 1);
+	len++;
+	tf_buf = malloc(len);
 	if (tf_buf == NULL) {
 		prterr("allocating tf_buf");
 		exit(1);
 	}
-	max_tf_len = sprintf(tf_buf, "%u ", highest);
+	max_tf_len = snprintf(tf_buf, len, "%u ", highest);
+	if (max_tf_len < 1) {
+		prterr("fiding max_tv_len\n");
+		exit(1);
+	}
+	if (max_tf_len != len - 1) {
+		warn("snprintf() gave %d instead of %d?\n",
+				max_tf_len, len - 1);
+		exit(1);
+	}
 }
 
-char *
+char * 
 fill_tf_buf(struct test_file *tf)
 {
 	if (tf_buf == NULL)
 		alloc_tf_buf();
 
-	sprintf(tf_buf,"%u ", (int)(tf - test_files));
+	sprintf(tf_buf,"%lu ", (unsigned long)(tf - test_files));
 	return tf_buf;
 }
 
 void
-output_line(struct test_file *tf, int op, unsigned long offset,
-		unsigned long size, struct timeval *tv)
+output_line(struct test_file *tf, int op, unsigned offset, 
+		unsigned size, struct timeval *tv)
 {
 	char *tf_num = "";
 
@@ -953,8 +968,9 @@ writefileimage()
 		if (iret == -1)
 			prterr("writefileimage: write");
 		else
-			prt("short write: 0x%x bytes instead of 0x%llx\n",
-			    iret, (unsigned long long)file_size);
+			prt("short write: 0x%lx bytes instead of 0x%llx\n",
+			    (unsigned long)iret, 
+			    (unsigned long long)file_size);
 		report_failure(172);
 	}
 	if (lite ? 0 : ftruncate(fd, file_size) == -1) {

@@ -7,11 +7,11 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+# bug number for skipped test: 2108
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 case `uname -r` in
-2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c" # bug 3117
+2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55" # bug 3117
 esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -69,6 +69,25 @@ START=${START:-start}
 log() {
 	echo "$*"
 	lctl mark "$*" 2> /dev/null || true
+}
+
+trace() {
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
+}
+TRACE=${TRACE:-""}
+
+check_kernel_version() {
+	VERSION_FILE=/proc/fs/lustre/kernel_version
+	WANT_VER=$1
+	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
+	GOT_VER=`cat $VERSION_FILE`
+	[ $GOT_VER -ge $WANT_VER ] && return 0
+	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
+	return 1
 }
 
 run_one() {
@@ -1190,7 +1209,7 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && return
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 36e" && return
 	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
 	touch $DIR/d36/f36e
 	$RUNAS utime $DIR/d36/f36e && error "utime worked, want failure" || true
@@ -1513,7 +1532,8 @@ test_47() {
 run_test 47 "Device nodes check ================================"
 
 test_48a() { # bug 2399
-	mkdir $DIR/d48a
+	check_kernel_version 34 || return 0
+	mkdir -p $DIR/d48a
 	cd $DIR/d48a
 	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
 	mkdir $DIR/d48a || error "recreate directory failed"
@@ -1525,23 +1545,64 @@ test_48a() { # bug 2399
 	mkdir . && error "'mkdir .' worked after recreating cwd"
 	rmdir . && error "'rmdir .' worked after recreating cwd"
 	ln -s . baz || error "'ln -s .' failed after recreating cwd"
+	cd .. || error "'cd ..' failed after recreating cwd"
 }
 run_test 48a "Access renamed working dir (should return errors)="
 
 test_48b() { # bug 2399
-	mkdir $DIR/d48b
+	check_kernel_version 34 || return 0
+	mkdir -p $DIR/d48b
 	cd $DIR/d48b
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
 	touch foo && error "'touch foo' worked after removing cwd"
 	mkdir foo && error "'mkdir foo' worked after removing cwd"
 	ls . && error "'ls .' worked after removing cwd"
 	ls .. || error "'ls ..' failed after removing cwd"
-	cd . && error "'cd .' worked after recreate cwd"
+	cd . && error "'cd .' worked after removing cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
+	cd .. || error "'cd ..' failed after removing cwd"
 }
 run_test 48b "Access removed working dir (should return errors)="
+
+test_48c() { # bug 2350
+	check_kernel_version 36 || return 0
+	#sysctl -w portals.debug=-1
+	#set -vx
+	mkdir -p $DIR/d48c/dir
+	cd $DIR/d48c/dir
+	rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
+	$TRACE touch foo && error "'touch foo' worked after removing cwd"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
+	$TRACE ls . && error "'ls .' worked after removing cwd"
+	$TRACE ls .. || error "'ls ..' failed after removing cwd"
+	$TRACE cd . && error "'cd .' worked after removing cwd"
+	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
+	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
+	$TRACE cd .. || error "'cd ..' failed after removing cwd"
+}
+run_test 48c "Access removed working subdir (should return errors)"
+
+test_48d() { # bug 2350
+	check_kernel_version 36 || return 0
+	#sysctl -w portals.debug=-1
+	#set -vx
+	mkdir -p $DIR/d48d/dir
+	cd $DIR/d48d/dir
+	rm -r $DIR/d48d || error "remove cwd and parent $DIR/d48d failed"
+	$TRACE touch foo && error "'touch foo' worked after removing cwd"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
+	$TRACE ls . && error "'ls .' worked after removing cwd"
+	$TRACE ls .. && error "'ls ..' worked after removing cwd"
+	$TRACE cd . && error "'cd .' worked after recreate cwd"
+	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
+	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
+	$TRACE cd .. && error "'cd ..' worked after recreate cwd" || true
+}
+run_test 48d "Access removed parent subdir (should return errors)"
 
 test_50() {
 	# bug 1485
@@ -1670,13 +1731,13 @@ run_test 54d "fifo device works in lustre ======================"
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        mount -t ext3 -o loop,iopen $EXT3_DEV $DIR/d55 || error
+        mount -t ext3 -o loop,iopen $EXT3_DEV $DIR/d55 || error "mounting"
         touch $DIR/d55/foo
-        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error
-        $IOPENTEST2 $DIR/d55 || error
+        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
+        $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
         echo "check for $EXT3_DEV. Please wait..."
         rm -rf $DIR/d55/*
-        umount $DIR/d55 || error
+        umount $DIR/d55 || error "unmounting"
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
@@ -1830,7 +1891,7 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
-	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
+	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -n 1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 		echo 0 > $i
 	done
@@ -1920,6 +1981,16 @@ test_66() {
 	[ $BLOCKS -ge $COUNT ] || error "$DIR/f66 blocks $BLOCKS < $COUNT"
 }
 run_test 66 "update inode blocks count on client ==============="
+
+test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
+	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 67" && return
+	check_kernel_version 35 || return 0
+	mkdir $DIR/d67
+	chmod 771 $DIR/d67
+	chgrp $RUNAS_ID $DIR/d67
+	$RUNAS -g $((RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error || true
+}
+run_test 67 "supplementary group failure (should return error) ="
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

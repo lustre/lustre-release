@@ -13,8 +13,8 @@ Index: linux-ia64/include/linux/mm.h
 _
 Index: linux-ia64/mm/filemap.c
 ===================================================================
---- linux-ia64.orig/mm/filemap.c	2004-04-27 12:35:18.000000000 -0700
-+++ linux-ia64/mm/filemap.c	2004-04-27 12:42:47.000000000 -0700
+--- linux-ia64.orig/mm/filemap.c       2004-04-27 12:35:18.000000000 -0700
++++ linux-ia64/mm/filemap.c    2004-04-27 12:42:47.000000000 -0700
 @@ -676,6 +676,7 @@ static inline void __add_to_page_cache(s
  	page_cache_get(page);
  	page->index = offset;

@@ -136,7 +136,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
         struct ldlm_namespace *ns = data;
-        char dummy[MAX_STRING_SIZE + 1];
+        char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
 
         dummy[MAX_STRING_SIZE] = '\0';
@@ -153,7 +153,12 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                 return count;
         }
 
-        tmp = simple_strtoul(dummy, NULL, 0);
+        tmp = simple_strtoul(dummy, &end, 0);
+        if (tmp == 0 && *end) {
+                CERROR("invalid value written\n");
+                return -EINVAL;
+        }
+
         CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
                ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
         ns->ns_max_unused = (unsigned int)tmp;

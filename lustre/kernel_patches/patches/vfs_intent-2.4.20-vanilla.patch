@@ -425,12 +425,12 @@ Index: linux-2.4.24/fs/namei.c
 +					break;
 +				new = real_lookup(dentry->d_parent,
 +						  &dentry->d_name, 0, it);
-+				d_invalidate(dentry);
-+				dput(dentry);
 +				if (IS_ERR(new)) {
 +					err = PTR_ERR(new);
 +					break;
 +				}
++				d_invalidate(dentry);
++				dput(dentry);
 +				nd->dentry = new;
 +			}
 +			if (!nd->dentry->d_inode)

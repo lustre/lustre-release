@@ -10,7 +10,7 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
 
-ALWAYS_EXCEPT="10"
+ALWAYS_EXCEPT="0 10"
 
 build_test_filter
 
@@ -137,7 +137,7 @@ setup() {
     wait_for mds
     start mds $MDSLCONFARGS ${REFORMAT}
     while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
-    zconf_mount $CLIENTS $MOUNT
+    grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
 
 }
 

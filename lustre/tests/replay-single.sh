@@ -889,6 +889,7 @@ test_45() {
 
     multiop $DIR/$tfile O_c &
     pid=$!
+    sleep 1
 
     # allow the open to complete
     usleep 500
@@ -907,6 +908,17 @@ test_45() {
     return 0
 }
 run_test 45 "Handle failed close"
+
+test_46() {
+    dmesg -c >/dev/null
+    drop_reply "touch $DIR/$tfile"
+    fail mds
+    # ironically, the previous test, 45, will cause a real forced close,
+    # so just look for one for this test
+    dmesg | grep -i "force closing client file handle for $tfile" && return 1
+    return 0
+}
+run_test 46 "Don't leak file handle after open resend (3325)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

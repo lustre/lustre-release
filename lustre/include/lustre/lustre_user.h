@@ -24,6 +24,11 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 #include <asm/types.h>
+#ifdef __KERNEL__
+#include <linux/string.h>
+#else
+#include <string.h>
+#endif
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
@@ -54,9 +59,8 @@
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
         __u64 l_object_id;	  /* OST object ID */
         __u64 l_object_gr;        /* OST object group (creating MDS number) */
-        __u32 l_ost_generation;   /* generation of this OST index */
-        __u16 l_ost_idx;          /* OST index in LOV */
-        __u16 l_reserved2;
+        __u32 l_ost_gen;          /* generation of this OST index */
+        __u32 l_ost_idx;          /* OST index in LOV */
 } __attribute__((packed));
 
 #define lov_user_md lov_user_md_v1
@@ -70,5 +74,25 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+struct ll_recreate_obj {
+        __u64 lrc_id;
+        __u32 lrc_ost_idx;
+};
+
+struct obd_uuid {
+        __u8 uuid[40];
+};
+
+static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
+{
+        return strcmp(u1->uuid, u2->uuid) == 0;
+}
+
+static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
+{
+        strncpy(uuid->uuid, tmp, sizeof(*uuid));
+        uuid->uuid[sizeof(*uuid) - 1] = '\0';
+}
 
 #endif /* _LUSTRE_USER_H */

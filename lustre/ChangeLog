@@ -26,9 +26,18 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't crash in mdc_close for bad permissions on open (3285)
 	- zero i_rdev for non-device files (3147)
 	- clear page->private before handing to FS, better assertion (3119)
+	- fix incorrect decref of invalidated dentry (2350)
+	- don't hold journal transaction open across create RPC (3313)
+	- update atime on MDS at close time (3265)
+	- close LDAP connection when recovering to avoid server load (3315)
+	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
+	- don't leak open file on MDS after open resend (3325)
+	- serialize filter_precreate and filter_destroy_precreated (3329)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
+	- fix compilation for qswnal for 2.6 kernels (3125)
 	- increase maximum number of MDS request buffers for large systems
+	- change liblustreapi to be useful for external progs like lfsck (3098)
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

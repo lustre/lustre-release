@@ -80,21 +80,6 @@
 /*
  *  GENERAL STUFF
  */
-struct obd_uuid {
-        __u8 uuid[40];
-};
-
-static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
-{
-        return strcmp(u1->uuid, u2->uuid) == 0;
-}
-
-static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
-{
-        strncpy(uuid->uuid, tmp, sizeof(*uuid));
-        uuid->uuid[sizeof(*uuid) - 1] = '\0';
-}
-
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO
  * FOO_BULK_PORTAL    is for incoming bulk on the FOO
@@ -514,11 +499,6 @@ struct ll_fid {
         __u64 id;
         __u32 generation;
         __u32 f_type;
-};
-
-struct ll_recreate_obj {
-        __u64 lrc_id;
-        __u32 lrc_ost_idx;
 };
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);

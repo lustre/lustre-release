@@ -424,7 +424,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "name: %*s in %ld, intent: %s\n", len, name,
+        CDEBUG(D_DLMTRACE, "name: %*s in inode %ld, intent: %s\n", len, name,
                (unsigned long)pfid->id, ldlm_it2str(it->it_op));
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {

@@ -1292,7 +1292,6 @@ static int ldlm_setup(void)
                 rc = kernel_thread(ldlm_bl_thread_main, &bltd, 0);
                 if (rc < 0) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
-                        LBUG();
                         GOTO(out_thread, rc);
                 }
                 wait_for_completion(&blp->blp_comp);
@@ -1300,17 +1299,13 @@ static int ldlm_setup(void)
 
         rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cancel_service,
                                     LDLM_NUM_THREADS, "ldlm_cn");
-        if (rc) {
-                LBUG();
+        if (rc)
                 GOTO(out_thread, rc);
-        }
 
         rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cb_service,
                                     LDLM_NUM_THREADS, "ldlm_cb");
-        if (rc) {
-                LBUG();
+        if (rc)
                 GOTO(out_thread, rc);
-        }
 
         INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
         spin_lock_init(&expired_lock_thread.elt_lock);

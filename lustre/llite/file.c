@@ -39,21 +39,19 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct obdo obdo;
-        int rc, valid;
+        int rc;
         ENTRY;
 
-        valid = OBD_MD_FLID;
-
-        memset(&obdo, 0, sizeof(obdo));
         obdo.o_id = inode->i_ino;
-        obdo.o_mode = inode->i_mode;
-        obdo.o_size = inode->i_size;
-        obdo.o_blocks = inode->i_blocks;
+        obdo.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&obdo, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME);
         if (0 /* ll_is_inode_dirty(inode) */) {
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                valid |= OBD_MD_FLFLAGS;
+                obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        obdo.o_valid = valid;
         rc = mdc_close(mdc_exp, &obdo, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
