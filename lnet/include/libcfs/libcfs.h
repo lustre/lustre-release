@@ -161,8 +161,8 @@ do {                                                                          \
         }                                                                     \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG_LIMIT(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG_LIMIT(D_ERROR, format, ## a)
+#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
 #define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
 
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
