@@ -1,0 +1,161 @@
+Index: linux-2.6.10/mm/truncate.c
+===================================================================
+--- linux-2.6.10.orig/mm/truncate.c	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10/mm/truncate.c	2005-04-07 14:55:03.019979256 +0800
+@@ -42,7 +42,7 @@
+  * its lock, b) when a concurrent invalidate_inode_pages got there first and
+  * c) when tmpfs swizzles a page between a tmpfs inode and swapper_space.
+  */
+-static void
++void
+ truncate_complete_page(struct address_space *mapping, struct page *page)
+ {
+ 	if (page->mapping != mapping)
+@@ -58,6 +58,8 @@
+ 	page_cache_release(page);	/* pagecache ref */
+ }
+ 
++EXPORT_SYMBOL(truncate_complete_page);
++
+ /*
+  * This is for invalidate_inode_pages().  That function can be called at
+  * any time, and is not supposed to throw away dirty pages.  But pages can
+Index: linux-2.6.10/net/core/sock.c
+===================================================================
+--- linux-2.6.10.orig/net/core/sock.c	2004-12-25 05:35:23.000000000 +0800
++++ linux-2.6.10/net/core/sock.c	2005-04-07 14:55:03.020979104 +0800
+@@ -1359,6 +1359,7 @@
+ EXPORT_SYMBOL(sk_alloc);
+ EXPORT_SYMBOL(sk_free);
+ EXPORT_SYMBOL(sk_send_sigurg);
++EXPORT_SYMBOL(sock_getsockopt);
+ EXPORT_SYMBOL(sock_alloc_send_pskb);
+ EXPORT_SYMBOL(sock_alloc_send_skb);
+ EXPORT_SYMBOL(sock_init_data);
+Index: linux-2.6.10/fs/dcache.c
+===================================================================
+--- linux-2.6.10.orig/fs/dcache.c	2005-04-07 00:35:35.000000000 +0800
++++ linux-2.6.10/fs/dcache.c	2005-04-07 14:55:03.003981688 +0800
+@@ -1737,6 +1737,7 @@
+ 
+ EXPORT_SYMBOL(d_alloc);
+ EXPORT_SYMBOL(d_alloc_anon);
++EXPORT_SYMBOL(is_subdir);
+ EXPORT_SYMBOL(d_alloc_root);
+ EXPORT_SYMBOL(d_delete);
+ EXPORT_SYMBOL(d_find_alias);
+Index: linux-2.6.10/fs/jbd/journal.c
+===================================================================
+--- linux-2.6.10.orig/fs/jbd/journal.c	2004-12-25 05:34:01.000000000 +0800
++++ linux-2.6.10/fs/jbd/journal.c	2005-04-07 14:55:03.006981232 +0800
+@@ -71,6 +71,7 @@
+ EXPORT_SYMBOL(journal_errno);
+ EXPORT_SYMBOL(journal_ack_err);
+ EXPORT_SYMBOL(journal_clear_err);
++EXPORT_SYMBOL(log_start_commit);
+ EXPORT_SYMBOL(log_wait_commit);
+ EXPORT_SYMBOL(journal_start_commit);
+ EXPORT_SYMBOL(journal_force_commit_nested);
+Index: linux-2.6.10/fs/namespace.c
+===================================================================
+--- linux-2.6.10.orig/fs/namespace.c	2005-04-07 00:35:35.000000000 +0800
++++ linux-2.6.10/fs/namespace.c	2005-04-07 14:55:03.007981080 +0800
+@@ -1233,6 +1233,7 @@
+ 		mntput(old_pwdmnt);
+ 	}
+ }
++EXPORT_SYMBOL(set_fs_pwd);
+ 
+ static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
+ {
+Index: linux-2.6.10/fs/file_table.c
+===================================================================
+--- linux-2.6.10.orig/fs/file_table.c	2004-12-25 05:33:50.000000000 +0800
++++ linux-2.6.10/fs/file_table.c	2005-04-07 14:55:03.004981536 +0800
+@@ -196,6 +196,7 @@
+ 		file_free(file);
+ 	}
+ }
++EXPORT_SYMBOL(put_filp);
+ 
+ void file_move(struct file *file, struct list_head *list)
+ {
+Index: linux-2.6.10/kernel/sched.c
+===================================================================
+--- linux-2.6.10.orig/kernel/sched.c	2005-04-07 00:35:34.000000000 +0800
++++ linux-2.6.10/kernel/sched.c	2005-04-07 14:55:03.018979408 +0800
+@@ -2942,6 +2942,19 @@
+ 
+ EXPORT_SYMBOL(sleep_on_timeout);
+ 
++void fastcall __sched sleep_on(wait_queue_head_t *q)
++{
++        SLEEP_ON_VAR
++
++        current->state = TASK_UNINTERRUPTIBLE;
++
++        SLEEP_ON_HEAD
++        schedule();
++        SLEEP_ON_TAIL
++}
++
++EXPORT_SYMBOL(sleep_on);
++
+ void set_user_nice(task_t *p, long nice)
+ {
+ 	unsigned long flags;
+Index: linux-2.6.10/kernel/exit.c
+===================================================================
+--- linux-2.6.10.orig/kernel/exit.c	2005-04-06 23:44:29.000000000 +0800
++++ linux-2.6.10/kernel/exit.c	2005-04-07 14:55:03.014980016 +0800
+@@ -246,6 +246,8 @@
+ 	switch_uid(INIT_USER);
+ }
+ 
++EXPORT_SYMBOL(reparent_to_init);
++
+ void __set_special_pids(pid_t session, pid_t pgrp)
+ {
+ 	struct task_struct *curr = current;
+@@ -427,6 +429,7 @@
+ {
+ 	__exit_files(tsk);
+ }
++EXPORT_SYMBOL(exit_files);
+ 
+ static inline void __put_fs_struct(struct fs_struct *fs)
+ {
+@@ -512,6 +515,7 @@
+ {
+ 	__exit_mm(tsk);
+ }
++EXPORT_SYMBOL(exit_mm);
+ 
+ static inline void choose_new_parent(task_t *p, task_t *reaper, task_t *child_reaper)
+ {
+Index: linux-2.6.10/include/linux/fs.h
+===================================================================
+--- linux-2.6.10.orig/include/linux/fs.h	2005-04-07 14:54:24.454842048 +0800
++++ linux-2.6.10/include/linux/fs.h	2005-04-07 14:55:03.010980624 +0800
+@@ -1183,6 +1183,7 @@
+ extern struct vfsmount *kern_mount(struct file_system_type *);
+ extern int may_umount_tree(struct vfsmount *);
+ extern int may_umount(struct vfsmount *);
++struct vfsmount *do_kern_mount(const char *type, int flags, const char *name, void *data);
+ extern long do_mount(char *, char *, char *, unsigned long, void *);
+ 
+ extern int vfs_statfs(struct super_block *, struct kstatfs *);
+Index: linux-2.6.10/include/linux/mm.h
+===================================================================
+--- linux-2.6.10.orig/include/linux/mm.h	2005-04-07 00:22:23.000000000 +0800
++++ linux-2.6.10/include/linux/mm.h	2005-04-07 14:55:03.012980320 +0800
+@@ -715,6 +715,9 @@
+ extern unsigned long __do_brk(unsigned long, unsigned long);
+ extern unsigned long do_brk(unsigned long, unsigned long);
+ 
++/* truncate.c */
++extern void truncate_complete_page(struct address_space *mapping,struct page *);
++
+ /* filemap.c */
+ extern unsigned long page_unuse(struct page *);
+ extern void truncate_inode_pages(struct address_space *, loff_t);

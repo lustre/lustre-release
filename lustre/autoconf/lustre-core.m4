@@ -59,6 +59,7 @@ AC_DEFUN([LC_CONFIG_EXT3],
 LB_LINUX_CONFIG([EXT3_FS_XATTR],[$1],[$3])
 ])
 
+
 #
 # LC_FSHOOKS
 #
@@ -79,7 +80,17 @@ AC_DEFUN([LC_FSHOOKS],
 	])
 $1
 ],[
+LB_LINUX_TRY_COMPILE([
+        #include <linux/version.h>
+],[
+ 	#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10))
+	#error "linux version < 2.6.10, only support 2.6.7"
+	#endif
+],[
 $2
+],[
+$3 
+])
 ])
 ])
 
@@ -273,8 +284,11 @@ case $BACKINGFS in
 		LC_FSHOOKS([
 			LDISKFS_SERIES="2.6-suse.series"
 		],[
-			LDISKFS_SERIES="2.6-vanilla.series"
-		])
+			LDISKFS_SERIES="2.6-fc3.series"
+		],[
+			LDISKFS_SERIES="2.6-vanilla.series"		
+		]
+		)
 		AC_SUBST(LDISKFS_SERIES)
 		;;
 esac # $BACKINGFS

@@ -1,7 +1,7 @@
 Index: linux-2.6.10/fs/namespace.c
 ===================================================================
---- linux-2.6.10.orig/fs/namespace.c	2005-03-31 17:58:42.827926064 +0800
-+++ linux-2.6.10/fs/namespace.c	2005-03-31 18:19:21.976546840 +0800
+--- linux-2.6.10.orig/fs/namespace.c	2005-04-07 14:55:39.000000000 +0800
++++ linux-2.6.10/fs/namespace.c	2005-04-07 14:55:41.612112360 +0800
 @@ -62,6 +62,7 @@
  		INIT_LIST_HEAD(&mnt->mnt_mounts);
  		INIT_LIST_HEAD(&mnt->mnt_list);
@@ -20,3 +20,19 @@ Index: linux-2.6.10/fs/namespace.c
  	free_vfsmnt(mnt);
  	deactivate_super(sb);
  }
+Index: linux-2.6.10/include/linux/dcache.h
+===================================================================
+--- linux-2.6.10.orig/include/linux/dcache.h	2005-04-07 14:55:40.871224992 +0800
++++ linux-2.6.10/include/linux/dcache.h	2005-04-07 15:12:37.823624728 +0800
+@@ -167,7 +167,10 @@
+ #define DCACHE_UNHASHED		0x0010	
+ #define DCACHE_LUSTRE_INVALID	0x0020	/* invalidated by Lustre */
+ 
+-#define DCACHE_CROSS_REF       0x0040  /* entry points to inode on another MDS */
++#define DCACHE_CROSS_REF        0x0040  /* entry points to inode on another MDS */
++#define DCACHE_GNS_PENDING      0x0080  /* entry is GNS pending mount point */
++#define DCACHE_GNS_MOUNTING     0x0100  /* entry is GNS mount in progress */
++
+ 
+ extern spinlock_t dcache_lock;
+ 

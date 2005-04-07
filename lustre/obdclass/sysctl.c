@@ -57,9 +57,13 @@ enum {
         OBD_LDLM_TIMEOUT,       /* LDLM timeout for ASTs before client eviction */
 };
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
 int proc_fail_loc(ctl_table *table, int write, struct file *filp,
                   void *buffer, size_t *lenp);
-
+#else
+int proc_fail_loc(ctl_table *table, int write, struct file *filp,
+                  void *buffer, size_t *lenp, loff_t *ppos);
+#endif
 static ctl_table obd_table[] = {
         {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
                 &proc_dointvec},
@@ -100,14 +104,22 @@ void obd_sysctl_clean (void)
         obd_table_header = NULL;
 #endif
 }
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
 int proc_fail_loc(ctl_table *table, int write, struct file *filp,
                   void *buffer, size_t *lenp)
+#else
+int proc_fail_loc(ctl_table *table, int write, struct file *filp,
+                  void *buffer, size_t *lenp, loff_t *ppos)
+#endif
 {
         int rc;
         int old_fail_loc = obd_fail_loc;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9))
         rc = proc_dointvec(table,write,filp,buffer,lenp);
+#else
+        rc = proc_dointvec(table,write,filp,buffer,lenp, ppos);
+#endif
         if (old_fail_loc != obd_fail_loc)
                 wake_up(&obd_race_waitq);
         return rc;
