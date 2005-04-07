@@ -388,6 +388,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	wait $MULTI_PID
 	rc=$?
 	sysctl -w lustre.fail_loc=0x0
+	client_df
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
 run_test 24 "fsync error (should return error)" 
