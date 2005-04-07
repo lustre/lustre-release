@@ -836,21 +836,6 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
-static int is_mount_object(struct dentry *dparent)
-{
-        struct dentry *dchild;
-
-        if (!(dparent->d_inode->i_mode & S_ISUID))
-                return 0;
-
-        dchild = lookup_one_len(".mntinfo", dparent, strlen(".mntinfo"));
-        if (IS_ERR(dchild) || dchild == NULL)
-                return 0;
-
-        dput(dchild);
-        return 1;
-}
-
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *child_lockh)
 {
@@ -1191,16 +1176,16 @@ got_child:
         if (S_ISDIR(dchild->d_inode->i_mode)) {
                 if (rec->ur_flags & MDS_OPEN_CREAT ||
                     rec->ur_flags & FMODE_WRITE) {
-                        /*we are trying to create or write a exist dir*/
+                        /* we are trying to create or write a exist dir */
                         GOTO(cleanup, rc = -EISDIR);
                 }
                 if (ll_permission(dchild->d_inode, acc_mode, NULL))
                         GOTO(cleanup, rc = -EACCES);
 
-                if (is_mount_object(dchild)) {
-                        CERROR("Found possible GNS mount object %*s; not "
-                               "opening.\n", dchild->d_name.len,
-                               dchild->d_name.name);
+                /* skip GNS suid bit marked directories. */
+                if (dchild->d_inode->i_mode & S_ISUID) {
+                        CDEBUG(D_INODE, "found GNS mount object %*s, not opening.\n", 
+                               dchild->d_name.len, dchild->d_name.name);
                         GOTO(cleanup, rc = 0); // success, but don't really open
                 }
         }
@@ -1262,8 +1247,8 @@ got_child:
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle,
                              rec, rep);
-        GOTO(cleanup, rc);
 
+	EXIT;
 cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);

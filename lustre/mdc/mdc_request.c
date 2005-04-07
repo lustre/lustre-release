@@ -638,13 +638,13 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EIO);
         }
 
-        //reqsize[0] = mdc_get_secdesc_size();
-        //mdc_pack_secdesc(req, reqsize[0]);
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_CLOSE, 3, reqsize, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
+
+        //reqsize[0] = mdc_get_secdesc_size();
+        //mdc_pack_secdesc(req, reqsize[0]);
 
         /* Ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);

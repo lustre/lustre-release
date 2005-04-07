@@ -1005,7 +1005,7 @@ def clean_loop(dev, fstype, backfstype, backdev):
 	    print "detach " + dev + " <-> " + realfile
 	    ret, out = run('losetup -d', dev)
 	    if ret:
-		log('unable to clean loop device:', dev, 'for file:', realfile)
+		log('unable to clean loop device', dev, 'for file', realfile)
 		logall(out)
 
 # finilizes passed device

@@ -453,4 +453,37 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
         return ll_i2info(inode)->lli_maxbytes;
 }
 
+static inline void
+ll_inode2id(struct lustre_id *id, struct inode *inode)
+{
+        struct lustre_id *lid = &ll_i2info(inode)->lli_id;
+
+        mdc_pack_id(id, inode->i_ino, inode->i_generation,
+                    (inode->i_mode & S_IFMT), id_group(lid),
+                    id_fid(lid));
+}
+
+static inline void 
+ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+                    struct inode *i2, const char *name, int namelen,
+                    int mode)
+{
+        LASSERT(i1);
+        ll_inode2id(&data->id1, i1);
+
+        /* it could be directory with mea */
+        data->mea1 = ll_i2info(i1)->lli_mea;
+
+        if (i2) {
+                ll_inode2id(&data->id2, i2);
+                data->mea2 = ll_i2info(i2)->lli_mea;
+        }
+
+	data->valid = 0;
+        data->name = name;
+        data->namelen = namelen;
+        data->create_mode = mode;
+        data->mod_time = LTIME_S(CURRENT_TIME);
+}
+
 #endif /* LLITE_INTERNAL_H */

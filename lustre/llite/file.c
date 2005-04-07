@@ -429,15 +429,18 @@ int ll_file_open(struct inode *inode, struct file *file)
                 (*och_usecount)++;
 
                 if (!it || !LUSTRE_IT(it) || !LUSTRE_IT(it)->it_disposition) {
-                        /* We are going to replace intent here, and that may
-                           possibly change access mode (FMODE_EXEC can only be
-                           set in intent), but I hope it never happens (I was
-                           not able to trigger it yet at least) -- green */
+                        /*
+                         * we are going to replace intent here, and that may
+                         * possibly change access mode (FMODE_EXEC can only be
+                         * set in intent), but I hope it never happens (I was
+                         * not able to trigger it yet at least) -- green
+                         */
+                        
                         /* FIXME: FMODE_EXEC is not covered by O_ACCMODE! */
                         LASSERT(!(it->it_flags & FMODE_EXEC));
                         LASSERTF((it->it_flags & O_ACCMODE) ==
                                  (oit.it_flags & O_ACCMODE), "Changing intent "
-                                 "flags %x to incompatible %x\n",it->it_flags,
+                                 "flags %x to incompatible %x\n", it->it_flags,
                                  oit.it_flags);
                         it = &oit;
                         rc = ll_intent_file_open(file, NULL, 0, it);
@@ -455,9 +458,12 @@ int ll_file_open(struct inode *inode, struct file *file)
                 LASSERTF(rc == 0, "rc = %d\n", rc);
         }
         up(&lli->lli_och_sem);
-        /* Must do this outside lli_och_sem lock to prevent deadlock where
-           different kind of OPEN lock for this same inode gets cancelled
-           by ldlm_cancel_lru */
+        
+        /*
+         * must do this outside lli_och_sem lock to prevent deadlock where
+         * different kind of OPEN lock for this same inode gets cancelled by
+         * ldlm_cancel_lru
+         */
 
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);

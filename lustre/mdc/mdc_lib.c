@@ -67,11 +67,13 @@ static __u32 mds_pack_open_flags(__u32 flags)
 
 /* packing of MDS records */
 void mdc_open_pack(struct lustre_msg *msg, int offset,
-                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
-                   __u32 flags, const void *lmm, int lmmlen)
+                   struct mdc_op_data *op_data, __u32 mode,
+                   __u64 rdev, __u32 flags, const void *lmm,
+                   int lmmlen)
 {
         struct mds_rec_create *rec;
         char *tmp;
+        
         rec = lustre_msg_buf(msg, offset, sizeof (*rec));
 
         /* XXX do something about time, uid, gid */
@@ -79,10 +81,10 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         if (op_data != NULL)
                 rec->cr_id = op_data->id1;
         memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
-        rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
-        rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
+        rec->cr_mode = mode;
+        rec->cr_rdev = rdev;
 
         if (op_data->name) {
                 tmp = lustre_msg_buf(msg, offset + 1,

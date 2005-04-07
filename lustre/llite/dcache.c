@@ -364,7 +364,6 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 if (rc)
                         LBUG(); /* Can't think of better idea just yet */
 
-
                 rc = md_intent_lock(exp, &pid, de->d_name.name,
                                     de->d_name.len, NULL, 0, &cid, &lookup_it,
                                     flags, &req, ll_mdc_blocking_ast);
