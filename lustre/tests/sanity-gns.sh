@@ -419,7 +419,7 @@ test_1a() {
     cleanup_loop $LOOP_DEV $LOOP_FILE
 }
 
-run_test 1a " general GNS test - mounting/umount (GENERIC) ============="
+run_test 1a " general GNS test - mount/umount (GENERIC) ================"
 
 test_2a() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
@@ -456,7 +456,7 @@ test_2a() {
     cleanup_loop $LOOP_DEV $LOOP_FILE
 }
 
-run_test 2a " general GNS test - mounting/umount (DEADLOCK) ============"
+run_test 2a " general GNS test - mount/umount (DEADLOCK) ==============="
 
 test_3a() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
@@ -499,7 +499,7 @@ test_3a() {
     cleanup_loop $LOOP_DEV $LOOP_FILE
 }
 
-run_test 3a " general GNS test - mounting/umount (GENERIC/DEADLOCK) ====="
+run_test 3a " general GNS test - mount/umount (GENERIC/DEADLOCK) ========"
 
 test_4a() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
@@ -542,7 +542,13 @@ test_4a() {
     cleanup_loop $LOOP_DEV $LOOP_FILE
 }
 
-run_test 4a " general GNS test - concurrent mounting/umount ============="
+run_test 4a " general GNS test - concurrent mount ======================="
+
+test_5a() {
+    echo "Not implemented yet!"
+}
+
+run_test 5a " general GNS test - concurrent mount of 2 GNS mounts ======="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
