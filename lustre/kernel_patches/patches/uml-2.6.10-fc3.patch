@@ -1,7 +1,7 @@
 Index: linux-2.6.10/lib/Kconfig.debug
 ===================================================================
 --- linux-2.6.10.orig/lib/Kconfig.debug	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/lib/Kconfig.debug	2005-04-06 23:44:30.189033160 +0800
++++ linux-2.6.10/lib/Kconfig.debug	2005-04-07 22:05:29.475761192 +0800
 @@ -23,7 +23,6 @@
  config MAGIC_SYSRQ
  	bool "Magic SysRq key"
@@ -13,7 +13,7 @@ Index: linux-2.6.10/lib/Kconfig.debug
 Index: linux-2.6.10/mm/mprotect.c
 ===================================================================
 --- linux-2.6.10.orig/mm/mprotect.c	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/mm/mprotect.c	2005-04-06 23:44:30.204030880 +0800
++++ linux-2.6.10/mm/mprotect.c	2005-04-07 22:05:29.475761192 +0800
 @@ -93,19 +93,20 @@
  {
  	pgd_t *dir;
@@ -78,7 +78,7 @@ Index: linux-2.6.10/mm/mprotect.c
 Index: linux-2.6.10/mm/mmap.c
 ===================================================================
 --- linux-2.6.10.orig/mm/mmap.c	2005-04-06 23:38:33.000000000 +0800
-+++ linux-2.6.10/mm/mmap.c	2005-04-06 23:44:30.193032552 +0800
++++ linux-2.6.10/mm/mmap.c	2005-04-07 22:05:29.476761040 +0800
 @@ -759,11 +759,11 @@
   * The caller must hold down_write(current->mm->mmap_sem).
   */
@@ -106,8 +106,8 @@ Index: linux-2.6.10/mm/mmap.c
   * For shmat() with addr=0.
 Index: linux-2.6.10/mm/proc_mm.c
 ===================================================================
---- linux-2.6.10.orig/mm/proc_mm.c	2005-04-07 06:37:43.373923992 +0800
-+++ linux-2.6.10/mm/proc_mm.c	2005-04-06 23:44:30.204030880 +0800
+--- linux-2.6.10.orig/mm/proc_mm.c	2005-04-07 19:34:21.197950744 +0800
++++ linux-2.6.10/mm/proc_mm.c	2005-04-07 22:05:29.476761040 +0800
 @@ -0,0 +1,181 @@
 +/*
 + * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -293,7 +293,7 @@ Index: linux-2.6.10/mm/proc_mm.c
 Index: linux-2.6.10/mm/Makefile
 ===================================================================
 --- linux-2.6.10.orig/mm/Makefile	2004-12-25 05:35:00.000000000 +0800
-+++ linux-2.6.10/mm/Makefile	2005-04-06 23:44:30.205030728 +0800
++++ linux-2.6.10/mm/Makefile	2005-04-07 22:05:29.477760888 +0800
 @@ -18,3 +18,4 @@
  obj-$(CONFIG_SHMEM) += shmem.o
  obj-$(CONFIG_TINY_SHMEM) += tiny-shmem.o
@@ -302,7 +302,7 @@ Index: linux-2.6.10/mm/Makefile
 Index: linux-2.6.10/arch/um/drivers/mconsole_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/drivers/mconsole_kern.c	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/um/drivers/mconsole_kern.c	2005-04-06 23:44:30.283018872 +0800
++++ linux-2.6.10/arch/um/drivers/mconsole_kern.c	2005-04-07 22:05:29.477760888 +0800
 @@ -204,6 +204,68 @@
  }
  #endif
@@ -375,7 +375,7 @@ Index: linux-2.6.10/arch/um/drivers/mconsole_kern.c
 Index: linux-2.6.10/arch/um/drivers/net_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/drivers/net_kern.c	2004-12-25 05:34:44.000000000 +0800
-+++ linux-2.6.10/arch/um/drivers/net_kern.c	2005-04-06 23:44:30.282019024 +0800
++++ linux-2.6.10/arch/um/drivers/net_kern.c	2005-04-07 22:05:29.478760736 +0800
 @@ -126,10 +126,6 @@
  	lp->tl.data = (unsigned long) &lp->user;
  	netif_start_queue(dev);
@@ -421,7 +421,7 @@ Index: linux-2.6.10/arch/um/drivers/net_kern.c
 Index: linux-2.6.10/arch/um/drivers/net_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/drivers/net_user.c	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/arch/um/drivers/net_user.c	2005-04-06 23:44:30.284018720 +0800
++++ linux-2.6.10/arch/um/drivers/net_user.c	2005-04-07 22:05:29.478760736 +0800
 @@ -173,10 +173,12 @@
  	pe_data.stdout = fds[1];
  	pid = run_helper(change_pre_exec, &pe_data, argv, NULL);
@@ -437,10 +437,31 @@ Index: linux-2.6.10/arch/um/drivers/net_user.c
  	return(pid);
  }
  
+Index: linux-2.6.10/arch/um/os-Linux/process.c
+===================================================================
+--- linux-2.6.10.orig/arch/um/os-Linux/process.c	2004-12-25 05:34:00.000000000 +0800
++++ linux-2.6.10/arch/um/os-Linux/process.c	2005-04-07 22:14:57.660384000 +0800
+@@ -94,10 +94,16 @@
+ 		CATCH_EINTR(waitpid(pid, NULL, 0));
+ 		
+ }
++/* Kill off a ptraced child by all means available. kill it normally first,
++ * then PTRACE_KILL it, then PTRACE_CONT it in case it's in a run state from
++ * which it can't exit directly.
++ */
+ 
+ void os_kill_ptraced_process(int pid, int reap_child)
+ {
++	kill(pid, SIGKILL);
+ 	ptrace(PTRACE_KILL, pid);
++	ptrace(PTRACE_CONT, pid);
+ 	if(reap_child)
+ 		CATCH_EINTR(waitpid(pid, NULL, 0));
+ }
 Index: linux-2.6.10/arch/um/os-Linux/elf_aux.c
 ===================================================================
---- linux-2.6.10.orig/arch/um/os-Linux/elf_aux.c	2005-04-07 06:37:43.373923992 +0800
-+++ linux-2.6.10/arch/um/os-Linux/elf_aux.c	2005-04-06 23:44:30.280019328 +0800
+--- linux-2.6.10.orig/arch/um/os-Linux/elf_aux.c	2005-04-07 19:34:21.197950744 +0800
++++ linux-2.6.10/arch/um/os-Linux/elf_aux.c	2005-04-07 22:05:29.478760736 +0800
 @@ -0,0 +1,67 @@
 +/*
 + *  arch/um/kernel/elf_aux.c
@@ -512,7 +533,7 @@ Index: linux-2.6.10/arch/um/os-Linux/elf_aux.c
 Index: linux-2.6.10/arch/um/os-Linux/user_syms.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/os-Linux/user_syms.c	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/arch/um/os-Linux/user_syms.c	2005-04-06 23:44:30.279019480 +0800
++++ linux-2.6.10/arch/um/os-Linux/user_syms.c	2005-04-07 22:05:29.478760736 +0800
 @@ -26,6 +26,9 @@
  
  EXPORT_SYMBOL(strstr);
@@ -526,7 +547,7 @@ Index: linux-2.6.10/arch/um/os-Linux/user_syms.c
 Index: linux-2.6.10/arch/um/os-Linux/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/os-Linux/Makefile	2004-12-25 05:35:00.000000000 +0800
-+++ linux-2.6.10/arch/um/os-Linux/Makefile	2005-04-06 23:44:30.281019176 +0800
++++ linux-2.6.10/arch/um/os-Linux/Makefile	2005-04-07 22:05:29.479760584 +0800
 @@ -3,9 +3,9 @@
  # Licensed under the GPL
  #
@@ -541,8 +562,8 @@ Index: linux-2.6.10/arch/um/os-Linux/Makefile
  	$(CC) $(CFLAGS_$(notdir $@)) $(USER_CFLAGS) -c -o $@ $<
 Index: linux-2.6.10/arch/um/sys-i386/signal.c
 ===================================================================
---- linux-2.6.10.orig/arch/um/sys-i386/signal.c	2005-04-07 06:37:43.373923992 +0800
-+++ linux-2.6.10/arch/um/sys-i386/signal.c	2005-04-06 23:44:30.236026016 +0800
+--- linux-2.6.10.orig/arch/um/sys-i386/signal.c	2005-04-07 19:34:21.197950744 +0800
++++ linux-2.6.10/arch/um/sys-i386/signal.c	2005-04-07 22:05:29.479760584 +0800
 @@ -0,0 +1,374 @@
 +/*
 + * Copyright (C) 2004 Jeff Dike (jdike@addtoit.com)
@@ -921,7 +942,7 @@ Index: linux-2.6.10/arch/um/sys-i386/signal.c
 Index: linux-2.6.10/arch/um/sys-i386/ptrace_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/sys-i386/ptrace_user.c	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/arch/um/sys-i386/ptrace_user.c	2005-04-06 23:44:30.233026472 +0800
++++ linux-2.6.10/arch/um/sys-i386/ptrace_user.c	2005-04-07 22:05:29.480760432 +0800
 @@ -17,17 +17,30 @@
  
  int ptrace_getregs(long pid, unsigned long *regs_out)
@@ -959,7 +980,7 @@ Index: linux-2.6.10/arch/um/sys-i386/ptrace_user.c
 Index: linux-2.6.10/arch/um/sys-i386/sysrq.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/sys-i386/sysrq.c	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/um/sys-i386/sysrq.c	2005-04-06 23:44:30.234026320 +0800
++++ linux-2.6.10/arch/um/sys-i386/sysrq.c	2005-04-07 22:05:29.480760432 +0800
 @@ -33,3 +33,13 @@
  
          show_trace((unsigned long *) &regs);
@@ -977,7 +998,7 @@ Index: linux-2.6.10/arch/um/sys-i386/sysrq.c
 Index: linux-2.6.10/arch/um/sys-i386/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/sys-i386/Makefile	2004-12-25 05:34:01.000000000 +0800
-+++ linux-2.6.10/arch/um/sys-i386/Makefile	2005-04-06 23:44:30.236026016 +0800
++++ linux-2.6.10/arch/um/sys-i386/Makefile	2005-04-07 22:05:29.480760432 +0800
 @@ -1,5 +1,5 @@
  obj-y = bitops.o bugs.o checksum.o fault.o ksyms.o ldt.o ptrace.o \
 -	ptrace_user.o semaphore.o sigcontext.o syscalls.o sysrq.o
@@ -988,7 +1009,7 @@ Index: linux-2.6.10/arch/um/sys-i386/Makefile
 Index: linux-2.6.10/arch/um/sys-i386/sigcontext.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/sys-i386/sigcontext.c	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/um/sys-i386/sigcontext.c	2005-04-06 23:44:30.233026472 +0800
++++ linux-2.6.10/arch/um/sys-i386/sigcontext.c	2005-04-07 22:05:29.480760432 +0800
 @@ -9,22 +9,14 @@
  #include <asm/sigcontext.h>
  #include "sysdep/ptrace.h"
@@ -1018,7 +1039,7 @@ Index: linux-2.6.10/arch/um/sys-i386/sigcontext.c
 Index: linux-2.6.10/arch/um/kernel/main.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/main.c	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/main.c	2005-04-06 23:44:30.262022064 +0800
++++ linux-2.6.10/arch/um/kernel/main.c	2005-04-07 22:05:29.480760432 +0800
 @@ -81,6 +81,8 @@
  
  extern int uml_exitcode;
@@ -1067,7 +1088,7 @@ Index: linux-2.6.10/arch/um/kernel/main.c
 Index: linux-2.6.10/arch/um/kernel/process.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/process.c	2004-12-25 05:35:25.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/process.c	2005-04-06 23:44:30.240025408 +0800
++++ linux-2.6.10/arch/um/kernel/process.c	2005-04-07 22:05:29.481760280 +0800
 @@ -13,6 +13,7 @@
  #include <setjmp.h>
  #include <sys/time.h>
@@ -1100,7 +1121,7 @@ Index: linux-2.6.10/arch/um/kernel/process.c
 Index: linux-2.6.10/arch/um/kernel/initrd_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/initrd_user.c	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/initrd_user.c	2005-04-06 23:44:30.252023584 +0800
++++ linux-2.6.10/arch/um/kernel/initrd_user.c	2005-04-07 22:05:29.481760280 +0800
 @@ -29,6 +29,8 @@
  		       filename, -n);
  		return(-1);
@@ -1113,7 +1134,7 @@ Index: linux-2.6.10/arch/um/kernel/initrd_user.c
 Index: linux-2.6.10/arch/um/kernel/time_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/time_kern.c	2004-12-25 05:35:00.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/time_kern.c	2005-04-06 23:44:30.271020696 +0800
++++ linux-2.6.10/arch/um/kernel/time_kern.c	2005-04-07 22:05:29.481760280 +0800
 @@ -170,7 +170,7 @@
  void timer_handler(int sig, union uml_pt_regs *regs)
  {
@@ -1126,7 +1147,7 @@ Index: linux-2.6.10/arch/um/kernel/time_kern.c
 Index: linux-2.6.10/arch/um/kernel/helper.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/helper.c	2004-12-25 05:34:45.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/helper.c	2005-04-06 23:44:30.271020696 +0800
++++ linux-2.6.10/arch/um/kernel/helper.c	2005-04-07 22:05:29.482760128 +0800
 @@ -49,14 +49,14 @@
  	return(0);
  }
@@ -1224,7 +1245,7 @@ Index: linux-2.6.10/arch/um/kernel/helper.c
 Index: linux-2.6.10/arch/um/kernel/irq_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/irq_user.c	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/irq_user.c	2005-04-06 23:44:30.263021912 +0800
++++ linux-2.6.10/arch/um/kernel/irq_user.c	2005-04-07 22:05:29.482760128 +0800
 @@ -374,6 +374,8 @@
  		if(err)
  			return(err);
@@ -1237,7 +1258,7 @@ Index: linux-2.6.10/arch/um/kernel/irq_user.c
 Index: linux-2.6.10/arch/um/kernel/mem.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/mem.c	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/mem.c	2005-04-06 23:44:30.279019480 +0800
++++ linux-2.6.10/arch/um/kernel/mem.c	2005-04-07 22:05:29.482760128 +0800
 @@ -175,6 +175,30 @@
  }
  #endif /* CONFIG_HIGHMEM */
@@ -1281,7 +1302,7 @@ Index: linux-2.6.10/arch/um/kernel/mem.c
 Index: linux-2.6.10/arch/um/kernel/skas/process.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/process.c	2004-12-25 05:35:39.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/process.c	2005-04-06 23:44:30.268021152 +0800
++++ linux-2.6.10/arch/um/kernel/skas/process.c	2005-04-07 22:05:29.483759976 +0800
 @@ -11,6 +11,7 @@
  #include <sched.h>
  #include <sys/wait.h>
@@ -1366,7 +1387,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/process.c
 Index: linux-2.6.10/arch/um/kernel/skas/sys-i386/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/sys-i386/Makefile	2004-12-25 05:35:27.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/sys-i386/Makefile	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/kernel/skas/sys-i386/Makefile	2005-04-07 19:34:21.197950744 +0800
 @@ -1,12 +0,0 @@
 -# 
 -# Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -1383,7 +1404,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/sys-i386/Makefile
 Index: linux-2.6.10/arch/um/kernel/skas/sys-i386/sigcontext.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/sys-i386/sigcontext.c	2004-12-25 05:33:51.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/sys-i386/sigcontext.c	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/kernel/skas/sys-i386/sigcontext.c	2005-04-07 19:34:21.197950744 +0800
 @@ -1,114 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -1502,7 +1523,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/sys-i386/sigcontext.c
 Index: linux-2.6.10/arch/um/kernel/skas/process_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/process_kern.c	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/process_kern.c	2005-04-06 23:44:30.268021152 +0800
++++ linux-2.6.10/arch/um/kernel/skas/process_kern.c	2005-04-07 22:05:29.488759216 +0800
 @@ -19,7 +19,6 @@
  #include "os.h"
  #include "user_util.h"
@@ -1522,7 +1543,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/process_kern.c
 Index: linux-2.6.10/arch/um/kernel/skas/trap_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/trap_user.c	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/trap_user.c	2005-04-06 23:44:30.269021000 +0800
++++ linux-2.6.10/arch/um/kernel/skas/trap_user.c	2005-04-07 22:05:29.488759216 +0800
 @@ -21,6 +21,14 @@
  	int save_errno = errno;
  	int save_user;
@@ -1541,7 +1562,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/trap_user.c
 Index: linux-2.6.10/arch/um/kernel/skas/syscall_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/syscall_kern.c	2004-12-25 05:35:00.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/syscall_kern.c	2005-04-06 23:44:30.269021000 +0800
++++ linux-2.6.10/arch/um/kernel/skas/syscall_kern.c	2005-04-07 22:05:29.488759216 +0800
 @@ -6,6 +6,7 @@
  #include "linux/sys.h"
  #include "linux/ptrace.h"
@@ -1553,7 +1574,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/syscall_kern.c
 Index: linux-2.6.10/arch/um/kernel/skas/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/Makefile	2004-12-25 05:34:30.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/Makefile	2005-04-06 23:44:30.270020848 +0800
++++ linux-2.6.10/arch/um/kernel/skas/Makefile	2005-04-07 22:05:29.488759216 +0800
 @@ -4,8 +4,7 @@
  #
  
@@ -1567,7 +1588,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/Makefile
 Index: linux-2.6.10/arch/um/kernel/skas/include/mmu-skas.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/include/mmu-skas.h	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/include/mmu-skas.h	2005-04-06 23:44:30.265021608 +0800
++++ linux-2.6.10/arch/um/kernel/skas/include/mmu-skas.h	2005-04-07 22:05:29.488759216 +0800
 @@ -22,3 +22,27 @@
   * c-file-style: "linux"
   * End:
@@ -1599,7 +1620,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/include/mmu-skas.h
 Index: linux-2.6.10/arch/um/kernel/skas/include/mode-skas.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/include/mode-skas.h	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/include/mode-skas.h	2005-04-06 23:44:30.265021608 +0800
++++ linux-2.6.10/arch/um/kernel/skas/include/mode-skas.h	2005-04-07 22:05:29.489759064 +0800
 @@ -14,6 +14,40 @@
  extern int have_fpx_regs;
  
@@ -1644,7 +1665,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/include/mode-skas.h
 Index: linux-2.6.10/arch/um/kernel/skas/include/uaccess-skas.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/skas/include/uaccess-skas.h	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/skas/include/uaccess-skas.h	2005-04-06 23:44:30.264021760 +0800
++++ linux-2.6.10/arch/um/kernel/skas/include/uaccess-skas.h	2005-04-07 22:05:29.489759064 +0800
 @@ -7,6 +7,51 @@
  #define __SKAS_UACCESS_H
  
@@ -1700,7 +1721,7 @@ Index: linux-2.6.10/arch/um/kernel/skas/include/uaccess-skas.h
 Index: linux-2.6.10/arch/um/kernel/tt/syscall_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/syscall_user.c	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/syscall_user.c	2005-04-06 23:44:30.275020088 +0800
++++ linux-2.6.10/arch/um/kernel/tt/syscall_user.c	2005-04-07 22:05:29.489759064 +0800
 @@ -42,37 +42,31 @@
  	syscall_trace(regs, 1);
  	record_syscall_end(index, result);
@@ -1767,7 +1788,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/syscall_user.c
 Index: linux-2.6.10/arch/um/kernel/tt/sys-i386/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/sys-i386/Makefile	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/sys-i386/Makefile	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/kernel/tt/sys-i386/Makefile	2005-04-07 19:34:21.197950744 +0800
 @@ -1,12 +0,0 @@
 -# 
 -# Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -1784,7 +1805,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/sys-i386/Makefile
 Index: linux-2.6.10/arch/um/kernel/tt/sys-i386/sigcontext.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/sys-i386/sigcontext.c	2004-12-25 05:35:39.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/sys-i386/sigcontext.c	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/kernel/tt/sys-i386/sigcontext.c	2005-04-07 19:34:21.197950744 +0800
 @@ -1,60 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -1849,7 +1870,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/sys-i386/sigcontext.c
 Index: linux-2.6.10/arch/um/kernel/tt/exec_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/exec_user.c	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/exec_user.c	2005-04-06 23:44:30.273020392 +0800
++++ linux-2.6.10/arch/um/kernel/tt/exec_user.c	2005-04-07 22:05:29.490758912 +0800
 @@ -10,6 +10,7 @@
  #include <errno.h>
  #include <sys/wait.h>
@@ -1873,7 +1894,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/exec_user.c
 Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/tracer.c	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/tracer.c	2005-04-06 23:44:30.276019936 +0800
++++ linux-2.6.10/arch/um/kernel/tt/tracer.c	2005-04-07 22:10:59.446598000 +0800
 @@ -13,6 +13,7 @@
  #include <string.h>
  #include <sys/mman.h>
@@ -1930,7 +1951,34 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
  	if((ptrace(PTRACE_CONT, pid, 0, 0) < 0)){
  		printf("Failed to continue idle thread, errno = %d\n", errno);
  		exit(1);
-@@ -297,7 +302,8 @@
+@@ -265,7 +270,25 @@
+ #endif
+ 		else if(WIFSIGNALED(status)){
+ 			sig = WTERMSIG(status);
+-			if(sig != 9){
++		        if(sig == SIGKILL){
++                                /* This is to make sure that processes die
++                                * immediately without becoming zombies on
++                                * all hosts. Before 2.6.9, kill(pid, SIGKILL)
++                                * was enough to make sure a process went away
++                                * immediately. After 2.6.9, they don't run
++                                * any more, but they remain as zombies. So,
++                                * a PTRACE_CONT is necessary in order to put
++                                * them in a normal run state so that they die.
++                                * I do a PTRACE_KILL here for good measure.
++                                * Might as well kill it by all available
++                                * means. These calls will likely fail when
++                                * they are not needed because the process has
++                                * already disappeared. However, they don't
++                                * hurt.
++                                */
++                               ptrace(PTRACE_KILL, pid, 0, 0);
++                               ptrace(PTRACE_CONT, pid, 0, 0);
++                        } else {
+ 				printf("Child %d exited with signal %d\n", pid,
+ 				       sig);
+ 			}
+@@ -297,7 +320,8 @@
  			task = cpu_tasks[proc_id].task;
  			tracing = is_tracing(task);
  			old_tracing = tracing;
@@ -1940,7 +1988,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
  			local_using_sysemu = get_using_sysemu();
  			pt_syscall_parm = local_using_sysemu ? PTRACE_SYSEMU : PTRACE_SYSCALL;
  
-@@ -306,6 +312,15 @@
+@@ -306,6 +330,15 @@
  				sig = 0;
  				op = do_proc_op(task, proc_id);
  				switch(op){
@@ -1956,7 +2004,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
  				case OP_TRACE_ON:
  					arch_leave_kernel(task, pid);
  					tracing = 1;
-@@ -314,7 +329,13 @@
+@@ -314,7 +347,13 @@
  				case OP_HALT:
  					unmap_physmem();
  					kmalloc_ok = 0;
@@ -1971,7 +2019,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
  					return(op == OP_REBOOT);
  				case OP_NONE:
  					printf("Detaching pid %d\n", pid);
-@@ -328,14 +349,26 @@
+@@ -328,14 +367,26 @@
  				 */
  				pid = cpu_tasks[proc_id].pid;
  				break;
@@ -2000,7 +2048,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
  				break;
  			case SIGPROF:
  				if(tracing) sig = 0;
-@@ -371,6 +404,9 @@
+@@ -371,6 +422,9 @@
  				continue;
  			}
  
@@ -2013,7 +2061,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/tracer.c
 Index: linux-2.6.10/arch/um/kernel/tt/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/Makefile	2004-12-25 05:34:57.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/Makefile	2005-04-06 23:44:30.277019784 +0800
++++ linux-2.6.10/arch/um/kernel/tt/Makefile	2005-04-07 22:05:29.491758760 +0800
 @@ -8,7 +8,7 @@
  
  obj-y = exec_kern.o exec_user.o gdb.o ksyms.o mem.o mem_user.o process_kern.o \
@@ -2026,7 +2074,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/Makefile
 Index: linux-2.6.10/arch/um/kernel/tt/include/mode-tt.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/include/mode-tt.h	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/include/mode-tt.h	2005-04-06 23:44:30.272020544 +0800
++++ linux-2.6.10/arch/um/kernel/tt/include/mode-tt.h	2005-04-07 22:05:29.491758760 +0800
 @@ -14,6 +14,41 @@
  
  extern int tracer(int (*init_proc)(void *), void *sp);
@@ -2072,7 +2120,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/include/mode-tt.h
 Index: linux-2.6.10/arch/um/kernel/tt/include/tt.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/tt/include/tt.h	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/tt/include/tt.h	2005-04-06 23:44:30.273020392 +0800
++++ linux-2.6.10/arch/um/kernel/tt/include/tt.h	2005-04-07 22:05:29.491758760 +0800
 @@ -26,7 +26,8 @@
  extern int is_tracing(void *task);
  extern void syscall_handler(int sig, union uml_pt_regs *regs);
@@ -2086,7 +2134,7 @@ Index: linux-2.6.10/arch/um/kernel/tt/include/tt.h
 Index: linux-2.6.10/arch/um/kernel/ptrace.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/ptrace.c	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/ptrace.c	2005-04-06 23:44:30.254023280 +0800
++++ linux-2.6.10/arch/um/kernel/ptrace.c	2005-04-07 22:05:29.491758760 +0800
 @@ -16,6 +16,7 @@
  #include "asm/uaccess.h"
  #include "kern_util.h"
@@ -2111,7 +2159,7 @@ Index: linux-2.6.10/arch/um/kernel/ptrace.c
 Index: linux-2.6.10/arch/um/kernel/dyn.lds.S
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/dyn.lds.S	2004-12-25 05:34:48.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/dyn.lds.S	2005-04-06 23:44:30.253023432 +0800
++++ linux-2.6.10/arch/um/kernel/dyn.lds.S	2005-04-07 22:05:29.492758608 +0800
 @@ -7,8 +7,11 @@
  
  SECTIONS
@@ -2127,7 +2175,7 @@ Index: linux-2.6.10/arch/um/kernel/dyn.lds.S
 Index: linux-2.6.10/arch/um/kernel/um_arch.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/um_arch.c	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/um_arch.c	2005-04-06 23:44:30.239025560 +0800
++++ linux-2.6.10/arch/um/kernel/um_arch.c	2005-04-07 22:05:29.492758608 +0800
 @@ -44,11 +44,6 @@
  	.ipi_pipe		= { -1, -1 }
  };
@@ -2155,7 +2203,7 @@ Index: linux-2.6.10/arch/um/kernel/um_arch.c
 Index: linux-2.6.10/arch/um/kernel/time.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/time.c	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/time.c	2005-04-06 23:44:30.237025864 +0800
++++ linux-2.6.10/arch/um/kernel/time.c	2005-04-07 22:05:29.492758608 +0800
 @@ -60,6 +60,9 @@
  	   (setitimer(ITIMER_REAL, &disable, NULL) < 0))
  		printk("disnable_timer - setitimer failed, errno = %d\n",
@@ -2169,7 +2217,7 @@ Index: linux-2.6.10/arch/um/kernel/time.c
 Index: linux-2.6.10/arch/um/kernel/process_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/process_kern.c	2004-12-25 05:34:57.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/process_kern.c	2005-04-06 23:44:30.240025408 +0800
++++ linux-2.6.10/arch/um/kernel/process_kern.c	2005-04-07 22:05:29.493758456 +0800
 @@ -291,8 +291,6 @@
  
  EXPORT_SYMBOL(disable_hlt);
@@ -2182,7 +2230,7 @@ Index: linux-2.6.10/arch/um/kernel/process_kern.c
 Index: linux-2.6.10/arch/um/kernel/trap_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/trap_user.c	2004-12-25 05:34:44.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/trap_user.c	2005-04-06 23:44:30.277019784 +0800
++++ linux-2.6.10/arch/um/kernel/trap_user.c	2005-04-07 22:05:29.493758456 +0800
 @@ -18,7 +18,6 @@
  #include "sigcontext.h"
  #include "sysdep/sigcontext.h"
@@ -2194,7 +2242,7 @@ Index: linux-2.6.10/arch/um/kernel/trap_user.c
 Index: linux-2.6.10/arch/um/kernel/signal_kern.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/signal_kern.c	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/signal_kern.c	2005-04-06 23:44:30.264021760 +0800
++++ linux-2.6.10/arch/um/kernel/signal_kern.c	2005-04-07 22:05:29.493758456 +0800
 @@ -230,53 +230,6 @@
  	return(do_sigaltstack(uss, uoss, PT_REGS_SP(&current->thread.regs)));
  }
@@ -2252,7 +2300,7 @@ Index: linux-2.6.10/arch/um/kernel/signal_kern.c
 Index: linux-2.6.10/arch/um/kernel/uml.lds.S
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/uml.lds.S	2004-12-25 05:34:44.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/uml.lds.S	2005-04-06 23:44:30.254023280 +0800
++++ linux-2.6.10/arch/um/kernel/uml.lds.S	2005-04-07 22:05:29.494758304 +0800
 @@ -7,8 +7,12 @@
  
  SECTIONS
@@ -2284,7 +2332,7 @@ Index: linux-2.6.10/arch/um/kernel/uml.lds.S
 Index: linux-2.6.10/arch/um/kernel/ksyms.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/ksyms.c	2004-12-25 05:33:50.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/ksyms.c	2005-04-06 23:44:30.238025712 +0800
++++ linux-2.6.10/arch/um/kernel/ksyms.c	2005-04-07 22:05:29.494758304 +0800
 @@ -48,6 +48,7 @@
  EXPORT_SYMBOL(mode_tt);
  EXPORT_SYMBOL(handle_page_fault);
@@ -2296,7 +2344,7 @@ Index: linux-2.6.10/arch/um/kernel/ksyms.c
 Index: linux-2.6.10/arch/um/kernel/signal_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/signal_user.c	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/signal_user.c	2005-04-06 23:44:30.252023584 +0800
++++ linux-2.6.10/arch/um/kernel/signal_user.c	2005-04-07 22:05:29.494758304 +0800
 @@ -61,6 +61,10 @@
   * disable profiling; it's safe because the profiling code does not interact
   * with the kernel code at all.*/
@@ -2311,7 +2359,7 @@ Index: linux-2.6.10/arch/um/kernel/signal_user.c
 Index: linux-2.6.10/arch/um/kernel/mem_user.c
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/mem_user.c	2004-12-25 05:34:57.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/mem_user.c	2005-04-06 23:44:30.237025864 +0800
++++ linux-2.6.10/arch/um/kernel/mem_user.c	2005-04-07 22:05:29.494758304 +0800
 @@ -101,6 +101,8 @@
  	}
  	printf("OK\n");
@@ -2364,7 +2412,7 @@ Index: linux-2.6.10/arch/um/kernel/mem_user.c
 Index: linux-2.6.10/arch/um/kernel/Makefile
 ===================================================================
 --- linux-2.6.10.orig/arch/um/kernel/Makefile	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/arch/um/kernel/Makefile	2005-04-06 23:44:30.278019632 +0800
++++ linux-2.6.10/arch/um/kernel/Makefile	2005-04-07 22:05:29.495758152 +0800
 @@ -6,7 +6,7 @@
  extra-y := vmlinux.lds
  clean-files := vmlinux.lds.S
@@ -2377,7 +2425,7 @@ Index: linux-2.6.10/arch/um/kernel/Makefile
 Index: linux-2.6.10/arch/um/Kconfig
 ===================================================================
 --- linux-2.6.10.orig/arch/um/Kconfig	2004-12-25 05:34:45.000000000 +0800
-+++ linux-2.6.10/arch/um/Kconfig	2005-04-06 23:44:30.285018568 +0800
++++ linux-2.6.10/arch/um/Kconfig	2005-04-07 22:05:29.495758152 +0800
 @@ -139,6 +139,25 @@
  
          It is safe to say 'Y' here.
@@ -2466,7 +2514,7 @@ Index: linux-2.6.10/arch/um/Kconfig
 Index: linux-2.6.10/arch/um/include/frame.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/frame.h	2004-12-25 05:34:31.000000000 +0800
-+++ linux-2.6.10/arch/um/include/frame.h	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/include/frame.h	2005-04-07 19:34:21.197950744 +0800
 @@ -1,53 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -2523,8 +2571,8 @@ Index: linux-2.6.10/arch/um/include/frame.h
 - */
 Index: linux-2.6.10/arch/um/include/elf_user.h
 ===================================================================
---- linux-2.6.10.orig/arch/um/include/elf_user.h	2005-04-07 06:37:43.373923992 +0800
-+++ linux-2.6.10/arch/um/include/elf_user.h	2005-04-06 23:44:30.231026776 +0800
+--- linux-2.6.10.orig/arch/um/include/elf_user.h	2005-04-07 19:34:21.197950744 +0800
++++ linux-2.6.10/arch/um/include/elf_user.h	2005-04-07 22:05:29.495758152 +0800
 @@ -0,0 +1,19 @@
 +/*
 + * Copyright (C) 2004 Fujitsu Siemens Computers GmbH
@@ -2548,7 +2596,7 @@ Index: linux-2.6.10/arch/um/include/elf_user.h
 Index: linux-2.6.10/arch/um/include/signal_user.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/signal_user.h	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/um/include/signal_user.h	2005-04-06 23:44:30.232026624 +0800
++++ linux-2.6.10/arch/um/include/signal_user.h	2005-04-07 22:05:29.496758000 +0800
 @@ -14,6 +14,8 @@
  extern int set_signals(int enable);
  extern int get_signals(void);
@@ -2561,7 +2609,7 @@ Index: linux-2.6.10/arch/um/include/signal_user.h
 Index: linux-2.6.10/arch/um/include/skas_ptrace.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/skas_ptrace.h	2004-12-25 05:35:27.000000000 +0800
-+++ linux-2.6.10/arch/um/include/skas_ptrace.h	2005-04-06 23:44:30.232026624 +0800
++++ linux-2.6.10/arch/um/include/skas_ptrace.h	2005-04-07 22:05:29.496758000 +0800
 @@ -6,6 +6,7 @@
  #ifndef __SKAS_PTRACE_H
  #define __SKAS_PTRACE_H
@@ -2581,7 +2629,7 @@ Index: linux-2.6.10/arch/um/include/skas_ptrace.h
 Index: linux-2.6.10/arch/um/include/frame_kern.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/frame_kern.h	2004-12-25 05:34:57.000000000 +0800
-+++ linux-2.6.10/arch/um/include/frame_kern.h	2005-04-06 23:44:30.228027232 +0800
++++ linux-2.6.10/arch/um/include/frame_kern.h	2005-04-07 22:05:29.496758000 +0800
 @@ -6,8 +6,8 @@
  #ifndef __FRAME_KERN_H_
  #define __FRAME_KERN_H_
@@ -2596,7 +2644,7 @@ Index: linux-2.6.10/arch/um/include/frame_kern.h
 Index: linux-2.6.10/arch/um/include/ptrace_user.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/ptrace_user.h	2004-12-25 05:33:51.000000000 +0800
-+++ linux-2.6.10/arch/um/include/ptrace_user.h	2005-04-06 23:44:30.229027080 +0800
++++ linux-2.6.10/arch/um/include/ptrace_user.h	2005-04-07 22:05:29.496758000 +0800
 @@ -26,4 +26,35 @@
  int get_using_sysemu(void);
  extern int sysemu_supported;
@@ -2636,7 +2684,7 @@ Index: linux-2.6.10/arch/um/include/ptrace_user.h
 Index: linux-2.6.10/arch/um/include/sysdep-i386/frame.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/sysdep-i386/frame.h	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/arch/um/include/sysdep-i386/frame.h	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/include/sysdep-i386/frame.h	2005-04-07 19:34:21.197950744 +0800
 @@ -1,29 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -2670,7 +2718,7 @@ Index: linux-2.6.10/arch/um/include/sysdep-i386/frame.h
 Index: linux-2.6.10/arch/um/include/sysdep-i386/frame_kern.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/sysdep-i386/frame_kern.h	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/arch/um/include/sysdep-i386/frame_kern.h	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/include/sysdep-i386/frame_kern.h	2005-04-07 19:34:21.197950744 +0800
 @@ -1,69 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -2744,7 +2792,7 @@ Index: linux-2.6.10/arch/um/include/sysdep-i386/frame_kern.h
 Index: linux-2.6.10/arch/um/include/sysdep-i386/frame_user.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/sysdep-i386/frame_user.h	2004-12-25 05:35:28.000000000 +0800
-+++ linux-2.6.10/arch/um/include/sysdep-i386/frame_user.h	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/include/sysdep-i386/frame_user.h	2005-04-07 19:34:21.197950744 +0800
 @@ -1,91 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -2840,7 +2888,7 @@ Index: linux-2.6.10/arch/um/include/sysdep-i386/frame_user.h
 Index: linux-2.6.10/arch/um/include/frame_user.h
 ===================================================================
 --- linux-2.6.10.orig/arch/um/include/frame_user.h	2004-12-25 05:33:50.000000000 +0800
-+++ linux-2.6.10/arch/um/include/frame_user.h	2005-04-07 06:37:43.373923992 +0800
++++ linux-2.6.10/arch/um/include/frame_user.h	2005-04-07 19:34:21.197950744 +0800
 @@ -1,23 +0,0 @@
 -/* 
 - * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -2868,7 +2916,7 @@ Index: linux-2.6.10/arch/um/include/frame_user.h
 Index: linux-2.6.10/arch/i386/kernel/ptrace.c
 ===================================================================
 --- linux-2.6.10.orig/arch/i386/kernel/ptrace.c	2004-12-25 05:34:29.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/ptrace.c	2005-04-06 23:44:30.208030272 +0800
++++ linux-2.6.10/arch/i386/kernel/ptrace.c	2005-04-07 22:05:29.498757696 +0800
 @@ -15,6 +15,7 @@
  #include <linux/user.h>
  #include <linux/security.h>
@@ -3030,7 +3078,7 @@ Index: linux-2.6.10/arch/i386/kernel/ptrace.c
 Index: linux-2.6.10/arch/i386/kernel/ldt.c
 ===================================================================
 --- linux-2.6.10.orig/arch/i386/kernel/ldt.c	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/ldt.c	2005-04-06 23:44:30.220028448 +0800
++++ linux-2.6.10/arch/i386/kernel/ldt.c	2005-04-07 22:05:29.498757696 +0800
 @@ -18,6 +18,7 @@
  #include <asm/system.h>
  #include <asm/ldt.h>
@@ -3190,7 +3238,7 @@ Index: linux-2.6.10/arch/i386/kernel/ldt.c
 Index: linux-2.6.10/arch/i386/kernel/sys_i386.c
 ===================================================================
 --- linux-2.6.10.orig/arch/i386/kernel/sys_i386.c	2004-12-25 05:35:39.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/sys_i386.c	2005-04-06 23:44:30.220028448 +0800
++++ linux-2.6.10/arch/i386/kernel/sys_i386.c	2005-04-07 22:05:29.499757544 +0800
 @@ -41,7 +41,7 @@
  }
  
@@ -3234,7 +3282,7 @@ Index: linux-2.6.10/arch/i386/kernel/sys_i386.c
 Index: linux-2.6.10/arch/i386/kernel/entry.S
 ===================================================================
 --- linux-2.6.10.orig/arch/i386/kernel/entry.S	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/entry.S	2005-04-06 23:44:30.206030576 +0800
++++ linux-2.6.10/arch/i386/kernel/entry.S	2005-04-07 22:05:29.499757544 +0800
 @@ -222,7 +222,7 @@
  	SAVE_ALL
  	GET_THREAD_INFO(%ebp)
@@ -3268,7 +3316,7 @@ Index: linux-2.6.10/arch/i386/kernel/entry.S
 Index: linux-2.6.10/arch/i386/Kconfig
 ===================================================================
 --- linux-2.6.10.orig/arch/i386/Kconfig	2005-04-06 23:38:33.000000000 +0800
-+++ linux-2.6.10/arch/i386/Kconfig	2005-04-06 23:44:30.222028144 +0800
++++ linux-2.6.10/arch/i386/Kconfig	2005-04-07 22:05:29.500757392 +0800
 @@ -738,6 +738,10 @@
  	depends on HIGHMEM64G
  	default y
@@ -3283,7 +3331,7 @@ Index: linux-2.6.10/arch/i386/Kconfig
 Index: linux-2.6.10/fs/hostfs/hostfs.h
 ===================================================================
 --- linux-2.6.10.orig/fs/hostfs/hostfs.h	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/fs/hostfs/hostfs.h	2005-04-06 23:44:30.286018416 +0800
++++ linux-2.6.10/fs/hostfs/hostfs.h	2005-04-07 22:05:29.500757392 +0800
 @@ -16,9 +16,30 @@
  #define HOSTFS_ATTR_CTIME	64
  #define HOSTFS_ATTR_ATIME_SET	128
@@ -3318,7 +3366,7 @@ Index: linux-2.6.10/fs/hostfs/hostfs.h
 Index: linux-2.6.10/fs/hostfs/hostfs_kern.c
 ===================================================================
 --- linux-2.6.10.orig/fs/hostfs/hostfs_kern.c	2004-12-25 05:34:01.000000000 +0800
-+++ linux-2.6.10/fs/hostfs/hostfs_kern.c	2005-04-06 23:44:30.287018264 +0800
++++ linux-2.6.10/fs/hostfs/hostfs_kern.c	2005-04-07 22:05:29.501757240 +0800
 @@ -393,6 +393,7 @@
  static struct file_operations hostfs_file_fops = {
  	.llseek		= generic_file_llseek,
@@ -3341,7 +3389,7 @@ Index: linux-2.6.10/fs/hostfs/hostfs_kern.c
 Index: linux-2.6.10/kernel/fork.c
 ===================================================================
 --- linux-2.6.10.orig/kernel/fork.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/kernel/fork.c	2005-04-06 23:44:30.191032856 +0800
++++ linux-2.6.10/kernel/fork.c	2005-04-07 22:05:29.502757088 +0800
 @@ -927,6 +927,9 @@
  	 * of CLONE_PTRACE.
  	 */
@@ -3355,7 +3403,7 @@ Index: linux-2.6.10/kernel/fork.c
 Index: linux-2.6.10/include/linux/ptrace.h
 ===================================================================
 --- linux-2.6.10.orig/include/linux/ptrace.h	2005-04-06 23:38:33.000000000 +0800
-+++ linux-2.6.10/include/linux/ptrace.h	2005-04-06 23:44:30.187033464 +0800
++++ linux-2.6.10/include/linux/ptrace.h	2005-04-07 22:05:29.503756936 +0800
 @@ -20,6 +20,7 @@
  #define PTRACE_DETACH		0x11
  
@@ -3367,7 +3415,7 @@ Index: linux-2.6.10/include/linux/ptrace.h
 Index: linux-2.6.10/include/linux/mm.h
 ===================================================================
 --- linux-2.6.10.orig/include/linux/mm.h	2005-04-06 23:38:33.000000000 +0800
-+++ linux-2.6.10/include/linux/mm.h	2005-04-06 23:44:30.188033312 +0800
++++ linux-2.6.10/include/linux/mm.h	2005-04-07 22:05:29.503756936 +0800
 @@ -625,6 +625,9 @@
  extern struct shrinker *set_shrinker(int, shrinker_t);
  extern void remove_shrinker(struct shrinker *shrinker);
@@ -3398,8 +3446,8 @@ Index: linux-2.6.10/include/linux/mm.h
  	unsigned long len, unsigned long prot,
 Index: linux-2.6.10/include/linux/proc_mm.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/proc_mm.h	2005-04-07 06:37:43.373923992 +0800
-+++ linux-2.6.10/include/linux/proc_mm.h	2005-04-06 23:44:30.189033160 +0800
+--- linux-2.6.10.orig/include/linux/proc_mm.h	2005-04-07 19:34:21.197950744 +0800
++++ linux-2.6.10/include/linux/proc_mm.h	2005-04-07 22:05:29.503756936 +0800
 @@ -0,0 +1,48 @@
 +/*
 + * Copyright (C) 2002 Jeff Dike (jdike@karaya.com)
@@ -3452,7 +3500,7 @@ Index: linux-2.6.10/include/linux/proc_mm.h
 Index: linux-2.6.10/include/asm-um/elf.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-um/elf.h	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/include/asm-um/elf.h	2005-04-06 23:44:30.183034072 +0800
++++ linux-2.6.10/include/asm-um/elf.h	2005-04-07 22:05:29.504756784 +0800
 @@ -3,7 +3,8 @@
  
  #include "asm/archparam.h"
@@ -3466,7 +3514,7 @@ Index: linux-2.6.10/include/asm-um/elf.h
 Index: linux-2.6.10/include/asm-um/archparam-i386.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-um/archparam-i386.h	2004-12-25 05:35:24.000000000 +0800
-+++ linux-2.6.10/include/asm-um/archparam-i386.h	2005-04-06 23:44:30.183034072 +0800
++++ linux-2.6.10/include/asm-um/archparam-i386.h	2005-04-07 22:05:29.504756784 +0800
 @@ -10,7 +10,8 @@
  
  #include "user.h"
@@ -3580,7 +3628,7 @@ Index: linux-2.6.10/include/asm-um/archparam-i386.h
 Index: linux-2.6.10/include/asm-um/fixmap.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-um/fixmap.h	2004-12-25 05:35:28.000000000 +0800
-+++ linux-2.6.10/include/asm-um/fixmap.h	2005-04-06 23:44:30.184033920 +0800
++++ linux-2.6.10/include/asm-um/fixmap.h	2005-04-07 22:05:29.504756784 +0800
 @@ -3,6 +3,7 @@
  
  #include <linux/config.h>
@@ -3611,7 +3659,7 @@ Index: linux-2.6.10/include/asm-um/fixmap.h
 Index: linux-2.6.10/include/asm-i386/thread_info.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-i386/thread_info.h	2004-12-25 05:34:00.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/thread_info.h	2005-04-06 23:44:30.185033768 +0800
++++ linux-2.6.10/include/asm-i386/thread_info.h	2005-04-07 22:05:29.505756632 +0800
 @@ -139,6 +139,7 @@
  #define TIF_NEED_RESCHED	3	/* rescheduling necessary */
  #define TIF_SINGLESTEP		4	/* restore singlestep on return to user mode */
@@ -3639,7 +3687,7 @@ Index: linux-2.6.10/include/asm-i386/thread_info.h
 Index: linux-2.6.10/include/asm-i386/ptrace.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-i386/ptrace.h	2004-12-25 05:33:51.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/ptrace.h	2005-04-06 23:44:30.186033616 +0800
++++ linux-2.6.10/include/asm-i386/ptrace.h	2005-04-07 22:05:29.505756632 +0800
 @@ -64,4 +64,26 @@
  #endif
  #endif
@@ -3670,7 +3718,7 @@ Index: linux-2.6.10/include/asm-i386/ptrace.h
 Index: linux-2.6.10/include/asm-i386/mmu_context.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-i386/mmu_context.h	2004-12-25 05:33:48.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/mmu_context.h	2005-04-06 23:44:30.185033768 +0800
++++ linux-2.6.10/include/asm-i386/mmu_context.h	2005-04-07 22:05:29.505756632 +0800
 @@ -6,13 +6,25 @@
  #include <asm/atomic.h>
  #include <asm/pgalloc.h>
@@ -3720,7 +3768,7 @@ Index: linux-2.6.10/include/asm-i386/mmu_context.h
 Index: linux-2.6.10/include/asm-i386/desc.h
 ===================================================================
 --- linux-2.6.10.orig/include/asm-i386/desc.h	2004-12-25 05:33:48.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/desc.h	2005-04-06 23:44:30.186033616 +0800
++++ linux-2.6.10/include/asm-i386/desc.h	2005-04-07 22:05:29.505756632 +0800
 @@ -126,6 +126,9 @@
  	put_cpu();
  }
