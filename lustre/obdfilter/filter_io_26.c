@@ -356,8 +356,10 @@ static void filter_clear_page_cache(struct inode *inode, struct dio_request *iob
                                       iobuf->dr_pages[i]->index);
                 if (page == NULL)
                         continue;
-                if (page->mapping != NULL)
+                if (page->mapping != NULL) {
+                        block_invalidatepage(page, 0);
                         ll_truncate_complete_page(page);
+                }
 
                 unlock_page(page);
                 page_cache_release(page);
