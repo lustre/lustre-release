@@ -142,4 +142,4 @@ try_to_cleanup
 drop_request "munlink /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
-$CLEANUP '--dump $TMP/recovery-cleanup-`hostname`.log'
+FORCE=--force $CLEANUP '--dump $TMP/recovery-cleanup-`hostname`.log'

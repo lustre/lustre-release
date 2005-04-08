@@ -66,7 +66,7 @@ fi
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w portals.debug=0 || true
-    cleanup
+    FORCE=--force cleanup
     exit
 fi
 
@@ -388,7 +388,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	wait $MULTI_PID
 	rc=$?
 	sysctl -w lustre.fail_loc=0x0
-	client_df
+	client_reconnect
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
 run_test 24 "fsync error (should return error)" 
@@ -473,8 +473,9 @@ test_25c() {
 	sleep 30
 	test_25c_guts
 	rc=$?
+	client_reconnect
 	return $rc
 }
 run_test 25c "failover OST under load"
 
-$CLEANUP
+FORCE=--force $CLEANUP

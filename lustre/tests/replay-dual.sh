@@ -17,11 +17,11 @@ gen_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
     if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+    add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
     fi
     
     add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+   --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE  --failover
     add_client client mds --lov lov1 --path $MOUNT
@@ -49,7 +49,7 @@ cleanup() {
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w portals.debug=0
-    cleanup
+    FORCE=--force cleanup
     exit
 fi
 
@@ -362,30 +362,30 @@ run_test 17 "fail OST during recovery (3571)"
 # cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for it
 export NOW=0
 
-test_18() {	# bug 3822 - evicting client with enqueued lock
-	#set -vx
-	mkdir -p $MOUNT1/$tdir
-	touch $MOUNT1/$tdir/f0
+test_18() { # bug 3822 - evicting client with enqueued lock
+   #set -vx
+   mkdir -p $MOUNT1/$tdir
+   touch $MOUNT1/$tdir/f0
 #define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
-	statmany -s $MOUNT1/$tdir/f 1 500 &
-	OPENPID=$!
-	NOW=`date +%s`
-	do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
-	sleep 1
+   statmany -s $MOUNT1/$tdir/f 1 500 &
+   OPENPID=$!
+   NOW=`date +%s`
+   do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+   sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
-	do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
-	cancel_lru_locks MDC
-	usleep 500 # wait to ensure first client is one that will be evicted
-	openfile -f O_RDONLY $MOUNT2/$tdir/f0
-	wait $OPENPID
-	dmesg | grep "entering recovery in server" && \
-		error "client not evicted" || true
+   do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
+   cancel_lru_locks MDC
+   usleep 500 # wait to ensure first client is one that will be evicted
+   openfile -f O_RDONLY $MOUNT2/$tdir/f0
+   wait $OPENPID
+   dmesg | grep "entering recovery in server" && \
+      error "client not evicted" || true
 }
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 if [ "$ONLY" != "setup" ]; then
-	equals_msg test complete, cleaning up
-	SLEEP=$((`date +%s` - $NOW))
-	[ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
-	$CLEANUP
+   equals_msg test complete, cleaning up
+   SLEEP=$((`date +%s` - $NOW))
+   [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+   FORCE=--force $CLEANUP
 fi

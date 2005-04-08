@@ -150,6 +150,17 @@ client_df() {
     fi
 }
 
+client_reconnect() {
+    df $MOUNT > /dev/null
+    uname -n >> $MOUNT/recon
+    if [ ! -z "$CLIENTS" ]; then
+	$PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
+    fi
+    echo Connected clients:
+    cat $MOUNT/recon
+    rm $MOUNT/recon
+}
+
 facet_failover() {
     facet=$1
     echo "Failing $facet node `facet_active_host $facet`"
@@ -582,6 +593,12 @@ pass() {
 	echo PASS $@
 }
 
+check_mds() {
+    FFREE=`cat /proc/fs/lustre/mds/*/filesfree`
+    FTOTAL=`cat /proc/fs/lustre/mds/*/filestotal`
+    [ $FFREE -ge $FTOTAL ] && error "files free $FFREE > total $FTOTAL" || true
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -593,7 +610,9 @@ run_one() {
 
     BEFORE=`date +%s`
     log "== test $testnum: $message ============ `date +%H:%M:%S` ($BEFORE)"
+    #check_mds
     test_${testnum} || error "test_$testnum failed with $?"
+    #check_mds
     pass "($((`date +%s` - $BEFORE))s)"
 }
 

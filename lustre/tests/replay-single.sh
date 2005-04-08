@@ -48,7 +48,7 @@ cleanup() {
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w portals.debug=0 || true
-    cleanup
+    FORCE=--force cleanup
     exit
 fi
 
@@ -1031,4 +1031,4 @@ test_58() {
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
 equals_msg test complete, cleaning up
-$CLEANUP
+FORCE=--force $CLEANUP

@@ -41,7 +41,7 @@ cleanup() {
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w portals.debug=0
-    cleanup
+    FORCE=--force cleanup
     exit
 fi
 
@@ -197,4 +197,4 @@ test_7() {
 run_test 7 "Fail OST before obd_destroy"
 
 equals_msg test complete, cleaning up
-$CLEANUP
+FORCE=--force $CLEANUP
