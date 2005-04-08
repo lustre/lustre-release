@@ -576,7 +576,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         if (rc)
                 CERROR("class_config_process_llog failed: rc = %d\n", rc);
 
-        rc = obd_disconnect(exp, 0);
+        err = obd_disconnect(exp, 0);
         
         EXIT;
 out_cleanup:
