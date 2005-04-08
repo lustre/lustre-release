@@ -26,6 +26,7 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/obd.h>
+#include <linux/obd_support.h>
 #include <linux/lvfs.h>
 
 struct dentry *lvfs_id2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
@@ -96,6 +97,7 @@ void lvfs_umount_fs(struct lvfs_obd_ctxt *lvfs_ctxt)
 {
         if (lvfs_ctxt && atomic_dec_and_test(&lvfs_ctxt->loc_refcount)) {
                 struct vfsmount *mnt = lvfs_ctxt->loc_mnt;
+                ll_sbdev_type save_dev = ll_sbdev(mnt->mnt_sb);
 
                 list_del(&lvfs_ctxt->loc_list);
                 if (atomic_read(&mnt->mnt_count) > 2)
@@ -103,12 +105,11 @@ void lvfs_umount_fs(struct lvfs_obd_ctxt *lvfs_ctxt)
                                atomic_read(&mnt->mnt_count));
                 
                 mntput(mnt);
-                
                 if (lvfs_ctxt->loc_name)
                         OBD_FREE(lvfs_ctxt->loc_name, 
                                  strlen(lvfs_ctxt->loc_name) + 1);
                 OBD_FREE(lvfs_ctxt, sizeof(*lvfs_ctxt));
-                dev_clear_rdonly(2);
+                ll_clear_rdonly(save_dev);
         }
 }
 EXPORT_SYMBOL(lvfs_umount_fs);

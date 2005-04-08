@@ -2932,7 +2932,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        dev_clear_rdonly(2);
 
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(rc = -EINVAL);
@@ -3012,6 +3011,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         mnt = lvfs_ctxt->loc_mnt;
         mds->mds_lvfs_ctxt = lvfs_ctxt;
+        ll_clear_rdonly(ll_sbdev(mnt->mnt_sb));
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lcfg->lcfg_inlbuf1, mnt);
 

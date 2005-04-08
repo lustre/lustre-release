@@ -226,6 +226,29 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+
+#
+# LC_FUNC_DEV_SET_RDONLY
+#
+# check for the old-style dev_set_rdonly which took an extra "devno" param
+# and can only set a single device to discard writes at one time
+#
+AC_DEFUN([LC_FUNC_DEV_SET_RDONLY],
+[AC_MSG_CHECKING([if kernel has old single-device dev_set_rdonly])
+HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/ll_rw_blk.c`"
+if test x$HAVE_OLD_DSR != "x1" ; then
+        HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/blkpg.c`"
+fi
+if test x$HAVE_OLD_DSR = "x1" ; then
+        AC_DEFINE(HAVE_OLD_DEV_SET_RDONLY, 1,
+                [kernel has old single-device dev_set_rdonly])
+        AC_MSG_RESULT(yes)
+else
+        AC_MSG_RESULT(no)
+fi
+])
+
+
 #
 # LC_CONFIG_BACKINGFS
 #
@@ -395,6 +418,7 @@ LC_FUNC_PDE
 LC_FUNC_DIRECT_IO
 LC_HEADER_MM_INLINE
 LC_STRUCT_INODE
+LC_FUNC_DEV_SET_RDONLY
 ])
 
 #

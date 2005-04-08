@@ -1438,7 +1438,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         int rc = 0, i;
         ENTRY;
 
-        dev_clear_rdonly(2);
 
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
@@ -1484,6 +1483,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_lvfs_ctxt.fs = get_ds();
         obd->obd_lvfs_ctxt.cb_ops = filter_lvfs_ops;
 
+        ll_clear_rdonly(ll_sbdev(filter->fo_sb));
+        
         rc = fsfilt_setup(obd, mnt->mnt_sb);
         if (rc)
                 GOTO(err_mntput, rc);
@@ -1591,6 +1592,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 static int filter_cleanup(struct obd_device *obd, int flags)
 {
         struct filter_obd *filter = &obd->u.filter;
+        ll_sbdev_type save_dev;
         ENTRY;
 
         if (flags & OBD_OPT_FAILOVER)
@@ -1613,6 +1615,7 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         if (filter->fo_sb == NULL)
                 RETURN(0);
 
+        save_dev = ll_sbdev(filter->fo_sb);
         filter_post_fs_cleanup(obd);
         filter_post(obd);
 
@@ -1626,7 +1629,7 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         fsfilt_put_ops(obd->obd_fsops);
         lock_kernel();
 
-        dev_clear_rdonly(2);
+        ll_clear_rdonly(save_dev);
 
         RETURN(0);
 }
@@ -2921,7 +2924,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 LASSERT(handle);
                 (void)fsfilt_commit(obd, sb, inode, handle, 1);
 
-                dev_set_rdonly(ll_sbdev(obd->u.filter.fo_sb), 2);
+                ll_set_rdonly(ll_sbdev(obd->u.filter.fo_sb));
                 RETURN(0);
         }
 

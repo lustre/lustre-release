@@ -487,7 +487,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 LASSERT(handle);
                 rc = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 1);
 
-                dev_set_rdonly(ll_sbdev(obd->u.mds.mds_sb), 2);
+                ll_set_rdonly(ll_sbdev(obd->u.mds.mds_sb));
                 RETURN(0);
         }
 
