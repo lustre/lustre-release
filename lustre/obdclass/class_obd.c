@@ -115,6 +115,7 @@ void ll_set_rdonly(ll_sbdev_type dev)
 
 void ll_clear_rdonly(ll_sbdev_type dev)
 {
+#ifndef HAVE_CLEAR_RDONLY_ON_PUT
         CDEBUG(D_IOCTL | D_HA, "unset dev %ld rdonly\n", (long)dev);
         if (ll_check_rdonly(dev)) {
                 ll_sbdev_sync(dev);
@@ -124,6 +125,10 @@ void ll_clear_rdonly(ll_sbdev_type dev)
                 dev_clear_rdonly(dev);
 #endif
         }
+#else 
+        CDEBUG(D_IOCTL | D_HA, "(will unset dev %ld rdonly on put)\n",
+               (long)dev);
+#endif
 }
 
 /*  opening /dev/obd */

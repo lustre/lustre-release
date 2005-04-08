@@ -1,6 +1,6 @@
---- linux-2.4.21-p4smp-75chaos/drivers/block/ll_rw_blk.c.orig	2004-10-28 14:41:07.000000000 -0700
-+++ linux-2.4.21-p4smp-75chaos/drivers/block/ll_rw_blk.c	2005-01-19 12:24:53.946853178 -0800
-@@ -679,6 +679,86 @@ void set_device_ro(kdev_t dev,int flag)
+--- linux-2.4.24.orig/drivers/block/ll_rw_blk.c	2005-04-07 17:30:58.978035892 -0700
++++ linux-2.4.24/drivers/block/ll_rw_blk.c	2005-04-07 17:22:04.354867801 -0700
+@@ -691,6 +691,86 @@ void set_device_ro(kdev_t dev,int flag)
  	else ro_bits[major][minor >> 5] &= ~(1 << (minor & 31));
  }
  
@@ -87,14 +87,37 @@
  inline void drive_stat_acct (kdev_t dev, int rw,
  				unsigned long nr_sectors, int new_io)
  {
-@@ -1257,6 +1337,10 @@ void generic_make_request (int rw, struc
+@@ -1256,6 +1336,10 @@ void generic_make_request (int rw, struc
  			break;
  		}
  
-+		if ((rw & WRITE)&&(dev_check_rdonly(bh->b_rdev))) {
-+		  bh->b_end_io(bh, 0);
-+		  break;
-+		}
++                if ((rw & WRITE)&&(dev_check_rdonly(bh->b_rdev))) {
++                        bh->b_end_io(bh, 0);
++                        break;
++                }
  	} while (q->make_request_fn(q, rw, bh));
  }
  
+--- linux-2.4.24.orig/include/linux/fs.h	2003-11-28 10:26:21.000000000 -0800
++++ linux-2.4.24/include/linux/fs.h	2005-04-07 17:03:36.810595409 -0700
+@@ -1418,6 +1418,10 @@ extern struct buffer_head * getblk(kdev_
+ extern void ll_rw_block(int, int, struct buffer_head * bh[]);
+ extern void submit_bh(int, struct buffer_head *);
+ extern int is_read_only(kdev_t);
++#define HAVE_CLEAR_RDONLY_ON_PUT
++void dev_set_rdonly(kdev_t dev);
++int dev_check_rdonly(kdev_t dev);
++void dev_clear_rdonly(kdev_t dev);
+ extern void __brelse(struct buffer_head *);
+ static inline void brelse(struct buffer_head *buf)
+ {
+--- linux-2.4.24.orig/fs/block_dev.c	2003-06-13 07:51:37.000000000 -0700
++++ linux-2.4.24/fs/block_dev.c	2005-04-07 14:01:49.000000000 -0700
+@@ -645,6 +645,7 @@ int blkdev_put(struct block_device *bdev
+ 		bdev->bd_op = NULL;
+ 	unlock_kernel();
+ 	up(&bdev->bd_sem);
++        dev_clear_rdonly(to_kdev_t(bdev->bd_dev));
+ 	bdput(bdev);
+ 	return ret;
+ }

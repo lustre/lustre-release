@@ -1,5 +1,5 @@
---- linux-2.6.5.orig/drivers/block/ll_rw_blk.c	2005-03-16 11:08:47.404935605 -0800
-+++ linux-2.6.5/drivers/block/ll_rw_blk.c	2005-03-16 10:57:38.197357003 -0800
+--- linux-2.6.5-suse.orig/drivers/block/ll_rw_blk.c.naked	2005-04-07 17:43:49.143050888 -0700
++++ linux-2.6.5/drivers/block/ll_rw_blk.c	2005-03-16 10:57:38.000000000 -0800
 @@ -2458,6 +2458,8 @@ static inline void blk_partition_remap(s
  	}
  }
@@ -115,3 +115,26 @@
   * sysfs parts below
   */
  struct queue_sysfs_entry {
+--- linux-2.6.5-suse.orig/include/linux/fs.h	2004-11-11 07:28:45.000000000 -0800
++++ linux-2.6.5/include/linux/fs.h	2005-04-07 18:12:42.772181591 -0700
+@@ -1385,6 +1385,10 @@ extern void file_kill(struct file *f);
+ struct bio;
+ extern int submit_bio(int, struct bio *);
+ extern int bdev_read_only(struct block_device *);
++#define HAVE_CLEAR_RDONLY_ON_PUT
++void dev_set_rdonly(kdev_t dev);
++int dev_check_rdonly(kdev_t dev);
++void dev_clear_rdonly(kdev_t dev);
+ extern int set_blocksize(struct block_device *, int);
+ extern int sb_set_blocksize(struct super_block *, int);
+ extern int sb_min_blocksize(struct super_block *, int);
+--- linux-2.6.5-suse.orig/fs/block_dev.c	2004-11-11 07:28:30.000000000 -0800
++++ linux-2.6.5/fs/block_dev.c	2005-04-07 18:14:27.948304347 -0700
+@@ -739,6 +739,7 @@ int blkdev_put(struct block_device *bdev
+ 	}
+ 	unlock_kernel();
+ 	up(&bdev->bd_sem);
++	dev_clear_rdonly(to_kdev_t(bdev->bd_dev));
+ 	bdput(bdev);
+ 	return ret;
+ }

@@ -1,5 +1,6 @@
---- linux-2.4.20-rh.orig/drivers/block/ll_rw_blk.c	2005-01-19 10:59:48.000000000 -0800
-+++ linux-2.4.20-rh/drivers/block/ll_rw_blk.c	2005-01-19 12:13:39.325347995 -0800
+diff -ur linux-2.4.20-rh.orig/drivers/block/ll_rw_blk.c linux-2.4.20-rh/drivers/block/ll_rw_blk.c
+--- linux-2.4.20-rh.orig/drivers/block/ll_rw_blk.c	2004-05-27 11:25:09.000000000 -0700
++++ linux-2.4.20-rh/drivers/block/ll_rw_blk.c	2005-04-08 09:02:14.734804881 -0700
 @@ -645,6 +645,86 @@ void set_device_ro(kdev_t dev,int flag)
  	else ro_bits[major][minor >> 5] &= ~(1 << (minor & 31));
  }
@@ -98,3 +99,29 @@
  	} while (q->make_request_fn(q, rw, bh));
  }
  
+diff -ur linux-2.4.20-rh.orig/fs/block_dev.c linux-2.4.20-rh/fs/block_dev.c
+--- linux-2.4.20-rh.orig/fs/block_dev.c	2002-08-02 17:39:45.000000000 -0700
++++ linux-2.4.20-rh/fs/block_dev.c	2005-04-08 09:02:15.005789333 -0700
+@@ -645,6 +645,7 @@ int blkdev_put(struct block_device *bdev
+ 		bdev->bd_op = NULL;
+ 	unlock_kernel();
+ 	up(&bdev->bd_sem);
++       dev_clear_rdonly(to_kdev_t(bdev->bd_dev));
+ 	bdput(bdev);
+ 	return ret;
+ }
+diff -ur linux-2.4.20-rh.orig/include/linux/fs.h linux-2.4.20-rh/include/linux/fs.h
+--- linux-2.4.20-rh.orig/include/linux/fs.h	2004-05-27 11:25:09.000000000 -0700
++++ linux-2.4.20-rh/include/linux/fs.h	2005-04-08 09:02:14.915794496 -0700
+@@ -1425,6 +1425,10 @@ extern struct buffer_head * getblk(kdev_
+ extern void ll_rw_block(int, int, struct buffer_head * bh[]);
+ extern void submit_bh(int, struct buffer_head *);
+ extern int is_read_only(kdev_t);
++#define HAVE_CLEAR_RDONLY_ON_PUT
++void dev_set_rdonly(kdev_t dev);
++int dev_check_rdonly(kdev_t dev);
++void dev_clear_rdonly(kdev_t dev);
+ extern void __brelse(struct buffer_head *);
+ static inline void brelse(struct buffer_head *buf)
+ {
+
