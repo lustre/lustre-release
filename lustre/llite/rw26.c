@@ -61,6 +61,8 @@ static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
    locked page too */
 static int ll_invalidatepage(struct page *page, unsigned long offset)
 {
+        if (offset)
+                return 0;
         if (PagePrivate(page))
                 ll_removepage(page);
         return 1;
