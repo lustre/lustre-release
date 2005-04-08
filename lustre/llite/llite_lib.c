@@ -288,19 +288,18 @@ out:
         RETURN(err);
 }
 
-void lustre_dump_inode(struct inode *inode)
+void ll_dump_inode(struct inode *inode)
 {
         struct list_head *tmp;
         int dentry_count = 0;
-        BDEVNAME_DECLARE_STORAGE(buf);
 
         LASSERT(inode != NULL);
 
         list_for_each(tmp, &inode->i_dentry)
                 dentry_count++;
 
-        CERROR("inode %p dump: dev=%s:%lu, mode=%o, count=%u, %d dentries\n",
-               inode, ll_bdevname(inode->i_sb, buf), inode->i_ino,
+        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
+               inode, ll_i2mdcexp(inode)->exp_obd->obd_name, inode->i_ino,
                inode->i_mode, atomic_read(&inode->i_count), dentry_count);
 }
 
@@ -321,7 +320,7 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
                dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
                dentry->d_flags, dentry->d_flags, dentry->d_fsdata, subdirs);
         if (dentry->d_inode != NULL)
-                lustre_dump_inode(dentry->d_inode);
+                ll_dump_inode(dentry->d_inode);
 
         if (recur == 0)
                 return;
@@ -980,7 +979,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu valid %x\n", inode->i_ino,
+               attr->ia_valid);
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
 
         if (ia_valid & ATTR_SIZE) {
