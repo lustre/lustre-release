@@ -126,7 +126,7 @@ sub process_stats()
 		my $wvdelta = int ($wdelta / $timespan);
 		my $wrate = ($cur{$write_bytes} - $last{$write_bytes}) /
 			   ($timespan * ( 1 << 20 ));
-		printf "R %6lu (%5lu %6.2fMb)/s W %6lu (%5lu %6.2fMb)/s",
+		printf "R %6lu (%5lu %6.2fMB)/s W %6lu (%5lu %6.2fMB)/s",
 			$rdelta, $rvdelta, $rrate,
 			$wdelta, $wvdelta, $wrate;
 
