@@ -1971,6 +1971,12 @@ static int mds_cleanup(struct obd_device *obd)
         }
         mds_fs_cleanup(obd);
 
+        /* 2 seems normal on mds, (may_umount() also expects 2
+          fwiw), but we only see 1 at this point in obdfilter. */
+        if (atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count) > 2)
+                CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
+                       atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
+
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
         if (kernel_locked()) {
@@ -1978,11 +1984,7 @@ static int mds_cleanup(struct obd_device *obd)
                 must_relock++;
         }
 
-        /* 2 seems normal on mds, (may_umount() also expects 2
-          fwiw), but we only see 1 at this point in obdfilter. */
-        if (atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count) > 2)
-                CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
-                       atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
+        obd_llog_finish(obd, 0);
 
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = NULL;
@@ -1995,8 +1997,6 @@ static int mds_cleanup(struct obd_device *obd)
                 obd->obd_recovering = 0;
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
-
-        obd_llog_finish(obd, 0);
 
         ll_clear_rdonly(save_dev);
         

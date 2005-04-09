@@ -1406,12 +1406,13 @@ static int filter_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
+        
+        obd_llog_finish(obd, 0);
 
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
 
-        obd_llog_finish(obd, 0);
 
         ll_clear_rdonly(save_dev);
 
