@@ -272,15 +272,28 @@ cleanup_upcall() {
     rm -fr $UPCALL
 }
 
+show_log() {
+    local LOG=$1
+    
+    test -f $LOG && {
+	echo "======================== upcall log ==========================="
+	cat $LOG
+	echo "==============================================================="
+    } || {
+	echo "upcall log file $LOG is not found"
+    }
+}
+
 check_gns() {
     local LOG="/tmp/gns-log"
     local UPCALL_PATH=""
     
     local UPCALL=$1
-    local OBJECT=$2
-    local TIMOUT=$3
-    local TICK=$4
-    local MODE=$5
+    local OBJECT1=$2
+    local OBJECT2=$3
+    local TIMOUT=$4
+    local TICK=$5
+    local MODE=$6
     
     rm -fr $LOG >/dev/null 2>&1
     UPCALL_PATH="/tmp/gns-upcall-$UPCALL.sh"
@@ -294,37 +307,56 @@ check_gns() {
     echo "$UPCALL_PATH" > /proc/fs/lustre/llite/fs0/gns_upcall || return $?
     echo "upcall:  $(cat /proc/fs/lustre/llite/fs0/gns_upcall)"
 
-    test "x$MODE" = "xGENERIC" && {
-	echo -n "mount on open $OBJECT/test_file1 (generic): "
+    case "$MODE" in
+	GENERIC)
+	    echo -n "mount on open $OBJECT1/test_file1 (generic): "
+	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 || return $?
+	    ;;
+	CONCUR1)
+	    local i=1
+	    local nr=20
 	
-	echo -n "test data" > $OBJECT/test_file1 >/dev/null 2>&1 || return $?
-    } || {
-	local i=1
-	local nr=20
+	    echo -n "mount on open $OBJECT1/test_file1 ($nr threads): "
+	    for ((;i<=$nr;i++)); do 
+		echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+	    done
 	
-	echo -n "mount on open $OBJECT/test_file1 ($nr threads): "
-	
-	for ((;i<=$nr;i++)); do 
-	    echo -n "test data" > $OBJECT/test_file$i >/dev/null 2>&1 &
-	done
-	
-	wait
-    }
-
-    local ENTRY="`basename $OBJECT`"
+	    wait
+	    ;;
+	CONCUR2)
+	    test "x$OBJECT2" = "x" && {
+		echo "not defined object2 for concurrent2 testing"
+		return 1
+	    }
+	    echo -n "mount on open $OBJECT1/test_file1: "
+	    echo -n "mount on open $OBJECT2/test_file1: "
+	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 &
+	    echo -n "test data" > $OBJECT2/test_file1 >/dev/null 2>&1 &
+	    ;;
+	*)
+	    echo "invalid testing mode $MODE"
+	    return 1
+    esac
     
-    cat /proc/mounts | grep -q "$ENTRY" || {
+    local ENTRY1="`basename $OBJECT1`"
+    local ENTRY2="`basename $OBJECT2`"
+    
+    cat /proc/mounts | grep -q "$ENTRY1" || {
 	echo "fail"
-	test -f $LOG && {
-	    echo "======================== upcall log ==========================="
-	    cat $LOG
-	    echo "==============================================================="
-	} || {
-	    echo "upcall log file $LOG is not found"
-	}
+	show_log $LOG
 	cleanup_upcall $UPCALL_PATH
 	return 1
     }
+    
+    if test "x$MODE" = "xCONCUR2"; then
+	cat /proc/mounts | grep -q "$ENTRY2" || {
+	    echo "fail"
+	    show_log $LOG
+	    cleanup_upcall $UPCALL_PATH
+	    return 1
+	}
+    fi
+    
     echo "success"
 
     local sleep_time=$TIMOUT
@@ -332,11 +364,20 @@ check_gns() {
     echo -n "waiting for umount ${sleep_time}s (timeout + tick*2): "
     sleep $sleep_time
 
-    cat /proc/mounts | grep -q "$ENTRY" && {
+    cat /proc/mounts | grep -q "$ENTRY1" && {
 	echo "failed"
 	cleanup_upcall $UPCALL_PATH
 	return 2
     }
+    
+    if test "x$MODE" = "xCONCUR2"; then
+	cat /proc/mounts | grep -q "$ENTRY2" && {
+	    echo "failed"
+	    cleanup_upcall $UPCALL_PATH
+	    return 2
+	}
+    fi
+    
     echo "success"
     cleanup_upcall $UPCALL_PATH
     return 0
@@ -408,7 +449,7 @@ test_1a() {
     echo ""
     echo "testing GNS with GENERIC upcall 3 times on the row"
     for ((i=0;i<3;i++)); do
-	check_gns GENERIC $DIR/gns_test_1a $TIMOUT $TICK GENERIC || {
+	check_gns GENERIC $DIR/gns_test_1a $DIR/gns_test_1a $TIMOUT $TICK GENERIC || {
 	    cleanup_object $DIR/gns_test_1a
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
 	    error
@@ -445,7 +486,7 @@ test_2a() {
     echo ""
     echo "testing GNS with DEADLOCK upcall 3 times on the row"
     for ((i=0;i<3;i++)); do
-	check_gns DEADLOCK $DIR/gns_test_2a $TIMOUT $TICK GENERIC || {
+	check_gns DEADLOCK $DIR/gns_test_2a $DIR/gns_test_2a $TIMOUT $TICK GENERIC || {
 	    cleanup_object $DIR/gns_test_2a
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
 	    error
@@ -488,7 +529,7 @@ test_3a() {
 	
 	test $(($i%2)) -eq 1 && MODE="DEADLOCK"
 	
-	check_gns $MODE $DIR/gns_test_3a $TIMOUT $TICK GENERIC || {
+	check_gns $MODE $DIR/gns_test_3a $DIR/gns_test_3a $TIMOUT $TICK GENERIC || {
 	    cleanup_object $DIR/gns_test_3a
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
 	    error
@@ -531,7 +572,7 @@ test_4a() {
 	
 	test $(($i%2)) -eq 1 && MODE="DEADLOCK"
 	
-	check_gns $MODE $DIR/gns_test_4a $TIMOUT $TICK CONCURRENT || {
+	check_gns $MODE $DIR/gns_test_4a $DIR/gns_test_4a $TIMOUT $TICK CONCUR1 || {
 	    cleanup_object $DIR/gns_test_4a
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
 	    error
@@ -545,7 +586,41 @@ test_4a() {
 run_test 4a " general GNS test - concurrent mount ======================="
 
 test_5a() {
-    echo "Not implemented yet!"
+    local LOOP_DEV=$(find_free_loop 2>/dev/null)
+    local UPCALL="/tmp/gns-upcall.sh"
+    local LOOP_FILE="/tmp/gns_loop_5a"
+    local OBJECT=".mntinfo"
+    local TIMOUT=5
+    local TICK=1
+
+    test "x$LOOP_DEV" != "x" && test -b $LOOP_DEV ||
+	error "can't find free loop device"
+
+    echo "preparing loop device $LOOP_DEV <-> $LOOP_FILE..."
+    cleanup_loop $LOOP_DEV $LOOP_FILE
+    setup_loop $LOOP_DEV $LOOP_FILE || error
+
+    echo "setting up GNS timeouts and mount object..."
+    setup_gns $OBJECT $TIMOUT $TICK || error
+
+    echo "preparing mount object at $DIR/gns_test_5a1/$OBJECT..."
+    setup_object $DIR/gns_test_5a1 $OBJECT "-t ext2 $LOOP_DEV" || error
+    
+    echo "preparing mount object at $DIR/gns_test_5a2/$OBJECT..."
+    setup_object $DIR/gns_test_5a2 $OBJECT "-t ext2 $LOOP_DEV" || error
+
+    echo ""
+    echo "testing GNS with GENERIC upcall"
+    check_gns GENERIC $DIR/gns_test_5a1 $DIR/gns_test_5a2 $TIMOUT $TICK CONCUR2 || {
+        cleanup_object $DIR/gns_test_5a1
+        cleanup_object $DIR/gns_test_5a2
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+        error
+    }
+    
+    cleanup_object $DIR/gns_test_5a1
+    cleanup_object $DIR/gns_test_5a2
+    cleanup_loop $LOOP_DEV $LOOP_FILE
 }
 
 run_test 5a " general GNS test - concurrent mount of 2 GNS mounts ======="
