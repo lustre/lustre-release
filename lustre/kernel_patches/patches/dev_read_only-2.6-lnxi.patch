@@ -1,5 +1,6 @@
---- linux-2.6.5-suse.orig/drivers/block/ll_rw_blk.c	2004-11-11 07:28:51.000000000 -0800
-+++ linux-2.6.5/drivers/block/ll_rw_blk.c	2005-03-16 10:57:38.000000000 -0800
+diff -ur linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c
+--- linux-2.6.5-lnxi.orig/drivers/block/ll_rw_blk.c	2004-11-11 07:28:51.000000000 -0800
++++ linux-2.6.5-lnxi/drivers/block/ll_rw_blk.c	2005-04-11 09:42:22.750936924 -0700
 @@ -2458,7 +2458,7 @@ static inline void blk_partition_remap(s
  	}
  }
@@ -85,14 +86,7 @@
  	
 -	printk(KERN_WARNING "Clearing read-only at %d\n", no_write);
 -	rdonly_devs[no_write] = 0;
-+        spin_lock(&devlock);
-+        cur = devlist;
-+        while(cur) {
-+                if (bdev->bd_dev == cur->dev) {
-+                        spin_unlock(&devlock);
-+                        kfree(newdev);
-+                        return;
- }
+-}
 -
 -int dev_check_rdonly(dev_t dev)
 -{
@@ -102,6 +96,14 @@
 -		if (rdonly_devs[i] == dev)
 -			return 1;
 -	return 0;
++        spin_lock(&devlock);
++        cur = devlist;
++        while(cur) {
++                if (bdev->bd_dev == cur->dev) {
++                        spin_unlock(&devlock);
++                        kfree(newdev);
++                        return;
++}
 +                cur = cur->next;
 +        }
 +        newdev->dev = bdev->bd_dev;
@@ -137,26 +139,28 @@
  }
  
  EXPORT_SYMBOL(dev_set_rdonly);
---- linux-2.6.5-suse.orig/include/linux/fs.h	2004-11-11 07:28:45.000000000 -0800
-+++ linux-2.6.5/include/linux/fs.h	2005-04-07 18:12:42.772181591 -0700
+diff -ur linux-2.6.5-lnxi.orig/fs/block_dev.c linux-2.6.5-lnxi/fs/block_dev.c
+--- linux-2.6.5-lnxi.orig/fs/block_dev.c	2004-11-11 07:28:30.000000000 -0800
++++ linux-2.6.5-lnxi/fs/block_dev.c	2005-04-11 09:49:01.891407856 -0700
+@@ -739,6 +739,7 @@ int blkdev_put(struct block_device *bdev
+ 	}
+ 	unlock_kernel();
+ 	up(&bdev->bd_sem);
++	dev_clear_rdonly(bdev);
+ 	bdput(bdev);
+ 	return ret;
+ }
+diff -ur linux-2.6.5-lnxi.orig/include/linux/fs.h linux-2.6.5-lnxi/include/linux/fs.h
+--- linux-2.6.5-lnxi.orig/include/linux/fs.h	2004-11-11 07:28:45.000000000 -0800
++++ linux-2.6.5-lnxi/include/linux/fs.h	2005-04-11 09:43:27.423116140 -0700
 @@ -1385,6 +1385,10 @@ extern void file_kill(struct file *f);
  struct bio;
  extern int submit_bio(int, struct bio *);
  extern int bdev_read_only(struct block_device *);
 +#define HAVE_CLEAR_RDONLY_ON_PUT
-+void dev_set_rdonly(kdev_t dev);
-+int dev_check_rdonly(kdev_t dev);
-+void dev_clear_rdonly(kdev_t dev);
++void dev_set_rdonly(struct block_device *bdev);
++int dev_check_rdonly(struct block_device *bdev);
++void dev_clear_rdonly(struct block_device *bdev);
  extern int set_blocksize(struct block_device *, int);
  extern int sb_set_blocksize(struct super_block *, int);
  extern int sb_min_blocksize(struct super_block *, int);
---- linux-2.6.5-suse.orig/fs/block_dev.c	2004-11-11 07:28:30.000000000 -0800
-+++ linux-2.6.5/fs/block_dev.c	2005-04-07 18:14:27.948304347 -0700
-@@ -739,6 +739,7 @@ int blkdev_put(struct block_device *bdev
- 	}
- 	unlock_kernel();
- 	up(&bdev->bd_sem);
-+	dev_clear_rdonly(to_kdev_t(bdev->bd_dev));
- 	bdput(bdev);
- 	return ret;
- }
