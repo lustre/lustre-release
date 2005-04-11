@@ -89,9 +89,10 @@ cleanup() {
 	stop_mds $FORCE || return 201
 	stop_ost $FORCE || return 202
 	# catch case where these return just fine, but modules are still not unloaded
-	/sbin/lsmod | grep -q portals
+	/sbin/lsmod | egrep -q "portals|libcfs"
 	if [ 1 -ne $? ]; then
 		echo "modules still loaded..."
+		/sbin/lsmod
 		return 203
 	fi
 }
