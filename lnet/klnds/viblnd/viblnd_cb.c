@@ -2753,11 +2753,16 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         kib_peer_t      *peer = conn->ibc_peer;
         unsigned long    flags;
 
-        CDEBUG(arprc == ibat_stat_ok ? D_NET : D_ERROR,
-               "Arp "LPX64"@%u.%u.%u.%u rc %d LID %s PATH %s\n",
-               peer->ibp_nid, HIPQUAD(peer->ibp_ip), arprc,
-               (arp_data->mask & IBAT_LID_VALID) == 0 ? "invalid" : "valid",
-               (arp_data->mask & IBAT_PRI_PATH_VALID) == 0 ? "invalid" : "valid");
+        if (arprc != ibat_stat_ok)
+                CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n",
+                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), arprc);
+        else
+                CDEBUG(D_NET, "Arp "LPX64"@%u.%u.%u.%u OK: LID %s PATH %s\n",
+                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
+                       (arp_data->mask & IBAT_LID_VALID) == 0 ? "invalid" : "valid",
+                       (arp_data->mask & IBAT_PRI_PATH_VALID) == 0 ? "invalid" : "valid");
+
+        LASSERT (conn != NULL);
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_ARP);
 
         conn->ibc_connvars->cv_arprc = arprc;
