@@ -25,7 +25,7 @@ fi
 [ "$DEBUG_ON" ] || DEBUG_ON="eval echo -1 > /proc/sys/portals/debug"
 
 for NAME in $CONFIGS; do
-	export NAME MOUNT
+	export NAME MOUNT START CLEAN
 	[ -e $NAME.sh ] && sh $NAME.sh
 	[ ! -e $NAME.xml ] && [ -z "$LDAPURL" ] && \
 		echo "no config '$NAME.xml'" 1>&2 && exit 1
@@ -35,7 +35,7 @@ for NAME in $CONFIGS; do
 	fi
 
 	if [ "$SANITY" != "no" ]; then
-		SANITYLOG=/tmp/sanity.log START=: CLEAN=: sh sanity.sh
+		SANITYLOG=/tmp/sanity.log sh sanity.sh
 	fi
 
 	if [ "$DBENCH" != "no" ]; then
