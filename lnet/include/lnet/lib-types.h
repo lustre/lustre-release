@@ -353,8 +353,6 @@ typedef struct lib_nal
                 (struct lib_nal *nal, unsigned int niov, ptl_kiov_t *iov, 
                  void **addrkey);
 
-	void (*libnal_printf)(struct lib_nal *nal, const char *fmt, ...);
-
 	/* Calculate a network "distance" to given node */
 	int (*libnal_dist) (struct lib_nal *nal, ptl_nid_t nid, unsigned long *dist);
 } lib_nal_t;
