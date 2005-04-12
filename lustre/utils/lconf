@@ -1181,9 +1181,21 @@ class kmod:
         for src_dir, dev_dir, mod in rev:
             if not mod_loaded(mod) and not config.noexec:
                 continue
-            # debug hack
-            if mod == 'portals' and config.dump:
-                lctl.dump(config.dump)
+            if mod == 'portals':
+                if not config.noexec:
+                    # handle modules loaded automatically, but not in config
+                    if mod_loaded("ksocknal"):
+                        log('try unloading module: ksocknal')
+                        (rc, out) = run('/sbin/rmmod ksocknal')
+                    if mod_loaded("kqswnal"):
+                        log('try unloading module: kqswnal')
+                        (rc, out) = run('/sbin/rmmod kqswnal')
+                    if mod_loaded("kptlrouter"):
+                        log('try unloading module: kptlrouter')
+                        (rc, out) = run('/sbin/rmmod kptlrouter')
+                if config.dump:
+                    # debug hack
+                    lctl.dump(config.dump)
             log('unloading module:', mod)
             (rc, out) = run('/sbin/rmmod', mod)
             if rc:
