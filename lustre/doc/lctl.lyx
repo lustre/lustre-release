@@ -562,9 +562,9 @@ debug_daemon debug daemon control and dump to a file
 
 debug_kernel\SpecialChar ~
 [file]\SpecialChar ~
-[raw] Get debug buffer and dump to a 
+[raw] Get Lustre debug buffer from kernel and dump to a 
 \emph on 
-fileusage
+file
 \emph default 
 .
 \layout Description
@@ -572,7 +572,7 @@ fileusage
 debug_file\SpecialChar ~
 <input>\SpecialChar ~
 [output]\SpecialChar ~
-[raw] Read debug buffer from input and dump to
+Convert kernel-dumped debug log from binary to plain text format.
  
 \emph on 
 outputusage
