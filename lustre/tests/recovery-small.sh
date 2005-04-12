@@ -244,8 +244,10 @@ test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
     # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
-    # need to write enough to ensure we send an RPC
-    do_facet client dd if=/dev/zero of=$DIR/$tfile bs=1024k count=2
+    # need to ensure we send an RPC
+    do_facet client cp /etc/termcap $DIR/$tfile
+    sync
+
     sleep $TIMEOUT
     sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
@@ -282,7 +284,6 @@ test_18a() {
 run_test 18a "manual ost invalidate clears page cache immediately"
 
 test_18b() {
-# OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
     f2=$MOUNT/$tdir/${tfile}-2
@@ -297,6 +298,7 @@ test_18b() {
     do_facet client cp /etc/termcap $f
     sync
     # just use this write to trigger the client's eviction from the ost
+# OBD_FAIL_PTLRPC_BULK_GET_NET|OBD_FAIL_ONCE
     sysctl -w lustre.fail_loc=0x80000503
     do_facet client dd if=/dev/zero of=$f2 bs=4k count=1
     sync
@@ -381,7 +383,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	multiop $DIR/$tdir/$tfile Owy_wyc &
 	MULTI_PID=$!
 	usleep 500
-# OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
+# OBD_FAIL_PTLRPC_BULK_GET_NET|OBD_FAIL_ONCE
 	sysctl -w lustre.fail_loc=0x80000503
 	usleep 500
 	kill -USR1 $MULTI_PID
@@ -393,12 +395,11 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 }
 run_test 24 "fsync error (should return error)" 
 
-
 test_25a() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes for 10 min.
 	do_facet client "writemany -q -a $DIR/$tdir/$tfile 600 5" &
-        CLIENT_PID=$!
+	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
@@ -420,7 +421,7 @@ test_25b() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
 	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
-        CLIENT_PID=$!
+	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 1
 	FAILURE_MODE="SOFT"
@@ -435,7 +436,7 @@ test_25b() {
 	sleep 20
 	facet_failover mds
 	# client process should see no problems even though MDS went down
-        # and recovery was interrupted
+	# and recovery was interrupted
 	wait $CLIENT_PID 
 	rc=$?
 	echo writemany returned $rc
@@ -445,7 +446,7 @@ run_test 25b "failover MDS during recovery"
 
 test_25c_guts() {
 	do_facet client "writemany -q $DIR/$tdir/$tfile 600 5" &
-        CLIENT_PID=$!
+	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"

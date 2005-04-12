@@ -2,7 +2,7 @@
 
 export PATH=`dirname $0`/../utils:$PATH
 
-config=${1:-local.xml}
+config=${1:-`basename $0 .sh`.xml}
 
 LMC="${LMC:-lmc} -m $config"
 TMP=${TMP:-/tmp}

@@ -618,4 +618,5 @@ test_10() {
 run_test 10 "Running Availability for 6 hours..."
 
 equals_msg "Done, cleaning up"
-$CLEANUP
+# we need to force cleanup for the stale MDS conns until bug 5921 is fixed
+FORCE=--force $CLEANUP
