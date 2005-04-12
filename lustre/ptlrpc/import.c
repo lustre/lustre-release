@@ -300,7 +300,7 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp =  class_conn2export(&imp->imp_dlm_handle);
         LASSERT(dlmexp != NULL);
         if (dlmexp->exp_connection)
-                ptlrpc_put_connection(imp->imp_connection);
+                ptlrpc_put_connection(dlmexp->exp_connection);
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
@@ -395,6 +395,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (aa->pcaa_initial_connect)
                 imp->imp_replayable = 1;
 
+        DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
         ptlrpcd_add_req(request);
         rc = 0;
 out:
