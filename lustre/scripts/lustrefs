@@ -62,7 +62,7 @@ lustre_action () {
 }
 
 LUSTREFSTAB=`LC_ALL=C awk '!/^#/ && $3 == "lustre" && $4 !~ /noauto/ { print $2 }' /etc/fstab`
-LUSTREMTAB=`LC_ALL=C awk '!/^#/ && $3 == "lustre" { print $2 }' /proc/mounts`
+LUSTREMTAB=`LC_ALL=C awk '!/^#/ && ($3 ~ "lustre") { print $2 }' /proc/mounts`
 
 # See how we were called.
 case "$1" in
