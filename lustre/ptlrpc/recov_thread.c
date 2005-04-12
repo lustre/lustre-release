@@ -192,7 +192,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         ENTRY;
 
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
-                CDEBUG(D_INFO, "reverse import disconnected, put llcd %p:%p\n",
+                CDEBUG(D_HA, "reverse import disconnected, put llcd %p:%p\n",
                        ctxt->loc_llcd, ctxt);
                 down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd != NULL) {
@@ -343,10 +343,6 @@ static int log_commit_thread(void *arg)
                         request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
-                        /* XXX FIXME bug 249, 5515 */
-                        request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
-                        request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
-
                         if (request == NULL) {
                                 rc = -ENOMEM;
                                 CERROR("error preparing commit: rc %d\n", rc);
@@ -358,6 +354,10 @@ static int log_commit_thread(void *arg)
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 break;
                         }
+
+                        /* XXX FIXME bug 249, 5515 */
+                        request->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
+                        request->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                         request->rq_replen = lustre_msg_size(0, NULL);
                         down(&llcd->llcd_ctxt->loc_sem);
