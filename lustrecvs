@@ -31,6 +31,8 @@ if [ -z "$LUSTRECVS_UPDATED" ] ; then
     exec "$0" "$@"
 fi
 
+[ "$1" = "-r" ] && shift
+
 buildtag="HEAD"
 lustretag="$1"
 shift
