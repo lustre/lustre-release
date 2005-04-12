@@ -267,7 +267,7 @@ static int quotfmt_test_3(struct lustre_quota_info *lqi)
 	if (dquot == NULL)
 		RETURN(-ENOMEM);
 repeat:
-	dquot->dq_flags &= ~DQ_FAKE;
+	clear_bit(DQ_FAKE_B, dquot->dq_flags);
 	/* write a new dquot */
 	rc = lustre_commit_dquot(dquot);
 	if (rc) {
@@ -283,7 +283,7 @@ repeat:
 		CERROR("read dquot failed! (rc:%d)\n", rc);
 		GOTO(out, rc);
 	}
-	if (!dquot->dq_off || dquot->dq_flags & DQ_FAKE) {
+	if (!dquot->dq_off || test_bit(DQ_FAKE_B, dquot->dq_flags)) {
 		CERROR("the dquot isn't committed\n");
 		GOTO(out, rc = -EINVAL);
 	}
