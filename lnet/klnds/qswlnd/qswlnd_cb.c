@@ -1939,7 +1939,7 @@ kqswnal_scheduler (void *arg)
                 if (!list_empty (&kqswnal_data.kqn_delayedtxds))
                 {
                         ktx = list_entry(kqswnal_data.kqn_delayedtxds.next,
-                                         kqswnal_tx_t, ktx_list);
+                                         kqswnal_tx_t, ktx_delayed_list);
                         list_del_init (&ktx->ktx_delayed_list);
                         spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                flags);
