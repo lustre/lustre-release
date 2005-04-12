@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
                 rc = write(fd, wbuf, len);
                 if (rc != len) {
-                        printf("Write error %s (rc = %d)\n", strerror(errno), rc);
+                        printf("Write error %s (rc = %d)\n",strerror(errno),rc);
                         return 1;
                 }
         }
@@ -94,7 +94,7 @@ int main(int argc, char **argv)
                         return 1;
                 }
 
-                rbuf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
+                rbuf =mmap(0,len,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,0,0);
                 if (rbuf == MAP_FAILED) {
                         printf("No memory %s\n", strerror(errno));
                         return 1;
@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 
                 rc = read(fd, rbuf, len);
                 if (rc != len) {
-                        printf("Read error: %s (rc = %d)\n", strerror(errno), rc);
+                        printf("Read error: %s (rc = %d)\n",strerror(errno),rc);
                         return 1;
                 }
 

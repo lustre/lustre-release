@@ -363,7 +363,7 @@ check_buffers(unsigned offset, unsigned size)
 			if (c != t) {
 			        if (n == 0) {
 					bad = short_at(&temp_buf[i]);
-				        prt("0x%5x\t0x%04x\t0x%04x", offset,
+				        prt("%#07x\t%#06x\t%#06x", offset,
 				            short_at(&good_buf[offset]), bad);
 					op = temp_buf[offset & 1 ? i+1 : i];
 				}
@@ -375,7 +375,7 @@ check_buffers(unsigned offset, unsigned size)
 			size--;
 		}
 		if (n) {
-		        prt("\t0x%5x\n", n);
+		        prt("\t%#7x\n", n);
 			if (bad)
 				prt("operation# (mod 256) for the bad data"
 					"may be %u\n", ((unsigned)op & 0xff));
