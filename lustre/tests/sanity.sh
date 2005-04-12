@@ -1478,13 +1478,19 @@ test_42b() {
         BEFOREWRITES=`count_ost_writes`
         $MUNLINK $DIR/f42b || error "$MUNLINK $DIR/f42b: $?"
         AFTERWRITES=`count_ost_writes`
-        [ $BEFOREWRITES -eq $AFTERWRITES ] ||
-            error "$BEFOREWRITES < $AFTERWRITES on unlink"
+        if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
+                error "$BEFOREWRITES < $AFTERWRITES on unlink"
+                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-unlk.bug5195.gz
+                error "please put $TMP/debug-unlk.bug5195.gz on bug 5195 once"
+        fi
         BEFOREWRITES=`count_ost_writes`
         sync || error "sync: $?"
         AFTERWRITES=`count_ost_writes`
-        [ $BEFOREWRITES -eq $AFTERWRITES ] ||
-            error "$BEFOREWRITES < $AFTERWRITES on sync"
+        if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
+                error "$BEFOREWRITES < $AFTERWRITES on sync"
+                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-sync.bug5195.gz
+                error "please put $TMP/debug-sync.bug5195.gz on bug 5195 once"
+        fi
         dmesg | grep 'error from obd_brw_async' && error 'error writing back'
 	start_writeback
         return 0
