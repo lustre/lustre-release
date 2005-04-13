@@ -30,6 +30,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- add support for an arbitrary number of OSTs (3026)  
 	- Quota support protocol changes.
 	- forward compatibility changes to wire structs (6007)
+	- rmmod NALs that might be loaded because of /etc/modules.conf (6133)
 	
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
