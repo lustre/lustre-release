@@ -44,81 +44,13 @@ struct cache_purge_param {
 static struct cache_purge_queue smfs_cpq;
 static struct cache_purge_queue *cpq = &smfs_cpq;
 
-#define CACHE_HOOK "cache_hook"
-int cache_space_pre_hook(struct inode *inode, void *dentry,
-                         void *data1, void *data2, int op, void *handle)
-{
-        int rc = 0;
-        ENTRY;
-
-        if (smfs_cache_hook(inode)) {                                          
-               if (!handle) {                                                  
-                        handle = smfs_trans_start(inode, KML_CACHE_NOOP, NULL);   
-                        if (IS_ERR(handle)) {                                   
-                                RETURN(PTR_ERR(handle));
-                        }                                                       
-                }                                                               
-                cache_space_pre(inode, op);                                       
-        }                                                                       
-        RETURN(rc); 
-}
-
-int cache_space_post_hook(struct inode *inode, void *de, void *data1, 
-                          void *data2, int op, void *handle)
-{
-        int rc = 0;
-        ENTRY;
-        if (smfs_cache_hook(inode)) {      
-                struct inode *new_inode = (struct inode*)data1;
-                struct dentry *new_dentry = (struct dentry*)data2;        
-                struct dentry *dentry = (struct dentry *)de;
-            
-                LASSERT(handle != NULL);                                
-                rc = cache_space_post(op, handle, inode, dentry, new_inode, 
-                                      new_dentry);
-        }
-        RETURN(rc);                                                               
-}
-
-int cache_space_hook_init(struct super_block *sb)
-{
-        struct smfs_super_info *smfs_info = S2SMI(sb);
-        struct smfs_hook_ops    *cache_hops;
-        int    rc = 0;
-        ENTRY;
-
-        cache_hops = smfs_alloc_hook_ops(CACHE_HOOK, cache_space_pre_hook, 
-                                         cache_space_post_hook);
-        if (!cache_hops) {
-                RETURN(-ENOMEM);
-        }
-        rc = smfs_register_hook_ops(smfs_info, cache_hops); 
-        if (rc) {
-                smfs_free_hook_ops(cache_hops);
-                RETURN(rc);
-        }
-        SMFS_SET_CACHE_HOOK(smfs_info);
-
-        RETURN(0);
-}
-
-int cache_space_hook_exit(struct smfs_super_info *smfs_info)
-{
-        struct smfs_hook_ops *cache_hops; 
-
-        cache_hops = smfs_unregister_hook_ops(smfs_info, CACHE_HOOK);
-        smfs_free_hook_ops(cache_hops);
-
-        SMFS_CLEAN_CACHE_HOOK(smfs_info);
-        return 0;
-}
-
 static int cache_leaf_node(struct dentry *dentry, __u64 *active_entry)
 {
         struct inode *inode = dentry->d_inode;
 
-        if (!dentry->d_inode)
+        if (!inode)
                 return 0;
+        
         if (S_ISDIR(inode->i_mode)) {
                 if (inode->i_nlink != 2)
                         return 0;
@@ -326,23 +258,14 @@ static void check_cache_space(void)
         EXIT;
 }
 
-void cache_space_pre(struct inode *inode, int op)
-{
-        ENTRY;
-
-        /* FIXME have not used op */
-        check_cache_space();
-        
-        EXIT;
-}
-
 static int cache_space_hook_lru(struct inode *inode, struct inode *parent,
-                                void *handle, int op, int flags)
+                                int op, int flags)
 {
         struct fsfilt_operations *fsops = S2SMI(cpq->cpq_sb)->sm_fsfilt;
         struct llog_ctxt *ctxt = cpq->cpq_loghandle->lgh_ctxt;
         struct llog_lru_rec *llr = NULL;
         struct llog_cookie *logcookie = NULL;
+        void * handle = NULL;
         int cookie_size = sizeof(struct llog_cookie);
         int rc = 0, err;
         ENTRY;
@@ -356,33 +279,32 @@ static int cache_space_hook_lru(struct inode *inode, struct inode *parent,
         if (!logcookie)
                 GOTO(out, rc = -ENOMEM);
 
-        if (op & CACHE_SPACE_DELETE) {
+         if (op & CACHE_SPACE_DELETE) {
                 rc = get_lru_logcookie(inode, logcookie);
                 if (rc < 0)
-                        GOTO(out, rc);
+                        goto out;
 
                 if (logcookie->lgc_lgl.lgl_oid == 0) {
                         CWARN("inode %lu/%u is not in lru list\n",
                               inode->i_ino, inode->i_generation);
-                        GOTO(insert, rc = -ENOENT);
+                        rc = -ENOENT;
                 }
-                if (flags && llog_cat_half_bottom(logcookie, ctxt->loc_handle))
-                        GOTO(out, rc = 0);
+                else {
+                        rc = 0;
+                        if (flags && llog_cat_half_bottom(logcookie, ctxt->loc_handle))
+                               goto out;
 
-                rc = llog_cancel(ctxt, 1, logcookie, 0, NULL);
-                if (!rc) {
-                        memset(logcookie, 0, cookie_size);
-                        rc = set_lru_logcookie(inode, handle, logcookie);
+                        rc = llog_cancel(ctxt, 1, logcookie, 0, NULL);
+                        if (!rc) {
+                                memset(logcookie, 0, cookie_size);
+                                rc = set_lru_logcookie(inode, handle, logcookie);
+                        }
                         if (rc)
-                                GOTO(out, rc);
-                } else {
-                        CERROR("failed at llog_cancel: %d\n", rc);
-                        GOTO(out, rc);
+                                        goto out;
                 }
         }
 
-insert:
-        if (op & CACHE_SPACE_INSERT) {
+         if (op & CACHE_SPACE_INSERT) {
                 LASSERT(parent != NULL);
                 OBD_ALLOC(llr, sizeof(*llr));
                 if (llr == NULL)
@@ -463,19 +385,302 @@ static int cache_purge_thread(void *args)
         RETURN(0);
 }
 
-int cache_space_hook_setup(struct super_block *sb)
+/* Hooks */
+static int cache_space_hook_create (struct inode *dir, struct dentry * dentry)
 {
-        struct llog_ctxt *ctxt;
+        __u64 active_entry = 0;
         int rc;
         ENTRY;
 
+        LASSERT(cache_leaf_node(dentry, NULL));
+        rc = cache_space_hook_lru(dentry->d_inode, dir, CACHE_SPACE_INSERT, 0);
+        if (rc)
+                RETURN(rc);
+        if (cache_leaf_node(dentry->d_parent, &active_entry)) {
+                rc = cache_space_hook_lru(dir, NULL, CACHE_SPACE_DELETE, 0);
+                if (rc)
+                        RETURN(rc);
+        }
+        if (!active_entry)
+                rc = get_active_entry(dir, &active_entry);
+        active_entry ++;
+        if (!rc)
+                rc = set_active_entry(dir, &active_entry, NULL);
+        RETURN(rc);
+}
+
+static int cache_space_hook_lookup(struct inode *dir, struct dentry *dentry)
+{
+        __u64 active_entry;
+        int rc = 0;
+        ENTRY;
+
+        if (cache_leaf_node(dentry, &active_entry))
+                rc = cache_space_hook_lru(dentry->d_inode, dir, 
+                                          CACHE_SPACE_DELETE | CACHE_SPACE_INSERT, 1);
+        RETURN(rc);
+}
+
+static int cache_space_hook_link(struct inode *dir, struct dentry *dentry)
+{
+        __u64 active_entry = 0;
+        int rc = 0;
+        ENTRY;
+
+        if (cache_pre_leaf_node(dentry, NULL, 1)) {
+                rc = cache_space_hook_lru(dentry->d_inode, NULL, 
+                                          CACHE_SPACE_DELETE, 0);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        if (cache_leaf_node(dentry->d_parent, &active_entry)) {
+                rc = cache_space_hook_lru(dir, NULL, CACHE_SPACE_DELETE, 0);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        if (!active_entry)
+                rc = get_active_entry(dir, &active_entry);
+        active_entry ++;
+        if (!rc)
+                rc = set_active_entry(dir, &active_entry, NULL);
+        RETURN(rc);
+}
+
+static int cache_space_hook_unlink(struct inode *dir, struct dentry *dentry)
+{
+        __u64 active_entry;
+        int rc = 0;
+        ENTRY;
+
+        if (cache_pre_leaf_node(dentry, NULL, 0))
+                rc = cache_space_hook_lru(dentry->d_inode, NULL,
+                                          CACHE_SPACE_DELETE, 0);
+        else if (cache_leaf_node(dentry, NULL))
+                        rc = cache_space_hook_lru(dentry->d_inode, dir,
+                                                  CACHE_SPACE_INSERT,0);
+        if (rc)
+                RETURN(rc);
+
+        rc = get_active_entry(dir, &active_entry);
+        active_entry --;
+        if (!rc)
+                rc = set_active_entry(dir, &active_entry, NULL);
+        if (!rc && cache_leaf_node(dentry->d_parent, &active_entry))
+                rc = cache_space_hook_lru(dir,
+                                          dentry->d_parent->d_parent->d_inode,
+                                          CACHE_SPACE_INSERT, 0);
+        RETURN(rc);
+}
+
+static int cache_space_hook_mkdir(struct inode *dir, struct dentry *dentry)
+{
+        __u64 active_entry;
+        int rc;
+        ENTRY;
+
+        LASSERT(cache_leaf_node(dentry, &active_entry));
+        rc = cache_space_hook_lru(dentry->d_inode, dir, CACHE_SPACE_INSERT, 0);
+
+        if (!rc && cache_pre_leaf_node(dentry->d_parent, &active_entry, 3))
+                rc = cache_space_hook_lru(dir, NULL, CACHE_SPACE_DELETE, 0);
+        RETURN(rc);
+}
+
+static int cache_space_hook_rmdir(struct inode *dir, struct dentry *dentry)
+{
+        __u64 active_entry;
+        int rc;
+        ENTRY;
+
+        LASSERT(cache_pre_leaf_node(dentry, &active_entry, 2));
+        rc = cache_space_hook_lru(dentry->d_inode, NULL, 
+                                  CACHE_SPACE_DELETE, 0);
+
+        if (!rc && cache_leaf_node(dentry->d_parent, &active_entry))
+                rc = cache_space_hook_lru(dir,
+                                          dentry->d_parent->d_parent->d_inode,
+                                          CACHE_SPACE_INSERT, 0);
+        RETURN(rc);
+}
+
+static int cache_space_hook_rename(struct inode *old_dir, struct dentry *old_dentry,
+                                   struct inode *new_dir, struct dentry *new_dentry)
+{
+        __u64 active_entry;
+        int rc = 0;
+        ENTRY;
+
+        if (new_dentry->d_inode) {
+                if (cache_pre_leaf_node(new_dentry, NULL, 0))
+                        rc = cache_space_hook_lru(new_dentry->d_inode, NULL,
+                                                  CACHE_SPACE_DELETE,0);
+                else if (cache_leaf_node(new_dentry, NULL))
+                        rc = cache_space_hook_lru(new_dentry->d_inode,
+                                                  new_dir,
+                                                  CACHE_SPACE_INSERT,0);
+        }
+
+        if (rc || old_dir == new_dir)
+                RETURN(rc);
+
+        if (!S_ISDIR(old_dentry->d_inode->i_mode)) {
+                if (cache_leaf_node(new_dentry->d_parent, &active_entry)) {
+                        rc = cache_space_hook_lru(new_dir, NULL,
+                                                  CACHE_SPACE_DELETE, 0);
+                        if (rc)
+                                RETURN(rc);
+                }
+                if (!active_entry)
+                        rc = get_active_entry(new_dir, &active_entry);
+                active_entry ++;
+                if (!rc)
+                        rc = set_active_entry(new_dir, &active_entry, NULL);
+                if (rc)
+                        RETURN(rc);
+                rc = get_active_entry(old_dir, &active_entry);
+                active_entry --;
+                if (!rc)
+                        rc = set_active_entry(old_dir, &active_entry, NULL);
+        } else if (cache_pre_leaf_node(new_dentry->d_parent, &active_entry, 3)) {
+                rc = cache_space_hook_lru(new_dir, NULL,
+                                          CACHE_SPACE_DELETE, 0);
+        }
+
+        if (!rc && cache_leaf_node(old_dentry->d_parent, &active_entry)) {
+                rc = cache_space_hook_lru(old_dir,
+                                          old_dentry->d_parent->d_parent->d_inode,
+                                          CACHE_SPACE_INSERT, 0);
+        }
+        
+        RETURN(rc);
+}
+
+static int lru_create (struct inode * inode, void * arg)
+{
+        struct hook_msg * msg = arg;
+        return cache_space_hook_create(inode, msg->dentry);
+}
+static int lru_lookup (struct inode * inode, void * arg)
+{
+        struct hook_msg * msg = arg;
+        return cache_space_hook_lookup(inode, msg->dentry);
+}
+static int lru_link (struct inode * inode, void * arg)
+{
+        struct hook_link_msg * msg = arg;
+        return cache_space_hook_link(inode, msg->dentry);
+}
+static int lru_unlink (struct inode * inode, void * arg)
+{
+        struct hook_unlink_msg * msg = arg;
+        return cache_space_hook_unlink(inode, msg->dentry);
+}
+static int lru_symlink (struct inode * inode, void * arg)
+{
+        struct hook_symlink_msg * msg = arg;
+        return cache_space_hook_create(inode, msg->dentry);
+}
+static int lru_mkdir (struct inode * inode, void * arg)
+{
+        struct hook_msg * msg = arg;
+        return cache_space_hook_mkdir(inode, msg->dentry);
+}
+static int lru_rmdir (struct inode * inode, void * arg)
+{
+        struct hook_unlink_msg * msg = arg;
+        return cache_space_hook_rmdir(inode, msg->dentry);
+}
+static int lru_rename (struct inode * inode, void * arg)
+{
+        struct hook_rename_msg * msg = arg;
+        return cache_space_hook_rename(inode, msg->dentry,
+                                       msg->new_dir, msg->new_dentry);
+}
+
+
+typedef int (*post_lru_op)(struct inode *inode, void * msg);
+static  post_lru_op smfs_lru_post[HOOK_MAX] = {
+        [HOOK_CREATE]     lru_create,
+        [HOOK_LOOKUP]     lru_lookup,
+        [HOOK_LINK]       lru_link,
+        [HOOK_UNLINK]     lru_unlink,
+        [HOOK_SYMLINK]    lru_symlink,
+        [HOOK_MKDIR]      lru_mkdir,
+        [HOOK_RMDIR]      lru_rmdir,
+        [HOOK_MKNOD]      lru_create,
+        [HOOK_RENAME]     lru_rename,
+        [HOOK_SETATTR]    NULL,
+        [HOOK_WRITE]      NULL,
+        [HOOK_READDIR]    NULL,
+};
+
+static int smfs_lru_pre_op(int op, struct inode *inode, void * msg, int ret, 
+                           void *priv)
+{
+        int rc = 0;
+        ENTRY;
+        
+        /* FIXME have not used op */
+        check_cache_space();                                       
+                                                                               
+        RETURN(rc); 
+}
+
+static int smfs_lru_post_op(int op, struct inode *inode, void *msg, int ret,
+                            void *priv)
+{
+        int rc = 0;
+        
+        ENTRY;
+        if (ret)
+                RETURN(0);
+        
+        if (smfs_lru_post[op])
+                rc = smfs_lru_post[op](inode, msg);
+        
+        RETURN(rc);                                                             
+}
+
+/* Helpers */
+static int smfs_exit_lru(struct super_block *sb, void * arg, void * priv)
+{
+        ENTRY;
+
+        smfs_deregister_plugin(sb, SMFS_PLG_LRU);
+                
+        EXIT;
+        return 0;
+}
+
+static int smfs_trans_lru (struct super_block *sb, void *arg, void * priv)
+{
+        int size;
+        
+        ENTRY;
+        
+        size = 20;//LDISKFS_INDEX_EXTRA_TRANS_BLOCKS+LDISKFS_DATA_TRANS_BLOCKS;
+        
+        RETURN(size);
+}
+
+static int smfs_start_lru(struct super_block *sb, void *arg, void * priv)
+{
+        int rc = 0;
+        struct smfs_super_info * smb = S2SMI(sb);
+        struct llog_ctxt *ctxt;
+        
+        ENTRY;
+        
+        if (SMFS_IS(smb->plg_flags, SMFS_PLG_LRU))
+                RETURN(0);
+
         /* first to initialize the cache lru catalog on local fs */
-        rc = llog_catalog_setup(&ctxt, CACHE_LRU_LOG,
-                                S2SMI(sb)->smsi_exp,
-                                S2SMI(sb)->smsi_ctxt,
-                                S2SMI(sb)->sm_fsfilt,
-                                S2SMI(sb)->smsi_logs_dir,
-                                S2SMI(sb)->smsi_objects_dir);
+        rc = llog_catalog_setup(&ctxt, CACHE_LRU_LOG, smb->smsi_exp,
+                                smb->smsi_ctxt, smb->sm_fsfilt,
+                                smb->smsi_logs_dir,
+                                smb->smsi_objects_dir);
         if (rc) {
                 CERROR("failed to initialize cache lru list catalog %d\n", rc);
                 RETURN(rc);
@@ -491,9 +696,11 @@ int cache_space_hook_setup(struct super_block *sb)
         rc = kernel_thread(cache_purge_thread, NULL, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
-                GOTO(err_out, rc);
+                goto err_out;
         }
         wait_for_completion(&cpq->cpq_comp);
+
+        SMFS_SET(smb->plg_flags, SMFS_PLG_LRU);
 
         RETURN(0);
 err_out:
@@ -502,11 +709,17 @@ err_out:
         RETURN(rc);
 }
 
-int cache_space_hook_cleanup(void)
+static int smfs_stop_lru(struct super_block *sb, void *arg, void * priv)
 {
+        struct smfs_super_info * smb = S2SMI(sb);
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
+        
+        if (!SMFS_IS(smb->plg_flags, SMFS_PLG_LRU))
+                RETURN(0);
+
+        SMFS_CLEAR(smb->plg_flags, SMFS_PLG_LRU);
 
         init_completion(&cpq->cpq_comp);
         cpq->cpq_flags = SVC_STOPPING;
@@ -516,229 +729,44 @@ int cache_space_hook_cleanup(void)
         ctxt = cpq->cpq_loghandle->lgh_ctxt;
         rc = llog_catalog_cleanup(ctxt);
         OBD_FREE(ctxt, sizeof(*ctxt));
-        
-        if (rc)
-                CERROR("failed to clean up cache lru list catalog %d\n", rc);
-
-        RETURN(rc);
+        RETURN(0);        
 }
 
-static int cache_space_hook_create(void *handle, struct inode *dir,
-                                   struct dentry *dentry, struct inode *new_dir,
-                                   struct dentry *new_dentry)
-{
-        __u64 active_entry = 0;
-        int rc;
-        ENTRY;
-
-        LASSERT(cache_leaf_node(dentry, NULL));
-        rc = cache_space_hook_lru(dentry->d_inode, dir, handle,
-                                  CACHE_SPACE_INSERT, 0);
-        if (rc)
-                RETURN(rc);
-        if (cache_leaf_node(dentry->d_parent, &active_entry)) {
-                rc = cache_space_hook_lru(dir,NULL,handle,CACHE_SPACE_DELETE,0);
-                if (rc)
-                        RETURN(rc);
-        }
-        if (!active_entry)
-                rc = get_active_entry(dir, &active_entry);
-        active_entry ++;
-        if (!rc)
-                rc = set_active_entry(dir, &active_entry, handle);
-        RETURN(rc);
-}
-
-static int cache_space_hook_lookup(void *handle, struct inode *dir,
-                                   struct dentry *dentry, struct inode *new_dir,
-                                   struct dentry *new_dentry)
-{
-        __u64 active_entry;
-        int rc = 0;
-        ENTRY;
-
-        if (cache_leaf_node(dentry, &active_entry))
-                rc = cache_space_hook_lru(dentry->d_inode, dir, handle,
-                                CACHE_SPACE_DELETE | CACHE_SPACE_INSERT,1);
-        RETURN(rc);
-}
-
-static int cache_space_hook_link(void *handle, struct inode *dir,
-                                 struct dentry *dentry, struct inode *new_dir,
-                                 struct dentry *new_dentry)
-{
-        __u64 active_entry = 0;
-        int rc = 0;
-        ENTRY;
-
-        if (cache_pre_leaf_node(dentry, NULL, 1)) {
-                rc = cache_space_hook_lru(dentry->d_inode, NULL,
-                                          handle, CACHE_SPACE_DELETE, 0);
-                if (rc)
-                        RETURN(rc);
-        }
-
-        if (cache_leaf_node(dentry->d_parent, &active_entry)) {
-                rc = cache_space_hook_lru(dir, NULL, handle, CACHE_SPACE_DELETE, 0);
-                if (rc)
-                        RETURN(rc);
-        }
-
-        if (!active_entry)
-                rc = get_active_entry(dir, &active_entry);
-        active_entry ++;
-        if (!rc)
-                rc = set_active_entry(dir, &active_entry, handle);
-        RETURN(rc);
-}
-
-static int cache_space_hook_unlink(void *handle, struct inode *dir,
-                                   struct dentry *dentry, struct inode *new_dir,
-                                   struct dentry *new_dentry)
-{
-        __u64 active_entry;
-        int rc = 0;
-        ENTRY;
-
-        if (cache_pre_leaf_node(dentry, NULL, 0))
-                rc = cache_space_hook_lru(dentry->d_inode, NULL,
-                                          handle, CACHE_SPACE_DELETE, 0);
-        else if (cache_leaf_node(dentry, NULL))
-                        rc = cache_space_hook_lru(dentry->d_inode, dir,
-                                                  handle, CACHE_SPACE_INSERT,0);
-        if (rc)
-                RETURN(rc);
-
-        rc = get_active_entry(dir, &active_entry);
-        active_entry --;
-        if (!rc)
-                rc = set_active_entry(dir, &active_entry, handle);
-        if (!rc && cache_leaf_node(dentry->d_parent, &active_entry))
-                rc = cache_space_hook_lru(dir,
-                                          dentry->d_parent->d_parent->d_inode,
-                                          handle, CACHE_SPACE_INSERT, 0);
-        RETURN(rc);
-}
-
-static int cache_space_hook_mkdir(void *handle, struct inode *dir,
-                                  struct dentry *dentry, struct inode *new_dir,
-                                  struct dentry *new_dentry)
-{
-        __u64 active_entry;
-        int rc;
-        ENTRY;
-
-        LASSERT(cache_leaf_node(dentry, &active_entry));
-        rc = cache_space_hook_lru(dentry->d_inode, dir, handle,
-                                  CACHE_SPACE_INSERT, 0);
-
-        if (!rc && cache_pre_leaf_node(dentry->d_parent, &active_entry, 3))
-                rc = cache_space_hook_lru(dir, NULL, handle, CACHE_SPACE_DELETE, 0);
-        RETURN(rc);
-}
-
-static int cache_space_hook_rmdir(void *handle, struct inode *dir,
-                                  struct dentry *dentry, struct inode *new_dir,
-                                  struct dentry *new_dentry)
-{
-        __u64 active_entry;
-        int rc;
-        ENTRY;
-
-        LASSERT(cache_pre_leaf_node(dentry, &active_entry, 2));
-        rc = cache_space_hook_lru(dentry->d_inode, NULL, handle,
-                                  CACHE_SPACE_DELETE, 0);
-
-        if (!rc && cache_leaf_node(dentry->d_parent, &active_entry))
-                rc = cache_space_hook_lru(dir,
-                                          dentry->d_parent->d_parent->d_inode,
-                                          handle, CACHE_SPACE_INSERT, 0);
-        RETURN(rc);
-}
-
-static int cache_space_hook_rename(void *handle, struct inode *old_dir,
-                                   struct dentry *old_dentry, struct inode *new_dir,
-                                   struct dentry *new_dentry)
-{
-        __u64 active_entry;
-        int rc = 0;
-        ENTRY;
-
-        if (new_dentry->d_inode) {
-                if (cache_pre_leaf_node(new_dentry, NULL, 0))
-                        rc = cache_space_hook_lru(new_dentry->d_inode, NULL,
-                                                  handle, CACHE_SPACE_DELETE,0);
-                else if (cache_leaf_node(new_dentry, NULL))
-                        rc = cache_space_hook_lru(new_dentry->d_inode,
-                                                  new_dir, handle,
-                                                  CACHE_SPACE_INSERT,0);
-        }
-
-        if (rc || old_dir == new_dir)
-                RETURN(rc);
-
-        if (!S_ISDIR(old_dentry->d_inode->i_mode)) {
-                if (cache_leaf_node(new_dentry->d_parent, &active_entry)) {
-                        rc = cache_space_hook_lru(new_dir, NULL, handle,
-                                                  CACHE_SPACE_DELETE, 0);
-                        if (rc)
-                                RETURN(rc);
-                }
-                if (!active_entry)
-                        rc = get_active_entry(new_dir, &active_entry);
-                active_entry ++;
-                if (!rc)
-                        rc = set_active_entry(new_dir, &active_entry, handle);
-                if (rc)
-                        RETURN(rc);
-                rc = get_active_entry(old_dir, &active_entry);
-                active_entry --;
-                if (!rc)
-                        rc = set_active_entry(old_dir, &active_entry, handle);
-        } else if (cache_pre_leaf_node(new_dentry->d_parent, &active_entry, 3)) {
-                rc = cache_space_hook_lru(new_dir, NULL, handle,
-                                          CACHE_SPACE_DELETE, 0);
-        }
-
-        if (!rc && cache_leaf_node(old_dentry->d_parent, &active_entry)) {
-                rc = cache_space_hook_lru(old_dir,
-                                          old_dentry->d_parent->d_parent->d_inode,
-                                          handle, CACHE_SPACE_INSERT, 0);
-        }
-        
-        RETURN(rc);
-}
-
-typedef int (*cache_hook_op)(void *handle, struct inode *old_dir,
-                             struct dentry *old_dentry, struct inode *new_dir,
-                             struct dentry *new_dentry);
-
-static  cache_hook_op cache_space_hook_ops[HOOK_MAX + 1] = {
-        [HOOK_CREATE]     cache_space_hook_create,
-        [HOOK_LOOKUP]     cache_space_hook_lookup,
-        [HOOK_LINK]       cache_space_hook_link,
-        [HOOK_UNLINK]     cache_space_hook_unlink,
-        [HOOK_SYMLINK]    cache_space_hook_create,
-        [HOOK_MKDIR]      cache_space_hook_mkdir,
-        [HOOK_RMDIR]      cache_space_hook_rmdir,
-        [HOOK_MKNOD]      cache_space_hook_create,
-        [HOOK_RENAME]     cache_space_hook_rename,
-        [HOOK_SETATTR]    NULL,
-        [HOOK_WRITE]      NULL,
-        [HOOK_READDIR]    NULL,
+typedef int (*lru_helper)(struct super_block * sb, void *msg, void *);
+static lru_helper smfs_lru_helpers[PLG_HELPER_MAX] = {
+        [PLG_EXIT]       smfs_exit_lru,
+        [PLG_START]      smfs_start_lru,
+        [PLG_STOP]       smfs_stop_lru,
+        [PLG_TRANS_SIZE] smfs_trans_lru,
+        [PLG_TEST_INODE] NULL,
+        [PLG_SET_INODE]  NULL,
 };
 
-int cache_space_post(int op, void *handle, struct inode *old_dir,
-                     struct dentry *old_dentry, struct inode *new_dir,
-                     struct dentry *new_dentry)
+static int smfs_lru_help_op(int code, struct super_block * sb,
+                            void * arg, void * priv)
 {
+        ENTRY;
+        if (smfs_lru_helpers[code])
+                smfs_lru_helpers[code](sb, arg, priv);
+        RETURN(0);
+}
+
+int smfs_init_lru(struct super_block *sb)
+{
+        struct smfs_plugin plg = {
+                .plg_type = SMFS_PLG_LRU,
+                .plg_pre_op = &smfs_lru_pre_op,
+                .plg_post_op = &smfs_lru_post_op,
+                .plg_helper = &smfs_lru_help_op,
+                .plg_private = NULL
+        };
         int rc = 0;
+        
         ENTRY;
 
-        LASSERT(op <= HOOK_MAX + 1);
-
-        if (cache_space_hook_ops[op]) 
-                rc = cache_space_hook_ops[op](handle, old_dir, old_dentry,
-                                              new_dir, new_dentry);
+        rc = smfs_register_plugin(sb, &plg); 
+        
         RETURN(rc);
 }
+
+

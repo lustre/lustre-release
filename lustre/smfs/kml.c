@@ -53,6 +53,59 @@ do {                                            \
         pbuf = buffer + length;                 \
 } while (0)
 
+
+static int smfs_llog_process_rec_cb(struct llog_handle *handle,
+                                    struct llog_rec_hdr *rec, void *data)
+{
+        char   *rec_buf ;
+        struct smfs_proc_args *args = (struct smfs_proc_args *)data;
+        struct lvfs_run_ctxt saved;
+        int    rc = 0;
+
+        if (!(le32_to_cpu(handle->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
+                CERROR("log is not plain\n");
+                RETURN(-EINVAL);
+        }
+
+        if (le32_to_cpu(rec->lrh_type) == LLOG_GEN_REC) {
+                struct llog_cookie cookie;
+
+                cookie.lgc_lgl = handle->lgh_id;
+                cookie.lgc_index = le32_to_cpu(rec->lrh_index);
+
+                llog_cancel(handle->lgh_ctxt, 1, &cookie, 0, NULL);
+                RETURN(LLOG_PROC_BREAK);
+        }
+
+        if (le32_to_cpu(rec->lrh_type) != SMFS_UPDATE_REC)
+                RETURN(-EINVAL);
+
+        rec_buf = (char*) (rec + 1);
+
+        if (!S2SMI(args->sr_sb)->smsi_ctxt)
+                GOTO(exit, rc = -ENODEV);
+
+        push_ctxt(&saved, S2SMI(args->sr_sb)->smsi_ctxt, NULL);
+#if 0
+        /*FIXME later should first unpack the rec,
+         * then call lvfs_reint or lvfs_undo
+         * kml rec format has changed lvfs_reint lvfs_undo should
+         * be rewrite FIXME later*/
+        if (SMFS_DO_REINT_REC(args->sr_flags))
+                rc = lvfs_reint(args->sr_sb, rec_buf);
+        else
+                rc = lvfs_undo(args->sr_sb, rec_buf);
+#endif
+        if (!rc && !SMFS_DO_REC_ALL(args->sr_flags)) {
+                args->sr_count --;
+                if (args->sr_count == 0)
+                        rc = LLOG_PROC_BREAK;
+        }
+        pop_ctxt(&saved, S2SMI(args->sr_sb)->smsi_ctxt, NULL);
+exit:
+        RETURN(rc);
+}
+
 static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
 {
         int idx = 0;
@@ -60,65 +113,6 @@ static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
 
         idx = GET_REC_PACK_TYPE_INDEX(smsi->smsi_flags);
         return smsi->smsi_pack_rec[idx];
-}
-
-static int smfs_post_kml_rec(struct inode *dir, void *de, void *data1, 
-                             void *data2, int op);
-
-static int smfs_rec_post_hook(struct inode *inode, void *dentry,
-                              void *data1, void *data2, int op, void *handle)
-{
-        int rc = 0;
-        ENTRY;
-
-        if (smfs_do_rec(inode))                                  
-                rc = smfs_post_kml_rec(inode, dentry, data1, data2, op);  
-        
-        RETURN(rc);
-}
-
-#define KML_HOOK "kml_hook"
-
-int smfs_rec_init(struct super_block *sb)
-{
-        int rc = 0;
-        struct smfs_super_info *smfs_info = S2SMI(sb);
-        struct smfs_hook_ops   *rec_hops = NULL;
-        ENTRY;
-
-        SMFS_SET_REC(smfs_info);
-
-        rc = ost_rec_pack_init(smfs_info);
-        if (rc)
-                return rc;
-        
-        rc = mds_rec_pack_init(smfs_info);
-        if (rc)
-                return rc;
-
-        rec_hops = smfs_alloc_hook_ops(KML_HOOK, NULL, smfs_rec_post_hook);
-        if (!rec_hops) {
-                RETURN(-ENOMEM);
-        }
-        rc = smfs_register_hook_ops(smfs_info, rec_hops);
-        if (rc && rec_hops) {
-                smfs_unregister_hook_ops(smfs_info, rec_hops->smh_name);
-                smfs_free_hook_ops(rec_hops);
-        } 
-        RETURN(rc);
-}
-
-int smfs_rec_cleanup(struct smfs_super_info *smfs_info)
-{
-        struct smfs_hook_ops *rec_hops; 
-        int rc = 0;
-        ENTRY;
-
-        rec_hops = smfs_unregister_hook_ops(smfs_info, KML_HOOK);
-        smfs_free_hook_ops(rec_hops);
-        SMFS_CLEAN_REC(smfs_info);
-        
-        RETURN(rc);
 }
 
 static inline void
@@ -175,93 +169,6 @@ int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
 }
 EXPORT_SYMBOL(smfs_rec_unpack);
 
-int smfs_start_rec(struct super_block *sb, struct vfsmount *mnt)
-{
-        struct dentry *dentry;
-        struct lvfs_run_ctxt saved;
-        int rc = 0;
-        ENTRY;
-
-        if (SMFS_INIT_REC(S2SMI(sb)) ||
-            (!SMFS_DO_REC(S2SMI(sb)) && !SMFS_CACHE_HOOK(S2SMI(sb))))
-                RETURN(rc);
-        
-        rc = smfs_llog_setup(sb, mnt);
-        if (rc)
-                RETURN(rc); 
-        push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
-        dentry = simple_mkdir(current->fs->pwd, "DELETE", 0777, 1);
-        if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                CERROR("cannot create DELETE directory: rc = %d\n", rc);
-                GOTO(err_exit, rc = -EINVAL);
-        }
-        S2SMI(sb)->smsi_delete_dir = dentry;
-
-        if (!rc)
-                SMFS_SET_INIT_REC(S2SMI(sb));
-exit:
-        pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
-        RETURN(rc);
-err_exit:
-        if (S2SMI(sb)->smsi_ctxt)
-                OBD_FREE(S2SMI(sb)->smsi_ctxt, sizeof(struct lvfs_run_ctxt));
-        goto exit;
-}
-EXPORT_SYMBOL(smfs_start_rec);
-
-int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt)
-{
-        struct lvfs_run_ctxt *current_ctxt = NULL;
-        struct smfs_super_info *smb = S2SMI(sb);
-        ENTRY;
- 
-        OBD_ALLOC(current_ctxt, sizeof(*current_ctxt));
-        if (!current_ctxt)
-                RETURN(-ENOMEM);
-        OBD_SET_CTXT_MAGIC(current_ctxt);
-        
-        current_ctxt->pwdmnt = mnt;
-        current_ctxt->pwd = mnt->mnt_root;
-        current_ctxt->fs = get_ds();
-        smb->smsi_ctxt = current_ctxt;
-
-        RETURN(0);
-}
-EXPORT_SYMBOL(smfs_post_setup);
-
-int smfs_post_cleanup(struct super_block *sb)
-{
-        struct smfs_super_info *smb = S2SMI(sb);
-        ENTRY;
-       
-        if (smb->smsi_ctxt)
-                OBD_FREE(S2SMI(sb)->smsi_ctxt, sizeof(struct lvfs_run_ctxt));
-        RETURN(0);
-}
-EXPORT_SYMBOL(smfs_post_cleanup);
-
-int smfs_stop_rec(struct super_block *sb)
-{
-        int rc = 0;
-        ENTRY;
-
-        if (!SMFS_INIT_REC(S2SMI(sb)) ||
-            (!SMFS_DO_REC(S2SMI(sb)) && !SMFS_CACHE_HOOK(S2SMI(sb))))
-                RETURN(rc);
-
-        rc = smfs_llog_cleanup(sb);
-
-        SMFS_CLEAN_INIT_REC(S2SMI(sb));
-
-        if (S2SMI(sb)->smsi_delete_dir) {
-                l_dput(S2SMI(sb)->smsi_delete_dir);
-                S2SMI(sb)->smsi_delete_dir = NULL;
-        }
-        RETURN(rc);
-}
-EXPORT_SYMBOL(smfs_stop_rec);
-
 int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                        unsigned long from, unsigned long num)
 {
@@ -276,35 +183,29 @@ int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
 }
 EXPORT_SYMBOL(smfs_rec_setattr);
 
-int smfs_rec_md(struct inode *inode, void *lmm, int lmm_size,
-                enum ea_type type)
+int smfs_rec_md(struct inode *inode, void *lmm, int lmm_size)
 {
         char *set_lmm = NULL;
-        int rc = 0;
+        int  rc = 0;
         ENTRY;
 
         if (!SMFS_DO_REC(S2SMI(inode->i_sb)))
                 RETURN(0);
 
         if (lmm) {
-                int size = lmm_size + sizeof(lmm_size) +
-                        sizeof(type);
-
-                OBD_ALLOC(set_lmm, size);
+                OBD_ALLOC(set_lmm, lmm_size + sizeof(lmm_size));
                 if (!set_lmm)
                         RETURN(-ENOMEM);
-
                 memcpy(set_lmm, &lmm_size, sizeof(lmm_size));
-                memcpy(set_lmm + sizeof(lmm_size), &type, sizeof(type));
-                memcpy(set_lmm + sizeof(lmm_size) + sizeof(type), lmm, lmm_size);
-
+                memcpy(set_lmm + sizeof(lmm_size), lmm, lmm_size);
                 rc = smfs_post_rec_setattr(inode, NULL, NULL, set_lmm);
                 if (rc) {
-                        CERROR("Error: Record md for inode %lu rc = %d\n",
+                        CERROR("Error: Record md for inode %lu rc=%d\n",
                                 inode->i_ino, rc);
                 }
-                OBD_FREE(set_lmm, size);
         }
+        if (set_lmm)
+                OBD_FREE(set_lmm, lmm_size + sizeof(lmm_size));
         RETURN(rc);
 }
 EXPORT_SYMBOL(smfs_rec_md);
@@ -334,7 +235,7 @@ int smfs_process_rec(struct super_block *sb,
         args.sr_count = count;
         args.sr_data = dir;
         args.sr_flags = flags ;
-        ctxt = S2SMI(sb)->smsi_rec_log;
+        ctxt = S2SMI(sb)->smsi_kml_log;
         loghandle = ctxt->loc_handle;
 
         if (count == 0) {
@@ -696,12 +597,12 @@ out:
 }
 
 int smfs_post_rec_setattr(struct inode *inode, struct dentry *dentry, 
-                          void *data1, void *data2)
+                          void  *data1, void  *data2)
 {        
-        struct iattr *attr = (struct iattr *)data1;
-        int rc = 0, length = 0, buf_len = 0;
         struct smfs_super_info *sinfo;
-        char *buffer = NULL, *pbuf;
+        struct iattr *attr = (struct iattr *)data1;
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0, buf_len = 0;
         ENTRY;
 
         sinfo = S2SMI(inode->i_sb);
@@ -817,29 +718,205 @@ exit:
         RETURN(rc);
 }
 
-typedef int (*post_kml_rec)(struct inode *dir, struct dentry *dentry,
-                           void *data1, void *data2);
+/* new plugin API */
+struct kml_priv {
+        struct dentry * kml_llog_dir;
+};
 
-static post_kml_rec smfs_kml_post[HOOK_MAX + 1] = {
-        [HOOK_CREATE]  smfs_post_rec_create,
+static int kml_create(struct inode * inode, void *arg) 
+{
+        struct hook_msg * msg = arg;
+        return smfs_post_rec_create(inode, msg->dentry, NULL, NULL);
+}
+
+static int kml_link(struct inode * inode, void *arg) 
+{
+        struct hook_link_msg * msg = arg;
+        return smfs_post_rec_link(inode, msg->dentry, msg->new_dentry, NULL);
+}
+
+static int kml_unlink(struct inode * inode, void *arg) 
+{
+        struct hook_unlink_msg * msg = arg;
+        return smfs_post_rec_unlink(inode, msg->dentry, &msg->mode, NULL);
+}
+
+static int kml_symlink(struct inode * inode, void *arg) 
+{
+        struct hook_symlink_msg * msg = arg;
+        return smfs_post_rec_create(inode, msg->dentry, &msg->tgt_len,
+                                    msg->symname);
+}
+
+static int kml_rename(struct inode * inode, void *arg) 
+{
+        struct hook_rename_msg * msg = arg;
+        return smfs_post_rec_rename(inode, msg->dentry, msg->new_dir,
+                                    msg->new_dentry);
+}
+
+static int kml_setattr(struct inode * inode, void *arg) 
+{
+        struct hook_setattr_msg * msg = arg;
+        return smfs_post_rec_setattr(inode, msg->dentry, msg->attr, NULL);
+}
+
+static int kml_write(struct inode * inode, void *arg) 
+{
+        struct hook_write_msg * msg = arg;
+        return smfs_post_rec_write(inode, msg->dentry, &msg->count, &msg->pos);
+}
+
+typedef int (*post_kml_op)(struct inode * inode, void *msg);
+static post_kml_op smfs_kml_post[HOOK_MAX] = {
+        [HOOK_CREATE]  kml_create,
         [HOOK_LOOKUP]  NULL,
-        [HOOK_LINK]    smfs_post_rec_link,
-        [HOOK_UNLINK]  smfs_post_rec_unlink,
-        [HOOK_SYMLINK] smfs_post_rec_create,
-        [HOOK_MKDIR]   smfs_post_rec_create,
-        [HOOK_RMDIR]   smfs_post_rec_unlink,
-        [HOOK_MKNOD]   smfs_post_rec_create,
-        [HOOK_RENAME]  smfs_post_rec_rename,
-        [HOOK_SETATTR] smfs_post_rec_setattr,
-        [HOOK_WRITE]   smfs_post_rec_write,
+        [HOOK_LINK]    kml_link,
+        [HOOK_UNLINK]  kml_unlink,
+        [HOOK_SYMLINK] kml_symlink,
+        [HOOK_MKDIR]   kml_create,
+        [HOOK_RMDIR]   kml_unlink,
+        [HOOK_MKNOD]   kml_create,
+        [HOOK_RENAME]  kml_rename,
+        [HOOK_SETATTR] kml_setattr,
+        [HOOK_WRITE]   kml_write,
         [HOOK_READDIR] NULL,
 };
-static int smfs_post_kml_rec(struct inode *dir, void *de, void *data1, 
-                             void *data2, int op)
+
+static int smfs_kml_post_op(int code, struct inode * inode,
+                            void * msg, int ret, void * priv)
 {
-        if (smfs_kml_post[op]) {
-                struct dentry *dentry = (struct dentry *)de;
-                return smfs_kml_post[op](dir, dentry, data1, data2);
+        int rc = 0;
+        
+        ENTRY;
+        CDEBUG(D_INODE,"KML: inode %lu, code: %u\n", inode->i_ino, code);
+        //KML don't handle failed ops
+        if (ret)
+                RETURN(0);
+        
+        if (smfs_kml_post[code]) {
+                rc = smfs_kml_post[code](inode, msg);
         }
+                
+        RETURN(rc);
+}
+
+/* Helpers */
+static int smfs_exit_kml(struct super_block *sb, void * arg, struct kml_priv * priv)
+{
+        ENTRY;
+
+        smfs_deregister_plugin(sb, SMFS_PLG_KML);
+                
+        EXIT;
         return 0;
 }
+
+static int smfs_trans_kml (struct super_block *sb, void *arg,
+                           struct kml_priv * priv)
+{
+        int size;
+        
+        ENTRY;
+        
+        size = 20;//LDISKFS_INDEX_EXTRA_TRANS_BLOCKS+LDISKFS_DATA_TRANS_BLOCKS;
+        
+        RETURN(size);
+}
+
+static int smfs_start_kml(struct super_block *sb, void *arg,
+                          struct kml_priv * kml_p)
+{
+        int rc = 0;
+        struct smfs_super_info * smb = S2SMI(sb);
+        struct llog_ctxt **ctxt = &smb->smsi_kml_log;
+
+        ENTRY;
+        //is plugin already activated
+        if (SMFS_IS(smb->plg_flags, SMFS_PLG_KML))
+                RETURN(0);
+        
+        //this will do OBD_ALLOC() for ctxt
+        rc = llog_catalog_setup(ctxt, KML_LOG_NAME, smb->smsi_exp,
+                                smb->smsi_ctxt, smb->sm_fsfilt,
+                                smb->smsi_logs_dir,
+                                smb->smsi_objects_dir);
+        
+        if (rc) {
+                CERROR("Failed to initialize kml log list catalog %d\n", rc);
+                RETURN(rc);
+        }
+        
+        (*ctxt)->llog_proc_cb = smfs_llog_process_rec_cb;
+
+        SMFS_SET(smb->plg_flags, SMFS_PLG_KML);
+
+        RETURN(0);
+}
+
+int smfs_stop_kml(struct super_block *sb, void *arg,
+                  struct kml_priv * kml_p)
+{
+        struct smfs_super_info * smb = S2SMI(sb);
+        struct llog_ctxt *ctxt = smb->smsi_kml_log;
+        ENTRY;
+
+        if (!SMFS_IS(smb->plg_flags, SMFS_PLG_KML))
+                RETURN(0);
+
+        SMFS_CLEAR(smb->plg_flags, SMFS_PLG_KML);
+
+        llog_catalog_cleanup(ctxt);
+        OBD_FREE(ctxt, sizeof(*ctxt));
+        
+        RETURN(0);
+}
+
+typedef int (*kml_helper)(struct super_block * sb, void *msg, struct kml_priv *);
+static kml_helper smfs_kml_helpers[PLG_HELPER_MAX] = {
+        [PLG_EXIT]       smfs_exit_kml,
+        [PLG_START]      smfs_start_kml,
+        [PLG_STOP]       smfs_stop_kml,
+        [PLG_TRANS_SIZE] smfs_trans_kml,
+        [PLG_TEST_INODE] NULL,
+        [PLG_SET_INODE]  NULL,
+};
+
+static int smfs_kml_help_op(int code, struct super_block * sb,
+                            void * arg, void * priv)
+{
+        int rc = 0;
+        ENTRY;
+        if (smfs_kml_helpers[code])
+                rc = smfs_kml_helpers[code](sb, arg, (struct kml_priv *) priv);
+        RETURN(rc);
+}
+
+int smfs_init_kml(struct super_block *sb)
+{
+        int rc = 0;
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct smfs_plugin plg = {
+                .plg_type = SMFS_PLG_KML,
+                .plg_pre_op = NULL,
+                .plg_post_op = &smfs_kml_post_op,
+                .plg_helper = &smfs_kml_help_op,
+                .plg_private = NULL,
+        };
+        
+        ENTRY;
+
+        rc = ost_rec_pack_init(smb);
+        if (rc)
+                return rc;
+        
+        rc = mds_rec_pack_init(smb);
+        if (rc)
+                return rc;
+
+        rc = smfs_register_plugin(sb, &plg);
+        
+        RETURN(rc);
+}
+
+

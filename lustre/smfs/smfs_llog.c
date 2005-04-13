@@ -30,121 +30,63 @@
 #include <linux/lvfs.h>
 
 #include "smfs_internal.h"
-
-static int smfs_llog_process_rec_cb(struct llog_handle *handle,
-                                    struct llog_rec_hdr *rec, void *data)
-{
-        char   *rec_buf ;
-        struct smfs_proc_args *args = (struct smfs_proc_args *)data;
-        struct lvfs_run_ctxt saved;
-        int    rc = 0;
-
-        if (!(le32_to_cpu(handle->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
-                CERROR("log is not plain\n");
-                RETURN(-EINVAL);
-        }
-
-        if (le32_to_cpu(rec->lrh_type) == LLOG_GEN_REC) {
-                struct llog_cookie cookie;
-
-                cookie.lgc_lgl = handle->lgh_id;
-                cookie.lgc_index = le32_to_cpu(rec->lrh_index);
-
-                llog_cancel(handle->lgh_ctxt, 1, &cookie, 0, NULL);
-                RETURN(LLOG_PROC_BREAK);
-        }
-
-        if (le32_to_cpu(rec->lrh_type) != SMFS_UPDATE_REC)
-                RETURN(-EINVAL);
-
-        rec_buf = (char*) (rec + 1);
-
-        if (!S2SMI(args->sr_sb)->smsi_ctxt)
-                GOTO(exit, rc = -ENODEV);
-
-        push_ctxt(&saved, S2SMI(args->sr_sb)->smsi_ctxt, NULL);
-#if 0
-        /*FIXME later should first unpack the rec,
-         * then call lvfs_reint or lvfs_undo
-         * kml rec format has changed lvfs_reint lvfs_undo should
-         * be rewrite FIXME later*/
-        if (SMFS_DO_REINT_REC(args->sr_flags))
-                rc = lvfs_reint(args->sr_sb, rec_buf);
-        else
-                rc = lvfs_undo(args->sr_sb, rec_buf);
-#endif
-        if (!rc && !SMFS_DO_REC_ALL(args->sr_flags)) {
-                args->sr_count --;
-                if (args->sr_count == 0)
-                        rc = LLOG_PROC_BREAK;
-        }
-        pop_ctxt(&saved, S2SMI(args->sr_sb)->smsi_ctxt, NULL);
-exit:
-        RETURN(rc);
-}
-
 int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
 {
-        struct llog_ctxt **ctxt = &(S2SMI(sb)->smsi_rec_log);
-        struct lvfs_run_ctxt saved;
-        struct dentry *dentry;
-        int rc = 0, rc2;
+        struct dentry *dentry = NULL;
+        int rc = 0;
 
         /* create OBJECTS and LOGS for writing logs */
         ENTRY;
 
         LASSERT(mnt);
 
-        push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
+        //push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create LOGS directory: rc = %d\n", rc);
-                GOTO(exit, rc = -EINVAL);
+                rc = -EINVAL;
+                goto exit;
         }
 
         S2SMI(sb)->smsi_logs_dir = dentry;
+        SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
+        
         dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
-                GOTO(exit, rc = -EINVAL);
+                rc = -EINVAL;
+                goto exit;
         }
 
         S2SMI(sb)->smsi_objects_dir = dentry;
+        SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
 
         /* write log will not write to KML, cleanup kml flags */
-        SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_objects_dir->d_inode);
-        SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_logs_dir->d_inode);
+        //SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_objects_dir->d_inode);
+        //SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_logs_dir->d_inode);
 
         /* log create does not call cache hooks, cleanup hook flags */
-        SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_objects_dir->d_inode);
-        SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_logs_dir->d_inode);
+        //SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_objects_dir->d_inode);
+        //SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_logs_dir->d_inode);
 
-        if (SMFS_DO_REC(S2SMI(sb))) {
-                rc = llog_catalog_setup(ctxt, KML_LOG_NAME, S2SMI(sb)->smsi_exp,
-                                        S2SMI(sb)->smsi_ctxt, S2SMI(sb)->sm_fsfilt,
-                                        S2SMI(sb)->smsi_logs_dir,
-                                        S2SMI(sb)->smsi_objects_dir);
-                (*ctxt)->llog_proc_cb = smfs_llog_process_rec_cb;
-        }
-
-        if (SMFS_CACHE_HOOK(S2SMI(sb))) {
+        
+        /*if (SMFS_CACHE_HOOK(S2SMI(sb))) {
                 rc2 = cache_space_hook_setup(sb);
                 if (!rc && rc2)
                         rc = rc2;
-        }
+        }*/
 exit:
-        pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
+        //pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         RETURN(rc);
 }
 
 int smfs_llog_cleanup(struct super_block *sb)
 {
-        struct llog_ctxt *ctxt = S2SMI(sb)->smsi_rec_log;
-        int rc = 0, rc2;
         ENTRY;
 
+        /*
         if (SMFS_CACHE_HOOK(S2SMI(sb)))
                 rc = cache_space_hook_cleanup();
 
@@ -154,7 +96,7 @@ int smfs_llog_cleanup(struct super_block *sb)
                 if (!rc)
                         rc = rc2;
         }
-
+        */
         if (S2SMI(sb)->smsi_logs_dir) {
                 l_dput(S2SMI(sb)->smsi_logs_dir);
                 S2SMI(sb)->smsi_logs_dir = NULL;
@@ -163,7 +105,7 @@ int smfs_llog_cleanup(struct super_block *sb)
                 l_dput(S2SMI(sb)->smsi_objects_dir);
                 S2SMI(sb)->smsi_objects_dir = NULL;
         }
-        RETURN(rc);
+        RETURN(0);
 }
 
 int smfs_llog_add_rec(struct smfs_super_info *sinfo, void *data, int data_size)
@@ -174,10 +116,11 @@ int smfs_llog_add_rec(struct smfs_super_info *sinfo, void *data, int data_size)
         rec.lrh_len = size_round(data_size);
         rec.lrh_type = SMFS_UPDATE_REC;
 
-        rc = llog_add(sinfo->smsi_rec_log, &rec, data, NULL, 0, NULL, NULL, NULL);
+        rc = llog_add(sinfo->smsi_kml_log, &rec, data, NULL, 0, NULL, NULL, NULL);
         if (rc != 1) {
                 CERROR("error adding kml rec: %d\n", rc);
                 RETURN(-EINVAL);
         }
         RETURN(0);
 }
+
