@@ -447,11 +447,11 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
 {
         struct dentry *cache_dentry = NULL;
         
-        if (!parent_dentry) {
+        /*if (!parent_dentry) {
                 cache_dentry = d_find_alias(cache_inode);
                 if (cache_dentry) 
                         RETURN(cache_dentry);
-        }
+        }*/
         
         cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
         if (!cache_dentry)
