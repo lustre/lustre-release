@@ -98,8 +98,10 @@ int smfs_options(char *data, char **devstr, char **namestr,
         }
 
         //save dev & type for further use
-        *devstr = strcpy(ret + strlen(ret) + 1, *devstr);//, strlen(*devstr));
-        *namestr = strcpy(*devstr + strlen(*devstr) + 1, *namestr);//, strlen(*namestr));
+        if (*devstr)
+                *devstr = strcpy(ret + strlen(ret) + 1, *devstr);
+        if (*namestr)
+                *namestr = strcpy(*devstr + strlen(*devstr) + 1, *namestr);
         
         OBD_FREE(temp, strlen(data) + 1);
         
@@ -323,7 +325,7 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
                 goto out_err;
         }
 
-        CERROR("mount opts: %s\n", (char *)data);
+        CDEBUG(D_SUPER, "mount opts: %s\n", (char *)data);
 
         smb = smfs_init_smb(sb);
         if (!smb)
@@ -345,7 +347,7 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
                 goto out_err;
         }
         
-        CERROR("backfs mount opts: %s\n", opts);
+        CDEBUG(D_SUPER, "backfs mount opts: %s\n", opts);
 
         err = smfs_mount_cache(smb, devstr, typestr, opts);
         if (err) {
