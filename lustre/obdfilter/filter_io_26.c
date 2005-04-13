@@ -113,6 +113,12 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         struct dio_request *dreq = bio->bi_private;
         unsigned long flags;
 
+        if (bio->bi_size) {
+                CWARN("gets called against non-complete bio 0x%p: %d/%d/%d\n",
+                      bio, bio->bi_size, done, error);
+                return 1;
+        }
+
         if (dreq == NULL) {
                 CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
