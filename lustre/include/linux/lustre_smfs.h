@@ -26,9 +26,6 @@
 #ifndef __LUSTRE_SMFS_H
 #define __LUSTRE_SMFS_H
 
-#include <linux/lustre_fsfilt.h>
-#include <linux/namei.h>
-
 struct snap_inode_info {
 	int sn_flags;		/*the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/
@@ -87,6 +84,7 @@ struct smfs_hook_ops {
         smfs_hook_func   smh_post_op;
         smfs_hook_func   smh_pre_op;
 };
+
 struct smfs_super_info {
         struct super_block       *smsi_sb;
         struct vfsmount          *smsi_mnt;         /* mount the cache kern */
@@ -94,19 +92,18 @@ struct smfs_super_info {
         struct fsfilt_operations *sm_fsfilt;        /* fsfilt operations */
         struct sm_operations     *sm_ops;           /* cache ops */
         struct lvfs_run_ctxt     *smsi_ctxt;
-        struct llog_ctxt         *smsi_rec_log;     /* smfs kml llog */
+        struct llog_ctxt         *smsi_kml_log;     /* smfs kml llog */
         struct dentry            *smsi_logs_dir;
         struct dentry            *smsi_objects_dir;
-        struct dentry            *smsi_delete_dir;  /* for delete inode dir */
         char                     *smsi_cache_ftype; /* cache file system type */
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
 	struct snap_super_info	 *smsi_snap_info;   /* snap table cow */
         smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
-        __u32                    smsi_flags;        /* flags */
+        __u32                    plg_flags;        /* flags */
+        __u32                    smsi_flags;
         __u32                    smsi_ops_check;
         struct list_head         smsi_plg_list;
-        struct list_head         smsi_hook_list;
         kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
 };
 
@@ -314,7 +311,7 @@ static inline void duplicate_inode(struct inode *dst_inode,
         //dst_inode->i_state = src_inode->i_state;
         dst_inode->i_generation = src_inode->i_generation;
         dst_inode->i_flags = src_inode->i_flags;
-
+        
         /* This is to make creating special files working. */
         dst_inode->i_rdev = src_inode->i_rdev;
 }
@@ -337,9 +334,14 @@ static inline void post_smfs_inode(struct inode *inode,
 static inline void pre_smfs_inode(struct inode *inode,
                                   struct inode *cache_inode)
 {
-        //if (inode && cache_inode) {
+        if (inode && cache_inode) {
+                cache_inode->i_flags = inode->i_flags;
                 //cache_inode->i_state = inode->i_state;
-        //}
+                if (S_ISDIR(inode->i_mode)) {
+                        cache_inode->i_nlink = inode->i_nlink;
+                }
+                cache_inode->i_generation = inode->i_generation;
+        }
 }
 
 /* instantiate a file handle to the cache file */
@@ -427,12 +429,23 @@ static inline void d_unalloc(struct dentry *dentry)
         dput(dentry); /* this will free the dentry memory */
 }
 
+static inline void smfs_update_dentry(struct dentry *dentry,
+                                      struct dentry *cache_dentry)
+{
+        if (DCACHE_CROSS_REF & cache_dentry->d_flags) {
+                dentry->d_flags |= DCACHE_CROSS_REF;
+ 	        dentry->d_generation = cache_dentry->d_generation;
+ 	        dentry->d_mdsnum = cache_dentry->d_mdsnum;
+ 	        dentry->d_fid = cache_dentry->d_fid;
+ 	        dentry->d_inum = cache_dentry->d_inum;
+        }
+}
+
 static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
                                              struct inode *cache_inode,
                                              struct dentry *dentry)
 {
         struct dentry *cache_dentry = NULL;
-        
         
         if (!parent_dentry) {
                 cache_dentry = d_find_alias(cache_inode);
@@ -443,6 +456,12 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
         cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
         if (!cache_dentry)
                 RETURN(NULL);
+
+        //wantedi support
+        cache_dentry->d_fsdata = dentry->d_fsdata;
+        
+        //cmd support
+        smfs_update_dentry(cache_dentry, dentry);
         
         if (!parent_dentry)
                 cache_dentry->d_parent = cache_dentry;
@@ -511,18 +530,8 @@ extern int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                               unsigned long from, unsigned long num);
 extern int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
                             struct iattr *attr);
-extern int smfs_rec_precreate(struct dentry *dentry, int *num,
-                              struct obdo *oa);
-extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size, 
-		       enum ea_type type);
+extern int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa);
+extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size);
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
-	
-
-extern int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt);
-extern int smfs_post_cleanup(struct super_block *sb);
-extern struct inode *smfs_get_inode (struct super_block *sb, ino_t hash,
-                                     struct inode *dir, int index);
-
-extern int is_smfs_sb(struct super_block *sb);
 #endif /* _LUSTRE_SMFS_H */
