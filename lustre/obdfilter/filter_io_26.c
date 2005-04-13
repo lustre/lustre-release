@@ -274,25 +274,25 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
-static void filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+static void filter_clear_page_cache(struct inode *inode, 
+				    struct dio_request *iobuf)
 {
-#if 0
         struct page *page;
         int i;
 
-        for (i = 0; i < iobuf->nr_pages ; i++) {
+        for (i = 0; i < iobuf->dr_npages ; i++) {
                 page = find_lock_page(inode->i_mapping,
-                                      iobuf->maplist[i]->index);
+                                      iobuf->dr_pages[i]->index);
                 if (page == NULL)
                         continue;
                 if (page->mapping != NULL) {
                         block_invalidatepage(page, 0);
-                        truncate_complete_page(page);
+			wait_on_page_writeback(page);
+                        ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
                 page_cache_release(page);
         }
-#endif
 }
 
 /* Must be called with i_sem taken for writes; this will drop it */
@@ -365,7 +365,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
 
         /* be careful to call this after fsync_inode_data_buffers has waited
          * for IO to complete before we evict it from the cache */
-        filter_clear_page_cache(inode, iobuf);
+        filter_clear_page_cache(inode, dreq);
 
         RETURN(filter_do_bio(obd, inode, dreq, rw));
 }
