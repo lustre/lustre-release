@@ -347,14 +347,15 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
         ldlm_mode_t mode;
-        struct page *page;
+        struct page *page = NULL;
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_service_time *stime;
         __u64 kms;
         unsigned long pgoff, size, rand_read, seq_read;
         int rc = 0;
         ENTRY;
 
-        if (ll_i2info(inode)->lli_smd == NULL) {
+        if (lli->lli_smd == NULL) {
                 CERROR("No lsm on fault?\n");
                 RETURN(NULL);
         }
@@ -363,28 +364,31 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         policy_from_vma(&policy, vma, address, PAGE_CACHE_SIZE);
 
         CDEBUG(D_MMAP, "nopage vma %p inode %lu, locking ["LPU64", "LPU64"]\n",
-               vma, inode->i_ino, policy.l_extent.start,
-               policy.l_extent.end);
+               vma, inode->i_ino, policy.l_extent.start, policy.l_extent.end);
 
         mode = mode_from_vma(vma);
         stime = (mode & LCK_PW) ? &ll_i2sbi(inode)->ll_write_stime :
                                   &ll_i2sbi(inode)->ll_read_stime;
         
-        rc = ll_extent_lock(fd, inode, ll_i2info(inode)->lli_smd, mode, &policy,
+        rc = ll_extent_lock(fd, inode, lli->lli_smd, mode, &policy,
                             &lockh, LDLM_FL_CBPENDING, stime);
         if (rc != 0)
                 RETURN(NULL);
 
         /* XXX change inode size without i_sem hold! there is a race condition
          *     with truncate path. (see ll_extent_lock) */
-        kms = lov_merge_size(ll_i2info(inode)->lli_smd, 1);
+        down(&lli->lli_size_sem);
+        kms = lov_merge_size(lli->lli_smd, 1);
         pgoff = ((address - vma->vm_start) >> PAGE_CACHE_SHIFT) + vma->vm_pgoff;
         size = (kms + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 
-        if (pgoff >= size)
+        if (pgoff >= size) {
+                up(&lli->lli_size_sem);
                 ll_glimpse_size(inode);
-        else
+        } else {
                 inode->i_size = kms;
+                up(&lli->lli_size_sem);
+        }
 
         /* disable VM_SEQ_READ and use VM_RAND_READ to make sure that
          * the kernel will not read other pages not covered by ldlm in

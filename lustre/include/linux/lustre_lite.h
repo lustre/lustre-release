@@ -71,6 +71,7 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_F_PREFER_EXTENDED_SIZE      2
 
 struct ll_inode_info {
+        int                     lli_size_pid;
         int                     lli_inode_magic;
         struct lov_stripe_md   *lli_smd;
         struct mea             *lli_mea;

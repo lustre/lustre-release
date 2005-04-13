@@ -418,6 +418,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         sema_init(&lli->lli_open_sem, 1);
         sema_init(&lli->lli_size_sem, 1);
         lli->lli_flags = 0;
+        lli->lli_size_pid = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
@@ -1044,7 +1045,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN /*| ATTR_RAW*/) : ~0)) {
                 struct lustre_md md;
-                int save_valid;
 
                 OBD_ALLOC(op_data, sizeof(*op_data));
                 if (op_data == NULL)
@@ -1073,10 +1073,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  *
                  * NB: ATTR_SIZE will only be set at this point if the size
                  * resides on the MDS, ie, this file has no objects. */
-                save_valid = attr->ia_valid;
                 attr->ia_valid &= ~ATTR_SIZE;
                 inode_setattr(inode, attr);
-                attr->ia_valid = save_valid;
                  
                 ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
@@ -1133,9 +1131,11 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
 
                 down(&lli->lli_size_sem);
+		lli->lli_size_pid = current->pid;
                 rc = vmtruncate(inode, attr->ia_size);
                 if (rc != 0) {
                         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+			lli->lli_size_pid = 0;
                         up(&lli->lli_size_sem);
                 }
 

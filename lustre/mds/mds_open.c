@@ -1558,8 +1558,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         mfd = mds_handle2mfd(&body->handle);
         if (mfd == NULL) {
                 DEBUG_REQ(D_ERROR, req, "no handle for file close ino "LPD64
-                          ": cookie "LPX64, body->id1.li_stc.u.e3s.l3s_ino,
-                          body->handle.cookie);
+                          ": cookie "LPX64, id_ino(&body->id1), body->handle.cookie);
                 req->rq_status = -ESTALE;
                 RETURN(-ESTALE);
         }
