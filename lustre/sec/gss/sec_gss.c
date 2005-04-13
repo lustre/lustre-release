@@ -43,7 +43,7 @@
  *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: sec_gss.c,v 1.3 2005/04/04 13:12:39 yury Exp $
+ * $Id: sec_gss.c,v 1.4 2005/04/13 09:49:50 yury Exp $
  */
 
 #ifndef EXPORT_SYMTAB
@@ -366,9 +366,9 @@ struct gss_sec {
 #endif
 };
 
-static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
-
 #ifdef __KERNEL__
+
+static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
 
 struct gss_upcall_msg {
         struct rpc_pipe_msg             gum_base;
@@ -634,12 +634,12 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
                         GOTO(err_free_ctx, err);
                 GOTO(err_free_ctx, err = 0);
         }
-        if (rawobj_extract_local(&tmp_buf, (__u32 **) &p, &len))
+        if (rawobj_extract_local(&tmp_buf, (__u32 **) ((void *)&p), &len))
                 GOTO(err_free_ctx, err);
         if (rawobj_dup(&ctx->gc_wire_ctx, &tmp_buf)) {
                 GOTO(err_free_ctx, err = -ENOMEM);
         }
-        if (rawobj_extract_local(&tmp_buf, (__u32 **) &p, &len))
+        if (rawobj_extract_local(&tmp_buf, (__u32 **) ((void *)&p), &len))
                 GOTO(err_free_wire_ctx, err);
         if (len) {
                 CERROR("unexpected trailing %u bytes\n", len);
@@ -1520,7 +1520,9 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
 {
         struct gss_sec *gsec;
         struct ptlrpc_sec *sec;
+#ifdef __KERNEL__
         char *pos;
+#endif
         ENTRY;
 
         LASSERT(flavor->flavor == PTLRPC_SEC_GSS);
@@ -1600,7 +1602,9 @@ static
 void gss_destroy_sec(struct ptlrpc_sec *sec)
 {
         struct gss_sec *gsec;
+#ifdef __KERNEL__
         char *pos;
+#endif
         ENTRY;
 
         gsec = container_of(sec, struct gss_sec, gs_base);
@@ -1778,18 +1782,17 @@ int __init ptlrpcs_gss_init(void)
         return rc;
 }
 
+#ifdef __KERNEL__
 static void __exit ptlrpcs_gss_exit(void)
 {
         lustre_secinit_downcall_handler = NULL;
 
         cleanup_kerberos_module();
-#ifndef __KERNEL__
-#else
         rpc_rmdir(LUSTRE_PIPEDIR);
         gss_svc_exit();
-#endif
         ptlrpcs_unregister(&gss_type);
 }
+#endif
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("GSS Security module for Lustre");

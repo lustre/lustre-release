@@ -54,7 +54,7 @@
 #include <linux/crypto.h>
 #else
 #include <liblustre.h>
-#include "../kcrypto/libcrypto.h"
+//#include "../kcrypto/libcrypto.h"
 #endif
 
 #include <libcfs/kp30.h>
@@ -79,6 +79,7 @@ krb5_encrypt(struct crypto_tfm *tfm,
              int length)
 {
         __u32 ret = -EINVAL;
+#ifdef __KERNEL__
         struct scatterlist sg[1];
         __u8 local_iv[16] = {0};
 
@@ -101,6 +102,7 @@ krb5_encrypt(struct crypto_tfm *tfm,
         ret = crypto_cipher_encrypt_iv(tfm, sg, sg, length, local_iv);
 
 out:
+#endif	
         return(ret);
 }
 
@@ -114,6 +116,7 @@ krb5_decrypt(struct crypto_tfm *tfm,
              int length)
 {
         __u32 ret = -EINVAL;
+#ifdef __KERNEL__
         struct scatterlist sg[1];
         __u8 local_iv[16] = {0};
 
@@ -135,11 +138,13 @@ krb5_decrypt(struct crypto_tfm *tfm,
         ret = crypto_cipher_decrypt_iv(tfm, sg, sg, length, local_iv);
 
 out:
+#endif
         return(ret);
 }
 
 //EXPORT_SYMBOL(krb5_decrypt);
 
+#ifdef __KERNEL__
 void
 buf_to_sg(struct scatterlist *sg, char *ptr, int len)
 {
@@ -212,15 +217,17 @@ void obj_to_scatter_list(rawobj_t *obj, struct scatterlist *list,
                 list++;
         }
 }
+#endif
 
 int gss_encrypt_rawobj(struct crypto_tfm *tfm,
                        rawobj_t *inobj, rawobj_t *outobj,
                        int enc)
 {
+        int rc = -EINVAL;
+#ifdef __KERNEL__
         struct scatterlist *src_list, *dst_list;
         __u8 local_iv[16] = {0};
         int list_len;
-        __u32 rc;
         ENTRY;
 
         LASSERT(outobj->len >= inobj->len);
@@ -249,8 +256,9 @@ int gss_encrypt_rawobj(struct crypto_tfm *tfm,
         }
 
         outobj->len = inobj->len;
-
+	EXIT;
 out_free:
         OBD_FREE(src_list, sizeof(*src_list) * list_len * 2);
-        RETURN(rc);
+#endif
+        return rc;
 }

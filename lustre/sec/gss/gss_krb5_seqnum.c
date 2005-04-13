@@ -51,7 +51,7 @@
 #include <linux/crypto.h>
 #else
 #include <liblustre.h>
-#include "../kcrypto/libcrypto.h"
+//#include "../kcrypto/libcrypto.h"
 #endif
 
 #include <libcfs/kp30.h>

@@ -78,7 +78,7 @@
 #include <linux/crypto.h>
 #else
 #include <liblustre.h>
-#include "../kcrypto/libcrypto.h"
+//#include "../kcrypto/libcrypto.h"
 #include <netinet/in.h>
 #endif
 

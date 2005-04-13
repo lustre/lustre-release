@@ -10,6 +10,81 @@
 #ifndef __SEC_GSS_GSS_INTERNAL_H_
 #define __SEC_GSS_GSS_INTERNAL_H_
 
+/* remove this mess when libkcrypt is ready --umka */
+#ifndef __KERNEL__
+/*
+ * Algorithm masks and types.
+ */
+#define CRYPTO_ALG_TYPE_MASK		0x000000ff
+#define CRYPTO_ALG_TYPE_CIPHER		0x00000001
+#define CRYPTO_ALG_TYPE_DIGEST		0x00000002
+#define CRYPTO_ALG_TYPE_COMPRESS	0x00000004
+
+/*
+ * Transform masks and values (for crt_flags).
+ */
+#define CRYPTO_TFM_MODE_MASK		0x000000ff
+#define CRYPTO_TFM_REQ_MASK		0x000fff00
+#define CRYPTO_TFM_RES_MASK		0xfff00000
+
+#define CRYPTO_TFM_MODE_ECB		0x00000001
+#define CRYPTO_TFM_MODE_CBC		0x00000002
+#define CRYPTO_TFM_MODE_CFB		0x00000004
+#define CRYPTO_TFM_MODE_CTR		0x00000008
+
+#define CRYPTO_TFM_REQ_WEAK_KEY		0x00000100
+#define CRYPTO_TFM_RES_WEAK_KEY		0x00100000
+#define CRYPTO_TFM_RES_BAD_KEY_LEN   	0x00200000
+#define CRYPTO_TFM_RES_BAD_KEY_SCHED 	0x00400000
+#define CRYPTO_TFM_RES_BAD_BLOCK_LEN 	0x00800000
+#define CRYPTO_TFM_RES_BAD_FLAGS 	0x01000000
+
+/*
+ * Miscellaneous stuff.
+ */
+#define CRYPTO_UNSPEC			0
+#define CRYPTO_MAX_ALG_NAME		64
+
+struct scatterlist {
+    struct page		*page;
+    unsigned int	offset;
+    __u32		dma_address;
+    unsigned int	length;
+};
+
+static inline struct crypto_tfm *
+crypto_alloc_tfm(const char *name, __u32 flags)
+{
+	return NULL;
+}
+
+static inline void 
+crypto_free_tfm(struct crypto_tfm *tfm)
+{
+	return;
+}
+
+static inline int 
+crypto_digest_setkey(struct crypto_tfm *tfm,
+                     const __u8 *key, unsigned int keylen)
+{
+	return -ENOSYS;
+}
+
+static inline unsigned int 
+crypto_tfm_alg_blocksize(struct crypto_tfm *tfm)
+{
+	return 0;
+}
+
+static inline unsigned int 
+crypto_tfm_alg_ivsize(struct crypto_tfm *tfm)
+{
+	return 0;
+}
+
+#endif /* __KERNEL__ */
+
 struct ptlrpc_sec;
 struct ptlrpc_cred;
 

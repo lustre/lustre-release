@@ -487,7 +487,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         class_uuid_t uuid;
         struct obd_uuid lmv_uuid;
         struct llog_ctxt *ctxt;
-        int rc, err = 0;
+        int rc = 0, err = 0;
         ENTRY;
 
         if (lmd_bad_magic(lmd))

@@ -31,6 +31,7 @@
 #include <linux/pagemap.h>
 #include <asm/div64.h>
 #include <linux/seq_file.h>
+#include <linux/namei.h>
 #else
 #include <liblustre.h>
 #endif
@@ -46,10 +47,8 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
-#include <linux/namei.h>
 #include <linux/lustre_lite.h>
 #include "lmv_internal.h"
-
 
 static inline void lmv_drop_intent_lock(struct lookup_intent *it)
 {
