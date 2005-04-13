@@ -14,7 +14,7 @@ ONLY=${ONLY:-"$*"}
 # - 65h (default stripe inheritance) is not implemented for LMV 
 #   configurations. Will be done in second phase of collibri.
 
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"51b 51c 65h"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48a 51b 51c 65h"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -24,7 +24,8 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 export SECURITY=${SECURITY:-"null"}
 
 TMP=${TMP:-/tmp}
-FSTYPE=${FSTYPE:-ext3}
+DEF_FSTYPE=`test "x$(uname -r | grep -o '2.6')" = "x2.6" && echo "ldiskfs" || echo "ext3"`
+FSTYPE=${FSTYPE:-$DEF_FSTYPE}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -1951,7 +1952,7 @@ check_fstype() {
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
         modprobe $FSTYPE > /dev/null 2>&1
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
-	test "x$(uname -r | grep -o "2.6")" = "x2.6" && MODEXT="ko" || MODEXT="o"
+	test "x$(uname -r | grep -o '2.6')" = "x2.6" && MODEXT="ko" || MODEXT="o"
         insmod ../$FSTYPE/$FSTYPE.$MODEXT > /dev/null 2>&1
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
         return 1

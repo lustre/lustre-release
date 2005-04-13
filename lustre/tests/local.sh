@@ -10,7 +10,8 @@ TMP=${TMP:-/tmp}
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 
 MDSSIZE=${MDSSIZE:-400000}
-FSTYPE=${FSTYPE:-ext3}
+DEF_FSTYPE=`test "x$(uname -r | grep -o '2.6')" = "x2.6" && echo "ldiskfs" || echo "ext3"`
+FSTYPE=${FSTYPE:-$DEF_FSTYPE}
 OST_FSTYPE=${OST_FSTYPE:-$FSTYPE}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
