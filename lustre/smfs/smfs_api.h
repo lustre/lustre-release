@@ -1,12 +1,13 @@
 /* SMFS plugin stuff */
-#define SMFS_PLG_DUMMY  0x0001L
-#define SMFS_PLG_KML    0x0002L
+#define SMFS_PLG_KML    0x0001L
 #define SMFS_PLG_LRU    0x0004L
-#define SMFS_PLG_COW    0x0008L
+#define SMFS_PLG_COW    0x0020L
+#define SMFS_PLG_DUMMY  0x1000L
+#define SMFS_PLG_ALL    (~0L)
 
-#define SMFS_SET_PLG(flags, mask) (flags |= mask)
-#define SMFS_IS_PLG(flags, mask) (flags & mask)
-#define SMFS_CLEAR_PLG(flags, mask) (flags &= ~mask)
+#define SMFS_SET(flags, mask) (flags |= mask)
+#define SMFS_IS(flags, mask) (flags & mask)
+#define SMFS_CLEAR(flags, mask) (flags &= ~mask)
 
 typedef int (*smfs_plg_hook)(int hook_code, struct inode *,
                              void *arg, int rc, void * priv);
@@ -35,12 +36,17 @@ struct smfs_plugin {
 #define HOOK_SETATTR      10
 #define HOOK_WRITE        11
 #define HOOK_READDIR      12
-#define HOOK_MAX          13
+#define HOOK_F_SETATTR    13
+#define HOOK_MAX          14
 
 struct hook_msg {
         struct dentry * dentry;
 };
 
+struct hook_link_msg {
+        struct dentry * dentry;
+        struct dentry * new_dentry;
+};
 struct hook_unlink_msg {
         struct dentry * dentry;
         int mode;
@@ -76,7 +82,11 @@ struct hook_setattr_msg {
         struct iattr *attr;
 };
 
-#define SMFS_PRE_HOOK(inode, op, msg)                        \
+void smfs_pre_hook (struct inode*, int, void*);
+void smfs_post_hook(struct inode*,int, void*, int);
+
+#define SMFS_PRE_HOOK(inode, op, msg) smfs_pre_hook (inode, op, msg)
+/*\
 do {                                                         \
         struct smfs_super_info *smb = S2SMI(inode->i_sb);    \
         struct list_head *hlist = &smb->smsi_plg_list;       \
@@ -88,8 +98,10 @@ do {                                                         \
                                         plg->plg_private);   \
         }                                                    \
 } while(0)
+*/
 
-#define SMFS_POST_HOOK(inode, op, msg, rc)                   \
+#define SMFS_POST_HOOK(inode, op, msg, rc) smfs_post_hook(inode, op, msg, rc)
+/*\
 do {                                                         \
         struct smfs_super_info *smb = S2SMI(inode->i_sb);    \
         struct list_head *hlist = &smb->smsi_plg_list;       \
@@ -101,24 +113,22 @@ do {                                                         \
                                          plg->plg_private);  \
         }                                                    \
 } while(0)
-
+*/
 #define PLG_EXIT        0
 #define PLG_TRANS_SIZE  1
 #define PLG_TEST_INODE  2
 #define PLG_SET_INODE   3
-#define PLG_HELPER_MAX  4
+#define PLG_START       4
+#define PLG_STOP        5
+#define PLG_HELPER_MAX  6
 
-#define SMFS_PLG_HELP(sb, op, data)                              \
-do {                                                             \
-        struct list_head *hlist = &S2SMI(sb)->smsi_plg_list;     \
-        struct smfs_plugin *plugin, *tmp;                        \
-                                                                 \
-        list_for_each_entry_safe(plugin, tmp, hlist, plg_list) { \
-                if (plugin->plg_helper)                          \
-                        plugin->plg_helper(op, sb, data,         \
-                                           plugin->plg_private); \
-        }                                                        \
-} while(0)
+struct plg_hmsg {
+        __u32 data;
+        __u32 result;        
+};
+
+int smfs_helper (struct super_block *, int, void *);
+#define SMFS_PLG_HELP(sb, op, data)  smfs_helper(sb, op, data)
 
 int smfs_register_plugin(struct super_block *, struct smfs_plugin *);
 void * smfs_deregister_plugin(struct super_block *, int);
