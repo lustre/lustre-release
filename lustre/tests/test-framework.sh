@@ -38,7 +38,12 @@ init_test_env() {
     export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
+    DEF_FSTYPE=`test "x$(uname -r | grep -o '2.6')" = "x2.6" && echo "ldiskfs" || echo "ext3"`
+    export FSTYPE=${FSTYPE:-$DEF_FSTYPE}
+    #used only if FSTYPE == smfs, otherwise ignored by lconf
+    MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-$DEF_FSTYPE}
+    OST_BACKFSTYPE=${OST_BACKFSTYPE:-$DEF_FSTYPE}
+
     export SECURITY=${SECURITY:-"null"}
 
     # Paths on remote nodes, if different 
@@ -350,14 +355,14 @@ add_mds() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE $*
 }
 
 add_ost() {
@@ -365,7 +370,7 @@ add_ost() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE --backfstype $OST_BACKFSTYPE $*
 }
 
 del_ost() {
@@ -384,7 +389,7 @@ add_ostfailover() {
     facet=$1
     shift
     add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE --backfstype $OST_BACKFSTYPE $*
 }
 
 add_lov() {

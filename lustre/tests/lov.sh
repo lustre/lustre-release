@@ -11,10 +11,15 @@ TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-400000}
-FSTYPE=${FSTYPE:-ext3}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
+
+DEF_FSTYPE=`test "x$(uname -r | grep -o '2.6')" = "x2.6" && echo "ldiskfs" || echo "ext3"`
+FSTYPE=${FSTYPE:-$DEF_FSTYPE}
+#used only if FSTYPE == smfs, otherwise ignored by lconf
+MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-$DEF_FSTYPE}
+OST_BACKFSTYPE=${OST_BACKFSTYPE:-$DEF_FSTYPE}
 
 OSTCOUNT=${OSTCOUNT:-5}
 # OSTDEVN will still override the device for OST N
@@ -40,7 +45,7 @@ ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 
 # configure mds server
-${LMC} --format --add mds --node localhost --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 20
+${LMC} --format --add mds --node localhost --mds mds1 --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE --dev $MDSDEV --size $MDSSIZE || exit 20
 
 # configure ost
 ${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
@@ -49,7 +54,8 @@ for num in `seq $OSTCOUNT`; do
     OST=ost$num
     DEVPTR=OSTDEV$num
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
-    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
+    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --backfstype $OST_BACKFSTYPE \
+           --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
 done
 
 

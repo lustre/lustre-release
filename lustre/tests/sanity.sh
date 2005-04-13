@@ -9,6 +9,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 # bug number for skipped tests:
 # skipped test: 
+# - 48a is obsolete due to new_kernel_api
 # - 51b 51c depend on used kernel
 #   more than only LOV EAs
 # - 65h (default stripe inheritance) is not implemented for LMV 
@@ -26,6 +27,9 @@ export SECURITY=${SECURITY:-"null"}
 TMP=${TMP:-/tmp}
 DEF_FSTYPE=`test "x$(uname -r | grep -o '2.6')" = "x2.6" && echo "ldiskfs" || echo "ext3"`
 FSTYPE=${FSTYPE:-$DEF_FSTYPE}
+#used only if FSTYPE == smfs, otherwise ignored by lconf
+MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-$DEF_FSTYPE}
+OST_BACKFSTYPE=${OST_BACKFSTYPE:-$DEF_FSTYPE}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -1952,7 +1956,7 @@ check_fstype() {
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
         modprobe $FSTYPE > /dev/null 2>&1
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
-	test "x$(uname -r | grep -o '2.6')" = "x2.6" && MODEXT="ko" || MODEXT="o"
+        test "x$(uname -r | grep -o '2.6')" = "x2.6" && MODEXT="ko" || MODEXT="o"
         insmod ../$FSTYPE/$FSTYPE.$MODEXT > /dev/null 2>&1
         test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
         return 1
@@ -1962,7 +1966,11 @@ test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
         check_fstype && echo "can't find fs $FSTYPE, skipping test 55" && return
-        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
+        if [ "$FSTYPE" == "smfs" ] ; then
+	    mount -t $MDS_BACKFSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
+	else
+	    mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
+	fi
 	touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
         $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
