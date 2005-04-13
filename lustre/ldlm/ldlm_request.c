@@ -50,8 +50,9 @@ int ldlm_expired_completion_wait(void *data)
         if (lock->l_conn_export == NULL) {
                 static unsigned long next_dump = 0, last_dump = 0;
 
-                LDLM_ERROR(lock, "lock timed out; not entering recovery in "
-                           "server code, just going back to sleep");
+                LDLM_ERROR(lock, "lock timed out (enq %lus ago); not entering "
+                           "recovery in server code, just going back to sleep",
+                           lock->l_enqueued_time.tv_sec);
                 if (time_after(jiffies, next_dump)) {
                         last_dump = next_dump;
                         next_dump = jiffies + 300 * HZ;
@@ -66,7 +67,8 @@ int ldlm_expired_completion_wait(void *data)
         obd = lock->l_conn_export->exp_obd;
         imp = obd->u.cli.cl_import;
         ptlrpc_fail_import(imp, lwd->lwd_generation);
-        LDLM_ERROR(lock, "lock timed out, entering recovery for %s@%s",
+        LDLM_ERROR(lock, "lock timed out (enqueued %lus ago), entering "
+                   "recovery for %s@%s", lock->l_enqueued_time.tv_sec,
                    imp->imp_target_uuid.uuid,
                    imp->imp_connection->c_remote_uuid.uuid);
 
@@ -606,8 +608,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
  * callback will be performed in this function. */
 int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 {
-        struct list_head *tmp, *next;
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock, *next;
         int count, rc = 0;
         LIST_HEAD(cblist);
         ENTRY;
@@ -620,10 +621,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                 RETURN(0);
         }
 
-        list_for_each_safe(tmp, next, &ns->ns_unused_list) {
-
-                lock = list_entry(tmp, struct ldlm_lock, l_lru);
-
+        list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru) {
                 LASSERT(!lock->l_readers && !lock->l_writers);
 
                 /* Setting the CBPENDING flag is a little misleading, but
@@ -635,17 +633,21 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
+
+                /* We can't re-add to l_lru as it confuses the refcounting in
+                 * ldlm_lock_remove_from_lru() if an AST arrives after we drop
+                 * ns_lock below.  Use l_pending_chain as that is unused on
+                 * client, and lru is client-only.  bug 5666 */
                 if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))
-                        list_add(&lock->l_lru, &cblist);
+                        list_add(&lock->l_pending_chain, &cblist);
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
 
-        list_for_each_safe(tmp, next, &cblist) {
-                lock = list_entry(tmp, struct ldlm_lock, l_lru);
-                list_del_init(&lock->l_lru);
+        list_for_each_entry_safe(lock, next, &cblist, l_pending_chain) {
+                list_del_init(&lock->l_pending_chain);
                 ldlm_handle_bl_callback(ns, NULL, lock);
         }
         RETURN(rc);
@@ -765,7 +767,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 }
 
 /* join/split resource locks to/from lru list */
-int ldlm_cli_join_lru(struct ldlm_namespace *ns, 
+int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                       struct ldlm_res_id *res_id, int join)
 {
         struct ldlm_resource *res;
@@ -779,13 +781,13 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
         if (res == NULL)
                 RETURN(count);
         LASSERT(res->lr_type == LDLM_EXTENT);
-        
+
         l_lock(&ns->ns_lock);
         if (!join)
                 goto split;
 
         list_for_each_entry_safe (lock, n, &res->lr_granted, l_res_link) {
-                if (list_empty(&lock->l_lru) && 
+                if (list_empty(&lock->l_lru) &&
                     !lock->l_readers && !lock->l_writers &&
                     !(lock->l_flags & LDLM_FL_LOCAL) &&
                     !(lock->l_flags & LDLM_FL_CBPENDING)) {

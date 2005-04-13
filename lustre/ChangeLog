@@ -16,6 +16,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- when creating new directories, inherit the parent's custom
 	  striping settings if present parent (3048)
 	- flush buffers from cache before direct IO in 2.6 obdfilter (4982)
+	- don't hold client locks on temporary worklist from l_lru (5666)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
