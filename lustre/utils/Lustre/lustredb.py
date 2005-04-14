@@ -400,6 +400,11 @@ class LustreDB_LDAP(LustreDB):
     def get_ref_type(self, ref_tag):
         return ref_tag[:-3]
 
+    def _get_lov_tgts(self, tag):
+        """ Get all the refs of type TAG.  Returns list of lov_tgts. """
+        tgts = []
+        return tgts
+
     #
     # [(ref_class, ref_uuid),]
     def _get_all_refs(self):
