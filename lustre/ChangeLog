@@ -16,6 +16,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- when creating new directories, inherit the parent's custom
 	  striping settings if present parent (3048)
 	- flush buffers from cache before direct IO in 2.6 obdfilter (4982)
+	- don't hold i_size_sem in ll_nopage() and ll_ap_refresh_count (6077)
 	- don't hold client locks on temporary worklist from l_lru (5666)
 	- handle IO errors in 2.6 obdfilter bio completion routine (6046)
        * miscellania
@@ -33,6 +34,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- Quota support protocol changes.
 	- forward compatibility changes to wire structs (6007)
 	- rmmod NALs that might be loaded because of /etc/modules.conf (6133)
+	- support for mountfsoptions and clientoptions to the Lustre LDAP (5873)
+	- improved "lustre status" script
 	
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
