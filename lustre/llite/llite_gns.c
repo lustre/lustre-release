@@ -50,27 +50,23 @@ ll_gns_wait_for_mount(struct dentry *dentry,
 {
         struct l_wait_info lwi;
         struct ll_sb_info *sbi;
-        int rc;
         ENTRY;
 
         LASSERT(dentry != NULL);
         LASSERT(!IS_ERR(dentry));
         sbi = ll_s2sbi(dentry->d_sb);
         
-        for (; !d_mountpoint(dentry) && tries > 0; tries--) {
-                lwi = LWI_TIMEOUT(timeout * HZ, NULL, NULL);
+        lwi = LWI_TIMEOUT(timeout * HZ, NULL, NULL);
+        for (; !d_mountpoint(dentry) && tries > 0; tries--)
                 l_wait_event(sbi->ll_gns_waitq, d_mountpoint(dentry), &lwi);
-        }
 
-        if ((rc = d_mountpoint(dentry) ? 1 : 0)) {
+        if (d_mountpoint(dentry)) {
                 spin_lock(&sbi->ll_gns_lock);
-                LASSERT(sbi->ll_gns_state == LL_GNS_MOUNTING);
                 sbi->ll_gns_state = LL_GNS_FINISHED;
                 spin_unlock(&sbi->ll_gns_lock);
+                RETURN(0);
         }
-
-        complete_all(&sbi->ll_gns_mount_finished);
-        RETURN(rc);
+        RETURN(-ETIME);
 }
 
 /*
@@ -110,8 +106,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          */
         spin_lock(&sbi->ll_gns_lock);
         if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
-            sbi->ll_gns_state == LL_GNS_FINISHED)
-        {
+            sbi->ll_gns_state == LL_GNS_FINISHED) {
                 spin_unlock(&sbi->ll_gns_lock);
                 CDEBUG(D_INODE, "GNS is in progress now, throwing "
                        "-ERESTARTSYS to restart syscall and let "
@@ -149,6 +144,13 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * mount object name is taken from sbi, where it is set in mount time or
          * via /proc/fs... tunable. It may be ".mntinfo" or so.
          */
+
+        /* 
+         * FIXME: lookup_one_len() requires dentry->d_inode->i_sem to be locked,
+         * but we can't use ll_lookup_one_len() as this function is called from
+         * different contol paths and some of them take dentry->d_inode->i_sem
+         * and others do not.
+         */
         dchild = lookup_one_len(sbi->ll_gns_oname, dentry,
                                 strlen(sbi->ll_gns_oname));
         up(&sbi->ll_gns_sem);
@@ -157,16 +159,29 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 GOTO(cleanup, rc = -ENOENT);
         
         if (IS_ERR(dchild)) {
+                rc = PTR_ERR(dchild);
+                
+                if (rc == -ERESTARTSYS) {
+                        CDEBUG(D_INODE, "possible endless loop is detected "
+                               "due to mount object is directory marked by "
+                               "SUID bit.\n");
+                        GOTO(cleanup, rc = -ELOOP);
+                }
+
                 CERROR("can't find mount object %*s/%*s err = %d.\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
                        (int)dchild->d_name.len, dchild->d_name.name,
-                       (int)PTR_ERR(dchild));
-                GOTO(cleanup, rc = PTR_ERR(dchild));
+                       rc);
+                GOTO(cleanup, rc);
         }
 
         /* mount object is not found */
         if (!dchild->d_inode)
                 GOTO(cleanup, rc = -ENOENT);
+
+        /* check if found child is regular file */
+        if (!S_ISREG(dchild->d_inode->i_mode))
+                GOTO(cleanup, rc = -EOPNOTSUPP);
 
         mntget(mnt);
 
@@ -240,7 +255,10 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * or usermode upcall program will start mounting in backgound and
          * return instantly. --umka
          */
-        if (ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS)) {
+
+        rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
+        complete_all(&sbi->ll_gns_mount_finished);
+        if (rc == 0) {
                 struct dentry *rdentry;
                 struct vfsmount *rmnt;
                 
@@ -271,11 +289,10 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 dentry->d_flags &= ~DCACHE_GNS_PENDING;
                 spin_unlock(&dentry->d_lock);
         } else {
-                CERROR("usermode upcall %s failed to mount %s\n",
-                       sbi->ll_gns_upcall, path);
-                rc = -ETIME;
+                CERROR("usermode upcall %s failed to mount %s, err %d\n",
+                       sbi->ll_gns_upcall, path, rc);
         }
-
+                
         EXIT;
 cleanup:
         switch (cleanup_phase) {
@@ -286,14 +303,13 @@ cleanup:
                         fput(mntinfo_fd);
         case 1:
                 free_page((unsigned long)pathpage);
-        case 0:
+                
                 /* 
                  * waking up all waiters after gns state is set to
                  * LL_GNS_MOUNTING
                  */
-                if (cleanup_phase > 0)
-                        complete_all(&sbi->ll_gns_mount_finished);
-                
+                complete_all(&sbi->ll_gns_mount_finished);
+        case 0:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;
                 spin_unlock(&sbi->ll_gns_lock);

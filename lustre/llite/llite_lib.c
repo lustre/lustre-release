@@ -74,7 +74,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 
         /* this later may be reset via /proc/fs/... */
         memcpy(sbi->ll_gns_oname, ".mntinfo", strlen(".mntinfo"));
-        sbi->ll_gns_oname[strlen(sbi->ll_gns_oname) - 1] = '\0';
+        sbi->ll_gns_oname[strlen(sbi->ll_gns_oname)] = '\0';
         
         /* this later may be reset via /proc/fs/... */
         memset(sbi->ll_gns_upcall, 0, sizeof(sbi->ll_gns_upcall));

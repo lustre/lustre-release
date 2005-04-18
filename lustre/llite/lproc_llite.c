@@ -312,6 +312,17 @@ static int ll_wr_gns_object_name(struct file *file, const char *buffer,
         struct super_block *sb = (struct super_block *)data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
+        /* checking for setting "." and ".." as object name */
+        if (buffer[0] == '.') switch (count) {
+                case 2:
+                        /* this is "." case with terminating zero */
+                        return -EINVAL;
+                case 3:
+                        /* this is ".." case with terminating zero */
+                        if (buffer[1] == '.')
+                                return -EINVAL;
+        }
+        
         down(&sbi->ll_gns_sem);
         snprintf(sbi->ll_gns_oname, count, "%s", buffer);
         up(&sbi->ll_gns_sem);
