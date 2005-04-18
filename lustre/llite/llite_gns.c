@@ -113,7 +113,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
             sbi->ll_gns_state == LL_GNS_FINISHED)
         {
                 spin_unlock(&sbi->ll_gns_lock);
-                CDEBUG(D_INODE"GNS is in progress now, throwing "
+                CDEBUG(D_INODE, "GNS is in progress now, throwing "
                        "-ERESTARTSYS to restart syscall and let "
                        "it finish.\n");
                 RETURN(-ERESTARTSYS);
