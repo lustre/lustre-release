@@ -729,14 +729,12 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
 int ll_dir_open(struct inode *inode, struct file *file)
 {
-        ENTRY;
-        RETURN(ll_file_open(inode, file));
+        return ll_file_open(inode, file);
 }
 
 int ll_dir_release(struct inode *inode, struct file *file)
 {
-        ENTRY;
-        RETURN(ll_file_release(inode, file));
+        return ll_file_release(inode, file);
 }
 
 struct file_operations ll_dir_operations = {

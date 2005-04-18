@@ -1,8 +1,12 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2004 Cluster File Systems, Inc.
- *   Author: Phil Schwan <phil@clusterfs.com>
+ * Copyright (C) 2004, 2005 Cluster File Systems, Inc.
+ *
+ * Author: Phil Schwan <phil@clusterfs.com>
+ * Author: Oleg Drokin <green@clusterfs.com>
+ * Author: Yury Umanets <yury@clusterfs.com>
+ * Review: Nikita Danilov <nikita@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -65,27 +69,24 @@ ll_gns_wait_for_mount(struct dentry *dentry,
                 spin_unlock(&sbi->ll_gns_lock);
         }
 
-        complete(&sbi->ll_gns_mount_finished);
+        complete_all(&sbi->ll_gns_mount_finished);
         RETURN(rc);
 }
 
 /*
  * tries to mount the mount object under passed @dentry. In the case of success
- * @dentry will become mount point and 0 will be retuned. Error code will be
+ * @dentry will become mount point and 0 will be returned. Error code will be
  * returned otherwise.
  */
-int ll_gns_mount_object(struct dentry *dentry,
-                        struct vfsmount *mnt)
+int
+ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 {
         struct ll_dentry_data *lld = dentry->d_fsdata;
-        char *p, *path, *pathpage, *argv[4];
+        char *path, *pathpage, *datapage, *argv[4];
         struct file *mntinfo_fd = NULL;
-        struct address_space *mapping;
         int cleanup_phase = 0, rc = 0;
         struct ll_sb_info *sbi;
         struct dentry *dchild;
-        struct page *datapage;
-        filler_t *filler;
         ENTRY;
 
         if (mnt == NULL) {
@@ -103,23 +104,19 @@ int ll_gns_mount_object(struct dentry *dentry,
         sbi = ll_i2sbi(dentry->d_inode);
         LASSERT(sbi != NULL);
 
-        /* another thead is in progress of mouning some entry */
+        /* 
+         * another thead is in progress or just finished mounting the
+         * dentry. Handling that.
+         */
         spin_lock(&sbi->ll_gns_lock);
-        if (sbi->ll_gns_state == LL_GNS_MOUNTING) {
+        if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
+            sbi->ll_gns_state == LL_GNS_FINISHED)
+        {
                 spin_unlock(&sbi->ll_gns_lock);
-
-                wait_for_completion(&sbi->ll_gns_mount_finished);
-                if (d_mountpoint(dentry))
-                        RETURN(0);
-        }
-
-        /* another thread mounted it already */
-        if (sbi->ll_gns_state == LL_GNS_FINISHED) {
-                spin_unlock(&sbi->ll_gns_lock);
-
-                /* we lost a race; just return */
-                if (d_mountpoint(dentry))
-                        RETURN(0);
+                CDEBUG(D_INODE"GNS is in progress now, throwing "
+                       "-ERESTARTSYS to restart syscall and let "
+                       "it finish.\n");
+                RETURN(-ERESTARTSYS);
         }
         LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
 
@@ -145,15 +142,15 @@ int ll_gns_mount_object(struct dentry *dentry,
                 GOTO(cleanup, rc = PTR_ERR(dchild));
         }
 
-        /* sychronizing with possible /proc/fs/...write */
+        /* synchronizing with possible /proc/fs/...write */
         down(&sbi->ll_gns_sem);
         
         /* 
          * mount object name is taken from sbi, where it is set in mount time or
          * via /proc/fs... tunable. It may be ".mntinfo" or so.
          */
-        dchild = ll_d_lookup(sbi->ll_gns_oname, dentry,
-                             strlen(sbi->ll_gns_oname));
+        dchild = lookup_one_len(sbi->ll_gns_oname, dentry,
+                                strlen(sbi->ll_gns_oname));
         up(&sbi->ll_gns_sem);
 
         if (!dchild)
@@ -166,6 +163,10 @@ int ll_gns_mount_object(struct dentry *dentry,
                        (int)PTR_ERR(dchild));
                 GOTO(cleanup, rc = PTR_ERR(dchild));
         }
+
+        /* mount object is not found */
+        if (!dchild->d_inode)
+                GOTO(cleanup, rc = -ENOENT);
 
         mntget(mnt);
 
@@ -190,27 +191,28 @@ int ll_gns_mount_object(struct dentry *dentry,
                 GOTO(cleanup, rc = -EFBIG);
         }
 
+        datapage = (char *)__get_free_page(GFP_KERNEL);
+        if (!datapage)
+                GOTO(cleanup, rc = -ENOMEM);
+
+        cleanup_phase = 3;
+        
         /* read data from mount object. */
-        mapping = mntinfo_fd->f_dentry->d_inode->i_mapping;
-        filler = (filler_t *)mapping->a_ops->readpage;
-        datapage = read_cache_page(mapping, 0, filler,
-                                   mntinfo_fd);
-        if (IS_ERR(datapage)) {
-                CERROR("can't read data from mount object %*s/%*s\n",
+        rc = kernel_read(mntinfo_fd, 0, datapage, PAGE_SIZE);
+        if (rc < 0) {
+                CERROR("can't read mount object %*s/%*s data, err %d\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
-                       (int)dchild->d_name.len, dchild->d_name.name);
-                GOTO(cleanup, rc = PTR_ERR(datapage));
+                       (int)dchild->d_name.len, dchild->d_name.name,
+                       rc);
+                GOTO(cleanup, rc);
         }
 
-        p = kmap(datapage);
-        LASSERT(p != NULL);
-        p[PAGE_SIZE - 1] = '\0';
-        cleanup_phase = 3;
+        datapage[PAGE_SIZE - 1] = '\0';
 
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
 
-        /* sychronizing with possible /proc/fs/...write */
+        /* synchronizing with possible /proc/fs/...write */
         down(&sbi->ll_gns_sem);
 
         /*
@@ -218,7 +220,7 @@ int ll_gns_mount_object(struct dentry *dentry,
          * may be /usr/lib/lustre/gns-upcall.sh
          */
         argv[0] = sbi->ll_gns_upcall;
-        argv[1] = p;
+        argv[1] = datapage;
         argv[2] = path;
         argv[3] = NULL;
         
@@ -234,7 +236,7 @@ int ll_gns_mount_object(struct dentry *dentry,
         /*
          * wait for mount completion. This is actually not need, because
          * USERMODEHELPER() returns only when usermode process finishes. But we
-         * doing this just for case USERMODEHELPER() semanthics will be changed
+         * doing this just for case USERMODEHELPER() semantics will be changed
          * or usermode upcall program will start mounting in backgound and
          * return instantly. --umka
          */
@@ -278,14 +280,20 @@ int ll_gns_mount_object(struct dentry *dentry,
 cleanup:
         switch (cleanup_phase) {
         case 3:
-                kunmap(datapage);
-                page_cache_release(datapage);
+                free_page((unsigned long)datapage);
         case 2:
                 if (mntinfo_fd != NULL)
                         fput(mntinfo_fd);
         case 1:
                 free_page((unsigned long)pathpage);
         case 0:
+                /* 
+                 * waking up all waiters after gns state is set to
+                 * LL_GNS_MOUNTING
+                 */
+                if (cleanup_phase > 0)
+                        complete_all(&sbi->ll_gns_mount_finished);
+                
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;
                 spin_unlock(&sbi->ll_gns_lock);
@@ -362,7 +370,7 @@ int ll_gns_check_mounts(struct ll_sb_info *sbi, int flags)
 }
 
 /*
- * GNS timer callback function. It restarts gns timer and wakes up GNS cvontrol
+ * GNS timer callback function. It restarts gns timer and wakes up GNS control
  * thread to process mounts list.
  */
 void ll_gns_timer_callback(unsigned long data)
@@ -392,7 +400,7 @@ static int inline ll_gns_check_event(void)
         return rc;
 }
 
-/* should we staop GNS control thread? */
+/* should we stop GNS control thread? */
 static int inline ll_gns_check_stop(void)
 {
         mb();
@@ -447,10 +455,6 @@ static int ll_gns_thread_main(void *arg)
                 spin_unlock(&gns_lock);
         }
 
-        /* 
-         * letting know stop function know that thread is stoped and it may
-         * return.
-         */
         EXIT;
         gns_thread.t_flags = SVC_STOPPED;
 

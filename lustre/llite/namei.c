@@ -404,11 +404,16 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
             S_ISDIR(dentry->d_inode->i_mode) &&
             ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN))))
         {
-                spin_lock(&dentry->d_lock);
-                dentry->d_flags |= DCACHE_GNS_PENDING;
-                spin_unlock(&dentry->d_lock);
+                rc = ll_gns_mount_object(dentry, nd->mnt);
+                if (rc == -ERESTARTSYS) {
+                        /* 
+                         * making system to restart syscall as currently GNS is
+                         * in mounting progress.
+                         */
+                        GOTO(out, retval = rc);
+                }
         }
-
+        
         if (dentry == save)
                 GOTO(out, retval = NULL);
         else

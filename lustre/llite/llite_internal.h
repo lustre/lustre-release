@@ -131,6 +131,7 @@ struct ll_readahead_state {
 extern kmem_cache_t *ll_file_data_slab;
 extern kmem_cache_t *ll_intent_slab;
 struct lustre_handle;
+
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;

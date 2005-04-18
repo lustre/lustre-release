@@ -172,18 +172,6 @@ static inline void ll_sleep(int t)
         schedule_timeout(t * HZ);
         set_current_state(TASK_RUNNING);
 }
-
-static inline struct dentry *
-ll_d_lookup(const char *name,
-	    struct dentry *dparent, int len)
-{
-	struct qstr qstr;
-
-	qstr.len = len;
-	qstr.name = name;
-	qstr.hash = full_name_hash(name, len);
-	return d_lookup(dparent, &qstr);
-}
 #endif
 
 static inline int ll_id2str(char *str, __u64 id, __u32 generation)

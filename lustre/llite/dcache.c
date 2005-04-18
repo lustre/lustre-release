@@ -294,29 +294,12 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
 {
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct ptlrpc_request *req = NULL;
+        int orig_it, err, rc = 0;
         struct obd_export *exp;
         struct it_cb_data icbd;
         struct lustre_id pid;
         struct lustre_id cid;
-        int orig_it, rc = 0;
         ENTRY;
-
-        spin_lock(&de->d_lock);
-
-        if ((de->d_flags & DCACHE_GNS_PENDING) &&
-            !(de->d_flags & DCACHE_GNS_MOUNTING))
-        {
-                spin_unlock(&de->d_lock);
-                        
-                if (nd) {
-                        int err = ll_gns_mount_object(de, nd->mnt);
-                        if (err)
-                                CERROR("can't mount %s, err = %d\n",
-                                       de->d_name.name, err);
-                }
-                RETURN(1);
-        }
-        spin_unlock(&de->d_lock);
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s (%p), intent=%s\n", de->d_name.name,
                de, LL_IT2STR(it));
@@ -512,18 +495,23 @@ out:
             !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN))))
                 return rc;
 
-        if (nd && !(de->d_flags & DCACHE_GNS_MOUNTING)) {
-                int err = ll_gns_mount_object(de, nd->mnt);
-                if (err)
-                        CERROR("can't mount %s, err = %d\n",
-                               de->d_name.name, err);
+        if (nd != NULL) {
+                err = ll_gns_mount_object(de, nd->mnt);
+                if (err == -ERESTARTSYS) {
+                        /* 
+                         * making system to restart syscall as currently GNS is
+                         * in mounting progress.
+                         */
+                        return err;
+                }
         }
         return rc;
 do_lookup:
         it = &lookup_it;
         if (ll_intent_alloc(it))
                 LBUG();
-// We did that already, right?  ll_inode2id(&pid, de->d_parent->d_inode);
+        
+        // We did that already, right?  ll_inode2id(&pid, de->d_parent->d_inode);
         rc = md_intent_lock(exp, &pid, de->d_name.name,
                             de->d_name.len, NULL, 0, NULL,
                             it, 0, &req, ll_mdc_blocking_ast);
