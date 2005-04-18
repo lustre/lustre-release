@@ -410,7 +410,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                          * making system to restart syscall as currently GNS is
                          * in mounting progress.
                          */
-                        GOTO(out, retval = rc);
+                        GOTO(out, retval = ERR_PTR(rc));
                 }
         }
         
