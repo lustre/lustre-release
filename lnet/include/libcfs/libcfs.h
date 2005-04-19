@@ -18,6 +18,10 @@
 
 #include "curproc.h"
 
+#ifndef __KERNEL__
+#include <stdio.h>
+#endif
+
 #define PORTAL_DEBUG
 
 #ifndef offsetof
@@ -208,20 +212,20 @@ do {                                                                    \
         CDEBUG(D_TRACE, "Process leaving\n");                           \
         EXIT_NESTING;                                                   \
 } while(0)
-#else /* !1 */
+#else /* !CDEBUG_ENTRY_EXIT */
 
 #define RETURN(rc) return (rc)
 #define ENTRY
 #define EXIT
 
-#endif
+#endif /* !CDEBUG_ENTRY_EXIT */
 
-#else
+#else /* !1 */
 #define CDEBUG(mask, format, a...)      do { } while (0)
 #define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
 #define CERROR(format, a...)            printk(KERN_ERR format, ## a)
 #define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
-#define LCONSOLE(mask, format, a...)    do { } while (0)
+#define LCONSOLE(mask, format, a...)    printk(format, ## a)
 #define LCONSOLE_INFO(format, a...)     printk(KERN_INFO format, ## a)
 #define LCONSOLE_WARN(format, a...)     printk(KERN_WARNING format, ## a)
 #define LCONSOLE_ERROR(format, a...)    printk(KERN_ERROR format, ## a)
@@ -233,24 +237,14 @@ do {                                                                    \
 #endif /* !1 */
 #else /* !__KERNEL__ */
 #define CDEBUG(mask, format, a...)      do { } while (0)
-#define LCONSOLE(mask, format, a...)    do { } while (0)
-#ifdef stderr
-#define CWARN(format, a...)             fprintf(stderr, "<4>" format, ## a)
-#define CERROR(format, a...)            fprintf(stderr, "<3>" format, ## a)
-#define CEMERG(format, a...)            fprintf(stderr, "<0>" format, ## a)
+#define LCONSOLE(mask, format, a...)    fprintf(stderr, format, ## a)
+#define CWARN(format, a...)             fprintf(stderr, format, ## a)
+#define CERROR(format, a...)            fprintf(stderr, format, ## a)
+#define CEMERG(format, a...)            fprintf(stderr, format, ## a)
 #define LCONSOLE_INFO(format, a...)     fprintf(stderr, format, ## a)
 #define LCONSOLE_WARN(format, a...)     fprintf(stderr, format, ## a)
 #define LCONSOLE_ERROR(format, a...)    fprintf(stderr, format, ## a)
 #define LCONSOLE_EMERG(format, a...)    fprintf(stderr, format, ## a)
-#else
-#define CWARN(format, a...)             do { } while (0)
-#define CERROR(format, a...)            do { } while (0)
-#define CEMERG(format, a...)            do { } while (0)
-#define LCONSOLE_INFO(format, a...)     do { } while (0)
-#define LCONSOLE_WARN(format, a...)     do { } while (0)
-#define LCONSOLE_ERROR(format, a...)    do { } while (0)
-#define LCONSOLE_EMERG(format, a...)    do { } while (0)
-#endif /* !stderr */
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)
