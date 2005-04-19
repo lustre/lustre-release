@@ -1,4 +1,0 @@
-subdir-m += portals
-subdir-m += lustre
-
-@INCLUDE_RULES@
