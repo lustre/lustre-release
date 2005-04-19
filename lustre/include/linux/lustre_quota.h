@@ -37,6 +37,7 @@ struct lustre_quota_info {
         struct lustre_mem_dqinfo qi_info[MAXQUOTAS];
 };
 
+#ifdef __KERNEL__
 struct lustre_dquot {
         struct list_head dq_hash;
         struct list_head dq_unused;
@@ -52,6 +53,7 @@ struct lustre_dquot {
         unsigned long dq_flags;
         struct mem_dqblk dq_dqb;
 };
+#endif
 
 #define QFILE_CHK               1
 #define QFILE_RD_INFO           2
@@ -65,8 +67,10 @@ struct lustre_dquot {
 int lustre_check_quota_file(struct lustre_quota_info *lqi, int type);
 int lustre_read_quota_info(struct lustre_quota_info *lqi, int type);
 int lustre_write_quota_info(struct lustre_quota_info *lqi, int type);
+#ifdef __KERNEL__
 int lustre_read_dquot(struct lustre_dquot *dquot);
 int lustre_commit_dquot(struct lustre_dquot *dquot);
+#endif
 int lustre_init_quota_info(struct lustre_quota_info *lqi, int type);
 
 #else
@@ -90,6 +94,7 @@ static inline int lustre_write_quota_info(struct lustre_quota_info *lqi,
 {
         return 0;
 }
+#ifdef __KERNEL__
 static inline int lustre_read_dquot(struct lustre_dquot *dquot)
 {
         return 0;
@@ -98,6 +103,7 @@ static inline int lustre_commit_dquot(struct lustre_dquot *dquot)
 {
         return 0;
 }
+#endif
 static inline int lustre_init_quota_info(struct lustre_quota_info *lqi,
                                          int type)
 {

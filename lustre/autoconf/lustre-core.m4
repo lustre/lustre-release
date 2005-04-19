@@ -438,6 +438,10 @@ AC_DEFUN([LC_CONFIGURE],
 # include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 
+# include/lustre/lustre_user.h
+AC_CHECK_TYPES([struct if_dqinfo],[],[],[#include <linux/quota.h>])
+AC_CHECK_TYPES([struct if_dqblk],[],[],[#include <linux/quota.h>])
+
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
 
@@ -486,6 +490,7 @@ lustre/kernel_patches/targets/hp_pnnl-2.4.target
 lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
 lustre/kernel_patches/targets/suse-2.4.21-2.target
+lustre/kernel_patches/targets/sles-2.4.target
 lustre/ldiskfs/Makefile
 lustre/ldiskfs/autoMakefile
 lustre/ldlm/Makefile

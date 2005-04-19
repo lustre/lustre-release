@@ -24,6 +24,16 @@
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
+#ifdef __KERNEL__
+#error Kernel files should not #include <liblustre.h>
+#else
+/*
+ * The userspace implementations of linux/spinlock.h vary; we just
+ * include our own for all of them
+ */
+#define __LINUX_SPINLOCK_H
+#endif
+
 #include <sys/mman.h>
 #ifdef HAVE_STDINT_H
 # include <stdint.h>

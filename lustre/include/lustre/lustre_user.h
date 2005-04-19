@@ -133,14 +133,30 @@ struct if_quotacheck {
 };
 
 #ifndef __KERNEL__
+
+#ifndef QUOTABLOCK_BITS
+#define QUOTABLOCK_BITS 10
+#endif
+
+#ifndef QUOTABLOCK_SIZE
+#define QUOTABLOCK_SIZE (1 << QUOTABLOCK_BITS)
+#endif
+
+#ifndef toqb
+#define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
+#endif
+
 /* XXX: these two structs should be in /usr/include/linux/quota.h */
+#ifndef HAVE_STRUCT_IF_DQINFO
 struct if_dqinfo {
         __u64 dqi_bgrace;
         __u64 dqi_igrace;
         __u32 dqi_flags;
         __u32 dqi_valid;
 };
+#endif
 
+#ifndef HAVE_STRUCT_IF_DQBLK
 struct if_dqblk {
         __u64 dqb_bhardlimit;
         __u64 dqb_bsoftlimit;
@@ -153,6 +169,8 @@ struct if_dqblk {
         __u32 dqb_valid;
 };
 #endif
+
+#endif /* !__KERNEL__ */
 
 struct if_quotactl {
         int                     qc_cmd;
