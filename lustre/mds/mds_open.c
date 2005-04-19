@@ -1182,14 +1182,12 @@ got_child:
                 if (ll_permission(dchild->d_inode, acc_mode, NULL))
                         GOTO(cleanup, rc = -EACCES);
 
-#if 0
-                /* skip GNS suid bit marked directories. */
-                if (dchild->d_inode->i_mode & S_ISUID) {
-                        CDEBUG(D_INODE, "found GNS mount object %*s, not opening.\n", 
-                               dchild->d_name.len, dchild->d_name.name);
-                        GOTO(cleanup, rc = 0); // success, but don't really open
-                }
-#endif
+                /* 
+                 * here was checking for possible GNS mount point to skip their
+                 * open. I removed it as its detection based only on SUID bit is
+                 * not reliable. Opening such an dirs should not cause any
+                 * problems, at least tests show that. --umka
+                 */
         }
 
         /* if we are following a symlink, don't open */

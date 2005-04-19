@@ -643,7 +643,7 @@ test_2a() {
     rm -fr $DIR/gns_test_2a
 }
 
-run_test 2a " check for evil conditions (object is symlink) ============="
+run_test 2a " odd conditions (mount object is symlink) ============="
 
 test_2b() {
     local OBJECT=".mntinfo"
@@ -669,7 +669,7 @@ test_2b() {
     rm -fr $DIR/gns_test_2b
 }
 
-run_test 2b " check for evil conditions (object is directory) ==========="
+run_test 2b " odd conditions (mount object is directory) ==========="
 
 test_2c() {
     local OBJECT=".mntinfo"
@@ -686,7 +686,7 @@ test_2c() {
     echo ""
     echo "testing GNS with GENERIC upcall"
     check_gns GENERIC $DIR/gns_test_2c $DIR/gns_test_2c $TIMOUT $TICK GENERIC && {
-	chmod u-s $DIR/gns_test_2c
+	chmod u-s -R $DIR/gns_test_2c
 	rm -fr $DIR/gns_test_2c
         error "recursive mounting of dir as mount object works?"
     }
@@ -695,9 +695,35 @@ test_2c() {
     rm -fr $DIR/gns_test_2c
 }
 
-run_test 2c " check for evil conditions (object is recursive dirs) ======"
+run_test 2c " odd conditions (mount object is recursive dir) ======="
 
-test_3a() {
+test_2d() {
+    local OBJECT=".mntinfo"
+    local TIMOUT=5
+    local TICK=1
+
+    echo "setting up GNS timeouts and mount object..."
+    setup_gns $OBJECT $TIMOUT $TICK || error
+
+    echo "preparing mount object at $DIR/gns_test_2d/$OBJECT..."
+    mkdir -p $DIR/gns_test_2d
+    chmod u+s $DIR/gns_test_2d
+    
+    echo ""
+    echo "testing GNS with GENERIC upcall"
+    check_gns GENERIC $DIR/gns_test_2d $DIR/gns_test_2d $TIMOUT $TICK GENERIC && {
+	chmod u-s $DIR/gns_test_2d
+	rm -fr $DIR/gns_test_2d
+        error "mount point with absent mount object works?"
+    }
+    
+    chmod u-s $DIR/gns_test_2d
+    rm -fr $DIR/gns_test_2d
+}
+
+run_test 2d " odd conditions (mount object is absent) =============="
+
+test_2e() {
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -722,7 +748,7 @@ test_3a() {
 	error "'..a' is not set as mount object name"
 }
 
-run_test 3a " check for evil conditions ('.' and '..' as mount object) =="
+run_test 2e " odd conditions ('.' and '..' as mount object) ============="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
