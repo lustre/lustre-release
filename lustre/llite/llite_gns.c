@@ -155,8 +155,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                                 strlen(sbi->ll_gns_oname));
         up(&sbi->ll_gns_sem);
 
-        if (!dchild)
-                GOTO(cleanup, rc = -ENOENT);
+        cleanup_phase = 2;
         
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
@@ -170,7 +169,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 
                 CERROR("can't find mount object %*s/%*s err = %d.\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
-                       (int)dchild->d_name.len, dchild->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
                        rc);
                 GOTO(cleanup, rc);
         }
@@ -190,18 +189,17 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         if (IS_ERR(mntinfo_fd)) {
                 CERROR("can't open mount object %*s/%*s err = %d.\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
-                       (int)dchild->d_name.len, dchild->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
                        (int)PTR_ERR(mntinfo_fd));
-                dput(dchild);
                 mntput(mnt);
                 GOTO(cleanup, rc = PTR_ERR(mntinfo_fd));
         }
-        cleanup_phase = 2;
+        cleanup_phase = 3;
 
         if (mntinfo_fd->f_dentry->d_inode->i_size > PAGE_SIZE) {
                 CERROR("mount object %*s/%*s is too big (%Ld)\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
-                       (int)dchild->d_name.len, dchild->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
                        mntinfo_fd->f_dentry->d_inode->i_size);
                 GOTO(cleanup, rc = -EFBIG);
         }
@@ -210,14 +208,14 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         if (!datapage)
                 GOTO(cleanup, rc = -ENOMEM);
 
-        cleanup_phase = 3;
+        cleanup_phase = 4;
         
         /* read data from mount object. */
         rc = kernel_read(mntinfo_fd, 0, datapage, PAGE_SIZE);
         if (rc < 0) {
                 CERROR("can't read mount object %*s/%*s data, err %d\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
-                       (int)dchild->d_name.len, dchild->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
                        rc);
                 GOTO(cleanup, rc);
         }
@@ -226,6 +224,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
+        dchild = NULL;
 
         /* synchronizing with possible /proc/fs/...write */
         down(&sbi->ll_gns_sem);
@@ -255,7 +254,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * or usermode upcall program will start mounting in backgound and
          * return instantly. --umka
          */
-
         rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
         complete_all(&sbi->ll_gns_mount_finished);
         if (rc == 0) {
@@ -296,11 +294,14 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         EXIT;
 cleanup:
         switch (cleanup_phase) {
-        case 3:
+        case 4:
                 free_page((unsigned long)datapage);
-        case 2:
+        case 3:
                 if (mntinfo_fd != NULL)
                         fput(mntinfo_fd);
+        case 2:
+                if (dchild != NULL)
+                        dput(dchild);
         case 1:
                 free_page((unsigned long)pathpage);
                 
