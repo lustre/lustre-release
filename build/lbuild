@@ -42,6 +42,18 @@ RPMBUILD=
 
 export CC=${CC:-gcc}
 
+# Readlink is not present on some older distributions: emulate it.
+readlink() {
+    local path=$1 ll
+
+    if [ -L "$path" ]; then
+	ll="$(LC_ALL=C ls -l "$path" 2> /dev/null)" &&
+	echo "${ll/* -> }"
+    else
+	return 1
+    fi
+}
+
 cleanup()
 {
     true
@@ -369,11 +381,7 @@ clean_linux()
 prep_build()
 {
     # make .spec file
-    if [ -f /etc/init.d/functions -a -f /etc/sysconfig/network ] ; then
-        ENABLE_INIT_SCRIPTS=""
-    else
-        ENABLE_INIT_SCRIPTS="# "
-    fi
+    ENABLE_INIT_SCRIPTS=""
     sed \
 	-e "s^@BASE_ARCHS@^$BASE_ARCHS^g" \
 	-e "s^@BIGMEM_ARCHS@^$BIGMEM_ARCHS^g" \
@@ -402,7 +410,8 @@ prep_build()
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
     for script in linux-{rhconfig.h,merge-config.awk,merge-modules.awk} \
-	suse-{functions.sh,post.sh,postun.sh,trigger-script.sh.in} ; do
+	suse-{functions.sh,post.sh,postun.sh,trigger-script.sh.in} \
+	sles8-{pre,post,postun,update_{INITRD_MODULES,rcfile_setting}}.sh ; do
 	cp $TOPDIR/lustre/build/$script SOURCES
     done
     cp "$LUSTRE" "$KERNEL_FILE" SOURCES
@@ -433,7 +442,7 @@ build()
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
-    if (( $DO_SRC )) ; then
+    if false && (( $DO_SRC )) ; then
 	$RPMBUILD -bs lustre-kernel-2.4.spec \
 	    --define "_topdir $TOPDIR" || \
 	    fatal 1 "Error building .src.rpm."

@@ -185,6 +185,11 @@ Source25: suse-functions.sh
 Source26: suse-post.sh
 Source27: suse-postun.sh
 Source28: suse-trigger-script.sh.in
+Source29: sles8-post.sh
+Source30: sles8-postun.sh
+Source31: sles8-pre.sh
+Source32: sles8-update_INITRD_MODULES.sh
+Source33: sles8-update_rcfile_setting.sh
 
 %package source
 Summary: The source code for the Linux kernel.
@@ -387,15 +392,30 @@ popd >/dev/null
 for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
 	for when in pre preun post postun ; do
 		script="${when}${flavor}.sh"
-		echo "if [ -f /etc/SuSE-release ] ; then" > ${script}
+		cat %{SOURCE25} %{SOURCE32} %{SOURCE33} > ${script}
+		echo "if [ -d /etc/susehelp.d ] ; then" >> ${script}
 		sed -e "s/@when@/$when/g" -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE28} >> ${script}
-		cat %{SOURCE25} >> ${script}
 		case $when in
+			pre)
+				echo "if [ ! -f /etc/modprobe.conf ] ; then" >> ${script}
+				cat %{SOURCE31} >> ${script}
+				echo "fi" >> ${script}
+				;;
 			post)
+				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
 				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE26} >> ${script}
+
+				echo "else" >> ${script}
+				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" -e "s^%%{cfg_name}^${flavor}^g" %{SOURCE29} >> ${script}
+				echo "fi" >> ${script}
 				;;
 			postun)
+				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
 				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE27} >> ${script}
+
+				echo "else" >> ${script}			
+				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE30} >> ${script}
+				echo "fi" >> ${script}
 				;;
 		esac
 		echo "exit 0; fi" >> ${script}
@@ -960,7 +980,7 @@ fi
 
 %files -n lustre-lite-utils
 %defattr(-, root, root)
-%doc lustre/COPYING lustre/lustre/BUGS lustre/ChangeLog lustre/README lustre/lustre/doc/lustre.pdf
+%doc lustre/COPYING lustre/lustre/BUGS lustre/ChangeLog lustre/README
 /sbin/*
 /usr/sbin/*
 /usr/bin/*
