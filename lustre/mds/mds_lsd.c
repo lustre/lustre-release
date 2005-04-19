@@ -211,7 +211,7 @@ int mds_init_lsd_cache()
         cache->uc_name = "LSD_CACHE";
 
         /* set default value, proc tunable */
-        sprintf(cache->uc_upcall, "%s", "/sbin/lsd_upcall");
+        sprintf(cache->uc_upcall, "%s", "/usr/sbin/lsd_upcall");
         cache->uc_entry_expire = 5 * 60;
         cache->uc_acquire_expire = 5;
 
