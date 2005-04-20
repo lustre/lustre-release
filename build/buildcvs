@@ -30,6 +30,10 @@ case "$lustretag" in
 	libsysiotag="LIBSYSIO_HEAD_20041101"
 	;;
 
+    b1_4_newconfig)	
+        portalstag="b_hd_newconfig"
+	;;
+
     b_port_ahead)
 	portalstag="b_port_ahead"
 	;;
