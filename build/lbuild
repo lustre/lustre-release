@@ -7,7 +7,7 @@ KERNELDIR=
 LUSTRE=
 PUBLISH=0
 RELEASE=0
-DO_SRC=1
+DO_SRC=0
 TAG=
 TARGET=
 TARGET_ARCHS=
@@ -442,7 +442,7 @@ build()
 	--define "_topdir $TOPDIR" || \
 	fatal 1 "Error building rpms for $arch."
 
-    if false && (( $DO_SRC )) ; then
+    if (( $DO_SRC )) ; then
 	$RPMBUILD -bs lustre-kernel-2.4.spec \
 	    --define "_topdir $TOPDIR" || \
 	    fatal 1 "Error building .src.rpm."
