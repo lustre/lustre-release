@@ -200,7 +200,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         cleanup_phase = 4;
         
         /* read data from mount object. */
-        rc = kernel_read(mntinfo_fd, 0, datapage, PAGE_SIZE);
+        rc = kernel_read(mntinfo_fd, 0, datapage, PAGE_SIZE - 1);
         if (rc < 0) {
                 CERROR("can't read mount object %*s/%*s data, err %d\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
