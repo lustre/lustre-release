@@ -655,7 +655,7 @@ PtlInit(int *max_interfaces)
         CFS_INIT_LIST_HEAD(&ptl_nal_table);
         ptl_apini.apini_refcount = 0;
 
-#ifdef __KERNEL__
+#ifndef __KERNEL__
         /* process  */
         /* Kernel NALs register themselves when their module loads, and
          * unregister themselves when their module is unloaded.  Userspace NALs
@@ -701,9 +701,9 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         LASSERT (ptl_init);
         CDEBUG(D_OTHER, "refs %d\n", ptl_apini.apini_refcount);
 
-        if (ptl_apini.apini_refcount != 0) {
-                rc = PTL_IFACE_DUP;
+        if (ptl_apini.apini_refcount > 0) {
                 ptl_apini.apini_refcount++;
+                rc = PTL_IFACE_DUP;
                 goto out;
         }
 
@@ -711,10 +711,14 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
                                requested_limits, actual_limits);
         if (rc != PTL_OK)
                 goto out;
-        
+
         rc = ptl_startup_nalnis();
-        if (rc != PTL_OK)
+        if (rc != PTL_OK) {
+                ptl_shutdown_apini();
                 goto out;
+        }
+
+        ptl_apini.apini_refcount = 1;
 
         memset (handle, 0, sizeof(*handle));
         LASSERT (!PtlHandleIsEqual(*handle, PTL_INVALID_HANDLE));

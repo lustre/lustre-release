@@ -32,11 +32,8 @@ PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
         ptl_eq_t      *eq;
         unsigned long  flags;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_HANDLE_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
          * overflow, they don't skip entries, so the queue has the same
@@ -93,11 +90,8 @@ PtlEQFree(ptl_handle_eq_t eqh)
         ptl_event_t   *events;
         unsigned long  flags;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-        
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_EQ_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
 
@@ -194,11 +188,8 @@ PtlEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
 #endif
         ENTRY;
 
-        if (!ptl_init)
-                RETURN(PTL_NO_INIT);
-        
-        if (ptl_apini.apini_refcount == 0)
-                RETURN(PTL_HANDLE_INVALID);
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
 
         if (neq < 1)
                 RETURN(PTL_EQ_INVALID);
