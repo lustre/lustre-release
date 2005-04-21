@@ -289,16 +289,31 @@ int ll_intent_alloc(struct lookup_intent *it)
         return 0;
 }
 
+static inline int 
+ll_special_name(struct dentry *de)
+{
+	if (de->d_name.name[0] == '.') switch (de->d_name.len) {
+		case 2:
+			if (de->d_name.name[1] == '.')
+				return 1;
+		case 1:
+			return 1;
+		default:
+			return 0;
+	}
+	return 0;
+}
+
 int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                      struct lookup_intent *it)
 {
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct ptlrpc_request *req = NULL;
-        int orig_it, err, rc = 0;
         struct obd_export *exp;
         struct it_cb_data icbd;
         struct lustre_id pid;
         struct lustre_id cid;
+        int orig_it, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s (%p), intent=%s\n", de->d_name.name,
@@ -467,13 +482,15 @@ revalidate_finish:
 
         GOTO(out, rc);
 out:
-        if (req != NULL && rc == 1)
+        if (req != NULL && rc == 1) {
                 ptlrpc_req_finished(req);
+                req = NULL;
+        }
 
         if (rc == 0) {
                 if (it == &lookup_it) {
                         ll_intent_release(it);
-                        if (req) /* Special case: We did lookup and it failed,
+                        if (req) /* special case: We did lookup and it failed,
                                     need to free request */
                                 ptlrpc_req_finished(req);
                 }
@@ -490,21 +507,24 @@ out:
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
         if (it == &lookup_it)
                 ll_intent_release(it);
-    
+
+        /* 
+         * if we found that this is possible GNS mount and dentry is still valid
+         * and may be used by system, we drop the lock and return 0, that means
+         * that re-lookup is needed. Such a way we cause real mounting only in
+         * lookup control path, which is always made with parent's i_sem taken.
+         * --umka
+         */
         if (!((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
             !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN))))
-                return rc;
-
-        if (nd != NULL) {
-                err = ll_gns_mount_object(de, nd->mnt);
-                if (err == -ERESTARTSYS) {
-                        /* 
-                         * making system to restart syscall as currently GNS is
-                         * in mounting progress.
-                         */
-                        return err;
-                }
+		return rc;
+	    
+	/* special "." and ".." has to be always revalidated */
+        if (rc && !ll_special_name(de) && nd != NULL && !(nd->flags & LOOKUP_LAST)) {
+                ll_intent_drop_lock(it);
+                return 0;
         }
+
         return rc;
 do_lookup:
         it = &lookup_it;

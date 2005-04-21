@@ -115,10 +115,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
         LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
 
-        spin_lock(&dentry->d_lock);
-        dentry->d_flags |= DCACHE_GNS_MOUNTING;
-        spin_unlock(&dentry->d_lock);
-        
         /* mounting started */
         sbi->ll_gns_state = LL_GNS_MOUNTING;
         spin_unlock(&sbi->ll_gns_lock);
@@ -143,13 +139,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         /* 
          * mount object name is taken from sbi, where it is set in mount time or
          * via /proc/fs... tunable. It may be ".mntinfo" or so.
-         */
-
-        /* 
-         * FIXME: lookup_one_len() requires dentry->d_inode->i_sem to be locked,
-         * but we can't use ll_lookup_one_len() as this function is called from
-         * different contol paths and some of them take dentry->d_inode->i_sem
-         * and others do not.
          */
         dchild = lookup_one_len(sbi->ll_gns_oname, dentry,
                                 strlen(sbi->ll_gns_oname));
@@ -283,9 +272,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                         mntput(mnt);
                         dput(dentry);
                 }
-                spin_lock(&dentry->d_lock);
-                dentry->d_flags &= ~DCACHE_GNS_PENDING;
-                spin_unlock(&dentry->d_lock);
         } else {
                 CERROR("usermode upcall %s failed to mount %s, err %d\n",
                        sbi->ll_gns_upcall, path, rc);
@@ -314,10 +300,6 @@ cleanup:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;
                 spin_unlock(&sbi->ll_gns_lock);
-
-                spin_lock(&dentry->d_lock);
-                dentry->d_flags &= ~DCACHE_GNS_MOUNTING;
-                spin_unlock(&dentry->d_lock);
         }
         return rc;
 }

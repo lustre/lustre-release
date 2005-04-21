@@ -1183,9 +1183,9 @@ got_child:
                         GOTO(cleanup, rc = -EACCES);
 
                 /* 
-                 * here was checking for possible GNS mount point to skip their
+                 * here was checking for possible GNS mount points to skip their
                  * open. I removed it as its detection based only on SUID bit is
-                 * not reliable. Opening such an dirs should not cause any
+                 * not reliable. Opening such a dirs should not cause any
                  * problems, at least tests show that. --umka
                  */
         }
