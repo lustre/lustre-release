@@ -21,21 +21,10 @@
 
 #include "lonal.h"
 
-/*
- *  LIB functions follow
- *
- */
-static int
-klonal_dist(lib_nal_t *nal, ptl_nid_t nid, unsigned long *dist)
-{
-        *dist = 0;                      /* it's me */
-        return (0);
-}
-
-static ptl_err_t
-klonal_send (lib_nal_t    *nal,
+ptl_err_t
+klonal_send (ptl_ni_t     *ni,
              void         *private,
-             lib_msg_t    *libmsg,
+             ptl_msg_t    *ptlmsg,
              ptl_hdr_t    *hdr,
              int           type,
              ptl_nid_t     nid,
@@ -53,19 +42,17 @@ klonal_send (lib_nal_t    *nal,
                 .klod_iov     = { .iov = payload_iov } };
         ptl_err_t rc;
 
-        LASSERT(nid == klonal_lib.libnal_ni.ni_pid.nid);
-
-        rc = lib_parse(&klonal_lib, hdr, &klod);
+        rc = ptl_parse(ni, hdr, &klod);
         if (rc == PTL_OK)
-                lib_finalize(&klonal_lib, private, libmsg, PTL_OK);
+                ptl_finalize(ni, private, ptlmsg, PTL_OK);
         
         return rc;
 }
 
-static ptl_err_t
-klonal_send_pages (lib_nal_t    *nal,
+ptl_err_t
+klonal_send_pages (ptl_ni_t     *ni,
                    void         *private,
-                   lib_msg_t    *libmsg,
+                   ptl_msg_t    *ptlmsg,
                    ptl_hdr_t    *hdr,
                    int           type,
                    ptl_nid_t     nid,
@@ -83,19 +70,17 @@ klonal_send_pages (lib_nal_t    *nal,
                 .klod_iov      = { .kiov = payload_kiov } };
         ptl_err_t   rc;
 
-        LASSERT(nid == klonal_lib.libnal_ni.ni_pid.nid);
-        
-        rc = lib_parse(&klonal_lib, hdr, &klod);
+        rc = ptl_parse(ni, hdr, &klod);
         if (rc == PTL_OK)
-                lib_finalize(&klonal_lib, private, libmsg, PTL_OK);
+                ptl_finalize(ni, private, ptlmsg, PTL_OK);
         
         return rc;
 }
 
-static ptl_err_t
-klonal_recv(lib_nal_t    *nal,
+ptl_err_t
+klonal_recv(ptl_ni_t     *ni,
             void         *private,
-            lib_msg_t    *libmsg,
+            ptl_msg_t    *ptlmsg,
             unsigned int  niov,
             struct iovec *iov,
             size_t        offset,
@@ -108,7 +93,7 @@ klonal_recv(lib_nal_t    *nal,
         LASSERT(klod->klod_type == KLOD_IOV);
 
         if (mlen == 0)
-                return PTL_OK;
+                goto out;
 
         while (offset >= iov->iov_len) {
                 offset -= iov->iov_len;
@@ -158,14 +143,15 @@ klonal_recv(lib_nal_t    *nal,
                 mlen -= fraglen;
         } while (mlen > 0);
         
-        lib_finalize(&klonal_lib, private, libmsg, PTL_OK);
+ out:
+        ptl_finalize(ni, private, ptlmsg, PTL_OK);
         return PTL_OK;
 }
 
-static ptl_err_t
-klonal_recv_pages(lib_nal_t    *nal,
+ptl_err_t
+klonal_recv_pages(ptl_ni_t     *ni,
                   void         *private,
-                  lib_msg_t    *libmsg,
+                  ptl_msg_t    *ptlmsg,
                   unsigned int  niov,
                   ptl_kiov_t   *kiov,
                   size_t        offset,
@@ -183,7 +169,7 @@ klonal_recv_pages(lib_nal_t    *nal,
         LASSERT(klod->klod_type == KLOD_KIOV);
 
         if (mlen == 0)
-                return PTL_OK;
+                goto out;
 
         while (offset >= kiov->kiov_len) {
                 offset -= kiov->kiov_len;
@@ -252,16 +238,7 @@ klonal_recv_pages(lib_nal_t    *nal,
         if (srcaddr != NULL)
                 kunmap(klod->klod_iov.kiov->kiov_page);
 
-        lib_finalize(&klonal_lib, private, libmsg, PTL_OK);
+ out:
+        ptl_finalize(ni, private, ptlmsg, PTL_OK);
         return PTL_OK;
 }
-
-lib_nal_t klonal_lib =
-{
-        libnal_data:       &klonal_data,         /* NAL private data */
-        libnal_send:        klonal_send,
-        libnal_send_pages:  klonal_send_pages,
-        libnal_recv:        klonal_recv,
-        libnal_recv_pages:  klonal_recv_pages,
-        libnal_dist:        klonal_dist
-};

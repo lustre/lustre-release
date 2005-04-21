@@ -93,8 +93,8 @@ void set_address(bridge t,ptl_pid_t pidrequest)
     int port;
     if (pidrequest==(unsigned short)PTL_PID_ANY) port = 0;
     else port=pidrequest;
-    t->lib_nal->libnal_ni.ni_pid.nid=get_node_id();
-    t->lib_nal->libnal_ni.ni_pid.pid=port;
+    t->b_ni->ni_nid=get_node_id();
+    ptl_apini.apini_pid=port;
 }
 #else
 
@@ -122,9 +122,9 @@ void set_address(bridge t,ptl_pid_t pidrequest)
     in_addr = get_node_id();
 
     t->iptop8 = in_addr >> PNAL_HOSTID_SHIFT;/* for making new connections */
-    t->lib_nal->libnal_ni.ni_pid.nid = ((in_addr & PNAL_HOSTID_MASK)
-                                        << PNAL_VNODE_SHIFT)
-                                       + virtnode;
+    t->b_ni->ni_nid = ((in_addr & PNAL_HOSTID_MASK)
+                       << PNAL_VNODE_SHIFT)
+                      + virtnode;
     pid=pidrequest;
     /* TODO: Support of pid PTL_ID_ANY with virtual nodes needs more work. */
 #ifdef notyet
@@ -142,6 +142,6 @@ void set_address(bridge t,ptl_pid_t pidrequest)
             return;
         }
     else port = ((virtnode << PNAL_VNODE_SHIFT) + pid) + PNAL_BASE_PORT;
-    t->lib_nal->libnal_ni.ni_pid.pid=pid;
+    ptl_apini->apini_pid=pid;
 }
 #endif

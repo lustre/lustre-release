@@ -25,16 +25,19 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-int 
-lib_api_eq_alloc (nal_t *apinal, ptl_size_t count,
-                  ptl_eq_handler_t callback, 
-                  ptl_handle_eq_t *handle)
+ptl_err_t
+PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
+           ptl_eq_handler_t callback, ptl_handle_eq_t *handle)
 {
-        lib_nal_t     *nal = apinal->nal_data;
-        lib_eq_t      *eq;
+        ptl_eq_t      *eq;
         unsigned long  flags;
-        int            rc;
 
+        if (!ptl_init)
+                return PTL_NO_INIT;
+
+        if (ptl_apini.apini_refcount == 0)
+                return PTL_HANDLE_INVALID;
+        
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
          * overflow, they don't skip entries, so the queue has the same
          * apparant capacity at all times */
@@ -50,29 +53,15 @@ lib_api_eq_alloc (nal_t *apinal, ptl_size_t count,
         if (count == 0)        /* catch bad parameter / overflow on roundup */
                 return (PTL_VAL_FAILED);
         
-        eq = lib_eq_alloc (nal);
+        eq = ptl_eq_alloc();
         if (eq == NULL)
                 return (PTL_NO_SPACE);
 
         PORTAL_ALLOC(eq->eq_events, count * sizeof(ptl_event_t));
         if (eq->eq_events == NULL) {
-                LIB_LOCK(nal, flags);
-                lib_eq_free (nal, eq);
-                LIB_UNLOCK(nal, flags);
-        }
-
-        if (nal->libnal_map != NULL) {
-                struct iovec iov = {
-                        .iov_base = eq->eq_events,
-                        .iov_len = count * sizeof(ptl_event_t)};
-
-                rc = nal->libnal_map(nal, 1, &iov, &eq->eq_addrkey);
-                if (rc != PTL_OK) {
-                        LIB_LOCK(nal, flags);
-                        lib_eq_free (nal, eq);
-                        LIB_UNLOCK(nal, flags);
-                        return (rc);
-                }
+                PTL_LOCK(flags);
+                ptl_eq_free (eq);
+                PTL_UNLOCK(flags);
         }
 
         /* NB this resets all event sequence numbers to 0, to be earlier
@@ -85,66 +74,61 @@ lib_api_eq_alloc (nal_t *apinal, ptl_size_t count,
         eq->eq_refcount = 0;
         eq->eq_callback = callback;
 
-        LIB_LOCK(nal, flags);
+        PTL_LOCK(flags);
 
-        lib_initialise_handle (nal, &eq->eq_lh, PTL_COOKIE_TYPE_EQ);
-        list_add (&eq->eq_list, &nal->libnal_ni.ni_active_eqs);
+        ptl_initialise_handle (&eq->eq_lh, PTL_COOKIE_TYPE_EQ);
+        list_add (&eq->eq_list, &ptl_apini.apini_active_eqs);
 
-        LIB_UNLOCK(nal, flags);
+        PTL_UNLOCK(flags);
 
-        ptl_eq2handle(handle, nal, eq);
+        ptl_eq2handle(handle, eq);
         return (PTL_OK);
 }
 
-int 
-lib_api_eq_free(nal_t *apinal, ptl_handle_eq_t *eqh)
+ptl_err_t
+PtlEQFree(ptl_handle_eq_t eqh)
 {
-        lib_nal_t     *nal = apinal->nal_data;
-        lib_eq_t      *eq;
+        ptl_eq_t      *eq;
         int            size;
         ptl_event_t   *events;
-        void          *addrkey;
         unsigned long  flags;
 
-        LIB_LOCK(nal, flags);
+        if (!ptl_init)
+                return PTL_NO_INIT;
+        
+        if (ptl_apini.apini_refcount == 0)
+                return PTL_EQ_INVALID;
+        
+        PTL_LOCK(flags);
 
-        eq = ptl_handle2eq(eqh, nal);
+        eq = ptl_handle2eq(&eqh);
         if (eq == NULL) {
-                LIB_UNLOCK(nal, flags);
+                PTL_UNLOCK(flags);
                 return (PTL_EQ_INVALID);
         }
 
         if (eq->eq_refcount != 0) {
-                LIB_UNLOCK(nal, flags);
+                PTL_UNLOCK(flags);
                 return (PTL_EQ_IN_USE);
         }
 
         /* stash for free after lock dropped */
         events  = eq->eq_events;
         size    = eq->eq_size;
-        addrkey = eq->eq_addrkey;
 
-        lib_invalidate_handle (nal, &eq->eq_lh);
+        ptl_invalidate_handle (&eq->eq_lh);
         list_del (&eq->eq_list);
-        lib_eq_free (nal, eq);
+        ptl_eq_free (eq);
 
-        LIB_UNLOCK(nal, flags);
-
-        if (nal->libnal_unmap != NULL) {
-                struct iovec iov = {
-                        .iov_base = events,
-                        .iov_len = size * sizeof(ptl_event_t)};
-
-                nal->libnal_unmap(nal, 1, &iov, &addrkey);
-        }
+        PTL_UNLOCK(flags);
 
         PORTAL_FREE(events, size * sizeof (ptl_event_t));
 
-        return (PTL_OK);
+        return PTL_OK;
 }
 
-int
-lib_get_event (lib_eq_t *eq, ptl_event_t *ev)
+ptl_err_t
+lib_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 {
         int          new_index = eq->eq_deq_seq & (eq->eq_size - 1);
         ptl_event_t *new_event = &eq->eq_events[new_index];
@@ -175,13 +159,28 @@ lib_get_event (lib_eq_t *eq, ptl_event_t *ev)
 }
 
 
-int
-lib_api_eq_poll (nal_t *apinal, 
-                 ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
-                 ptl_event_t *event, int *which)
+ptl_err_t
+PtlEQGet (ptl_handle_eq_t eventq, ptl_event_t *event)
 {
-        lib_nal_t       *nal = apinal->nal_data;
-        lib_ni_t        *ni = &nal->libnal_ni;
+        int which;
+
+        return PtlEQPoll(&eventq, 1, 0, 
+                         event, &which);
+}
+
+ptl_err_t
+PtlEQWait (ptl_handle_eq_t eventq, ptl_event_t *event)
+{
+        int which;
+
+        return PtlEQPoll(&eventq, 1, PTL_TIME_FOREVER,
+                         event, &which);
+}
+
+ptl_err_t
+PtlEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
+           ptl_event_t *event, int *which)
+{
         unsigned long    flags;
         int              i;
         int              rc;
@@ -195,22 +194,31 @@ lib_api_eq_poll (nal_t *apinal,
 #endif
         ENTRY;
 
-        LIB_LOCK(nal, flags);
+        if (!ptl_init)
+                RETURN(PTL_NO_INIT);
+        
+        if (ptl_apini.apini_refcount == 0)
+                RETURN(PTL_HANDLE_INVALID);
+
+        if (neq < 1)
+                RETURN(PTL_EQ_INVALID);
+
+        PTL_LOCK(flags);
 
         for (;;) {
                 for (i = 0; i < neq; i++) {
-                        lib_eq_t *eq = ptl_handle2eq(&eventqs[i], nal);
+                        ptl_eq_t *eq = ptl_handle2eq(&eventqs[i]);
 
                         rc = lib_get_event (eq, event);
                         if (rc != PTL_EQ_EMPTY) {
-                                LIB_UNLOCK(nal, flags);
+                                PTL_UNLOCK(flags);
                                 *which = i;
                                 RETURN(rc);
                         }
                 }
                 
                 if (timeout_ms == 0) {
-                        LIB_UNLOCK (nal, flags);
+                        PTL_UNLOCK (flags);
                         RETURN (PTL_EQ_EMPTY);
                 }
 
@@ -220,9 +228,9 @@ lib_api_eq_poll (nal_t *apinal,
 #ifdef __KERNEL__
                 cfs_waitlink_init(&wl);
                 set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_add(&ni->ni_waitq, &wl);
+                cfs_waitq_add(&ptl_apini.apini_waitq, &wl);
 
-                LIB_UNLOCK(nal, flags);
+                PTL_UNLOCK(flags);
 
                 if (timeout_ms < 0) {
                         cfs_waitq_wait (&wl);
@@ -237,11 +245,12 @@ lib_api_eq_poll (nal_t *apinal,
                                 timeout_ms = 0;
                 }
                 
-                LIB_LOCK(nal, flags);
-                cfs_waitq_del(&ni->ni_waitq, &wl);
+                PTL_LOCK(flags);
+                cfs_waitq_del(&ptl_apini.apini_waitq, &wl);
 #else
                 if (timeout_ms < 0) {
-                        pthread_cond_wait(&ni->ni_cond, &ni->ni_mutex);
+                        pthread_cond_wait(&ptl_apini.apini_cond, 
+                                          &ptl_apini.apini_mutex);
                 } else {
                         gettimeofday(&then, NULL);
                         
@@ -253,8 +262,8 @@ lib_api_eq_poll (nal_t *apinal,
                                 ts.tv_nsec -= 1000000000;
                         }
                         
-                        pthread_cond_timedwait(&ni->ni_cond,
-                                               &ni->ni_mutex, &ts);
+                        pthread_cond_timedwait(&ptl_apini.apini_cond,
+                                               &ptl_apini.apini_mutex, &ts);
                         
                         gettimeofday(&now, NULL);
                         timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +

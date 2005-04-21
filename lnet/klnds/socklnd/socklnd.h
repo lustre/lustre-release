@@ -42,7 +42,6 @@
 #include <portals/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/nal.h>
 #include <portals/socknal.h>
 
 #define SOCKNAL_N_AUTOCONNECTD  4               /* # socknal autoconnect daemons */
@@ -187,14 +186,15 @@ typedef struct
 
         ksock_irqinfo_t   ksnd_irqinfo[NR_IRQS];/* irq->scheduler lookup */
 
+        ptl_ni_t         *ksnd_ni;              /* NI instance (tmp hack) */
+
         int               ksnd_ninterfaces;
         ksock_interface_t ksnd_interfaces[SOCKNAL_MAX_INTERFACES]; /* published interfaces */
 } ksock_nal_data_t;
 
 #define SOCKNAL_INIT_NOTHING    0
 #define SOCKNAL_INIT_DATA       1
-#define SOCKNAL_INIT_LIB        2
-#define SOCKNAL_INIT_ALL        3
+#define SOCKNAL_INIT_ALL        2
 
 /* A packet just assembled for transmission is represented by 1 or more
  * struct iovec fragments (the first frag contains the portals header),
@@ -238,8 +238,8 @@ typedef struct                                  /* forwarded packet */
 typedef struct                                  /* locally transmitted packet */
 {
         ksock_tx_t              ltx_tx;         /* send info */
-        void                   *ltx_private;    /* lib_finalize() callback arg */
-        void                   *ltx_cookie;     /* lib_finalize() callback arg */
+        void                   *ltx_private;    /* ptl_finalize() callback arg */
+        void                   *ltx_cookie;     /* ptl_finalize() callback arg */
         ptl_hdr_t               ltx_hdr;        /* buffer for packet header */
         int                     ltx_desc_size;  /* bytes allocated for this desc */
         struct iovec            ltx_iov[1];     /* iov for hdr + payload */
@@ -310,7 +310,7 @@ typedef struct ksock_conn
         int                 ksnc_rx_nkiov;      /* # page frags */
         ptl_kiov_t         *ksnc_rx_kiov;       /* the page frags */
         ksock_rxiovspace_t  ksnc_rx_iov_space;  /* space for frag descriptors */
-        void               *ksnc_cookie;        /* rx lib_finalize passthru arg */
+        void               *ksnc_cookie;        /* rx ptl_finalize passthru arg */
         ptl_hdr_t           ksnc_hdr;           /* where I read headers into */
 
         /* WRITER */
@@ -369,7 +369,6 @@ typedef struct ksock_peer
 } ksock_peer_t;
 
 
-extern lib_nal_t        ksocknal_lib;
 extern ksock_nal_data_t ksocknal_data;
 extern ksock_tunables_t ksocknal_tunables;
 
@@ -401,6 +400,30 @@ ksocknal_putconnsock (ksock_conn_t *conn)
 {
         cfs_put_file (KSN_CONN2FILE(conn));
 }
+
+ptl_err_t ksocknal_startup (ptl_ni_t *ni, char **interfaces);
+void ksocknal_shutdown (ptl_ni_t *ni);
+ptl_err_t ksocknal_send (ptl_ni_t *ni, void *private,
+                         ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                         int type, ptl_nid_t nid, ptl_pid_t pid,
+                         unsigned int payload_niov, 
+                         struct iovec *payload_iov,
+                         size_t payload_offset, size_t payload_nob);
+ptl_err_t ksocknal_send_pages (ptl_ni_t *ni, void *private,
+                               ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                               int type, ptl_nid_t nid, ptl_pid_t pid,
+                               unsigned int payload_niov, 
+                               ptl_kiov_t *payload_kiov,
+                               size_t payload_offset, size_t payload_nob);
+ptl_err_t ksocknal_recv(ptl_ni_t *ni, void *private,
+                        ptl_msg_t *ptlmsg, unsigned int niov,
+                        struct iovec *iov, size_t offset,
+                        size_t mlen, size_t rlen);
+ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
+                              ptl_msg_t *ptlmsg, unsigned int niov,
+                              ptl_kiov_t *kiov, size_t offset,
+                              size_t mlen, size_t rlen);
+
 
 extern void ksocknal_put_route (ksock_route_t *route);
 extern void ksocknal_put_peer (ksock_peer_t *peer);

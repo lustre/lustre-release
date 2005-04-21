@@ -23,12 +23,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_PORTALS
-
 #include <portals/lib-p30.h>
-#include <portals/p30.h>
-#include <portals/nal.h>
-#include <libcfs/kp30.h>
-#include <portals/kpr.h>
 
 extern void (kping_client)(struct portal_ioctl_data *);
 
@@ -36,7 +31,6 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                          unsigned int cmd, unsigned long arg)
 {
         int err;
-        char str[PTL_NALFMT_SIZE];
         ENTRY;
 
         switch (cmd) {
@@ -45,7 +39,7 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
 
                 CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
                        data->ioc_count, data->ioc_nid,
-                       portals_nid2str(data->ioc_nal, data->ioc_nid, str));
+                       libcfs_nid2str(data->ioc_nid));
                 ping = PORTAL_SYMBOL_GET(kping_client);
                 if (!ping)
                         CERROR("PORTAL_SYMBOL_GET failed\n");
@@ -84,7 +78,7 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                 CDEBUG (D_IOCTL, "fail nid: [%d] "LPU64" count %d\n",
                         data->ioc_nal, data->ioc_nid, data->ioc_count);
 
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
+                err = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, NULL,
                                 NULL, &nih);
                 if (!(err == PTL_OK || err == PTL_IFACE_DUP))
                         return (-EINVAL);
@@ -103,40 +97,6 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                 RETURN (err);
         }
 
-        case IOC_PORTAL_LOOPBACK: {
-                ptl_handle_ni_t  nih;
-                int              enabled = data->ioc_flags;
-                int              set = data->ioc_misc;
-
-                CDEBUG (D_IOCTL, "loopback: [%d] %d %d\n",
-                        data->ioc_nal, enabled, set);
-
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        return (-EINVAL);
-
-                if (err == PTL_OK) {
-                        /* There's no point in failing an interface that
-                         * came into existance just for this */
-                        err = -EINVAL;
-                } else {
-                        err = PtlLoopback (nih, set, &enabled);
-                        if (err != PTL_OK) {
-                                err = -EINVAL;
-                        } else {
-                                data->ioc_flags = enabled;
-                                if (copy_to_user ((char *)arg, data, 
-                                                  sizeof (*data)))
-                                        err = -EFAULT;
-                                else
-                                        err = 0;
-                        }
-                }
-
-                PtlNIFini(nih);
-                RETURN (err);
-        }
         default:
                 RETURN(-EINVAL);
         }
@@ -196,19 +156,17 @@ EXPORT_SYMBOL(PtlEQFree);
 EXPORT_SYMBOL(PtlEQGet);
 EXPORT_SYMBOL(PtlGetId);
 EXPORT_SYMBOL(PtlMDBind);
-EXPORT_SYMBOL(lib_iov_nob);
-EXPORT_SYMBOL(lib_copy_iov2buf);
-EXPORT_SYMBOL(lib_copy_buf2iov);
-EXPORT_SYMBOL(lib_extract_iov);
-EXPORT_SYMBOL(lib_kiov_nob);
-EXPORT_SYMBOL(lib_copy_kiov2buf);
-EXPORT_SYMBOL(lib_copy_buf2kiov);
-EXPORT_SYMBOL(lib_extract_kiov);
-EXPORT_SYMBOL(lib_finalize);
-EXPORT_SYMBOL(lib_parse);
-EXPORT_SYMBOL(lib_create_reply_msg);
-EXPORT_SYMBOL(lib_init);
-EXPORT_SYMBOL(lib_fini);
+EXPORT_SYMBOL(ptl_iov_nob);
+EXPORT_SYMBOL(ptl_copy_iov2buf);
+EXPORT_SYMBOL(ptl_copy_buf2iov);
+EXPORT_SYMBOL(ptl_extract_iov);
+EXPORT_SYMBOL(ptl_kiov_nob);
+EXPORT_SYMBOL(ptl_copy_kiov2buf);
+EXPORT_SYMBOL(ptl_copy_buf2kiov);
+EXPORT_SYMBOL(ptl_extract_kiov);
+EXPORT_SYMBOL(ptl_finalize);
+EXPORT_SYMBOL(ptl_parse);
+EXPORT_SYMBOL(ptl_create_reply_msg);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");

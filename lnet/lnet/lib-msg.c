@@ -24,17 +24,10 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#ifndef __KERNEL__
-# include <stdio.h>
-#else
-# include <libcfs/kp30.h>
-#endif
-
 #include <portals/lib-p30.h>
 
 void
-lib_enq_event_locked (lib_nal_t *nal, void *private,
-                      lib_eq_t *eq, ptl_event_t *ev)
+ptl_enq_event_locked (void *private, ptl_eq_t *eq, ptl_event_t *ev)
 {
         ptl_event_t  *eq_slot;
 
@@ -54,7 +47,7 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
         eq_slot = eq->eq_events + (ev->sequence & (eq->eq_size - 1));
 
         /* There is no race since both event consumers and event producers
-         * take the LIB_LOCK(), so we don't screw around with memory
+         * take the PTL_LOCK, so we don't screw around with memory
          * barriers, setting the sequence number last or wierd structure
          * layout assertions. */
         *eq_slot = *ev;
@@ -65,17 +58,17 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
 
         /* Wake anyone sleeping for an event (see lib-eq.c) */
 #ifdef __KERNEL__
-        if (cfs_waitq_active(&nal->libnal_ni.ni_waitq))
-                cfs_waitq_broadcast(&nal->libnal_ni.ni_waitq);
+        if (cfs_waitq_active(&ptl_apini.apini_waitq))
+                cfs_waitq_broadcast(&ptl_apini.apini_waitq);
 #else
-        pthread_cond_broadcast(&nal->libnal_ni.ni_cond);
+        pthread_cond_broadcast(&ptl_apini.apini_cond);
 #endif
 }
 
 void
-lib_finalize (lib_nal_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
+ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
 {
-        lib_md_t     *md;
+        ptl_libmd_t  *md;
         int           unlink;
         unsigned long flags;
         int           rc;
@@ -86,62 +79,63 @@ lib_finalize (lib_nal_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
 
         /* Only send an ACK if the PUT completed successfully */
         if (status == PTL_OK &&
-            !ptl_is_wire_handle_none(&msg->ack_wmd)) {
+            !ptl_is_wire_handle_none(&msg->msg_ack_wmd)) {
 
-                LASSERT(msg->ev.type == PTL_EVENT_PUT_END);
+                LASSERT(msg->msg_ev.type == PTL_EVENT_PUT_END);
 
                 memset (&ack, 0, sizeof (ack));
                 ack.type     = cpu_to_le32(PTL_MSG_ACK);
-                ack.dest_nid = cpu_to_le64(msg->ev.initiator.nid);
-                ack.dest_pid = cpu_to_le32(msg->ev.initiator.pid);
-                ack.src_nid  = cpu_to_le64(nal->libnal_ni.ni_pid.nid);
-                ack.src_pid  = cpu_to_le32(nal->libnal_ni.ni_pid.pid);
+                ack.dest_nid = cpu_to_le64(msg->msg_ev.initiator.nid);
+                ack.dest_pid = cpu_to_le32(msg->msg_ev.initiator.pid);
+                ack.src_nid  = cpu_to_le64(ni->ni_nid);
+                ack.src_pid  = cpu_to_le32(ptl_apini.apini_pid);
                 ack.payload_length = 0;
 
-                ack.msg.ack.dst_wmd = msg->ack_wmd;
-                ack.msg.ack.match_bits = msg->ev.match_bits;
-                ack.msg.ack.mlength = cpu_to_le32(msg->ev.mlength);
+                ack.msg.ack.dst_wmd = msg->msg_ack_wmd;
+                ack.msg.ack.match_bits = msg->msg_ev.match_bits;
+                ack.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-                rc = lib_send (nal, private, NULL, &ack, PTL_MSG_ACK,
-                               msg->ev.initiator.nid, msg->ev.initiator.pid,
+                rc = ptl_send (ni, private, NULL, &ack, PTL_MSG_ACK,
+                               msg->msg_ev.initiator.nid, 
+                               msg->msg_ev.initiator.pid,
                                NULL, 0, 0);
                 if (rc != PTL_OK) {
                         /* send failed: there's nothing else to clean up. */
                         CERROR("Error %d sending ACK to "LPX64"\n",
-                               rc, msg->ev.initiator.nid);
+                               rc, msg->msg_ev.initiator.nid);
                 }
         }
 
-        md = msg->md;
+        md = msg->msg_md;
 
-        LIB_LOCK(nal, flags);
+        PTL_LOCK(flags);
 
         /* Now it's safe to drop my caller's ref */
-        md->pending--;
-        LASSERT (md->pending >= 0);
+        md->md_pending--;
+        LASSERT (md->md_pending >= 0);
 
         /* Should I unlink this MD? */
-        if (md->pending != 0)                   /* other refs */
+        if (md->md_pending != 0)                   /* other refs */
                 unlink = 0;
         else if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) != 0)
                 unlink = 1;
         else if ((md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) == 0)
                 unlink = 0;
         else
-                unlink = lib_md_exhausted(md);
+                unlink = ptl_md_exhausted(md);
 
-        msg->ev.ni_fail_type = status;
-        msg->ev.unlinked = unlink;
+        msg->msg_ev.ni_fail_type = status;
+        msg->msg_ev.unlinked = unlink;
 
-        if (md->eq != NULL)
-                lib_enq_event_locked(nal, private, md->eq, &msg->ev);
+        if (md->md_eq != NULL)
+                ptl_enq_event_locked(private, md->md_eq, &msg->msg_ev);
 
         if (unlink)
-                lib_md_unlink(nal, md);
+                ptl_md_unlink(md);
 
         list_del (&msg->msg_list);
-        nal->libnal_ni.ni_counters.msgs_alloc--;
-        lib_msg_free(nal, msg);
+        ptl_apini.apini_counters.msgs_alloc--;
+        ptl_msg_free(msg);
 
-        LIB_UNLOCK(nal, flags);
+        PTL_UNLOCK(flags);
 }

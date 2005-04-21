@@ -23,22 +23,6 @@
 
 #include "qswnal.h"
 
-/*
- *  LIB functions follow
- *
- */
-static int
-kqswnal_dist(lib_nal_t *nal, ptl_nid_t nid, unsigned long *dist)
-{
-        if (nid == nal->libnal_ni.ni_pid.nid)
-                *dist = 0;                      /* it's me */
-        else if (kqswnal_nid2elanid (nid) >= 0)
-                *dist = 1;                      /* it's my peer */
-        else
-                *dist = 2;                      /* via router */
-        return (0);
-}
-
 void
 kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
 {
@@ -447,8 +431,8 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
         case KTX_RDMAING:          /* optimized GET/PUT handled */
         case KTX_PUTTING:          /* optimized PUT sent */
         case KTX_SENDING:          /* normal send */
-                lib_finalize (&kqswnal_lib, NULL,
-                              (lib_msg_t *)ktx->ktx_args[1],
+                ptl_finalize (kqswnal_data.kqn_ni, NULL,
+                              (ptl_msg_t *)ktx->ktx_args[1],
                               (error == 0) ? PTL_OK : PTL_FAIL);
                 break;
 
@@ -456,10 +440,10 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
                 /* Complete the GET with success since we can't avoid
                  * delivering a REPLY event; we committed to it when we
                  * launched the GET */
-                lib_finalize (&kqswnal_lib, NULL, 
-                              (lib_msg_t *)ktx->ktx_args[1], PTL_OK);
-                lib_finalize (&kqswnal_lib, NULL,
-                              (lib_msg_t *)ktx->ktx_args[2],
+                ptl_finalize (kqswnal_data.kqn_ni, NULL, 
+                              (ptl_msg_t *)ktx->ktx_args[1], PTL_OK);
+                ptl_finalize (kqswnal_data.kqn_ni, NULL,
+                              (ptl_msg_t *)ktx->ktx_args[2],
                               (error == 0) ? PTL_OK : PTL_FAIL);
                 break;
 
@@ -751,7 +735,7 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, ptl_nid_t expected_nid)
         kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(buffer + KQSW_HDR_SIZE);
         ptl_nid_t           nid = kqswnal_rx_nid(krx);
 
-        /* Note (1) lib_parse has already flipped hdr.
+        /* Note (1) ptl_parse has already flipped hdr.
          *      (2) RDMA addresses are sent in native endian-ness.  When
          *      EKC copes with different endian nodes, I'll fix this (and
          *      eat my hat :) */
@@ -807,7 +791,7 @@ kqswnal_rdma_store_complete (EP_RXD *rxd)
         krx->krx_rpc_reply_needed = 0;
         kqswnal_rx_decref (krx);
 
-        /* free ktx & finalize() its lib_msg_t */
+        /* free ktx & finalize() its ptl_msg_t */
         kqswnal_tx_done(ktx, (status == EP_SUCCESS) ? 0 : -ECONNABORTED);
 }
 
@@ -837,7 +821,7 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
                 status = -ECONNABORTED;
         }
 
-        /* free ktx & finalize() its lib_msg_t */
+        /* free ktx & finalize() its ptl_msg_t */
         kqswnal_tx_done(ktx, status);
 
         if (!in_interrupt()) {
@@ -859,7 +843,7 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
 }
 
 int
-kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
+kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
               int niov, struct iovec *iov, ptl_kiov_t *kiov,
               size_t offset, size_t len)
 {
@@ -879,13 +863,13 @@ kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
         LASSERT (krx->krx_rpc_reply_needed);
         LASSERT (krx->krx_rpc_reply_status != 0);
 
-        rmd = kqswnal_parse_rmd(krx, type, libmsg->ev.initiator.nid);
+        rmd = kqswnal_parse_rmd(krx, type, ptlmsg->msg_ev.initiator.nid);
         if (rmd == NULL)
                 return (-EPROTO);
 
         if (len == 0) {
                 /* data got truncated to nothing. */
-                lib_finalize(&kqswnal_lib, krx, libmsg, PTL_OK);
+                ptl_finalize(kqswnal_data.kqn_ni, krx, ptlmsg, PTL_OK);
                 /* Let kqswnal_rx_done() complete the RPC with success */
                 krx->krx_rpc_reply_status = 0;
                 return (0);
@@ -896,14 +880,14 @@ kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
         ktx = kqswnal_get_idle_tx(NULL, 0);
         if (ktx == NULL) {
                 CERROR ("Can't get txd for RDMA with "LPX64"\n",
-                        libmsg->ev.initiator.nid);
+                        ptlmsg->msg_ev.initiator.nid);
                 return (-ENOMEM);
         }
 
         ktx->ktx_state   = KTX_RDMAING;
-        ktx->ktx_nid     = libmsg->ev.initiator.nid;
+        ktx->ktx_nid     = ptlmsg->msg_ev.initiator.nid;
         ktx->ktx_args[0] = krx;
-        ktx->ktx_args[1] = libmsg;
+        ktx->ktx_args[1] = ptlmsg;
 
 #if MULTIRAIL_EKC
         /* Map on the rail the RPC prefers */
@@ -1017,9 +1001,9 @@ kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
 }
 
 static ptl_err_t
-kqswnal_sendmsg (lib_nal_t    *nal,
+kqswnal_sendmsg (ptl_ni_t     *ni,
                  void         *private,
-                 lib_msg_t    *libmsg,
+                 ptl_msg_t    *ptlmsg,
                  ptl_hdr_t    *hdr,
                  int           type,
                  ptl_nid_t     nid,
@@ -1062,7 +1046,7 @@ kqswnal_sendmsg (lib_nal_t    *nal,
         if (type == PTL_MSG_REPLY &&            /* can I look in 'private' */
             ((kqswnal_rx_t *)private)->krx_rpc_reply_needed) { /* is it an RPC */
                 /* Must be a REPLY for an optimized GET */
-                rc = kqswnal_rdma ((kqswnal_rx_t *)private, libmsg, PTL_MSG_GET,
+                rc = kqswnal_rdma ((kqswnal_rx_t *)private, ptlmsg, PTL_MSG_GET,
                                    payload_niov, payload_iov, payload_kiov, 
                                    payload_offset, payload_nob);
                 return ((rc == 0) ? PTL_OK : PTL_FAIL);
@@ -1091,14 +1075,14 @@ kqswnal_sendmsg (lib_nal_t    *nal,
                                           in_interrupt()));
         if (ktx == NULL) {
                 CERROR ("Can't get txd for msg type %d for "LPX64"\n",
-                        type, libmsg->ev.initiator.nid);
+                        type, ptlmsg->msg_ev.initiator.nid);
                 return (PTL_NO_SPACE);
         }
 
         ktx->ktx_state   = KTX_SENDING;
         ktx->ktx_nid     = targetnid;
         ktx->ktx_args[0] = private;
-        ktx->ktx_args[1] = libmsg;
+        ktx->ktx_args[1] = ptlmsg;
         ktx->ktx_args[2] = NULL;    /* set when a GET commits to REPLY */
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
@@ -1152,7 +1136,7 @@ kqswnal_sendmsg (lib_nal_t    *nal,
              (type == PTL_MSG_PUT &&            /* optimize PUT? */
               kqswnal_tunables.kqn_optimized_puts != 0 &&
               payload_nob >= kqswnal_tunables.kqn_optimized_puts))) {
-                lib_md_t           *md = libmsg->md;
+                ptl_libmd_t        *md = ptlmsg->msg_md;
                 kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(ktx->ktx_buffer + KQSW_HDR_SIZE);
                 
                 /* Optimised path: I send over the Elan vaddrs of the local
@@ -1167,11 +1151,11 @@ kqswnal_sendmsg (lib_nal_t    *nal,
 
                 ktx->ktx_state = (type == PTL_MSG_PUT) ? KTX_PUTTING : KTX_GETTING;
 
-                if ((libmsg->md->options & PTL_MD_KIOV) != 0) 
-                        rc = kqswnal_map_tx_kiov (ktx, 0, md->length,
+                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) != 0) 
+                        rc = kqswnal_map_tx_kiov (ktx, 0, md->md_length,
                                                   md->md_niov, md->md_iov.kiov);
                 else
-                        rc = kqswnal_map_tx_iov (ktx, 0, md->length,
+                        rc = kqswnal_map_tx_iov (ktx, 0, md->md_length,
                                                  md->md_niov, md->md_iov.iov);
                 if (rc != 0)
                         goto out;
@@ -1197,8 +1181,8 @@ kqswnal_sendmsg (lib_nal_t    *nal,
 #endif
                 if (type == PTL_MSG_GET) {
                         /* Allocate reply message now while I'm in thread context */
-                        ktx->ktx_args[2] = lib_create_reply_msg (&kqswnal_lib,
-                                                                 nid, libmsg);
+                        ktx->ktx_args[2] = ptl_create_reply_msg (
+                                kqswnal_data.kqn_ni, nid, ptlmsg);
                         if (ktx->ktx_args[2] == NULL)
                                 goto out;
 
@@ -1219,11 +1203,11 @@ kqswnal_sendmsg (lib_nal_t    *nal,
 #endif
                 if (payload_nob > 0) {
                         if (payload_kiov != NULL)
-                                lib_copy_kiov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
+                                ptl_copy_kiov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
                                                    payload_niov, payload_kiov, 
                                                    payload_offset, payload_nob);
                         else
-                                lib_copy_iov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
+                                ptl_copy_iov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
                                                   payload_niov, payload_iov, 
                                                   payload_offset, payload_nob);
                 }
@@ -1268,9 +1252,9 @@ kqswnal_sendmsg (lib_nal_t    *nal,
                          * pretend the GET succeeded but the REPLY
                          * failed. */
                         rc = 0;
-                        lib_finalize (&kqswnal_lib, private, libmsg, PTL_OK);
-                        lib_finalize (&kqswnal_lib, private,
-                                      (lib_msg_t *)ktx->ktx_args[2], PTL_FAIL);
+                        ptl_finalize (kqswnal_data.kqn_ni, private, ptlmsg, PTL_OK);
+                        ptl_finalize (kqswnal_data.kqn_ni, private,
+                                      (ptl_msg_t *)ktx->ktx_args[2], PTL_FAIL);
                 }
                 
                 kqswnal_put_idle_tx (ktx);
@@ -1280,10 +1264,10 @@ kqswnal_sendmsg (lib_nal_t    *nal,
         return (rc == 0 ? PTL_OK : PTL_FAIL);
 }
 
-static ptl_err_t
-kqswnal_send (lib_nal_t    *nal,
+ptl_err_t
+kqswnal_send (ptl_ni_t     *ni,
               void         *private,
-              lib_msg_t    *libmsg,
+              ptl_msg_t    *ptlmsg,
               ptl_hdr_t    *hdr,
               int           type,
               ptl_nid_t     nid,
@@ -1293,15 +1277,15 @@ kqswnal_send (lib_nal_t    *nal,
               size_t        payload_offset,
               size_t        payload_nob)
 {
-        return (kqswnal_sendmsg (nal, private, libmsg, hdr, type, nid, pid,
+        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, nid, pid,
                                  payload_niov, payload_iov, NULL, 
                                  payload_offset, payload_nob));
 }
 
-static ptl_err_t
-kqswnal_send_pages (lib_nal_t    *nal,
+ptl_err_t
+kqswnal_send_pages (ptl_ni_t     *ni,
                     void         *private,
-                    lib_msg_t    *libmsg,
+                    ptl_msg_t    *ptlmsg,
                     ptl_hdr_t    *hdr,
                     int           type,
                     ptl_nid_t     nid,
@@ -1311,7 +1295,7 @@ kqswnal_send_pages (lib_nal_t    *nal,
                     size_t        payload_offset,
                     size_t        payload_nob)
 {
-        return (kqswnal_sendmsg (nal, private, libmsg, hdr, type, nid, pid,
+        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, nid, pid,
                                  payload_niov, NULL, payload_kiov, 
                                  payload_offset, payload_nob));
 }
@@ -1338,7 +1322,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         if (ktx == NULL)        /* can't get txd right now */
                 return;         /* fwd will be scheduled when tx desc freed */
 
-        if (nid == kqswnal_lib.libnal_ni.ni_pid.nid) /* gateway is me */
+        if (nid == kqswnal_data.kqn_ni->ni_nid) /* gateway is me */
                 nid = fwd->kprfd_target_nid;    /* target is final dest */
 
         if (kqswnal_nid2elanid (nid) < 0) {
@@ -1368,7 +1352,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 ktx->ktx_frags[0].Len = KQSW_HDR_SIZE + nob;
 #endif
                 if (nob > 0)
-                        lib_copy_kiov2buf(ktx->ktx_buffer + KQSW_HDR_SIZE,
+                        ptl_copy_kiov2buf(ktx->ktx_buffer + KQSW_HDR_SIZE,
                                           niov, kiov, 0, nob);
         }
         else
@@ -1522,10 +1506,10 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        if (dest_nid == kqswnal_lib.libnal_ni.ni_pid.nid) { /* It's for me :) */
+        if (dest_nid == kqswnal_data.kqn_ni->ni_nid) { /* It's for me :) */
                 /* I ignore parse errors since I'm not consuming a byte
                  * stream */
-                (void)lib_parse (&kqswnal_lib, hdr, krx);
+                (void)ptl_parse (kqswnal_data.kqn_ni, hdr, krx);
 
                 /* Drop my ref; any RDMA activity takes an additional ref */
                 kqswnal_rx_decref(krx);
@@ -1678,9 +1662,9 @@ kqswnal_csum_error (kqswnal_rx_t *krx, int ishdr)
 #endif
 
 static ptl_err_t
-kqswnal_recvmsg (lib_nal_t    *nal,
+kqswnal_recvmsg (ptl_ni_t     *ni,
                  void         *private,
-                 lib_msg_t    *libmsg,
+                 ptl_msg_t    *ptlmsg,
                  unsigned int  niov,
                  struct iovec *iov,
                  ptl_kiov_t   *kiov,
@@ -1714,11 +1698,11 @@ kqswnal_recvmsg (lib_nal_t    *nal,
         if (senders_csum != hdr_csum)
                 kqswnal_csum_error (krx, 1);
 #endif
-        /* NB lib_parse() has already flipped *hdr */
+        /* NB ptl_parse() has already flipped *hdr */
 
         CDEBUG(D_NET,"kqswnal_recv, mlen="LPSZ", rlen="LPSZ"\n", mlen, rlen);
 
-        if (libmsg == NULL) {                   /* portals is discarding. */
+        if (ptlmsg == NULL) {                   /* portals is discarding. */
                 LASSERT (mlen == 0);
                 return PTL_OK;                  /* ignored by caller! */
         }
@@ -1726,7 +1710,7 @@ kqswnal_recvmsg (lib_nal_t    *nal,
         if (krx->krx_rpc_reply_needed &&
             hdr->type == PTL_MSG_PUT) {
                 /* This must be an optimized PUT */
-                rc = kqswnal_rdma (krx, libmsg, PTL_MSG_PUT,
+                rc = kqswnal_rdma (krx, ptlmsg, PTL_MSG_PUT,
                                    niov, iov, kiov, offset, mlen);
                 return (rc == 0 ? PTL_OK : PTL_FAIL);
         }
@@ -1840,37 +1824,37 @@ kqswnal_recvmsg (lib_nal_t    *nal,
                        "csum_nob %d\n",
                         hdr_csum, payload_csum, csum_frags, csum_nob);
 #endif
-        lib_finalize(nal, private, libmsg, PTL_OK);
+        ptl_finalize(ni, private, ptlmsg, PTL_OK);
 
         return (PTL_OK);
 }
 
-static ptl_err_t
-kqswnal_recv(lib_nal_t    *nal,
+ptl_err_t
+kqswnal_recv(ptl_ni_t     *ni,
              void         *private,
-             lib_msg_t    *libmsg,
+             ptl_msg_t    *ptlmsg,
              unsigned int  niov,
              struct iovec *iov,
              size_t        offset,
              size_t        mlen,
              size_t        rlen)
 {
-        return (kqswnal_recvmsg(nal, private, libmsg, 
+        return (kqswnal_recvmsg(ni, private, ptlmsg, 
                                 niov, iov, NULL, 
                                 offset, mlen, rlen));
 }
 
-static ptl_err_t
-kqswnal_recv_pages (lib_nal_t    *nal,
+ptl_err_t
+kqswnal_recv_pages (ptl_ni_t     *ni,
                     void         *private,
-                    lib_msg_t    *libmsg,
+                    ptl_msg_t    *ptlmsg,
                     unsigned int  niov,
                     ptl_kiov_t   *kiov,
                     size_t        offset,
                     size_t        mlen,
                     size_t        rlen)
 {
-        return (kqswnal_recvmsg(nal, private, libmsg, 
+        return (kqswnal_recvmsg(ni, private, ptlmsg, 
                                 niov, NULL, kiov, 
                                 offset, mlen, rlen));
 }
@@ -1998,13 +1982,3 @@ kqswnal_scheduler (void *arg)
         kqswnal_thread_fini ();
         return (0);
 }
-
-lib_nal_t kqswnal_lib =
-{
-        libnal_data:       &kqswnal_data,         /* NAL private data */
-        libnal_send:        kqswnal_send,
-        libnal_send_pages:  kqswnal_send_pages,
-        libnal_recv:        kqswnal_recv,
-        libnal_recv_pages:  kqswnal_recv_pages,
-        libnal_dist:        kqswnal_dist
-};

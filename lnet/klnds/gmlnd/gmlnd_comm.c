@@ -186,7 +186,7 @@ int gmnal_rx_thread(void *arg)
 /*
  *	Start processing a small message receive
  *	Get here from gmnal_receive_thread
- *	Hand off to lib_parse, which calls cb_recv
+ *	Hand off to ptl_parse, which calls cb_recv
  *	which hands back to gmnal_small_receive
  *	Deal with all endian stuff here.
  */
@@ -231,15 +231,15 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	CDEBUG(D_INFO, "Back from gmnal_rxbuffer_to_srxd\n");
 	if (!srxd) {
 		CDEBUG(D_ERROR, "Failed to get receive descriptor\n");
-                /* I think passing a NULL srxd to lib_parse will crash
+                /* I think passing a NULL srxd to ptl_parse will crash
                  * gmnal_recv() */
                 LBUG();
-		lib_parse(nal_data->libnal, portals_hdr, srxd);
+		ptl_parse(nal_data->ni, portals_hdr, srxd);
 		return(GMNAL_STATUS_FAIL);
 	}
 
 	/*
- 	 *	no need to bother portals library with this
+ 	 *	no need to bother portals with this
 	 */
 	if (gmnal_type == GMNAL_LARGE_MESSAGE_ACK) {
 		gmnal_large_tx_ack_received(nal_data, srxd);
@@ -251,14 +251,14 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	srxd->nsiov = gmnal_msghdr->niov;
 	srxd->gm_source_node = gmnal_msghdr->sender_node_id;
 	
-	CDEBUG(D_PORTALS, "Calling lib_parse buffer is [%p]\n", 
+	CDEBUG(D_PORTALS, "Calling ptl_parse buffer is [%p]\n", 
 	       buffer+GMNAL_MSGHDR_SIZE);
 	/*
- 	 *	control passes to lib, which calls cb_recv 
-	 *	cb_recv is responsible for returning the buffer 
+ 	 *	control passes to portals, which calls nal_recv 
+	 *	nal_recv is responsible for returning the buffer 
 	 *	for future receive
 	 */
-	rc = lib_parse(nal_data->libnal, portals_hdr, srxd);
+	rc = ptl_parse(nal_data->ni, portals_hdr, srxd);
 
         if (rc != PTL_OK) {
                 /* I just received garbage; take appropriate action... */
@@ -321,31 +321,31 @@ gmnal_rx_bad(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, gmnal_srxd_t *srxd)
 /*
  *	Process a small message receive.
  *	Get here from gmnal_receive_thread, gmnal_pre_receive
- *	lib_parse, cb_recv
+ *	ptl_parse, cb_recv
  *	Put data from prewired receive buffer into users buffer(s)
  *	Hang out the receive buffer again for another receive
- *	Call lib_finalize
+ *	Call ptl_finalize
  */
 ptl_err_t
-gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
+gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
 {
 	gmnal_srxd_t	*srxd = NULL;
-	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
+	gmnal_data_t	*nal_data = (gmnal_data_t*)ni->ni_data;
 
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
-		lib_finalize(libnal, private, cookie, PTL_FAIL);
+		ptl_finalize(ni, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
 	srxd = (gmnal_srxd_t*)private;
 
 	/*
-	 *	let portals library know receive is complete
+	 *	let portals know receive is complete
 	 */
-	CDEBUG(D_PORTALS, "calling lib_finalize\n");
-	lib_finalize(libnal, private, cookie, PTL_OK);
+	CDEBUG(D_PORTALS, "calling ptl_finalize\n");
+	ptl_finalize(ni, private, cookie, PTL_OK);
 	/*
 	 *	return buffer so it can be used again
 	 */
@@ -366,31 +366,27 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
  *	The callback function informs when the send is complete.
  */
 ptl_err_t
-gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
+gmnal_small_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid,
 		gmnal_stxd_t *stxd, int size)
 {
-	gmnal_data_t	*nal_data = (gmnal_data_t*)libnal->libnal_data;
+	gmnal_data_t	*nal_data = (gmnal_data_t*)ni->ni_data;
 	void		*buffer = NULL;
 	gmnal_msghdr_t	*msghdr = NULL;
 	int		tot_size = 0;
 	unsigned int	local_nid;
 	gm_status_t	gm_status = GM_SUCCESS;
 
-	CDEBUG(D_TRACE, "gmnal_small_tx libnal [%p] private [%p] cookie [%p] "
+	CDEBUG(D_TRACE, "gmnal_small_tx ni [%p] private [%p] cookie [%p] "
 	       "hdr [%p] type [%d] global_nid ["LPU64"] pid [%d] stxd [%p] "
-	       "size [%d]\n", libnal, private, cookie, hdr, type,
+	       "size [%d]\n", ni, private, cookie, hdr, type,
 	       global_nid, pid, stxd, size);
 
 	CDEBUG(D_INFO, "portals_hdr:: dest_nid ["LPU64"], src_nid ["LPU64"]\n",
 	       hdr->dest_nid, hdr->src_nid);
 
-	if (!nal_data) {
-		CDEBUG(D_ERROR, "no nal_data\n");
-		return(PTL_FAIL);
-	} else {
-		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
-	}
+        CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
+        LASSERT(nal_data != NULL);
 
 	GMNAL_GM_LOCK(nal_data);
 	gm_status = gm_global_id_to_node_id(nal_data->gm_port, global_nid, 
@@ -452,7 +448,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 /*
  *	A callback to indicate the small transmit operation is compete
  *	Check for erros and try to deal with them.
- *	Call lib_finalise to inform the client application that the send 
+ *	Call ptl_finalise to inform the client application that the send 
  *	is complete and the memory can be reused.
  *	Return the stxd when finished with it (returns a send token)
  */
@@ -460,9 +456,9 @@ void
 gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 {
 	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
-	lib_msg_t	*cookie = stxd->cookie;
+	ptl_msg_t	*cookie = stxd->cookie;
 	gmnal_data_t	*nal_data = (gmnal_data_t*)stxd->nal_data;
-	lib_nal_t	*libnal = nal_data->libnal;
+	ptl_ni_t	*ni = nal_data->ni;
 	unsigned	 gnid = 0;
 	gm_status_t	 gm_status = 0;
 
@@ -580,7 +576,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 	 *	TO DO
 	 *	If this is a large message init,
 	 *	we're not finished with the data yet,
-	 *	so can't call lib_finalise.
+	 *	so can't call ptl_finalise.
 	 *	However, we're also holding on to a 
 	 *	stxd here (to keep track of the source
 	 *	iovec only). Should use another structure
@@ -592,7 +588,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		return;
 	}
 	gmnal_return_stxd(nal_data, stxd);
-	lib_finalize(libnal, stxd, cookie, PTL_OK);
+	ptl_finalize(ni, stxd, cookie, PTL_OK);
 	return;
 }
 
@@ -645,7 +641,7 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
  *	this ack, deregister the memory. Only 1 send token is required here.
  */
 int
-gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
+gmnal_large_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
 	        ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
 		unsigned int niov, struct iovec *iov, size_t offset, int size)
 {
@@ -661,18 +657,13 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	int		niov_dup;
 
 
-	CDEBUG(D_TRACE, "gmnal_large_tx libnal [%p] private [%p], cookie [%p] "
+	CDEBUG(D_TRACE, "gmnal_large_tx ni [%p] private [%p], cookie [%p] "
 	       "hdr [%p], type [%d] global_nid ["LPU64"], pid [%d], niov [%d], "
-	       "iov [%p], size [%d]\n", libnal, private, cookie, hdr, type, 
+	       "iov [%p], size [%d]\n", ni, private, cookie, hdr, type, 
 	       global_nid, pid, niov, iov, size);
 
-	if (libnal)
-		nal_data = (gmnal_data_t*)libnal->libnal_data;
-	else  {
-		CDEBUG(D_ERROR, "no libnal.\n");
-		return(GMNAL_STATUS_FAIL);
-	}
-	
+        LASSERT (ni != NULL);
+        nal_data = (gmnal_data_t*)ni->ni_data;
 
 	/*
 	 *	Get stxd and buffer. Put local address of data in buffer, 
@@ -820,11 +811,11 @@ gmnal_large_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
  *	data from the sender.
  */
 int
-gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
+gmnal_large_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
 		unsigned int nriov, struct iovec *riov, size_t offset, 
 		size_t mlen, size_t rlen)
 {
-	gmnal_data_t	*nal_data = libnal->libnal_data;
+	gmnal_data_t	*nal_data = ni->ni_data;
 	gmnal_srxd_t	*srxd = (gmnal_srxd_t*)private;
 	void		*buffer = NULL;
 	struct	iovec	*riov_dup;
@@ -832,13 +823,13 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	gmnal_msghdr_t	*msghdr = NULL;
 	gm_status_t	gm_status;
 
-	CDEBUG(D_TRACE, "gmnal_large_rx :: libnal[%p], private[%p], "
+	CDEBUG(D_TRACE, "gmnal_large_rx :: ni[%p], private[%p], "
 	       "cookie[%p], niov[%d], iov[%p], mlen["LPSZ"], rlen["LPSZ"]\n",
-		libnal, private, cookie, nriov, riov, mlen, rlen);
+		ni, private, cookie, nriov, riov, mlen, rlen);
 
 	if (!srxd) {
 		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
-		lib_finalize(libnal, private, cookie, PTL_FAIL);
+		ptl_finalize(ni, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
 
@@ -1115,7 +1106,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 
 	gmnal_ltxd_t	*ltxd = (gmnal_ltxd_t*)context;
 	gmnal_srxd_t	*srxd = ltxd->srxd;
-	lib_nal_t	*libnal = srxd->nal_data->libnal;
+	ptl_ni_t	*ni = srxd->nal_data->ni;
 	int		lastone;
 	struct	iovec	*riov;
 	int		nriov;
@@ -1149,7 +1140,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	 *	Let our client application proceed
 	 */	
 	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
-	lib_finalize(libnal, srxd, srxd->cookie, PTL_OK);
+	ptl_finalize(ni, srxd, srxd->cookie, PTL_OK);
 
 	/*
 	 *	send an ack to the sender to let him know we got the data
@@ -1265,7 +1256,7 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 /*
  *	A callback to indicate the small transmit operation is compete
  *	Check for errors and try to deal with them.
- *	Call lib_finalise to inform the client application that the 
+ *	Call ptl_finalise to inform the client application that the 
  *	send is complete and the memory can be reused.
  *	Return the stxd when finished with it (returns a send token)
  */
@@ -1292,14 +1283,14 @@ gmnal_large_tx_ack_callback(gm_port_t *gm_port, void *context,
  *	Indicates the large transmit operation is compete.
  *	Called on transmit side (means data has been pulled  by receiver 
  *	or failed).
- *	Call lib_finalise to inform the client application that the send 
+ *	Call ptl_finalise to inform the client application that the send 
  *	is complete, deregister the memory and return the stxd. 
  *	Finally, report the rx buffer that the ack message was delivered in.
  */
 void 
 gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 {
-	lib_nal_t	*libnal = nal_data->libnal;
+	ptl_ni_t	*ni = nal_data->ni;
 	gmnal_stxd_t	*stxd = NULL;
 	gmnal_msghdr_t	*msghdr = NULL;
 	void		*buffer = NULL;
@@ -1314,7 +1305,7 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 
-	lib_finalize(libnal, stxd, stxd->cookie, PTL_OK);
+	ptl_finalize(ni, stxd, stxd->cookie, PTL_OK);
 
 	/*
 	 *	extract the iovec from the stxd, deregister the memory.

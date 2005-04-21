@@ -21,9 +21,20 @@
 
 #include "qswnal.h"
 
-nal_t			kqswnal_api;
+
+ptl_nal_t kqswnal_nal =
+{
+	.nal_name       = "elan",
+	.nal_type       = QSWNAL,
+	.nal_startup    = kqswnal_startup,
+	.nal_shutdown   = kqswnal_shutdown,
+	.nal_send       = kqswnal_send,
+        .nal_send_pages = kqswnal_send_pages,
+        .nal_recv       = kqswnal_recv,
+        .nal_recv_pages = kqswnal_recv_pages,
+};
+
 kqswnal_data_t		kqswnal_data;
-ptl_handle_ni_t         kqswnal_ni;
 kqswnal_tunables_t      kqswnal_tunables;
 
 kpr_nal_interface_t kqswnal_router_interface = {
@@ -107,7 +118,7 @@ kqswnal_cmd (struct portals_cfg *pcfg, void *private)
 			kqswnal_data.kqn_nid_offset);
 		kqswnal_data.kqn_nid_offset =
 			pcfg->pcfg_nid - kqswnal_data.kqn_elanid;
-		kqswnal_lib.libnal_ni.ni_pid.nid = pcfg->pcfg_nid;
+		kqswnal_data.kqn_ni->ni_nid = pcfg->pcfg_nid;
 		return (0);
 		
 	default:
@@ -115,22 +126,16 @@ kqswnal_cmd (struct portals_cfg *pcfg, void *private)
 	}
 }
 
-static void
-kqswnal_shutdown(nal_t *nal)
+void
+kqswnal_shutdown(ptl_ni_t *ni)
 {
 	unsigned long flags;
 	kqswnal_tx_t *ktx;
 	kqswnal_rx_t *krx;
-	int           do_lib_fini = 0;
-
-	/* NB The first ref was this module! */
-	if (nal->nal_refct != 0) {
-		PORTAL_MODULE_UNUSE;
-		return;
-	}
-
+	
 	CDEBUG (D_NET, "shutdown\n");
-	LASSERT (nal == &kqswnal_api);
+	LASSERT (ni->ni_data == &kqswnal_data);
+	LASSERT (ni == kqswnal_data.kqn_ni);
 
 	switch (kqswnal_data.kqn_init)
 	{
@@ -139,10 +144,6 @@ kqswnal_shutdown(nal_t *nal)
 
 	case KQN_INIT_ALL:
                 libcfs_nal_cmd_unregister(QSWNAL);
-		/* fall through */
-
-	case KQN_INIT_LIB:
-		do_lib_fini = 1;
 		/* fall through */
 
 	case KQN_INIT_DATA:
@@ -188,7 +189,7 @@ kqswnal_shutdown(nal_t *nal)
 	/* NB ep_free_rcvr() returns only after we've freed off all receive
 	 * buffers (see shutdown handling in kqswnal_requeue_rx()).  This
 	 * means we must have completed any messages we passed to
-	 * lib_parse() or kpr_fwd_start(). */
+	 * ptl_parse() or kpr_fwd_start(). */
 
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_xmtr (kqswnal_data.kqn_eptx);
@@ -251,12 +252,9 @@ kqswnal_shutdown(nal_t *nal)
 	}
 
 	/**********************************************************************/
-	/* finalise router and portals lib */
+	/* finalise router */
 
 	kpr_deregister (&kqswnal_data.kqn_router);
-
-	if (do_lib_fini)
-		lib_fini (&kqswnal_lib);
 
 	/**********************************************************************/
 	/* Unmap message buffers and free all descriptors and buffers
@@ -349,10 +347,8 @@ kqswnal_shutdown(nal_t *nal)
                 atomic_read(&portal_kmemory));
 }
 
-static int
-kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
-		 ptl_ni_limits_t *requested_limits, 
-		 ptl_ni_limits_t *actual_limits)
+ptl_err_t
+kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 {
 #if MULTIRAIL_EKC
 	EP_RAILMASK       all_rails = EP_RAILMASK_ALL;
@@ -364,25 +360,21 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	kqswnal_rx_t     *krx;
 	kqswnal_tx_t     *ktx;
 	int               elan_page_idx;
-	ptl_process_id_t  my_process_id;
 	int               pkmem = atomic_read(&portal_kmemory);
 
-	LASSERT (nal == &kqswnal_api);
-
-	if (nal->nal_refct != 0) {
-		if (actual_limits != NULL)
-			*actual_limits = kqswnal_lib.libnal_ni.ni_actual_limits;
-		/* This module got the first ref */
-		PORTAL_MODULE_USE;
-		return (PTL_OK);
-	}
-
-	LASSERT (kqswnal_data.kqn_init == KQN_INIT_NOTHING);
+	/* Only 1 instance supported */
+	if (kqswnal_data.kqn_init != KQN_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
+        }
 
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
 
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));
+
+	kqswnal_data.kqn_ni = ni;
+	ni->ni_data = &kqswnal_data;
 
 	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_nblk_idletxds);
@@ -412,13 +404,13 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	kqswnal_data.kqn_ep = ep_system();
 	if (kqswnal_data.kqn_ep == NULL) {
 		CERROR("Can't initialise EKC\n");
-		kqswnal_shutdown(nal);
+		kqswnal_shutdown(ni);
 		return (PTL_IFACE_INVALID);
 	}
 
 	if (ep_waitfor_nodeid(kqswnal_data.kqn_ep) == ELAN_INVALID_NODE) {
 		CERROR("Can't get elan ID\n");
-		kqswnal_shutdown(nal);
+		kqswnal_shutdown(ni);
 		return (PTL_IFACE_INVALID);
 	}
 #else
@@ -429,7 +421,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (kqswnal_data.kqn_ep == NULL)
 	{
 		CERROR ("Can't get elan device 0\n");
-		kqswnal_shutdown(nal);
+		kqswnal_shutdown(ni);
 		return (PTL_IFACE_INVALID);
 	}
 #endif
@@ -445,7 +437,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (kqswnal_data.kqn_eptx == NULL)
 	{
 		CERROR ("Can't allocate transmitter\n");
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}
 
@@ -458,7 +450,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (kqswnal_data.kqn_eprx_small == NULL)
 	{
 		CERROR ("Can't install small msg receiver\n");
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}
 
@@ -468,7 +460,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (kqswnal_data.kqn_eprx_large == NULL)
 	{
 		CERROR ("Can't install large msg receiver\n");
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}
 
@@ -483,7 +475,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 				EP_PERM_WRITE);
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve tx dma space\n");
-		kqswnal_shutdown(nal);
+		kqswnal_shutdown(ni);
 		return (PTL_NO_SPACE);
 	}
 #else
@@ -498,7 +490,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (rc != DDI_SUCCESS)
 	{
 		CERROR ("Can't reserve rx dma space\n");
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}
 #endif
@@ -512,7 +504,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 				EP_PERM_WRITE);
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve rx dma space\n");
-		kqswnal_shutdown(nal);
+		kqswnal_shutdown(ni);
 		return (PTL_NO_SPACE);
 	}
 #else
@@ -528,7 +520,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	if (rc != DDI_SUCCESS)
 	{
 		CERROR ("Can't reserve rx dma space\n");
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}
 #endif
@@ -543,7 +535,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 
 		PORTAL_ALLOC (ktx, sizeof(*ktx));
 		if (ktx == NULL) {
-			kqswnal_shutdown (nal);
+			kqswnal_shutdown (ni);
 			return (PTL_NO_SPACE);
 		}
 
@@ -554,7 +546,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		PORTAL_ALLOC (ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
 		if (ktx->ktx_buffer == NULL)
 		{
-			kqswnal_shutdown (nal);
+			kqswnal_shutdown (ni);
 			return (PTL_NO_SPACE);
 		}
 
@@ -602,7 +594,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 
 		PORTAL_ALLOC(krx, sizeof(*krx));
 		if (krx == NULL) {
-			kqswnal_shutdown(nal);
+			kqswnal_shutdown(ni);
 			return (PTL_NO_SPACE);
 		}
 
@@ -627,7 +619,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 			struct page *page = alloc_page(GFP_KERNEL);
 			
 			if (page == NULL) {
-				kqswnal_shutdown (nal);
+				kqswnal_shutdown (ni);
 				return (PTL_NO_SPACE);
 			}
 
@@ -670,23 +662,6 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		 (KQSW_NRXMSGS_LARGE * KQSW_NRXMSGPAGES_LARGE));
 
 	/**********************************************************************/
-	/* Network interface ready to initialise */
-
-	my_process_id.nid = kqswnal_elanid2nid(kqswnal_data.kqn_elanid);
-	my_process_id.pid = requested_pid;
-
-	rc = lib_init(&kqswnal_lib, nal, my_process_id,
-		      requested_limits, actual_limits);
-        if (rc != PTL_OK)
-	{
-		CERROR ("lib_init failed %d\n", rc);
-		kqswnal_shutdown (nal);
-		return (rc);
-	}
-
-	kqswnal_data.kqn_init = KQN_INIT_LIB;
-
-	/**********************************************************************/
 	/* Queue receives, now that it's OK to run their completion callbacks */
 
 	for (krx = kqswnal_data.kqn_rxds; krx != NULL; krx = krx->krx_alloclist) {
@@ -703,7 +678,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		if (rc != EP_SUCCESS)
 		{
 			CERROR ("failed ep_queue_receive %d\n", rc);
-			kqswnal_shutdown (nal);
+			kqswnal_shutdown (ni);
 			return (PTL_FAIL);
 		}
 	}
@@ -715,7 +690,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		if (rc != 0)
 		{
 			CERROR ("failed to spawn scheduling thread: %d\n", rc);
-			kqswnal_shutdown (nal);
+			kqswnal_shutdown (ni);
 			return (PTL_FAIL);
 		}
 	}
@@ -728,7 +703,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	rc = libcfs_nal_cmd_register (QSWNAL, &kqswnal_cmd, NULL);
 	if (rc != 0) {
 		CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-		kqswnal_shutdown (nal);
+		kqswnal_shutdown (ni);
 		return (PTL_FAIL);
 	}
 
@@ -750,9 +725,7 @@ kqswnal_finalise (void)
 	if (kqswnal_tunables.kqn_sysctl != NULL)
 		unregister_sysctl_table (kqswnal_tunables.kqn_sysctl);
 #endif
-	PtlNIFini(kqswnal_ni);
-
-	ptl_unregister_nal(QSWNAL);
+	ptl_unregister_nal(&kqswnal_nal);
 }
 
 static int __init
@@ -760,26 +733,14 @@ kqswnal_initialise (void)
 {
 	int   rc;
 
-	kqswnal_api.nal_ni_init = kqswnal_startup;
-	kqswnal_api.nal_ni_fini = kqswnal_shutdown;
-
 	/* Initialise dynamic tunables to defaults once only */
 	kqswnal_tunables.kqn_optimized_puts = KQSW_OPTIMIZED_PUTS;
 	kqswnal_tunables.kqn_optimized_gets = KQSW_OPTIMIZED_GETS;
 	
-	rc = ptl_register_nal(QSWNAL, &kqswnal_api);
+	rc = ptl_register_nal(&kqswnal_nal);
 	if (rc != PTL_OK) {
 		CERROR("Can't register QSWNAL: %d\n", rc);
 		return (-ENOMEM);		/* or something... */
-	}
-
-	/* Pure gateways, and the workaround for 'EKC blocks forever until
-	 * the service is active' want the NAL started up at module load
-	 * time... */
-	rc = PtlNIInit(QSWNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kqswnal_ni);
-	if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-		ptl_unregister_nal(QSWNAL);
-		return (-ENODEV);
 	}
 
 #if CONFIG_SYSCTL

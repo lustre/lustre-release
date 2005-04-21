@@ -37,16 +37,6 @@ struct nal_cmd_handler {
 static struct nal_cmd_handler nal_cmd[16];
 struct semaphore nal_cmd_mutex;
 
-#ifdef PORTAL_DEBUG
-void kportal_assertion_failed(char *expr, char *file, const char *func,
-                              const int line)
-{
-        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,
-                          "ASSERTION(%s) failed\n", expr);
-        LBUG_WITH_LOC(file, func, line);
-}
-#endif
-
 void
 kportal_memhog_free (struct portals_device_userstate *pdu)
 {
@@ -482,6 +472,7 @@ extern cfs_psdev_t libcfs_dev;
 extern struct rw_semaphore tracefile_sem;
 extern struct semaphore trace_thread_sem;
 
+extern void libcfs_init_nidstrings(void);
 extern int libcfs_arch_init(void);
 extern void libcfs_arch_cleanup(void);
 
@@ -490,6 +481,7 @@ static int init_libcfs_module(void)
         int rc;
 
         libcfs_arch_init();
+        libcfs_init_nidstrings();
         init_rwsem(&tracefile_sem);
         init_mutex(&trace_thread_sem);
         init_mutex(&nal_cmd_mutex);
@@ -561,7 +553,5 @@ static void exit_libcfs_module(void)
                 printk(KERN_ERR "LustreError: portals_debug_cleanup: %d\n", rc);
         libcfs_arch_cleanup();
 }
-
-EXPORT_SYMBOL(kportal_assertion_failed);
 
 cfs_module(libcfs, "1.0.0", init_libcfs_module, exit_libcfs_module);

@@ -30,7 +30,6 @@
 gmnal_data_t	*global_nal_data = NULL;
 #define         GLOBAL_NID_STR_LEN      16
 char            global_nid_str[GLOBAL_NID_STR_LEN] = {0};
-ptl_handle_ni_t kgmnal_ni;
 
 extern int gmnal_cmd(struct portals_cfg *pcfg, void *private);
 
@@ -54,37 +53,28 @@ static ctl_table gmnalnal_top_sysctl_table[] = {
 };
 
 /*
- *	gmnal_api_shutdown
- *      nal_refct == 0 => called on last matching PtlNIFini()
+ *	gmnal_shutdown
  *	Close down this interface and free any resources associated with it
  *	nal_t	nal	our nal to shutdown
  */
 void
-gmnal_api_shutdown(nal_t *nal)
+gmnal_shutdown(ptl_ni_t *ni)
 {
 	gmnal_data_t	*nal_data;
-	lib_nal_t	*libnal;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
+        LASSERT(ni->ni_data == global_nal_data);
 
-        LASSERT(nal == global_nal_data->nal);
-        libnal = (lib_nal_t *)nal->nal_data;
-        nal_data = (gmnal_data_t *)libnal->libnal_data;
+        nal_data = (gmnal_data_t *)ni->ni_data;
         LASSERT(nal_data == global_nal_data);
-	CDEBUG(D_TRACE, "gmnal_api_shutdown: nal_data [%p]\n", nal_data);
+	CDEBUG(D_TRACE, "gmnal_shutdown: nal_data [%p]\n", nal_data);
 
         /* Stop portals calling our ioctl handler */
         libcfs_nal_cmd_unregister(GMNAL);
 
         /* XXX for shutdown "under fire" we probably need to set a shutdown
-         * flag so when lib calls us we fail immediately and dont queue any
-         * more work but our threads can still call into lib OK.  THEN
-         * shutdown our threads, THEN lib_fini() */
-        lib_fini(libnal);
+         * flag so when portals calls us we fail immediately and dont queue any
+         * more work but our threads can still call into portals OK.  THEN
+         * shutdown our threads, THEN ptl_fini() */
 
 	gmnal_stop_rxthread(nal_data);
 	gmnal_stop_ctthread(nal_data);
@@ -98,39 +88,30 @@ gmnal_api_shutdown(nal_t *nal)
                 unregister_sysctl_table (nal_data->sysctl);
         /* Don't free 'nal'; it's a static struct */
 	PORTAL_FREE(nal_data, sizeof(gmnal_data_t));
-	PORTAL_FREE(libnal, sizeof(lib_nal_t));
 
         global_nal_data = NULL;
+
+        PORTAL_MODULE_UNUSE;
 }
 
 
 int
-gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
-                  ptl_ni_limits_t *requested_limits,
-                  ptl_ni_limits_t *actual_limits)
+gmnal_startup(ptl_ni_t *ni, char **interfaces)
 {
-
-	lib_nal_t	*libnal = NULL;
 	gmnal_data_t	*nal_data = NULL;
 	gmnal_srxd_t	*srxd = NULL;
 	gm_status_t	gm_status;
 	unsigned int	local_nid = 0, global_nid = 0;
-        ptl_process_id_t process_id;
-
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL) {
-                        libnal = (lib_nal_t *)nal->nal_data;
-                        *actual_limits = libnal->libnal_ni.ni_actual_limits;
-                }
-                PORTAL_MODULE_USE;
-                return (PTL_OK);
-        }
-
-        /* Called on first PtlNIInit() */
 
 	CDEBUG(D_TRACE, "startup\n");
 
-        LASSERT(global_nal_data == NULL);
+        LASSERT(ni->ni_nal == &gmnal_nal);
+
+        if (global_nal_data != NULL) {
+                /* Already got 1 instance */
+                CERROR("Can't support > 1 instance of this NAL\n");
+                return PTL_FAIL;
+        }
 
 	PORTAL_ALLOC(nal_data, sizeof(gmnal_data_t));
 	if (!nal_data) {
@@ -145,21 +126,11 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	CDEBUG(D_INFO, "Allocd and reset nal_data[%p]\n", nal_data);
 	CDEBUG(D_INFO, "small_msg_size is [%d]\n", nal_data->small_msg_size);
 
-	PORTAL_ALLOC(libnal, sizeof(lib_nal_t));
-	if (!libnal) {
-		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));
-		return(PTL_NO_SPACE);
-	}
-	memset(libnal, 0, sizeof(lib_nal_t));
-	CDEBUG(D_INFO, "Allocd and reset libnal[%p]\n", libnal);
-
-	GMNAL_INIT_NAL_CB(libnal);
 	/*
 	 *	String them all together
 	 */
-	libnal->libnal_data = (void*)nal_data;
-	nal_data->nal = nal;
-	nal_data->libnal = libnal;
+        ni->ni_data = nal_data;
+	nal_data->ni = ni;
 
 	GMNAL_GM_LOCK_INIT(nal_data);
 
@@ -171,7 +142,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	if (gm_init() != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "call to gm_init failed\n");
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 
@@ -216,7 +186,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 
@@ -232,7 +201,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 
@@ -261,7 +229,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 
@@ -275,9 +242,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	CDEBUG(D_INFO, "receive thread seems to have started\n");
 
 
-	/*
-	 *	Initialise the portals library
-	 */
 	CDEBUG(D_NET, "Getting node id\n");
 	GMNAL_GM_LOCK(nal_data);
 	gm_status = gm_get_node_id(nal_data->gm_port, &local_nid);
@@ -293,7 +257,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 
@@ -315,7 +278,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
 	CDEBUG(D_INFO, "Global node id is [%u]\n", global_nid);
@@ -325,37 +287,16 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 /*
 	pid = gm_getpid();
 */
-        process_id.pid = requested_pid;
-        process_id.nid = global_nid;
-        
-	CDEBUG(D_INFO, "portals_pid is [%u]\n", process_id.pid);
-	CDEBUG(D_INFO, "portals_nid is ["LPU64"]\n", process_id.nid);
-	
-	CDEBUG(D_PORTALS, "calling lib_init\n");
-	if (lib_init(libnal, nal, process_id, 
-                     requested_limits, actual_limits) != PTL_OK) {
-		CDEBUG(D_ERROR, "lib_init failed\n");
-		gmnal_stop_rxthread(nal_data);
-		gmnal_stop_ctthread(nal_data);
-		gmnal_free_txd(nal_data);
-		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
-		gm_close(nal_data->gm_port);
-		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
-		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
-		
-	}
+        ni->ni_nid = global_nid;
 
-	if (libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, libnal->libnal_data) != 0) {
+	CDEBUG(D_INFO, "portals_pid is [%u]\n", ni->ni_pid);
+	CDEBUG(D_INFO, "portals_nid is ["LPU64"]\n", ni->ni_nid);
+	
+	if (libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, nal_data) != 0) {
 		CDEBUG(D_INFO, "libcfs_nal_cmd_register failed\n");
 
                 /* XXX these cleanup cases should be restructured to
                  * minimise duplication... */
-                lib_fini(libnal);
-                
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
 		gmnal_free_txd(nal_data);
@@ -365,7 +306,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
         }
 
@@ -376,12 +316,21 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 	CDEBUG(D_INFO, "gmnal_init finished\n");
 
-	global_nal_data = libnal->libnal_data;
+	global_nal_data = nal_data;
 
 	return(PTL_OK);
 }
 
-nal_t the_gm_nal;
+ptl_nal_t the_gm_nal = {
+        .nal_name           = "gm",
+        .nal_type           = GMNAL,
+        .nal_startup        = gmnal_startup,
+        .nal_shutdown       = gmnal_shutdown,
+        .nal_send           = gmnal_cb_send,
+        .nal_send_pages     = gmnal_cb_send_pages,
+        .nal_recv           = gmnal_cb_recv,
+        .nal_recv_pages     = gmnal_cb_recv_pages,
+};
 
 /* 
  *        Called when module loaded
@@ -390,18 +339,9 @@ int gmnal_init(void)
 {
         int    rc;
 
-	memset(&the_gm_nal, 0, sizeof(nal_t));
-	CDEBUG(D_INFO, "reset nal[%p]\n", &the_gm_nal);
-	GMNAL_INIT_NAL(&the_gm_nal);
-
-        rc = ptl_register_nal(GMNAL, &the_gm_nal);
+        rc = ptl_register_nal(&the_gm_nal);
         if (rc != PTL_OK)
                 CERROR("Can't register GMNAL: %d\n", rc);
-        rc = PtlNIInit(GMNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kgmnal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(GMNAL);
-                return (-ENODEV);
-        }
 
         return (rc);
 }
@@ -414,8 +354,6 @@ void gmnal_fini()
 {
 	CDEBUG(D_TRACE, "gmnal_fini\n");
 
-        PtlNIFini(kgmnal_ni);
-
-        ptl_unregister_nal(GMNAL);
+        ptl_unregister_nal(&the_gm_nal);
         LASSERT(global_nal_data == NULL);
 }

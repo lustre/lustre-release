@@ -1,6 +1,6 @@
-my_sources =    api-errno.c api-ni.c api-wrap.c \
-		lib-init.c lib-me.c lib-msg.c lib-eq.c \
-		lib-md.c lib-move.c lib-ni.c lib-pid.c
+my_sources =    api-errno.c api-ni.c \
+		lib-me.c lib-msg.c lib-eq.c \
+		lib-md.c lib-move.c
 
 if !CRAY_PORTALS
 
@@ -20,9 +20,9 @@ endif # LINUX
 if DARWIN
 macos_PROGRAMS := portals
 
-portals_SOURCES := api-errno.c api-ni.c api-wrap.c
-portals_SOURCES += lib-init.c lib-me.c lib-msg.c lib-eq.c lib-md.c
-portals_SOURCES += lib-move.c lib-ni.c lib-pid.c module.c
+portals_SOURCES := api-errno.c api-ni.c
+portals_SOURCES += lib-me.c lib-msg.c lib-eq.c lib-md.c
+portals_SOURCES += lib-move.c module.c
 
 portals_CFLAGS := $(EXTRA_KCFLAGS)
 portals_LDFLAGS := $(EXTRA_KLDFLAGS)

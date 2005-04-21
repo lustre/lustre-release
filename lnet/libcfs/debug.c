@@ -141,7 +141,7 @@ int portals_debug_init(unsigned long bufsize)
 {
         cfs_waitq_init(&debug_ctlwq);
 #ifdef CRAY_PORTALS
-        lus_portals_debug = &portals_debug_msg;
+        lus_portals_debug = &libcfs_debug_msg;
 #endif
 #ifdef PORTALS_DUMP_ON_PANIC
         /* This is currently disabled because it spews far too much to the
@@ -191,61 +191,5 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
-                return str;
-        }
-
-        switch(nal){
-/* XXX this could be a nal method of some sort, 'cept it's config
- * dependent whether (say) socknal NIDs are actually IP addresses... */
-#if !CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case IIBNAL:
-        case VIBNAL:
-        case OPENIBNAL:
-        case RANAL:
-        case SOCKNAL: {
-                /* HIPQUAD requires __u32, but we can't cast in it */
-                __u32 nid32 = (__u32)nid;
-                if ((__u32)(nid >> 32)) {
-                        snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
-                                 (__u32)(nid >> 32), HIPQUAD(nid32));
-                } else {
-                        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
-                                 HIPQUAD(nid32));
-                }
-                break;
-        }
-        case QSWNAL:
-        case GMNAL:
-        case LONAL:
-                snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-#endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE, "?%x? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-char *portals_id2str(int nal, ptl_process_id_t id, char *str)
-{
-        int   len;
-
-        portals_nid2str(nal, id.nid, str);
-        len = strlen(str);
-        snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
-        return str;
-}
-
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_set_level);
-EXPORT_SYMBOL(portals_nid2str);
-EXPORT_SYMBOL(portals_id2str);

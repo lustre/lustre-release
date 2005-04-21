@@ -56,7 +56,6 @@
 #include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/nal.h>
 
 #include <ts_ib_core.h>
 #include <ts_ib_cm.h>
@@ -147,6 +146,7 @@ typedef struct
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
+        ptl_ni_t         *kib_ni;               /* _the_ openib interface */
 
         __u64             kib_svc_id;           /* service number I listen on */
         tTS_IB_GID        kib_svc_gid;          /* device/port GID */
@@ -336,7 +336,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_passive_rdma; /* peer sucks/blows */
         int                       tx_passive_rdma_wait; /* waiting for peer to complete */
         __u64                     tx_passive_rdma_cookie; /* completion cookie */
-        lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
+        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
         kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
         __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *tx_msg;       /* pre-mapped buffer (host vaddr) */
@@ -407,7 +407,6 @@ typedef struct kib_peer
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
 
-extern lib_nal_t       kibnal_lib;
 extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
@@ -507,6 +506,29 @@ kibnal_wreqid_is_rx (__u64 wreqid)
 # define sk_sleep       sleep
 #endif
 
+ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
+void kibnal_shutdown (ptl_ni_t *ni);
+ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,
+                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                       int type, ptl_nid_t nid, ptl_pid_t pid,
+                       unsigned int payload_niov, 
+                       struct iovec *payload_iov,
+                       size_t payload_offset, size_t payload_nob);
+ptl_err_t kibnal_send_pages (ptl_ni_t *ni, void *private,
+                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                             int type, ptl_nid_t nid, ptl_pid_t pid,
+                             unsigned int payload_niov, 
+                             ptl_kiov_t *payload_kiov,
+                             size_t payload_offset, size_t payload_nob);
+ptl_err_t kibnal_recv(ptl_ni_t *ni, void *private,
+                      ptl_msg_t *ptlmsg, unsigned int niov,
+                      struct iovec *iov, size_t offset,
+                      size_t mlen, size_t rlen);
+ptl_err_t kibnal_recv_pages(ptl_ni_t *ni, void *private,
+                            ptl_msg_t *ptlmsg, unsigned int niov,
+                            ptl_kiov_t *kiov, size_t offset,
+                            size_t mlen, size_t rlen);
+
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
 extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 
                             ptl_nid_t dstnid, __u64 dststamp);
@@ -552,7 +574,7 @@ extern void kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern int  kibnal_close_conn (kib_conn_t *conn, int why);
 extern void kibnal_start_active_rdma (int type, int status,
-                                      kib_rx_t *rx, lib_msg_t *libmsg,
+                                      kib_rx_t *rx, ptl_msg_t *ptlmsg,
                                       unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       int offset, int nob);

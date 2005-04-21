@@ -120,15 +120,13 @@ kpr_do_upcall (void *arg)
 void
 kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive, time_t when)
 {
-        char str[PTL_NALFMT_SIZE];
-        
         /* May be in arbitrary context */
         kpr_upcall_t  *u = kmalloc (sizeof (kpr_upcall_t), GFP_ATOMIC);
 
         if (u == NULL) {
                 CERROR ("Upcall out of memory: nal %x nid "LPX64" (%s) %s\n",
                         gw_nalid, gw_nid,
-                        portals_nid2str(gw_nalid, gw_nid, str),
+                        libcfs_nid2str(gw_nid),
                         alive ? "up" : "down");
                 return;
         }
@@ -153,7 +151,6 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         struct timeval       now;
 	struct list_head    *e;
 	struct list_head    *n;
-        char                 str[PTL_NALFMT_SIZE];
 
         CDEBUG (D_NET, "%s notifying [%x] "LPX64": %s\n", 
                 byNal ? "NAL" : "userspace", 
@@ -254,7 +251,7 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                 /* It wasn't userland that notified me... */
                 CWARN ("Upcall: NAL %x NID "LPX64" (%s) is %s\n",
                        gateway_nalid, gateway_nid,
-                       portals_nid2str(gateway_nalid, gateway_nid, str),
+                       libcfs_nid2str(gateway_nid),
                        alive ? "alive" : "dead");
                 kpr_upcall (gateway_nalid, gateway_nid, alive, when);
         } else {
@@ -452,7 +449,7 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
         CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %x\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
-        LASSERT (nob == lib_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
+        LASSERT (nob == ptl_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
         LASSERT (!in_interrupt());
 
 	read_lock (&kpr_rwlock);

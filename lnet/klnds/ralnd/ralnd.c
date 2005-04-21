@@ -25,8 +25,17 @@
 static int        kranal_devids[] = {RAPK_MAIN_DEVICE_ID,
                                      RAPK_EXPANSION_DEVICE_ID};
 
-nal_t                   kranal_api;
-ptl_handle_ni_t         kranal_ni;
+ptl_nal_t kranal_nal = {
+        .nal_name       = "ra",
+        .nal_type       = RANAL,
+        .nal_startup    = kranal_startup,
+        .nal_shutdown   = kranal_shutdown,
+        .nal_send       = kranal_send,
+        .nal_send_pages = kranal_send_pages,
+        .nal_recv       = kranal_recv,
+        .nal_recv_pages = kranal_recv_pages,
+};
+
 kra_data_t              kranal_data;
 kra_tunables_t          kranal_tunables;
 
@@ -223,7 +232,7 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
         connreq->racr_magic     = RANAL_MSG_MAGIC;
         connreq->racr_version   = RANAL_MSG_VERSION;
         connreq->racr_devid     = conn->rac_device->rad_id;
-        connreq->racr_srcnid    = kranal_lib.libnal_ni.ni_pid.nid;
+        connreq->racr_srcnid    = kranal_data.kra_ni->ni_nid;
         connreq->racr_dstnid    = dstnid;
         connreq->racr_peerstamp = kranal_data.kra_peerstamp;
         connreq->racr_connstamp = conn->rac_my_connstamp;
@@ -294,7 +303,7 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
         int                 loopback;
         int                 count = 0;
 
-        loopback = peer->rap_nid == kranal_lib.libnal_ni.ni_pid.nid;
+        loopback = peer->rap_nid == kranal_data.kra_ni->ni_nid;
 
         list_for_each_safe (ctmp, cnxt, &peer->rap_conns) {
                 conn = list_entry(ctmp, kra_conn_t, rac_list);
@@ -340,7 +349,7 @@ kranal_conn_isdup_locked(kra_peer_t *peer, kra_conn_t *newconn)
         struct list_head *tmp;
         int               loopback;
 
-        loopback = peer->rap_nid == kranal_lib.libnal_ni.ni_pid.nid;
+        loopback = peer->rap_nid == kranal_data.kra_ni->ni_nid;
 
         list_for_each(tmp, &peer->rap_conns) {
                 conn = list_entry(tmp, kra_conn_t, rac_list);
@@ -728,7 +737,7 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         /* spread connections over all devices using both peer NIDs to ensure
          * all nids use all devices */
-        idx = peer->rap_nid + kranal_lib.libnal_ni.ni_pid.nid;
+        idx = peer->rap_nid + kranal_data.kra_ni->ni_nid;
         dev = &kranal_data.kra_devices[idx % kranal_data.kra_ndevs];
 
         rc = kranal_create_conn(&conn, dev);
@@ -861,12 +870,12 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* Refuse connection if peer thinks we are a different NID.  We check
          * this while holding the global lock, to synch with connection
          * destruction on NID change. */
-        if (dst_nid != kranal_lib.libnal_ni.ni_pid.nid) {
+        if (dst_nid != kranal_data.kra_ni->ni_nid) {
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
                 CERROR("Stale/bad connection with "LPX64
                        ": dst_nid "LPX64", expected "LPX64"\n",
-                       peer_nid, dst_nid, kranal_lib.libnal_ni.ni_pid.nid);
+                       peer_nid, dst_nid, kranal_data.kra_ni->ni_nid);
                 rc = -ESTALE;
                 goto failed;
         }
@@ -1247,15 +1256,15 @@ int
 kranal_set_mynid(ptl_nid_t nid)
 {
         unsigned long    flags;
-        lib_ni_t        *ni = &kranal_lib.libnal_ni;
+        ptl_ni_t        *ni = kranal_data.kra_ni;
         int              rc = 0;
 
         CDEBUG(D_NET, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_pid.nid);
+               nid, ni->ni_nid);
 
         down(&kranal_data.kra_nid_mutex);
 
-        if (nid == ni->ni_pid.nid) {
+        if (nid == ni->ni_nid) {
                 /* no change of NID */
                 up(&kranal_data.kra_nid_mutex);
                 return 0;
@@ -1266,7 +1275,7 @@ kranal_set_mynid(ptl_nid_t nid)
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
         kranal_data.kra_peerstamp++;
-        ni->ni_pid.nid = nid;
+        ni->ni_nid = nid;
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         /* Delete all existing peers and their connections after new
@@ -1800,21 +1809,16 @@ kranal_device_fini(kra_device_t *dev)
 }
 
 void
-kranal_api_shutdown (nal_t *nal)
+kranal_shutdown (ptl_ni_t *ni)
 {
         int           i;
         unsigned long flags;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
-
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
                atomic_read(&portal_kmemory));
 
-        LASSERT (nal == &kranal_api);
+        LASSERT (ni == kranal_data.kra_ni);
+        LASSERT (ni->ni_data == &kranal_data);
 
         switch (kranal_data.kra_init) {
         default:
@@ -1842,10 +1846,6 @@ kranal_api_shutdown (nal_t *nal)
                                atomic_read(&kranal_data.kra_nconns));
                         kranal_pause(HZ);
                 }
-                /* fall through */
-
-        case RANAL_INIT_LIB:
-                lib_fini(&kranal_lib);
                 /* fall through */
 
         case RANAL_INIT_DATA:
@@ -1923,31 +1923,27 @@ kranal_api_shutdown (nal_t *nal)
         kranal_data.kra_init = RANAL_INIT_NOTHING;
 }
 
-int
-kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
-                    ptl_ni_limits_t *requested_limits,
-                    ptl_ni_limits_t *actual_limits)
+ptl_err_t
+kranal_startup (ptl_ni_t *ni, char **interfaces)
 {
         struct timeval    tv;
-        ptl_process_id_t  process_id;
         int               pkmem = atomic_read(&portal_kmemory);
         int               rc;
         int               i;
         kra_device_t     *dev;
 
-        LASSERT (nal == &kranal_api);
+        LASSERT (ni->ni_nal == &kranal_nal);
 
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL)
-                        *actual_limits = kranal_lib.libnal_ni.ni_actual_limits;
-                /* This module got the first ref */
-                PORTAL_MODULE_USE;
-                return PTL_OK;
+        /* Only 1 instance supported */
+        if (kranal_data.kra_init != RANAL_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
         }
-
-        LASSERT (kranal_data.kra_init == RANAL_INIT_NOTHING);
-
+        
         memset(&kranal_data, 0, sizeof(kranal_data)); /* zero pointers, flags etc */
+
+        ni->ni_data = &kranal_data;
+        kranal_data.kra_ni = ni;
 
         /* CAVEAT EMPTOR: Every 'Fma' message includes the sender's NID and
          * a unique (for all time) connstamp so we can uniquely identify
@@ -2017,20 +2013,6 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         if (rc != 0)
                 goto failed;
 
-        process_id.pid = requested_pid;
-        process_id.nid = PTL_NID_ANY;           /* don't know my NID yet */
-
-        rc = lib_init(&kranal_lib, nal, process_id,
-                      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-                CERROR("lib_init failed: error %d\n", rc);
-                goto failed;
-        }
-
-        /* lib interface initialised */
-        kranal_data.kra_init = RANAL_INIT_LIB;
-        /*****************************************************/
-
         rc = kranal_thread_start(kranal_reaper, NULL);
         if (rc != 0) {
                 CERROR("Can't spawn ranal reaper: %d\n", rc);
@@ -2090,7 +2072,7 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         return PTL_OK;
 
  failed:
-        kranal_api_shutdown(&kranal_api);
+        kranal_shutdown(ni);
         return PTL_FAIL;
 }
 
@@ -2100,9 +2082,7 @@ kranal_module_fini (void)
         if (kranal_tunables.kra_sysctl != NULL)
                 unregister_sysctl_table(kranal_tunables.kra_sysctl);
 
-        PtlNIFini(kranal_ni);
-
-        ptl_unregister_nal(RANAL);
+        ptl_unregister_nal(&kranal_nal);
 }
 
 int __init
@@ -2112,14 +2092,11 @@ kranal_module_init (void)
 
         /* the following must be sizeof(int) for
          * proc_dointvec/kranal_listener_procint() */
-        LASSERT (sizeof(kranal_tunables.kra_timeout) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_listener_timeout) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_backlog) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_port) == sizeof(int));
-        LASSERT (sizeof(kranal_tunables.kra_max_immediate) == sizeof(int));
-
-        kranal_api.nal_ni_init = kranal_api_startup;
-        kranal_api.nal_ni_fini = kranal_api_shutdown;
+        CLASSERT (sizeof(kranal_tunables.kra_timeout) == sizeof(int));
+        CLASSERT (sizeof(kranal_tunables.kra_listener_timeout) == sizeof(int));
+        CLASSERT (sizeof(kranal_tunables.kra_backlog) == sizeof(int));
+        CLASSERT (sizeof(kranal_tunables.kra_port) == sizeof(int));
+        CLASSERT (sizeof(kranal_tunables.kra_max_immediate) == sizeof(int));
 
         /* Initialise dynamic tunables to defaults once only */
         kranal_tunables.kra_timeout = RANAL_TIMEOUT;
@@ -2128,25 +2105,17 @@ kranal_module_init (void)
         kranal_tunables.kra_port = RANAL_PORT;
         kranal_tunables.kra_max_immediate = RANAL_MAX_IMMEDIATE;
 
-        rc = ptl_register_nal(RANAL, &kranal_api);
+        rc = ptl_register_nal(&kranal_nal);
         if (rc != PTL_OK) {
                 CERROR("Can't register RANAL: %d\n", rc);
                 return -ENOMEM;               /* or something... */
-        }
-
-        /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(RANAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kranal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(RANAL);
-                return -ENODEV;
         }
 
         kranal_tunables.kra_sysctl =
                 register_sysctl_table(kranal_top_ctl_table, 0);
         if (kranal_tunables.kra_sysctl == NULL) {
                 CERROR("Can't register sysctl table\n");
-                PtlNIFini(kranal_ni);
-                ptl_unregister_nal(RANAL);
+                ptl_unregister_nal(&kranal_nal);
                 return -ENOMEM;
         }
 

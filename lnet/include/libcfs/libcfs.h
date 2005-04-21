@@ -122,7 +122,7 @@ do {                                                                          \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||         \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
-                portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
@@ -136,11 +136,11 @@ do {                                                                          \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (cfs_time_after(cfs_time_current(), cdebug_next)) {                \
-                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
                                   __FUNCTION__, __LINE__, CDEBUG_STACK,       \
                                   cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
+                        libcfs_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
                                           __FILE__, __FUNCTION__, __LINE__,   \
                                           0, "skipped %d similar messages\n", \
                                           cdebug_count);                      \
@@ -157,7 +157,7 @@ do {                                                                          \
                                        cdebug_delay*2;                        \
                 cdebug_next = cfs_time_current() + cdebug_delay;              \
         } else {                                                              \
-                portals_debug_msg(DEBUG_SUBSYSTEM,                            \
+                libcfs_debug_msg(DEBUG_SUBSYSTEM,                            \
                                   portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, cdebug_format, ## a);         \
@@ -474,10 +474,13 @@ static inline time_t cfs_unix_seconds(void)
         result;                                                 \
 })
 
-extern void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                              const int line, unsigned long stack,
-                              char *format, ...)
+extern void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
+                             const int line, unsigned long stack,
+                             char *format, ...)
             __attribute__ ((format (printf, 7, 8)));
+
+extern void libcfs_assertion_failed(char *expr, char *file, 
+                                    const char *fn, const int line);
 
 static inline void cfs_slow_warning(cfs_time_t now, int seconds, char *msg)
 {

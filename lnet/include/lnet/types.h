@@ -25,8 +25,7 @@ typedef __u32 ptl_size_t;
 #define PTL_TIME_FOREVER    (-1)
 
 typedef struct {
-        unsigned long nal_idx;			/* which network interface */
-        __u64         cookie;			/* which thing on that interface */
+        __u64         cookie;
 } ptl_handle_any_t;
 
 typedef ptl_handle_any_t ptl_handle_ni_t;
@@ -35,12 +34,12 @@ typedef ptl_handle_any_t ptl_handle_md_t;
 typedef ptl_handle_any_t ptl_handle_me_t;
 
 #define PTL_INVALID_HANDLE \
-    ((const ptl_handle_any_t){.nal_idx = -1, .cookie = -1})
+    ((const ptl_handle_any_t){.cookie = -1})
 #define PTL_EQ_NONE PTL_INVALID_HANDLE
 
 static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
 {
-	return (h1.nal_idx == h2.nal_idx && h1.cookie == h2.cookie);
+	return (h1.cookie == h2.cookie);
 }
 
 #define PTL_UID_ANY      ((ptl_uid_t) -1)

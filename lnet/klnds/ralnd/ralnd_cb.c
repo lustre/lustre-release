@@ -23,20 +23,6 @@
 
 #include "ranal.h"
 
-int
-kranal_dist(lib_nal_t *nal, ptl_nid_t nid, unsigned long *dist)
-{
-        /* I would guess that if kranal_get_peer (nid) == NULL,
-           and we're not routing, then 'nid' is very distant :) */
-        if ( nal->libnal_ni.ni_pid.nid == nid ) {
-                *dist = 0;
-        } else {
-                *dist = 1;
-        }
-
-        return 0;
-}
-
 void
 kranal_device_callback(RAP_INT32 devid, RAP_PVOID arg)
 {
@@ -129,8 +115,8 @@ kranal_get_idle_tx (int may_block)
                 LASSERT (tx->tx_buftype == RANAL_BUF_NONE);
                 LASSERT (tx->tx_msg.ram_type == RANAL_MSG_NONE);
                 LASSERT (tx->tx_conn == NULL);
-                LASSERT (tx->tx_libmsg[0] == NULL);
-                LASSERT (tx->tx_libmsg[1] == NULL);
+                LASSERT (tx->tx_ptlmsg[0] == NULL);
+                LASSERT (tx->tx_ptlmsg[1] == NULL);
         }
 
         spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
@@ -144,7 +130,7 @@ kranal_init_msg(kra_msg_t *msg, int type)
         msg->ram_magic = RANAL_MSG_MAGIC;
         msg->ram_version = RANAL_MSG_VERSION;
         msg->ram_type = type;
-        msg->ram_srcnid = kranal_lib.libnal_ni.ni_pid.nid;
+        msg->ram_srcnid = kranal_data.kra_ni->ni_nid;
         /* ram_connstamp gets set when FMA is sent */
 }
 
@@ -383,12 +369,12 @@ kranal_tx_done (kra_tx_t *tx, int completion)
         kranal_unmap_buffer(tx);
 
         for (i = 0; i < 2; i++) {
-                /* tx may have up to 2 libmsgs to finalise */
-                if (tx->tx_libmsg[i] == NULL)
+                /* tx may have up to 2 ptlmsgs to finalise */
+                if (tx->tx_ptlmsg[i] == NULL)
                         continue;
 
-                lib_finalize(&kranal_lib, NULL, tx->tx_libmsg[i], ptlrc);
-                tx->tx_libmsg[i] = NULL;
+                ptl_finalize(kranal_data.kra_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
+                tx->tx_ptlmsg[i] = NULL;
         }
 
         tx->tx_buftype = RANAL_BUF_NONE;
@@ -583,9 +569,9 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
 }
 
 ptl_err_t
-kranal_do_send (lib_nal_t    *nal,
+kranal_do_send (ptl_ni_t     *ni,
                 void         *private,
-                lib_msg_t    *libmsg,
+                ptl_msg_t    *ptlmsg,
                 ptl_hdr_t    *hdr,
                 int           type,
                 ptl_nid_t     nid,
@@ -648,7 +634,7 @@ kranal_do_send (lib_nal_t    *nal,
                 }
 
                 tx->tx_conn = conn;
-                tx->tx_libmsg[0] = libmsg;
+                tx->tx_ptlmsg[0] = ptlmsg;
 
                 kranal_map_buffer(tx);
                 kranal_rdma(tx, RANAL_MSG_GET_DONE,
@@ -665,40 +651,41 @@ kranal_do_send (lib_nal_t    *nal,
                 LASSERT (nob == 0);
                 /* We have to consider the eventual sink buffer rather than any
                  * payload passed here (there isn't any, and strictly, looking
-                 * inside libmsg is a layering violation).  We send a simple
+                 * inside ptlmsg is a layering violation).  We send a simple
                  * IMMEDIATE GET if the sink buffer is mapped already and small
                  * enough for FMA */
 
-                if ((libmsg->md->options & PTL_MD_KIOV) == 0 &&
-                    libmsg->md->length <= RANAL_FMA_MAX_DATA &&
-                    libmsg->md->length <= kranal_tunables.kra_max_immediate)
+                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) == 0 &&
+                    ptlmsg->msg_md->md_length <= RANAL_FMA_MAX_DATA &&
+                    ptlmsg->msg_md->md_length <= kranal_tunables.kra_max_immediate)
                         break;
 
                 tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_GET_REQ);
                 if (tx == NULL)
                         return PTL_NO_SPACE;
 
-                if ((libmsg->md->options & PTL_MD_KIOV) == 0)
-                        rc = kranal_setup_virt_buffer(tx, libmsg->md->md_niov,
-                                                      libmsg->md->md_iov.iov,
-                                                      0, libmsg->md->length);
+                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) == 0)
+                        rc = kranal_setup_virt_buffer(tx, ptlmsg->msg_md->md_niov,
+                                                      ptlmsg->msg_md->md_iov.iov,
+                                                      0, ptlmsg->msg_md->md_length);
                 else
-                        rc = kranal_setup_phys_buffer(tx, libmsg->md->md_niov,
-                                                      libmsg->md->md_iov.kiov,
-                                                      0, libmsg->md->length);
+                        rc = kranal_setup_phys_buffer(tx, ptlmsg->msg_md->md_niov,
+                                                      ptlmsg->msg_md->md_iov.kiov,
+                                                      0, ptlmsg->msg_md->md_length);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
                 }
 
-                tx->tx_libmsg[1] = lib_create_reply_msg(&kranal_lib, nid, libmsg);
-                if (tx->tx_libmsg[1] == NULL) {
+                tx->tx_ptlmsg[1] = ptl_create_reply_msg(kranal_data.kra_ni, 
+                                                        nid, ptlmsg);
+                if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR("Can't create reply for GET to "LPX64"\n", nid);
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
                 }
 
-                tx->tx_libmsg[0] = libmsg;
+                tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.get.ragm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
                 kranal_launch_tx(tx, nid);
@@ -724,7 +711,7 @@ kranal_do_send (lib_nal_t    *nal,
                         return PTL_FAIL;
                 }
 
-                tx->tx_libmsg[0] = libmsg;
+                tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.putreq.raprm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
                 kranal_launch_tx(tx, nid);
@@ -748,37 +735,37 @@ kranal_do_send (lib_nal_t    *nal,
         }
 
         tx->tx_msg.ram_u.immediate.raim_hdr = *hdr;
-        tx->tx_libmsg[0] = libmsg;
+        tx->tx_ptlmsg[0] = ptlmsg;
         kranal_launch_tx(tx, nid);
         return PTL_OK;
 }
 
 ptl_err_t
-kranal_send (lib_nal_t *nal, void *private, lib_msg_t *cookie,
+kranal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
              ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
              unsigned int niov, struct iovec *iov,
              size_t offset, size_t len)
 {
-        return kranal_do_send(nal, private, cookie,
+        return kranal_do_send(ni, private, cookie,
                               hdr, type, nid, pid,
                               niov, iov, NULL,
                               offset, len);
 }
 
 ptl_err_t
-kranal_send_pages (lib_nal_t *nal, void *private, lib_msg_t *cookie,
+kranal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                    ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
                    unsigned int niov, ptl_kiov_t *kiov,
                    size_t offset, size_t len)
 {
-        return kranal_do_send(nal, private, cookie,
+        return kranal_do_send(ni, private, cookie,
                               hdr, type, nid, pid,
                               niov, NULL, kiov,
                               offset, len);
 }
 
 ptl_err_t
-kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
+kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
                 int offset, int mlen, int rlen)
 {
@@ -793,12 +780,12 @@ kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
 
-        CDEBUG(D_NET, "conn %p, rxmsg %p, libmsg %p\n", conn, rxmsg, libmsg);
+        CDEBUG(D_NET, "conn %p, rxmsg %p, ptlmsg %p\n", conn, rxmsg, ptlmsg);
 
-        if (libmsg == NULL) {
+        if (ptlmsg == NULL) {
                 /* GET or ACK or portals is discarding */
                 LASSERT (mlen == 0);
-                lib_finalize(nal, NULL, libmsg, PTL_OK);
+                ptl_finalize(ni, NULL, ptlmsg, PTL_OK);
                 return PTL_OK;
         }
 
@@ -828,7 +815,7 @@ kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                         buffer = ((char *)iov->iov_base) + offset;
                 }
                 rc = kranal_consume_rxmsg(conn, buffer, mlen);
-                lib_finalize(nal, NULL, libmsg, (rc == 0) ? PTL_OK : PTL_FAIL);
+                ptl_finalize(ni, NULL, ptlmsg, (rc == 0) ? PTL_OK : PTL_FAIL);
                 return PTL_OK;
 
         case RANAL_MSG_PUT_REQ:
@@ -853,7 +840,7 @@ kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                         (__u64)((unsigned long)tx->tx_buffer);
                 tx->tx_msg.ram_u.putack.rapam_desc.rard_nob = mlen;
 
-                tx->tx_libmsg[0] = libmsg; /* finalize this on RDMA_DONE */
+                tx->tx_ptlmsg[0] = ptlmsg; /* finalize this on RDMA_DONE */
 
                 kranal_post_fma(conn, tx);
 
@@ -864,20 +851,20 @@ kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
 }
 
 ptl_err_t
-kranal_recv (lib_nal_t *nal, void *private, lib_msg_t *msg,
+kranal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
              unsigned int niov, struct iovec *iov,
              size_t offset, size_t mlen, size_t rlen)
 {
-        return kranal_do_recv(nal, private, msg, niov, iov, NULL,
+        return kranal_do_recv(ni, private, msg, niov, iov, NULL,
                               offset, mlen, rlen);
 }
 
 ptl_err_t
-kranal_recv_pages (lib_nal_t *nal, void *private, lib_msg_t *msg,
+kranal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                    unsigned int niov, ptl_kiov_t *kiov,
                    size_t offset, size_t mlen, size_t rlen)
 {
-        return kranal_do_recv(nal, private, msg, niov, NULL, kiov,
+        return kranal_do_recv(ni, private, msg, niov, NULL, kiov,
                               offset, mlen, rlen);
 }
 
@@ -1727,14 +1714,14 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
         case RANAL_MSG_IMMEDIATE:
                 CDEBUG(D_NET, "RX IMMEDIATE on %p\n", conn);
-                lib_parse(&kranal_lib, &msg->ram_u.immediate.raim_hdr, conn);
+                ptl_parse(kranal_data.kra_ni, &msg->ram_u.immediate.raim_hdr, conn);
                 break;
 
         case RANAL_MSG_PUT_REQ:
                 CDEBUG(D_NET, "RX PUT_REQ on %p\n", conn);
-                lib_parse(&kranal_lib, &msg->ram_u.putreq.raprm_hdr, conn);
+                ptl_parse(kranal_data.kra_ni, &msg->ram_u.putreq.raprm_hdr, conn);
 
-                if (conn->rac_rxmsg == NULL)    /* lib_parse matched something */
+                if (conn->rac_rxmsg == NULL)    /* ptl_parse matched something */
                         break;
 
                 tx = kranal_new_tx_msg(0, RANAL_MSG_PUT_NAK);
@@ -1785,9 +1772,9 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
         case RANAL_MSG_GET_REQ:
                 CDEBUG(D_NET, "RX GET_REQ on %p\n", conn);
-                lib_parse(&kranal_lib, &msg->ram_u.get.ragm_hdr, conn);
+                ptl_parse(kranal_data.kra_ni, &msg->ram_u.get.ragm_hdr, conn);
 
-                if (conn->rac_rxmsg == NULL)    /* lib_parse matched something */
+                if (conn->rac_rxmsg == NULL)    /* ptl_parse matched something */
                         break;
 
                 tx = kranal_new_tx_msg(0, RANAL_MSG_GET_NAK);
@@ -2025,13 +2012,3 @@ kranal_scheduler (void *arg)
         kranal_thread_fini();
         return 0;
 }
-
-
-lib_nal_t kranal_lib = {
-        libnal_data:        &kranal_data,      /* NAL private data */
-        libnal_send:         kranal_send,
-        libnal_send_pages:   kranal_send_pages,
-        libnal_recv:         kranal_recv,
-        libnal_recv_pages:   kranal_recv_pages,
-        libnal_dist:         kranal_dist
-};

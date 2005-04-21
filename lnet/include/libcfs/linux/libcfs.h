@@ -101,7 +101,7 @@ struct ptldebug_header {
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
                 if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack) {    \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,         \
+                        libcfs_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,         \
                                           __FILE__, __FUNCTION__, __LINE__,   \
                                           (stack),"maximum lustre stack %u\n",\
                                           portal_stack = (stack));            \

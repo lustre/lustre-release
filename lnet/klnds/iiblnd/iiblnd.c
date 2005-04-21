@@ -23,7 +23,17 @@
 
 #include "iibnal.h"
 
-nal_t                   kibnal_api;
+ptl_nal_t kibnal_nal = {
+        .nal_name          = "iib",
+        .nal_type          = IIBNAL,
+        .nal_startup       = kibnal_startup,
+        .nal_shutdown      = kibnal_shutdown,
+        .nal_send          = kibnal_send,
+        .nal_send_pages    = kibnal_send_pages,
+        .nal_recv          = kibnal_recv,
+        .nal_recv_pages    = kibnal_recv_pages,
+};
+
 ptl_handle_ni_t         kibnal_ni;
 kib_tunables_t          kibnal_tunables;
 
@@ -245,12 +255,12 @@ static int
 kibnal_set_mynid(ptl_nid_t nid)
 {
         struct timeval tv;
-        lib_ni_t      *ni = &kibnal_lib.libnal_ni;
+        ptl_ni_t      *ni = kibnal_data.kib_ni;
         int            rc;
         FSTATUS        frc;
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_pid.nid);
+               nid, ni->ni_nid);
 
         do_gettimeofday(&tv);
 
@@ -280,7 +290,7 @@ kibnal_set_mynid(ptl_nid_t nid)
                 kibnal_data.kib_cep = NULL;
         }
         
-        kibnal_data.kib_nid = ni->ni_pid.nid = nid;
+        kibnal_data.kib_nid = ni->ni_nid = nid;
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
         
         /* Delete all existing peers and their connections after new
@@ -1149,22 +1159,17 @@ kibnal_setup_tx_descs (void)
         return (0);
 }
 
-static void
-kibnal_api_shutdown (nal_t *nal)
+void
+kibnal_shutdown (ptl_ni_t *ni)
 {
         int   i;
         int   rc;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
-
+        LASSERT (ni->ni_data == &kibnal_data);
+        LASSERT (ni == kibnal_data.kib_ni);
+       
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
-
-        LASSERT(nal == &kibnal_api);
 
         switch (kibnal_data.kib_init) {
         default:
@@ -1244,10 +1249,6 @@ kibnal_api_shutdown (nal_t *nal)
                         CERROR ("Close HCA  error: %d\n", rc);
                 /* fall through */
 
-        case IBNAL_INIT_LIB:
-                lib_fini(&kibnal_lib);
-                /* fall through */
-
         case IBNAL_INIT_DATA:
                 /* Module refcount only gets to zero when all peers
                  * have been closed so all lists must be empty */
@@ -1318,12 +1319,9 @@ static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
 } 
 #undef roundup_power
 
-static int
-kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
-                     ptl_ni_limits_t *requested_limits,
-                     ptl_ni_limits_t *actual_limits)
+ptl_err_t
+kibnal_startup (ptl_ni_t *ni, char **interfaces)
 {
-        ptl_process_id_t    process_id;
         int                 pkmem = atomic_read(&portal_kmemory);
         IB_PORT_ATTRIBUTES *pattr;
         FSTATUS             frc;
@@ -1331,17 +1329,16 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         int                 n;
         int                 i;
 
-        LASSERT (nal == &kibnal_api);
+        LASSERT (ni->ni_nal == &kibnal_nal);
 
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL)
-                        *actual_limits = kibnal_lib.libnal_ni.ni_actual_limits;
-                /* This module got the first ref */
-                PORTAL_MODULE_USE;
-                return (PTL_OK);
+        /* Only 1 instance supported */
+        if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
         }
-
-        LASSERT (kibnal_data.kib_init == IBNAL_INIT_NOTHING);
+        
+        ni->ni_data = &kibnal_data;
+        kibnal_data.kib_ni = ni;
 
         frc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2, 
                                        &kibnal_data.kib_interfaces);
@@ -1390,20 +1387,6 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         /* lists/ptrs/locks initialised */
         kibnal_data.kib_init = IBNAL_INIT_DATA;
-        /*****************************************************/
-
-        process_id.pid = requested_pid;
-        process_id.nid = kibnal_data.kib_nid;
-        
-        rc = lib_init(&kibnal_lib, nal, process_id,
-                      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-                CERROR("lib_init failed: error %d\n", rc);
-                goto failed;
-        }
-
-        /* lib interface initialised */
-        kibnal_data.kib_init = IBNAL_INIT_LIB;
         /*****************************************************/
 
         for (i = 0; i < IBNAL_N_SCHED; i++) {
@@ -1656,7 +1639,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         return (PTL_OK);
 
  failed:
-        kibnal_api_shutdown (&kibnal_api);    
+        kibnal_shutdown (ni);    
         return (PTL_FAIL);
 }
 
@@ -1667,9 +1650,7 @@ kibnal_module_fini (void)
         if (kibnal_tunables.kib_sysctl != NULL)
                 unregister_sysctl_table (kibnal_tunables.kib_sysctl);
 #endif
-        PtlNIFini(kibnal_ni);
-
-        ptl_unregister_nal(IIBNAL);
+        ptl_unregister_nal(&kibnal_nal);
 }
 
 int __init
@@ -1688,23 +1669,13 @@ kibnal_module_init (void)
                 return -EINVAL;
         }
 
-        kibnal_api.nal_ni_init = kibnal_api_startup;
-        kibnal_api.nal_ni_fini = kibnal_api_shutdown;
-
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        rc = ptl_register_nal(IIBNAL, &kibnal_api);
+        rc = ptl_register_nal(&kibnal_nal);
         if (rc != PTL_OK) {
                 CERROR("Can't register IBNAL: %d\n", rc);
                 return (-ENOMEM);               /* or something... */
-        }
-
-        /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(IIBNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kibnal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(IIBNAL);
-                return (-ENODEV);
         }
         
 #ifdef CONFIG_SYSCTL

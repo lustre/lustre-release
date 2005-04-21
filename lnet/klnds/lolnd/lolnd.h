@@ -38,7 +38,6 @@
 #include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/nal.h>
 
 #define KLOD_IOV        153401
 #define KLOD_KIOV       153402
@@ -55,18 +54,27 @@ typedef struct
         }                klod_iov;
 } klo_desc_t;
 
-typedef struct
-{
-        char               klo_init;            /* what's been initialised */
-}  klonal_data_t;
-
-/* kqn_init state */
-#define KLO_INIT_NOTHING        0               /* MUST BE ZERO so zeroed state is initialised OK */
-#define KLO_INIT_LIB            1
-#define KLO_INIT_ALL            2
-
-extern lib_nal_t           klonal_lib;
-extern nal_t               klonal_api;
-extern klonal_data_t       klonal_data;
+ptl_err_t klonal_startup (ptl_ni_t *ni, char **interfaces);
+void klonal_shutdown (ptl_ni_t *ni);
+ptl_err_t klonal_send (ptl_ni_t *ni, void *private,
+                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                       int type, ptl_nid_t nid, ptl_pid_t pid,
+                       unsigned int payload_niov, 
+                       struct iovec *payload_iov,
+                       size_t payload_offset, size_t payload_nob);
+ptl_err_t klonal_send_pages (ptl_ni_t *ni, void *private,
+                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                             int type, ptl_nid_t nid, ptl_pid_t pid,
+                             unsigned int payload_niov, 
+                             ptl_kiov_t *payload_kiov,
+                             size_t payload_offset, size_t payload_nob);
+ptl_err_t klonal_recv(ptl_ni_t *ni, void *private,
+                      ptl_msg_t *ptlmsg, unsigned int niov,
+                      struct iovec *iov, size_t offset,
+                      size_t mlen, size_t rlen);
+ptl_err_t klonal_recv_pages(ptl_ni_t *ni, void *private,
+                            ptl_msg_t *ptlmsg, unsigned int niov,
+                            ptl_kiov_t *kiov, size_t offset,
+                            size_t mlen, size_t rlen);
 
 #endif /* _LONAL_H */

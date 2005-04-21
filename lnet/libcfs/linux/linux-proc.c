@@ -105,16 +105,7 @@ static struct ctl_table top_table[2] = {
 #define def_prof(FOO) [PROF__##FOO] = {#FOO, 0, }
 
 struct prof_ent prof_ents[] = {
-        def_prof(our_recvmsg),
-        def_prof(our_sendmsg),
-        def_prof(socknal_recv),
-        def_prof(lib_parse),
-        def_prof(conn_list_walk),
-        def_prof(memcpy),
-        def_prof(lib_finalize),
-        def_prof(pingcli_time),
-        def_prof(gmnal_send),
-        def_prof(gmnal_recv),
+        def_prof(placeholder),
 };
 
 EXPORT_SYMBOL(prof_ents);

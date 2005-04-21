@@ -34,7 +34,6 @@
 
 static unsigned ping_head_magic;
 static unsigned ping_bulk_magic;
-static int nal  = SOCKNAL;                            // Your NAL,
 static unsigned long packets_valid = 0;         // Valid packets 
 static int running = 1;
 atomic_t pkt;
@@ -187,9 +186,9 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->ni = PTL_INVALID_HANDLE;
 
        /* Aquire and initialize the proper nal for portals. */
-        rc = PtlNIInit(nal, 0, NULL, NULL, &server->ni);
+        rc = PtlNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
         if (!(rc == PTL_OK || rc == PTL_IFACE_DUP)) {
-                CDEBUG (D_OTHER, "NAL %x not loaded\n", nal);
+                CDEBUG (D_OTHER, "PtlNIInit: error %d\n", rc);
                 return pingsrv_shutdown (4);
         }
 
@@ -277,10 +276,6 @@ static void /*__exit*/ pingsrv_cleanup(void)
 } /* pingsrv_cleanup() */
 
 
-MODULE_PARM(nal, "i");
-MODULE_PARM_DESC(nal, "Use the specified NAL "
-                "(2-ksocknal, 1-kqswnal)");
- 
 MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A kernel space ping server for portals testing");
 MODULE_LICENSE("GPL");

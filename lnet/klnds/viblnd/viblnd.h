@@ -58,7 +58,6 @@
 #include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/nal.h>
 
 /* CPU_{L,B}E #defines needed by Voltaire headers */
 #include <asm/byteorder.h>
@@ -200,6 +199,7 @@ typedef struct
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
+        ptl_ni_t         *kib_ni;               /* _the_ nal instance */
 
         __u64             kib_svc_id;           /* service number I listen on */
         vv_gid_t          kib_port_gid;         /* device/port GID */
@@ -300,7 +300,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_status;    /* completion status */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
-        lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
+        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
 #if IBNAL_WHOLE_MEM
         vv_l_key_t                tx_lkey;      /* local key for message buffer */
 #else
@@ -406,9 +406,31 @@ typedef struct kib_peer
 } kib_peer_t;
 
 
-extern lib_nal_t       kibnal_lib;
 extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
+
+ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
+void kibnal_shutdown (ptl_ni_t *ni);
+ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,
+                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                       int type, ptl_nid_t nid, ptl_pid_t pid,
+                       unsigned int payload_niov, 
+                       struct iovec *payload_iov,
+                       size_t payload_offset, size_t payload_nob);
+ptl_err_t kibnal_send_pages (ptl_ni_t *ni, void *private,
+                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                             int type, ptl_nid_t nid, ptl_pid_t pid,
+                             unsigned int payload_niov, 
+                             ptl_kiov_t *payload_kiov,
+                             size_t payload_offset, size_t payload_nob);
+ptl_err_t kibnal_recv(ptl_ni_t *ni, void *private,
+                      ptl_msg_t *ptlmsg, unsigned int niov,
+                      struct iovec *iov, size_t offset,
+                      size_t mlen, size_t rlen);
+ptl_err_t kibnal_recv_pages(ptl_ni_t *ni, void *private,
+                            ptl_msg_t *ptlmsg, unsigned int niov,
+                            ptl_kiov_t *kiov, size_t offset,
+                            size_t mlen, size_t rlen);
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
 extern void kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid,

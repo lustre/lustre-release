@@ -21,10 +21,12 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/time.h>
+#include <libcfs/libcfs.h>
 
 int smp_processor_id = 1;
 char debug_file_path[1024] = "/tmp/lustre-log";
@@ -84,8 +86,8 @@ int portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, const char *fn, 
-                   const int line, const char *format, ...)
+libcfs_debug_msg (int subsys, int mask, char *file, const char *fn, 
+                  const int line, unsigned long stack, char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -117,3 +119,11 @@ portals_debug_msg (int subsys, int mask, char *file, const char *fn,
 
 }
 
+void
+libcfs_assertion_failed(char *expr, char *file, const char *func,
+                        const int line)
+{
+        libcfs_debug_msg(0, D_EMERG, file, func, line, 0,
+                         "ASSERTION(%s) failed\n", expr);
+        abort();
+}

@@ -21,122 +21,55 @@
 
 #include "lonal.h"
 
-nal_t			klonal_api;
-klonal_data_t		klonal_data;
-ptl_handle_ni_t         klonal_ni;
+ptl_nal_t klonal_nal = {
+        .nal_name       = "lo",
+        .nal_type       = LONAL,
+        .nal_startup    = klonal_startup,
+        .nal_shutdown   = klonal_shutdown,
+        .nal_send       = klonal_send,
+        .nal_send_pages = klonal_send_pages,
+        .nal_recv       = klonal_recv,
+        .nal_recv_pages = klonal_recv_pages,
+};
 
+int     klonal_instanced;
 
-int
-klonal_cmd (struct portals_cfg *pcfg, void *private)
+void
+klonal_shutdown(ptl_ni_t *ni)
 {
-	LASSERT (pcfg != NULL);
-	
-	switch (pcfg->pcfg_command) {
-	case NAL_CMD_REGISTER_MYNID:
-		CDEBUG (D_IOCTL, "setting NID to "LPX64" (was "LPX64")\n",
-			pcfg->pcfg_nid, klonal_lib.libnal_ni.ni_pid.nid);
-		klonal_lib.libnal_ni.ni_pid.nid = pcfg->pcfg_nid;
-		return (0);
-		
-	default:
-		return (-EINVAL);
-	}
-}
-
-static void
-klonal_shutdown(nal_t *nal)
-{
-	/* NB The first ref was this module! */
-	if (nal->nal_refct != 0)
-		return;
-
 	CDEBUG (D_NET, "shutdown\n");
-	LASSERT (nal == &klonal_api);
-
-	switch (klonal_data.klo_init)
-	{
-	default:
-		LASSERT (0);
-
-	case KLO_INIT_ALL:
-                libcfs_nal_cmd_unregister(LONAL);
-		/* fall through */
-
-	case KLO_INIT_LIB:
-		lib_fini (&klonal_lib);
-		break;
-
-	case KLO_INIT_NOTHING:
-		return;
-	}
-
-	memset(&klonal_data, 0, sizeof (klonal_data));
-
-	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&portal_kmemory));
-
-	printk (KERN_INFO "Lustre: LO NAL unloaded (final mem %d)\n",
-                atomic_read(&portal_kmemory));
+	LASSERT (ni->ni_nal == &klonal_nal);
+        LASSERT (klonal_instanced);
+        
+        klonal_instanced = 0;
 	PORTAL_MODULE_UNUSE;
 }
 
-static int
-klonal_startup (nal_t *nal, ptl_pid_t requested_pid,
-		ptl_ni_limits_t *requested_limits, 
-		ptl_ni_limits_t *actual_limits)
+ptl_err_t
+klonal_startup (ptl_ni_t *ni, char **interfaces)
 {
-	int               rc;
-	ptl_process_id_t  my_process_id;
-	int               pkmem = atomic_read(&portal_kmemory);
+	LASSERT (ni->ni_nal == &klonal_nal);
 
-	LASSERT (nal == &klonal_api);
+        if (klonal_instanced)  {
+                /* Multiple instances of the loopback NI is never right */
+                CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
+        }
 
-	if (nal->nal_refct != 0) {
-		if (actual_limits != NULL)
-			*actual_limits = klonal_lib.libnal_ni.ni_actual_limits;
-		return (PTL_OK);
-	}
+	CDEBUG (D_NET, "start\n");
 
-	LASSERT (klonal_data.klo_init == KLO_INIT_NOTHING);
+#warning fixme
+        ni->ni_nid = 0;
+        klonal_instanced = 1;
 
-	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
-
-	/* ensure all pointers NULL etc */
-	memset (&klonal_data, 0, sizeof (klonal_data));
-
-	my_process_id.nid = 0;
-	my_process_id.pid = requested_pid;
-
-	rc = lib_init(&klonal_lib, nal, my_process_id,
-		      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-		CERROR ("lib_init failed %d\n", rc);
-		klonal_shutdown (nal);
-		return (rc);
-	}
-
-	klonal_data.klo_init = KLO_INIT_LIB;
-
-	rc = libcfs_nal_cmd_register (LONAL, &klonal_cmd, NULL);
-	if (rc != 0) {
-		CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-		klonal_shutdown (nal);
-		return (PTL_FAIL);
-	}
-
-	klonal_data.klo_init = KLO_INIT_ALL;
-
-	printk(KERN_INFO "Lustre: LO NAL (initial mem %d)\n", pkmem);
 	PORTAL_MODULE_USE;
-
 	return (PTL_OK);
 }
 
 void __exit
 klonal_finalise (void)
 {
-	PtlNIFini(klonal_ni);
-
-	ptl_unregister_nal(LONAL);
+	ptl_unregister_nal(&klonal_nal);
 }
 
 static int __init
@@ -144,10 +77,7 @@ klonal_initialise (void)
 {
 	int   rc;
 
-	klonal_api.nal_ni_init = klonal_startup;
-	klonal_api.nal_ni_fini = klonal_shutdown;
-
-	rc = ptl_register_nal(LONAL, &klonal_api);
+	rc = ptl_register_nal(&klonal_nal);
 	if (rc != PTL_OK) {
 		CERROR("Can't register LONAL: %d\n", rc);
 		return (-ENOMEM);		/* or something... */

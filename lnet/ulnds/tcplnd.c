@@ -43,7 +43,7 @@
 #endif
 
 /* Function:  tcpnal_send
- * Arguments: nal:     pointer to my nal control block
+ * Arguments: ni:      pointer to NAL instance
  *            private: unused
  *            cookie:  passed back to the portals library
  *            hdr:     pointer to the portals header
@@ -55,9 +55,9 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-ptl_err_t tcpnal_send(lib_nal_t *n,
+ptl_err_t tcpnal_send(ptl_ni_t *ni,
                       void *private,
-                      lib_msg_t *cookie,
+                      ptl_msg_t *cookie,
                       ptl_hdr_t *hdr,
                       int type,
                       ptl_nid_t nid,
@@ -68,7 +68,7 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
                       size_t len)
 {
     connection c;
-    bridge b=(bridge)n->libnal_data;
+    bridge b=(bridge)ni->ni_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
     ptl_err_t rc = PTL_OK;
@@ -94,7 +94,7 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
-    ntiov = 1 + lib_extract_iov(256, &tiov[1], niov, iov, offset, len);
+    ntiov = 1 + ptl_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
     pthread_mutex_lock(&send_lock);
 #if 1
@@ -132,9 +132,9 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
     pthread_mutex_unlock(&send_lock);
 
     if (rc == PTL_OK) {
-            /* NB the NAL only calls lib_finalize() if it returns PTL_OK
+            /* NB the NAL only calls ptl_finalize() if it returns PTL_OK
              * from cb_send() */
-            lib_finalize(n, private, cookie, PTL_OK);
+            ptl_finalize(ni, private, cookie, PTL_OK);
     }
 
     return(rc);
@@ -142,10 +142,10 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
 
 
 /* Function:  tcpnal_recv
- * Arguments: lib_nal_t *nal:    pointer to my nal control block
+ * Arguments: ptl_ni_t *:        pointer to NAL instance
  *            void *private:     connection pointer passed through
- *                               lib_parse()
- *            lib_msg_t *cookie: passed back to portals library
+ *                               ptl_parse()
+ *            ptl_msg_t *cookie: passed back to portals library
  *            user_ptr data:     pointer to the destination buffer
  *            size_t mlen:       length of the body
  *            size_t rlen:       length of data in the network
@@ -154,15 +154,14 @@ ptl_err_t tcpnal_send(lib_nal_t *n,
  * blocking read of the requested data. must drain out the
  * difference of mainpulated and requested lengths from the network
  */
-ptl_err_t tcpnal_recv(lib_nal_t *n,
+ptl_err_t tcpnal_recv(ptl_ni_t *ni,
                       void *private,
-                      lib_msg_t *cookie,
+                      ptl_msg_t *cookie,
                       unsigned int niov,
                       struct iovec *iov,
                       size_t offset,
                       size_t mlen,
                       size_t rlen)
-
 {
     struct iovec tiov[256];
     int ntiov;
@@ -175,7 +174,7 @@ ptl_err_t tcpnal_recv(lib_nal_t *n,
     LASSERT(rlen);
     LASSERT(rlen >= mlen);
 
-    ntiov = lib_extract_iov(256, tiov, niov, iov, offset, mlen);
+    ntiov = ptl_extract_iov(256, tiov, niov, iov, offset, mlen);
     
     /* FIXME
      * 1. Is this effecient enough? change to use readv() directly?
@@ -187,7 +186,7 @@ ptl_err_t tcpnal_recv(lib_nal_t *n,
 
 finalize:
     /* FIXME; we always assume success here... */
-    lib_finalize(n, private, cookie, PTL_OK);
+    ptl_finalize(ni, private, cookie, PTL_OK);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -217,7 +216,7 @@ static int from_connection(void *a, void *d)
     ptl_hdr_t hdr;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-        lib_parse(b->lib_nal, &hdr, c);
+        ptl_parse(b->b_ni, &hdr, c);
         /*TODO: check error status*/
         return(1);
     }
@@ -225,7 +224,7 @@ static int from_connection(void *a, void *d)
 }
 
 
-static void tcpnal_shutdown(bridge b)
+void tcpnal_shutdown(bridge b)
 {
     shutdown_connections(b->lower);
 }
@@ -240,12 +239,8 @@ int tcpnal_init(bridge b)
 {
     manager m;
         
-    b->lib_nal->libnal_send=tcpnal_send;
-    b->lib_nal->libnal_recv=tcpnal_recv;
-    b->shutdown=tcpnal_shutdown;
-    
-    if (!(m=init_connections(PNAL_PORT(b->lib_nal->libnal_ni.ni_pid.nid,
-                                       b->lib_nal->libnal_ni.ni_pid.pid),
+    if (!(m=init_connections(PNAL_PORT(b->b_ni->ni_nid,
+                                       ptl_apini.apini_pid),
                              from_connection,b))){
         /* TODO: this needs to shut down the
            newly created junk */

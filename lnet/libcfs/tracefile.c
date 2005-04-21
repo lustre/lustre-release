@@ -163,8 +163,8 @@ static struct trace_page *trace_get_tage(struct trace_cpu_data *tcd,
         return tage;
 }
 
-void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                       const int line, unsigned long stack, char *format, ...)
+void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
+                      const int line, unsigned long stack, char *format, ...)
 {
         struct trace_cpu_data *tcd;
         struct ptldebug_header header;
@@ -231,7 +231,7 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         tage->used += needed;
         if (tage->used > CFS_PAGE_SIZE)
                 printk(KERN_EMERG
-                       "tage->used == %u in portals_debug_msg\n", tage->used);
+                       "tage->used == %u in libcfs_debug_msg\n", tage->used);
 
  out:
         if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || portal_printk)
@@ -239,7 +239,17 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
 
         trace_put_tcd(tcd, flags);
 }
-EXPORT_SYMBOL(portals_debug_msg);
+EXPORT_SYMBOL(libcfs_debug_msg);
+
+void
+libcfs_assertion_failed(char *expr, char *file, 
+                        const char *func, const int line)
+{
+        libcfs_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,
+                         "ASSERTION(%s) failed\n", expr);
+        LBUG();
+}
+EXPORT_SYMBOL(libcfs_assertion_failed);
 
 static void collect_pages_on_cpu(void *info)
 {

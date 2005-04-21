@@ -103,18 +103,16 @@ pingcli_start(struct portal_ioctl_data *args)
 {
         ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
         unsigned ping_head_magic = PING_HEADER_MAGIC;
-        char str[PTL_NALFMT_SIZE];
         int rc;
 
         client->tsk = current;
         client->args = args;
 
-        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
-                        nal %x, size %u, count: %u, timeout: %u\n",
-                        args->ioc_nid,
-                        portals_nid2str(args->ioc_nid, args->ioc_nal, str),
-                        args->ioc_nal, args->ioc_size,
-                        args->ioc_count, args->ioc_timeout);
+        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  "
+                "size %u, count: %u, timeout: %u\n",
+                args->ioc_nid,
+                libcfs_nid2str(args->ioc_nid),
+                args->ioc_size, args->ioc_count, args->ioc_timeout);
 
 
         PORTAL_ALLOC (client->outbuf, STDSIZE) ;
@@ -135,10 +133,10 @@ pingcli_start(struct portal_ioctl_data *args)
         }
 
         /* Aquire and initialize the proper nal for portals. */
-        rc = PtlNIInit(args->ioc_nal, 0, NULL, NULL, &nih);
+        rc = PtlNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP)
         {
-                CERROR ("NAL %x not loaded.\n", args->ioc_nal);
+                CERROR ("PtlNIInit: error %d\n", rc);
                 pingcli_shutdown (nih, 4);
                 return (NULL);
         }

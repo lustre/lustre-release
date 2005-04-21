@@ -56,7 +56,6 @@
 #include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
-#include <portals/nal.h>
 
 #include <rapl.h>
 
@@ -122,7 +121,8 @@ typedef struct
         int               kra_init;             /* initialisation state */
         int               kra_shutdown;         /* shut down? */
         atomic_t          kra_nthreads;         /* # live threads */
-
+        ptl_ni_t         *kra_ni;               /* _the_ nal instance */
+        
         struct semaphore  kra_nid_mutex;        /* serialise NID/listener ops */
         struct semaphore  kra_listener_signal;  /* block for listener startup/shutdown */
         struct socket    *kra_listener_sock;    /* listener's socket */
@@ -162,8 +162,7 @@ typedef struct
 
 #define RANAL_INIT_NOTHING         0
 #define RANAL_INIT_DATA            1
-#define RANAL_INIT_LIB             2
-#define RANAL_INIT_ALL             3
+#define RANAL_INIT_ALL             2
 
 typedef struct kra_acceptsock                   /* accepted socket queued for connd */
 {
@@ -267,7 +266,7 @@ typedef struct kra_tx                           /* message descriptor */
 {
         struct list_head          tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
         struct kra_conn          *tx_conn;      /* owning conn */
-        lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
+        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
         unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
         int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         int                       tx_nob;       /* # bytes of payload */
@@ -353,7 +352,6 @@ typedef struct kra_peer
 # define sk_sleep       sleep
 #endif
 
-extern lib_nal_t       kranal_lib;
 extern kra_data_t      kranal_data;
 extern kra_tunables_t  kranal_tunables;
 
@@ -446,6 +444,29 @@ kranal_page2phys (struct page *p)
 {
         return page_to_phys(p);
 }
+
+ptl_err_t kranal_startup (ptl_ni_t *ni, char **interfaces);
+void kranal_shutdown (ptl_ni_t *ni);
+ptl_err_t kranal_send (ptl_ni_t *ni, void *private,
+                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                       int type, ptl_nid_t nid, ptl_pid_t pid,
+                       unsigned int payload_niov, 
+                       struct iovec *payload_iov,
+                       size_t payload_offset, size_t payload_nob);
+ptl_err_t kranal_send_pages (ptl_ni_t *ni, void *private,
+                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                             int type, ptl_nid_t nid, ptl_pid_t pid,
+                             unsigned int payload_niov, 
+                             ptl_kiov_t *payload_kiov,
+                             size_t payload_offset, size_t payload_nob);
+ptl_err_t kranal_recv(ptl_ni_t *ni, void *private,
+                      ptl_msg_t *ptlmsg, unsigned int niov,
+                      struct iovec *iov, size_t offset,
+                      size_t mlen, size_t rlen);
+ptl_err_t kranal_recv_pages(ptl_ni_t *ni, void *private,
+                            ptl_msg_t *ptlmsg, unsigned int niov,
+                            ptl_kiov_t *kiov, size_t offset,
+                            size_t mlen, size_t rlen);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table,

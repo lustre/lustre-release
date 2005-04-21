@@ -23,8 +23,17 @@
 
 #include "openibnal.h"
 
-nal_t                   kibnal_api;
-ptl_handle_ni_t         kibnal_ni;
+ptl_nal_t               kibnal_nal = {
+        .nal_name       = "openib",
+        .nal_type       = OPENIBNAL,
+        .nal_startup    = kibnal_startup,
+        .nal_shutdown   = kibnal_shutdown,
+        .nal_send       = kibnal_send,
+        .nal_send_pages = kibnal_send_pages,
+        .nal_recv       = kibnal_recv,
+        .nal_recv_pages = kibnal_recv_pages,
+};
+
 kib_data_t              kibnal_data;
 kib_tunables_t          kibnal_tunables;
 
@@ -89,7 +98,7 @@ kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid, __u64 dststamp)
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = kibnal_lib.libnal_ni.ni_pid.nid;
+        msg->ibm_srcnid   = kibnal_data.kib_ni->ni_nid;
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
@@ -500,7 +509,7 @@ kibnal_make_svcqry (kib_conn_t *conn)
                 goto out;
         }
         
-        if (msg->ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid ||
+        if (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 CERROR("Unexpected dst NID/stamp "LPX64"/"LPX64" from "
                        LPX64"@%u.%u.%u.%u/%d\n", 
@@ -581,10 +590,10 @@ kibnal_handle_svcqry (struct socket *sock)
                 goto out;
         }
         
-        if (msg->ibm_dstnid != kibnal_lib.libnal_ni.ni_pid.nid) {
+        if (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid) {
                 CERROR("Unexpected dstnid "LPX64"(expected "LPX64" "
                        "from %u.%u.%u.%u/%d\n", msg->ibm_dstnid,
-                       kibnal_lib.libnal_ni.ni_pid.nid,
+                       kibnal_data.kib_ni->ni_nid,
                        HIPQUAD(peer_ip), peer_port);
                 goto out;
         }
@@ -922,11 +931,11 @@ kibnal_stop_ib_listener (void)
 int
 kibnal_set_mynid (ptl_nid_t nid)
 {
-        lib_ni_t         *ni = &kibnal_lib.libnal_ni;
+        ptl_ni_t         *ni = kibnal_data.kib_ni;
         int               rc;
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_pid.nid);
+               nid, ni->ni_nid);
 
         down (&kibnal_data.kib_nid_mutex);
 
@@ -945,7 +954,7 @@ kibnal_set_mynid (ptl_nid_t nid)
         if (kibnal_data.kib_listen_handle != NULL)
                 kibnal_stop_ib_listener();
 
-        ni->ni_pid.nid = nid;
+        ni->ni_nid = nid;
         kibnal_data.kib_incarnation++;
         mb();
         /* Delete all existing peers and their connections after new
@@ -953,7 +962,7 @@ kibnal_set_mynid (ptl_nid_t nid)
          * world. */
         kibnal_del_peer (PTL_NID_ANY, 0);
 
-        if (ni->ni_pid.nid != PTL_NID_ANY) {
+        if (ni->ni_nid != PTL_NID_ANY) {
                 /* got a new NID to install */
                 rc = kibnal_start_ib_listener();
                 if (rc != 0) {
@@ -974,7 +983,7 @@ kibnal_set_mynid (ptl_nid_t nid)
  failed_1:
         kibnal_stop_ib_listener();
  failed_0:
-        ni->ni_pid.nid = PTL_NID_ANY;
+        ni->ni_nid = PTL_NID_ANY;
         kibnal_data.kib_incarnation++;
         mb();
         kibnal_del_peer (PTL_NID_ANY, 0);
@@ -1781,21 +1790,16 @@ kibnal_setup_tx_descs (void)
 }
 
 void
-kibnal_api_shutdown (nal_t *nal)
+kibnal_shutdown (ptl_ni_t *ni)
 {
         int   i;
         int   rc;
 
-        if (nal->nal_refct != 0) {
-                /* This module got the first ref */
-                PORTAL_MODULE_UNUSE;
-                return;
-        }
-
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
 
-        LASSERT(nal == &kibnal_api);
+        LASSERT(ni == kibnal_data.kib_ni);
+        LASSERT(ni->ni_data == &kibnal_data);
 
         switch (kibnal_data.kib_init) {
         default:
@@ -1843,10 +1847,6 @@ kibnal_api_shutdown (nal_t *nal)
                 rc = ib_pd_destroy(kibnal_data.kib_pd);
                 if (rc != 0)
                         CERROR ("Destroy PD error: %d\n", rc);
-                /* fall through */
-
-        case IBNAL_INIT_LIB:
-                lib_fini(&kibnal_lib);
                 /* fall through */
 
         case IBNAL_INIT_DATA:
@@ -1902,31 +1902,27 @@ kibnal_api_shutdown (nal_t *nal)
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
 }
 
-int
-kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
-                     ptl_ni_limits_t *requested_limits,
-                     ptl_ni_limits_t *actual_limits)
+ptl_err_t
+kibnal_startup (ptl_ni_t *ni, char **interfaces)
 {
         struct timeval    tv;
-        ptl_process_id_t  process_id;
         int               pkmem = atomic_read(&portal_kmemory);
         int               rc;
         int               i;
 
-        LASSERT (nal == &kibnal_api);
+        LASSERT (ni->ni_nal == &kibnal_nal);
 
-        if (nal->nal_refct != 0) {
-                if (actual_limits != NULL)
-                        *actual_limits = kibnal_lib.libnal_ni.ni_actual_limits;
-                /* This module got the first ref */
-                PORTAL_MODULE_USE;
-                return (PTL_OK);
+        /* Only 1 instance supported */
+        if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
+                CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
         }
-
-        LASSERT (kibnal_data.kib_init == IBNAL_INIT_NOTHING);
 
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
 
+        kibnal_data.kib_ni = ni;
+        ni->ni_data = &kibnal_data;
+        
         do_gettimeofday(&tv);
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
@@ -1972,21 +1968,6 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         /* lists/ptrs/locks initialised */
         kibnal_data.kib_init = IBNAL_INIT_DATA;
-        /*****************************************************/
-
-
-        process_id.pid = requested_pid;
-        process_id.nid = PTL_NID_ANY;           /* don't know my NID yet */
-        
-        rc = lib_init(&kibnal_lib, nal, process_id,
-                      requested_limits, actual_limits);
-        if (rc != PTL_OK) {
-                CERROR("lib_init failed: error %d\n", rc);
-                goto failed;
-        }
-
-        /* lib interface initialised */
-        kibnal_data.kib_init = IBNAL_INIT_LIB;
         /*****************************************************/
 
         for (i = 0; i < IBNAL_N_SCHED; i++) {
@@ -2135,11 +2116,11 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         printk(KERN_INFO "Lustre: OpenIB NAL loaded "
                "(initial mem %d)\n", pkmem);
 
-        return (PTL_OK);
+        return PTL_OK;
 
  failed:
-        kibnal_api_shutdown (&kibnal_api);    
-        return (PTL_FAIL);
+        kibnal_shutdown(ni);    
+        return PTL_FAIL;
 }
 
 void __exit
@@ -2147,9 +2128,8 @@ kibnal_module_fini (void)
 {
         if (kibnal_tunables.kib_sysctl != NULL)
                 unregister_sysctl_table (kibnal_tunables.kib_sysctl);
-        PtlNIFini(kibnal_ni);
 
-        ptl_unregister_nal(OPENIBNAL);
+        ptl_unregister_nal(&kibnal_nal);
 }
 
 int __init
@@ -2163,34 +2143,23 @@ kibnal_module_init (void)
         LASSERT (sizeof(kibnal_tunables.kib_backlog) == sizeof(int));
         LASSERT (sizeof(kibnal_tunables.kib_port) == sizeof(int));
 
-        kibnal_api.nal_ni_init = kibnal_api_startup;
-        kibnal_api.nal_ni_fini = kibnal_api_shutdown;
-
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
         kibnal_tunables.kib_listener_timeout = IBNAL_LISTENER_TIMEOUT;
         kibnal_tunables.kib_backlog = IBNAL_BACKLOG;
         kibnal_tunables.kib_port = IBNAL_PORT;
 
-        rc = ptl_register_nal(OPENIBNAL, &kibnal_api);
+        rc = ptl_register_nal(&kibnal_nal);
         if (rc != PTL_OK) {
                 CERROR("Can't register IBNAL: %d\n", rc);
                 return (-ENOMEM);               /* or something... */
         }
 
-        /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(OPENIBNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kibnal_ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                ptl_unregister_nal(OPENIBNAL);
-                return (-ENODEV);
-        }
-        
         kibnal_tunables.kib_sysctl = 
                 register_sysctl_table (kibnal_top_ctl_table, 0);
         if (kibnal_tunables.kib_sysctl == NULL) {
                 CERROR("Can't register sysctl table\n");
-                PtlNIFini(kibnal_ni);
-                ptl_unregister_nal(OPENIBNAL);
+                ptl_unregister_nal(&kibnal_nal);
                 return (-ENOMEM);
         }
 

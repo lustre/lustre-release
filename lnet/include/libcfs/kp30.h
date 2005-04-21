@@ -15,21 +15,19 @@
 #error Unsupported operating system
 #endif
 
+#ifndef DEBUG_SUBSYSTEM
+# define DEBUG_SUBSYSTEM S_UNDEFINED
+#endif
+
 #ifdef __KERNEL__
 
-# ifndef DEBUG_SUBSYSTEM
-#  define DEBUG_SUBSYSTEM S_UNDEFINED
-# endif
-
 #ifdef PORTAL_DEBUG
-extern void kportal_assertion_failed(char *expr, char *file, const char *func,
-                                     const int line);
-#define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
-                                                        __FUNCTION__, __LINE__))
+#define LASSERT(e) ((e) ? 0 : libcfs_assertion_failed( #e , __FILE__,  \
+                                                      __FUNCTION__, __LINE__))
 #define LASSERTF(cond, fmt...)                                                \
         do {                                                                  \
                 if (unlikely(!(cond))) {                                      \
-                        portals_debug_msg(DEBUG_SUBSYSTEM, D_EMERG,  __FILE__,\
+                        libcfs_debug_msg(DEBUG_SUBSYSTEM, D_EMERG,  __FILE__,\
                                           __FUNCTION__,__LINE__, CDEBUG_STACK,\
                                           "ASSERTION(" #cond ") failed:" fmt);\
                         LBUG();                                               \
@@ -116,16 +114,7 @@ do {                                                                    \
 #ifdef PORTALS_PROFILING
 #define prof_enum(FOO) PROF__##FOO
 enum {
-        prof_enum(our_recvmsg),
-        prof_enum(our_sendmsg),
-        prof_enum(socknal_recv),
-        prof_enum(lib_parse),
-        prof_enum(conn_list_walk),
-        prof_enum(memcpy),
-        prof_enum(lib_finalize),
-        prof_enum(pingcli_time),
-        prof_enum(gmnal_send),
-        prof_enum(gmnal_recv),
+        prof_enum(placeholder),
         MAX_PROFS
 };
 
@@ -174,23 +163,13 @@ int portals_debug_mark_buffer(char *text);
 int portals_debug_set_daemon(unsigned int cmd, unsigned int length,
                              char *file, unsigned int size);
 __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
-/* Use the special GNU C __attribute__ hack to have the compiler check the
- * printf style argument string against the actual argument count and
- * types.
- */
-void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                       const int line, unsigned long stack,
-                       char *format, ...)
-        __attribute__ ((format (printf, 7, 8)));
+
 void portals_debug_set_level(unsigned int debug_level);
 
 extern void kportal_daemonize (char *name);
 extern void kportal_blockallsigs (void);
 
 #else  /* !__KERNEL__ */
-# ifndef DEBUG_SUBSYSTEM
-#  define DEBUG_SUBSYSTEM S_UNDEFINED
-# endif
 # ifdef PORTAL_DEBUG
 #  undef NDEBUG
 #  include <assert.h>
@@ -205,19 +184,11 @@ do {                                                                           \
 #  define LASSERT(e)
 #  define LASSERTF(cond, args...) do { } while (0)
 # endif
+# define LBUG()   assert(0)
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
 void portals_debug_dumplog(void);
-# define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
-    printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
-           (subsys), (mask), (long)time(0), file, fn, line,                   \
-           getpid(), (unsigned long)stack, ## a);
-
-#undef CWARN
-#undef CERROR
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
 #endif
 
 /*
@@ -237,8 +208,8 @@ void portals_debug_dumplog(void);
 #define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 
 /* support decl needed both by kernel and liblustre */
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
-char *portals_id2str(int nal, ptl_process_id_t nid, char *str);
+char *libcfs_nid2str(ptl_nid_t nid);
+char *libcfs_id2str(ptl_process_id_t id);
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -400,7 +371,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 36, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LOOPBACK                _IOWR('e', 38, IOCTL_PORTAL_TYPE)
+/* gap: use me! */
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, IOCTL_PORTAL_TYPE)
@@ -412,7 +383,7 @@ enum {
         SOCKNAL   = 2,
         GMNAL     = 3,
         /*          4 unused */
-        TCPNAL    = 5,
+        /*          5 unused */
         ROUTER    = 6,
         OPENIBNAL = 7,
         IIBNAL    = 8,
