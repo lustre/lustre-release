@@ -320,6 +320,11 @@ check_gns() {
 	    done
 	
 	    wait
+	    
+	    local RETVAL=$?
+	    
+	    [ $RETVAL -eq 0 ] || 
+		return $RETVAL
 	    ;;
 	CONCUR2)
 	    test "x$OBJECT2" = "x" && {
@@ -330,6 +335,32 @@ check_gns() {
 	    echo -n "mount on open $OBJECT2/test_file1: "
 	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 &
 	    echo -n "test data" > $OBJECT2/test_file1 >/dev/null 2>&1 &
+	    
+	    wait
+	    
+	    local RETVAL=$?
+	    
+	    [ $RETVAL -eq 0 ] || 
+		return $RETVAL
+	    ;;
+	CONCUR3)
+	    echo -n "mount on open $OBJECT1/test_file1: "
+	    
+	    local i=1
+	    local nr=20
+	    
+	    for ((;i<$nr;i++)); do
+		touch $OBJECT1/file$i &
+		echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+		mkdir $OBJECT1/dir$i &
+	    done
+
+	    wait
+	    
+	    local RETVAL=$?
+	    
+	    [ $RETVAL -eq 0 ] || 
+		return $RETVAL
 	    ;;
 	*)
 	    echo "invalid testing mode $MODE"
@@ -342,7 +373,6 @@ check_gns() {
     cat /proc/mounts | grep -q "$ENTRY1" || {
 	echo "fail"
 	show_log $LOG
-	cleanup_upcall $UPCALL_PATH
 	return 1
     }
     
@@ -350,7 +380,6 @@ check_gns() {
 	cat /proc/mounts | grep -q "$ENTRY2" || {
 	    echo "fail"
 	    show_log $LOG
-	    cleanup_upcall $UPCALL_PATH
 	    return 1
 	}
     fi
@@ -364,14 +393,12 @@ check_gns() {
 
     cat /proc/mounts | grep -q "$ENTRY1" && {
 	echo "failed"
-	cleanup_upcall $UPCALL_PATH
 	return 2
     }
     
     if test "x$MODE" = "xCONCUR2"; then
 	cat /proc/mounts | grep -q "$ENTRY2" && {
 	    echo "failed"
-	    cleanup_upcall $UPCALL_PATH
 	    return 2
 	}
     fi
@@ -558,7 +585,7 @@ test_1d() {
     setup_object $DIR/gns_test_1d $OBJECT "-t ext2 $LOOP_DEV" || error
 
     echo ""
-    echo "testing GNS with DEADLOCK upcall 4 times on the row"
+    echo "testing GNS with GENERIC/DEADLOCK upcall 4 times on the row in CONCUR1 mode"
     local i=0
     
     for ((;i<4;i++)); do
@@ -603,7 +630,7 @@ test_1e() {
     setup_object $DIR/gns_test_1e2 $OBJECT "-t ext2 $LOOP_DEV" || error
 
     echo ""
-    echo "testing GNS with GENERIC upcall"
+    echo "testing GNS with GENERIC upcall in CONCUR2 mode"
     check_gns GENERIC $DIR/gns_test_1e1 $DIR/gns_test_1e2 $TIMOUT $TICK CONCUR2 || {
         cleanup_object $DIR/gns_test_1e1
         cleanup_object $DIR/gns_test_1e2
@@ -749,6 +776,43 @@ test_2e() {
 }
 
 run_test 2e " odd conditions ('.' and '..' as mount object) ============="
+
+test_3a() {
+    local LOOP_DEV=$(find_free_loop 2>/dev/null)
+    local LOOP_FILE="/tmp/gns_loop_3a"
+    local OBJECT=".mntinfo"
+    local TIMOUT=5
+    local TICK=1
+
+    test "x$LOOP_DEV" != "x" && test -b $LOOP_DEV ||
+	error "can't find free loop device"
+
+    echo "preparing loop device $LOOP_DEV <-> $LOOP_FILE..."
+    cleanup_loop $LOOP_DEV $LOOP_FILE
+    setup_loop $LOOP_DEV $LOOP_FILE || error
+
+    echo "setting up GNS timeouts and mount object..."
+    setup_gns $OBJECT $TIMOUT $TICK || error
+
+    echo "preparing mount object at $DIR/gns_test_3a/$OBJECT..."
+    setup_object $DIR/gns_test_3a $OBJECT "-t ext2 $LOOP_DEV" || error
+
+    echo ""
+    echo "testing GNS with DEADLOCK upcall in CONCUR3 mode"
+    
+    local MODE="DEADLOCK"
+	
+    check_gns $MODE $DIR/gns_test_3a $DIR/gns_test_3a $TIMOUT $TICK CONCUR3 || {
+        cleanup_object $DIR/gns_test_3a
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+        error
+    }
+    
+    cleanup_object $DIR/gns_test_3a
+    cleanup_loop $LOOP_DEV $LOOP_FILE
+}
+
+run_test 3a " odd conditions (mount point is modifying during mount) ===="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP

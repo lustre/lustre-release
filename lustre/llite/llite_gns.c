@@ -185,7 +185,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
         cleanup_phase = 3;
 
-        if (mntinfo_fd->f_dentry->d_inode->i_size > PAGE_SIZE) {
+        if (mntinfo_fd->f_dentry->d_inode->i_size > PAGE_SIZE - 1) {
                 CERROR("mount object %*s/%*s is too big (%Ld)\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
                        strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
@@ -209,8 +209,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 GOTO(cleanup, rc);
         }
 
-        datapage[PAGE_SIZE - 1] = '\0';
-
+        datapage[rc] = '\0';
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
         dchild = NULL;
