@@ -185,11 +185,10 @@ out:
 
 static void __exit exit_lustre_lite(void)
 {
-        ll_gns_stop_thread();
-
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
 
+        ll_gns_stop_thread();
         ll_destroy_inodecache();
         
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
