@@ -77,7 +77,9 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         sbi->ll_gns_oname[strlen(sbi->ll_gns_oname)] = '\0';
         
         /* this later may be reset via /proc/fs/... */
-        memset(sbi->ll_gns_upcall, 0, sizeof(sbi->ll_gns_upcall));
+        memcpy(sbi->ll_gns_upcall, "/usr/sbin/gns_upcall",
+               strlen("/usr/sbin/gns_upcall"));
+        sbi->ll_gns_upcall[strlen(sbi->ll_gns_upcall)] = '\0';
 
         /* default values, may be changed via /proc/fs/... */
         sbi->ll_gns_state = LL_GNS_IDLE;

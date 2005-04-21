@@ -286,9 +286,17 @@ static int ll_wr_gns_upcall(struct file *file, const char *buffer,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         down(&sbi->ll_gns_sem);
-        snprintf(sbi->ll_gns_upcall, count, "%s", buffer);
-        up(&sbi->ll_gns_sem);
+        
+        /*
+         * upcall should not be the same as object name, check for possible
+         * overflow.
+         */
+        if (count < sizeof(sbi->ll_gns_upcall) &&
+            (strlen(sbi->ll_gns_oname) != count ||
+             strncmp(sbi->ll_gns_oname, buffer, count)))
+                snprintf(sbi->ll_gns_upcall, count, "%s", buffer);
 
+        up(&sbi->ll_gns_sem);
         return count;
 }
 
@@ -324,9 +332,17 @@ static int ll_wr_gns_object_name(struct file *file, const char *buffer,
         }
         
         down(&sbi->ll_gns_sem);
-        snprintf(sbi->ll_gns_oname, count, "%s", buffer);
+        
+        /*
+         * upcall should not be the same as object name, check for possible
+         * overflow.
+         */
+        if (count < sizeof(sbi->ll_gns_oname) &&
+            (strlen(sbi->ll_gns_upcall) != count ||
+             strncmp(sbi->ll_gns_upcall, buffer, count)))
+                snprintf(sbi->ll_gns_oname, count, "%s", buffer);
+        
         up(&sbi->ll_gns_sem);
-
         return count;
 }
 
@@ -357,7 +373,8 @@ static int ll_wr_gns_timeout(struct file *file, const char *buffer,
                 return rc;
 
         down(&sbi->ll_gns_sem);
-        sbi->ll_gns_timeout = val;
+        if (val > sbi->ll_gns_tick)
+                sbi->ll_gns_timeout = val;
         up(&sbi->ll_gns_sem);
 
         return count;
@@ -390,12 +407,13 @@ static int ll_wr_gns_tick(struct file *file, const char *buffer,
                 return rc;
 
         down(&sbi->ll_gns_sem);
-        if (sbi->ll_gns_tick < sbi->ll_gns_timeout)
+        if (val < sbi->ll_gns_timeout)
                 sbi->ll_gns_tick = val;
         up(&sbi->ll_gns_sem);
 
         return count;
 }
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },

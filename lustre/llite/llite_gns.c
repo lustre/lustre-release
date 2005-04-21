@@ -209,6 +209,14 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 GOTO(cleanup, rc);
         }
 
+        /* no data in mount object? */
+        if (rc == 0) {
+                CERROR("mount object %*s/%*s is empty?\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname);
+                GOTO(cleanup, rc);
+        }
+
         datapage[rc] = '\0';
         fput(mntinfo_fd);
         mntinfo_fd = NULL;
