@@ -541,14 +541,14 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                "evicting %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
 
@@ -683,7 +683,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x id %s\n",
                                client_cksum, cksum,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         cksum_counter = 1;
                         repbody->oa.o_cksum = cksum;
                 } else {
@@ -691,8 +691,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
                                 CWARN("Checksum %u from %s: %x OK\n",
                                       cksum_counter,
-                                      req->rq_peerstr,
-                                      cksum);
+                                      libcfs_id2str(req->rq_peer), cksum);
                 }
         }
 #endif
@@ -745,14 +744,14 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                req->rq_export->exp_obd->obd_name,
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                         ptlrpc_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
-                               req->rq_peerstr);
+                               libcfs_id2str(req->rq_peer));
                 }
         }
         RETURN(rc);
@@ -1056,7 +1055,7 @@ static int ost_handle(struct ptlrpc_request *req)
 
                 if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
-                               req->rq_reqmsg->opc, req->rq_peerstr);
+                               req->rq_reqmsg->opc, libcfs_id2str(req->rq_peer));
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }

@@ -36,9 +36,8 @@
 static void cray_portals_callback(ptl_event_t *ev);
 #endif
 
-
-struct ptlrpc_ni  ptlrpc_interfaces[8];
-int               ptlrpc_ninterfaces;
+ptl_handle_ni_t   ptlrpc_ni_h;
+ptl_handle_eq_t   ptlrpc_eq_h;
 
 /*  
  *  Client's outgoing request callback
@@ -161,10 +160,8 @@ void request_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_cb_id               *cbid = ev->md.user_ptr;
         struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
-        struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
-        struct ptlrpc_service             *service = srv_ni->sni_service;
+        struct ptlrpc_service             *service = rqbd->rqbd_service;
         struct ptlrpc_request             *req;
-        char                              str[PTL_NALFMT_SIZE];
         unsigned long                     flags;
         ENTRY;
 
@@ -197,8 +194,7 @@ void request_in_callback(ptl_event_t *ev)
                         CERROR("Can't allocate incoming request descriptor: "
                                "Dropping %s RPC from %s\n",
                                service->srv_name, 
-                               portals_id2str(srv_ni->sni_ni->pni_number,
-                                              ev->initiator, str));
+                               libcfs_id2str(ev->initiator));
                         return;
                 }
         }
@@ -212,9 +208,7 @@ void request_in_callback(ptl_event_t *ev)
             ev->ni_fail_type == PTL_NI_OK)
                 req->rq_reqlen = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
-        req->rq_peer.peer_id = ev->initiator;
-        req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
-        ptlrpc_id2str(&req->rq_peer, req->rq_peerstr);
+        req->rq_peer = ev->initiator;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
         
@@ -224,16 +218,16 @@ void request_in_callback(ptl_event_t *ev)
         list_add_tail(&req->rq_history_list, &service->srv_request_history);
 
         if (ev->unlinked) {
-                srv_ni->sni_nrqbd_receiving--;
+                service->srv_nrqbd_receiving--;
                 if (ev->type != PTL_EVENT_UNLINK &&
-                    srv_ni->sni_nrqbd_receiving == 0) {
-                        /* This service is off-air on this interface because
-                         * all its request buffers are busy.  Portals will
-                         * start dropping incoming requests until more buffers
-                         * get posted.  NB don't moan if it's because we're
-                         * tearing down the service. */
-                        CWARN("All %s %s request buffers busy\n",
-                              service->srv_name, srv_ni->sni_ni->pni_name);
+                    service->srv_nrqbd_receiving == 0) {
+                        /* This service is off-air because all its request
+                         * buffers are busy.  Portals will start dropping
+                         * incoming requests until more buffers get posted.  
+                         * NB don't moan if it's because we're tearing down the
+                         * service. */
+                        CWARN("All %s request buffers busy\n",
+                              service->srv_name);
                 }
                 /* req takes over the network's ref on rqbd */
         } else {
@@ -259,8 +253,7 @@ void reply_out_callback(ptl_event_t *ev)
 {
         struct ptlrpc_cb_id       *cbid = ev->md.user_ptr;
         struct ptlrpc_reply_state *rs = cbid->cbid_arg;
-        struct ptlrpc_srv_ni      *sni = rs->rs_srv_ni;
-        struct ptlrpc_service     *svc = sni->sni_service;
+        struct ptlrpc_service     *svc = rs->rs_service;
         unsigned long              flags;
         ENTRY;
 
@@ -352,39 +345,13 @@ static void ptlrpc_master_callback(ptl_event_t *ev)
         callback (ev);
 }
 
-int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
+int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, ptl_process_id_t *peer)
 {
-        struct ptlrpc_ni   *pni;
-        __u32               peer_nal;
-        ptl_nid_t           peer_nid;
-        int                 i;
-        char                str[PTL_NALFMT_SIZE];
-        int                 rc;
-
-        ENTRY;
-        
-        rc = lustre_uuid_to_peer (uuid->uuid, &peer_nal, &peer_nid);
-
-        if (rc != 0)
-                RETURN (rc);
-
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                pni = &ptlrpc_interfaces[i];
-
-                if (pni->pni_number == peer_nal) {
-                        peer->peer_id.nid = peer_nid;
-                        peer->peer_id.pid = LUSTRE_SRV_PTL_PID;
-                        peer->peer_ni = pni;
-                        RETURN(0);
-                }
-        }
-
-        CERROR("Can't find ptlrpc interface for NAL %x, NID %s\n",
-               peer_nal, portals_nid2str(peer_nal, peer_nid, str));
-        return (-ENOENT);
+        peer->pid = LUSTRE_SRV_PTL_PID;
+        return lustre_uuid_to_peer (uuid->uuid, &peer->nid);
 }
 
-void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
+void ptlrpc_ni_fini(void)
 {
         wait_queue_head_t   waitq;
         struct l_wait_info  lwi;
@@ -397,19 +364,18 @@ void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
          * replies */
 
         for (retries = 0;; retries++) {
-                rc = PtlEQFree(pni->pni_eq_h);
+                rc = PtlEQFree(ptlrpc_eq_h);
                 switch (rc) {
                 default:
                         LBUG();
 
                 case PTL_OK:
-                        PtlNIFini(pni->pni_ni_h);
+                        PtlNIFini(ptlrpc_ni_h);
                         return;
                         
                 case PTL_EQ_IN_USE:
                         if (retries != 0)
-                                CWARN("Event queue for %s still busy\n",
-                                      pni->pni_name);
+                                CWARN("Event queue still busy\n");
                         
                         /* Wait for a bit */
                         init_waitqueue_head(&waitq);
@@ -433,33 +399,25 @@ ptl_pid_t ptl_get_pid(void)
         return pid;
 }
         
-int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
+int ptlrpc_ni_init(void)
 {
         int              rc;
         char             str[20];
-        ptl_handle_ni_t  nih;
         ptl_pid_t        pid;
         
         pid = ptl_get_pid();
-        
+
         /* We're not passing any limits yet... */
-        rc = PtlNIInit(number, pid, NULL, NULL, &nih);
+        rc = PtlNIInit(PTL_IFACE_DEFAULT, pid, NULL, NULL, &ptlrpc_ni_h);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                CDEBUG (D_NET, "Can't init network interface %s: %d\n", 
-                        name, rc);
+                CDEBUG (D_NET, "Can't init network interface: %d\n", rc);
                 return (-ENOENT);
         }
 
         CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
         
-        PtlSnprintHandle(str, sizeof(str), nih);
-        CDEBUG (D_NET, "init %x %s: %s\n", number, name, str);
-
-        pni->pni_name = name;
-        pni->pni_number = number;
-        pni->pni_ni_h = nih;
-
-        pni->pni_eq_h = PTL_INVALID_HANDLE;
+        PtlSnprintHandle(str, sizeof(str), ptlrpc_ni_h);
+        CDEBUG (D_NET, "ptlrpc_ni_h: %s\n", str);
 
         /* CAVEAT EMPTOR: how we process portals events is _radically_
          * different depending on... */
@@ -467,8 +425,8 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         /* kernel portals calls our master callback when events are added to
          * the event queue.  In fact lustre never pulls events off this queue,
          * so it's only sized for some debug history. */
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, ptlrpc_master_callback,
-                        &pni->pni_eq_h);
+        rc = PtlEQAlloc(ptlrpc_ni_h, 1024, ptlrpc_master_callback,
+                        &ptlrpc_eq_h);
 #else
         /* liblustre calls the master callback when it removes events from the
          * event queue.  The event queue has to be big enough not to drop
@@ -477,24 +435,20 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         /* cray portals implements a non-standard callback to notify us there
          * are buffered events even when the app is not doing a filesystem
          * call. */
-        rc = PtlEQAlloc(pni->pni_ni_h, 10240, cray_portals_callback,
-                        &pni->pni_eq_h);
+        rc = PtlEQAlloc(ptlrpc_ni_h, 10240, cray_portals_callback,
+                        &ptlrpc_eq_h);
 # else
-        rc = PtlEQAlloc(pni->pni_ni_h, 10240, PTL_EQ_HANDLER_NONE,
-                        &pni->pni_eq_h);
+        rc = PtlEQAlloc(ptlrpc_ni_h, 10240, PTL_EQ_HANDLER_NONE,
+                        &ptlrpc_eq_h);
 # endif
 #endif
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
+        if (rc == PTL_OK)
+                return 0;
+        
+        CERROR ("Failed to allocate event queue: %d\n", rc);
+        PtlNIFini(ptlrpc_ni_h);
 
-        return (0);
- fail:
-        CERROR ("Failed to initialise network interface %s: %d\n",
-                name, rc);
-
-        /* OK to do complete teardown since we invalidated the handles above */
-        ptlrpc_ni_fini (pni);
-        return (rc);
+        return (-ENOMEM);
 }
 
 #ifndef __KERNEL__
@@ -533,8 +487,7 @@ liblustre_check_events (int timeout)
         int         i;
         ENTRY;
 
-        rc = PtlEQPoll(&ptlrpc_interfaces[0].pni_eq_h, 1, timeout * 1000,
-                       &ev, &i);
+        rc = PtlEQPoll(ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
         if (rc == PTL_EQ_EMPTY)
                 RETURN(0);
         
@@ -610,54 +563,12 @@ static void cray_portals_callback(ptl_event_t *ev)
 #endif
 #endif /* __KERNEL__ */
 
-int ptlrpc_default_nal(void)
-{
-        if (ptlrpc_ninterfaces == 0)
-                return (-ENOENT);
-
-        return (ptlrpc_interfaces[0].pni_number);
-}
-
 int ptlrpc_init_portals(void)
 {
-        /* Add new portals network interfaces here.
-         * Order is irrelevent! */
-        static struct {
-                int   number;
-                char *name;
-        } ptl_nis[] = {
-#if !CRAY_PORTALS
-                {QSWNAL,    "qswnal"},
-                {SOCKNAL,   "socknal"},
-                {GMNAL,     "gmnal"},
-                {OPENIBNAL, "openibnal"},
-                {IIBNAL,    "iibnal"},
-                {VIBNAL,    "vibnal"},
-                {TCPNAL,    "tcpnal"},
-                {LONAL,     "lonal"},
-                {RANAL,     "ranal"},
-#else
-                {CRAY_KB_ERNAL, "cray_kb_ernal"},
-#endif
-        };
-        int   rc;
-        int   i;
+        int   rc = ptlrpc_ni_init();
 
-        LASSERT(ptlrpc_ninterfaces == 0);
-
-        for (i = 0; i < sizeof (ptl_nis) / sizeof (ptl_nis[0]); i++) {
-                LASSERT(ptlrpc_ninterfaces < (sizeof(ptlrpc_interfaces) /
-                                              sizeof(ptlrpc_interfaces[0])));
-
-                rc = ptlrpc_ni_init(ptl_nis[i].number, ptl_nis[i].name,
-                                    &ptlrpc_interfaces[ptlrpc_ninterfaces]);
-                if (rc == 0)
-                        ptlrpc_ninterfaces++;
-        }
-
-        if (ptlrpc_ninterfaces == 0) {
-                CERROR("network initialisation failed: is a NAL module "
-                       "loaded?\n");
+        if (rc != 0) {
+                CERROR("network initialisation failed\n");
                 return -EIO;
         }
 #ifndef __KERNEL__
@@ -672,6 +583,5 @@ void ptlrpc_exit_portals(void)
 #ifndef __KERNEL__
         liblustre_deregister_wait_callback(liblustre_services_callback);
 #endif
-        while (ptlrpc_ninterfaces > 0)
-                ptlrpc_ni_fini (&ptlrpc_interfaces[--ptlrpc_ninterfaces]);
+        ptlrpc_ni_fini();
 }

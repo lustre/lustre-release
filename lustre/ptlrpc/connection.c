@@ -37,38 +37,32 @@ static struct list_head conn_unused_list;
 
 void ptlrpc_dump_connections(void)
 {
-        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp;
         struct ptlrpc_connection *c;
         ENTRY;
 
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       ptlrpc_peernid2str(&c->c_peer, str),
-                       c->c_peer.peer_ni->pni_name);
+                       libcfs_nid2str(c->c_peer.nid));
         }
         EXIT;
 }
 
-struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
+struct ptlrpc_connection *ptlrpc_get_connection(ptl_process_id_t peer,
                                                 struct obd_uuid *uuid)
 {
-        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
         ENTRY;
 
-
-        CDEBUG(D_INFO, "peer is %s on %s\n",
-               ptlrpc_id2str(peer, str), peer->peer_ni->pni_name);
+        CDEBUG(D_INFO, "peer is %s\n", libcfs_id2str(peer));
 
         spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    peer->peer_ni == c->c_peer.peer_ni) {
+                if (memcmp(&peer, &c->c_peer, sizeof(peer)) == 0) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }
@@ -76,8 +70,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
-                    peer->peer_ni == c->c_peer.peer_ni) {
+                if (memcmp(&peer, &c->c_peer, sizeof(peer)) == 0) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
@@ -95,7 +88,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         if (uuid && uuid->uuid)                         /* XXX ???? */
                 obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
         atomic_set(&c->c_refcount, 0);
-        memcpy(&c->c_peer, peer, sizeof(c->c_peer));
+        memcpy(&c->c_peer, &peer, sizeof(c->c_peer));
 
         ptlrpc_connection_addref(c);
 
@@ -109,7 +102,6 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
 int ptlrpc_put_connection(struct ptlrpc_connection *c)
 {
-        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         ENTRY;
 
@@ -118,10 +110,9 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 RETURN(0);
         }
 
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount) - 1, 
-                ptlrpc_peernid2str(&c->c_peer, str),
-                c->c_peer.peer_ni->pni_name);
+                libcfs_nid2str(c->c_peer.nid));
 
         if (atomic_dec_and_test(&c->c_refcount)) {
                 spin_lock(&conn_lock);
@@ -139,13 +130,11 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
-        char str[PTL_NALFMT_SIZE];
         ENTRY;
         atomic_inc(&c->c_refcount);
-        CDEBUG (D_INFO, "connection=%p refcount %d to %s on %s\n",
+        CDEBUG (D_INFO, "connection=%p refcount %d to %s\n",
                 c, atomic_read(&c->c_refcount),
-                ptlrpc_peernid2str(&c->c_peer, str),
-                c->c_peer.peer_ni->pni_name);
+                libcfs_nid2str(c->c_peer.nid));
         RETURN(c);
 }
 
@@ -158,7 +147,6 @@ void ptlrpc_init_connection(void)
 
 void ptlrpc_cleanup_connection(void)
 {
-        char str[PTL_NALFMT_SIZE];
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
 
@@ -170,10 +158,9 @@ void ptlrpc_cleanup_connection(void)
         }
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%s on %s)\n",
+                CERROR("Connection %p/%s has refcount %d (nid=%s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       ptlrpc_peernid2str(&c->c_peer, str),
-                       c->c_peer.peer_ni->pni_name);
+                       libcfs_nid2str(c->c_peer.nid));
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));
         }

@@ -93,8 +93,6 @@ static inline void inter_module_put(void *a)
         return;
 }
 
-extern ptl_handle_ni_t         tcpnal_ni;
-
 void *inter_module_get(char *arg);
 
 /* cheats for now */
@@ -689,14 +687,6 @@ static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
 static inline void portals_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
-
-#define LBUG()                                                          \
-        do {                                                            \
-                printf("!!!LBUG at %s:%d\n", __FILE__, __LINE__);       \
-                sleep(1000000);                                         \
-        } while (0)
-
-
 
 /* completion */
 struct completion {

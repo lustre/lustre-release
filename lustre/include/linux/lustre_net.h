@@ -145,14 +145,9 @@
 #define PTLBD_BUFSIZE    (32 * 1024)
 #define PTLBD_MAXREQSIZE 1024
 
-struct ptlrpc_peer {
-        ptl_process_id_t  peer_id;
-        struct ptlrpc_ni *peer_ni;
-};
-
 struct ptlrpc_connection {
         struct list_head        c_link;
-        struct ptlrpc_peer      c_peer;
+        ptl_process_id_t        c_peer;
         struct obd_uuid         c_remote_uuid;
         atomic_t                c_refcount;
 };
@@ -242,34 +237,34 @@ struct ptlrpc_cb_id {
 #define RS_DEBUG     1
 
 struct ptlrpc_reply_state {
-        struct ptlrpc_cb_id   rs_cb_id;
-        struct list_head      rs_list;
-        struct list_head      rs_exp_list;
-        struct list_head      rs_obd_list;
+        struct ptlrpc_cb_id    rs_cb_id;
+        struct list_head       rs_list;
+        struct list_head       rs_exp_list;
+        struct list_head       rs_obd_list;
 #if RS_DEBUG
-        struct list_head      rs_debug_list;
+        struct list_head       rs_debug_list;
 #endif
         /* updates to following flag serialised by srv_request_lock */
-        unsigned int          rs_difficult:1;   /* ACK/commit stuff */
-        unsigned int          rs_scheduled:1;   /* being handled? */
-        unsigned int          rs_scheduled_ever:1; /* any schedule attempts? */
-        unsigned int          rs_handled:1;     /* been handled yet? */
-        unsigned int          rs_on_net:1;      /* reply_out_callback pending? */
+        unsigned int           rs_difficult:1;   /* ACK/commit stuff */
+        unsigned int           rs_scheduled:1;   /* being handled? */
+        unsigned int           rs_scheduled_ever:1; /* any schedule attempts? */
+        unsigned int           rs_handled:1;     /* been handled yet? */
+        unsigned int           rs_on_net:1;      /* reply_out_callback pending? */
 
-        int                   rs_size;
-        __u64                 rs_transno;
-        __u64                 rs_xid;
-        struct obd_export    *rs_export;
-        struct ptlrpc_srv_ni *rs_srv_ni;
-        ptl_handle_md_t       rs_md_h;
-        atomic_t              rs_refcount;
+        int                    rs_size;
+        __u64                  rs_transno;
+        __u64                  rs_xid;
+        struct obd_export     *rs_export;
+        struct ptlrpc_service *rs_service;
+        ptl_handle_md_t        rs_md_h;
+        atomic_t               rs_refcount;
 
         /* locks awaiting client reply ACK */
-        int                   rs_nlocks;
-        struct lustre_handle  rs_locks[RS_MAX_LOCKS];
-        ldlm_mode_t           rs_modes[RS_MAX_LOCKS];
+        int                    rs_nlocks;
+        struct lustre_handle   rs_locks[RS_MAX_LOCKS];
+        ldlm_mode_t            rs_modes[RS_MAX_LOCKS];
         /* last member: variable sized reply message */
-        struct lustre_msg     rs_msg;
+        struct lustre_msg      rs_msg;
 };
 
 struct ptlrpc_request {
@@ -324,8 +319,7 @@ struct ptlrpc_request {
         wait_queue_head_t    rq_reply_waitq;
         struct ptlrpc_cb_id  rq_reply_cbid;
 
-        struct ptlrpc_peer rq_peer; /* XXX see service.c can this be removed? */
-        char               rq_peerstr[PTL_NALFMT_SIZE];
+        ptl_process_id_t   rq_peer;
         struct obd_export *rq_export;
         struct obd_import *rq_import;
 
@@ -455,32 +449,12 @@ struct ptlrpc_thread {
 struct ptlrpc_request_buffer_desc {
         struct list_head       rqbd_list;
         struct list_head       rqbd_reqs;
-        struct ptlrpc_srv_ni  *rqbd_srv_ni;
+        struct ptlrpc_service *rqbd_service;
         ptl_handle_md_t        rqbd_md_h;
         int                    rqbd_refcount;
         char                  *rqbd_buffer;
         struct ptlrpc_cb_id    rqbd_cbid;
         struct ptlrpc_request  rqbd_req;
-};
-
-/* event queues are per-ni, because one day we may get a hardware
- * supported NAL that delivers events asynchonously wrt kernel portals
- * into the eq.
- */
-struct ptlrpc_ni { /* Generic interface state */
-        char                   *pni_name;
-        int                     pni_number;
-        ptl_handle_ni_t         pni_ni_h;
-        ptl_handle_eq_t         pni_eq_h;
-};
-
-struct ptlrpc_srv_ni {
-        /* Interface-specific service state */
-        struct ptlrpc_service  *sni_service;    /* owning service */
-        struct ptlrpc_ni       *sni_ni;         /* network interface */
-        struct list_head        sni_active_rqbds;   /* req buffers receiving */
-        struct list_head        sni_active_replies; /* all the active replies */
-        int                     sni_nrqbd_receiving; /* # posted request buffers */
 };
 
 typedef int (*svc_handler_t)(struct ptlrpc_request *req);
@@ -510,11 +484,14 @@ struct ptlrpc_service {
         svcreq_printfn_t  srv_request_history_print_fn; /* service-specific print fn */
 
         struct list_head  srv_idle_rqbds;       /* request buffers to be reposted */
+        struct list_head  srv_active_rqbds;     /* req buffers receiving */
         struct list_head  srv_history_rqbds;    /* request buffer history */
+        int               srv_nrqbd_receiving;  /* # posted request buffers */
         int               srv_n_history_rqbds;  /* # request buffers in history */
         int               srv_max_history_rqbds; /* max # request buffers in history */
         
         atomic_t          srv_outstanding_replies;
+        struct list_head  srv_active_replies;   /* all the active replies */
         struct list_head  srv_reply_queue;      /* replies waiting for service */
 
         wait_queue_head_t srv_waitq; /* all threads sleep on this */
@@ -529,38 +506,23 @@ struct ptlrpc_service {
 
         struct proc_dir_entry   *srv_procroot;
         struct lprocfs_stats    *srv_stats;
-        
-        struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
-static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
-{
-        LASSERT(p->peer_ni != NULL);
-        return (portals_nid2str(p->peer_ni->pni_number, p->peer_id.nid, str));
-}
-
-static inline char *ptlrpc_id2str(struct ptlrpc_peer *p, char *str)
-{
-        LASSERT(p->peer_ni != NULL);
-        return (portals_id2str(p->peer_ni->pni_number, p->peer_id, str));
-}
-
 /* ptlrpc/events.c */
-extern struct ptlrpc_ni ptlrpc_interfaces[];
-extern int              ptlrpc_ninterfaces;
-extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, struct ptlrpc_peer *peer);
+extern ptl_handle_ni_t  ptlrpc_ni_h;
+extern ptl_handle_eq_t  ptlrpc_eq_h;
+extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, ptl_process_id_t *peer);
 extern void request_out_callback (ptl_event_t *ev);
 extern void reply_in_callback(ptl_event_t *ev);
 extern void client_bulk_callback (ptl_event_t *ev);
 extern void request_in_callback(ptl_event_t *ev);
 extern void reply_out_callback(ptl_event_t *ev);
 extern void server_bulk_callback (ptl_event_t *ev);
-extern int ptlrpc_default_nal(void);
 
 /* ptlrpc/connection.c */
 void ptlrpc_dump_connections(void);
 void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *);
-struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
+struct ptlrpc_connection *ptlrpc_get_connection(ptl_process_id_t peer,
                                                 struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);

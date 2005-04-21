@@ -24,9 +24,7 @@ unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 
 void *inter_module_get(char *arg)
 {
-        if (!strcmp(arg, "tcpnal_ni"))
-                return &tcpnal_ni;
-        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
+        if (!strcmp(arg, "ldlm_cli_cancel_unused"))
                 return ldlm_cli_cancel_unused;
         else if (!strcmp(arg, "ldlm_namespace_cleanup"))
                 return ldlm_namespace_cleanup;
@@ -37,6 +35,7 @@ void *inter_module_get(char *arg)
 }
 
 /* XXX move to proper place */
+#error
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         switch(nal){
@@ -61,8 +60,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         return str;
 }
 
-ptl_handle_ni_t         tcpnal_ni;
-
 struct pingcli_args {
         ptl_nid_t mynid;
         ptl_nid_t nid;
@@ -74,24 +71,6 @@ struct pingcli_args {
 struct task_struct *current;
 
 /* portals interfaces */
-ptl_handle_ni_t *
-kportal_get_ni (int nal)
-{
-        switch (nal)
-        {
-        case SOCKNAL:
-                return &tcpnal_ni;
-        default:
-                return NULL;
-        }
-}
-
-inline void
-kportal_put_ni (int nal)
-{
-        return;
-}
-
 int
 kportal_nal_cmd(struct portals_cfg *pcfg)
 {
@@ -129,14 +108,9 @@ int init_lib_portals()
 {
         int rc;
 
-        PtlInit();
-        rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
-        if (rc != 0) {
-                CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
-                PtlFini();
-                RETURN (rc);
-        }
-        PtlNIDebug(tcpnal_ni, ~0);
+        rc = PtlInit();
+        if (rc != PTL_OK)
+                CERROR("PtlInit failed: error %d\n", rc);
         return rc;
 }
 

@@ -185,7 +185,6 @@ static int expired_lock_main(void *arg)
 static void waiting_locks_callback(unsigned long unused)
 {
         struct ldlm_lock *lock, *last = NULL;
-        char str[PTL_NALFMT_SIZE];
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
@@ -198,7 +197,7 @@ static void waiting_locks_callback(unsigned long unused)
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
                            "%s@%s nid %s ",lock->l_export->exp_client_uuid.uuid,
                            lock->l_export->exp_connection->c_remote_uuid.uuid,
-                           ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer,str));
+                           libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
 
                 if (lock == last) {
                         LDLM_ERROR(lock, "waiting on lock multiple times");
@@ -355,16 +354,14 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                             const char *ast_type)
 {
         struct ptlrpc_connection *conn = lock->l_export->exp_connection;
-        char str[PTL_NALFMT_SIZE];
-
-        ptlrpc_peernid2str(&conn->c_peer, str);
+        char                     *str = libcfs_nid2str(conn->c_peer.nid);
 
         LCONSOLE_ERROR("A client on nid %s was evicted from service %s.\n",
                        str, lock->l_export->exp_obd->obd_name);
 
         LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid, str);
+                   conn->c_remote_uuid.uuid, conn->c_peer.nid, str);
 
         ptlrpc_fail_export(lock->l_export);
 }
@@ -373,15 +370,14 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                  struct ptlrpc_request *req, int rc,
                                  const char *ast_type)
 {
-        struct ptlrpc_peer *peer = &req->rq_import->imp_connection->c_peer;
-        char str[PTL_NALFMT_SIZE];
+        ptl_process_id_t peer = req->rq_import->imp_connection->c_peer;
 
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
                 LASSERT(lock->l_export);
                 if (lock->l_export->exp_libclient) {
                         LDLM_DEBUG(lock, "%s AST to liblustre client (nid %s)"
                                    " timeout, just cancelling lock", ast_type,
-                                   ptlrpc_peernid2str(peer, str));
+                                   libcfs_nid2str(peer.nid));
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
                 } else {
@@ -394,11 +390,11 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                 if (rc == -EINVAL)
                         LDLM_DEBUG(lock, "client (nid %s) returned %d"
                                    " from %s AST - normal race",
-                                   ptlrpc_peernid2str(peer, str),
+                                   libcfs_nid2str(peer.nid),
                                    req->rq_repmsg->status, ast_type);
                 else
                         LDLM_ERROR(lock, "client (nid %s) returned %d "
-                                   "from %s AST", ptlrpc_peernid2str(peer, str),
+                                   "from %s AST", libcfs_nid2str(peer.nid),
                                    (req->rq_repmsg != NULL) ?
                                    req->rq_repmsg->status : 0, ast_type);
                 ldlm_lock_cancel(lock);
@@ -877,7 +873,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                        " from client %s id %s\n",
                        dlm_req->lock_handle1.cookie,
                        req->rq_export->exp_client_uuid.uuid,
-                       req->rq_peerstr);
+                       libcfs_id2str(req->rq_peer));
                 LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock "
                                   "(cookie "LPU64")",
                                   dlm_req->lock_handle1.cookie);
@@ -1111,7 +1107,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                        "export cookie "LPX64"; this is "
                        "normal if this node rebooted with a lock held\n",
                        req->rq_reqmsg->opc,
-                       req->rq_peerstr,
+                       libcfs_id2str(req->rq_peer),
                        req->rq_reqmsg->handle.cookie);
 
                 dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),
@@ -1246,7 +1242,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 struct ldlm_request *dlm_req;
 
                 CERROR("operation %d from %s with bad export cookie "LPU64"\n",
-                       req->rq_reqmsg->opc, req->rq_peerstr,
+                       req->rq_reqmsg->opc, libcfs_id2str(req->rq_peer),
                        req->rq_reqmsg->handle.cookie);
 
                 dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),

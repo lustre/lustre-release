@@ -569,11 +569,10 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 rc = ptlrpc_queue_wait(req);
 
                 if (rc == ESTALE) {
-                        char str[PTL_NALFMT_SIZE];
                         CERROR("client/server (nid %s) out of sync"
                                " -- not fatal\n",
-                               ptlrpc_peernid2str(&req->rq_import->
-                                                  imp_connection->c_peer, str));
+                               libcfs_nid2str(req->rq_import->
+                                              imp_connection->c_peer.nid));
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);

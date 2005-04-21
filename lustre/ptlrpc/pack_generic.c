@@ -124,7 +124,7 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
-        rs->rs_srv_ni = req->rq_rqbd->rqbd_srv_ni;
+        rs->rs_service = req->rq_rqbd->rqbd_service;
         rs->rs_size = size;
         INIT_LIST_HEAD(&rs->rs_exp_list);
         INIT_LIST_HEAD(&rs->rs_obd_list);

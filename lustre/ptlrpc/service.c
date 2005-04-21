@@ -60,9 +60,8 @@ ptlrpc_free_request_buffer (char *ptr, int size)
 }
 
 struct ptlrpc_request_buffer_desc *
-ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
+ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
 {
-        struct ptlrpc_service             *svc = srv_ni->sni_service;
         unsigned long                      flags;
         struct ptlrpc_request_buffer_desc *rqbd;
 
@@ -70,7 +69,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
         if (rqbd == NULL)
                 return (NULL);
 
-        rqbd->rqbd_srv_ni = srv_ni;
+        rqbd->rqbd_service = svc;
         rqbd->rqbd_refcount = 0;
         rqbd->rqbd_cbid.cbid_fn = request_in_callback;
         rqbd->rqbd_cbid.cbid_arg = rqbd;
@@ -93,8 +92,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
 void
 ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd) 
 {
-        struct ptlrpc_srv_ni  *sni = rqbd->rqbd_srv_ni;
-        struct ptlrpc_service *svc = sni->sni_service;
+        struct ptlrpc_service *svc = rqbd->rqbd_service;
         unsigned long          flags;
         
         LASSERT (rqbd->rqbd_refcount == 0);
@@ -110,21 +108,20 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 }
 
 int
-ptlrpc_grow_req_bufs(struct ptlrpc_srv_ni *srv_ni)
+ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
 {
-        struct ptlrpc_service             *svc = srv_ni->sni_service;
         struct ptlrpc_request_buffer_desc *rqbd;
         int                                i;
 
         CDEBUG(D_RPCTRACE, "%s: allocate %d new %d-byte reqbufs (%d/%d left)\n",
                svc->srv_name, svc->srv_nbuf_per_group, svc->srv_buf_size,
-               srv_ni->sni_nrqbd_receiving, svc->srv_nbufs);
+               svc->srv_nrqbd_receiving, svc->srv_nbufs);
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
-                rqbd = ptlrpc_alloc_rqbd(srv_ni);
+                rqbd = ptlrpc_alloc_rqbd(svc);
 
                 if (rqbd == NULL) {
-                        CERROR ("%s/%s: Can't allocate request buffer\n",
-                                svc->srv_name, srv_ni->sni_ni->pni_name);
+                        CERROR ("%s: Can't allocate request buffer\n",
+                                svc->srv_name);
                         return (-ENOMEM);
                 }
 
@@ -154,7 +151,7 @@ ptlrpc_save_lock (struct ptlrpc_request *req,
 void
 ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
 {
-        struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+        struct ptlrpc_service *svc = rs->rs_service;
 
 #ifdef CONFIG_SMP
         LASSERT (spin_is_locked (&svc->srv_lock));
@@ -191,7 +188,7 @@ ptlrpc_commit_replies (struct obd_device *obd)
                 LASSERT (rs->rs_difficult);
 
                 if (rs->rs_transno <= obd->obd_last_committed) {
-                        struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+                        struct ptlrpc_service *svc = rs->rs_service;
 
                         spin_lock (&svc->srv_lock);
                         list_del_init (&rs->rs_obd_list);
@@ -213,7 +210,6 @@ timeval_sub(struct timeval *large, struct timeval *small)
 static int
 ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 {
-        struct ptlrpc_srv_ni              *srv_ni;
         struct ptlrpc_request_buffer_desc *rqbd;
         unsigned long                      flags;
         int                                rc;
@@ -233,9 +229,8 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
                 list_del (&rqbd->rqbd_list);
 
                 /* assume we will post successfully */
-                srv_ni = rqbd->rqbd_srv_ni;
-                srv_ni->sni_nrqbd_receiving++;
-                list_add (&rqbd->rqbd_list, &srv_ni->sni_active_rqbds);
+                svc->srv_nrqbd_receiving++;
+                list_add (&rqbd->rqbd_list, &svc->srv_active_rqbds);
 
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
 
@@ -248,17 +243,16 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 
         spin_lock_irqsave(&svc->srv_lock, flags);
 
-        srv_ni->sni_nrqbd_receiving--;
+        svc->srv_nrqbd_receiving--;
         list_del(&rqbd->rqbd_list);
         list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
 
-        if (srv_ni->sni_nrqbd_receiving == 0) {
+        if (svc->srv_nrqbd_receiving == 0) {
                 /* This service is off-air on this interface because all
                  * its request buffers are busy.  Portals will have started
                  * dropping incoming requests until more buffers get
                  * posted */
-                CERROR("All %s %s request buffers busy\n",
-                       svc->srv_name, srv_ni->sni_ni->pni_name);
+                CERROR("All %s request buffers busy\n", svc->srv_name);
         }
 
         spin_unlock_irqrestore (&svc->srv_lock, flags);
@@ -273,22 +267,18 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                 struct proc_dir_entry *proc_entry,
                 svcreq_printfn_t svcreq_printfn)
 {
-        int                                i;
-        int                                rc;
-        int                                ssize;
-        struct ptlrpc_service             *service;
-        struct ptlrpc_srv_ni              *srv_ni;
+        int                    rc;
+        struct ptlrpc_service *service;
         ENTRY;
 
-        LASSERT (ptlrpc_ninterfaces > 0);
         LASSERT (nbufs > 0);
         LASSERT (bufsize >= max_req_size);
         
-        ssize = offsetof (struct ptlrpc_service,
-                          srv_interfaces[ptlrpc_ninterfaces]);
-        OBD_ALLOC(service, ssize);
+        OBD_ALLOC(service, sizeof(*service));
         if (service == NULL)
                 RETURN(NULL);
+
+        /* First initialise enough for early teardown */
 
         service->srv_name = name;
         spin_lock_init(&service->srv_lock);
@@ -308,43 +298,28 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
 
         INIT_LIST_HEAD(&service->srv_request_queue);
         INIT_LIST_HEAD(&service->srv_idle_rqbds);
+        INIT_LIST_HEAD(&service->srv_active_rqbds);
         INIT_LIST_HEAD(&service->srv_history_rqbds);
         INIT_LIST_HEAD(&service->srv_request_history);
+        INIT_LIST_HEAD(&service->srv_active_replies);
         INIT_LIST_HEAD(&service->srv_reply_queue);
-
-        /* First initialise enough for early teardown */
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                srv_ni = &service->srv_interfaces[i];
-
-                srv_ni->sni_service = service;
-                srv_ni->sni_ni = &ptlrpc_interfaces[i];
-                INIT_LIST_HEAD(&srv_ni->sni_active_rqbds);
-                INIT_LIST_HEAD(&srv_ni->sni_active_replies);
-        }
 
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
         spin_unlock (&ptlrpc_all_services_lock);
         
-        /* Now allocate the request buffers, assuming all interfaces require
-         * the same number. */
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                srv_ni = &service->srv_interfaces[i];
-                CDEBUG (D_NET, "%s: initialising interface %s\n", name,
-                        srv_ni->sni_ni->pni_name);
-
-                rc = ptlrpc_grow_req_bufs(srv_ni);
-                /* We shouldn't be under memory pressure at startup, so
-                 * fail if we can't post all our buffers at this time. */
-                if (rc != 0)
-                        GOTO(failed, NULL);
-        }
+        /* Now allocate the request buffers */
+        rc = ptlrpc_grow_req_bufs(service);
+        /* We shouldn't be under memory pressure at startup, so
+         * fail if we can't post all our buffers at this time. */
+        if (rc != 0)
+                GOTO(failed, NULL);
 
         if (proc_entry != NULL)
                 ptlrpc_lprocfs_register_service(proc_entry, service);
 
-        CDEBUG(D_NET, "%s: Started on %d interfaces, listening on portal %d\n",
-               service->srv_name, ptlrpc_ninterfaces, service->srv_req_portal);
+        CDEBUG(D_NET, "%s: Started, listening on portal %d\n",
+               service->srv_name, service->srv_req_portal);
 
         RETURN(service);
 failed:
@@ -356,8 +331,7 @@ static void
 ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
-        struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
-        struct ptlrpc_service             *svc = srv_ni->sni_service;
+        struct ptlrpc_service             *svc = rqbd->rqbd_service;
         unsigned long                      flags;
         int                                refcount;
         struct list_head                  *tmp;
@@ -481,14 +455,15 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         if (rc != 0) {
                 CERROR ("error unpacking request: ptl %d from %s"
                         " xid "LPU64"\n", svc->srv_req_portal,
-                        request->rq_peerstr, request->rq_xid);
+                        libcfs_id2str(request->rq_peer), request->rq_xid);
                 goto out;
         }
 
         rc = -EINVAL;
         if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u) from %s\n",
-                       request->rq_reqmsg->type, request->rq_peerstr);
+                       request->rq_reqmsg->type,
+                       libcfs_id2str(request->rq_peer));
                 goto out;
         }
 
@@ -500,7 +475,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         if (timediff / 1000000 > (long)obd_timeout) {
                 CERROR("Dropping timed-out opc %d request from %s"
                        ": %ld seconds old\n", request->rq_reqmsg->opc,
-                       request->rq_peerstr,
+                       libcfs_id2str(request->rq_peer),
                        timediff / 1000000);
                 goto out;
         }
@@ -532,30 +507,28 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 
         request->rq_phase = RQ_PHASE_INTERPRET;
 
-        CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
+        CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
+               "%s:%s+%d:%d:"LPU64":%s:%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
-               request->rq_peer.peer_ni->pni_name,
-               request->rq_peerstr,
+               libcfs_id2str(request->rq_peer),
                request->rq_reqmsg->opc);
 
         rc = svc->srv_handler(request);
 
         request->rq_phase = RQ_PHASE_COMPLETE;
 
-        CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:ni:nid:opc "
-               "%s:%s+%d:%d:"LPU64":%s:%s:%d\n", current->comm,
+        CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
+               "%s:%s+%d:%d:"LPU64":%s:%d\n", current->comm,
                (request->rq_export ?
                 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
                (request->rq_export ?
                 atomic_read(&request->rq_export->exp_refcount) : -99),
                request->rq_reqmsg->status, request->rq_xid,
-               request->rq_peer.peer_ni->pni_name,
-               request->rq_peerstr,
+               libcfs_id2str(request->rq_peer),
                request->rq_reqmsg->opc);
 
 put_conn:
@@ -570,7 +543,7 @@ put_conn:
         CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
                "request "LPU64" opc %u from %s processed in %ldus "
                "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
-               request->rq_peerstr,
+               libcfs_id2str(request->rq_peer),
                timediff, timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL) {
@@ -597,7 +570,6 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         struct obd_device         *obd;
         int                        nlocks;
         int                        been_handled;
-        char                       str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -646,7 +618,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                       rs, 
                       rs->rs_xid, rs->rs_transno,
                       rs->rs_msg.opc, 
-                      ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+                      libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 
         if ((!been_handled && rs->rs_on_net) || 
@@ -736,27 +708,20 @@ void ptlrpc_daemonize(void)
 }
 
 static void
-ptlrpc_check_rqbd_pools(struct ptlrpc_service *svc)
+ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
 {
-        struct ptlrpc_srv_ni  *sni;
-        int                    i;
-        int                    avail = 0;
-        int                    low_water = svc->srv_nbuf_per_group/2;
+        int avail = svc->srv_nrqbd_receiving;
+        int low_water = svc->srv_nbuf_per_group/2;
 
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                sni = &svc->srv_interfaces[i];
+        /* NB I'm not locking; just looking. */
 
-                avail += sni->sni_nrqbd_receiving;
-                /* NB I'm not locking; just looking. */
+        /* CAVEAT EMPTOR: We might be allocating buffers here because we've
+         * allowed the request history to grow out of control.  We could put a
+         * sanity check on that here and cull some history if we need the
+         * space. */
 
-                /* CAVEAT EMPTOR: We might be allocating buffers here
-                 * because we've allowed the request history to grow out of
-                 * control.  We could put a sanity check on that here and
-                 * cull some history if we need the space. */
-
-                if (sni->sni_nrqbd_receiving <= low_water)
-                        ptlrpc_grow_req_bufs(sni);
-        }
+        if (avail <= low_water)
+                ptlrpc_grow_req_bufs(svc);
 
         lprocfs_counter_add(svc->srv_stats, PTLRPC_REQBUF_AVAIL_CNTR, avail);
 }
@@ -842,7 +807,7 @@ static int ptlrpc_main(void *arg)
 
                 lc_watchdog_touch(watchdog);
 
-                ptlrpc_check_rqbd_pools(svc);
+                ptlrpc_check_rqbd_pool(svc);
 
                 if (!list_empty (&svc->srv_reply_queue))
                         ptlrpc_server_handle_reply (svc);
@@ -982,10 +947,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 
 int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
-        int                   i;
         int                   rc;
         unsigned long         flags;
-        struct ptlrpc_srv_ni *srv_ni;
         struct l_wait_info    lwi;
         struct list_head     *tmp;
 
@@ -1002,56 +965,49 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
          * freed */
         service->srv_max_history_rqbds = 0;
 
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                srv_ni = &service->srv_interfaces[i];
-                CDEBUG(D_NET, "%s: tearing down interface %s\n",
-                       service->srv_name, srv_ni->sni_ni->pni_name);
+        CDEBUG(D_NET, "%s: tearing down\n", service->srv_name);
 
-                /* Unlink all the request buffers.  This forces a 'final'
-                 * event with its 'unlink' flag set for each posted rqbd */
-                list_for_each(tmp, &srv_ni->sni_active_rqbds) {
-                        struct ptlrpc_request_buffer_desc *rqbd =
-                                list_entry(tmp, struct ptlrpc_request_buffer_desc, 
-                                           rqbd_list);
+        /* Unlink all the request buffers.  This forces a 'final' event with
+         * its 'unlink' flag set for each posted rqbd */
+        list_for_each(tmp, &service->srv_active_rqbds) {
+                struct ptlrpc_request_buffer_desc *rqbd =
+                        list_entry(tmp, struct ptlrpc_request_buffer_desc, 
+                                   rqbd_list);
 
-                        rc = PtlMDUnlink(rqbd->rqbd_md_h);
-                        LASSERT (rc == PTL_OK || rc == PTL_MD_INVALID);
-                }
-
-                /* Wait for the network to release any buffers it's
-                 * currently filling */
-                for (;;) {
-                        spin_lock_irqsave(&service->srv_lock, flags);
-                        rc = srv_ni->sni_nrqbd_receiving;
-                        spin_unlock_irqrestore(&service->srv_lock, flags);
-
-                        if (rc == 0)
-                                break;
-                        
-                        /* Network access will complete in finite time but
-                         * the HUGE timeout lets us CWARN for visibility of
-                         * sluggish NALs */
-                        lwi = LWI_TIMEOUT(300 * HZ, NULL, NULL);
-                        rc = l_wait_event(service->srv_waitq,
-                                          srv_ni->sni_nrqbd_receiving == 0,
-                                          &lwi);
-                        if (rc == -ETIMEDOUT)
-                                CWARN("Waiting for request buffers on "
-                                      "service %s on interface %s ",
-                                      service->srv_name, srv_ni->sni_ni->pni_name);
-                }
-
-                /* schedule all outstanding replies to terminate them */
-                spin_lock_irqsave(&service->srv_lock, flags);
-                while (!list_empty(&srv_ni->sni_active_replies)) {
-                        struct ptlrpc_reply_state *rs =
-                                list_entry(srv_ni->sni_active_replies.next,
-                                           struct ptlrpc_reply_state,
-                                           rs_list);
-                        ptlrpc_schedule_difficult_reply(rs);
-                }
-                spin_unlock_irqrestore(&service->srv_lock, flags);
+                rc = PtlMDUnlink(rqbd->rqbd_md_h);
+                LASSERT (rc == PTL_OK || rc == PTL_MD_INVALID);
         }
+
+        /* Wait for the network to release any buffers it's currently
+         * filling */
+        for (;;) {
+                spin_lock_irqsave(&service->srv_lock, flags);
+                rc = service->srv_nrqbd_receiving;
+                spin_unlock_irqrestore(&service->srv_lock, flags);
+
+                if (rc == 0)
+                        break;
+
+                /* Network access will complete in finite time but the HUGE
+                 * timeout lets us CWARN for visibility of sluggish NALs */
+                lwi = LWI_TIMEOUT(300 * HZ, NULL, NULL);
+                rc = l_wait_event(service->srv_waitq,
+                                  service->srv_nrqbd_receiving == 0,
+                                  &lwi);
+                if (rc == -ETIMEDOUT)
+                        CWARN("Service %s waiting for request buffers\n",
+                              service->srv_name);
+        }
+
+        /* schedule all outstanding replies to terminate them */
+        spin_lock_irqsave(&service->srv_lock, flags);
+        while (!list_empty(&service->srv_active_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry(service->srv_active_replies.next,
+                                   struct ptlrpc_reply_state, rs_list);
+                ptlrpc_schedule_difficult_reply(rs);
+        }
+        spin_unlock_irqrestore(&service->srv_lock, flags);
 
         /* purge the request queue.  NB No new replies (rqbds all unlinked)
          * and no service threads, so I'm the only thread noodling the
@@ -1071,11 +1027,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         LASSERT(service->srv_n_queued_reqs == 0);
         LASSERT(service->srv_n_active_reqs == 0);
         LASSERT(service->srv_n_history_rqbds == 0);
-
-        for (i = 0; i < ptlrpc_ninterfaces; i++) {
-                srv_ni = &service->srv_interfaces[i];
-                LASSERT(list_empty(&srv_ni->sni_active_rqbds));
-        }
+        LASSERT(list_empty(&service->srv_active_rqbds));
 
         /* Now free all the request buffers since nothing references them
          * any more... */
@@ -1104,8 +1056,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 CWARN("Unexpectedly long timeout %p\n", service);
         }
 
-        OBD_FREE(service,
-                 offsetof(struct ptlrpc_service,
-                          srv_interfaces[ptlrpc_ninterfaces]));
+        OBD_FREE(service, sizeof(*service));
         return 0;
 }

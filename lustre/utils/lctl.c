@@ -118,9 +118,6 @@ command_t cmdlist[] = {
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
          "usage: fail nid|_all_ [count]"},
-        {"loopback", jt_ptl_loopback, 0, "print loopback state\n"
-         "With arg enable/disable\n"
-         "usage: loopback [on|off]"},
 
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},

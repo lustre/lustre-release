@@ -385,7 +385,6 @@ set_local(struct lustre_mount_data *lmd)
         case SOCKNAL:
                 /* We need to do this before the mount is started if routing */
                 system("/sbin/modprobe ksocknal");
-        case TCPNAL:
         case OPENIBNAL:
         case IIBNAL:
         case VIBNAL:
@@ -462,7 +461,6 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 break;
 
         case SOCKNAL:
-        case TCPNAL:
         case OPENIBNAL:
         case VIBNAL:
         case RANAL:

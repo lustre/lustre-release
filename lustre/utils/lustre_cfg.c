@@ -253,7 +253,7 @@ int jt_obd_cleanup(int argc, char **argv)
 }
 
 static 
-int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal) 
+int do_add_uuid(char * func, char *uuid, ptl_nid_t nid) 
 {
         char tmp[64];
         int rc;
@@ -266,11 +266,10 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
 
 #if 0
-        fprintf(stderr, "adding\tnal: %d\tnid: %d\tuuid: %s\n",
-               lcfg->lcfg_nid, lcfg->lcfg_nal, uuid);
+        fprintf(stderr, "adding\tnid: %d\tuuid: %s\n",
+               lcfg->lcfg_nid, uuid);
 #endif
         rc = lcfg_ioctl(func, OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
@@ -287,7 +286,6 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
         ptl_nid_t nid = 0;
-        int nal;
         
         if (argc != 4) {                
                 return CMD_HELP;
@@ -298,19 +296,12 @@ int jt_lcfg_add_uuid(int argc, char **argv)
                         return (-1);
         }
 
-        nal = ptl_name2nal(argv[3]);
-
-        if (nal <= 0) {
-                fprintf (stderr, "Can't parse NAL %s\n", argv[3]);
-                return -1;
-        }
-
-        return do_add_uuid(argv[0], argv[1], nid, nal);
+        return do_add_uuid(argv[0], argv[1], nid);
 }
 
-int obd_add_uuid(char *uuid, ptl_nid_t nid, int nal)
+int obd_add_uuid(char *uuid, ptl_nid_t nid)
 {
-        return do_add_uuid("obd_add_uuid", uuid, nid, nal);
+        return do_add_uuid("obd_add_uuid", uuid, nid);
 }
 
 int jt_lcfg_del_uuid(int argc, char **argv)

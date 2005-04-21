@@ -574,11 +574,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 /* NB the casts only avoid compiler warnings */
         case 8:
                 snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_id.nid);
+                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.nid);
                 break;
         case 4:
                 snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_%x_UUID", (__u32)req->rq_peer.peer_id.nid);
+                         "NET_%x_UUID", (__u32)req->rq_peer.nid);
                 break;
         default:
                 LBUG();
@@ -699,7 +699,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
-        export->exp_connection = ptlrpc_get_connection(&req->rq_peer,
+        export->exp_connection = ptlrpc_get_connection(req->rq_peer,
                                                        &remote_uuid);
 
         if (rc == EALREADY) {
@@ -1254,11 +1254,9 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         struct ptlrpc_reply_state *rs;
         struct obd_device         *obd;
         struct obd_export         *exp;
-        struct ptlrpc_srv_ni      *sni;
         struct ptlrpc_service     *svc;
 
-        sni = req->rq_rqbd->rqbd_srv_ni;
-        svc = sni->sni_service;
+        svc = req->rq_rqbd->rqbd_service;
         
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
@@ -1270,7 +1268,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         /* must be an export if locks saved */
         LASSERT (req->rq_export != NULL);
         /* req/reply consistent */
-        LASSERT (rs->rs_srv_ni == sni);
+        LASSERT (rs->rs_service == svc);
 
         /* "fresh" reply */
         LASSERT (!rs->rs_scheduled);
@@ -1329,7 +1327,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
                 wake_up (&svc->srv_waitq);
         } else {
-                list_add (&rs->rs_list, &sni->sni_active_replies);
+                list_add (&rs->rs_list, &svc->srv_active_replies);
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
 

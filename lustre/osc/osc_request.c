@@ -916,25 +916,23 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
 
 #if CHECKSUM_BULK
         if (oa->o_valid & OBD_MD_FLCKSUM) {
-                const struct ptlrpc_peer *peer =
-                        &req->rq_import->imp_connection->c_peer;
+                const ptl_process_id_t peer =
+                        req->rq_import->imp_connection->c_peer;
                 static int cksum_counter;
                 obd_count server_cksum = oa->o_cksum;
                 obd_count cksum = cksum_pages(rc, page_count, pga);
-                char str[PTL_NALFMT_SIZE];
-
-                portals_nid2str(peer->peer_ni->pni_number, peer->peer_nid, str);
+                char     *str = libcfs_nid2str(peer.nid);
 
                 cksum_counter++;
                 if (server_cksum != cksum) {
                         CERROR("Bad checksum: server %x, client %x, server NID "
                                LPX64" (%s)\n", server_cksum, cksum,
-                               peer->peer_nid, str);
+                               peer.nid, str);
                         cksum_counter = 0;
                         oa->o_cksum = cksum;
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
                         CWARN("Checksum %u from "LPX64" (%s) OK: %x\n",
-                              cksum_counter, peer->peer_nid, str, cksum);
+                              cksum_counter, peer.nid, str, cksum);
                 }
                 CDEBUG(D_PAGE, "checksum %x\n", cksum);
         } else {
@@ -944,7 +942,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 if ((cksum_missed & (-cksum_missed)) == cksum_missed)
                         CERROR("Request checksum %u from "LPX64", no reply\n",
                                cksum_missed,
-                               req->rq_import->imp_connection->c_peer.peer_id.nid);
+                               req->rq_import->imp_connection->c_peer.nid);
         }
 #endif
         RETURN(0);
