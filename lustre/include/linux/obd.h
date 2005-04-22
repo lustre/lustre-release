@@ -278,8 +278,6 @@ struct client_obd {
         /* security flavors */
         __u32                    cl_sec_flavor;
         __u32                    cl_sec_subflavor;
-        __u32                    cl_nllu; /* non lustre local user */
-        __u32                    cl_nllg; /* non lustre local group */
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
@@ -523,6 +521,7 @@ struct lmv_obd {
         int                     server_timeout;
         int                     connect_flags;
         struct semaphore        init_sem;
+        struct obd_connect_data conn_data;
 };
 
 struct niobuf_local {
@@ -716,7 +715,8 @@ struct obd_ops {
                           int priority);
         int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, unsigned long flags);
+                         struct obd_uuid *cluuid, struct obd_connect_data *data,
+                         unsigned long flags);
         int (*o_connect_post)(struct obd_export *exp, unsigned long flags);
         int (*o_disconnect)(struct obd_export *exp, unsigned long flags);
 

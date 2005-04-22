@@ -604,7 +604,7 @@ int ptlrpc_do_rawrpc(struct obd_import *imp,
         LASSERT(imp);
         class_import_get(imp);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                CWARN("raw rpc on closed imp(=>%s)? send anyway\n",
+                CDEBUG(D_SEC, "raw rpc on closed imp(=>%s)? send anyway\n",
                        imp->imp_target_uuid.uuid);
         }
 

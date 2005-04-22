@@ -166,11 +166,11 @@ static int lprocfs_wr_lsd_downcall(struct file *file, const char *buffer,
 
         if (count != sizeof(param)) {
                 CERROR("invalid data size %lu\n", count);
-                return count;
+                goto do_err_downcall;
         }
         if (copy_from_user(&param, buffer, count)) {
                 CERROR("broken downcall\n");
-                return count;
+                goto do_err_downcall;
         }
 
         if (param.err) {
@@ -179,9 +179,8 @@ static int lprocfs_wr_lsd_downcall(struct file *file, const char *buffer,
         }
 
         if (param.ngroups > NGROUPS_MAX) {
-                CERROR("%d groups?\n", param.ngroups);
-                param.err = -EINVAL;
-                goto do_downcall;
+                CERROR("%d groups too big\n", param.ngroups);
+                goto do_err_downcall;
         }
 
         if (param.ngroups <= NGROUPS_SMALL)
@@ -191,25 +190,27 @@ static int lprocfs_wr_lsd_downcall(struct file *file, const char *buffer,
                 if (!gids) {
                         CERROR("fail to alloc memory for %d gids\n",
                                 param.ngroups);
-                        param.err = -ENOMEM;
-                        goto do_downcall;
+                        goto do_err_downcall;
                 }
         }
         if (copy_from_user(gids, param.groups,
                            param.ngroups * sizeof(gid_t))) {
                 CERROR("broken downcall\n");
-                param.err = -EFAULT;
-                goto do_downcall;
+                goto do_err_downcall;
         }
 
         param.groups = gids;
 
 do_downcall:
-        upcall_cache_downcall(cache, (__u64) param.uid, param.err, &param);
+        upcall_cache_downcall(cache, (__u64) param.uid, &param);
 
         if (gids && gids != gids_local)
                 OBD_FREE(gids, param.ngroups * sizeof(gid_t));
         return count;
+
+do_err_downcall:
+        param.err = -EINVAL;
+        goto do_downcall;
 }
 
 static int lprocfs_rd_lsd_expire(char *page, char **start, off_t off, int count,

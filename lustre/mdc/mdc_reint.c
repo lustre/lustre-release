@@ -81,7 +81,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
 
         LASSERT(iattr != NULL);
 
-        size[0] = mdc_get_secdesc_size();
+        size[0] = lustre_secdesc_size();
         if (ealen > 0) {
                 bufcount++;
                 if (ea2len > 0)
@@ -93,7 +93,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_secdesc(req, size[0]);
+        lustre_pack_secdesc(req, size[0]);
 
         if (iattr->ia_valid & ATTR_FROM_OPEN) {
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
@@ -130,7 +130,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         int level, bufcount = 3;
         ENTRY;
 
-        size[0] = mdc_get_secdesc_size();
+        size[0] = lustre_secdesc_size();
         if (data && datalen) {
                 size[bufcount] = datalen;
                 bufcount++;
@@ -141,7 +141,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_secdesc(req, size[0]);
+        lustre_pack_secdesc(req, size[0]);
 
         /*
          * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
@@ -180,14 +180,14 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
         ENTRY;
         LASSERT(req == NULL);
 
-        size[0] = mdc_get_secdesc_size();
+        size[0] = lustre_secdesc_size();
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 4, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_secdesc(req, size[0]);
+        lustre_pack_secdesc(req, size[0]);
         *request = req;
 
         size[0] = sizeof(struct mds_body);
@@ -212,14 +212,14 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
         int rc, size[3] = {0, sizeof(struct mds_rec_link), data->namelen + 1};
         ENTRY;
 
-        size[0] = mdc_get_secdesc_size();
+        size[0] = lustre_secdesc_size();
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 3, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_secdesc(req, size[0]);
+        lustre_pack_secdesc(req, size[0]);
 
         mdc_link_pack(req->rq_reqmsg, 1, data);
 
@@ -244,14 +244,14 @@ int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
                            newlen + 1, obd->u.cli.cl_max_mds_cookiesize};
         ENTRY;
 
-        size[0] = mdc_get_secdesc_size();
+        size[0] = lustre_secdesc_size();
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 5, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_pack_secdesc(req, size[0]);
+        lustre_pack_secdesc(req, size[0]);
 
         mdc_rename_pack(req->rq_reqmsg, 1, data, old, oldlen, new, newlen);
 

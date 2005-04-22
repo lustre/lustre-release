@@ -236,7 +236,7 @@ int ptlbd_do_connect(struct ptlbd_obd *ptlbd)
         ENTRY;
 
         memset(&conn, 0, sizeof(conn));
-        rc = obd_connect(&conn, obd, &ptlbd->bd_server_uuid, 0);
+        rc = obd_connect(&conn, obd, &ptlbd->bd_server_uuid, NULL, 0);
         if (rc < 0)
                 RETURN(rc);
         ptlbd->bd_exp = class_conn2export(&conn);

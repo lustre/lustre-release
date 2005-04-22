@@ -1855,7 +1855,7 @@ class CONFDEV(Module):
         
 	if self.target.get_class() == 'mds':
 	    if options:
-        	options = "%s,iopen_nopriv" %(options)
+        	options = "%s,acl,user_xattr,iopen_nopriv" %(options)
 	    else:
         	options = "iopen_nopriv"
 	    

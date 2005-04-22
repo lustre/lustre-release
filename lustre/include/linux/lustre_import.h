@@ -104,6 +104,7 @@ struct obd_import {
                                   imp_deactive:1;
         __u32                     imp_connect_op;
         __u32                     imp_connect_flags;
+        struct obd_connect_data   imp_connect_data;
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

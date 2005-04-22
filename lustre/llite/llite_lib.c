@@ -126,18 +126,21 @@ int lustre_init_dt_desc(struct ll_sb_info *sbi)
 extern struct dentry_operations ll_d_ops;
 
 int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
-                             char *security, __u32 *nllu, int async)
+                             int async, char *security, __u32 *nllu,
+                             __u64 *remote)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *request = NULL;
         struct lustre_handle dt_conn = {0, };
         struct lustre_handle md_conn = {0, };
+        struct obd_connect_data *data;
         struct inode *root = NULL;
         struct obd_device *obd;
         struct obd_statfs osfs;
         struct lustre_md md;
         kdev_t devno;
         int err;
+        __u32 valsize;
         ENTRY;
 
         obd = class_name2obd(lmv);
@@ -148,6 +151,20 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
+        if ((*remote & (OBD_CONNECT_LOCAL | OBD_CONNECT_REMOTE)) ==
+            (OBD_CONNECT_LOCAL | OBD_CONNECT_REMOTE)) {
+                CERROR("wrong remote flag "LPX64"\n", *remote);
+                RETURN(-EINVAL);
+        }
+
+        OBD_ALLOC(data, sizeof(*data));
+        if (!data)
+                RETURN(-ENOMEM);
+
+        data->ocd_connect_flags |= *remote & (OBD_CONNECT_LOCAL |
+                                              OBD_CONNECT_REMOTE);
+        memcpy(data->ocd_nllu, nllu, sizeof(data->ocd_nllu));
+
         if (security == NULL)
                 security = "null";
 
@@ -156,14 +173,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         if (err) {
                 CERROR("LMV %s: failed to set security %s, err %d\n",
                         lmv, security, err);
-                RETURN(err);
-        }
-
-        err = obd_set_info(obd->obd_self_export, strlen("nllu"), "nllu",
-                           sizeof(__u32) * 2, nllu);
-        if (err) {
-                CERROR("LMV %s: failed to set NLLU, err %d\n",
-                        lmv, err);
+                OBD_FREE(data, sizeof(*data));
                 RETURN(err);
         }
 
@@ -174,7 +184,8 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                         CERROR("could not register mount in /proc/lustre");
         }
 
-        err = obd_connect(&md_conn, obd, &sbi->ll_sb_uuid, OBD_OPT_REAL_CLIENT);
+        err = obd_connect(&md_conn, obd, &sbi->ll_sb_uuid, data,
+                          OBD_OPT_REAL_CLIENT);
         if (err == -EBUSY) {
                 CERROR("An MDS (lmv %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -204,6 +215,17 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
 
         sb->s_dev = devno;
 
+        /* after statfs, we are supposed to have connected to MDSs,
+         * so it's ok to check remote flag returned.
+         */
+        valsize = sizeof(&sbi->ll_remote);
+        err = obd_get_info(sbi->ll_md_exp, strlen("remote_flag"), "remote_flag",
+                           &valsize, &sbi->ll_remote);
+        if (err) {
+                CERROR("fail to obtain remote flag\n");
+                GOTO(out, err);
+        }
+
         obd = class_name2obd(lov);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", lov);
@@ -212,7 +234,8 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, OBD_OPT_REAL_CLIENT);
+        err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data,
+                          OBD_OPT_REAL_CLIENT);
         if (err == -EBUSY) {
                 CERROR("An OST (lov %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -289,11 +312,14 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         sb->s_root = d_alloc_root(root);
         sb->s_root->d_op = &ll_d_ops;
 
+        sb->s_flags |= MS_POSIXACL;
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
         sb->s_flags |= S_PDIROPS;
 #endif
 
+        if (data != NULL)
+                OBD_FREE(data, sizeof(*data));
         RETURN(err);
 out_root:
         if (root)
@@ -303,6 +329,8 @@ out_lov:
 out_lmv:
         obd_disconnect(sbi->ll_md_exp, 0);
 out:
+        if (data != NULL)
+                OBD_FREE(data, sizeof(*data));
         lprocfs_unregister_mountpoint(sbi);
         return err;
 }
@@ -440,7 +468,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         char *lmv = NULL;
         int async, err;
         char *sec = NULL;
-        __u32 nllu[2] = { 99, 99 };
+        __u32 nllu[2] = { NOBODY_UID, NOBODY_GID };
+        __u64 remote_flag = 0;    
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
@@ -461,8 +490,9 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 CERROR("no mdc\n");
                 GOTO(out, err = -EINVAL);
         }
-
-        err = lustre_common_fill_super(sb, lmv, lov, sec, nllu, async);
+        
+        err = lustre_common_fill_super(sb, lmv, lov, async, sec, nllu,
+                                       &remote_flag);
         EXIT;
 out:
         if (err)
@@ -566,7 +596,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
-        rc = obd_connect(&md_conn, obd, &lmv_uuid, 0);
+        rc = obd_connect(&md_conn, obd, &lmv_uuid, NULL, 0);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
                 GOTO(out_cleanup, rc);
@@ -733,8 +763,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, err = -EINVAL);
         }
 
-        err = lustre_common_fill_super(sb, lmv, lov, lmd->lmd_security,
-                                       &lmd->lmd_nllu, lmd->lmd_async);
+        err = lustre_common_fill_super(sb, lmv, lov, lmd->lmd_async,
+                                       lmd->lmd_security, &lmd->lmd_nllu,
+                                       &lmd->lmd_remote_flag);
 
         if (err)
                 GOTO(out_free, err);

@@ -1667,7 +1667,9 @@ static int filter_connect_post(struct obd_export *exp, unsigned long connect_fla
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, unsigned long connect_flags)
+                          struct obd_uuid *cluuid,
+                          struct obd_connect_data *data,
+                          unsigned long connect_flags)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;

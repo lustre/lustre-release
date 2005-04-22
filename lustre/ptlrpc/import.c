@@ -305,16 +305,20 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
-        int size[] = {sizeof(imp->imp_target_uuid),
+        int size[] = {0,
+                      sizeof(imp->imp_target_uuid),
                       sizeof(obd->obd_uuid),
                       sizeof(imp->imp_dlm_handle),
-                      sizeof(unsigned long),
-                      sizeof(__u32) * 2};
-        char *tmp[] = {imp->imp_target_uuid.uuid,
+                      sizeof(imp->imp_connect_flags),
+                      sizeof(imp->imp_connect_data)};
+        char *tmp[] = {NULL,
+                       imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
                        (char *)&imp->imp_dlm_handle,
                        (char *)&imp->imp_connect_flags, /* XXX: make this portable! */
-                       (char*) &obd->u.cli.cl_nllu};
+                       (char*) &imp->imp_connect_data};
+        int repsize = sizeof(struct obd_connect_data);
+                        
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
@@ -362,10 +366,13 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         LASSERT(imp->imp_sec);
 
+        size[0] = lustre_secdesc_size();
         request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION,
-                                  imp->imp_connect_op, 5, size, tmp);
+                                  imp->imp_connect_op, 6, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
+
+        lustre_pack_secdesc(request, size[0]);
 
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
@@ -375,7 +382,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         }
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        request->rq_replen = lustre_msg_size(0, NULL);
+        request->rq_replen = lustre_msg_size(1, &repsize);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
         LASSERT (sizeof (*aa) <= sizeof (request->rq_async_args));
@@ -423,10 +430,22 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 GOTO(out, rc);
         LASSERT(imp->imp_conn_current);
         imp->imp_conn_current->oic_last_attempt = 0;
-
+/*
+        remote_flag = lustre_msg_buf(request->rq_repmsg, 0, sizeof(int));
+        LASSERT(remote_flag != NULL);
+        imp->imp_obd->u.cli.cl_remote = *remote_flag;
+*/
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
         if (aa->pcaa_initial_connect) {
+                struct obd_connect_data *conn_data;
+
+                conn_data = lustre_swab_repbuf(request, 0, sizeof(*conn_data),
+                                               lustre_swab_connect);
+                LASSERT(conn_data);
+                imp->imp_connect_data.ocd_connect_flags =
+                                        conn_data->ocd_connect_flags;
+
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
                                imp->imp_target_uuid.uuid);

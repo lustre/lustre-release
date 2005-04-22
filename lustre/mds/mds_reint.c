@@ -403,6 +403,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct mds_body *body;
         struct dentry *de;
         struct inode *inode = NULL;
@@ -422,6 +423,25 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
         MD_COUNTER_INCREMENT(obd, setattr);
+
+        if (med->med_remote) {
+                if (rec->ur_iattr.ia_valid & ATTR_GID) {
+                        CWARN("Deny chgrp from remote client\n");
+                        GOTO(cleanup, rc = -EPERM);
+                }
+                if (rec->ur_iattr.ia_valid & ATTR_UID) {
+                        uid_t uid;
+
+                        uid = mds_idmap_lookup_uid(med->med_idmap, 0,
+                                                   rec->ur_iattr.ia_uid);
+                        if (uid == MDS_IDMAP_NOTFOUND) {
+                                CWARN("Deny chown to uid %u\n",
+                                      rec->ur_iattr.ia_uid);
+                                GOTO(cleanup, rc = -EPERM);
+                        }
+                        rec->ur_iattr.ia_uid = uid;
+                }
+        }
 
         if (rec->ur_iattr.ia_valid & ATTR_FROM_OPEN) {
                 de = mds_id2dentry(obd, rec->ur_id1, NULL);
@@ -521,6 +541,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 body->valid |= OBD_MD_FLMTIME;
         if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
+
+        mds_body_do_reverse_map(med, body);
 
         /* The logcookie should be no use anymore, why nobody remove
          * following code block?
@@ -824,12 +846,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 oa->o_easize = *((u16 *) rec->ur_eadata);
                         }
 
-                        obdo_from_inode(oa, dir, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                        OBD_MD_FLUID | OBD_MD_FLGID);
-                        
-                        oa->o_mode = dir->i_mode;
-                        
+                        obdo_from_inode(oa, dir, OBD_MD_FLATIME |
+                                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+
+                        /* adjust the uid/gid/mode bits */
+                        oa->o_mode = rec->ur_mode;
+                        oa->o_uid = current->fsuid;
+                        oa->o_gid = (dir->i_mode & S_ISGID) ?
+                                                dir->i_gid : current->fsgid;
+                        oa->o_valid |= OBD_MD_FLTYPE|OBD_MD_FLUID|OBD_MD_FLGID;
+
                         CDEBUG(D_OTHER, "%s: create dir on MDS %u\n",
                                obd->obd_name, i);
 
@@ -937,6 +963,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 CDEBUG(D_INODE, "error during create: %d\n", rc);
                 GOTO(cleanup, rc);
         } else if (dchild->d_inode) {
+                struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
                 struct iattr iattr;
                 struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
@@ -1052,6 +1079,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
                 mds_pack_inode2body(obd, body, inode, 1);
+                mds_body_do_reverse_map(med, body);
         }
 
         EXIT;

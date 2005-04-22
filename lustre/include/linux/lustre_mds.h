@@ -138,17 +138,31 @@ struct mds_client_data {
         __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 88];
 };
 
-/* simple uid/gid mapping hash table */
-struct mds_idmap_item {
-        struct list_head        hash;
-        __u32                   id1;
-        __u32                   id2;
+/* uid/gid mapping support for remote client, some of them
+ * probably consume too much space??
+ */
+#define MDS_IDMAP_HASHSIZE      (32)
+#define MDS_IDMAP_HASHFUNC(id)  ((id) & (MDS_IDMAP_HASHSIZE - 1))
+
+#define MDS_RMT_UIDMAP_IDX      (0)
+#define MDS_LCL_UIDMAP_IDX      (1)
+#define MDS_RMT_GIDMAP_IDX      (2)
+#define MDS_LCL_GIDMAP_IDX      (3)
+#define MDS_IDMAP_N_HASHES      (4)
+
+#define MDS_IDMAP_NOTFOUND      (-1)
+
+struct mds_idmap_entry {
+        struct list_head rmt_hash; /* hashed as rmt_id; */
+        struct list_head lcl_hash; /* hashed as lcl_id; */
+        atomic_t         refcount;
+        uid_t            rmt_id;   /* remote uid/gid */
+        uid_t            lcl_id;   /* local uid/gid */
 };
 
-#define MDS_IDMAP_HASHSIZE      (32)
 struct mds_idmap_table {
-        struct list_head uidmap[MDS_IDMAP_HASHSIZE];
-        struct list_head gidmap[MDS_IDMAP_HASHSIZE];
+        spinlock_t       mit_lock;
+        struct list_head mit_idmaps[MDS_IDMAP_N_HASHES][MDS_IDMAP_HASHSIZE];
 };
 
 /* file data for open files on MDS */
@@ -187,14 +201,29 @@ struct mds_grp_hash {
         unsigned int            gh_allow_setgroups:1;
 };
 
+#ifdef PTL_NETID_ANY
+#error "remove this"
+#endif
+#define PTL_NETID_ANY   ((ptl_netid_t) -1)
+
+#define LSD_PERM_SETUID         0x00000001
+#define LSD_PERM_SETGID         0x00000002
+#define LSD_PERM_SETGRP         0x00000004
+
+struct lsd_permission {
+        ptl_nid_t       nid;
+        ptl_netid_t     netid;
+        __u32           perm;
+};
+
 /* lustre security descriptor */
 struct lustre_sec_desc {
+        unsigned int            lsd_invalid:1;
         uid_t                   lsd_uid;
         gid_t                   lsd_gid;
         struct group_info      *lsd_ginfo;
-        unsigned int            lsd_allow_setuid:1,
-                                lsd_allow_setgid:1,
-                                lsd_allow_setgrp:1;
+        __u32                   lsd_nperms;
+        struct lsd_permission  *lsd_perms;
 };
 
 struct lsd_cache_entry {
@@ -203,19 +232,22 @@ struct lsd_cache_entry {
 };
 
 struct lsd_downcall_args {
-        int     err;
-        uid_t   uid;
-        gid_t   gid;
-        __u32   ngroups;
-        gid_t  *groups;
-        __u32   allow_setuid;
-        __u32   allow_setgid;
-        __u32   allow_setgrp;
+        int                     err;
+        uid_t                   uid;
+        gid_t                   gid;
+        __u32                   ngroups;
+        gid_t                  *groups;
+        __u32                   nperms;
+        struct lsd_permission  *perms;       
 };
 
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
+
+/* mds/mds_lsd.c */
+__u32 mds_lsd_get_perms(struct lustre_sec_desc *lsd, __u32 is_remote,
+                        ptl_netid_t netid, ptl_nid_t nid);
 
 /* mds/handler.c */
 #ifdef __KERNEL__
@@ -264,8 +296,6 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data);
 
 /* mdc/mdc_request.c */
-int mdc_get_secdesc_size(void);
-void mdc_pack_secdesc(struct ptlrpc_request *req, int size);
 int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
                       unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md);

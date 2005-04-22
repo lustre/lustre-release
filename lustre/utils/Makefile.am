@@ -34,6 +34,7 @@ lfs_SOURCES = lfs.c
 llmount_SOURCES = llmount.c 
 llmount_LDADD = $(LIBREADLINE) -lptlctl
 lsd_upcall_SOURCES = lsd_upcall.c
+lsd_upcall_LDADD = $(LIBREADLINE) -lptlctl
 
 EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
 

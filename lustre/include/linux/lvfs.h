@@ -47,11 +47,12 @@ struct mds_grp_hash_entry;
 struct lvfs_ucred {
         struct lustre_sec_desc *luc_lsd;
         struct group_info      *luc_ginfo;
-        __u32 luc_fsuid;
-        __u32 luc_fsgid;
-        __u32 luc_cap;
-        __u32 luc_uid;
-        __u32 luc_umask;
+        __u32                   luc_uid;
+        __u32                   luc_gid;
+        __u32                   luc_fsuid;
+        __u32                   luc_fsgid;
+        __u32                   luc_cap;
+        __u32                   luc_umask;
 };
 
 struct lvfs_callback_ops {

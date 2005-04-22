@@ -148,10 +148,14 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
+                save->luc.luc_uid = current->uid;
+                save->luc.luc_gid = current->gid;
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
 
+                current->uid = uc->luc_uid;
+                current->gid = uc->luc_gid;
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
@@ -207,6 +211,8 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
+                current->uid = saved->luc.luc_uid;
+                current->gid = saved->luc.luc_gid;
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;

@@ -149,6 +149,8 @@ EXPORT_SYMBOL(ptlrpc_daemonize);
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
+EXPORT_SYMBOL(lustre_secdesc_size);
+EXPORT_SYMBOL(lustre_pack_secdesc);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
 EXPORT_SYMBOL(lustre_free_reply_state);

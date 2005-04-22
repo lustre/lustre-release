@@ -15,7 +15,6 @@
  * Bruce Fields <bfields@umich.edu>
  * Copyright (c) 2000 The Regents of the University of Michigan
  *
- * $Id: gss_api.h,v 1.3 2005/04/04 13:12:39 yury Exp $
  */
 
 #ifndef __SEC_GSS_GSS_API_H_

@@ -74,6 +74,64 @@ void lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
         }
 }
 
+int lustre_secdesc_size(void)
+{
+#ifdef __KERNEL__
+        int ngroups = current_ngroups;
+
+        if (ngroups > LUSTRE_MAX_GROUPS)
+                ngroups = LUSTRE_MAX_GROUPS;
+
+        return sizeof(struct mds_req_sec_desc) +
+                sizeof(__u32) * ngroups;
+#else
+        return 0;
+#endif
+}
+
+/*
+ * because group info might have changed since last time we call
+ * secdesc_size(), so here we did more sanity check to prevent garbage gids
+ */
+void lustre_pack_secdesc(struct ptlrpc_request *req, int size)
+{
+#ifdef __KERNEL__
+        struct mds_req_sec_desc *rsd;
+        
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        struct group_info *ginfo;
+#endif
+
+        rsd = lustre_msg_buf(req->rq_reqmsg,
+                             MDS_REQ_SECDESC_OFF, size);
+        
+        rsd->rsd_uid = current->uid;
+        rsd->rsd_gid = current->gid;
+        rsd->rsd_fsuid = current->fsuid;
+        rsd->rsd_fsgid = current->fsgid;
+        rsd->rsd_cap = current->cap_effective;
+        rsd->rsd_ngroups = (size - sizeof(*rsd)) / sizeof(__u32);
+        LASSERT(rsd->rsd_ngroups <= LUSTRE_MAX_GROUPS);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        task_lock(current);
+        get_group_info(current->group_info);
+        ginfo = current->group_info;
+        task_unlock(current);
+        if (rsd->rsd_ngroups > ginfo->ngroups)
+                rsd->rsd_ngroups = ginfo->ngroups;
+        memcpy(rsd->rsd_groups, ginfo->blocks[0],
+               rsd->rsd_ngroups * sizeof(__u32));
+#else
+        LASSERT(rsd->rsd_ngroups <= NGROUPS);
+        if (rsd->rsd_ngroups > current->ngroups)
+                rsd->rsd_ngroups = current->ngroups;
+        memcpy(rsd->rsd_groups, current->groups,
+               rsd->rsd_ngroups * sizeof(__u32));
+#endif
+#endif
+}
+
 int lustre_pack_request (struct ptlrpc_request *req,
                          int count, int *lens, char **bufs)
 {
@@ -369,6 +427,13 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
 /* byte flipping routines for all wire types declared in
  * lustre_idl.h implemented here.
  */
+
+void lustre_swab_connect(struct obd_connect_data *ocd)
+{
+        __swab64s (&ocd->ocd_connect_flags);
+        __swab32s (&ocd->ocd_nllu[0]);
+        __swab32s (&ocd->ocd_nllu[1]);
+}
 
 void lustre_swab_obdo (struct obdo  *o)
 {

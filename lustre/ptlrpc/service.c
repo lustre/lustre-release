@@ -459,6 +459,9 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 
         /* go through security check/transform */
         request->rq_auth_uid = -1;
+        request->rq_mapped_uid = -1;
+        request->rq_remote_realm = 0;
+
         secrc = svcsec_accept(request, &sec_err);
         switch(secrc) {
         case SVC_OK:
@@ -467,11 +470,11 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         case SVC_COMPLETE:
                 target_send_reply(request, 0, OBD_FAIL_MDS_ALL_REPLY_NET);
                 goto put_conn;
-        case SVC_DROP:
-                goto out;
         case SVC_LOGIN:
         case SVC_LOGOUT:
                 break;
+        case SVC_DROP:
+                goto out;
         default:
                 LBUG();
         }

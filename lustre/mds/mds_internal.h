@@ -99,13 +99,18 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
 void groups_from_buffer(struct group_info *ginfo, __u32 *gids);
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
-int mds_idmap_set(struct mds_export_data *med, __u32 id1, __u32 id2,
-                  int is_uid_mapping);
-__u32 mds_idmap_get(struct mds_export_data *med, __u32 id,
-                    int is_uid_mapping);
-void mds_idmap_cleanup(struct mds_export_data *med);
-void mds_reverse_map_ugid(struct ptlrpc_request *req,
-                          struct mds_body *body);
+int mds_idmap_add(struct mds_idmap_table *tbl,
+                  uid_t rmt_uid, uid_t lcl_uid,
+                  gid_t rmt_gid, gid_t lcl_gid);
+int mds_idmap_del(struct mds_idmap_table *tbl,
+                  uid_t rmt_uid, uid_t lcl_uid,
+                  gid_t rmt_gid, gid_t lcl_gid);
+int mds_idmap_lookup_uid(struct mds_idmap_table *tbl, int reverse, uid_t uid);
+int mds_idmap_lookup_gid(struct mds_idmap_table *tbl, int reverse, gid_t gid);
+struct mds_idmap_table *mds_idmap_alloc(void);
+void mds_idmap_free(struct mds_idmap_table *tbl);
+void mds_body_do_reverse_map(struct mds_export_data *med,
+                             struct mds_body *body);
 int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    struct mds_req_sec_desc *rsd);
 void mds_exit_ucred(struct lvfs_ucred *ucred);
@@ -165,8 +170,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti);
 
 /* mds/handler.c */
-void mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
-                     ptl_nid_t *peernid);
+int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
+                    ptl_nid_t *peernid);
 int mds_handle(struct ptlrpc_request *req);
 extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_dt_clean(struct obd_device *obd);

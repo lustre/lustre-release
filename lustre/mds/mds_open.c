@@ -841,11 +841,11 @@ int mds_open(struct mds_update_record *rec, int offset,
 {
         /* XXX ALLOCATE _something_ - 464 bytes on stack here */
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct mds_obd *mds = mds_req2mds(req);
         struct ldlm_reply *rep = NULL;
         struct mds_body *body = NULL;
         struct dentry *dchild = NULL, *dparent = NULL;
-        struct mds_export_data *med;
         struct lustre_handle parent_lockh[2] = {{0}, {0}};
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
         int parent_mode = LCK_PR;
@@ -894,8 +894,10 @@ int mds_open(struct mds_update_record *rec, int offset,
 
                 rc = mds_open_by_id(req, rec->ur_id2, body, rec->ur_flags,
                                     rec, rep);
-                if (rc != -ENOENT)
+                if (rc != -ENOENT) {
+                        mds_body_do_reverse_map(med, body);
                         RETURN(rc);
+                }
 
                 /* We didn't find the correct inode on disk either, so we
                  * need to re-create it via a regular replay. */
@@ -906,7 +908,6 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         LASSERT(offset == 3); /* If we got here, we must be called via intent */
 
-        med = &req->rq_export->exp_mds_data;
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_OPEN_PACK\n");
                 RETURN(-ENOMEM);
@@ -939,9 +940,15 @@ int mds_open(struct mds_update_record *rec, int offset,
                                        rec->ur_namelen - 1, MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                if (rc != -ENOENT)
+                if (rc != -ENOENT) {
                         CERROR("parent lookup for "DLID4" failed, error %d\n",
                                OLID4(rec->ur_id1), rc);
+                } else {
+                        /* Just cannot find parent - make it look like
+                           usual negative lookup to avoid extra MDS RPC */
+                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+                        intent_set_disposition(rep, DISP_LOOKUP_NEG);
+                }
                 GOTO(cleanup, rc);
         }
         LASSERT(dparent->d_inode != NULL);
@@ -1291,6 +1298,8 @@ cleanup_no_trans:
         if (rc == 0)
                 atomic_inc(&mds->mds_open_count);
 
+        mds_body_do_reverse_map(med, body);
+
         /*
          * If we have not taken the "open" lock, we may not return 0 here,
          * because caller expects 0 to mean "lock is taken", and it needs
@@ -1300,6 +1309,7 @@ cleanup_no_trans:
          */
         if ((cleanup_phase != 3) && !rc)
                 rc = ENOLCK;
+
         RETURN(rc);
 }
 

@@ -229,7 +229,7 @@ int mdc_enqueue(struct obd_export *exp,
 //        LDLM_DEBUG_NOLOCK("mdsintent=%s,name=%s,dir=%lu",
 //                          ldlm_it2str(it->it_op), it_name, it_inode->i_ino);
 
-        reqsize[0] = mdc_get_secdesc_size();
+        reqsize[0] = lustre_secdesc_size();
 
         if (it->it_op & IT_OPEN) {
                 it->it_create_mode |= S_IFREG;
@@ -326,7 +326,7 @@ int mdc_enqueue(struct obd_export *exp,
                 RETURN(-EINVAL);
         }
 
-        mdc_pack_secdesc(req, reqsize[0]);
+        lustre_pack_secdesc(req, reqsize[0]);
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,

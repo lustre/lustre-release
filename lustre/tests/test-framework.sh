@@ -204,7 +204,6 @@ fail_drop() {
     local failcode=$2
     facet_failover $facet
     do_facet mds "echo $failcode > /proc/sys/lustre/fail_loc"
-    cat /proc/sys/lustre/fail_loc
     df $MOUNT || error "post-failover df: $?"
     do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
 }

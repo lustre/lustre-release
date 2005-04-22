@@ -103,18 +103,14 @@ struct ptlrpc_svcsec * svcsec_get(struct ptlrpc_svcsec *sec)
 {
         int rc;
 
-//        spin_lock(&svcsecs_lock);
         rc = try_module_get(sec->pss_owner);
-//        spin_unlock(&svcsecs_lock);
         LASSERT(rc);
         return sec;
 }
 
 void svcsec_put(struct ptlrpc_svcsec *sec)
 {
-//        spin_lock(&svcsecs_lock);
         module_put(sec->pss_owner);
-//        spin_unlock(&svcsecs_lock);
 }
 
 /*

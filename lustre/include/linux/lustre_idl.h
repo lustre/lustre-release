@@ -224,6 +224,28 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_INITIAL     0x20
 #define MSG_CONNECT_ASYNC       0x40
 
+/* Connect flags */
+
+#define OBD_CONNECT_RDONLY      (0x00000001LL)
+#define OBD_CONNECT_REMOTE      (0x40000000LL)
+#define OBD_CONNECT_LOCAL       (0x80000000LL)
+
+#define OBD_CONNECT_SUPPORTED (OBD_CONNECT_RDONLY |     \
+                               OBD_CONNECT_REMOTE |     \
+                               OBD_CONNECT_LOCAL)
+
+/* This structure is used for both request and reply.
+ *
+ * If we eventually have separate connect data for different types, which we
+ * almost certainly will, then perhaps we stick a union in here. */
+struct obd_connect_data {
+        __u64 ocd_connect_flags;
+        __u32 ocd_nllu[2];
+        __u64 padding[6];
+};
+
+extern void lustre_swab_connect(struct obd_connect_data *ocd);
+
 /*
  *   OST requests: OBDO & OBD request records
  */

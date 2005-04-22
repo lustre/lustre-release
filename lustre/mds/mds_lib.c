@@ -47,6 +47,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_ucache.h>
 #include "mds_internal.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
@@ -508,194 +509,346 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         RETURN(rc);
 }
 
+/********************************
+ * MDS uid/gid mapping handling *
+ ********************************/
+
 static
-struct mds_idmap_table *__get_idmap_table(struct mds_export_data *med,
-                                          int create)
+struct mds_idmap_entry* idmap_alloc_entry(__u32 rmt_id, __u32 lcl_id)
 {
-        struct mds_idmap_table *new;
-        int i;
+        struct mds_idmap_entry *e;
 
-        if (!create || med->med_idmap)
-                return med->med_idmap;
-
-        spin_unlock(&med->med_idmap_lock);
-        OBD_ALLOC(new, sizeof(*new));
-        spin_lock(&med->med_idmap_lock);
-
-        if (!new) {
-                CERROR("fail to alloc %d\n", sizeof(*new));
+        OBD_ALLOC(e, sizeof(*e));
+        if (!e)
                 return NULL;
-        }
 
-        if (med->med_idmap) {
-                OBD_FREE(new, sizeof(*new));
-                return med->med_idmap;
-        }
+        INIT_LIST_HEAD(&e->rmt_hash);
+        INIT_LIST_HEAD(&e->lcl_hash);
+        atomic_set(&e->refcount, 1);
+        e->rmt_id = rmt_id;
+        e->lcl_id = lcl_id;
 
-        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
-                INIT_LIST_HEAD(&new->uidmap[i]);
-                INIT_LIST_HEAD(&new->gidmap[i]);
-        }
-
-        CDEBUG(D_SEC, "allocate idmap table for med %p\n", med);
-        med->med_idmap = new;
-        return new;
+        return e;
 }
 
-static void __flush_mapping_table(struct list_head *table)
+void idmap_free_entry(struct mds_idmap_entry *e)
 {
-        struct mds_idmap_item *item;
-        int i;
+        if (!list_empty(&e->rmt_hash))
+                list_del(&e->rmt_hash);
+        if (!list_empty(&e->lcl_hash))
+                list_del(&e->lcl_hash);
+        OBD_FREE(e, sizeof(*e));
+}
 
-        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
-                while (!list_empty(&table[i])) {
-                        item = list_entry(table[i].next, struct mds_idmap_item,
-                                          hash);
-                        list_del(&item->hash);
-                        OBD_FREE(item, sizeof(*item));
+static
+int idmap_insert_entry(struct list_head *rmt_hash, struct list_head *lcl_hash,
+                       struct mds_idmap_entry *new, const char *warn_msg)
+{
+        struct list_head *rmt_head = &rmt_hash[MDS_IDMAP_HASHFUNC(new->rmt_id)];
+        struct list_head *lcl_head = &lcl_hash[MDS_IDMAP_HASHFUNC(new->lcl_id)];
+        struct mds_idmap_entry *e;
+
+        list_for_each_entry(e, rmt_head, rmt_hash) {
+                if (e->rmt_id == new->rmt_id &&
+                    e->lcl_id == new->lcl_id) {
+                        atomic_inc(&e->refcount);
+                        return 1;
+                }
+                if (e->rmt_id == new->rmt_id && warn_msg)
+                        CWARN("%s: rmt id %u already map to %u (new %u)\n",
+                              warn_msg, e->rmt_id, e->lcl_id, new->lcl_id);
+                if (e->lcl_id == new->lcl_id && warn_msg)
+                        CWARN("%s: lcl id %u already be mapped from %u "
+                              "(new %u)\n", warn_msg,
+                              e->lcl_id, e->rmt_id, new->rmt_id);
+        }
+
+        list_add_tail(rmt_head, &new->rmt_hash);
+        list_add_tail(lcl_head, &new->lcl_hash);
+        return 0;
+}
+
+static
+int idmap_remove_entry(struct list_head *rmt_hash, struct list_head *lcl_hash,
+                       __u32 rmt_id, __u32 lcl_id)
+{
+        struct list_head *rmt_head = &rmt_hash[MDS_IDMAP_HASHFUNC(rmt_id)];
+        struct mds_idmap_entry *e;
+
+        list_for_each_entry(e, rmt_head, rmt_hash) {
+                if (e->rmt_id == rmt_id && e->lcl_id == lcl_id) {
+                        if (atomic_dec_and_test(&e->refcount)) {
+                                list_del(&e->rmt_hash);
+                                list_del(&e->lcl_hash);
+                                OBD_FREE(e, sizeof(*e));
+                                return 0;
+                        } else
+                                return 1;
                 }
         }
+        return -ENOENT;
 }
 
-void mds_idmap_cleanup(struct mds_export_data *med)
+int mds_idmap_add(struct mds_idmap_table *tbl,
+                  uid_t rmt_uid, uid_t lcl_uid,
+                  gid_t rmt_gid, gid_t lcl_gid)
+{
+        struct mds_idmap_entry *ue, *ge;
+        ENTRY;
+
+        if (!tbl)
+                RETURN(-EPERM);
+
+        ue = idmap_alloc_entry(rmt_uid, lcl_uid);
+        if (!ue)
+                RETURN(-ENOMEM);
+        ge = idmap_alloc_entry(rmt_gid, lcl_gid);
+        if (!ge) {
+                idmap_free_entry(ue);
+                RETURN(-ENOMEM);
+        }
+
+        spin_lock(&tbl->mit_lock);
+
+        if (idmap_insert_entry(tbl->mit_idmaps[MDS_RMT_UIDMAP_IDX],
+                               tbl->mit_idmaps[MDS_LCL_UIDMAP_IDX],
+                               ue, "UID mapping")) {
+                idmap_free_entry(ue);
+        }
+
+        if (idmap_insert_entry(tbl->mit_idmaps[MDS_RMT_GIDMAP_IDX],
+                               tbl->mit_idmaps[MDS_LCL_GIDMAP_IDX],
+                               ge, "GID mapping")) {
+                idmap_free_entry(ge);
+        }
+
+        spin_unlock(&tbl->mit_lock);
+        RETURN(0);
+}
+
+int mds_idmap_del(struct mds_idmap_table *tbl,
+                  uid_t rmt_uid, uid_t lcl_uid,
+                  gid_t rmt_gid, gid_t lcl_gid)
 {
         ENTRY;
 
-        if (!med->med_idmap) {
-                EXIT;
-                return;
-        }
+        if (!tbl)
+                RETURN(0);
 
-        spin_lock(&med->med_idmap_lock);
-        __flush_mapping_table(med->med_idmap->uidmap);
-        __flush_mapping_table(med->med_idmap->gidmap);
-        OBD_FREE(med->med_idmap, sizeof(struct mds_idmap_table));
-        spin_unlock(&med->med_idmap_lock);
-}
-
-static inline int idmap_hash(__u32 id)
-{
-        return (id & (MDS_IDMAP_HASHSIZE - 1));
+        spin_lock(&tbl->mit_lock);
+        idmap_remove_entry(tbl->mit_idmaps[MDS_RMT_UIDMAP_IDX],
+                           tbl->mit_idmaps[MDS_LCL_UIDMAP_IDX],
+                           rmt_uid, lcl_uid);
+        idmap_remove_entry(tbl->mit_idmaps[MDS_RMT_GIDMAP_IDX],
+                           tbl->mit_idmaps[MDS_LCL_GIDMAP_IDX],
+                           rmt_gid, lcl_gid);
+        spin_unlock(&tbl->mit_lock);
+        RETURN(0);
 }
 
 static
-int __idmap_set_item(struct mds_export_data *med,
-                     struct list_head *table,
-                     __u32 id1, __u32 id2)
+__u32 idmap_lookup_id(struct list_head *hash, int reverse, __u32 id)
 {
-        struct list_head *head;
-        struct mds_idmap_item *item, *new = NULL;
-        int found = 0;
+        struct list_head *head = &hash[MDS_IDMAP_HASHFUNC(id)];
+        struct mds_idmap_entry *e;
 
-        head = table + idmap_hash(id1);
-again:
-        list_for_each_entry(item, head, hash) {
-                if (item->id1 == id1) {
-                        found = 1;
-                        break;
+        if (!reverse) {
+                list_for_each_entry(e, head, rmt_hash) {
+                        if (e->rmt_id == id)
+                                return e->lcl_id;
                 }
-        }
-
-        if (!found) {
-                if (new == NULL) {
-                        spin_unlock(&med->med_idmap_lock);
-                        OBD_ALLOC(new, sizeof(*new));
-                        spin_lock(&med->med_idmap_lock);
-                        if (!new) {
-                                CERROR("fail to alloc %d\n", sizeof(*new));
-                                return -ENOMEM;
-                        }
-                        goto again;
-                }
-                new->id1 = id1;
-                new->id2 = id2;
-                list_add(&new->hash, head);
+                return MDS_IDMAP_NOTFOUND;
         } else {
-                if (new)
-                        OBD_FREE(new, sizeof(*new));
-                if (item->id2 != id2) {
-                        CWARN("mapping changed: %u ==> (%u -> %u)\n",
-                               id1, item->id2, id2);
-                        item->id2 = id2;
+                list_for_each_entry(e, head, lcl_hash) {
+                        if (e->lcl_id == id)
+                                return e->rmt_id;
                 }
-                list_move(&item->hash, head);
+                return MDS_IDMAP_NOTFOUND;
         }
+}
+
+int mds_idmap_lookup_uid(struct mds_idmap_table *tbl, int reverse, uid_t uid)
+{
+        struct list_head *hash;
+
+        if (!tbl)
+                return MDS_IDMAP_NOTFOUND;
+
+        if (!reverse)
+                hash = tbl->mit_idmaps[MDS_RMT_UIDMAP_IDX];
+        else
+                hash = tbl->mit_idmaps[MDS_LCL_UIDMAP_IDX];
+
+        spin_lock(&tbl->mit_lock);
+        uid = idmap_lookup_id(hash, reverse, uid);
+        spin_unlock(&tbl->mit_lock);
+
+        return uid;
+}
+
+int mds_idmap_lookup_gid(struct mds_idmap_table *tbl, int reverse, gid_t gid)
+{
+        struct list_head *hash;
+
+        if (!tbl)
+                return MDS_IDMAP_NOTFOUND;
+
+        if (!reverse)
+                hash = tbl->mit_idmaps[MDS_RMT_GIDMAP_IDX];
+        else
+                hash = tbl->mit_idmaps[MDS_LCL_GIDMAP_IDX];
+
+        spin_lock(&tbl->mit_lock);
+        gid = idmap_lookup_id(hash, reverse, gid);
+        spin_unlock(&tbl->mit_lock);
+
+        return gid;
+}
+
+struct mds_idmap_table *mds_idmap_alloc()
+{
+        struct mds_idmap_table *tbl;
+        int i, j;
+
+        OBD_ALLOC(tbl, sizeof(*tbl));
+        if (!tbl)
+                return NULL;
+
+        spin_lock_init(&tbl->mit_lock);
+        for (i = 0; i < MDS_IDMAP_N_HASHES; i++)
+                for (j = 0; j < MDS_IDMAP_HASHSIZE; j++)
+                        INIT_LIST_HEAD(&tbl->mit_idmaps[i][j]);
+
+        return tbl;
+}
+
+static void idmap_clear_rmt_hash(struct list_head *list)
+{
+        struct mds_idmap_entry *e;
+        int i;
+
+        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
+                while (!list_empty(&list[i])) {
+                        e = list_entry(list[i].next, struct mds_idmap_entry,
+                                       rmt_hash);
+                        idmap_free_entry(e);
+                }
+        }
+}
+
+void mds_idmap_free(struct mds_idmap_table *tbl)
+{
+        int i;
+
+        spin_lock(&tbl->mit_lock);
+        idmap_clear_rmt_hash(tbl->mit_idmaps[MDS_RMT_UIDMAP_IDX]);
+        idmap_clear_rmt_hash(tbl->mit_idmaps[MDS_RMT_GIDMAP_IDX]);
+
+        /* paranoid checking */
+        for (i = 0; i < MDS_IDMAP_HASHSIZE; i++) {
+                LASSERT(list_empty(&tbl->mit_idmaps[MDS_LCL_UIDMAP_IDX][i]));
+                LASSERT(list_empty(&tbl->mit_idmaps[MDS_LCL_GIDMAP_IDX][i]));
+        }
+        spin_unlock(&tbl->mit_lock);
+
+        OBD_FREE(tbl, sizeof(*tbl));
+}
+
+/*********************************
+ * helpers doing mapping for MDS *
+ *********************************/
+
+/*
+ * we allow remote setuid/setgid to an "authencated" one,
+ * this policy probably change later.
+ */
+static
+int mds_req_secdesc_do_map(struct mds_export_data *med,
+                           struct mds_req_sec_desc *rsd)
+{
+        struct mds_idmap_table *idmap = med->med_idmap;
+        uid_t uid, fsuid;
+        gid_t gid, fsgid;
+
+        uid = mds_idmap_lookup_uid(idmap, 0, rsd->rsd_uid);
+        if (uid == MDS_IDMAP_NOTFOUND) {
+                CERROR("can't find map for uid %u\n", rsd->rsd_uid);
+                return -EPERM;
+        }
+
+        if (rsd->rsd_uid == rsd->rsd_fsuid)
+                fsuid = uid;
+        else {
+                fsuid = mds_idmap_lookup_uid(idmap, 0, rsd->rsd_fsuid);
+                if (fsuid == MDS_IDMAP_NOTFOUND) {
+                        CERROR("can't find map for fsuid %u\n", rsd->rsd_fsuid);
+                        return -EPERM;
+                }
+        }
+
+        gid = mds_idmap_lookup_gid(idmap, 0, rsd->rsd_gid);
+        if (gid == MDS_IDMAP_NOTFOUND) {
+                CERROR("can't find map for gid %u\n", rsd->rsd_gid);
+                return -EPERM;
+        }
+
+        if (rsd->rsd_gid == rsd->rsd_fsgid)
+                fsgid = gid;
+        else {
+                fsgid = mds_idmap_lookup_gid(idmap, 0, rsd->rsd_fsgid);
+                if (fsgid == MDS_IDMAP_NOTFOUND) {
+                        CERROR("can't find map for fsgid %u\n", rsd->rsd_fsgid);
+                        return -EPERM;
+                }
+        }
+
+        rsd->rsd_uid = uid;
+        rsd->rsd_gid = gid;
+        rsd->rsd_fsuid = fsuid;
+        rsd->rsd_fsgid = fsgid;
 
         return 0;
 }
 
-int mds_idmap_set(struct mds_export_data *med, __u32 id1, __u32 id2,
-                  int is_uid_mapping)
+void mds_body_do_reverse_map(struct mds_export_data *med,
+                             struct mds_body *body)
 {
-        struct mds_idmap_table *idmap;
-        int rc;
+        uid_t uid;
+        gid_t gid;
+
+        if (!med->med_remote)
+                return;
+
         ENTRY;
-
-        spin_lock(&med->med_idmap_lock);
-
-        idmap = __get_idmap_table(med, 1);
-        if (!idmap)
-                GOTO(out, rc = -ENOMEM);
-
-        if (is_uid_mapping)
-                rc = __idmap_set_item(med, idmap->uidmap, id1, id2);
-        else
-                rc = __idmap_set_item(med, idmap->gidmap, id1, id2);
-
-out:
-        spin_unlock(&med->med_idmap_lock);
-        RETURN(rc);
-}
-
-__u32 mds_idmap_get(struct mds_export_data *med, __u32 id,
-                    int is_uid_mapping)
-{
-        struct mds_idmap_table *idmap;
-        struct list_head *table;
-        struct list_head *head;
-        struct mds_idmap_item *item;
-        int found = 0;
-        __u32 res;
-
-        spin_lock(&med->med_idmap_lock);
-        idmap = __get_idmap_table(med, 0);
-        if (!idmap)
-                goto nllu;
-
-        table = is_uid_mapping ? idmap->uidmap : idmap->gidmap;
-        head = table + idmap_hash(id);
-
-        list_for_each_entry(item, head, hash) {
-                if (item->id1 == id) {
-                        found = 1;
-                        break;
+        if (body->valid & OBD_MD_FLUID) {
+                uid = mds_idmap_lookup_uid(med->med_idmap, 1, body->uid);
+                if (uid == MDS_IDMAP_NOTFOUND) {
+                        uid = med->med_nllu;
+                        if (body->valid & OBD_MD_FLMODE) {
+                                body->mode = (body->mode & ~S_IRWXU) |
+                                             ((body->mode & S_IRWXO) << 6);
+                        }
                 }
+                body->uid = uid;
         }
-        if (!found)
-                goto nllu;
+        if (body->valid & OBD_MD_FLGID) {
+                gid = mds_idmap_lookup_gid(med->med_idmap, 1, body->gid);
+                if (gid == MDS_IDMAP_NOTFOUND) {
+                        gid = med->med_nllg;
+                        if (body->valid & OBD_MD_FLMODE) {
+                                body->mode = (body->mode & ~S_IRWXG) |
+                                             ((body->mode & S_IRWXO) << 3);
+                        }
+                }
+                body->gid = gid;
+        }
 
-        res = item->id2;
-out:
-        spin_unlock(&med->med_idmap_lock);
-        return res;
-nllu:
-        res = is_uid_mapping ? med->med_nllu : med->med_nllg;
-        goto out;
+        EXIT;
 }
 
-void mds_reverse_map_ugid(struct ptlrpc_request *req,
-                          struct mds_body *body)
-{
-        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
-
-        LASSERT(req->rq_remote);
-
-        if (body->valid & OBD_MD_FLUID)
-                body->uid = mds_idmap_get(med, body->uid, 1);
-
-        if (body->valid & OBD_MD_FLGID)
-                body->gid = mds_idmap_get(med, body->gid, 0);
-}
+/**********************
+ * MDS ucred handling *
+ **********************/
 
 static inline void drop_ucred_ginfo(struct lvfs_ucred *ucred)
 {
@@ -729,7 +882,8 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
         struct lustre_sec_desc *lsd;
         ptl_nid_t peernid = req->rq_peer.peer_id.nid;
         struct group_info *gnew;
-        unsigned int setuid, setgid, strong_sec;
+        unsigned int setuid, setgid, strong_sec, root_squashed;
+        __u32 lsd_perms;
         ENTRY;
 
         LASSERT(ucred);
@@ -737,162 +891,118 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
         LASSERT(rsd->rsd_ngroups <= LUSTRE_MAX_GROUPS);
 
         strong_sec = (req->rq_auth_uid != -1);
-        LASSERT(!(req->rq_remote && !strong_sec));
+        LASSERT(!(req->rq_remote_realm && !strong_sec));
 
-        /* sanity check & set local/remote flag */
-        if (req->rq_remote) {
-                if (med->med_local) {
-                        CWARN("exp %p: client on nid "LPX64" was local, "
-                              "set to remote\n", req->rq_export, peernid);
-                        med->med_local = 0;
-                }
-        } else {
-                if (!med->med_local) {
-                        CWARN("exp %p: client on nid "LPX64" was remote, "
-                              "set to local\n", req->rq_export, peernid);
-                        med->med_local = 1;
-                }
-        }
-
-        setuid = (rsd->rsd_fsuid != rsd->rsd_uid);
-        setgid = (rsd->rsd_fsgid != rsd->rsd_gid);
-
-        /* deny setuid/setgid for remote client */
-        if ((setuid || setgid) && !med->med_local) {
-                CWARN("deny setxid (%u/%u) from remote client "LPX64"\n",
-                      setuid, setgid, peernid);
-                RETURN(-EPERM);
-        }
-
-        /* take care of uid/gid mapping for client in remote realm */
-        if (req->rq_remote) {
-                /* record the uid mapping here */
-                mds_idmap_set(med, req->rq_auth_uid, rsd->rsd_uid, 1);
-
-                /* now we act as the authenticated user */
-                rsd->rsd_uid = rsd->rsd_fsuid = req->rq_auth_uid;
-        } else if (strong_sec && req->rq_auth_uid != rsd->rsd_uid) {
-                /* if we use strong authentication on this request, we
-                 * expect the uid which client claimed is true.
-                 *
-                 * FIXME root's machine_credential in krb5 will be interpret
-                 * as "nobody", which is not good for mds-mds and mds-ost
-                 * connection.
-                 */
+        /* if we use strong authentication for a local client, we
+         * expect the uid which client claimed is true.
+         */
+        if (!med->med_remote && strong_sec &&
+            req->rq_auth_uid != rsd->rsd_uid) {
                 CWARN("nid "LPX64": UID %u was authenticated while client "
-                      "claimed %u, set %u by force\n",
+                      "claimed %u, enforce to be %u\n",
                       peernid, req->rq_auth_uid, rsd->rsd_uid,
                       req->rq_auth_uid);
-                rsd->rsd_uid = req->rq_auth_uid;
+                if (rsd->rsd_uid != rsd->rsd_fsuid)
+                        rsd->rsd_uid = req->rq_auth_uid;
+                else
+                        rsd->rsd_uid = rsd->rsd_fsuid = req->rq_auth_uid;
+        }
+
+        if (med->med_remote) {
+                int rc;
+
+                if (req->rq_mapped_uid == MDS_IDMAP_NOTFOUND) {
+                        CWARN("no mapping found, deny\n");
+                        RETURN(-EPERM);
+                }
+
+                rc = mds_req_secdesc_do_map(med, rsd);
+                if (rc)
+                        RETURN(rc);
         }
 
         /* now lsd come into play */
         ucred->luc_ginfo = NULL;
         ucred->luc_lsd = lsd = mds_get_lsd(rsd->rsd_uid);
 
-#if CRAY_PORTALS
-        ucred->luc_fsuid = req->rq_uid;
-#else
-        ucred->luc_fsuid = rsd->rsd_fsuid;
-#endif
-        if (lsd) {
-                if (req->rq_remote) {
-                        /* record the gid mapping here */
-                        mds_idmap_set(med, lsd->lsd_gid, rsd->rsd_gid, 0);
-                        /* now we act as the authenticated group */
-                        rsd->rsd_gid = rsd->rsd_fsgid = lsd->lsd_gid;
-                } else if (rsd->rsd_gid != lsd->lsd_gid) {
-                        /* verify gid which client declared is true */
-                        CWARN("GID: %u while client declare %u, "
-                              "set %u by force\n",
-                              lsd->lsd_gid, rsd->rsd_gid,
-                              lsd->lsd_gid);
-                        rsd->rsd_gid = lsd->lsd_gid;
-                }
-
-                if (lsd->lsd_ginfo) {
-                        ucred->luc_ginfo = lsd->lsd_ginfo;
-                        get_group_info(ucred->luc_ginfo);
-                }
-
-                /* check permission of setuid */
-                if (setuid) {
-                        if (!lsd->lsd_allow_setuid) {
-                                CWARN("mds blocked setuid attempt: %u -> %u\n",
-                                      rsd->rsd_uid, rsd->rsd_fsuid);
-                                RETURN(-EPERM);
-                        }
-                }
-
-                /* check permission of setgid */
-                if (setgid) {
-                        if (!lsd->lsd_allow_setgid) {
-                                CWARN("mds blocked setgid attempt: %u -> %u\n",
-                                      rsd->rsd_gid, rsd->rsd_fsgid);
-                                RETURN(-EPERM);
-                        }
-                }
-        } else {
-                /* failed to get lsd, right now we simply deny any access
-                 * if strong authentication is used,
-                 */
-                if (strong_sec) {
-                        CWARN("mds deny access without LSD\n");
-                        RETURN(-EPERM);
-                }
-
-                /* and otherwise deny setuid/setgid attempt */
-                if (setuid || setgid) {
-                        CWARN("mds deny setuid/setgid without LSD\n");
-                        RETURN(-EPERM);
-                }
+        if (!lsd) {
+                CERROR("Deny access without LSD: uid %d\n", rsd->rsd_uid);
+                RETURN(-EPERM);
         }
 
-        /* NOTE: we have already obtained supplementary groups,
-         * it will be retained across root_squash. will it be a
-         * security problem??
-         */
-        mds_squash_root(mds, rsd, &peernid); 
+        /* find out the setuid/setgid attempt */
+        setuid = (rsd->rsd_uid != rsd->rsd_fsuid);
+        setgid = (rsd->rsd_gid != rsd->rsd_fsgid ||
+                  rsd->rsd_gid != lsd->lsd_gid);
+
+        lsd_perms = mds_lsd_get_perms(lsd, med->med_remote, 0, peernid);
+
+        /* check permission of setuid */
+        if (setuid && !(lsd_perms & LSD_PERM_SETUID)) {
+                CWARN("mds blocked setuid attempt: %u -> %u\n",
+                      rsd->rsd_uid, rsd->rsd_fsuid);
+                RETURN(-EPERM);
+        }
+
+        /* check permission of setgid */
+        if (setgid && !(lsd_perms & LSD_PERM_SETGID)) {
+                CWARN("mds blocked setgid attempt: %u -> %u\n",
+                      rsd->rsd_gid, rsd->rsd_fsgid);
+                RETURN(-EPERM);
+        }
+
+        root_squashed = mds_squash_root(mds, rsd, &peernid); 
 
         /* remove privilege for non-root user */
         if (rsd->rsd_fsuid)
                 rsd->rsd_cap &= ~CAP_FS_MASK;
 
-        /* by now every fields in rsd have been granted */
+        /* by now every fields other than groups in rsd have been granted */
+        ucred->luc_uid = rsd->rsd_uid;
+        ucred->luc_gid = rsd->rsd_gid;
+        ucred->luc_fsuid = rsd->rsd_fsuid;
         ucred->luc_fsgid = rsd->rsd_fsgid;
         ucred->luc_cap = rsd->rsd_cap;
-        ucred->luc_uid = rsd->rsd_uid;
 
-        /* everything is done if we don't allow setgroups */
-        if (!lsd || !lsd->lsd_allow_setgrp)
+        /* don't use any supplementary group for remote client or
+         * we squashed root */
+        if (med->med_remote || root_squashed)
                 RETURN(0);
 
+        /* install groups from LSD */
+        if (lsd->lsd_ginfo) {
+                ucred->luc_ginfo = lsd->lsd_ginfo;
+                get_group_info(ucred->luc_ginfo);
+        }
+
+        /* everything is done if we don't allow setgroups */
+        if (!(lsd_perms & LSD_PERM_SETGRP))
+                RETURN(0);
+
+        /* root could set any groups as he want (if allowed), normal
+         * users only could reduce his group array.
+         */
         if (ucred->luc_uid == 0) {
-                if (rsd->rsd_ngroups == 0) {
-                        drop_ucred_ginfo(ucred);
+                drop_ucred_ginfo(ucred);
+
+                if (rsd->rsd_ngroups == 0)
                         RETURN(0);
-                }
 
                 gnew = groups_alloc(rsd->rsd_ngroups);
                 if (!gnew) {
                         CERROR("out of memory\n");
-                        drop_ucred_ginfo(ucred);
                         drop_ucred_lsd(ucred);
                         RETURN(-ENOMEM);
                 }
                 groups_from_buffer(gnew, rsd->rsd_groups);
-                groups_sort(gnew); /* can't rely on client */
+                groups_sort(gnew); /* don't rely on client doing this */
 
-                drop_ucred_ginfo(ucred);
                 ucred->luc_ginfo = gnew;
         } else {
                 __u32 set = 0, cur = 0;
-                struct group_info *ginfo;
+                struct group_info *ginfo = ucred->luc_ginfo;
 
-                /* if no group info in hash, we don't
-                 * bother createing new
-                 */
-                if (!ucred->luc_ginfo)
+                if (!ginfo)
                         RETURN(0);
 
                 /* Note: freeing a group_info count on 'nblocks' instead of
@@ -907,7 +1017,6 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                         RETURN(-ENOMEM);
                 }
 
-                ginfo = ucred->luc_ginfo;
                 while (cur < rsd->rsd_ngroups) {
                         if (groups_search(ginfo, rsd->rsd_groups[cur])) {
                                 GROUP_AT(gnew, set) = rsd->rsd_groups[cur];

@@ -120,6 +120,10 @@ test_0b() {
 run_test 0b "ensure object created after recover exists. (3284)"
 
 test_0c() {
+    if [ `using_krb5_sec $SECURITY` == 'n' ] ; then
+        echo "Skip 0c in non-gss mode"
+        return 0
+    fi
     # drop gss error notification
     replay_barrier mds1
     fail_drop mds1 0x760
@@ -1285,7 +1289,7 @@ test_56() {
     rm $DIR/$tfile
     return 0
 }
-run_test 56 "let MDS_CHECK_RESENT return the original return code instead of 0
+run_test 56 "let MDS_CHECK_RESENT return the original return code instead of 0"
 
 equals_msg test complete, cleaning up
 $CLEANUP

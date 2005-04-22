@@ -271,6 +271,9 @@ static inline void lustre_cfg_freedata(char *buf, int len)
         return;
 }
 
+#define NOBODY_UID      99
+#define NOBODY_GID      99
+
 /* Passed by mount */
 struct lustre_mount_data {
         uint32_t lmd_magic;
@@ -281,6 +284,7 @@ struct lustre_mount_data {
         uint32_t lmd_server_ipaddr;
         uint32_t lmd_port;
         uint32_t lmd_async;
+        uint64_t lmd_remote_flag;
         uint32_t lmd_nllu;
         uint32_t lmd_nllg;
         char     lmd_security[16];

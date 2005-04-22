@@ -49,8 +49,9 @@ struct upcall_cache {
 
         char                   *uc_name;
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-        unsigned long           uc_acquire_expire;
-        unsigned long           uc_entry_expire;
+        unsigned long           uc_acquire_expire;   /* max acquire time */
+        unsigned long           uc_entry_expire;     /* max entry life time */
+        unsigned long           uc_err_entry_expire; /* err entry life time */
 
         /* functions */
         unsigned int                (*hash)(struct upcall_cache *, __u64);
@@ -70,8 +71,7 @@ void upcall_cache_init_entry(struct upcall_cache *cache,
 struct upcall_cache_entry *
 upcall_cache_get_entry(struct upcall_cache *cache, __u64 key);
 void upcall_cache_put_entry(struct upcall_cache_entry *entry);
-int upcall_cache_downcall(struct upcall_cache *cache, __u64 key,
-                          int err, void *args);
+int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args);
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key);
 void upcall_cache_flush_idle(struct upcall_cache *cache);
 void upcall_cache_flush_all(struct upcall_cache *cache);

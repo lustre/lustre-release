@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (c) 2004 Cluster File Systems, Inc.
+ *  Copyright (c) 2004-2005 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -62,6 +62,11 @@
 static struct upcall_cache _lsd_cache;
 static struct list_head _lsd_hashtable[MDS_LSD_HASHSIZE];
 
+#define MDS_LSD_UPCALL_PATH             "/usr/sbin/lsd_upcall"
+#define MDS_LSD_ACQUIRE_EXPIRE          (5)
+#define MDS_LSD_ENTRY_EXPIRE            (5 * 60)
+#define MDS_LSD_ERR_ENTRY_EXPIRE        (30)
+
 struct upcall_cache *__mds_get_global_lsd_cache()
 {
         return &_lsd_cache;
@@ -97,6 +102,11 @@ static void lsd_free_entry(struct upcall_cache *cache,
         lentry = container_of(entry, struct lsd_cache_entry, base);
         if (lentry->lsd.lsd_ginfo)
                 put_group_info(lentry->lsd.lsd_ginfo);
+        if (lentry->lsd.lsd_perms) {
+                LASSERT(lentry->lsd.lsd_nperms);
+                OBD_FREE(lentry->lsd.lsd_perms, lentry->lsd.lsd_nperms *
+                                                sizeof(struct lsd_permission));
+        }
         OBD_FREE(lentry, sizeof(*lentry));
 }
 
@@ -140,6 +150,7 @@ static int lsd_parse_downcall(struct upcall_cache *cache,
         struct lsd_cache_entry *lentry;
         struct lsd_downcall_args *lsd_args;
         struct group_info *ginfo;
+        int size;
         ENTRY;
 
         LASSERT(args);
@@ -147,30 +158,52 @@ static int lsd_parse_downcall(struct upcall_cache *cache,
         lentry = container_of(entry, struct lsd_cache_entry, base);
         lsd = &lentry->lsd;
         lsd_args = (struct lsd_downcall_args *) args;
-        LASSERT(lsd_args->err == 0);
         LASSERT(lsd_args->ngroups <= NGROUPS_MAX);
+
+        if (lsd_args->err)
+                GOTO(err_ret, lsd_args->err);
 
         ginfo = groups_alloc(lsd_args->ngroups);
         if (!ginfo) {
-                CERROR("can't alloc group_info for %d groups\n",
-                        lsd_args->ngroups);
-                RETURN(-ENOMEM);
+                CERROR("failed to alloc %d groups\n", lsd_args->ngroups);
+                GOTO(err_ret, -ENOMEM);
         }
         groups_from_buffer(ginfo, lsd_args->groups);
         groups_sort(ginfo);
 
+        if (lsd_args->nperms) {
+                size = lsd_args->nperms * sizeof(struct lsd_permission);
+                OBD_ALLOC(lsd->lsd_perms, size);
+                if (!lsd->lsd_perms) {
+                        CERROR("failed to alloc %d\n", size);
+                        GOTO(err_group, -ENOMEM);
+                }
+                if (copy_from_user(lsd->lsd_perms, lsd_args->perms, size)) {
+                        CERROR("error copy from user space\n");
+                        GOTO(err_free, -EFAULT);
+                }
+        }
+
+        lsd->lsd_invalid = 0;
         lsd->lsd_uid = lsd_args->uid;
         lsd->lsd_gid = lsd_args->gid;
         lsd->lsd_ginfo = ginfo;
-        lsd->lsd_allow_setuid = lsd_args->allow_setuid;
-        lsd->lsd_allow_setgid = lsd_args->allow_setgid;
-        lsd->lsd_allow_setgrp = lsd_args->allow_setgrp;
+        lsd->lsd_nperms = lsd_args->nperms;
 
-        CWARN("LSD: uid %u gid %u ngroups %u, perm (%d/%d/%d)\n",
-              lsd->lsd_uid, lsd->lsd_gid, ginfo->ngroups,
-              lsd->lsd_allow_setuid, lsd->lsd_allow_setgid,
-              lsd->lsd_allow_setgrp);
+        CWARN("LSD: %d:%d, ngrps %u, nperms %u\n", lsd->lsd_uid, lsd->lsd_gid,
+              lsd->lsd_ginfo ? lsd->lsd_ginfo->ngroups : 0, lsd->lsd_nperms);
+
         RETURN(0);
+err_free:
+        OBD_FREE(lsd->lsd_perms, size);
+        lsd->lsd_perms = NULL;
+err_group:
+        put_group_info(ginfo);
+err_ret:
+        CERROR("LSD downcall error, disable this user for %lus\n",
+               cache->uc_err_entry_expire);
+        lsd->lsd_invalid = 1;
+        RETURN(1);
 }
 
 struct lustre_sec_desc * mds_get_lsd(__u32 uid)
@@ -184,6 +217,11 @@ struct lustre_sec_desc * mds_get_lsd(__u32 uid)
                 return NULL;
 
         lentry = container_of(entry, struct lsd_cache_entry, base);
+        if (lentry->lsd.lsd_invalid) {
+                upcall_cache_put_entry(&lentry->base);
+                return NULL;
+        }
+
         return &lentry->lsd;
 }
 
@@ -211,9 +249,10 @@ int mds_init_lsd_cache()
         cache->uc_name = "LSD_CACHE";
 
         /* set default value, proc tunable */
-        sprintf(cache->uc_upcall, "%s", "/usr/sbin/lsd_upcall");
-        cache->uc_entry_expire = 5 * 60;
-        cache->uc_acquire_expire = 5;
+        sprintf(cache->uc_upcall, MDS_LSD_UPCALL_PATH);
+        cache->uc_acquire_expire = MDS_LSD_ACQUIRE_EXPIRE;
+        cache->uc_entry_expire = MDS_LSD_ENTRY_EXPIRE;
+        cache->uc_err_entry_expire = MDS_LSD_ERR_ENTRY_EXPIRE;
 
         cache->hash = lsd_hash;
         cache->alloc_entry = lsd_alloc_entry;
@@ -237,4 +276,25 @@ void mds_flush_lsd(__u32 id)
 void mds_cleanup_lsd_cache()
 {
         upcall_cache_flush_all(&_lsd_cache);
+}
+
+__u32 mds_lsd_get_perms(struct lustre_sec_desc *lsd, __u32 is_remote,
+                        ptl_netid_t netid, ptl_nid_t nid)
+{
+        struct lsd_permission *perm = lsd->lsd_perms;
+        __u32 i;
+
+        for (i = 0; i < lsd->lsd_nperms; i++) {
+                if (perm->netid != PTL_NETID_ANY && perm->netid != netid)
+                        continue;
+                if (perm->nid != PTL_NID_ANY && perm->nid != nid)
+                        continue;
+                return perm->perm;
+        }
+
+        /* default */
+        if (is_remote)
+                return 0;
+        else
+                return LSD_PERM_SETGRP;
 }

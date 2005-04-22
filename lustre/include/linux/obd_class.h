@@ -594,6 +594,7 @@ static inline int obd_del_conn(struct obd_import *imp,
 static inline int obd_connect(struct lustre_handle *conn,
                               struct obd_device *obd,
                               struct obd_uuid *cluuid,
+                              struct obd_connect_data *data,
                               unsigned long flags)
 {
         int rc;
@@ -603,7 +604,7 @@ static inline int obd_connect(struct lustre_handle *conn,
         OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, flags);
+        rc = OBP(obd, connect)(conn, obd, cluuid, data, flags);
         RETURN(rc);
 }
 

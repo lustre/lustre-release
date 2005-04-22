@@ -374,6 +374,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
                           struct obd_uuid *cluuid,
+                          struct obd_connect_data *conn_data,
                           unsigned long connect_flags)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -409,6 +410,9 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
 
         imp->imp_connect_flags = connect_flags;
+        if (conn_data)
+                memcpy(&imp->imp_connect_data, conn_data, sizeof(*conn_data));
+
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -541,17 +545,21 @@ int target_handle_connect(struct ptlrpc_request *req)
         struct obd_uuid cluuid;
         struct obd_uuid remote_uuid;
         struct list_head *p;
+        struct obd_connect_data *conn_data;
+        int conn_data_size = sizeof(*conn_data);
         char *str, *tmp;
         int rc = 0;
         unsigned long flags;
         int initial_conn = 0;
         char peer_str[PTL_NALFMT_SIZE];
+        const int offset = 1;
         ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
 
-        LASSERT_REQSWAB (req, 0);
-        str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
+        LASSERT_REQSWAB (req, offset + 0);
+        str = lustre_msg_string(req->rq_reqmsg, offset + 0,
+                                sizeof(tgtuuid) - 1);
         if (str == NULL) {
                 CERROR("bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
@@ -568,8 +576,8 @@ int target_handle_connect(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENODEV);
         }
 
-        LASSERT_REQSWAB (req, 1);
-        str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        str = lustre_msg_string(req->rq_reqmsg, offset + 1, sizeof(cluuid) - 1);
         if (str == NULL) {
                 CERROR("bad client UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
@@ -592,17 +600,22 @@ int target_handle_connect(struct ptlrpc_request *req)
                 LBUG();
         }
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, sizeof conn);
         if (tmp == NULL)
                 GOTO(out, rc = -EPROTO);
 
         memcpy(&conn, tmp, sizeof conn);
 
-        cfp = lustre_msg_buf(req->rq_reqmsg, 3, sizeof(unsigned long));
+        cfp = lustre_msg_buf(req->rq_reqmsg, offset + 3, sizeof(unsigned long));
         LASSERT(cfp != NULL);
         connect_flags = *cfp;
 
-        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        conn_data = lustre_swab_reqbuf(req, offset + 4, sizeof(*conn_data),
+                                       lustre_swab_connect);
+        if (!conn_data)
+                GOTO(out, rc = -EPROTO);
+
+        rc = lustre_pack_reply(req, 1, &conn_data_size, NULL);
         if (rc)
                 GOTO(out, rc);
         
@@ -677,9 +690,17 @@ int target_handle_connect(struct ptlrpc_request *req)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid, connect_flags);
+                        rc = obd_connect(&conn, target, &cluuid, conn_data,
+                                         connect_flags);
                 }
         }
+
+        /* Return only the parts of obd_connect_data that we understand, so the
+         * client knows that we don't understand the rest. */
+        conn_data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
+        memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*conn_data)), conn_data,
+               sizeof(*conn_data));
+
         /* Tell the client if we support replayable requests */
         if (target->obd_replayable)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_REPLAYABLE);
@@ -747,7 +768,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (target->obd_recovering)
                 target->obd_connected_clients++;
 
-        memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof(conn)),
+        memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, offset + 2, sizeof(conn)),
                sizeof(conn));
 
         if (export->exp_imp_reverse != NULL) {

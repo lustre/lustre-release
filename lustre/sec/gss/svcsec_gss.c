@@ -105,6 +105,9 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 
 struct rsi {
         struct cache_head       h;
+        __u32                   naltype;
+        __u32                   netid;
+        __u64                   nid;
         rawobj_t                in_handle, in_token;
         rawobj_t                out_handle, out_token;
         int                     major_status, minor_status;
@@ -148,6 +151,9 @@ static void rsi_request(struct cache_detail *cd,
 {
         struct rsi *rsii = container_of(h, struct rsi, h);
 
+        qword_addhex(bpp, blen, (char *) &rsii->naltype, sizeof(rsii->naltype));
+        qword_addhex(bpp, blen, (char *) &rsii->netid, sizeof(rsii->netid));
+        qword_addhex(bpp, blen, (char *) &rsii->nid, sizeof(rsii->nid));
         qword_addhex(bpp, blen, rsii->in_handle.data, rsii->in_handle.len);
         qword_addhex(bpp, blen, rsii->in_token.data, rsii->in_token.len);
         (*bpp)[-1] = '\n';
@@ -364,7 +370,7 @@ static struct cache_detail rsi_cache = {
 #define RSC_HASHMAX     (1<<RSC_HASHBITS)
 #define RSC_HASHMASK    (RSC_HASHMAX-1)
 
-#define GSS_SEQ_WIN     128
+#define GSS_SEQ_WIN     512
 
 struct gss_svc_seq_data {
         /* highest seq number seen so far: */
@@ -378,8 +384,9 @@ struct gss_svc_seq_data {
 struct rsc {
         struct cache_head       h;
         rawobj_t                handle;
-        __u32                   remote;
+        __u32                   remote_realm;
         struct vfs_cred         cred;
+        uid_t                   mapped_uid;
         struct gss_svc_seq_data seqdata;
         struct gss_ctx         *mechctx;
 };
@@ -493,9 +500,16 @@ static int rsc_parse(struct cache_detail *cd,
                 goto out;
 
         /* remote flag */
-        rv = get_int(&mesg, &rsci->remote);
+        rv = get_int(&mesg, &rsci->remote_realm);
         if (rv) {
                 CERROR("fail to get remote flag\n");
+                goto out;
+        }
+
+        /* mapped uid */
+        rv = get_int(&mesg, &rsci->mapped_uid);
+        if (rv) {
+                CERROR("fail to get mapped uid\n");
                 goto out;
         }
 
@@ -503,10 +517,10 @@ static int rsc_parse(struct cache_detail *cd,
         rv = get_int(&mesg, &rsci->cred.vc_uid);
         if (rv == -EINVAL)
                 goto out;
-        if (rv == -ENOENT)
+        if (rv == -ENOENT) {
+                CERROR("NOENT? set rsc entry negative\n");
                 set_bit(CACHE_NEGATIVE, &rsci->h.flags);
-        else {
-                int N, i;
+        } else {
                 struct gss_api_mech *gm;
                 rawobj_t tmp_buf;
                 __u64 ctx_expiry;
@@ -514,27 +528,6 @@ static int rsc_parse(struct cache_detail *cd,
                 /* gid */
                 if (get_int(&mesg, &rsci->cred.vc_gid))
                         goto out;
-
-                /* number of additional gid's */
-                if (get_int(&mesg, &N))
-                        goto out;
-                status = -ENOMEM;
-#if 0
-                rsci->cred.vc_ginfo = groups_alloc(N);
-                if (rsci->cred.vc_ginfo == NULL)
-                        goto out;
-#endif
-
-                /* gid's */
-                status = -EINVAL;
-                for (i=0; i<N; i++) {
-                        gid_t gid;
-                        if (get_int(&mesg, &gid))
-                                goto out;
-#if 0
-                        GROUP_AT(rsci->cred.vc_ginfo, i) = gid;
-#endif
-                }
 
                 /* mech name */
                 len = qword_get(&mesg, buf, mlen);
@@ -687,12 +680,17 @@ gss_check_seq_num(struct gss_svc_seq_data *sd, __u32 seq_num)
                 __set_bit(seq_num % GSS_SEQ_WIN, sd->sd_win);
                 goto exit;
         } else if (seq_num + GSS_SEQ_WIN <= sd->sd_max) {
+                CERROR("seq %u too low: max %u, win %d\n",
+                        seq_num, sd->sd_max, GSS_SEQ_WIN);
                 rc = 1;
                 goto exit;
         }
 
-        if (__test_and_set_bit(seq_num % GSS_SEQ_WIN, sd->sd_win))
+        if (__test_and_set_bit(seq_num % GSS_SEQ_WIN, sd->sd_win)) {
+                CERROR("seq %u is replay: max %u, win %d\n",
+                        seq_num, sd->sd_max, GSS_SEQ_WIN);
                 rc = 1;
+        }
 exit:
         spin_unlock(&sd->sd_lock);
         return rc;
@@ -912,6 +910,10 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
                 GOTO(out_rsikey, rc = SVC_DROP);
         }
 
+        rsikey->naltype = (__u32) req->rq_peer.peer_ni->pni_number;
+        rsikey->netid = 0;
+        rsikey->nid = (__u64) req->rq_peer.peer_id.nid;
+
         rsip = gssd_upcall(rsikey, &my_chandle);
         if (!rsip) {
                 CERROR("error in gssd_upcall.\n");
@@ -973,6 +975,10 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
                req->rq_reply_state->rs_repdata_len);
 
         *res = PTLRPCS_OK;
+
+        req->rq_auth_uid = rsci->cred.vc_uid;
+        req->rq_remote_realm = rsci->remote_realm;
+        req->rq_mapped_uid = rsci->mapped_uid;
 
         /* This is simplified since right now we doesn't support
          * INIT_CONTINUE yet.
@@ -1046,7 +1052,8 @@ gss_svcsec_handle_data(struct ptlrpc_request *req,
         }
 
         req->rq_auth_uid = rsci->cred.vc_uid;
-        req->rq_remote = rsci->remote;
+        req->rq_remote_realm = rsci->remote_realm;
+        req->rq_mapped_uid = rsci->mapped_uid;
 
         *res = PTLRPCS_OK;
         GOTO(out, rc = SVC_OK);

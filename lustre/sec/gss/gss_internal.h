@@ -108,6 +108,11 @@ typedef struct rawobj_buf_s {
         __u8           *buf;
 } rawobj_buf_t;
 
+/*
+ * mark of the interface between kernel and lgssd/lsvcgssd
+ */
+#define GSSD_INTERFACE_VERSION  (1)
+
 #define MAXSEQ 0x80000000 /* maximum legal sequence number, from rfc 2203 */
 
 enum rpc_gss_proc {

@@ -8,9 +8,11 @@
 export KDCHOST=${KDCHOST:-"localhost"}
 export KDCDIR=${KDCDIR:-"/usr/kerberos/sbin"}
 export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
-export LGSSD=${LGSSD:-"/sbin/lgssd"}
-export SVCGSSD=${SVCGSSD:-"/sbin/lsvcgssd"}
+export LGSSD=${LGSSD:-"/usr/sbin/lgssd"}
+export SVCGSSD=${SVCGSSD:-"/usr/sbin/lsvcgssd"}
 export PDSH=${PDSH:-"ssh"}
+
+export CHECK_KDC=${CHECKKDC:-"no"}
 
 using_krb5_sec() {
     if [ "x$1" != "xkrb5i" -a "x$1" != "xkrb5p" ]; then
@@ -22,6 +24,10 @@ using_krb5_sec() {
 
 start_krb5_kdc() {
     if [ `using_krb5_sec $SECURITY` == 'n' ] ; then
+        return 0
+    fi
+
+    if [ "x$CHECK_KDC" == "xno" ]; then
         return 0
     fi
 

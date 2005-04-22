@@ -35,6 +35,9 @@
 #include <linux/obd.h>
 #include <linux/lustre_mds.h>
 
+#include <portals/types.h>
+#include <portals/ptlctl.h>
+
 /*
  * return:
  *  0:      fail to insert (found identical)
@@ -76,7 +79,7 @@ int get_groups_local(uid_t uid, gid_t *gid, int *ngroups, gid_t **groups)
 
         pw = getpwuid(uid);
         if (!pw)
-                return -errno;
+                return -ENOENT;
 
         *gid = pw->pw_gid;
 
@@ -97,34 +100,308 @@ int get_groups_local(uid_t uid, gid_t *gid, int *ngroups, gid_t **groups)
         return 0;
 }
 
+#define LINEBUF_SIZE    (1024)
+static char linebuf[LINEBUF_SIZE];
+
+int readline(FILE *fp, char *buf, int bufsize)
+{
+        char *p = buf;
+        int i = 0;
+
+        if (fgets(buf, bufsize, fp) == NULL)
+                return -1;
+
+        while (*p) {
+                if (*p == '#') {
+                        *p = '\0';
+                        break;
+                }
+                if (*p == '\n') {
+                        *p = '\0';
+                        break;
+                }
+                i++;
+                p++;
+        }
+
+        return i;
+}
+
+#define IS_SPACE(c) ((c) == ' ' || (c) == '\t')
+
+void remove_space_head(char **buf)
+{
+        char *p = *buf;
+
+        while (IS_SPACE(*p))
+                p++;
+
+        *buf = p;
+}
+
+void remove_space_tail(char **buf)
+{
+        char *p = *buf;
+        char *spc = NULL;
+
+        while (*p) {
+                if (!IS_SPACE(*p)) {
+                        if (spc) spc = NULL;
+                } else
+                        if (!spc) spc = p;
+                p++;
+        }
+
+        if (spc)
+                *spc = '\0';
+}
+
+int get_next_uid_range(char **buf, uid_t *uid_range)
+{
+        char *p = *buf;
+        char *comma, *sub;
+
+        remove_space_head(&p);
+        if (strlen(p) == 0)
+                return -1;
+
+        comma = strchr(p, ',');
+        if (comma) {
+                *comma = '\0';
+                *buf = comma + 1;
+        } else
+                *buf = p + strlen(p);
+
+        sub = strchr(p, '-');
+        if (!sub) {
+                uid_range[0] = uid_range[1] = atoi(p);
+        } else {
+                *sub++ = '\0';
+                uid_range[0] = atoi(p);
+                uid_range[1] = atoi(sub);
+        }
+
+        return 0;
+}
+
+/*
+ * return 0: ok
+ */
+int remove_bracket(char **buf)
+{
+        char *p = *buf;
+        char *p2;
+
+        if (*p++ != '[')
+                return -1;
+
+        p2 = strchr(p, ']');
+        if (!p2)
+                return -1;
+
+        *p2++ = '\0';
+        while (*p2) {
+                if (*p2 != ' ' && *p2 != '\t')
+                        return -1;
+                p2++;
+        }
+
+        remove_space_tail(&p);
+        *buf = p;
+        return 0;
+}
+
+/* return 0: found a match */
+int search_uid(FILE *fp, uid_t uid)
+{
+        char *p;
+        uid_t uid_range[2];
+        int rc;
+
+        while (1) {
+                rc = readline(fp, linebuf, LINEBUF_SIZE);
+                if (rc < 0)
+                        return rc;
+                if (rc == 0)
+                        continue;
+
+                p = linebuf;
+                if (remove_bracket(&p))
+                        continue;
+
+                while (get_next_uid_range(&p, uid_range) == 0) {
+                        if (uid >= uid_range[0] && uid <= uid_range[1]) {
+                                return 0;
+                        }
+                }
+                continue;
+        }
+}
+
+static struct {
+        char   *name;
+        __u32   bit;
+} perm_types[] =  {
+        {"setuid",      LSD_PERM_SETUID},
+        {"setgid",      LSD_PERM_SETGID},
+        {"setgrp",      LSD_PERM_SETGRP},
+};
+#define N_PERM_TYPES    (3)
+
+int parse_perm(__u32 *perm, char *str)
+{
+        char *p = str;
+        char *comma;
+        int i;
+
+        *perm = 0;
+
+        while (1) {
+                p = str;
+                comma = strchr(str, ',');
+                if (comma) {
+                        *comma = '\0';
+                        str = comma + 1;
+                }
+
+                for (i = 0; i < N_PERM_TYPES; i++) {
+                        if (!strcasecmp(p, perm_types[i].name)) {
+                                *perm |= perm_types[i].bit;
+                                break;
+                        }
+                }
+
+                if (i >= N_PERM_TYPES) {
+                        printf("unkown perm type: %s\n", p);
+                        return -1;
+                }
+
+                if (!comma)
+                        break;
+        }
+        return 0;
+}
+
+int get_one_perm(FILE *fp, struct lsd_permission *perm)
+{
+        char nid_str[256], perm_str[256];
+        int rc;
+
+again:
+        rc = readline(fp, linebuf, LINEBUF_SIZE);
+        if (rc < 0)
+                return rc;
+        if (rc == 0)
+                goto again;
+
+        rc = sscanf(linebuf, "%s %s", nid_str, perm_str);
+        if (rc != 2)
+                return -1;
+
+        if (ptl_parse_nid(&perm->nid, nid_str))
+                return -1;
+
+        if (parse_perm(&perm->perm, perm_str))
+                return -1;
+
+        perm->netid = 0;
+        return 0;
+}
+
+#define MAX_PERMS       (50)
+
+int get_perms(FILE *fp, uid_t uid, int *nperms, struct lsd_permission **perms)
+{
+        static struct lsd_permission _perms[MAX_PERMS];
+
+        if (search_uid(fp, uid))
+                return -1;
+
+        *nperms = 0;
+        while (*nperms < MAX_PERMS) {
+                if (get_one_perm(fp, &_perms[*nperms]))
+                        break;
+                (*nperms)++;
+        }
+        *perms = _perms;
+        return 0;
+}
+
+void show_result(struct lsd_downcall_args *dc)
+{
+        int i;
+
+        printf("err: %d, uid %u, gid %d\n"
+               "ngroups: %d\n",
+               dc->err, dc->uid, dc->gid, dc->ngroups);
+        for (i = 0; i < dc->ngroups; i++)
+                printf("\t%d\n", dc->groups[i]);
+
+        printf("nperms: %d\n", dc->nperms);
+        for (i = 0; i < dc->nperms; i++)
+                printf("\t: netid %u, nid "LPX64", bits %x\n", i,
+                        dc->perms[i].nid, dc->perms[i].perm);
+}
+
+void usage(char *prog)
+{
+        printf("Usage: %s [-t] uid\n", prog);
+        exit(1);
+}
+
 int main (int argc, char **argv)
 {
-        char   *pathname = "/proc/fs/lustre/mds/lsd_downcall";
-        int     fd, rc;
+        char   *dc_name = "/proc/fs/lustre/mds/lsd_downcall";
+        int     dc_fd;
+        char   *conf_name = "/etc/lustre/lsd.conf";
+        FILE   *conf_fp;
         struct lsd_downcall_args ioc_data;
+        extern char *optarg;
+        int     opt, testing = 0, rc;
 
-        if (argc != 2) {
-                printf("bad parameter\n");
-                return -EINVAL;
+        while ((opt = getopt(argc, argv, "t")) != -1) {
+                switch (opt) {
+                case 't':
+                        testing = 1;
+                        break;
+                default:
+                        usage(argv[0]);
+                }
         }
 
-        ioc_data.uid = atoi(argv[1]);
+        if (optind >= argc)
+                usage(argv[0]);
 
-        fd = open(pathname, O_WRONLY);
-        if (fd < 0) {
-                rc = -errno;
-                printf("can't open device %s\n", pathname);
-                return rc;
-        }
+        memset(&ioc_data, 0, sizeof(ioc_data));
+        ioc_data.uid = atoi(argv[optind]);
 
+        /* read user/group database */
         ioc_data.err = get_groups_local(ioc_data.uid, &ioc_data.gid,
                                         &ioc_data.ngroups, &ioc_data.groups);
+        if (ioc_data.err)
+                goto do_downcall;
 
-        /* FIXME get these from config file */
-        ioc_data.allow_setuid = 1;
-        ioc_data.allow_setgid = 1;
-        ioc_data.allow_setgrp = 1;
+        /* read lsd config database */
+        conf_fp = fopen(conf_name, "r");
+        if (conf_fp) {
+                get_perms(conf_fp, ioc_data.uid, &ioc_data.nperms,
+                          &ioc_data.perms);
+                fclose(conf_fp);
+        }
 
-        rc = write(fd, &ioc_data, sizeof(ioc_data));
-        return (rc != sizeof(ioc_data));
+
+do_downcall:
+        if (testing) {
+                show_result(&ioc_data);
+                return 0;
+        } else {
+                dc_fd = open(dc_name, O_WRONLY);
+                if (dc_fd < 0) {
+                        printf("can't open device %s\n", dc_name);
+                        return -errno;
+                }
+
+                rc = write(dc_fd, &ioc_data, sizeof(ioc_data));
+                return (rc != sizeof(ioc_data));
+        }
 }

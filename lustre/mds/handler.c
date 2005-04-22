@@ -55,7 +55,6 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
-
 #include <linux/lustre_acl.h>
 #include "mds_internal.h"
 
@@ -360,6 +359,145 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
         RETURN(result);
 }
 
+static
+int mds_req_add_idmapping(struct ptlrpc_request *req,
+                          struct mds_export_data *med)
+{
+        struct mds_req_sec_desc *rsd;
+        struct lustre_sec_desc  *lsd;
+        int rc;
+
+        if (!med->med_remote)
+                return 0;
+
+        /* maybe we should do it more completely: invalidate the gss ctxt? */
+        if (req->rq_mapped_uid == MDS_IDMAP_NOTFOUND) {
+                CWARN("didn't find mapped uid\n");
+                return -EPERM;
+        }
+
+        rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
+        if (!rsd) {
+                CERROR("Can't unpack security desc\n");
+                return -EPROTO;
+        }
+
+        lsd = mds_get_lsd(req->rq_mapped_uid);
+        if (!lsd) {
+                CERROR("can't get LSD(%u), no mapping added\n",
+                       req->rq_mapped_uid);
+                return -EPERM;
+        }
+
+        rc = mds_idmap_add(med->med_idmap, rsd->rsd_uid, lsd->lsd_uid,
+                           rsd->rsd_gid, lsd->lsd_gid);
+        mds_put_lsd(lsd);
+        return rc;
+}
+
+static
+int mds_req_del_idmapping(struct ptlrpc_request *req,
+                          struct mds_export_data *med)
+{
+        struct mds_req_sec_desc *rsd;
+        struct lustre_sec_desc  *lsd;
+        int rc;
+
+        if (!med->med_remote)
+                return 0;
+
+        rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
+        if (!rsd) {
+                CERROR("Can't unpack security desc\n");
+                return -EPROTO;
+        }
+
+        LASSERT(req->rq_mapped_uid != -1);
+        lsd = mds_get_lsd(req->rq_mapped_uid);
+        if (!lsd) {
+                CERROR("can't get LSD(%u), no idmapping deleted\n",
+                       req->rq_mapped_uid);
+                return -EPERM;
+        }
+
+        rc = mds_idmap_del(med->med_idmap, rsd->rsd_uid, lsd->lsd_uid,
+                           rsd->rsd_gid, lsd->lsd_gid);
+        mds_put_lsd(lsd);
+        return rc;
+}
+
+static int mds_init_export_data(struct ptlrpc_request *req,
+                                struct mds_export_data *med)
+{
+        struct obd_connect_data *data, *reply;
+        int ask_remote, ask_local;
+        ENTRY;
+
+        data = lustre_msg_buf(req->rq_reqmsg, 5, sizeof(*data));
+        reply = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data));
+        LASSERT(data && reply);
+
+        if (med->med_initialized) {
+                CWARN("med already initialized, reconnect?\n");
+                goto reply;
+        }
+
+        ask_remote = data->ocd_connect_flags & OBD_CONNECT_REMOTE;
+        ask_local = data->ocd_connect_flags & OBD_CONNECT_LOCAL;
+
+        /* currently the policy is simple: satisfy client as possible
+         * as we can.
+         */
+        if (req->rq_auth_uid == -1) {
+                if (ask_remote)
+                        CWARN("null sec is used, force to be local\n");
+                med->med_remote = 0;
+        } else {
+                if (ask_remote) {
+                        if (!req->rq_remote_realm)
+                                CWARN("local realm asked to be remote\n");
+                        med->med_remote = 1;
+                } else if (ask_local) {
+                        if (req->rq_remote_realm)
+                                CWARN("remote realm asked to be local\n");
+                        med->med_remote = 0;
+                } else
+                        med->med_remote = (req->rq_remote_realm != 0);
+        }
+
+        med->med_nllu = data->ocd_nllu[0];
+        med->med_nllg = data->ocd_nllu[1];
+
+        med->med_initialized = 1;
+reply:
+        reply->ocd_connect_flags &= ~(OBD_CONNECT_REMOTE | OBD_CONNECT_LOCAL);
+        if (med->med_remote) {
+                if (!med->med_idmap)
+                        med->med_idmap = mds_idmap_alloc();
+
+                if (!med->med_idmap)
+                        CERROR("Failed to alloc idmap, following request from "
+                               "this client will be refused\n");
+
+                reply->ocd_connect_flags |= OBD_CONNECT_REMOTE;
+                CDEBUG(D_SEC, "set client as remote\n");
+        } else {
+                reply->ocd_connect_flags |= OBD_CONNECT_LOCAL;
+                CDEBUG(D_SEC, "set client as local\n");
+        }
+
+        RETURN(0);
+}
+
+static void mds_free_export_data(struct mds_export_data *med)
+{
+        if (!med->med_idmap)
+                return;
+
+        LASSERT(med->med_remote);
+        mds_idmap_free(med->med_idmap);
+        med->med_idmap = NULL;
+}
 
 /* Establish a connection to the MDS.
  *
@@ -368,7 +506,8 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
  * etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, unsigned long flags)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       unsigned long flags)
 {
         struct mds_export_data *med;
         struct mds_client_data *mcd;
@@ -456,12 +595,12 @@ static int mds_init_export(struct obd_export *exp)
 static int mds_destroy_export(struct obd_export *export)
 {
         struct obd_device *obd = export->exp_obd;
-        struct mds_export_data *med;
+        struct mds_export_data *med = &export->exp_mds_data;
         struct lvfs_run_ctxt saved;
         int rc = 0;
         ENTRY;
 
-        med = &export->exp_mds_data;
+        mds_free_export_data(med);
         target_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
@@ -880,31 +1019,46 @@ int mds_pack_acl(struct obd_device *obd, struct lustre_msg *repmsg, int offset,
 }
 
 /* 
- * we only take care of fsuid/fsgid.
+ * here we take simple rule: once uid/fsuid is root, we also squash
+ * the gid/fsgid, don't care setuid/setgid attributes.
  */
-void mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
-                     ptl_nid_t *peernid)
+int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
+                    ptl_nid_t *peernid)
 {
-        if (!mds->mds_squash_uid || rsd->rsd_fsuid)
-                return;
+        if (!mds->mds_squash_uid || *peernid == mds->mds_nosquash_nid)
+                return 0;
 
-        if (*peernid == mds->mds_nosquash_nid)
-                return;
+        if (rsd->rsd_uid && rsd->rsd_fsuid)
+                return 0;
 
-        CDEBUG(D_SEC, "squash req from 0x%llx, (%d:%d/%x)=>(%d:%d/%x)\n",
-                *peernid, rsd->rsd_fsuid, rsd->rsd_fsgid, rsd->rsd_cap,
-                mds->mds_squash_uid, mds->mds_squash_gid,
-                (rsd->rsd_cap & ~CAP_FS_MASK));
+        CDEBUG(D_SEC, "squash req from "LPX64":"
+               "(%u:%u-%u:%u/%x)=>(%u:%u-%u:%u/%x)\n", *peernid,
+                rsd->rsd_uid, rsd->rsd_gid,
+                rsd->rsd_fsuid, rsd->rsd_fsgid, rsd->rsd_cap,
+                rsd->rsd_uid ? rsd->rsd_uid : mds->mds_squash_uid,
+                rsd->rsd_uid ? rsd->rsd_gid : mds->mds_squash_gid,
+                rsd->rsd_fsuid ? rsd->rsd_fsuid : mds->mds_squash_uid,
+                rsd->rsd_fsuid ? rsd->rsd_fsgid : mds->mds_squash_gid,
+                rsd->rsd_cap & ~CAP_FS_MASK);
 
-        rsd->rsd_fsuid = mds->mds_squash_uid;
-        rsd->rsd_fsgid = mds->mds_squash_gid;
+        if (rsd->rsd_uid == 0) {
+                rsd->rsd_uid = mds->mds_squash_uid;
+                rsd->rsd_gid = mds->mds_squash_gid;
+        }
+        if (rsd->rsd_fsuid == 0) {
+                rsd->rsd_fsuid = mds->mds_squash_uid;
+                rsd->rsd_fsgid = mds->mds_squash_gid;
+        }
         rsd->rsd_cap &= ~CAP_FS_MASK;
+
+        return 1;
 }
 
 static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                                 struct ptlrpc_request *req, int req_off,
                                 struct mds_body *reqbody, int reply_off)
 {
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct inode *inode = dentry->d_inode;
         struct mds_body *body;
         int rc = 0;
@@ -952,9 +1106,8 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                                   body, inode);
         }                
 
-        /* do reverse uid/gid mapping if needed */
-        if (rc == 0 && req->rq_remote)
-                mds_reverse_map_ugid(req, body);
+        if (rc == 0)
+                mds_body_do_reverse_map(med, body);
 
         RETURN(rc);
 }
@@ -1167,7 +1320,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 
         rc = mds_init_ucred(&uc, req, rsd);
         if (rc) {
-                CERROR("can't init ucred\n");
                 GOTO(cleanup, rc);
         }
 
@@ -1376,7 +1528,6 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         rc = mds_init_ucred(&uc, req, rsd);
         if (rc) {
                 mds_exit_ucred(&uc);
-                CERROR("can't init ucred\n");
                 RETURN(rc);
         }
 
@@ -1539,7 +1690,6 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
 
         rc = mds_init_ucred(&uc, req, rsd);
         if (rc) {
-                CERROR("can't init ucred\n");
                 GOTO(out, rc);
         }
 
@@ -1702,29 +1852,12 @@ int mds_reint(struct ptlrpc_request *req, int offset,
 
         rc = mds_init_ucred(&rec->ur_uc, req, rsd);
         if (rc) {
-                CERROR("can't init ucred\n");
                 GOTO(out, rc);
         }
 
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
 
-        /* do reverse uid/gid mapping if needed */
-        if (rc == 0 && req->rq_remote &&
-            (rec->ur_opcode == REINT_SETATTR ||
-             rec->ur_opcode == REINT_OPEN)) {
-                struct mds_body *body;
-                int bodyoff;
-
-                if (rec->ur_opcode == REINT_SETATTR)
-                        bodyoff = 0;
-                else /* open */
-                        bodyoff = (offset == 3 ? 1 : 0);
-                body = lustre_msg_buf(req->rq_repmsg, bodyoff, sizeof(*body));
-                LASSERT(body);
-
-                mds_reverse_map_ugid(req, body);
-        }
  out:
         mds_exit_ucred(&rec->ur_uc);
         OBD_FREE(rec, sizeof(*rec));
@@ -1865,13 +1998,10 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         MDS_CHECK_RESENT(req, reconstruct_create(req));
 
-        /*
-         * this only serve to inter-mds request, don't need check group database
-         * here. --ericm.
-         */
         uc.luc_lsd = NULL;
         uc.luc_ginfo = NULL;
         uc.luc_uid = body->oa.o_uid;
+        uc.luc_gid = body->oa.o_gid;
         uc.luc_fsuid = body->oa.o_uid;
         uc.luc_fsgid = body->oa.o_gid;
 
@@ -2224,36 +2354,41 @@ static int mdt_set_info(struct ptlrpc_request *req)
         RETURN(-EINVAL);
 }
 
-static int mds_init_export_data(struct ptlrpc_request *req)
+static void mds_revoke_export_locks(struct obd_export *exp)
 {
-        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
-        __u32 *nllu;
+        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+        struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
+        struct ldlm_lock *lock, *next;
+        struct ldlm_lock_desc desc;
 
-        nllu = lustre_msg_buf(req->rq_reqmsg, 4, sizeof(__u32) * 2);
-        if (nllu == NULL) {
-                CERROR("failed to extract nllu, use 99:99\n");
-                med->med_nllu = 99;
-                med->med_nllg = 99;
-        } else {
-                if (lustre_msg_swabbed(req->rq_reqmsg)) {
-                        __swab32s(&nllu[0]);
-                        __swab32s(&nllu[1]);
-                }
-                med->med_nllu = nllu[0];
-                med->med_nllg = nllu[1];
+        if (!exp->u.eu_mds_data.med_remote)
+                return;
+
+        ENTRY;
+        l_lock(&ns->ns_lock);
+        list_for_each_entry_safe(lock, next, locklist, l_export_chain) {
+                if (lock->l_req_mode != lock->l_granted_mode)
+                        continue;
+
+                LASSERT(lock->l_resource);
+                if (lock->l_resource->lr_type != LDLM_IBITS &&
+                    lock->l_resource->lr_type != LDLM_PLAIN)
+                        continue;
+
+                if (lock->l_flags & LDLM_FL_AST_SENT)
+                        continue;
+
+                lock->l_flags |= LDLM_FL_AST_SENT;
+
+                /* the desc just pretend to exclusive */
+                ldlm_lock2desc(lock, &desc);
+                desc.l_req_mode = LCK_EX;
+                desc.l_granted_mode = 0;
+
+                lock->l_blocking_ast(lock, &desc, NULL, LDLM_CB_BLOCKING);
         }
-
-        if (req->rq_remote) {
-                CWARN("exp %p, peer "LPX64": set as remote\n",
-                       req->rq_export, req->rq_peer.peer_id.nid);
-                med->med_local = 0;
-        } else
-                med->med_local = 1;
-
-        LASSERT(med->med_idmap == NULL);
-        spin_lock_init(&med->med_idmap_lock);
-
-        return 0;
+        l_unlock(&ns->ns_lock);
+        EXIT;
 }
 
 static int mds_msg_check_version(struct lustre_msg *msg)
@@ -2346,8 +2481,19 @@ int mds_handle(struct ptlrpc_request *req)
 
         /* Security opc should NOT trigger any recovery events */
         if (req->rq_reqmsg->opc == SEC_INIT ||
-            req->rq_reqmsg->opc == SEC_INIT_CONTINUE ||
-            req->rq_reqmsg->opc == SEC_FINI) {
+            req->rq_reqmsg->opc == SEC_INIT_CONTINUE) {
+                if (!req->rq_export)
+                        GOTO(out, rc = 0);
+
+                mds_req_add_idmapping(req, &req->rq_export->exp_mds_data);
+                mds_revoke_export_locks(req->rq_export);
+                GOTO(out, rc = 0);
+        } else if (req->rq_reqmsg->opc == SEC_FINI) {
+                if (!req->rq_export)
+                        GOTO(out, rc = 0);
+
+                mds_req_del_idmapping(req, &req->rq_export->exp_mds_data);
+                mds_revoke_export_locks(req->rq_export);
                 GOTO(out, rc = 0);
         }
 
@@ -2408,9 +2554,16 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
                 rc = target_handle_connect(req);
                 if (!rc) {
+                        struct mds_export_data *med;
+
+                        LASSERT(req->rq_export);
+                        med = &req->rq_export->u.eu_mds_data;
+                        mds_init_export_data(req, med);
+                        mds_req_add_idmapping(req, med);
+
                         /* Now that we have an export, set mds. */
+                        obd = req->rq_export->exp_obd;
                         mds = mds_req2mds(req);
-                        mds_init_export_data(req);
                 }
                 break;
 
@@ -2953,7 +3106,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
          * here we use "iopen_nopriv" hardcoded, because it affects MDS utility
          * and the rest of options are passed by mount options. Probably this
          * should be moved to somewhere else like startup scripts or lconf. */
-        sprintf(options, "iopen_nopriv,acl,user_xattr");
+        sprintf(options, "iopen_nopriv");
         if (lcfg->lcfg_inllen4 > 0 && lcfg->lcfg_inlbuf4)
                 sprintf(options + strlen(options), ",%s",
                         lcfg->lcfg_inlbuf4);

@@ -206,7 +206,7 @@ find_again:
                 set_current_state(TASK_INTERRUPTIBLE);
                 write_unlock(&cache->uc_hashlock);
 
-                schedule_timeout(cache->uc_acquire_expire);
+                schedule_timeout(cache->uc_acquire_expire * HZ);
 
                 write_lock(&cache->uc_hashlock);
                 remove_wait_queue(&entry->ue_waitq, &wait);
@@ -222,6 +222,8 @@ find_again:
                                entry->ue_expire);
                         put_entry(entry);
                         write_unlock(&cache->uc_hashlock);
+                        CERROR("Interrupted? Or check whether %s is in place\n",
+                               cache->uc_upcall);
                         RETURN(NULL);
                 }
                 /* fall through */
@@ -284,8 +286,7 @@ void upcall_cache_put_entry(struct upcall_cache_entry *entry)
 }
 EXPORT_SYMBOL(upcall_cache_put_entry);
 
-int upcall_cache_downcall(struct upcall_cache *cache, __u64 key,
-                          int err, void *args)
+int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
 {
         struct list_head *head;
         struct upcall_cache_entry *entry;
@@ -312,11 +313,6 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key,
                 RETURN(-EINVAL);
         }
 
-        if (err < 0) {
-                UC_CACHE_SET_INVALID(entry);
-                GOTO(out, rc = err);
-        }
-
         if (!UC_CACHE_IS_ACQUIRING(entry) ||
             UC_CACHE_IS_INVALID(entry) ||
             UC_CACHE_IS_EXPIRED(entry)) {
@@ -333,12 +329,17 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key,
         rc = cache->parse_downcall(cache, entry, args);
         write_lock(&cache->uc_hashlock);
         atomic_dec(&entry->ue_refcount);
-        if (rc) {
+
+        if (rc < 0) {
                 UC_CACHE_SET_INVALID(entry);
                 list_del_init(&entry->ue_hash);
                 GOTO(out, rc);
+        } else if (rc == 0) {
+                entry->ue_expire = get_seconds() + cache->uc_entry_expire;
+        } else {
+                entry->ue_expire = get_seconds() + cache->uc_err_entry_expire;
         }
-        entry->ue_expire = get_seconds() + cache->uc_entry_expire;
+
         UC_CACHE_SET_VALID(entry);
         CDEBUG(D_OTHER, "create ucache entry %p(key "LPU64")\n",
                entry, entry->ue_key);

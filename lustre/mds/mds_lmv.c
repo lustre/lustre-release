@@ -75,8 +75,8 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
                 GOTO(err_last, rc = -ENOTCONN);
         }
 
-        rc = obd_connect(&conn, mds->mds_md_obd,
-                         &obd->obd_uuid, OBD_OPT_MDS_CONNECTION);
+        rc = obd_connect(&conn, mds->mds_md_obd, &obd->obd_uuid, NULL,
+                         OBD_OPT_MDS_CONNECTION);
         if (rc) {
                 CERROR("MDS cannot connect to MD(LMV) %s (%d)\n",
                        md_name, rc);
@@ -1179,7 +1179,6 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
 
         rc = mds_init_ucred(&uc, req, rsd);
         if (rc) {
-                CERROR("can't init ucred\n");
                 GOTO(cleanup, rc);
         }
 

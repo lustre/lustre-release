@@ -72,7 +72,9 @@ struct ll_sb_info {
         struct list_head          ll_pglist;
 
         struct ll_ra_info         ll_ra_info;
-                                                                                                                                                                                                     
+
+        unsigned int              ll_remote;    /* remote client? */
+
         /* times spent waiting for locks in each call site.  These are
          * all protected by the ll_lock */
         struct obd_service_time   ll_read_stime;

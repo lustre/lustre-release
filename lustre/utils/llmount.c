@@ -38,6 +38,7 @@
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
+#include <linux/lustre_idl.h>
 
 int debug;
 int verbose;
@@ -120,8 +121,9 @@ init_options(struct lustre_mount_data *lmd)
         lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
         lmd->lmd_nal = SOCKNAL;
         lmd->lmd_async = 0;
-        lmd->lmd_nllu = 99;
-        lmd->lmd_nllg = 99;
+        lmd->lmd_remote_flag = 0;
+        lmd->lmd_nllu = NOBODY_UID;
+        lmd->lmd_nllg = NOBODY_GID;
         strncpy(lmd->lmd_security, "null", sizeof(lmd->lmd_security));
         return 0;
 }
@@ -344,15 +346,21 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 }
                         }
                 } else {
-                        val = 1;
-                        if (!strncmp(opt, "no", 2)) {
-                                val = 0;
-                                opt += 2;
-                        }
-                        if (!strcmp(opt, "debug")) {
-                                debug = val;
+                        if (!strcmp(opt, "remote")) {
+                                lmd->lmd_remote_flag = OBD_CONNECT_REMOTE;
+                        } else if (!strcmp(opt, "local")) {
+                                lmd->lmd_remote_flag = OBD_CONNECT_LOCAL;
                         } else if (!strcmp(opt, "async")) {
                                 lmd->lmd_async = 1;
+                        } else {
+                                val = 1;
+                                if (!strncmp(opt, "no", 2)) {
+                                        val = 0;
+                                        opt += 2;
+                                }
+                                if (!strcmp(opt, "debug")) {
+                                        debug = val;
+                                }
                         }
                 }
         }

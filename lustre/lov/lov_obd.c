@@ -54,7 +54,8 @@
 /* obd methods */
 #define MAX_STRING_SIZE 128
 static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
-                           int activate, unsigned long connect_flags)
+                           int activate, struct obd_connect_data *conn_data,
+                           unsigned long connect_flags)
 {
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct obd_uuid *tgt_uuid = &tgt->uuid;
@@ -98,7 +99,8 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 RETURN(0);
         }
 
-        rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, connect_flags);
+        rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, conn_data,
+                         connect_flags);
         if (rc) {
                 CERROR("Target %s connect error %d\n", tgt_uuid->uuid, rc);
                 RETURN(rc);
@@ -148,7 +150,8 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 }
 
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, unsigned long flags)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       unsigned long flags)
 {
 #ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
@@ -188,7 +191,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (obd_uuid_empty(&tgt->uuid))
                         continue;
-                rc = lov_connect_obd(obd, tgt, 0, flags);
+                rc = lov_connect_obd(obd, tgt, 0, data, flags);
                 if (rc)
                         GOTO(out_disc, rc);
         }
@@ -536,7 +539,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                         osc_obd->obd_no_recov = 0;
         }
 
-        rc = lov_connect_obd(obd, tgt, 1, lov->lov_connect_flags);
+        rc = lov_connect_obd(obd, tgt, 1, NULL, lov->lov_connect_flags);
         if (rc)
                 GOTO(out, rc);
 

@@ -193,7 +193,8 @@ int lmv_detach(struct obd_device *dev)
 /* this is fake connect function. Its purpose is to initialize lmv and say
  * caller that everything is okay. Real connection will be performed later. */
 static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, unsigned long flags)
+                       struct obd_uuid *cluuid, struct obd_connect_data *data,
+                       unsigned long flags)
 {
 #ifdef __KERNEL__
         struct proc_dir_entry *lmv_proc_dir;
@@ -224,6 +225,8 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         lmv->cluuid = *cluuid;
         lmv->connect_flags = flags;
         sema_init(&lmv->init_sem, 1);
+        if (data)
+                memcpy(&lmv->conn_data, data, sizeof(*data));
 
 #ifdef __KERNEL__
         lmv_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
@@ -338,7 +341,7 @@ int lmv_check_connect(struct obd_device *obd)
                         GOTO(out_disc, rc = -EINVAL);
                 }
                 
-                rc = obd_connect(&conn, tgt_obd, &lmv_mdc_uuid,
+                rc = obd_connect(&conn, tgt_obd, &lmv_mdc_uuid, &lmv->conn_data,
                                  lmv->connect_flags);
                 if (rc) {
                         CERROR("target %s connect error %d\n",
@@ -1809,6 +1812,26 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 struct lmv_desc *desc_ret = val;
                 *desc_ret = lmv->desc;
                 RETURN(0);
+        } else if (keylen == strlen("remote_flag") &&
+                   !strcmp(key, "remote_flag")) {
+                struct lmv_tgt_desc *tgts;
+                int i;
+
+                LASSERT(*vallen == sizeof(__u32));
+                for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count;
+                     i++, tgts++) {
+
+                        /* all tgts should be connected when this get called. */
+                        if (!tgts || !tgts->ltd_exp) {
+                                CERROR("target not setup?\n");
+                                continue;
+                        }
+
+                        if (!obd_get_info(tgts->ltd_exp, keylen, key,
+                                          vallen, val))
+                                RETURN(0);
+                }
+                RETURN(-EINVAL);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");

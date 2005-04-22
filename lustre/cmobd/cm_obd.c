@@ -153,7 +153,7 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
 
         /* connecting master */
         memset(&conn, 0, sizeof(conn));
-        rc = obd_connect(&conn, cmobd->master_obd, &obd->obd_uuid, 0);
+        rc = obd_connect(&conn, cmobd->master_obd, &obd->obd_uuid, NULL, 0);
         if (rc)
                 RETURN(rc);
         cmobd->master_exp = class_conn2export(&conn);

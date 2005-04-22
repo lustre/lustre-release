@@ -963,11 +963,6 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_CONNECT:
         case OST_DISCONNECT:
         case OBD_PING:
-                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
-                if (rc)
-                        CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
-                break;
         case OST_CREATE:
         case OST_DESTROY:
         case OST_GETATTR:
@@ -984,7 +979,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
                 rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_OST_VERSION);
+                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
                 break;
         case LDLM_ENQUEUE:
         case LDLM_CONVERT:

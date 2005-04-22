@@ -2991,11 +2991,12 @@ static int osc_llog_finish(struct obd_device *obd,
 
 static int osc_connect(struct lustre_handle *exph,
                        struct obd_device *obd, struct obd_uuid *cluuid,
+                       struct obd_connect_data *data,
                        unsigned long connect_flags)
 {
         int rc;
         ENTRY;
-        rc = client_connect_import(exph, obd, cluuid, connect_flags);
+        rc = client_connect_import(exph, obd, cluuid, data, connect_flags);
         RETURN(rc);
 }
 

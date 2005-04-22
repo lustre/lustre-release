@@ -43,7 +43,6 @@
  *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: sec_gss.c,v 1.4 2005/04/13 09:49:50 yury Exp $
  */
 
 #ifndef EXPORT_SYMTAB
@@ -93,30 +92,22 @@ struct rpc_clnt;
 
 static int secinit_compose_request(struct obd_import *imp,
                                    char *buf, int bufsize,
+                                   uid_t uid, gid_t gid,
+                                   long token_size,
                                    char __user *token)
 {
         struct ptlrpcs_wire_hdr *hdr;
         struct lustre_msg       *lmsg;
-        char __user             *token_buf;
-        __u64                    token_size;
+        struct mds_req_sec_desc *secdesc;
+        __u32                    size = sizeof(*secdesc);
         __u32                    lmsg_size, *p;
-        int rc;
+        int                      rc;
 
-        lmsg_size = lustre_msg_size(0, NULL);
+        lmsg_size = lustre_msg_size(1, &size);
 
-        if (copy_from_user(&token_size, token, sizeof(token_size))) {
-                CERROR("read token error\n");
-                return -EFAULT;
-        }
         if (sizeof(*hdr) + lmsg_size + size_round(token_size) > bufsize) {
-                CERROR("token size "LPU64" too large\n", token_size);
+                CERROR("token size %ld too large\n", token_size);
                 return -EINVAL;
-        }
-
-        if (copy_from_user(&token_buf, (token + sizeof(token_size)),
-                           sizeof(void*))) {
-                CERROR("read token buf pointer error\n");
-                return -EFAULT;
         }
 
         /* security wire hdr */
@@ -126,9 +117,15 @@ static int secinit_compose_request(struct obd_import *imp,
         hdr->msg_len = cpu_to_le32(lmsg_size);
         hdr->sec_len = cpu_to_le32(7 * 4 + token_size);
 
-        /* lustre message */
+        /* lustre message & secdesc */
         lmsg = buf_to_lustre_msg(buf);
-        lustre_init_msg(lmsg, 0, NULL, NULL);
+
+        lustre_init_msg(lmsg, 1, &size, NULL);
+        secdesc = lustre_msg_buf(lmsg, 0, size);
+        secdesc->rsd_uid = secdesc->rsd_fsuid = uid;
+        secdesc->rsd_gid = secdesc->rsd_fsgid = gid;
+        secdesc->rsd_cap = secdesc->rsd_ngroups = 0;
+
         lmsg->handle   = imp->imp_remote_handle;
         lmsg->type     = PTL_RPC_MSG_REQUEST;
         lmsg->opc      = SEC_INIT;
@@ -146,10 +143,10 @@ static int secinit_compose_request(struct obd_import *imp,
         *p++ = cpu_to_le32(0);                          /* context handle */
 
         /* now the token part */
-        *p++ = (__u32)(cpu_to_le64(token_size));
+        *p++ = cpu_to_le32((__u32) token_size);
         LASSERT(((char *)p - buf) + token_size <= bufsize);
 
-        rc = copy_from_user(p, token_buf, token_size);
+        rc = copy_from_user(p, token, token_size);
         if (rc) {
                 CERROR("can't copy token\n");
                 return -EFAULT;
@@ -160,38 +157,44 @@ static int secinit_compose_request(struct obd_import *imp,
 }
 
 static int secinit_parse_reply(char *repbuf, int replen,
-                               char __user *outbuf, int outlen)
+                               char __user *outbuf, long outlen)
 {
-        __u32 *p = (__u32 *)repbuf;
-        __u32 lmsg_len, sec_len, status, major, minor, seq, obj_len, round_len;
-        __u32 effective = 0;
+        __u32                   *p = (__u32 *)repbuf;
+        struct ptlrpcs_wire_hdr *hdr = (struct ptlrpcs_wire_hdr *) repbuf;
+        __u32                    lmsg_len, sec_len, status;
+        __u32                    major, minor, seq, obj_len, round_len;
+        __u32                    effective = 0;
 
         if (replen <= (4 + 6) * 4) {
                 CERROR("reply size %d too small\n", replen);
                 return -EINVAL;
         }
 
+        hdr->flavor = le32_to_cpu(hdr->flavor);
+        hdr->sectype = le32_to_cpu(hdr->sectype);
+        hdr->msg_len = le32_to_cpu(hdr->msg_len);
+        hdr->sec_len = le32_to_cpu(hdr->sec_len);
+
         lmsg_len = le32_to_cpu(p[2]);
         sec_len = le32_to_cpu(p[3]);
 
         /* sanity checks */
-        if (p[0] != cpu_to_le32(PTLRPC_SEC_GSS) ||
-            p[1] != cpu_to_le32(PTLRPC_SEC_TYPE_NONE)) {
+        if (hdr->flavor != PTLRPC_SEC_GSS ||
+            hdr->sectype != PTLRPC_SEC_TYPE_NONE) {
                 CERROR("unexpected reply\n");
                 return -EINVAL;
         }
-        if (lmsg_len % 8 ||
-            4 * 4 + lmsg_len + sec_len > replen) {
+        if (hdr->msg_len % 8 ||
+            sizeof(*hdr) + hdr->msg_len + hdr->sec_len > replen) {
                 CERROR("unexpected reply\n");
                 return -EINVAL;
         }
-        if (sec_len > outlen) {
+        if (hdr->sec_len > outlen) {
                 CERROR("outbuf too small\n");
                 return -EINVAL;
         }
 
-        p += 4;                 /* skip hdr */
-        p += lmsg_len / 4;      /* skip lmsg */
+        p = (__u32 *) buf_to_sec_data(repbuf);
         effective = 0;
 
         status = le32_to_cpu(*p++);
@@ -200,29 +203,37 @@ static int secinit_parse_reply(char *repbuf, int replen,
         seq = le32_to_cpu(*p++);
         effective += 4 * 4;
 
-        copy_to_user(outbuf, &status, 4);
+        if (copy_to_user(outbuf, &status, 4))
+                return -EFAULT;
         outbuf += 4;
-        copy_to_user(outbuf, &major, 4);
+        if (copy_to_user(outbuf, &major, 4))
+                return -EFAULT;
         outbuf += 4;
-        copy_to_user(outbuf, &minor, 4);
+        if (copy_to_user(outbuf, &minor, 4))
+                return -EFAULT;
         outbuf += 4;
-        copy_to_user(outbuf, &seq, 4);
+        if (copy_to_user(outbuf, &seq, 4))
+                return -EFAULT;
         outbuf += 4;
 
         obj_len = le32_to_cpu(*p++);
         round_len = (obj_len + 3) & ~ 3;
-        copy_to_user(outbuf, &obj_len, 4);
+        if (copy_to_user(outbuf, &obj_len, 4))
+                return -EFAULT;
         outbuf += 4;
-        copy_to_user(outbuf, (char *)p, round_len);
+        if (copy_to_user(outbuf, (char *)p, round_len))
+                return -EFAULT;
         p += round_len / 4;
         outbuf += round_len;
         effective += 4 + round_len;
 
         obj_len = le32_to_cpu(*p++);
         round_len = (obj_len + 3) & ~ 3;
-        copy_to_user(outbuf, &obj_len, 4);
+        if (copy_to_user(outbuf, &obj_len, 4))
+                return -EFAULT;
         outbuf += 4;
-        copy_to_user(outbuf, (char *)p, round_len);
+        if (copy_to_user(outbuf, (char *)p, round_len))
+                return -EFAULT;
         p += round_len / 4;
         outbuf += round_len;
         effective += 4 + round_len;
@@ -230,45 +241,47 @@ static int secinit_parse_reply(char *repbuf, int replen,
         return effective;
 }
 
-/* input: 
- *   1. ptr to uuid
- *   2. ptr to send_token
- *   3. ptr to output buffer
- *   4. output buffer size
- * output:
- *   1. return code. 0 is success
- *   2. no meaning
- *   3. ptr output data
- *   4. output data size
- *
- * return:
- *   < 0: error
- *   = 0: success
- *
- * FIXME This interface looks strange, should be reimplemented
- */
+/* XXX move to where lgssd could see */
+struct lgssd_ioctl_param {
+        int             version;        /* in   */
+        char           *uuid;           /* in   */
+        uid_t           uid;            /* in   */
+        gid_t           gid;            /* in   */
+        long            send_token_size;/* in   */
+        char           *send_token;     /* in   */
+        long            reply_buf_size; /* in   */
+        char           *reply_buf;      /* in   */
+        long            status;         /* out  */
+        long            reply_length;   /* out  */
+};
+
 static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
 {
-        struct obd_import *imp;
-        const int reqbuf_size = 1024;
-        const int repbuf_size = 1024;
-        char *reqbuf, *repbuf;
-        struct obd_device *obd;
-        char obdname[64];
-        long inbuf[4], lsize;
-        int rc, reqlen, replen;
+        struct obd_import        *imp;
+        struct lgssd_ioctl_param  param;
+        const int                 reqbuf_size = 1024;
+        const int                 repbuf_size = 1024;
+        char                     *reqbuf, *repbuf;
+        struct obd_device        *obd;
+        char                      obdname[64];
+        long                      lsize;
+        int                       rc, reqlen, replen;
 
-        if (count != 4 * sizeof(long)) {
-                CERROR("count %lu\n", count);
+        if (count != sizeof(param)) {
+                CERROR("partial write\n");
                 RETURN(-EINVAL);
         }
-        if (copy_from_user(inbuf, buffer, count)) {
-                CERROR("Invalid pointer\n");
+        if (copy_from_user(&param, buffer, sizeof(param)))
                 RETURN(-EFAULT);
+
+        if (param.version != GSSD_INTERFACE_VERSION) {
+                CERROR("gssd interface version %d (expect %d)\n",
+                        param.version, GSSD_INTERFACE_VERSION);
+                RETURN(-EINVAL);
         }
 
         /* take name */
-        if (strncpy_from_user(obdname, (char *)inbuf[0],
+        if (strncpy_from_user(obdname, param.uuid,
                               sizeof(obdname)) <= 0) {
                 CERROR("Invalid obdname pointer\n");
                 RETURN(-EFAULT);
@@ -297,7 +310,9 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
 
         /* get token */
         reqlen = secinit_compose_request(imp, reqbuf, reqbuf_size,
-                                         (char *)inbuf[1]);
+                                         param.uid, param.gid,
+                                         param.send_token_size,
+                                         param.send_token);
         if (reqlen < 0)
                 GOTO(out_free, rc = reqlen);
 
@@ -307,21 +322,24 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
         if (rc)
                 GOTO(out_free, rc);
 
-        if (replen > inbuf[3]) {
+        if (replen > param.reply_buf_size) {
                 CERROR("output buffer size %ld too small, need %d\n",
-                        inbuf[3], replen);
+                        param.reply_buf_size, replen);
                 GOTO(out_free, rc = -EINVAL);
         }
 
         lsize = secinit_parse_reply(repbuf, replen,
-                                    (char *)inbuf[2], (int)inbuf[3]);
+                                    param.reply_buf, param.reply_buf_size);
         if (lsize < 0)
                 GOTO(out_free, rc = (int)lsize);
 
-        copy_to_user(buffer + 3 * sizeof(long), &lsize, sizeof(lsize));
-        lsize = 0;
-        copy_to_user((char*)buffer, &lsize, sizeof(lsize));
-        rc = 0;
+        param.status = 0;
+        param.reply_length = lsize;
+
+        if (copy_to_user(buffer, &param, sizeof(param)))
+                rc = -EFAULT;
+        else
+                rc = 0;
 out_free:
         class_import_put(imp);
         if (repbuf)
@@ -370,6 +388,14 @@ struct gss_sec {
 
 static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
 
+struct gss_upcall_msg_data {
+        __u32                           gum_uid;
+        __u32                           gum_svc;
+        __u32                           gum_nal;
+        __u32                           gum_netid;
+        __u64                           gum_nid;
+};
+
 struct gss_upcall_msg {
         struct rpc_pipe_msg             gum_base;
         atomic_t                        gum_refcount;
@@ -377,10 +403,7 @@ struct gss_upcall_msg {
         struct gss_sec                 *gum_gsec;
         wait_queue_head_t               gum_waitq;
         char                            gum_obdname[64];
-        uid_t                           gum_uid;
-        __u32                           gum_ip; /* XXX IPv6? */
-        __u32                           gum_svc;
-        __u32                           gum_pad;
+        struct gss_upcall_msg_data      gum_data;
 };
 
 /**********************************************
@@ -439,30 +462,28 @@ gss_unhash_msg(struct gss_upcall_msg *gmsg)
 static
 struct gss_upcall_msg * gss_find_upcall(struct gss_sec *gsec,
                                         char *obdname,
-                                        uid_t uid, __u32 dest_ip)
+                                        struct gss_upcall_msg_data *gmd)
 {
         struct gss_upcall_msg *gmsg;
         ENTRY;
 
         list_for_each_entry(gmsg, &gsec->gs_upcalls, gum_list) {
-                if (gmsg->gum_uid != uid)
-                        continue;
-                if (gmsg->gum_ip != dest_ip)
+                if (memcmp(&gmsg->gum_data, gmd, sizeof(*gmd)))
                         continue;
                 if (strcmp(gmsg->gum_obdname, obdname))
                         continue;
                 atomic_inc(&gmsg->gum_refcount);
                 CDEBUG(D_SEC, "found gmsg at %p: obdname %s, uid %d, ref %d\n",
-                       gmsg, obdname, uid, atomic_read(&gmsg->gum_refcount));
+                       gmsg, obdname, gmd->gum_uid,
+                       atomic_read(&gmsg->gum_refcount));
                 RETURN(gmsg);
         }
         RETURN(NULL);
 }
 
 static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
-                                struct gss_sec *gsec,
-                                char *obdname,
-                                uid_t uid, __u32 dest_ip, __u32 svc)
+                                struct gss_sec *gsec, char *obdname,
+                                struct gss_upcall_msg_data *gmd)
 {
         struct rpc_pipe_msg *rpcmsg;
         ENTRY;
@@ -473,14 +494,11 @@ static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
         atomic_set(&gmsg->gum_refcount, 2);
         gmsg->gum_gsec = gsec;
         strncpy(gmsg->gum_obdname, obdname, sizeof(gmsg->gum_obdname));
-        gmsg->gum_uid = uid;
-        gmsg->gum_ip = dest_ip;
-        gmsg->gum_svc = svc;
+        memcpy(&gmsg->gum_data, gmd, sizeof(*gmd));
 
         rpcmsg = &gmsg->gum_base;
-        rpcmsg->data = &gmsg->gum_uid;
-        rpcmsg->len = sizeof(gmsg->gum_uid) + sizeof(gmsg->gum_ip) +
-                      sizeof(gmsg->gum_svc) + sizeof(gmsg->gum_pad);
+        rpcmsg->data = &gmsg->gum_data;
+        rpcmsg->len = sizeof(gmsg->gum_data);
         EXIT;
 }
 #endif /* __KERNEL__ */
@@ -594,8 +612,8 @@ simple_get_bytes(char **buf, __u32 *buflen, void *res, __u32 reslen)
  */
 static
 int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
-                            struct gss_cl_ctx **gc, struct vfs_cred *vcred,
-                            __u32 *dest_ip, int *gss_err)
+                            struct gss_cl_ctx **gc,
+                            struct gss_upcall_msg_data *gmd, int *gss_err)
 {
         char *p = buf->data;
         __u32 len = buf->len;
@@ -616,10 +634,15 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
         spin_lock_init(&ctx->gc_seq_lock);
         atomic_set(&ctx->gc_refcount,1);
 
-        if (simple_get_bytes(&p, &len, &vcred->vc_uid, sizeof(vcred->vc_uid)))
+        if (simple_get_bytes(&p, &len, &gmd->gum_uid, sizeof(gmd->gum_uid)))
                 GOTO(err_free_ctx, err);
-        vcred->vc_pag = vcred->vc_uid; /* FIXME */
-        if (simple_get_bytes(&p, &len, dest_ip, sizeof(*dest_ip)))
+        if (simple_get_bytes(&p, &len, &gmd->gum_svc, sizeof(gmd->gum_svc)))
+                GOTO(err_free_ctx, err);
+        if (simple_get_bytes(&p, &len, &gmd->gum_nal, sizeof(gmd->gum_nal)))
+                GOTO(err_free_ctx, err);
+        if (simple_get_bytes(&p, &len, &gmd->gum_netid, sizeof(gmd->gum_netid)))
+                GOTO(err_free_ctx, err);
+        if (simple_get_bytes(&p, &len, &gmd->gum_nid, sizeof(gmd->gum_nid)))
                 GOTO(err_free_ctx, err);
         /* FIXME: discarded timeout for now */
         if (simple_get_bytes(&p, &len, &timeout, sizeof(timeout)))
@@ -632,6 +655,10 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
                 /* in which case the next int is an error code: */
                 if (simple_get_bytes(&p, &len, gss_err, sizeof(*gss_err)))
                         GOTO(err_free_ctx, err);
+                if (*gss_err == 0) {
+                        CERROR("error downcall pass no gss error\n");
+                        GOTO(err_free_ctx, err);
+                }
                 GOTO(err_free_ctx, err = 0);
         }
         if (rawobj_extract_local(&tmp_buf, (__u32 **) ((void *)&p), &len))
@@ -664,17 +691,17 @@ err_free_ctx:
  * cred APIs                           *
  ***************************************/
 #ifdef __KERNEL__
+#define CRED_REFRESH_UPCALL_TIMEOUT     (20)
 static int gss_cred_refresh(struct ptlrpc_cred *cred)
 {
         struct obd_import          *import;
         struct gss_sec             *gsec;
         struct gss_upcall_msg      *gss_msg, *gss_new;
+        struct gss_upcall_msg_data  gmd;
         struct dentry              *dentry;
         char                       *obdname, *obdtype;
         wait_queue_t                wait;
         uid_t                       uid = cred->pc_uid;
-        ptl_nid_t                   peer_nid;
-        __u32                       dest_ip, svc;
         int                         res;
         ENTRY;
 
@@ -691,14 +718,16 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
                 RETURN(-EINVAL);
         }
 
-        peer_nid = import->imp_connection->c_peer.peer_id.nid;
-        dest_ip = (__u32) (peer_nid & 0xFFFFFFFF);
+        gmd.gum_uid = uid;
+        gmd.gum_nal = import->imp_connection->c_peer.peer_ni->pni_number;
+        gmd.gum_netid = 0;
+        gmd.gum_nid = import->imp_connection->c_peer.peer_id.nid;
 
         obdtype = import->imp_obd->obd_type->typ_name;
         if (!strcmp(obdtype, "mdc"))
-                svc = 0;
+                gmd.gum_svc = 0;
         else if (!strcmp(obdtype, "osc"))
-                svc = 1;
+                gmd.gum_svc = 1;
         else {
                 CERROR("gss on %s?\n", obdtype);
                 RETURN(-EINVAL);
@@ -716,7 +745,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
 
 again:
         spin_lock(&gsec->gs_lock);
-        gss_msg = gss_find_upcall(gsec, obdname, uid, dest_ip);
+        gss_msg = gss_find_upcall(gsec, obdname, &gmd);
         if (gss_msg) {
                 spin_unlock(&gsec->gs_lock);
                 GOTO(waiting, res);
@@ -731,7 +760,7 @@ again:
                 goto again;
         }
         /* so far we'v created gss_new */
-        gss_init_upcall_msg(gss_new, gsec, obdname, uid, dest_ip, svc);
+        gss_init_upcall_msg(gss_new, gsec, obdname, &gmd);
 
         if (gss_cred_is_uptodate_ctx(cred)) {
                 /* someone else had done it for us, simply cancel
@@ -763,13 +792,18 @@ waiting:
         set_current_state(TASK_INTERRUPTIBLE);
         spin_unlock(&gsec->gs_lock);
 
-        schedule();
+        res = schedule_timeout(CRED_REFRESH_UPCALL_TIMEOUT * HZ);
 
         remove_wait_queue(&gss_msg->gum_waitq, &wait);
         if (signal_pending(current)) {
-                CERROR("interrupted gss upcall %p\n", gss_msg);
+                CERROR("interrupted gss upcall: cred %p\n", cred);
                 res = -EINTR;
-        }
+        } else if (res == 0) {
+                CERROR("gss upcall timeout: cred %p\n", cred);
+                res = -ETIMEDOUT;
+        } else
+                res = 0;
+
         gss_release_msg(gss_msg);
         RETURN(res);
 }
@@ -838,6 +872,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
                 goto err_out;
         }
 
+        LASSERT(ctx);
         gss_cred_set_ctx(cred, ctx);
         LASSERT(gss_cred_is_uptodate_ctx(cred));
 
@@ -1373,8 +1408,8 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         struct vfs_cred vcred = { 0 };
         struct ptlrpc_cred *cred;
         struct gss_upcall_msg *gss_msg;
+        struct gss_upcall_msg_data gmd = { 0 };
         struct gss_cl_ctx *ctx = NULL;
-        __u32  dest_ip;
         ssize_t left;
         int err, gss_err;
         ENTRY;
@@ -1406,19 +1441,21 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         obdname = import->imp_obd->obd_name;
         mech = gsec->gs_mech;
 
-        err = gss_parse_init_downcall(mech, &obj, &ctx, &vcred, &dest_ip,
-                                      &gss_err);
-        if (err) {
-                CERROR("parse downcall err %d\n", err);
-                GOTO(err, err);
-        }
+        err = gss_parse_init_downcall(mech, &obj, &ctx, &gmd, &gss_err);
+        if (err)
+                CERROR("parse init downcall err %d\n", err);
+
+        vcred.vc_uid = gmd.gum_uid;
+        vcred.vc_pag = vcred.vc_uid; /* FIXME */
+
         cred = ptlrpcs_cred_lookup(sec, &vcred);
         if (!cred) {
-                CWARN("didn't find cred\n");
+                CWARN("didn't find cred for uid %u\n", vcred.vc_uid);
                 GOTO(err, err);
         }
-        if (gss_err) {
-                CERROR("got gss err %d, set cred %p dead\n", gss_err, cred);
+        if (err || gss_err) {
+                CERROR("got err %d, gss err %d, set cred %p dead\n",
+                        err, gss_err, cred);
                 cred->pc_flags |= PTLRPC_CRED_DEAD;
         } else {
                 CDEBUG(D_SEC, "get initial ctx:\n");
@@ -1426,7 +1463,7 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         }
 
         spin_lock(&gsec->gs_lock);
-        gss_msg = gss_find_upcall(gsec, obdname, vcred.vc_uid, dest_ip);
+        gss_msg = gss_find_upcall(gsec, obdname, &gmd);
         if (gss_msg) {
                 gss_unhash_msg_nolock(gss_msg);
                 spin_unlock(&gsec->gs_lock);

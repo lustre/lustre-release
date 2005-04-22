@@ -153,7 +153,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                            strlen("initial_recov"), "initial_recov",
                            sizeof(allow_recov), &allow_recov);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, 0);
+        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL, 0);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n",
                         g_zconf_mdsname, err);

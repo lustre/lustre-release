@@ -317,8 +317,9 @@ struct ptlrpc_request {
         struct ptlrpc_svcsec *rq_svcsec;      /* server side security */
         /* XXX temporarily put here XXX */
         void                 *rq_sec_svcdata; /* server security data */
-        unsigned int          rq_remote;      /* from remote client */
+        unsigned int          rq_remote_realm;/* from remote realm */
         uid_t                 rq_auth_uid;
+        uid_t                 rq_mapped_uid;
 
         char *rq_reqbuf;       /* backend request buffer */
         int   rq_reqbuf_len;   /* backend request buffer length */
@@ -716,6 +717,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
+int lustre_secdesc_size(void);
+void lustre_pack_secdesc(struct ptlrpc_request *req, int size);
 int lustre_pack_request(struct ptlrpc_request *, int count, int *lens,
                         char **bufs);
 int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
@@ -853,7 +856,9 @@ mdc_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev, int flags);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, unsigned long);
+                          struct obd_uuid *cluuid,
+                          struct obd_connect_data *conn_data,
+                          unsigned long);
 int client_disconnect_export(struct obd_export *exp, unsigned long);
 
 int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,

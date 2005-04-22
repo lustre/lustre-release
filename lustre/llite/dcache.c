@@ -482,18 +482,19 @@ revalidate_finish:
 
         GOTO(out, rc);
 out:
-        if (req != NULL && rc == 1) {
+        /* If we had succesful it lookup on mds, but it happened to be negative,
+           we do not free request as it will be reused during lookup (see
+           comment in mdc/mdc_locks.c::mdc_intent_lock(). But if
+           request was not completed, we need to free it. (bug 5154) */
+        if (req != NULL && (rc == 1 || !it_disposition(it, DISP_ENQ_COMPLETE))) {
                 ptlrpc_req_finished(req);
                 req = NULL;
         }
 
         if (rc == 0) {
-                if (it == &lookup_it) {
+                if (it == &lookup_it)
                         ll_intent_release(it);
-                        if (req) /* special case: We did lookup and it failed,
-                                    need to free request */
-                                ptlrpc_req_finished(req);
-                }
+
                 ll_unhash_aliases(de->d_inode);
                 return 0;
         }

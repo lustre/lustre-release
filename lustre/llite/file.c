@@ -1955,94 +1955,65 @@ int ll_listxattr(struct dentry *dentry, char *list, size_t size)
                                     OBD_MD_FLEALIST);
 }
 
-int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+/*
+ * XXX We could choose not to check DLM lock. Leave the decision
+ * to remote acl handling.
+ */
+static int
+lustre_check_acl(struct inode *inode, int mask)
 {
         struct lookup_intent it = { .it_op = IT_GETATTR };
-        int mode = inode->i_mode;
-        struct dentry de;
+        struct dentry de = { .d_inode = inode };
         struct ll_sb_info *sbi;
         struct lustre_id id;
         struct ptlrpc_request *req = NULL;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct posix_acl *acl;
         int rc;
         ENTRY;
 
         sbi = ll_i2sbi(inode);
         ll_inode2id(&id, inode);
 
-        /* Nobody gets write access to a read-only fs */
-        if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
-            (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
-                return -EROFS;
-        /* Nobody gets write access to an immutable file */
-        if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
+        if (ll_intent_alloc(&it))
                 return -EACCES;
-        if (current->fsuid == inode->i_uid) {
-                mode >>= 6;
-        } else if (1) {
-                struct ll_inode_info *lli = ll_i2info(inode);
-                struct posix_acl *acl;
 
-                /* The access ACL cannot grant access if the group class
-                   permission bits don't contain all requested permissions. */
-                if (((mode >> 3) & mask & S_IRWXO) != mask)
-                        goto check_groups;
-
-                if (ll_intent_alloc(&it))
-                        return -EACCES;
-
-                de.d_inode = inode;
-                rc = md_intent_lock(sbi->ll_md_exp, &id, NULL, 0, NULL, 0, &id,
-                                    &it, 0, &req, ll_mdc_blocking_ast);
-                if (rc < 0) {
-                        ll_intent_free(&it);
-                        GOTO(out, rc);
-                }
-
-                rc = revalidate_it_finish(req, 1, &it, &de);
-                if (rc) {
-                        ll_intent_release(&it);
-                        GOTO(out, rc);
-                }
-
-                ll_lookup_finish_locks(&it, &de);
+        rc = md_intent_lock(sbi->ll_md_exp, &id, NULL, 0, NULL, 0, &id,
+                            &it, 0, &req, ll_mdc_blocking_ast);
+        if (rc < 0) {
                 ll_intent_free(&it);
-
-                spin_lock(&lli->lli_lock);
-                acl = posix_acl_dup(ll_i2info(inode)->lli_acl_access);
-                spin_unlock(&lli->lli_lock);
-
-                if (!acl)
-                        goto check_groups;
-
-                rc = posix_acl_permission(inode, acl, mask);
-                posix_acl_release(acl);
-                if (rc == -EACCES)
-                        goto check_capabilities;
                 GOTO(out, rc);
-        } else {
-check_groups:
-                if (in_group_p(inode->i_gid))
-                        mode >>= 3;
         }
-        if ((mode & mask & S_IRWXO) == mask)
-                GOTO(out, rc = 0);
 
-check_capabilities:
-        rc = -EACCES; 
-        /* Allowed to override Discretionary Access Control? */
-        if (!(mask & MAY_EXEC) ||
-            (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-                if (capable(CAP_DAC_OVERRIDE))
-                        GOTO(out, rc = 0);
-       /* Read and search granted if capable(CAP_DAC_READ_SEARCH) */
-        if (capable(CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
-            (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
-                GOTO(out, rc = 0);
+        rc = revalidate_it_finish(req, 1, &it, &de);
+        if (rc) {
+                ll_intent_release(&it);
+                GOTO(out, rc);
+        }
+
+        ll_lookup_finish_locks(&it, &de);
+        ll_intent_free(&it);
+
+        spin_lock(&lli->lli_lock);
+        acl = posix_acl_dup(ll_i2info(inode)->lli_acl_access);
+        spin_unlock(&lli->lli_lock);
+
+        if (!acl)
+                GOTO(out, rc = -EAGAIN);
+
+        rc = posix_acl_permission(inode, acl, mask);
+        posix_acl_release(acl);
+
 out:
         if (req)
                 ptlrpc_req_finished(req);
 
-        return rc;
+        RETURN(rc);
+}
+
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+{
+        return generic_permission(inode, mask, lustre_check_acl);
 }
 
 struct file_operations ll_file_operations = {
