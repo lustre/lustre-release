@@ -436,7 +436,8 @@ static int find_process_file(DIR *dir, char *dname, char *fname,
                         /* add fname to directory list; */
                         rc = errno;
                 } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                        err_msg("IOC_MDC_GETSTRIPE ioctl failed for '%s/%s'",
+                                dname, fname);
                         rc = errno;
                 }
                 return rc;
