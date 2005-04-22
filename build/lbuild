@@ -8,6 +8,7 @@ LUSTRE=
 PUBLISH=0
 RELEASE=0
 DO_SRC=0
+DOWNLOAD=1
 TAG=
 TARGET=
 TARGET_ARCHS=
@@ -117,6 +118,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Path to an existing lustre source tarball to use instead of
     pulling from CVS.
 
+  --nodownload
+    Do not try to download a kernel from ftp.lustre.org
+
   --nosrc
     Do not build a .src.rpm, a full kernel patch, or a patched kernel
     tarball.
@@ -222,8 +226,35 @@ load_target()
 
     if [ "$KERNELDIR" ] ; then
 	KERNEL_FILE="$KERNELDIR/$KERNEL"
-	[ -r "$KERNELDIR/$KERNEL" ] || \
-	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
+	if [ ! -r "$KERNELDIR/$KERNEL" ] ; then
+	    case $TARGET in
+		2.6-rhel4)
+		    dldir="rhel-2.6"
+		    ;;
+		2.6-suse)
+		    dldir="suse-2.6"
+		    ;;
+		hp_pnnl-2.4)
+		    dldir="hp-pnnl-2.4"
+		    ;;
+		2.6-vanilla \
+		| suse-2.4.21-2 \
+		| rh-2.4 \
+		| rhel-2.4 \
+		| sles-2.4)
+		    dldir="$TARGET"
+		    ;;
+	    esac
+	    if (( $DOWNLOAD )) ; then
+		echo "Downloading http://ftp.lustre.org/kernels/$dldir/old/$KERNEL..."
+		if ! wget -nv "http://ftp.lustre.org/kernels/$dldir/old/$KERNEL" \
+		    -O "$KERNELDIR/$KERNEL" ; then
+		    fatal 1 "Could not download target $TARGET's kernel file $KERNEL from ftp.lustre.org."
+		fi
+	    else
+		fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
+	    fi
+	fi
     fi
 
     if [ "$SERIES" ] ; then
@@ -456,7 +487,7 @@ publish()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,lustre:,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
 
 eval set -- "$options"
     
@@ -491,6 +522,10 @@ while [ "$1" ] ; do
 	--lustre)
 	    LUSTRE=$2
 	    shift 2
+	    ;;
+	--nodownload)
+	    DOWNLOAD=0
+	    shift 1
 	    ;;
 	--nosrc)
 	    DO_SRC=0
