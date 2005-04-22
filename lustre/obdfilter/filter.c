@@ -1396,7 +1396,7 @@ static int filter_cleanup(struct obd_device *obd)
         filter_post(obd);
 
         shrink_dcache_parent(filter->fo_sb->s_root);
-        
+
         DQUOT_OFF(filter->fo_sb);
 
         if (atomic_read(&filter->fo_vfsmnt->mnt_count) > 1)
@@ -1468,6 +1468,7 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         fed->fed_fcd = fcd;
 
         rc = filter_client_add(obd, filter, fed, -1);
+        GOTO(cleanup, rc);
 
 cleanup:
         if (rc) {
@@ -1479,7 +1480,7 @@ cleanup:
         } else {
                 class_export_put(exp);
         }
-        
+
         RETURN(rc);
 }
 
@@ -1658,7 +1659,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
                 RETURN(dchild);
         }
 
-        if (dchild->d_inode == NULL) {
+        if (dchild->d_inode == NULL && strcmp(what, "filter_setattr")) {
                 CERROR("%s: %s on non-existent object: "LPU64"\n",
                        obd->obd_name, what, oa->o_id);
                 f_dput(dchild);
@@ -1747,24 +1748,18 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_unlock, rc = PTR_ERR(handle));
 
-        /* XXX this could be a rwsem instead, if filter_preprw played along */
-        if (iattr.ia_valid & ATTR_ATTR_FLAG)
+        if (iattr.ia_valid & ATTR_ATTR_FLAG) {
                 rc = fsfilt_iocontrol(exp->exp_obd, dentry->d_inode, NULL,
                                       EXT3_IOC_SETFLAGS,
                                       (long)&iattr.ia_attr_flags);
-        else {
+        } else {
                 rc = fsfilt_setattr(exp->exp_obd, dentry, handle, &iattr, 1);
-                /* set cancel cookie callback function */  
-                if (fcc != NULL) {
-                        if (oti != NULL)
-                                fsfilt_add_journal_cb(obd, 0, oti->oti_handle,
-                                                      filter_cancel_cookies_cb,
-                                                      fcc);
-                        else
-                                fsfilt_add_journal_cb(obd, 0, handle,
-                                                      filter_cancel_cookies_cb,
-                                                      fcc);
-                }
+                if (fcc != NULL)
+                        /* set cancel cookie callback function */
+                        fsfilt_add_journal_cb(obd, 0, oti ?
+                                              handle : oti->oti_handle,
+                                              filter_cancel_cookies_cb,
+                                              fcc);
         }
 
         rc = filter_finish_transno(exp, oti, rc);
@@ -2501,7 +2496,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 struct super_block *sb = obd->u.filter.fo_sb;
                 struct inode *inode = sb->s_root->d_inode;
                 BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("setting device %s read-only\n",
+                CERROR("*** setting device %s read-only ***\n",
                        ll_bdevname(sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
