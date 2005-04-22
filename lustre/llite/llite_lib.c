@@ -1250,6 +1250,9 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 inode->i_blksize = min(lsm->lsm_xfersize, LL_MAX_BLKSIZE);
                 if (lli->lli_smd != lsm)
                         obd_free_memmd(ll_i2obdexp(inode), &lsm);
+        } else {
+                inode->i_blksize = max(inode->i_blksize,
+                                       inode->i_sb->s_blocksize);
         }
 
         if (body->valid & OBD_MD_FLID)

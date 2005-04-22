@@ -37,7 +37,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- rmmod NALs that might be loaded because of /etc/modules.conf (6133)
 	- support for mountfsoptions and clientoptions to the Lustre LDAP (5873)
 	- improved "lustre status" script
-	
+	- initialize blocksize for non-regular files (6062)
+
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
        * bug fixes
