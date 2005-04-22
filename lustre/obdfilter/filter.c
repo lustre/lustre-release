@@ -1757,7 +1757,7 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
                 if (fcc != NULL)
                         /* set cancel cookie callback function */
                         fsfilt_add_journal_cb(obd, 0, oti ?
-                                              handle : oti->oti_handle,
+                                              oti->oti_handle : handle,
                                               filter_cancel_cookies_cb,
                                               fcc);
         }
