@@ -550,14 +550,18 @@ struct obd_export *class_new_export(struct obd_device *obd)
 
         INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
+        export->exp_last_request_time = CURRENT_SECONDS;
         spin_lock_init(&export->exp_lock);
 
         spin_lock(&obd->obd_dev_lock);
         LASSERT(!obd->obd_stopping); /* shouldn't happen, but might race */
         atomic_inc(&obd->obd_refcount);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
+        list_add_tail(&export->exp_obd_chain_timed, 
+                      &export->exp_obd->obd_exports_timed);
         export->exp_obd->obd_num_exports++;
         spin_unlock(&obd->obd_dev_lock);
+
         obd_init_export(export);
         return export;
 }
@@ -568,6 +572,7 @@ void class_unlink_export(struct obd_export *exp)
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
+        list_del_init(&exp->exp_obd_chain_timed);
         exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
@@ -948,3 +953,241 @@ int oig_wait(struct obd_io_group *oig)
         CDEBUG(D_CACHE, "done waiting on oig %p rc %d\n", oig, oig->oig_rc);
         return oig->oig_rc;
 }
+
+                
+/* Ping evictor thread */
+#define PET_READY     1
+#define PET_TERMINATE 2
+#define D_PET D_HA
+
+static int               pet_refcount = 0;
+static int               pet_state;
+static wait_queue_head_t pet_waitq;
+static struct obd_export *pet_exp = NULL;
+static spinlock_t        pet_lock = SPIN_LOCK_UNLOCKED;
+
+static int ping_evictor_wake(struct obd_export *exp)
+{
+#ifdef __KERNEL__
+        spin_lock(&pet_lock);
+        if (pet_exp) {
+                /* eventually the new obd will call here again. */
+                spin_unlock(&pet_lock);
+                return 1;
+        }
+        pet_exp = exp;
+        spin_unlock(&pet_lock);
+
+        /* We have to make sure the obd isn't destroyed between now and when
+           the ping evictor runs. We'll take a reference here, and drop it
+           when we finish in the evictor.  We don't really care about this
+           export in particular; we just need one to keep the obd. */
+        class_export_get(pet_exp);
+        wake_up(&pet_waitq);
+#endif
+        return 0;
+}
+               
+#ifdef __KERNEL__
+/* Same as ptlrpc_fail_export, but this module must load first... */
+void ping_evictor_fail_export(struct obd_export *exp)
+{
+        int rc, already_failed;
+        unsigned long flags;
+
+        spin_lock_irqsave(&exp->exp_lock, flags);
+        already_failed = exp->exp_failed;
+        exp->exp_failed = 1;
+        spin_unlock_irqrestore(&exp->exp_lock, flags);
+
+        if (already_failed) {
+                CDEBUG(D_PET, "disconnecting dead export %p/%s; skipping\n",
+                       exp, exp->exp_client_uuid.uuid);
+                return;
+        }
+
+        CDEBUG(D_PET, "disconnecting export %p/%s\n",
+               exp, exp->exp_client_uuid.uuid);
+
+        /* Most callers into obd_disconnect are removing their own reference
+         * (request, for example) in addition to the one from the hash table.
+         * We don't have such a reference here, so make one. */
+        class_export_get(exp);
+        rc = obd_disconnect(exp);
+        if (rc)
+                CERROR("disconnecting export %p failed: %d\n", exp, rc);
+        CERROR("disconnected export %p/%s\n",
+               exp, exp->exp_client_uuid.uuid);
+}
+
+static int ping_evictor_main(void *arg)
+{
+        struct list_head *pos, *n;
+        struct obd_device *obd;
+        struct obd_export *exp;
+        struct l_wait_info lwi = { 0 };
+        time_t expire_time;
+        unsigned long flags;
+        ENTRY;
+
+        lock_kernel();
+        kportal_daemonize("ping_evictor");
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+        unlock_kernel();
+
+        CDEBUG(D_PET, "Starting Ping Evictor\n");
+        pet_exp = NULL;
+        pet_state = PET_READY;
+        while (1) {
+                l_wait_event(pet_waitq, pet_exp ||
+                             (pet_state == PET_TERMINATE), &lwi);
+                if (pet_state == PET_TERMINATE)
+                        break;
+                
+                obd = pet_exp->exp_obd;
+                expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
+                
+                CDEBUG(D_PET, "evicting all exports of obd %s older than %ld\n",
+                       obd->obd_name, expire_time);
+                
+                /* Exports can't be deleted out of the list, which means we 
+                   can't lose the last ref on the export, while we hold the obd 
+                   lock (class_unlink_export).  If they've already been
+                   removed from the list, we won't find them here. */
+                spin_lock(&obd->obd_dev_lock);
+                list_for_each_safe(pos, n, &obd->obd_exports_timed) {
+                        int stop = 0;
+                        exp = list_entry(pos, struct obd_export, 
+                                         exp_obd_chain_timed);
+                        class_export_get(exp);
+                        spin_unlock(&obd->obd_dev_lock);
+
+                        if (expire_time > exp->exp_last_request_time) {
+                                LCONSOLE_WARN("%s hasn't heard from %s in %ld "
+                                              "seconds.  I think it's dead, "
+                                              "and I am evicting it.\n",
+                                              obd->obd_name,
+                                              exp->exp_client_uuid.uuid,
+                                              (long)(CURRENT_SECONDS - 
+                                              exp->exp_last_request_time));
+                                ping_evictor_fail_export(exp);
+                        } else {
+                                /* List is sorted, so everyone below is ok */
+                                stop++;
+                        }
+                        class_export_put(exp);
+                        /* lock again for the next entry */
+                        spin_lock(&obd->obd_dev_lock);
+                        
+                        if (stop) 
+                                break;
+                }
+                spin_unlock(&obd->obd_dev_lock);
+                class_export_put(pet_exp);
+                pet_exp = NULL;
+        }
+        CDEBUG(D_PET, "Exiting Ping Evictor\n");
+
+        RETURN(0);
+}
+#endif 
+
+void ping_evictor_start(void)
+{
+#ifdef __KERNEL__
+        int rc;
+
+        if (++pet_refcount > 1)
+                return;
+
+        init_waitqueue_head(&pet_waitq);
+
+        rc = kernel_thread(ping_evictor_main, NULL, CLONE_VM | CLONE_FS);
+        if (rc < 0) {
+                pet_refcount--;
+                CERROR("Cannot start ping evictor thread: %d\n", rc);
+        }
+#endif
+}
+
+void ping_evictor_stop(void)
+{
+#ifdef __KERNEL__
+        if (--pet_refcount > 0)
+                return;
+
+        pet_state = PET_TERMINATE;
+        wake_up(&pet_waitq);
+#endif
+}
+
+/* This function makes sure dead exports are evicted in a timely manner. 
+   This function is only called when some export receives a message (i.e.,
+   the network is up.) */
+void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
+{
+        LASSERT(exp);
+
+        /* Compensate for slow machines, etc, by faking our request time
+           into the future.  Although this can break the strict time-ordering
+           of the list, we can be really lazy here - we don't have to evict
+           at the exact right moment.  Eventually, all silent exports 
+           will make it to the top of the list. */         
+        exp->exp_last_request_time = max(exp->exp_last_request_time,
+                                         (time_t)CURRENT_SECONDS + extra_delay);
+
+        CDEBUG(D_PET, "updating export %s at %ld\n",
+               exp->exp_client_uuid.uuid,
+               exp->exp_last_request_time);
+
+        /* exports may get disconnected from the chain even though the 
+           export has references, so we must keep the spin lock while
+           manipulating the lists */
+        spin_lock(&exp->exp_obd->obd_dev_lock);
+
+        if (list_empty(&exp->exp_obd_chain_timed)) {
+                /* this one is not timed */
+                spin_unlock(&exp->exp_obd->obd_dev_lock);
+                return;
+        }
+
+        list_move_tail(&exp->exp_obd_chain_timed, 
+                       &exp->exp_obd->obd_exports_timed);
+        
+        /* Note - racing to start/reset the obd_eviction timer is safe */
+        if (exp->exp_obd->obd_eviction_timer == 0) { 
+                struct obd_export *oldest_exp;
+                /* Check if the oldest entry is expired. */
+                oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
+                                        struct obd_export, exp_obd_chain_timed);
+                spin_unlock(&exp->exp_obd->obd_dev_lock);
+                
+                if (CURRENT_SECONDS > (oldest_exp->exp_last_request_time +
+                                       (3 * obd_timeout / 2) + extra_delay)) {
+                        /* We need a second timer, in case the net was
+                           down and it just came back. Since the pinger
+                           may skip every other PING_INTERVAL (see note in
+                           ptlrpc_pinger_main), we better wait for 3. */
+                        exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS + 
+                                3 * PING_INTERVAL;
+                        CDEBUG(D_PET,
+                               "Thinking about evicting old export %s at %ld\n",
+                               oldest_exp->exp_client_uuid.uuid,
+                               oldest_exp->exp_last_request_time);
+                }
+        } else {
+                spin_unlock(&exp->exp_obd->obd_dev_lock);
+                if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
+                                       extra_delay)) {
+                        /* The evictor won't evict anyone who we've heard from
+                           recently, so we don't have to check before we start
+                           it. */
+                        if (!ping_evictor_wake(exp))
+                                exp->exp_obd->obd_eviction_timer = 0;
+                }
+        }
+}
+

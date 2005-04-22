@@ -151,13 +151,13 @@ client_df() {
 }
 
 client_reconnect() {
-    df $MOUNT > /dev/null
     uname -n >> $MOUNT/recon
     if [ ! -z "$CLIENTS" ]; then
 	$PDSH $CLIENTS "df $MOUNT; uname -n >> $MOUNT/recon" > /dev/null
     fi
     echo Connected clients:
     cat $MOUNT/recon
+    ls -l $MOUNT/recon > /dev/null
     rm $MOUNT/recon
 }
 

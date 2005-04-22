@@ -525,6 +525,8 @@ struct obd_device {
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
+        struct list_head        obd_exports_timed;  /* for ping evictor */
+        time_t                  obd_eviction_timer; /* for ping evictor */
 
         /* XXX encapsulate all this recovery data into one struct */
         svc_handler_t                    obd_recovery_handler;

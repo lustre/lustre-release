@@ -395,7 +395,33 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 }
 run_test 24 "fsync error (should return error)" 
 
-test_25a() {
+test_26() {      # bug 5921 - evict dead exports 
+# this test can only run from a client on a separate node.
+	[ "`lsmod | grep obdfilter`" ] && \
+	    echo "skipping test 26 (local OST)" && return
+	[ "`lsmod | grep mds`" ] && \
+	    echo "skipping test 26 (local MDS)" && return
+	OST_FILE=/proc/fs/lustre/obdfilter/ost_svc/num_exports
+        OST_EXP="`do_facet ost cat $OST_FILE`"
+	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
+	echo starting with $OST_NEXP1 OST exports
+# OBD_FAIL_PTLRPC_DROP_RPC 0x505
+	do_facet client sysctl -w lustre.fail_loc=0x505
+	# evictor takes up to 2.25x to evict.  But if there's a 
+	# race to start the evictor from various obds, the loser
+	# might have to wait for the next ping.
+	echo Waiting for $(($TIMEOUT * 4)) secs
+	sleep $(($TIMEOUT * 4))
+        OST_EXP="`do_facet ost cat $OST_FILE`"
+	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
+	echo ending with $OST_NEXP2 OST exports
+	do_facet client sysctl -w lustre.fail_loc=0x0
+        [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted"
+	return 0
+}
+run_test 26 "evict dead exports"
+
+test_50() {     # bug 4834 - failover under load failures
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes for 10 min.
 	do_facet client "writemany -q -a $DIR/$tdir/$tfile 600 5" &
@@ -415,9 +441,9 @@ test_25a() {
 	echo writemany returned $rc
 	return $rc
 }
-run_test 25a "failover MDS under load"
+run_test 50 "failover MDS under load"
 
-test_25b() {
+test_51() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
 	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
@@ -442,9 +468,9 @@ test_25b() {
 	echo writemany returned $rc
 	return $rc
 }
-run_test 25b "failover MDS during recovery"
+run_test 51 "failover MDS during recovery"
 
-test_25c_guts() {
+test_52_guts() {
 	do_facet client "writemany -q $DIR/$tdir/$tfile 600 5" &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
@@ -461,22 +487,23 @@ test_25c_guts() {
 	return $rc
 }
 
-test_25c() {
+test_52() {
 	mkdir -p $DIR/$tdir
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	# wait for client to reconnect to OST
 	sleep 30
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	sleep 30
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	client_reconnect
 	return $rc
 }
-run_test 25c "failover OST under load"
+run_test 52 "failover OST under load"
+
 
 FORCE=--force $CLEANUP

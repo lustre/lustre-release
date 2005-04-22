@@ -1763,6 +1763,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
+        ping_evictor_start();
+        
         sema_init(&mds->mds_quota_info.qi_sem, 1);
         rc = qctxt_init(&mds->mds_quota_ctxt, mds->mds_sb, dqacq_handler);
         if (rc) {
@@ -1950,6 +1952,8 @@ static int mds_cleanup(struct obd_device *obd)
         ll_sbdev_type save_dev;
         int must_relock = 0;
         ENTRY;
+
+        ping_evictor_stop();
 
         if (mds->mds_sb == NULL)
                 RETURN(0);

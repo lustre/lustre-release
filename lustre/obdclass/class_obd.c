@@ -444,12 +444,16 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
 EXPORT_SYMBOL(class_disconnect_stale_exports);
+EXPORT_SYMBOL(class_update_export_timer);
 
 EXPORT_SYMBOL(oig_init);
 EXPORT_SYMBOL(oig_release);
 EXPORT_SYMBOL(oig_add_one);
 EXPORT_SYMBOL(oig_wait);
 EXPORT_SYMBOL(oig_complete_one);
+
+EXPORT_SYMBOL(ping_evictor_start);
+EXPORT_SYMBOL(ping_evictor_stop);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);

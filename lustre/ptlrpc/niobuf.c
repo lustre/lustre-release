@@ -392,6 +392,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         ptl_md_t         reply_md;
         ENTRY;
 
+        OBD_FAIL_RETURN(OBD_FAIL_PTLRPC_DROP_RPC, 0); 
+
         LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
 
         /* If this is a re-transmit, we're required to have disengaged
@@ -406,7 +408,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 request->rq_err = 1;
                 RETURN(-ENODEV);
         }
-
+        
         connection = request->rq_import->imp_connection;
 
         if (request->rq_bulk != NULL) {

@@ -443,6 +443,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         int                    rc;
         ENTRY;
 
+        LASSERT(svc);
+
         spin_lock_irqsave (&svc->srv_lock, flags);
         if (list_empty (&svc->srv_request_queue) ||
             (svc->srv_n_difficult_replies != 0 &&
@@ -494,17 +496,6 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
-        /* Discard requests queued for longer than my timeout.  If the
-         * client's timeout is similar to mine, she'll be timing out this
-         * REQ anyway (bug 1502) */
-        if (timediff / 1000000 > (long)obd_timeout) {
-                CERROR("Dropping timed-out opc %d request from %s"
-                       ": %ld seconds old\n", request->rq_reqmsg->opc,
-                       request->rq_peerstr,
-                       timediff / 1000000);
-                goto out;
-        }
-
         request->rq_export = class_conn2export(&request->rq_reqmsg->handle);
 
         if (request->rq_export) {
@@ -527,7 +518,19 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                         goto put_conn;
                 }
 
-                request->rq_export->exp_last_request_time = CURRENT_SECONDS;
+                class_update_export_timer(request->rq_export, 
+                                          (time_t)(timediff / 1000000));
+        }
+
+        /* Discard requests queued for longer than my timeout.  If the
+         * client's timeout is similar to mine, she'll be timing out this
+         * REQ anyway (bug 1502) */
+        if (timediff / 1000000 > (long)obd_timeout) {
+                CERROR("Dropping timed-out opc %d request from %s"
+                       ": %ld seconds old\n", request->rq_reqmsg->opc,
+                       request->rq_peerstr,
+                       timediff / 1000000);
+                goto put_conn;
         }
 
         request->rq_phase = RQ_PHASE_INTERPRET;

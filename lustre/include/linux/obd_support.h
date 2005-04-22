@@ -37,7 +37,8 @@ extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
-extern unsigned int obd_timeout;
+extern unsigned int obd_timeout;          /* seconds */
+#define PING_INTERVAL (obd_timeout / 4)
 extern unsigned int ldlm_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
@@ -146,6 +147,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_PTLRPC_RQBD             0x502
 #define OBD_FAIL_PTLRPC_BULK_GET_NET     0x503
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
+#define OBD_FAIL_PTLRPC_DROP_RPC         0x505
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601

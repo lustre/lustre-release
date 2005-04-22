@@ -19,6 +19,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't hold i_size_sem in ll_nopage() and ll_ap_refresh_count (6077)
 	- don't hold client locks on temporary worklist from l_lru (5666)
 	- handle IO errors in 2.6 obdfilter bio completion routine (6046)
+	- automatically evict dead clients (5921)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)

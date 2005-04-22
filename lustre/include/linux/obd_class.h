@@ -130,6 +130,7 @@ do {                                                                           \
 void __class_export_put(struct obd_export *);
 struct obd_export *class_new_export(struct obd_device *obddev);
 void class_unlink_export(struct obd_export *exp);
+void class_update_export_timer(struct obd_export *exp, time_t extra_delay);
 
 struct obd_import *class_import_get(struct obd_import *);
 void class_import_put(struct obd_import *);
@@ -158,6 +159,11 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
 int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
+
+/* ping evictor */
+void ping_evictor_start(void);
+void ping_evictor_stop(void);
+
 
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_ops->o_ ## op

@@ -95,6 +95,7 @@ int class_attach(struct lustre_cfg *lcfg)
         cleanup_phase = 3;  /* class_release_dev */
 
         INIT_LIST_HEAD(&obd->obd_exports);
+        INIT_LIST_HEAD(&obd->obd_exports_timed);
         obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
@@ -185,6 +186,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         memcpy(&exp->exp_client_uuid, &obd->obd_uuid,
                sizeof(exp->exp_client_uuid));
         obd->obd_self_export = exp;
+        list_del_init(&exp->exp_obd_chain_timed);
         class_export_put(exp);
 
         err = obd_setup(obd, sizeof(*lcfg), lcfg);
@@ -333,7 +335,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         GOTO(out, err = -EBUSY);
                 }
                 CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
-                       obd->obd_name, atomic_read(&obd->obd_refcount));
+                       obd->obd_name, atomic_read(&obd->obd_refcount) - 1);
                 dump_exports(obd);
                 class_disconnect_exports(obd);
         }

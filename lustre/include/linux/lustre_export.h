@@ -55,6 +55,7 @@ struct obd_export {
         atomic_t                  exp_refcount;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
+        struct list_head          exp_obd_chain_timed; /* for ping evictor */
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct ptlrpc_connection *exp_connection;

@@ -431,11 +431,14 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
+        /* All imports are pingable */
+        imp->imp_pingable = 1;
+        
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
                                imp->imp_target_uuid.uuid);
-                        imp->imp_pingable = imp->imp_replayable = 1;
+                        imp->imp_replayable = 1;
                 } else {
                         imp->imp_replayable = 0;
                 }

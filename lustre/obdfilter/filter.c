@@ -1349,6 +1349,8 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
                 lproc_filter_attach_seqstat(obd);
         }
 
+        ping_evictor_start();
+
         return rc;
 }
 
@@ -1377,6 +1379,8 @@ static int filter_cleanup(struct obd_device *obd)
                         RETURN(-EBUSY);
                 }
         }
+
+        ping_evictor_stop();
 
         qctxt_cleanup(&filter->fo_quota_ctxt, 0);
 
@@ -1412,7 +1416,6 @@ static int filter_cleanup(struct obd_device *obd)
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
-
 
         ll_clear_rdonly(save_dev);
 
