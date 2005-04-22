@@ -392,19 +392,25 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 CWARN("Please update config and run --write-conf on MDS\n");
 
                 desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
+        } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
+                CWARN("default_stripe_size "LPU64" isn't a multiple of %lu\n",
+                      desc->ld_default_stripe_size, LOV_MIN_STRIPE_SIZE);
+                CWARN("Please update config and run --write-conf on MDS\n");
+
+                desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
         }
 
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
-         * of 4GB or larger on 32-bit CPUs.
-         */
+         * of 4GB or larger on 32-bit CPUs. */
         count = desc->ld_default_stripe_count;
-        if (count && (count * desc->ld_default_stripe_size) > ~0UL) {
+        if ((count ? count : desc->ld_tgt_count) *
+            desc->ld_default_stripe_size > ~0UL) {
                 CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
                        desc->ld_default_stripe_size, count, ~0UL);
                 RETURN(-EINVAL);
         }
-  
+
         /* Allocate space for target list */
         if (desc->ld_tgt_count)
                 count = desc->ld_tgt_count;
@@ -790,11 +796,11 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 }
 
-#define ASSERT_LSM_MAGIC(lsmp)                                  \
-do {                                                            \
-        LASSERT((lsmp) != NULL);                                \
-        LASSERTF((lsmp)->lsm_magic == LOV_MAGIC, "%p, %x",      \
-                 (lsmp), (lsmp)->lsm_magic);                    \
+#define ASSERT_LSM_MAGIC(lsmp)                                          \
+do {                                                                    \
+        LASSERT((lsmp) != NULL);                                        \
+        LASSERTF((lsmp)->lsm_magic == LOV_MAGIC, "%p->lsm_magic=%x\n",  \
+                 (lsmp), (lsmp)->lsm_magic);                            \
 } while (0)
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
@@ -1010,12 +1016,12 @@ static int lov_setattr_async(struct obd_export *exp, struct obdo *src_oa,
         obd_id objid = src_oa->o_id;
         int i;
         ENTRY;
-                                                                                                                             
+
         ASSERT_LSM_MAGIC(lsm);
         LASSERT(oti);
         if (src_oa->o_valid & OBD_MD_FLCOOKIE)
                 LASSERT(oti->oti_logcookies);
-                                                                                                                             
+
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 

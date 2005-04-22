@@ -99,11 +99,14 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (shrink) {
                 struct lov_oinfo *loi;
-                int i = 0;
-                for (loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-                     i++, loi++) {
-                        kms = lov_size_to_stripe(lsm, size, i);
+                for (loi = lsm->lsm_oinfo; stripe < lsm->lsm_stripe_count;
+                     stripe++, loi++) {
+                        kms = lov_size_to_stripe(lsm, size, stripe);
                         loi->loi_kms = loi->loi_rss = kms;
+                        CDEBUG(D_INODE,
+                               "stripe %d KMS %sing "LPU64"->"LPU64"\n",
+                               stripe, kms > loi->loi_kms ? "increas":"shrink",
+                               loi->loi_kms, kms);
                 }
                 RETURN(0);
         }
