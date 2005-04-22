@@ -672,7 +672,7 @@ test_33() {
     touch $DIR/$tfile
     fail_abort mds
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile && return 1
+    $CHECKSTAT -t file $DIR/$tfile && return 3
     return 0
 }
 run_test 33 "abort recovery before client does replay"
