@@ -1020,13 +1020,15 @@ run_test 57 "test recovery from llog for setattr op"
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
-    createmany -o $DIR/$tfile-%d 2500
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier mds
     fail mds
     sleep 2
-    $CHECKSTAT -t file $DIR/$tfile-* || return 1
+    $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
     do_facet mds "sysctl -w lustre.fail_loc=0x0"
-    unlinkmany $DIR/$tfile-* 2500
+    unlinkmany $DIR/$tdir/$tfile-%d 2500
+    rmdir $DIR/$tdir
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 
