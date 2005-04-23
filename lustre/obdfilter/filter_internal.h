@@ -100,8 +100,8 @@ void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_gr group, obd_id id);
 struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
-                                  const char *what);
-#define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
+                                  const char *what, int quiet);
+#define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__, 0)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);

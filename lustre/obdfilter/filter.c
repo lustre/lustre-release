@@ -1644,7 +1644,7 @@ static int filter_disconnect(struct obd_export *exp)
 }
 
 struct dentry *__filter_oa2dentry(struct obd_device *obd,
-                                  struct obdo *oa, const char *what)
+                                  struct obdo *oa, const char *what, int quiet)
 {
         struct dentry *dchild = NULL;
         obd_gr group = 0;
@@ -1659,9 +1659,10 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
                 RETURN(dchild);
         }
 
-        if (dchild->d_inode == NULL && strcmp(what, "filter_setattr")) {
-                CERROR("%s: %s on non-existent object: "LPU64"\n",
-                       obd->obd_name, what, oa->o_id);
+        if (dchild->d_inode == NULL) {
+                if (!quiet)
+                        CERROR("%s: %s on non-existent object: "LPU64"\n",
+                               obd->obd_name, what, oa->o_id);
                 f_dput(dchild);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -1714,7 +1715,7 @@ static int filter_setattr(struct obd_export *exp, struct obdo *oa,
         int rc, rc2;
         ENTRY;
 
-        dentry = filter_oa2dentry(exp->exp_obd, oa);
+        dentry = __filter_oa2dentry(exp->exp_obd, oa, __FUNCTION__, 1);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
