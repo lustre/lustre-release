@@ -108,7 +108,6 @@ struct super_operations lustre_super_operations =
         .umount_begin  = ll_umount_begin
 };
 
-
 struct file_system_type lustre_lite_fs_type = {
         .owner        = THIS_MODULE,
         .name         = "lustre_lite",

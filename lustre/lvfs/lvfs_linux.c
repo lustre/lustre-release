@@ -442,7 +442,7 @@ static int lvfs_memdbg_init(int size)
         LASSERT(size > sizeof(sizeof(struct hlist_head)));
         obd_memtable_size = size / sizeof(struct hlist_head);
 
-        CWARN("Allocating %lu malloc entries...\n",
+        CWARN("allocating %lu malloc entries...\n",
               (unsigned long)obd_memtable_size);
 
         obd_memtable = kmalloc(size, GFP_KERNEL);
@@ -464,13 +464,13 @@ static int lvfs_memdbg_cleanup(void)
 {
         struct hlist_node *node = NULL, *tmp = NULL;
         struct hlist_head *head;
-        struct mtrack *mt;
+        struct mem_track *mt;
         int i;
 
         spin_lock(&obd_memlist_lock);
         for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
                 hlist_for_each_safe(node, tmp, head) {
-                        mt = hlist_entry(node, struct mtrack, m_hash);
+                        mt = hlist_entry(node, struct mem_track, m_hash);
                         hlist_del_init(&mt->m_hash);
                         kfree(mt);
                 }
@@ -486,14 +486,14 @@ static inline unsigned long const hashfn(void *ptr)
                 (obd_memtable_size - 1);
 }
 
-static void __lvfs_memdbg_insert(struct mtrack *mt)
+static void __lvfs_memdbg_insert(struct mem_track *mt)
 {
         struct hlist_head *head = obd_memtable +
                 hashfn(mt->m_ptr);
         hlist_add_head(&mt->m_hash, head);
 }
 
-void lvfs_memdbg_insert(struct mtrack *mt)
+void lvfs_memdbg_insert(struct mem_track *mt)
 {
         spin_lock(&obd_memlist_lock);
         __lvfs_memdbg_insert(mt);
@@ -501,12 +501,12 @@ void lvfs_memdbg_insert(struct mtrack *mt)
 }
 EXPORT_SYMBOL(lvfs_memdbg_insert);
 
-static void __lvfs_memdbg_remove(struct mtrack *mt)
+static void __lvfs_memdbg_remove(struct mem_track *mt)
 {
         hlist_del_init(&mt->m_hash);
 }
 
-void lvfs_memdbg_remove(struct mtrack *mt)
+void lvfs_memdbg_remove(struct mem_track *mt)
 {
         spin_lock(&obd_memlist_lock);
         __lvfs_memdbg_remove(mt);
@@ -514,16 +514,16 @@ void lvfs_memdbg_remove(struct mtrack *mt)
 }
 EXPORT_SYMBOL(lvfs_memdbg_remove);
 
-static struct mtrack *__lvfs_memdbg_find(void *ptr)
+static struct mem_track *__lvfs_memdbg_find(void *ptr)
 {
         struct hlist_node *node = NULL;
-        struct mtrack *mt = NULL;
+        struct mem_track *mt = NULL;
         struct hlist_head *head;
 
         head = obd_memtable + hashfn(ptr);
 
         hlist_for_each(node, head) {
-                mt = hlist_entry(node, struct mtrack, m_hash);
+                mt = hlist_entry(node, struct mem_track, m_hash);
                 if ((unsigned long)mt->m_ptr == (unsigned long)ptr)
                         break;
                 mt = NULL;
@@ -531,9 +531,9 @@ static struct mtrack *__lvfs_memdbg_find(void *ptr)
         return mt;
 }
 
-struct mtrack *lvfs_memdbg_find(void *ptr)
+struct mem_track *lvfs_memdbg_find(void *ptr)
 {
-        struct mtrack *mt;
+        struct mem_track *mt;
 
         spin_lock(&obd_memlist_lock);
         mt = __lvfs_memdbg_find(ptr);
@@ -543,7 +543,7 @@ struct mtrack *lvfs_memdbg_find(void *ptr)
 }
 EXPORT_SYMBOL(lvfs_memdbg_find);
 
-int lvfs_memdbg_check_insert(struct mtrack *mt)
+int lvfs_memdbg_check_insert(struct mem_track *mt)
 {
         spin_lock(&obd_memlist_lock);
         if (!__lvfs_memdbg_find(mt->m_ptr)) {
@@ -556,10 +556,10 @@ int lvfs_memdbg_check_insert(struct mtrack *mt)
 }
 EXPORT_SYMBOL(lvfs_memdbg_check_insert);
 
-struct mtrack *
+struct mem_track *
 lvfs_memdbg_check_remove(void *ptr)
 {
-        struct mtrack *mt;
+        struct mem_track *mt;
 
         spin_lock(&obd_memlist_lock);
         mt = __lvfs_memdbg_find(ptr);
@@ -572,32 +572,40 @@ lvfs_memdbg_check_remove(void *ptr)
         return NULL;
 }
 EXPORT_SYMBOL(lvfs_memdbg_check_remove);
+#endif
 
 static void lvfs_memdbg_show(void)
 {
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
         struct hlist_node *node = NULL;
         struct hlist_head *head;
-        struct mtrack *mt;
-        int leaked, i;
+        struct mem_track *mt;
+#endif
+        int leaked;
+	
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+	int i;
+#endif
 
         leaked = atomic_read(&obd_memory);
 
         if (leaked > 0) {
-                CWARN("Memory leaks detected (max %d, leaked %d):\n",
+                CWARN("memory leaks detected (max %d, leaked %d)\n",
                       obd_memmax, leaked);
 
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
                 spin_lock(&obd_memlist_lock);
                 for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
                         hlist_for_each(node, head) {
-                                mt = hlist_entry(node, struct mtrack, m_hash);
+                                mt = hlist_entry(node, struct mem_track, m_hash);
                                 CWARN("  ptr: 0x%p, size: %d, src at \"%s\"\n",
                                       mt->m_ptr, mt->m_size, mt->m_loc);
                         }
                 }
                 spin_unlock(&obd_memlist_lock);
+#endif
         }
 }
-#endif
 
 static int __init lvfs_linux_init(void)
 {
@@ -614,9 +622,9 @@ static void __exit lvfs_linux_exit(void)
         ENTRY;
 
         lvfs_mount_list_cleanup();
+        lvfs_memdbg_show();
 
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-        lvfs_memdbg_show();
         lvfs_memdbg_cleanup();
 #endif
         EXIT;

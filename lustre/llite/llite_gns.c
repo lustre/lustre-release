@@ -244,7 +244,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
 
         /*
-         * wait for mount completion. This is actually not need, because
+         * wait for mount completion. This is actually not needed, because
          * USERMODEHELPER() returns only when usermode process finishes. But we
          * doing this just for case USERMODEHELPER() semantics will be changed
          * or usermode upcall program will start mounting in backgound and

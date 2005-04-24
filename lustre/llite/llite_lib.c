@@ -1070,6 +1070,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        LTIME_S(CURRENT_TIME));
+
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
