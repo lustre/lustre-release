@@ -1083,8 +1083,13 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
-                rc = mds_pack_md(obd, req->rq_repmsg, reply_off + 1, body,
-                                 inode, 1, (reqbody->valid & OBD_MD_MEA) ? 1 : 0);
+	    
+	        /* guessing what kind og attribute do we need. */
+		int is_mea = (S_ISDIR(inode->i_mode) && 
+		    (reqbody->valid & OBD_MD_MEA) != 0);
+		
+                rc = mds_pack_md(obd, req->rq_repmsg, reply_off + 1, 
+				 body, inode, 1, is_mea);
 
                 /* if we have LOV EA data, the OST holds size, atime, mtime. */
                 if (!(body->valid & OBD_MD_FLEASIZE) &&
