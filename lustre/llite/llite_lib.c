@@ -1017,6 +1017,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        CURRENT_SECONDS);
+
+
+        /* NB: ATTR_SIZE will only be set after this point if the size
+         * resides on the MDS, ie, this file has no objects. */
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
@@ -1043,12 +1047,11 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                /* We call inode_setattr to adjust timestamps, but we first
-                 * clear ATTR_SIZE to avoid invoking vmtruncate.
-                 *
-                 * NB: ATTR_SIZE will only be set at this point if the size
-                 * resides on the MDS, ie, this file has no objects. */
-                attr->ia_valid &= ~ATTR_SIZE;
+                /* We call inode_setattr to adjust timestamps.
+                 * If there is at least some data in file, we cleared ATTR_SIZE
+                 * above to avoid invoking vmtruncate, otherwise it is important
+                 * to call vmtruncate in inode_setattr to update inode->i_size
+                 * (bug 6196) */
                 inode_setattr(inode, attr);
 
                 ll_update_inode(inode, md.body, md.lsm);
