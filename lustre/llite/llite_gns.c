@@ -107,11 +107,16 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         spin_lock(&sbi->ll_gns_lock);
         if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
             sbi->ll_gns_state == LL_GNS_FINISHED) {
+                /* 
+                 * check if another control thread is trying to mount some GNS
+                 * dentry too. Letting it know that we busy and make
+                 * ll_lookup_it() ti restart syscall and try again later.
+                 */
                 spin_unlock(&sbi->ll_gns_lock);
                 CDEBUG(D_INODE, "GNS is in progress now, throwing "
                        "-ERESTARTSYS to restart syscall and let "
                        "it finish.\n");
-                RETURN(-ERESTARTSYS);
+                RETURN(-EBUSY);
         }
         LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
 
@@ -140,22 +145,21 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * mount object name is taken from sbi, where it is set in mount time or
          * via /proc/fs... tunable. It may be ".mntinfo" or so.
          */
-        dchild = lookup_one_len(sbi->ll_gns_oname, dentry,
-                                strlen(sbi->ll_gns_oname));
+
+        /* 
+         * recursive lookup with trying to mount SUID bit marked directories on
+         * the way is not possible here, as lookup_one_len() does not pass nd to
+         * ->lookup() and this is checked in ll_lookup_it(). So, do not handle
+         * possible -EBUSY here.
+         */
+        dchild = ll_lookup_one_len(sbi->ll_gns_oname, dentry,
+                                   strlen(sbi->ll_gns_oname));
         up(&sbi->ll_gns_sem);
 
         cleanup_phase = 2;
         
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                
-                if (rc == -ERESTARTSYS) {
-                        CDEBUG(D_INODE, "possible endless loop is detected "
-                               "due to mount object is directory marked by "
-                               "SUID bit.\n");
-                        GOTO(cleanup, rc = -ELOOP);
-                }
-
                 CERROR("can't find mount object %*s/%*s err = %d.\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
                        strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,

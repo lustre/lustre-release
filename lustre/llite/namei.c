@@ -405,12 +405,31 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
             ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN))))
         {
                 rc = ll_gns_mount_object(dentry, nd->mnt);
-                if (rc == -ERESTARTSYS) {
+                if (rc == -EBUSY) {
                         /* 
                          * making system to restart syscall as currently GNS is
                          * in mounting progress.
                          */
-                        GOTO(out, retval = ERR_PTR(rc));
+                        GOTO(out, retval = ERR_PTR(-ERESTARTSYS));
+                }
+
+                if (rc) {
+                        /* 
+                         * just reporting about GNS failures, lookup() is
+                         * successful, do not stop it.
+                         *
+                         * GNS failure may be that found object is found in SUID
+                         * bit marked dir but it is not regular file and we
+                         * should lookup further until we find correct mount
+                         * object. This will allow to perform GNS mount is the
+                         * following case for instance:
+                         *
+                         * /mnt/lustre/gns_mount/.mntinfo/.mntinfo/..../.mntinfo
+                         * where all ".mntinfo" are dirs and only last one is
+                         * reg file.
+                         */
+                        CDEBUG(D_INODE, "failed to mount %*s, err %d\n",
+                               (int)dentry->d_name.len, dentry->d_name.name);
                 }
         }
         
