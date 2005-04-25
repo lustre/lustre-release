@@ -286,8 +286,8 @@ static void filter_clear_page_cache(struct inode *inode,
                 if (page == NULL)
                         continue;
                 if (page->mapping != NULL) {
-                        block_invalidatepage(page, 0);
 			wait_on_page_writeback(page);
+                        block_invalidatepage(page, 0);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
