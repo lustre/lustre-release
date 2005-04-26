@@ -70,7 +70,6 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         spin_lock_init(&sbi->ll_gns_lock);
         INIT_LIST_HEAD(&sbi->ll_gns_sbi_head);
         init_waitqueue_head(&sbi->ll_gns_waitq);
-        init_completion(&sbi->ll_gns_mount_finished);
 
         /* this later may be reset via /proc/fs/... */
         memcpy(sbi->ll_gns_oname, ".mntinfo", strlen(".mntinfo"));

@@ -77,13 +77,43 @@ ll_gns_wait_for_mount(struct dentry *dentry,
 int
 ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 {
-        struct ll_dentry_data *lld = dentry->d_fsdata;
         char *path, *pathpage, *datapage, *argv[4];
         struct file *mntinfo_fd = NULL;
         int cleanup_phase = 0, rc = 0;
         struct ll_sb_info *sbi;
         struct dentry *dchild;
         ENTRY;
+
+        LASSERT(dentry->d_inode != NULL);
+
+        if (!S_ISDIR(dentry->d_inode->i_mode))
+                RETURN(-EINVAL);
+
+        sbi = ll_i2sbi(dentry->d_inode);
+        LASSERT(sbi != NULL);
+
+        spin_lock(&sbi->ll_gns_lock);
+
+        if (sbi->ll_gns_state == LL_GNS_DISABLED) {
+                spin_unlock(&sbi->ll_gns_lock);
+                RETURN(-EINVAL);
+        }
+        
+        /* 
+         * another thead is in progress or just finished mounting the
+         * dentry. Handling that.
+         */
+        if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
+            sbi->ll_gns_state == LL_GNS_FINISHED) {
+                /* 
+                 * check if another thread is trying to mount some GNS dentry
+                 * too. Letting it know that we busy and make ll_lookup_it() to
+                 * restart syscall and try again later.
+                 */
+                spin_unlock(&sbi->ll_gns_lock);
+                RETURN(-EAGAIN);
+        }
+        LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
 
         if (mnt == NULL) {
                 CERROR("suid directory found, but no "
@@ -92,33 +122,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
 
         CDEBUG(D_INODE, "mounting dentry %p\n", dentry);
-
-        LASSERT(dentry->d_inode != NULL);
-        LASSERT(S_ISDIR(dentry->d_inode->i_mode));
-        LASSERT(lld != NULL);
-        
-        sbi = ll_i2sbi(dentry->d_inode);
-        LASSERT(sbi != NULL);
-
-        /* 
-         * another thead is in progress or just finished mounting the
-         * dentry. Handling that.
-         */
-        spin_lock(&sbi->ll_gns_lock);
-        if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
-            sbi->ll_gns_state == LL_GNS_FINISHED) {
-                /* 
-                 * check if another control thread is trying to mount some GNS
-                 * dentry too. Letting it know that we busy and make
-                 * ll_lookup_it() ti restart syscall and try again later.
-                 */
-                spin_unlock(&sbi->ll_gns_lock);
-                CDEBUG(D_INODE, "GNS is in progress now, throwing "
-                       "-ERESTARTSYS to restart syscall and let "
-                       "it finish.\n");
-                RETURN(-EBUSY);
-        }
-        LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
 
         /* mounting started */
         sbi->ll_gns_state = LL_GNS_MOUNTING;
@@ -148,9 +151,9 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 
         /* 
          * recursive lookup with trying to mount SUID bit marked directories on
-         * the way is not possible here, as lookup_one_len() does not pass nd to
-         * ->lookup() and this is checked in ll_lookup_it(). So, do not handle
-         * possible -EBUSY here.
+         * the way is not possible here, as lookup_one_len() does not pass @nd
+         * to ->lookup() and this is checked in ll_lookup_it(). So, do not
+         * handle possible -EAGAIN here.
          */
         dchild = ll_lookup_one_len(sbi->ll_gns_oname, dentry,
                                    strlen(sbi->ll_gns_oname));
@@ -255,7 +258,6 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * return instantly. --umka
          */
         rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
-        complete_all(&sbi->ll_gns_mount_finished);
         if (rc == 0) {
                 struct dentry *rdentry;
                 struct vfsmount *rmnt;
@@ -301,12 +303,6 @@ cleanup:
                         dput(dchild);
         case 1:
                 free_page((unsigned long)pathpage);
-                
-                /* 
-                 * waking up all waiters after gns state is set to
-                 * LL_GNS_MOUNTING
-                 */
-                complete_all(&sbi->ll_gns_mount_finished);
         case 0:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;

@@ -414,6 +414,45 @@ static int ll_wr_gns_tick(struct file *file, const char *buffer,
         return count;
 }
 
+static int ll_rd_gns_enabled(char *page, char **start, off_t off,
+                             int count, int *eof, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int enabled = 0;
+
+        spin_lock(&sbi->ll_gns_lock);
+        enabled = (sbi->ll_gns_state == LL_GNS_DISABLED ? 0 : 1);
+        spin_unlock(&sbi->ll_gns_lock);
+
+        return snprintf(page, count, "%d\n", enabled);
+}
+
+static int ll_wr_gns_enabled(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        struct super_block *sb = (struct super_block *)data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        spin_lock(&sbi->ll_gns_lock);
+        if (val == 0 && sbi->ll_gns_state == LL_GNS_IDLE) {
+                sbi->ll_gns_state = LL_GNS_DISABLED;
+                goto out;
+        }
+        if (val == 1 && sbi->ll_gns_state == LL_GNS_DISABLED) {
+                sbi->ll_gns_state = LL_GNS_IDLE;
+                goto out;
+        }
+out:
+        spin_unlock(&sbi->ll_gns_lock);
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -438,6 +477,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         
         { "gns_tick", ll_rd_gns_tick,
           ll_wr_gns_tick, 0 },
+        
+        { "gns_enabled", ll_rd_gns_enabled,
+          ll_wr_gns_enabled, 0 },
         
         { "gns_object_name", ll_rd_gns_object_name,
           ll_wr_gns_object_name, 0 },

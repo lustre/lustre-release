@@ -99,7 +99,6 @@ struct ll_sb_info {
 
         unsigned long             ll_gns_tick;
         unsigned long             ll_gns_timeout;
-        struct completion         ll_gns_mount_finished;
 
         /* path to upcall */
         char                      ll_gns_upcall[PATH_MAX];
@@ -117,6 +116,7 @@ struct ll_gns_ctl {
 #define LL_GNS_IDLE               (1 << 0)
 #define LL_GNS_MOUNTING           (1 << 1)
 #define LL_GNS_FINISHED           (1 << 2)
+#define LL_GNS_DISABLED           (1 << 3)
 
 /* mounts checking flags */
 #define LL_GNS_UMOUNT             (1 << 0)
