@@ -81,8 +81,6 @@ command_t cmdlist[] = {
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
          "usage: conn_list"},
-        {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
-         "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits\n"

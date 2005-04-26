@@ -305,24 +305,24 @@ def run_acceptors():
         return
     for port in acceptors.keys():
         daemon = acceptors[port]
-        if daemon.net_type == 'tcp' and not daemon.running():
-            daemon.start()
+        #if daemon.net_type == 'tcp' and not daemon.running():
+        #    daemon.start()
 
 def run_one_acceptor(port):
     if config.lctl_dump or config.record:
         return
     if acceptors.has_key(port):
         daemon = acceptors[port]
-        if daemon.net_type == 'tcp' and not daemon.running():
-            daemon.start()
+        #if daemon.net_type == 'tcp' and not daemon.running():
+        #    daemon.start()
     else:
          panic("run_one_acceptor: No acceptor defined for port:", port)
 
 def stop_acceptor(port):
     if acceptors.has_key(port):
         daemon = acceptors[port]
-        if daemon.net_type == 'tcp' and daemon.running():
-            daemon.stop()
+        #if daemon.net_type == 'tcp' and daemon.running():
+        #    daemon.stop()
 
 
 # ============================================================
