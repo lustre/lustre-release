@@ -427,14 +427,14 @@ setup_object() {
     echo ""
     echo "================================================================="
     
-    chmod u+s $OBJPATH -R
+    chmod u+s $OBJPATH
     return $?
 }
 
 cleanup_object() {
     local OBJPATH=$1
 
-    chmod u-s $OBJPATH -R
+    chmod u-s $OBJPATH
     umount $OBJPATH >/dev/null 2>&1
     rm -fr $OBJPATH >/dev/null 2>&1
 }
@@ -920,6 +920,7 @@ test_2g() {
     echo "preparing mount object at $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT..."
     setup_object $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
 $OBJECT "-t ext2 $LOOP_DEV" || error
+    chmod u+s $DIR/gns_test_2g
 
     enable_gns
 
