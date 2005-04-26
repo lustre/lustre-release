@@ -1,4 +1,5 @@
-MODULES := lvfs fsfilt_@BACKINGFS@ quotactl_test quotacheck_test
+MODULES := lvfs quotactl_test quotacheck_test
+@SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o
 quotactl-objs := quotactl_test.o

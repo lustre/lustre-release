@@ -1,15 +1,13 @@
-@LDISKFS_TRUE@subdir-m  += ldiskfs
+@LDISKFS_TRUE@subdir-m += ldiskfs
 
 subdir-m += lvfs
 subdir-m += obdclass
 subdir-m += lov
 subdir-m += ptlrpc
-subdir-m += obdecho
 subdir-m += osc
-subdir-m += mdc
-subdir-m += mds
-subdir-m += obdfilter
-subdir-m += ost
-subdir-m += llite
+subdir-m += obdecho
+
+@SERVER_TRUE@subdir-m += mds obdfilter ost
+@CLIENT_TRUE@subdir-m += mdc llite
 
 @INCLUDE_RULES@
