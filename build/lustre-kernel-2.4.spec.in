@@ -531,11 +531,7 @@ BuildKernel()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- --enable-modules \
-	--disable-doc --disable-tests \
-	--disable-utils --disable-liblustre \
-	--sysconfdir=%{_sysconfdir} \
-	--mandir=%{_mandir} \
+	-- --disable-tests \
 	@CONFIGURE_FLAGS@
 }
 
@@ -601,7 +597,7 @@ BuildKernel
 %endif
 
 %if %{buildbase}
-BuildLustre
+# BuildLustre
 %endif
 
 popd >/dev/null
@@ -971,40 +967,5 @@ fi
 %endif
 
 %if %{buildbase}
-
 %files source -f kernel-source.files
-
-%files doc
-%defattr(-,root,root)
-%doc lustre/linux/Documentation/*
-
-%files -n lustre-lite-utils
-%defattr(-, root, root)
-%doc lustre/COPYING lustre/lustre/BUGS lustre/ChangeLog lustre/README
-/sbin/*
-/usr/sbin/*
-/usr/bin/*
-/usr/lib/lustre/python
-@ENABLE_INIT_SCRIPTS@/etc/init.d/lustre
-@ENABLE_INIT_SCRIPTS@/etc/init.d/lustrefs
-/usr/include/lustre/*
-/usr/include/linux/*
-/usr/lib/lib*.a
-/usr/share/man/man?/*
-
-#%files -n lustre-doc
-#%defattr(-, root, root)
-#/usr/share/doc/lustre/COPYING
-#/usr/share/doc/lustre/lustre.pdf
-#/usr/share/doc/lustre/COPYING
-
-/usr/share/lustre/examples
-
-%files -n lustre-ldap
-%defattr(-, root, root)
-/etc/openldap/slapd-lustre.conf
-/etc/openldap/schema/lustre.schema
-/usr/share/lustre/lustre2ldif.xsl
-/usr/share/lustre/top.ldif
-
-%endif # %{buildbase}
+%endif

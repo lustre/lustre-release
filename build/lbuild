@@ -4,6 +4,7 @@ TOPDIR=$PWD
 
 # CVSROOT is inherited from the environment
 KERNELDIR=
+LINUX=
 LUSTRE=
 PUBLISH=0
 RELEASE=0
@@ -114,6 +115,10 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     Directory containing Linux source tarballs referenced by target
     files.
 
+  --linux=LINUX
+    Directory of Linux kernel sources.  When this option is used, only
+    Lustre modules and userspace are built.
+
   --lustre=LUSTRE
     Path to an existing lustre source tarball to use instead of
     pulling from CVS.
@@ -131,6 +136,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --release
     Specifies that the files generated do not include timestamps, and
     that this is an official release.
+
+  --src
+    Build a .src.rpm, a full kernel patch, and a patched kernel tarball.
 
   --tag=TAG
     A CVS branch/tag name to build from when pulling from CVS.
@@ -173,23 +181,25 @@ check_options()
 	    usage 1 "A branch/tag name must be specified with --tag when not building from a tarball."
     fi
 
-    [ "$KERNELDIR" ] || \
-	usage 1 "A kernel directory must be specified with --kerneldir."
+    if [ -z "$LINUX" ] ; then
+	[ "$KERNELDIR" ] || \
+	    usage 1 "A kernel directory must be specified with --kerneldir."
 
-    [ -d "$KERNELDIR" ] || \
-	usage 1 "$KERNELDIR is not a directory."
+	[ -d "$KERNELDIR" ] || \
+	    usage 1 "$KERNELDIR is not a directory."
 
-    if ! (( $RELEASE )) ; then
-	[ "$TAG" ] || \
-	    usage 1 "When building a snapshot, a tag name must be used."
+	if ! (( $RELEASE )) ; then
+	    [ "$TAG" ] || \
+		usage 1 "When building a snapshot, a tag name must be used."
+	fi
+
+	[ "$TARGET" ] || usage 1 "A target must be specified with --target."
+#       TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
+#       [ -r "$TARGET_FILE" ] || \
+#       	usage 1 "Target '$TARGET' was not found."
     fi
 
     TIMESTAMP=$(date -d "$DATE" "+%Y%m%d%H%M")
-
-    [ "$TARGET" ] || usage 1 "A target must be specified with --target."
-#    TARGET_FILE="$TOPDIR/lustre/kernel_patches/targets/$TARGET.target"
-#    [ -r "$TARGET_FILE" ] || \
-#	usage 1 "Target '$TARGET' was not found."
 
     RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
     if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
@@ -409,7 +419,7 @@ clean_linux()
     rm -rf linux
 }
 
-prep_build()
+prep_kernel_build()
 {
     # make .spec file
     ENABLE_INIT_SCRIPTS=""
@@ -456,14 +466,14 @@ prep_build()
 clean_lustre()
 {
     [ -d lustre ] || return 0
-    echo "Cleaning lustre..."
+    echo "Cleaning Lustre..."
     [ -L lustre ] && rm -rf $(readlink lustre)
     rm -rf lustre
 }
 
-build()
+build_kernel()
 {
-    echo "Building rpms for: $BUILD_ARCHS..."
+    echo "Building kernel + Lustre RPMs for: $BUILD_ARCHS..."
     targets=
     for arch in $BUILD_ARCHS ; do
 	targets="--target $arch $targets"
@@ -471,13 +481,39 @@ build()
 
     $RPMBUILD $targets -bb lustre-kernel-2.4.spec \
 	--define "_topdir $TOPDIR" || \
-	fatal 1 "Error building rpms for $arch."
+	fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     if (( $DO_SRC )) ; then
 	$RPMBUILD -bs lustre-kernel-2.4.spec \
 	    --define "_topdir $TOPDIR" || \
 	    fatal 1 "Error building .src.rpm."
     fi
+}
+
+build_lustre()
+{
+    [ -d SRPMS ] || mkdir SRPMS
+    [ -d RPMS ] || mkdir RPMS
+    [ -d BUILD ] || mkdir BUILD
+    [ -d SOURCES ] || mkdir SOURCES
+
+    cp "$LUSTRE" SOURCES
+
+    pushd lustre >/dev/null
+
+    echo "Building Lustre RPMs for: $BUILD_ARCHS..."
+    targets=
+    for arch in $BUILD_ARCHS ; do
+	targets="--target $arch $targets"
+    done
+
+    ./configure "--with-linux=${LINUX}" ${CONFIGURE_FLAGS}
+
+    $RPMBUILD $targets -bb build/lustre.spec \
+	--define "_topdir $TOPDIR" || \
+	fatal 1 "Error building rpms for $BUILD_ARCHS."
+
+    popd >/dev/null
 }
 
 publish()
@@ -487,7 +523,10 @@ publish()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+if [ $? != 0 ] ; then
+    usage 1
+fi
 
 eval set -- "$options"
     
@@ -519,6 +558,10 @@ while [ "$1" ] ; do
 	    KERNELDIR=$2
 	    shift 2
 	    ;;
+	--linux | --with-linux)
+	    LINUX=$2
+	    shift 2
+	    ;;
 	--lustre)
 	    LUSTRE=$2
 	    shift 2
@@ -538,6 +581,10 @@ while [ "$1" ] ; do
 	--release)
 	    RELEASE=1
 	    shift
+	    ;;
+	--src)
+	    DO_SRC=1
+	    shift 1
 	    ;;
 	--tag)
 	    TAG=$2
@@ -569,18 +616,24 @@ done
 check_options
 
 unpack_lustre
-load_target
-
-if (( $DO_SRC )) ; then
-    unpack_linux
-    patch_linux
-    pack_linux
-    clean_linux
-fi
 
 # prep_build needs the .spec.in from the lustre source
-prep_build
-clean_lustre
+if [ -z "$LINUX" ] ; then
+    load_target
 
-build
+    if (( $DO_SRC )) ; then
+	unpack_linux
+	patch_linux
+	pack_linux
+	clean_linux
+    fi
+
+    prep_kernel_build
+    clean_lustre
+
+    build_kernel
+else
+    build_lustre
+fi
+
 publish

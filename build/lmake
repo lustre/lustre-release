@@ -45,6 +45,7 @@ TARGET_FILE=
 KERNEL_FILE=
 SERIES_FILE=
 CONFIG_FILE=
+RPMBUILD=
 
 canon()
 {
@@ -52,7 +53,24 @@ canon()
     echo $PWD
     popd >/dev/null
 }
-TOPDIR=$(canon "${0%%${0##*/}}/..")
+TOPDIR="${0%%${0##*/}}"
+if [ "${TOPDIR}" ] ; then
+    TOPDIR=$(canon "${TOPDIR}/..")
+else
+    TOPDIR=$(canon "..")
+fi
+
+lbuild_topdir()
+{
+    retdir=$TOPDIR
+    while [ ! -d $retdir/BUILD ] ; do
+	retdir=$(canon "$retdir/..")
+	if [ "$retdir" = "/" ] ; then
+	    break;
+	fi
+    done
+    echo "$retdir"
+}
 
 cleanup()
 {
@@ -178,6 +196,14 @@ check_options()
 
     if [ -z "$JOBS" -o "$JOBS" -lt "1" ] ; then
 	JOBS=1
+    fi
+
+    RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
+    if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+	RPMBUILD=$(which rpm 2>/dev/null | head -1)
+	if [ ! "$RPMBUILD" -o "$RPMBUILD" == "" ]; then
+	    usage 1 "Could not find binary for making rpms (tried rpmbuild and rpm)."
+	fi
     fi
 }
 
@@ -365,6 +391,7 @@ build_kernel()
 
 configure_lustre()
 {
+    return 0
     (( $BUILD_LUSTRE )) || return 0
     pushd "$TOPDIR" >/dev/null
     [ -f Makefile ] && make -s clean
@@ -378,8 +405,19 @@ build_lustre()
 {
     (( $BUILD_LUSTRE )) || return 0
     set_make
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null
-    $MAKE_J "$MAKE_CC" || fatal 1 "Error building Lustre."
+    sed \
+	-e s^@VERSION@^${LUSTRE_VERSION}^g \
+	-e s^@LINUXRELEASE@^${FULL_VERSION}^g \
+	-e s^@RELEASE@^${FULL_VERSION//-/_}^g \
+	-e s^@ac_configure_args@^"--with-linux=${PWD}/linux ${CONFIGURE_FLAGS}"^g \
+	< build/lustre.spec.in \
+	> build/lustre.spec
+    $RPMBUILD --target ${TARGET_ARCH} -bb build/lustre.spec \
+	--define "_topdir $(lbuild_topdir)" || \
+	fatal 1 "Error building Lustre rpms."
+    # $MAKE_J "$MAKE_CC" || fatal 1 "Error building Lustre."
     popd >/dev/null
 }
 
@@ -443,6 +481,7 @@ install_kernel()
 install_lustre()
 {
     (( $INSTALL_LUSTRE )) || return 0
+    return 0
     set_make
     FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR" >/dev/null

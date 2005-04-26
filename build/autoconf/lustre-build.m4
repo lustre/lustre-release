@@ -489,6 +489,8 @@ build/lustre.spec
 LP_CONFIG_FILES
 LC_CONFIG_FILES
 
+AC_SUBST(ac_configure_args)
+
 AC_OUTPUT
 
 cat <<_ACEOF
