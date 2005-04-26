@@ -286,6 +286,22 @@ show_log() {
     }
 }
 
+check_mnt()
+{
+    local OBJECT=$1
+    local mnt=""
+    local p=""
+    
+    mnt="`cat /proc/mounts | grep $OBJECT | awk '{print \$2}'`"
+    test -z "$mnt" && return 1
+    
+    for p in $mnt; do
+	test "x$p" = "x$OBJECT" || return 1
+    done
+    
+    return 0
+}
+
 check_gns() {
     local LOG="/tmp/gns-log"
     local UPCALL_PATH=""
@@ -373,17 +389,14 @@ check_gns() {
 	    return 1
     esac
     
-    local ENTRY1="`basename $OBJECT1`"
-    local ENTRY2="`basename $OBJECT2`"
-    
-    cat /proc/mounts | grep -q "$ENTRY1" || {
+    check_mnt $OBJECT1 || {
 	echo "fail"
 	show_log $LOG
 	return 1
     }
     
     if test "x$MODE" = "xCONCUR2"; then
-	cat /proc/mounts | grep -q "$ENTRY2" || {
+	check_mnt $OBJECT2 || {
 	    echo "fail"
 	    show_log $LOG
 	    return 1
@@ -396,14 +409,14 @@ check_gns() {
     let sleep_time+=$TICK*2
     echo -n "waiting for umount ${sleep_time}s (timeout + tick*2): "
     sleep $sleep_time
-
-    cat /proc/mounts | grep -q "$ENTRY1" && {
+    
+    check_mnt $OBJECT1 && {
 	echo "failed"
 	return 2
     }
     
     if test "x$MODE" = "xCONCUR2"; then
-	cat /proc/mounts | grep -q "$ENTRY2" && {
+	check_mnt $OBJECT2 && {
 	    echo "failed"
 	    return 2
 	}
@@ -494,6 +507,7 @@ test_1a() {
 
     echo ""
     echo "testing GNS with GENERIC upcall 3 times on the row"
+    
     for ((i=0;i<3;i++)); do
 	check_gns GENERIC $DIR/gns_test_1a $DIR/gns_test_1a $TIMOUT $TICK GENERIC || {
 	    disable_gns
@@ -537,6 +551,7 @@ test_1b() {
 
     echo ""
     echo "testing GNS with DEADLOCK upcall 3 times on the row"
+    
     for ((i=0;i<3;i++)); do
 	check_gns DEADLOCK $DIR/gns_test_1b $DIR/gns_test_1b $TIMOUT $TICK GENERIC || {
 	    disable_gns
@@ -579,7 +594,7 @@ test_1c() {
     enable_gns
 
     echo ""
-    echo "testing GNS with DEADLOCK upcall 4 times on the row"
+    echo "testing GNS with GENERIC/DEADLOCK upcall 4 times on the row in GENERIC mode"
     local i=0
     
     for ((;i<4;i++)); do
@@ -681,6 +696,7 @@ test_1e() {
 
     echo ""
     echo "testing GNS with GENERIC upcall in CONCUR2 mode"
+    
     check_gns GENERIC $DIR/gns_test_1e1 $DIR/gns_test_1e2 $TIMOUT $TICK CONCUR2 || {
 	disable_gns
         cleanup_object $DIR/gns_test_1e1
@@ -717,6 +733,7 @@ test_2a() {
 
     echo ""
     echo "testing GNS with GENERIC upcall"
+    
     check_gns GENERIC $DIR/gns_test_2a $DIR/gns_test_2a $TIMOUT $TICK GENERIC && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2a
@@ -749,6 +766,7 @@ test_2b() {
     
     echo ""
     echo "testing GNS with GENERIC upcall"
+    
     check_gns GENERIC $DIR/gns_test_2b $DIR/gns_test_2b $TIMOUT $TICK GENERIC && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2b
@@ -781,6 +799,7 @@ test_2c() {
     
     echo ""
     echo "testing GNS with GENERIC upcall"
+    
     check_gns GENERIC $DIR/gns_test_2c $DIR/gns_test_2c $TIMOUT $TICK GENERIC && {
 	disable_gns
 	chmod u-s -R $DIR/gns_test_2c
@@ -813,6 +832,7 @@ test_2d() {
 
     echo ""
     echo "testing GNS with GENERIC upcall"
+    
     check_gns GENERIC $DIR/gns_test_2d $DIR/gns_test_2d $TIMOUT $TICK GENERIC && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2d
@@ -934,9 +954,23 @@ $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC || {
         disable_gns
         cleanup_object $DIR/gns_test_2g
         cleanup_loop $LOOP_DEV $LOOP_FILE
-        error
+        error "recursive mount point does not work"
     }
     
+    disable_gns
+
+    chmod u-s $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT
+
+    enable_gns
+
+    check_gns $MODE $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
+$DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC && {
+        disable_gns
+        cleanup_object $DIR/gns_test_2g
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+        error "GNS works whereas mount point is not SUID marked dir"
+    }
+
     disable_gns
 
     cleanup_object $DIR/gns_test_2g
