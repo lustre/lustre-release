@@ -108,71 +108,16 @@ ksocknal_lib_tunables_fini ()
 
 static unsigned long  ksocknal_mbuf_size = (u_quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES);
 
-struct socket *
-sockfd_lookup(int fd, void *foo)
-{
-	struct socket *so;
-	struct file *fp;
-        CFS_DECL_FUNNEL_DATA;
-
-        CFS_NET_IN;
-	getsock(current_proc()->p_fd, fd, &fp);
-        CFS_NET_EX;
-	so = (struct socket *)fp->f_data;
-	so->reserved4 = fp;
-        CFS_CONE_IN;
-	fref(fp);
-        CFS_CONE_EX;
-	return so;
-}
-
 extern struct fileops socketops;
 
-static int
-sock_map_fd (struct socket *so)
+void
+ksocknal_lib_release_sock(struct socket *so)
 {
-	struct file *fp;
-	int fd;
-        CFS_DECL_FUNNEL_DATA;
-	
-        CFS_CONE_IN;
-	falloc(current_proc(), &fp, &fd);
-	fp->f_flag = FREAD|FWRITE;
-	fp->f_type = DTYPE_SOCKET;
-	fp->f_ops = &socketops;
-	fp->f_data = (caddr_t)so;
-	so->reserved4 = fp;
-	*fdflags(current_proc(), fd) &= ~UF_RESERVED;
-        CFS_CONE_EX;
-
-	return fd;
-}
-
-static void
-sock_release(struct socket *so)
-{
-	struct file *fp;
         CFS_DECL_FUNNEL_DATA;
 
-	fp = (struct file *)so->reserved4;
-	so->reserved4 = NULL;
-	fp->f_data = NULL;
-        CFS_CONE_IN;
-	frele(fp);
-        CFS_CONE_EX;
         CFS_NET_IN;
 	soshutdown(so, 0);
         CFS_NET_EX;
-}
-
-static void
-sock_fdrelse(int fd)
-{ 
-        CFS_DECL_FUNNEL_DATA;
-
-        CFS_CONE_IN;
-        fdrelse(current_proc(), fd);
-        CFS_CONE_EX;
 }
 
 void
@@ -623,7 +568,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         int            rc;
         CFS_DECL_NET_DATA;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
                 LASSERT (conn->ksnc_closing);
                 *txmem = *rxmem = *nagle = 0;
@@ -655,7 +600,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         }
         CFS_NET_EX;
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 
         if (rc == 0)
                 *nagle = !*nagle;
@@ -780,7 +725,7 @@ out:
 }
 
 int
-ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry, 
+ksocknal_lib_connect_sock (struct socket **sockp, int *fatal, 
                            ksock_route_t *route, int local_port)
 {
         struct sockaddr_in  locaddr;
@@ -808,7 +753,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         srvaddr.sin_port = htons (route->ksnr_port);
         srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
 
-        *may_retry = 0;
+        *fatal = 1;
 
         CFS_NET_IN;
         rc = socreate(PF_INET, &so, SOCK_STREAM, 0); 
@@ -818,18 +763,6 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
                 CERROR ("Can't create autoconnect socket: %d\n", rc);
                 return (-rc);
         }
-
-        /*
-         * XXX
-         * Liang: what do we need here? 
-         */
-        fd = sock_map_fd (so);
-        if (fd < 0) {
-                sock_release (so);
-                CERROR ("sock_map_fd error %d\n", fd);
-                return (fd);
-        }
-        sock_fdrelse(fd);
 
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
@@ -874,7 +807,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc == EADDRINUSE) { 
                 CFS_NET_EX; 
                 CDEBUG(D_NET, "Port %d already in use\n", local_port); 
-                *may_retry = 1; 
+                *fatal = 0; 
                 goto out;
         }
         if (rc != 0) { 
@@ -884,7 +817,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
                 goto out; 
         }
         rc = soconnect(so, (struct sockaddr *)&srvaddr);
-        *may_retry = (rc == EADDRNOTAVAIL || rc == EADDRINUSE);
+        *fatal = !(rc == EADDRNOTAVAIL || rc == EADDRINUSE);
         if (rc != 0) { 
                 CFS_NET_EX;
                 if (rc != EADDRNOTAVAIL && rc != EADDRINUSE)
@@ -921,8 +854,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         return (-rc);
 
  out:
-        rele_file(KSN_SOCK2FILE(so));
-
+        ksocknal_lib_release_sock(so);
         return (-rc);
 }
 
@@ -935,7 +867,7 @@ ksocknal_lib_push_conn(ksock_conn_t *conn)
         int             rc; 
         CFS_DECL_NET_DATA; 
         
-        rc = ksocknal_getconnsock (conn); 
+        rc = ksocknal_connsock_addref(conn); 
         if (rc != 0)            /* being shut down */ 
                 return; 
         sock = conn->ksnc_sock; 
@@ -950,7 +882,7 @@ ksocknal_lib_push_conn(ksock_conn_t *conn)
         sosetopt(sock, &sopt); 
         CFS_NET_EX; 
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
         return;
 }
 

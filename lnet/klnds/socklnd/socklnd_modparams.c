@@ -20,9 +20,33 @@
 
 #include "socknal.h"
 
-static int timeout = SOCKNAL_IO_TIMEOUT;
+static int port = SOCKNAL_PORT;
+CFS_MODULE_PARM(port, "i", int, 0444,
+                "the socknal service number (site wide)");
+
+static int backlog = SOCKNAL_BACKLOG;
+CFS_MODULE_PARM(backlog, "i", int, 0644,
+                "service listen backlog (0 == disable service)");
+
+static int timeout = SOCKNAL_TIMEOUT;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
                 "dead socket timeout (seconds)");
+
+static int listen_timeout = SOCKNAL_LISTEN_TIMEOUT;
+CFS_MODULE_PARM(listen_timeout, "i", int, 0644,
+                "socket listen timeout (seconds)");
+
+static int nconnds = SOCKNAL_NCONND;
+CFS_MODULE_PARM(nconnds, "i", int, 0644,
+                "# connection daemons");
+
+static int min_reconnectms = SOCKNAL_MIN_RECONNECTMS;
+CFS_MODULE_PARM(min_reconnectms, "i", int, 0644,
+                "min connection retry interval (mS)");
+
+static int max_reconnectms = SOCKNAL_MAX_RECONNECTMS;
+CFS_MODULE_PARM(max_reconnectms, "i", int, 0644,
+                "max connection retry interval (mS)");
 
 static int eager_ack = SOCKNAL_EAGER_ACK;
 CFS_MODULE_PARM(eager_ack, "i", int, 0644,
@@ -69,7 +93,13 @@ CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
 #endif
 
 ksock_tunables_t ksocknal_tunables = {
+        .ksnd_port            = &port,
+	.ksnd_backlog         = &backlog,
         .ksnd_timeout         = &timeout,
+        .ksnd_listen_timeout  = &listen_timeout,
+	.ksnd_nconnds         = &nconnds,
+	.ksnd_min_reconnectms = &min_reconnectms,
+	.ksnd_max_reconnectms = &max_reconnectms,
         .ksnd_eager_ack       = &eager_ack,
         .ksnd_typed_conns     = &typed_conns,
         .ksnd_min_bulk        = &min_bulk,

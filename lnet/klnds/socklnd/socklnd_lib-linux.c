@@ -1,7 +1,7 @@
 #include "socknal.h"
 
 # if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
-static ctl_table ksocknal_ctl_table[12];
+static ctl_table ksocknal_ctl_table[18];
 
 ctl_table ksocknal_top_ctl_table[] = {
         {200, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
@@ -15,8 +15,26 @@ ksocknal_lib_tunables_init ()
 	int    j = 1;
 	
         ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "port", ksocknal_tunables.ksnd_port, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "backlog", ksocknal_tunables.ksnd_backlog, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "timeout", ksocknal_tunables.ksnd_timeout, 
 		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "listen_timeout", ksocknal_tunables.ksnd_listen_timeout, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "nconnds", ksocknal_tunables.ksnd_nconnds, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "min_reconnectms", ksocknal_tunables.ksnd_min_reconnectms, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "max_reconnectms", ksocknal_tunables.ksnd_max_reconnectms, 
+		 sizeof (int), 0444, NULL, &proc_dointvec};
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "eager_ack", ksocknal_tunables.ksnd_eager_ack, 
 		 sizeof (int), 0644, NULL, &proc_dointvec};
@@ -554,7 +572,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         int            len;
         int            rc;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0) {
                 LASSERT (conn->ksnc_closing);
                 *txmem = *rxmem = *nagle = 0;
@@ -578,7 +596,7 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
         }
 
         set_fs (oldmm);
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 
         if (rc == 0)
                 *nagle = !*nagle;
@@ -715,62 +733,15 @@ ksocknal_lib_setup_sock (struct socket *sock)
 }
 
 int
-ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
-                      ksock_route_t *route, int local_port)
+ksocknal_lib_set_sock_timeout (struct socket *sock, int timeout)
 {
-        struct sockaddr_in  locaddr;
-        struct sockaddr_in  srvaddr;
-        struct socket      *sock;
-        int                 rc;
-        int                 option;
-        mm_segment_t        oldmm = get_fs();
-        struct timeval      tv;
+	struct timeval tv;
+	int            rc;
+        mm_segment_t   oldmm = get_fs();
 
-        memset(&locaddr, 0, sizeof(locaddr));
-        locaddr.sin_family = AF_INET;
-        locaddr.sin_port = htons(local_port);
-        locaddr.sin_addr.s_addr =
-                (route->ksnr_myipaddr != 0) ? htonl(route->ksnr_myipaddr)
-                                            : INADDR_ANY;
-
-        memset (&srvaddr, 0, sizeof (srvaddr));
-        srvaddr.sin_family = AF_INET;
-        srvaddr.sin_port = htons (route->ksnr_port);
-        srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
-
-        *may_retry = 0;
-
-        rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
-        *sockp = sock;
-        if (rc != 0) {
-                CERROR ("Can't create autoconnect socket: %d\n", rc);
-                return (rc);
-        }
-
-        /* Ugh; have to map_fd for compatibility with sockets passed in
-         * from userspace.  And we actually need the sock->file refcounting
-         * that this gives you :) */
-
-        rc = sock_map_fd (sock);
-        if (rc < 0) {
-                sock_release (sock);
-                CERROR ("sock_map_fd error %d\n", rc);
-                return (rc);
-        }
-
-        /* NB the file descriptor (rc) now owns the ref on sock->file */
-        LASSERT (sock->file != NULL);
-        LASSERT (file_count(sock->file) == 1);
-
-        get_file(sock->file);                /* extra ref makes sock->file */
-        sys_close(rc);                       /* survive this close */
-
-        /* Still got a single ref on sock->file */
-        LASSERT (file_count(sock->file) == 1);
-
-        /* Set the socket timeouts, so our connection attempt completes in
+        /* Set the socket timeouts, so our connection handshake completes in
          * finite time */
-        tv.tv_sec = *ksocknal_tunables.ksnd_timeout;
+        tv.tv_sec = timeout;
         tv.tv_usec = 0;
 
         set_fs (KERNEL_DS);
@@ -778,9 +749,8 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
                               (char *)&tv, sizeof (tv));
         set_fs (oldmm);
         if (rc != 0) {
-                CERROR ("Can't set send timeout %d: %d\n",
-                        *ksocknal_tunables.ksnd_timeout, rc);
-                goto failed;
+                CERROR ("Can't set send timeout %d: %d\n", timeout, rc);
+		return rc;
         }
 
         set_fs (KERNEL_DS);
@@ -788,10 +758,47 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
                               (char *)&tv, sizeof (tv));
         set_fs (oldmm);
         if (rc != 0) {
-                CERROR ("Can't set receive timeout %d: %d\n",
-                        *ksocknal_tunables.ksnd_timeout, rc);
-                goto failed;
+                CERROR ("Can't set receive timeout %d: %d\n", timeout, rc);
+		return rc;
         }
+
+	return 0;
+}
+
+void
+ksocknal_lib_release_sock(struct socket *sock)
+{
+	sock_release(sock);
+}
+
+int
+ksocknal_lib_create_sock(struct socket **sockp, int *fatal,
+			 int timeout, __u32 local_ip, int local_port)
+{
+        struct sockaddr_in  locaddr;
+        struct socket      *sock;
+        int                 rc;
+        int                 option;
+        mm_segment_t        oldmm = get_fs();
+
+	*fatal = 1;				/* assume errors are fatal */
+
+        memset(&locaddr, 0, sizeof(locaddr));
+        locaddr.sin_family = AF_INET;
+        locaddr.sin_port = htons(local_port);
+        locaddr.sin_addr.s_addr = (local_ip == 0) ? 
+				  INADDR_ANY : htonl(local_ip);
+
+        rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
+        *sockp = sock;
+        if (rc != 0) {
+                CERROR ("Can't create socket: %d\n", rc);
+                return (rc);
+        }
+
+	rc = ksocknal_lib_set_sock_timeout(sock, timeout);
+	if (rc != 0)
+		goto failed;
 
         set_fs (KERNEL_DS);
         option = 1;
@@ -806,8 +813,8 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
         rc = sock->ops->bind(sock,
                              (struct sockaddr *)&locaddr, sizeof(locaddr));
         if (rc == -EADDRINUSE) {
-                CDEBUG(D_NET, "Port %d already in use\n", local_port);
-                *may_retry = 1;
+                CDEBUG(D_WARNING, "Port %d already in use\n", local_port);
+                *fatal = 0;
                 goto failed;
         }
         if (rc != 0) {
@@ -816,9 +823,113 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
                 goto failed;
         }
 
-        rc = sock->ops->connect(sock,
-                                (struct sockaddr *)&srvaddr, sizeof(srvaddr),
-                                sock->file->f_flags);
+	return 0;
+
+ failed:
+        sock_release(sock);
+        return rc;
+}
+
+int
+ksocknal_lib_listen(struct socket **sockp, int port, int backlog)
+{
+	int      fatal;
+	int      rc;
+
+	rc = ksocknal_lib_create_sock(sockp, &fatal, 1, 0, port);
+	if (rc != 0)
+		return rc;
+
+	rc = (*sockp)->ops->listen(*sockp, backlog);
+	if (rc == 0)
+		return 0;
+	
+	CERROR("Can't set listen backlog %d: %d\n", backlog, rc);
+	sock_release(*sockp);
+	return rc;
+}
+
+int
+ksocknal_lib_accept(struct socket *sock, ksock_connreq_t **crp)
+{
+	wait_queue_t   wait;
+	struct socket *newsock;
+	int            rc;
+
+	init_waitqueue_entry(&wait, current);
+
+	newsock = sock_alloc();
+	if (newsock == NULL) {
+		CERROR("Can't allocate socket\n");
+		return -ENOMEM;
+	}
+
+	/* XXX this should add a ref to sock->ops->owner, if
+	 * TCP could be a module */
+	newsock->type = sock->type;
+	newsock->ops = sock->ops;
+
+	set_current_state(TASK_INTERRUPTIBLE);
+	add_wait_queue(sock->sk->sk_sleep, &wait);
+	
+	rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
+	if (rc == -EAGAIN) {
+		/* Nothing ready, so wait for activity */
+		schedule();
+		rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
+	}
+	
+	remove_wait_queue(sock->sk->sk_sleep, &wait);
+	set_current_state(TASK_RUNNING);
+
+	if (rc != 0)
+		goto failed;
+	
+	rc = ksocknal_lib_set_sock_timeout(newsock, 
+					   *ksocknal_tunables.ksnd_listen_timeout);
+	if (rc != 0)
+		goto failed;
+	
+	rc = -ENOMEM;
+	PORTAL_ALLOC(*crp, sizeof(**crp));
+	if (*crp == NULL)
+		goto failed;
+
+	(*crp)->ksncr_sock = newsock;
+	return 0;
+
+ failed:
+	sock_release(newsock);
+	return rc;
+}
+
+void
+ksocknal_lib_abort_accept(struct socket *sock)
+{
+	wake_up_all(sock->sk->sk_sleep);
+}
+
+int
+ksocknal_lib_connect_sock(struct socket **sockp, int *fatal,
+			  ksock_route_t *route, int local_port)
+{
+        struct sockaddr_in  srvaddr;
+        int                 rc;
+
+        memset (&srvaddr, 0, sizeof (srvaddr));
+        srvaddr.sin_family = AF_INET;
+        srvaddr.sin_port = htons (route->ksnr_port);
+        srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
+
+	rc = ksocknal_lib_create_sock(sockp, fatal,
+				      *ksocknal_tunables.ksnd_timeout,
+				      route->ksnr_myipaddr, local_port);
+	if (rc != 0)
+		return rc;
+
+        rc = (*sockp)->ops->connect(*sockp,
+				    (struct sockaddr *)&srvaddr, sizeof(srvaddr),
+				    0);
         if (rc == 0)
                 return 0;
 
@@ -826,15 +937,14 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
          * peer/port on the same local port on a differently typed
          * connection.  Let our caller retry with a different local
          * port... */
-        *may_retry = (rc == -EADDRNOTAVAIL);
+        *fatal = !(rc == -EADDRNOTAVAIL);
 
-        CDEBUG(*may_retry ? D_NET : D_ERROR,
+        CDEBUG(*fatal ? D_ERROR : D_NET,
                "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                HIPQUAD(route->ksnr_myipaddr), local_port,
                HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
 
- failed:
-        fput(sock->file);
+	sock_release(*sockp);
         return rc;
 }
 
@@ -861,7 +971,7 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
         int             rc;
         mm_segment_t    oldmm;
 
-        rc = ksocknal_getconnsock (conn);
+        rc = ksocknal_connsock_addref(conn);
         if (rc != 0)                            /* being shut down */
                 return;
 
@@ -886,7 +996,7 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
         tp->nonagle = nonagle;
         release_sock (sk);
 
-        ksocknal_putconnsock (conn);
+        ksocknal_connsock_decref(conn);
 }
 
 extern void ksocknal_read_callback (ksock_conn_t *conn);

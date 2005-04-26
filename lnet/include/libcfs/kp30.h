@@ -399,7 +399,7 @@ enum {
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
-#define NAL_CMD_REGISTER_PEER_FD     100
+/* unused                            100 */
 #define NAL_CMD_CLOSE_CONNECTION     101
 #define NAL_CMD_REGISTER_MYNID       102
 #define NAL_CMD_PUSH_CONNECTION      103

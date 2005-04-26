@@ -37,7 +37,6 @@ command_t list[] = {
         {"add_peer", jt_ptl_add_peer, 0, "add peer entry (args: nid host port)"},
         {"del_peer", jt_ptl_del_peer, 0, "delete peer entry (args: [nid] [host])"},
         {"print_conns", jt_ptl_print_connections, 0, "print connections (no args)"},
-        {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: host port [iIOC])"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [nid] [host]"},
         {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [nid]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)"},

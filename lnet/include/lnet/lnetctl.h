@@ -47,7 +47,6 @@ int jt_ptl_print_peers (int argc, char **argv);
 int jt_ptl_add_peer (int argc, char **argv);
 int jt_ptl_del_peer (int argc, char **argv);
 int jt_ptl_print_connections (int argc, char **argv);
-int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
 int jt_ptl_print_active_txs(int argc, char **argv);
