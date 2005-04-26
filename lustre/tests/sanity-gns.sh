@@ -920,7 +920,7 @@ test_2g() {
     echo "preparing mount object at $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT..."
     setup_object $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
 $OBJECT "-t ext2 $LOOP_DEV" || error
-    chmod u+s $DIR/gns_test_2g
+    chmod u+s $DIR/gns_test_2g -R
 
     enable_gns
 
