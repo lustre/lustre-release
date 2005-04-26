@@ -4,6 +4,7 @@ lnxrel="27.0.2.EL"
 KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=rhel-2.4.21
 VERSION=${lnxmaj}
+LUSTRE_VERSION=@VERSION@
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 RHBUILD=1
 

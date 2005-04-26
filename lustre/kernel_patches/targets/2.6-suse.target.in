@@ -6,6 +6,7 @@ KERNEL=linux-$lnxmaj-$lnxrel.tar.bz2
 SERIES=2.6-suse-lnxi.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
+LUSTRE_VERSION=@VERSION@
 RHBUILD=0
 LINUX26=1
 SUSEBUILD=1
