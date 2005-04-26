@@ -41,10 +41,12 @@ if USE_QUILT
 	cd linux-stage && quilt setup -l ../$(series) -d ../$(patches)
 	cd linux-stage && quilt push -a -q
 else
+	@echo -n "Applying ext3 patches:"
 	@cd linux-stage && for i in $$(<../$(series)) ; do \
-		echo "patch -p1 < ../$(patches)/$$i" ; \
-		patch -p1 < ../$(patches)/$$i || exit 1 ; \
+		echo -n " $$i" ; \
+		patch -s -p1 < ../$(patches)/$$i || exit 1 ; \
 	done
+	@echo
 endif
 	mkdir linux
 	@echo -n "Replacing 'ext3' with 'ldiskfs':"
