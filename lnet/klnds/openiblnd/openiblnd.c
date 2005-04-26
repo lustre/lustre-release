@@ -24,7 +24,6 @@
 #include "openibnal.h"
 
 ptl_nal_t               kibnal_nal = {
-        .nal_name       = "openib",
         .nal_type       = OPENIBNAL,
         .nal_startup    = kibnal_startup,
         .nal_shutdown   = kibnal_shutdown,
@@ -931,22 +930,21 @@ kibnal_stop_ib_listener (void)
 int
 kibnal_set_mynid (ptl_nid_t nid)
 {
-        ptl_ni_t         *ni = kibnal_data.kib_ni;
         int               rc;
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_nid);
+               nid, kibnal_data.kib_ni->ni_nid);
 
         down (&kibnal_data.kib_nid_mutex);
 
-        if (nid == kibnal_data.kib_nid) {
+        if (nid == kibnal_data.kib_ni->ni_nid) {
                 /* no change of NID */
                 up (&kibnal_data.kib_nid_mutex);
                 return (0);
         }
 
         CDEBUG(D_NET, "NID "LPX64"("LPX64")\n",
-               kibnal_data.kib_nid, nid);
+               kibnal_data.kib_ni->ni_nid, nid);
 
         if (kibnal_data.kib_listener_sock != NULL)
                 kibnal_stop_ip_listener(1);
@@ -954,7 +952,7 @@ kibnal_set_mynid (ptl_nid_t nid)
         if (kibnal_data.kib_listen_handle != NULL)
                 kibnal_stop_ib_listener();
 
-        ni->ni_nid = nid;
+        kibnal_data.kib_ni->ni_nid = nid;
         kibnal_data.kib_incarnation++;
         mb();
         /* Delete all existing peers and their connections after new
@@ -962,7 +960,7 @@ kibnal_set_mynid (ptl_nid_t nid)
          * world. */
         kibnal_del_peer (PTL_NID_ANY, 0);
 
-        if (ni->ni_nid != PTL_NID_ANY) {
+        if (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY) {
                 /* got a new NID to install */
                 rc = kibnal_start_ib_listener();
                 if (rc != 0) {
@@ -983,7 +981,7 @@ kibnal_set_mynid (ptl_nid_t nid)
  failed_1:
         kibnal_stop_ib_listener();
  failed_0:
-        ni->ni_nid = PTL_NID_ANY;
+        kibnal_data.kib_ni->ni_nid = PTL_NID_ANY;
         kibnal_data.kib_incarnation++;
         mb();
         kibnal_del_peer (PTL_NID_ANY, 0);
@@ -2149,11 +2147,7 @@ kibnal_module_init (void)
         kibnal_tunables.kib_backlog = IBNAL_BACKLOG;
         kibnal_tunables.kib_port = IBNAL_PORT;
 
-        rc = ptl_register_nal(&kibnal_nal);
-        if (rc != PTL_OK) {
-                CERROR("Can't register IBNAL: %d\n", rc);
-                return (-ENOMEM);               /* or something... */
-        }
+        ptl_register_nal(&kibnal_nal);
 
         kibnal_tunables.kib_sysctl = 
                 register_sysctl_table (kibnal_top_ctl_table, 0);

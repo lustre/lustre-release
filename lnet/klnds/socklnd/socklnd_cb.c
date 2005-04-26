@@ -144,7 +144,8 @@ ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 if (bufnob < conn->ksnc_tx_bufnob) {
                         /* allocated send buffer bytes < computed; infer
                          * something got ACKed */
-                        conn->ksnc_tx_deadline = cfs_time_shift(ksocknal_tunables.ksnd_io_timeout);
+                        conn->ksnc_tx_deadline = 
+                                cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
                         conn->ksnc_peer->ksnp_last_alive = cfs_time_current();
                         conn->ksnc_tx_bufnob = bufnob;
                         mb();
@@ -212,7 +213,8 @@ ksocknal_recv_iov (ksock_conn_t *conn)
         nob = rc; 
         
         conn->ksnc_peer->ksnp_last_alive = cfs_time_current(); 
-        conn->ksnc_rx_deadline = cfs_time_shift (ksocknal_tunables.ksnd_io_timeout); 
+        conn->ksnc_rx_deadline = 
+                cfs_time_shift(*ksocknal_tunables.ksnd_timeout); 
         mb();                           /* order with setting rx_started */ 
         conn->ksnc_rx_started = 1; 
         
@@ -255,7 +257,8 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
         nob = rc; 
 
         conn->ksnc_peer->ksnp_last_alive = cfs_time_current(); 
-        conn->ksnc_rx_deadline = cfs_time_shift (ksocknal_tunables.ksnd_io_timeout); 
+        conn->ksnc_rx_deadline = 
+                cfs_time_shift(*ksocknal_tunables.ksnd_timeout); 
         mb();                           /* order with setting rx_started */ 
         conn->ksnc_rx_started = 1;
 
@@ -320,7 +323,7 @@ ksocknal_receive (ksock_conn_t *conn)
 
                 if (conn->ksnc_rx_nob_wanted == 0) {
                         /* Completed a message segment (header or payload) */
-                        if ((ksocknal_tunables.ksnd_eager_ack & conn->ksnc_type) != 0 &&
+                        if ((*ksocknal_tunables.ksnd_eager_ack & conn->ksnc_type) != 0 &&
                             (conn->ksnc_rx_state ==  SOCKNAL_RX_BODY ||
                              conn->ksnc_rx_state == SOCKNAL_RX_BODY_FWD)) {
                                 /* Remind the socket to ack eagerly... */
@@ -510,6 +513,7 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
         spin_unlock_irqrestore (&ksocknal_data.ksnd_autoconnectd_lock, flags);
 }
 
+#if 0
 ksock_peer_t *
 ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
 {
@@ -543,6 +547,7 @@ ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
                 target_nid, libcfs_nid2str(target_nid));
         return (NULL);
 }
+#endif
 
 ksock_conn_t *
 ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
@@ -569,7 +574,7 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
                         fnob     = nob;
                 }
 
-                if (!ksocknal_tunables.ksnd_typed_conns)
+                if (!*ksocknal_tunables.ksnd_typed_conns)
                         continue;
 
                 switch (c->ksnc_type) {
@@ -581,11 +586,11 @@ ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
                 case SOCKNAL_CONN_BULK_IN:
                         continue;
                 case SOCKNAL_CONN_BULK_OUT:
-                        if (tx->tx_nob < ksocknal_tunables.ksnd_min_bulk)
+                        if (tx->tx_nob < *ksocknal_tunables.ksnd_min_bulk)
                                 continue;
                         break;
                 case SOCKNAL_CONN_CONTROL:
-                        if (tx->tx_nob >= ksocknal_tunables.ksnd_min_bulk)
+                        if (tx->tx_nob >= *ksocknal_tunables.ksnd_min_bulk)
                                 continue;
                         break;
                 }
@@ -640,7 +645,8 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         if (list_empty(&conn->ksnc_tx_queue) &&
             SOCK_WMEM_QUEUED(conn->ksnc_sock) == 0) {
                 /* First packet starts the timeout */
-                conn->ksnc_tx_deadline = cfs_time_shift(ksocknal_tunables.ksnd_io_timeout);
+                conn->ksnc_tx_deadline = 
+                        cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
                 conn->ksnc_tx_bufnob = 0;
                 mb();    /* order with adding to tx_queue */
         }
@@ -671,7 +677,7 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                 route = list_entry (tmp, ksock_route_t, ksnr_list);
                 bits  = route->ksnr_connected;
 
-                if (ksocknal_tunables.ksnd_typed_conns) {
+                if (*ksocknal_tunables.ksnd_typed_conns) {
                         /* All typed connections established? */
                         if ((bits & KSNR_TYPED_ROUTES) == KSNR_TYPED_ROUTES)
                                 continue;
@@ -719,6 +725,8 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
         ksock_conn_t     *conn;
         ksock_route_t    *route;
         rwlock_t         *g_lock;
+        int               create_peer = 0;
+        int               rc;
         
         /* Ensure the frags we've been given EXACTLY match the number of
          * bytes we want to send.  Many TCP/IP stacks disregard any total
@@ -740,23 +748,31 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
         tx->tx_hdr = (ptl_hdr_t *)tx->tx_iov[0].iov_base;
 
         g_lock = &ksocknal_data.ksnd_global_lock;
+        
+ again:
+        if (create_peer) {
+                rc = ksocknal_add_peer(nid, (__u32)nid, 988);
+                if (rc != 0) {
+                        CERROR("Can't add peer "LPX64": %d\n",
+                               nid, rc);
+                        return rc;
+                }
+        }
+        
 #if !SOCKNAL_ROUND_ROBIN
         read_lock (g_lock);
-
-        peer = ksocknal_find_target_peer_locked (tx, nid);
-        if (peer == NULL) {
-                read_unlock (g_lock);
-                return (-EHOSTUNREACH);
-        }
-
-        if (ksocknal_find_connectable_route_locked(peer) == NULL) {
-                conn = ksocknal_find_conn_locked (tx, peer);
-                if (conn != NULL) {
-                        /* I've got no autoconnect routes that need to be
-                         * connecting and I do have an actual connection... */
-                        ksocknal_queue_tx_locked (tx, conn);
-                        read_unlock (g_lock);
-                        return (0);
+#warning "router issues"
+        peer = ksocknal_find_peer_locked(nid);
+        if (peer != NULL) {
+                if (ksocknal_find_connectable_route_locked(peer) == NULL) {
+                        conn = ksocknal_find_conn_locked (tx, peer);
+                        if (conn != NULL) {
+                                /* I've got no autoconnect routes that need to be
+                                 * connecting and I do have an actual connection... */
+                                ksocknal_queue_tx_locked (tx, conn);
+                                read_unlock (g_lock);
+                                return (0);
+                        }
                 }
         }
  
@@ -765,10 +781,18 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
 #endif
         write_lock_irqsave(g_lock, flags);
 
-        peer = ksocknal_find_target_peer_locked (tx, nid);
+#warning "router issues"
+        peer = ksocknal_find_peer_locked(nid);
         if (peer == NULL) {
                 write_unlock_irqrestore(g_lock, flags);
-                return (-EHOSTUNREACH);
+
+                if (create_peer) {
+                        CERROR("Can't find peer "LPX64"\n", nid);
+                        return -ENOENT;
+                }
+                
+                create_peer = 1;
+                goto again;
         }
 
         for (;;) {
@@ -798,6 +822,8 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
         }
         
         write_unlock_irqrestore (g_lock, flags);
+
+        CERROR("Peer entry with no routes: "LPX64"\n", nid);
         return (-EHOSTUNREACH);
 }
 
@@ -1957,7 +1983,7 @@ ksocknal_autoconnect (ksock_route_t *route)
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
         for (;;) {
-                if (!ksocknal_tunables.ksnd_typed_conns) {
+                if (!*ksocknal_tunables.ksnd_typed_conns) {
                         if ((route->ksnr_connected & (1<<SOCKNAL_CONN_ANY)) == 0)
                                 type = SOCKNAL_CONN_ANY;
                         else
@@ -2341,9 +2367,9 @@ ksocknal_reaper (void *arg)
                          * timeout on any connection within (n+1)/n times the
                          * timeout interval. */
 
-                        if (ksocknal_tunables.ksnd_io_timeout > n * p)
+                        if (*ksocknal_tunables.ksnd_timeout > n * p)
                                 chunk = (chunk * n * p) /
-                                        ksocknal_tunables.ksnd_io_timeout;
+                                        *ksocknal_tunables.ksnd_timeout;
                         if (chunk == 0)
                                 chunk = 1;
 

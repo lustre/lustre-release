@@ -1,65 +1,86 @@
 #include "socknal.h"
 
-#ifdef CONFIG_SYSCTL
-#define SOCKNAL_SYSCTL	200
-
-#define SOCKNAL_SYSCTL_TIMEOUT          1
-#define SOCKNAL_SYSCTL_EAGER_ACK        2
-#define SOCKNAL_SYSCTL_ZERO_COPY        3
-#define SOCKNAL_SYSCTL_TYPED            4
-#define SOCKNAL_SYSCTL_MIN_BULK         5
-#define SOCKNAL_SYSCTL_BUFFER_SIZE      6
-#define SOCKNAL_SYSCTL_NAGLE            7
-#define SOCKNAL_SYSCTL_IRQ_AFFINITY     8
-#define SOCKNAL_SYSCTL_KEEPALIVE_IDLE   9
-#define SOCKNAL_SYSCTL_KEEPALIVE_COUNT 10
-#define SOCKNAL_SYSCTL_KEEPALIVE_INTVL 11
-
-static ctl_table ksocknal_ctl_table[] = {
-        {SOCKNAL_SYSCTL_TIMEOUT, "timeout",
-         &ksocknal_tunables.ksnd_io_timeout, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_EAGER_ACK, "eager_ack",
-         &ksocknal_tunables.ksnd_eager_ack, sizeof (int),
-         0644, NULL, &proc_dointvec},
-#if SOCKNAL_ZC
-        {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy",
-         &ksocknal_tunables.ksnd_zc_min_frag, sizeof (int),
-         0644, NULL, &proc_dointvec},
-#endif
-        {SOCKNAL_SYSCTL_TYPED, "typed",
-         &ksocknal_tunables.ksnd_typed_conns, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_MIN_BULK, "min_bulk",
-         &ksocknal_tunables.ksnd_min_bulk, sizeof (int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_BUFFER_SIZE, "buffer_size",
-         &ksocknal_tunables.ksnd_buffer_size, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_NAGLE, "nagle",
-         &ksocknal_tunables.ksnd_nagle, sizeof(int),
-         0644, NULL, &proc_dointvec},
-#if CPU_AFFINITY
-        {SOCKNAL_SYSCTL_IRQ_AFFINITY, "irq_affinity",
-         &ksocknal_tunables.ksnd_irq_affinity, sizeof(int),
-         0644, NULL, &proc_dointvec},
-#endif
-        {SOCKNAL_SYSCTL_KEEPALIVE_IDLE, "keepalive_idle",
-         &ksocknal_tunables.ksnd_keepalive_idle, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_KEEPALIVE_COUNT, "keepalive_count",
-         &ksocknal_tunables.ksnd_keepalive_count, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        {SOCKNAL_SYSCTL_KEEPALIVE_INTVL, "keepalive_intvl",
-         &ksocknal_tunables.ksnd_keepalive_intvl, sizeof(int),
-         0644, NULL, &proc_dointvec},
-        { 0 }
-};
+# if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+static ctl_table ksocknal_ctl_table[12];
 
 ctl_table ksocknal_top_ctl_table[] = {
-        {SOCKNAL_SYSCTL, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
+        {200, "socknal", NULL, 0, 0555, ksocknal_ctl_table},
         { 0 }
 };
+
+int
+ksocknal_lib_tunables_init () 
+{
+	int    i = 0;
+	int    j = 1;
+	
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "timeout", ksocknal_tunables.ksnd_timeout, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "eager_ack", ksocknal_tunables.ksnd_eager_ack, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+#if SOCKNAL_ZC
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "zero_copy", ksocknal_tunables.ksnd_zc_min_frag, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+#endif
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "typed", ksocknal_tunables.ksnd_typed_conns, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "min_bulk", ksocknal_tunables.ksnd_min_bulk, 
+		 sizeof (int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "buffer_size", ksocknal_tunables.ksnd_buffer_size, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "nagle", ksocknal_tunables.ksnd_nagle, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+#if CPU_AFFINITY
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "irq_affinity", ksocknal_tunables.ksnd_irq_affinity, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+#endif
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_idle", ksocknal_tunables.ksnd_keepalive_idle, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+        ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_count", ksocknal_tunables.ksnd_keepalive_count, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+	ksocknal_ctl_table[i++] = (ctl_table)
+		{j++, "keepalive_intvl", ksocknal_tunables.ksnd_keepalive_intvl, 
+		 sizeof(int), 0644, NULL, &proc_dointvec};
+
+	LASSERT (j == i+1);
+	LASSERT (i < sizeof(ksocknal_ctl_table)/sizeof(ksocknal_ctl_table[0]));
+
+        ksocknal_tunables.ksnd_sysctl =
+                register_sysctl_table(ksocknal_top_ctl_table, 0);
+
+        if (ksocknal_tunables.ksnd_sysctl == NULL)
+		CWARN("Can't setup /proc tunables\n");
+
+	return 0;
+}
+
+void
+ksocknal_lib_tunables_fini () 
+{
+        if (ksocknal_tunables.ksnd_sysctl != NULL)
+                unregister_sysctl_table(ksocknal_tunables.ksnd_sysctl);	
+}
+#else
+int
+ksocknal_lib_tunables_init () 
+{
+	return 0;
+}
+
+void 
+ksocknal_lib_tunables_fini ()
+{
+}
 #endif
 
 void
@@ -274,7 +295,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
          * or leave them alone. */
 
 #if SOCKNAL_ZC
-        if (kiov->kiov_len >= ksocknal_tunables.ksnd_zc_min_frag &&
+        if (kiov->kiov_len >= *ksocknal_tunables.ksnd_zc_min_frag &&
             (sock->sk->route_caps & NETIF_F_SG) &&
             (sock->sk->route_caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM))) {
                 struct page   *page = kiov->kiov_page;
@@ -620,7 +641,7 @@ ksocknal_lib_setup_sock (struct socket *sock)
         }
 
         if (ksocknal_tunables.ksnd_buffer_size > 0) {
-                option = ksocknal_tunables.ksnd_buffer_size;
+                option = *ksocknal_tunables.ksnd_buffer_size;
 
                 set_fs (KERNEL_DS);
                 rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDBUF,
@@ -644,9 +665,9 @@ ksocknal_lib_setup_sock (struct socket *sock)
         }
 
         /* snapshot tunables */
-        keep_idle  = ksocknal_tunables.ksnd_keepalive_idle;
-        keep_count = ksocknal_tunables.ksnd_keepalive_count;
-        keep_intvl = ksocknal_tunables.ksnd_keepalive_intvl;
+        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
+        keep_count = *ksocknal_tunables.ksnd_keepalive_count;
+        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
 
         do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0);
 
@@ -749,7 +770,7 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
 
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
-        tv.tv_sec = ksocknal_tunables.ksnd_io_timeout;
+        tv.tv_sec = *ksocknal_tunables.ksnd_timeout;
         tv.tv_usec = 0;
 
         set_fs (KERNEL_DS);
@@ -758,7 +779,7 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set send timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto failed;
         }
 
@@ -768,7 +789,7 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
         set_fs (oldmm);
         if (rc != 0) {
                 CERROR ("Can't set receive timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto failed;
         }
 

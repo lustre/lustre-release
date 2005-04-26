@@ -71,7 +71,6 @@ extern ptl_err_t tcpnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                              size_t offset, size_t mlen, size_t rlen);
 
 ptl_nal_t tcpnal_nal = {
-        .nal_name      = "tcp",
         .nal_type      = SOCKNAL,
         .nal_startup   = procbridge_startup,
         .nal_shutdown  = procbridge_shutdown,

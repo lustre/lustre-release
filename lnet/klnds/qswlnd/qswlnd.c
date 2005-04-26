@@ -24,7 +24,6 @@
 
 ptl_nal_t kqswnal_nal =
 {
-	.nal_name       = "elan",
 	.nal_type       = QSWNAL,
 	.nal_startup    = kqswnal_startup,
 	.nal_shutdown   = kqswnal_shutdown,
@@ -35,7 +34,6 @@ ptl_nal_t kqswnal_nal =
 };
 
 kqswnal_data_t		kqswnal_data;
-kqswnal_tunables_t      kqswnal_tunables;
 
 kpr_nal_interface_t kqswnal_router_interface = {
 	kprni_nalid:	QSWNAL,
@@ -43,28 +41,6 @@ kpr_nal_interface_t kqswnal_router_interface = {
 	kprni_fwd:	kqswnal_fwd_packet,
 	kprni_notify:   NULL,			/* we're connectionless */
 };
-
-#if CONFIG_SYSCTL
-#define QSWNAL_SYSCTL  201
-
-#define QSWNAL_SYSCTL_OPTIMIZED_GETS     1
-#define QSWNAL_SYSCTL_OPTIMIZED_PUTS     2
-
-static ctl_table kqswnal_ctl_table[] = {
-	{QSWNAL_SYSCTL_OPTIMIZED_PUTS, "optimized_puts",
-	 &kqswnal_tunables.kqn_optimized_puts, sizeof (int),
-	 0644, NULL, &proc_dointvec},
-	{QSWNAL_SYSCTL_OPTIMIZED_GETS, "optimized_gets",
-	 &kqswnal_tunables.kqn_optimized_gets, sizeof (int),
-	 0644, NULL, &proc_dointvec},
-	{0}
-};
-
-static ctl_table kqswnal_top_ctl_table[] = {
-	{QSWNAL_SYSCTL, "qswnal", NULL, 0, 0555, kqswnal_ctl_table},
-	{0}
-};
-#endif
 
 int
 kqswnal_get_tx_desc (struct portals_cfg *pcfg)
@@ -297,8 +273,10 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	{
 		elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eprxdmahandle, 0,
-				  KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
-				  KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE);
+				  KQSW_NRXMSGPAGES_SMALL * 
+				  (*kqswnal_tunables.kqn_nrxmsgs_small) +
+				  KQSW_NRXMSGPAGES_LARGE * 
+				  (*kqswnal_tunables.kqn_nrxmsgs_large));
 
 		elan3_dma_release(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eprxdmahandle);
@@ -308,8 +286,8 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	{
 		elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle, 0,
-				  KQSW_NTXMSGPAGES * (KQSW_NTXMSGS +
-						      KQSW_NNBLK_TXMSGS));
+				  KQSW_NTXMSGPAGES * (*kqswnal_tunables.kqn_ntxmsgs +
+						      *kqswnal_tunables.kqn_nnblk_txmsgs));
 
 		elan3_dma_release(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle);
@@ -444,9 +422,10 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 	/**********************************************************************/
 	/* Get the receivers */
 
-	kqswnal_data.kqn_eprx_small = ep_alloc_rcvr (kqswnal_data.kqn_ep,
-						     EP_MSG_SVC_PORTALS_SMALL,
-						     KQSW_EP_ENVELOPES_SMALL);
+	kqswnal_data.kqn_eprx_small = 
+		ep_alloc_rcvr (kqswnal_data.kqn_ep,
+			       EP_MSG_SVC_PORTALS_SMALL,
+			       *kqswnal_tunables.kqn_ep_envelopes_small);
 	if (kqswnal_data.kqn_eprx_small == NULL)
 	{
 		CERROR ("Can't install small msg receiver\n");
@@ -454,9 +433,10 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 		return (PTL_NO_SPACE);
 	}
 
-	kqswnal_data.kqn_eprx_large = ep_alloc_rcvr (kqswnal_data.kqn_ep,
-						     EP_MSG_SVC_PORTALS_LARGE,
-						     KQSW_EP_ENVELOPES_LARGE);
+	kqswnal_data.kqn_eprx_large = 
+		ep_alloc_rcvr (kqswnal_data.kqn_ep,
+			       EP_MSG_SVC_PORTALS_LARGE,
+			       *kqswnal_tunables.kqn_ep_envelopes_large);
 	if (kqswnal_data.kqn_eprx_large == NULL)
 	{
 		CERROR ("Can't install large msg receiver\n");
@@ -471,7 +451,8 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 #if MULTIRAIL_EKC
 	kqswnal_data.kqn_ep_tx_nmh = 
 		ep_dvma_reserve(kqswnal_data.kqn_ep,
-				KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
+				KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs+
+						  *kqswnal_tunables.kqn_nnblk_txmsgs),
 				EP_PERM_WRITE);
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve tx dma space\n");
@@ -485,7 +466,8 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
         dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
 	rc = elan3_dma_reserve(kqswnal_data.kqn_ep->DmaState,
-			      KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
+			      KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs+
+						*kqswnal_tunables.kqn_nnblk_txmsgs),
 			      &dmareq, &kqswnal_data.kqn_eptxdmahandle);
 	if (rc != DDI_SUCCESS)
 	{
@@ -499,8 +481,10 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 #if MULTIRAIL_EKC
 	kqswnal_data.kqn_ep_rx_nmh =
 		ep_dvma_reserve(kqswnal_data.kqn_ep,
-				KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
-				KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE,
+				KQSW_NRXMSGPAGES_SMALL * 
+				(*kqswnal_tunables.kqn_nrxmsgs_small) +
+				KQSW_NRXMSGPAGES_LARGE * 
+				(*kqswnal_tunables.kqn_nrxmsgs_large),
 				EP_PERM_WRITE);
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve rx dma space\n");
@@ -514,8 +498,10 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
         dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
 	rc = elan3_dma_reserve (kqswnal_data.kqn_ep->DmaState,
-				KQSW_NRXMSGPAGES_SMALL * KQSW_NRXMSGS_SMALL +
-				KQSW_NRXMSGPAGES_LARGE * KQSW_NRXMSGS_LARGE,
+				KQSW_NRXMSGPAGES_SMALL * 
+				(*kqswnal_tunables.kqn_nrxmsgs_small) +
+				KQSW_NRXMSGPAGES_LARGE * 
+				(*kqswnal_tunables.kqn_nrxmsgs_large),
 				&dmareq, &kqswnal_data.kqn_eprxdmahandle);
 	if (rc != DDI_SUCCESS)
 	{
@@ -528,7 +514,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 	/* Allocate/Initialise transmit descriptors */
 
 	kqswnal_data.kqn_txds = NULL;
-	for (i = 0; i < (KQSW_NTXMSGS + KQSW_NNBLK_TXMSGS); i++)
+	for (i = 0; i < (*kqswnal_tunables.kqn_ntxmsgs + *kqswnal_tunables.kqn_nnblk_txmsgs); i++)
 	{
 		int           premapped_pages;
 		int           basepage = i * KQSW_NTXMSGPAGES;
@@ -573,7 +559,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 #if MULTIRAIL_EKC
 		ktx->ktx_rail = -1;		/* unset rail */
 #endif
-		ktx->ktx_isnblk = (i >= KQSW_NTXMSGS);
+		ktx->ktx_isnblk = (i >= *kqswnal_tunables.kqn_ntxmsgs);
 		list_add_tail (&ktx->ktx_list, 
 			       ktx->ktx_isnblk ? &kqswnal_data.kqn_nblk_idletxds :
 			                         &kqswnal_data.kqn_idletxds);
@@ -583,7 +569,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 	/* Allocate/Initialise receive descriptors */
 	kqswnal_data.kqn_rxds = NULL;
 	elan_page_idx = 0;
-	for (i = 0; i < KQSW_NRXMSGS_SMALL + KQSW_NRXMSGS_LARGE; i++)
+	for (i = 0; i < *kqswnal_tunables.kqn_nrxmsgs_small + *kqswnal_tunables.kqn_nrxmsgs_large; i++)
 	{
 #if MULTIRAIL_EKC
 		EP_NMD        elanbuffer;
@@ -602,7 +588,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 		krx->krx_alloclist = kqswnal_data.kqn_rxds;
 		kqswnal_data.kqn_rxds = krx;
 
-		if (i < KQSW_NRXMSGS_SMALL)
+		if (i < *kqswnal_tunables.kqn_nrxmsgs_small)
 		{
 			krx->krx_npages = KQSW_NRXMSGPAGES_SMALL;
 			krx->krx_eprx   = kqswnal_data.kqn_eprx_small;
@@ -658,8 +644,8 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 		}
 	}
 	LASSERT (elan_page_idx ==
-		 (KQSW_NRXMSGS_SMALL * KQSW_NRXMSGPAGES_SMALL) +
-		 (KQSW_NRXMSGS_LARGE * KQSW_NRXMSGPAGES_LARGE));
+		 (*kqswnal_tunables.kqn_nrxmsgs_small * KQSW_NRXMSGPAGES_SMALL) +
+		 (*kqswnal_tunables.kqn_nrxmsgs_large * KQSW_NRXMSGPAGES_LARGE));
 
 	/**********************************************************************/
 	/* Queue receives, now that it's OK to run their completion callbacks */
@@ -721,33 +707,19 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 void __exit
 kqswnal_finalise (void)
 {
-#if CONFIG_SYSCTL
-	if (kqswnal_tunables.kqn_sysctl != NULL)
-		unregister_sysctl_table (kqswnal_tunables.kqn_sysctl);
-#endif
 	ptl_unregister_nal(&kqswnal_nal);
+	kqswnal_tunables_fini();
 }
 
 static int __init
 kqswnal_initialise (void)
 {
-	int   rc;
-
-	/* Initialise dynamic tunables to defaults once only */
-	kqswnal_tunables.kqn_optimized_puts = KQSW_OPTIMIZED_PUTS;
-	kqswnal_tunables.kqn_optimized_gets = KQSW_OPTIMIZED_GETS;
+	int   rc = kqswnal_tunables_init();
 	
-	rc = ptl_register_nal(&kqswnal_nal);
-	if (rc != PTL_OK) {
-		CERROR("Can't register QSWNAL: %d\n", rc);
-		return (-ENOMEM);		/* or something... */
-	}
+	if (rc != 0)
+		return rc;
 
-#if CONFIG_SYSCTL
-        /* Press on regardless even if registering sysctl doesn't work */
-        kqswnal_tunables.kqn_sysctl = 
-		register_sysctl_table (kqswnal_top_ctl_table, 0);
-#endif
+	ptl_register_nal(&kqswnal_nal);
 	return (0);
 }
 

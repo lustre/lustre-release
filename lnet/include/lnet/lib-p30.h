@@ -407,7 +407,7 @@ extern void ptl_md_unlink(ptl_libmd_t *md);
 extern void ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd);
 
 #ifdef __KERNEL__
-extern int ptl_register_nal(ptl_nal_t *nal);
+extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
 #endif
 

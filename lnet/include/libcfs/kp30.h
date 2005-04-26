@@ -208,6 +208,8 @@ void portals_debug_dumplog(void);
 #define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 
 /* support decl needed both by kernel and liblustre */
+int   libcfs_isknown_nettype(int type);
+char *libcfs_nettype2str(int type);
 char *libcfs_nid2str(ptl_nid_t nid);
 char *libcfs_id2str(ptl_process_id_t id);
 

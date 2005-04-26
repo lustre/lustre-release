@@ -143,24 +143,6 @@ static void ptl_mutex_exit (void)
 
 
 ptl_nal_t *
-ptl_find_nal_by_name (char *name) 
-{
-        ptl_nal_t          *nal;
-        struct list_head   *tmp;
-
-        /* holding mutex */
-        list_for_each (tmp, &ptl_nal_table) {
-                nal = list_entry(tmp, ptl_nal_t, nal_list);
-
-                if (!strcmp (nal->nal_name, name))
-                        return nal;
-        }
-        
-        return NULL;
-}
-
-
-ptl_nal_t *
 ptl_find_nal_by_type (int type) 
 {
         ptl_nal_t          *nal;
@@ -178,27 +160,19 @@ ptl_find_nal_by_type (int type)
 }
 
 
-int 
+void
 ptl_register_nal (ptl_nal_t *nal)
 {
-        int    rc;
-        
         ptl_mutex_enter();
 
         LASSERT (ptl_init);
-
-        if (ptl_find_nal_by_name(nal->nal_name) != NULL ||
-            ptl_find_nal_by_type(nal->nal_type) != NULL) {
-                rc = PTL_IFACE_DUP;
-        } else {
-                list_add (&nal->nal_list, &ptl_nal_table);
-                
-                nal->nal_refcount = 0;
-                rc = PTL_OK;
-        }
+        LASSERT (libcfs_isknown_nettype(nal->nal_type));
+        LASSERT (ptl_find_nal_by_type(nal->nal_type) == NULL);
+        
+        list_add (&nal->nal_list, &ptl_nal_table);
+        nal->nal_refcount = 0;
 
         ptl_mutex_exit();
-        return (rc);
 }
 
 void
@@ -208,7 +182,6 @@ ptl_unregister_nal (ptl_nal_t *nal)
 
         LASSERT (ptl_init);
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == nal);
-        LASSERT (ptl_find_nal_by_name(nal->nal_name) == nal);
         LASSERT (nal->nal_refcount == 0);
         
         list_del (&nal->nal_list);
@@ -615,19 +588,20 @@ ptl_startup_nalnis (void)
 
                 PORTAL_ALLOC(ni, sizeof(*ni));
                 if (ni == NULL) {
-                        CERROR("Can't allocate NI for %s\n", 
-                               nal->nal_name);
+                        CERROR("Can't allocate NI for %s NAL\n", 
+                               libcfs_nettype2str(nal->nal_type));
                         rc = PTL_FAIL;
                         break;
                 }
 
                 ni->ni_nal = nal;
+                //                ni->ni_nid = (nal->nal_type << 16)
                 nal->nal_refcount++;
 
                 rc = (nal->nal_startup)(ni, &interface);
                 if (rc != PTL_OK) {
                         CERROR("Error %d staring up NI %s\n",
-                               rc, nal->nal_name);
+                               rc, libcfs_nettype2str(nal->nal_type));
                         PORTAL_FREE(ni, sizeof(*ni));
                         nal->nal_refcount--;
                         break;

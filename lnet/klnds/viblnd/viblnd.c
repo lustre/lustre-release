@@ -25,7 +25,6 @@
 #include "vibnal.h"
 
 ptl_nal_t               kibnal_nal = {
-        .nal_name       = "vib",
         .nal_type       = VIBNAL,
         .nal_startup    = kibnal_startup,
         .nal_shutdown   = kibnal_shutdown,
@@ -1898,11 +1897,7 @@ kibnal_module_init (void)
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        rc = ptl_register_nal(&kibnal_nal);
-        if (rc != PTL_OK) {
-                CERROR("Can't register IBNAL: %d\n", rc);
-                return (-ENOMEM);               /* or something... */
-        }
+        ptl_register_nal(&kibnal_nal);
         
 #ifdef CONFIG_SYSCTL
         /* Press on regardless even if registering sysctl doesn't work */

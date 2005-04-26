@@ -572,6 +572,8 @@ kibnal_page2phys (struct page *p)
 #  if CONFIG_X86 && CONFIG_HIGHMEM4G
    /* truncation to void* doesn't matter if 0 <= physmem < 4G
     * so allow x86 with 32 bit phys addrs */
+#  elif CONFIG_IA64
+   /* OK anyway on 64-bit arch */
 #  else
 #   error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"
 #  endif

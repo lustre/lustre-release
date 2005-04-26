@@ -24,7 +24,6 @@
 #include "iibnal.h"
 
 ptl_nal_t kibnal_nal = {
-        .nal_name          = "iib",
         .nal_type          = IIBNAL,
         .nal_startup       = kibnal_startup,
         .nal_shutdown      = kibnal_shutdown,
@@ -124,7 +123,7 @@ kibnal_check_advert (void)
         qry->OutputType = OutputTypeServiceRecord;
         qry->InputValue.ServiceRecordValue.ComponentMask = KIBNAL_SERVICE_KEY_MASK;
         svc = &qry->InputValue.ServiceRecordValue.ServiceRecord;
-        kibnal_set_service_keys(svc, kibnal_data.kib_nid);
+        kibnal_set_service_keys(svc, kibnal_data.kib_ni->ni_nid);
 
         frc = iibt_sd_query_port_fabric_information(kibnal_data.kib_sd,
                                                     kibnal_data.kib_port_guid,
@@ -159,7 +158,7 @@ static void fill_fod(FABRIC_OPERATION_DATA *fod, FABRIC_OPERATION_TYPE type)
         svc->RID.ServiceP_Key = kibnal_data.kib_port_pkey;
         svc->ServiceLease = 0xffffffff;
 
-        kibnal_set_service_keys(svc, kibnal_data.kib_nid);
+        kibnal_set_service_keys(svc, kibnal_data.kib_ni->ni_nid);
 }
 
 static int
@@ -170,7 +169,7 @@ kibnal_advertise (void)
         FSTATUS                frc;
         FSTATUS                frc2;
 
-        LASSERT (kibnal_data.kib_nid != PTL_NID_ANY);
+        LASSERT (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY);
 
         PORTAL_ALLOC(fod, sizeof(*fod));
         if (fod == NULL)
@@ -190,7 +189,7 @@ kibnal_advertise (void)
 
         if (frc != FSUCCESS && frc != FPENDING) {
                 CERROR ("Immediate error %d advertising NID "LPX64"\n",
-                        frc, kibnal_data.kib_nid);
+                        frc, kibnal_data.kib_ni->ni_nid);
                 goto out;
         }
 
@@ -199,7 +198,7 @@ kibnal_advertise (void)
         frc = frc2;
         if (frc != FSUCCESS)
                 CERROR ("Error %d advertising BUD "LPX64"\n",
-                        frc, kibnal_data.kib_nid);
+                        frc, kibnal_data.kib_ni->ni_nid);
 out:
         PORTAL_FREE(fod, sizeof(*fod));
         return (frc == FSUCCESS) ? 0 : -EINVAL;
@@ -213,7 +212,7 @@ kibnal_unadvertise (int expect_success)
         FSTATUS                frc;
         FSTATUS                frc2;
 
-        LASSERT (kibnal_data.kib_nid != PTL_NID_ANY);
+        LASSERT (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY);
 
         PORTAL_ALLOC(fod, sizeof(*fod));
         if (fod == NULL)
@@ -232,7 +231,7 @@ kibnal_unadvertise (int expect_success)
 
         if (frc != FSUCCESS && frc != FPENDING) {
                 CERROR ("Immediate error %d unadvertising NID "LPX64"\n",
-                        frc, kibnal_data.kib_nid);
+                        frc, kibnal_data.kib_ni->ni_nid);
                 goto out;
         }
 
@@ -243,10 +242,10 @@ kibnal_unadvertise (int expect_success)
 
         if (expect_success)
                 CERROR("Error %d unadvertising NID "LPX64"\n",
-                       frc2, kibnal_data.kib_nid);
+                       frc2, kibnal_data.kib_ni->ni_nid);
         else
                 CWARN("Removed conflicting NID "LPX64"\n",
-                      kibnal_data.kib_nid);
+                      kibnal_data.kib_ni->ni_nid);
  out:
         PORTAL_FREE(fod, sizeof(*fod));
 }
@@ -255,27 +254,26 @@ static int
 kibnal_set_mynid(ptl_nid_t nid)
 {
         struct timeval tv;
-        ptl_ni_t      *ni = kibnal_data.kib_ni;
         int            rc;
         FSTATUS        frc;
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_nid);
+               nid, kibnal_data.kib_ni->ni_nid);
 
         do_gettimeofday(&tv);
 
         down (&kibnal_data.kib_nid_mutex);
 
-        if (nid == kibnal_data.kib_nid) {
+        if (nid == kibnal_data.kib_ni->ni_nid) {
                 /* no change of NID */
                 up (&kibnal_data.kib_nid_mutex);
                 return (0);
         }
 
         CDEBUG(D_NET, "NID "LPX64"("LPX64")\n",
-               kibnal_data.kib_nid, nid);
+               kibnal_data.kib_ni->ni_nid, nid);
         
-        if (kibnal_data.kib_nid != PTL_NID_ANY) {
+        if (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY) {
 
                 kibnal_unadvertise (1);
 
@@ -290,7 +288,7 @@ kibnal_set_mynid(ptl_nid_t nid)
                 kibnal_data.kib_cep = NULL;
         }
         
-        kibnal_data.kib_nid = ni->ni_nid = nid;
+        kibnal_data.kib_ni->ni_nid = nid;
         kibnal_data.kib_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
         
         /* Delete all existing peers and their connections after new
@@ -298,7 +296,7 @@ kibnal_set_mynid(ptl_nid_t nid)
          * new world. */
         kibnal_del_peer (PTL_NID_ANY, 0);
 
-        if (kibnal_data.kib_nid == PTL_NID_ANY) {
+        if (kibnal_data.kib_ni->ni_nid == PTL_NID_ANY) {
                 /* No new NID to install */
                 up (&kibnal_data.kib_nid_mutex);
                 return (0);
@@ -343,7 +341,7 @@ kibnal_set_mynid(ptl_nid_t nid)
                 kibnal_del_peer (PTL_NID_ANY, 0);
         }
 
-        kibnal_data.kib_nid = PTL_NID_ANY;
+        kibnal_data.kib_ni->ni_nid = PTL_NID_ANY;
         up (&kibnal_data.kib_nid_mutex);
         return (rc);
 }
@@ -1350,7 +1348,7 @@ kibnal_startup (ptl_ni_t *ni, char **interfaces)
 
         init_MUTEX (&kibnal_data.kib_nid_mutex);
         init_MUTEX_LOCKED (&kibnal_data.kib_nid_signal);
-        kibnal_data.kib_nid = PTL_NID_ANY;
+        kibnal_data.kib_ni->ni_nid = PTL_NID_ANY;
 
         rwlock_init(&kibnal_data.kib_global_lock);
 
@@ -1672,11 +1670,7 @@ kibnal_module_init (void)
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        rc = ptl_register_nal(&kibnal_nal);
-        if (rc != PTL_OK) {
-                CERROR("Can't register IBNAL: %d\n", rc);
-                return (-ENOMEM);               /* or something... */
-        }
+        ptl_register_nal(&kibnal_nal);
         
 #ifdef CONFIG_SYSCTL
         /* Press on regardless even if registering sysctl doesn't work */

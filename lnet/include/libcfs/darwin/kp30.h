@@ -47,6 +47,14 @@
 
 #define printk(format, args...)                 printf(format, ## args)
 
+/******************************************************************************/
+/* Module parameter support */
+#define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        this should force a syntax error
+
+#define CFS_SYSFS_MODULE_PARM    0 /* no sysfs access to module parameters */
+/******************************************************************************/
+
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>

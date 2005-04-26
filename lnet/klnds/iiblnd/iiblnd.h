@@ -174,7 +174,6 @@ typedef struct
         __u64             kib_service_id;       /* service number I listen on */
         __u64             kib_port_guid;        /* my GUID (lo 64 of GID)*/
         __u16             kib_port_pkey;        /* my pkey, whatever that is */
-        ptl_nid_t         kib_nid;              /* my NID */
         struct semaphore  kib_nid_mutex;        /* serialise NID ops */
         struct semaphore  kib_nid_signal;       /* signal completion */
         IB_HANDLE         kib_cep;              /* connection end point */

@@ -314,7 +314,7 @@ gmnal_startup(ptl_ni_t *ni, char **interfaces)
         nal_data->sysctl = NULL;
         nal_data->sysctl = register_sysctl_table (gmnalnal_top_sysctl_table, 0);
 
-	CDEBUG(D_INFO, "gmnal_init finished\n");
+	CDEBUG(D_INFO, "finished\n");
 
 	global_nal_data = nal_data;
 
@@ -322,7 +322,6 @@ gmnal_startup(ptl_ni_t *ni, char **interfaces)
 }
 
 ptl_nal_t the_gm_nal = {
-        .nal_name           = "gm",
         .nal_type           = GMNAL,
         .nal_startup        = gmnal_startup,
         .nal_shutdown       = gmnal_shutdown,
@@ -337,13 +336,8 @@ ptl_nal_t the_gm_nal = {
  */
 int gmnal_init(void)
 {
-        int    rc;
-
-        rc = ptl_register_nal(&the_gm_nal);
-        if (rc != PTL_OK)
-                CERROR("Can't register GMNAL: %d\n", rc);
-
-        return (rc);
+        ptl_register_nal(&the_gm_nal);
+        return (0);
 }
 
 

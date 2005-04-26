@@ -26,7 +26,6 @@ static int        kranal_devids[] = {RAPK_MAIN_DEVICE_ID,
                                      RAPK_EXPANSION_DEVICE_ID};
 
 ptl_nal_t kranal_nal = {
-        .nal_name       = "ra",
         .nal_type       = RANAL,
         .nal_startup    = kranal_startup,
         .nal_shutdown   = kranal_shutdown,
@@ -2105,11 +2104,7 @@ kranal_module_init (void)
         kranal_tunables.kra_port = RANAL_PORT;
         kranal_tunables.kra_max_immediate = RANAL_MAX_IMMEDIATE;
 
-        rc = ptl_register_nal(&kranal_nal);
-        if (rc != PTL_OK) {
-                CERROR("Can't register RANAL: %d\n", rc);
-                return -ENOMEM;               /* or something... */
-        }
+        ptl_register_nal(&kranal_nal);
 
         kranal_tunables.kra_sysctl =
                 register_sysctl_table(kranal_top_ctl_table, 0);

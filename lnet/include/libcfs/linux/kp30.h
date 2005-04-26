@@ -135,6 +135,20 @@ do {                                                                    \
 #endif
 
 /******************************************************************************/
+/* Module parameter support */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        MODULE_PARM(name, t);\
+        MODULE_PARM_DESC(name, desc)
+
+# define CFS_SYSFS_MODULE_PARM  0 /* no sysfs module parameters */
+#else
+# define CFS_MODULE_PARM(name, t, type, perm, desc) \
+        module_param(name, type, perm);\
+        MODULE_PARM_DESC(name, desc)
+# define CFS_SYSFS_MODULE_PARM  1 /* module parameters accessible via sysfs */
+#endif
+/******************************************************************************/
 
 #if (__GNUC__)
 /* Use the special GNU C __attribute__ hack to have the compiler check the

@@ -110,13 +110,12 @@ typedef unsigned long kqsw_csum_t;
 
 #define KQSW_OPTIMIZED_GETS             1       /* optimize gets >= this size */
 #define KQSW_OPTIMIZED_PUTS            (32<<10) /* optimize puts >= this size */
-#define KQSW_COPY_SMALL_FWD             0       /* copy small fwd messages to pre-mapped buffer? */
 
 /*
  * derived constants
  */
 
-#define KQSW_TX_BUFFER_SIZE     (KQSW_HDR_SIZE + KQSW_TX_MAXCONTIG)
+#define KQSW_TX_BUFFER_SIZE     (KQSW_HDR_SIZE + *kqswnal_tunables.kqn_tx_maxcontig)
 /* The pre-allocated tx buffer (hdr + small payload) */
 
 #define KQSW_NTXMSGPAGES        (btopr(KQSW_TX_BUFFER_SIZE) + 1 + btopr(KQSW_MAXPAYLOAD) + 1)
@@ -209,11 +208,18 @@ typedef struct kqswnal_tx
 
 typedef struct
 {
-        /* dynamic tunables... */
-        int                      kqn_optimized_puts;  /* optimized PUTs? */
-        int                      kqn_optimized_gets;  /* optimized GETs? */
-#if CONFIG_SYSCTL
-        struct ctl_table_header *kqn_sysctl;          /* sysctl interface */
+        int               *kqn_tx_maxcontig;    /* maximum payload to defrag */
+        int               *kqn_ntxmsgs;         /* # normal tx msgs */
+        int               *kqn_nnblk_txmsgs;    /* # reserved tx msgs */
+        int               *kqn_nrxmsgs_large;   /* # 'large' rx msgs */
+        int               *kqn_ep_envelopes_large; /* # 'large' rx ep envelopes */
+        int               *kqn_nrxmsgs_small;   /* # 'small' rx msgs */
+        int               *kqn_ep_envelopes_small; /* # 'small' rx ep envelopes */
+        int               *kqn_optimized_puts;  /* optimized PUTs? */
+        int               *kqn_optimized_gets;  /* optimized GETs? */
+
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
 #endif
 } kqswnal_tunables_t;
 
@@ -392,5 +398,8 @@ ptl_err_t kqswnal_recv_pages(ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, unsigned int niov,
                              ptl_kiov_t *kiov, size_t offset,
                              size_t mlen, size_t rlen);
+
+int kqswnal_tunables_init(void);
+void kqswnal_tunables_fini(void);
 
 #endif /* _QSWNAL_H */

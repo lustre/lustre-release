@@ -37,28 +37,31 @@
 #define SOCKNAL_SINGLE_FRAG_RX  1
 #endif
 
+#if !CFS_SYSFS_MODULE_PARM
+#error "this can't use ksocknal_tunables to get the addresses of the tuning vars"
+
 SYSCTL_DECL(_portals);
 
 SYSCTL_NODE (_portals,           OID_AUTO,       ksocknal,        CTLFLAG_RW, 
              0,                 "ksocknal_sysctl");
 
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       timeout, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_io_timeout, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_timeout, 
            0,                                   "timeout");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       eager_ack, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_eager_ack, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_eager_ack, 
            0,                                   "eager_ack");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       typed, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_typed_conns, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_typed_conns, 
            0,                                   "typed");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       min_bulk, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_min_bulk, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_min_bulk, 
            0,                                   "min_bulk");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       buffer_size, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_buffer_size, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_buffer_size, 
            0,                                   "buffer_size");
 SYSCTL_INT(_portals_ksocknal,    OID_AUTO,       nagle, 
-           CTLTYPE_INT | CTLFLAG_RW ,           &ksocknal_tunables.ksnd_nagle, 
+           CTLTYPE_INT | CTLFLAG_RW ,            ksocknal_tunables.ksnd_nagle, 
            0,                                   "nagle");
 
 cfs_sysctl_table_t      ksocknal_top_ctl_table [] = {
@@ -71,6 +74,37 @@ cfs_sysctl_table_t      ksocknal_top_ctl_table [] = {
         &sysctl__portals_ksocknal_nagle,
         NULL
 };
+
+int
+ksocknal_lib_tunables_init ()
+{
+        ksocknal_tunables.ksnd_sysctl =
+                register_sysctl_table (ksocknal_top_ctl_table, 0);
+
+        if (ksocknal_tunables.ksnd_sysctl == NULL)
+		return -ENOMEM;
+
+	return 0;
+}
+
+int
+ksocknal_lib_tunables_fini ()
+{
+        if (ksocknal_tunables.ksnd_sysctl != NULL)
+                unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);	
+}
+#else
+int
+ksocknal_lib_tunables_init ()
+{
+	return 0;
+}
+
+int
+ksocknal_lib_tunables_fini ()
+{
+}
+#endif
 
 static unsigned long  ksocknal_mbuf_size = (u_quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES);
 
@@ -665,7 +699,7 @@ ksocknal_lib_setup_sock (struct socket *so)
         }
 
 
-        if (!ksocknal_tunables.ksnd_nagle) { 
+        if (!*ksocknal_tunables.ksnd_nagle) { 
                 option = 1; 
                 bzero(&sopt, sizeof sopt);
                 sopt.sopt_dir = SOPT_SET; 
@@ -679,8 +713,8 @@ ksocknal_lib_setup_sock (struct socket *so)
                         goto out;
                 } 
         } 
-        if (ksocknal_tunables.ksnd_buffer_size > 0) { 
-                option = ksocknal_tunables.ksnd_buffer_size; 
+        if (*ksocknal_tunables.ksnd_buffer_size > 0) { 
+                option = *ksocknal_tunables.ksnd_buffer_size; 
                 if (option > ksocknal_mbuf_size) 
                         option = ksocknal_mbuf_size; 
                                                 
@@ -705,9 +739,9 @@ ksocknal_lib_setup_sock (struct socket *so)
                 }
         } 
         /* snapshot tunables */ 
-        keep_idle  = ksocknal_tunables.ksnd_keepalive_idle; 
-        keep_count = ksocknal_tunables.ksnd_keepalive_count; 
-        keep_intvl = ksocknal_tunables.ksnd_keepalive_intvl;
+        keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle; 
+        keep_count = *ksocknal_tunables.ksnd_keepalive_count; 
+        keep_intvl = *ksocknal_tunables.ksnd_keepalive_intvl;
 
         do_keepalive = (keep_idle > 0 && keep_count > 0 && keep_intvl > 0); 
         option = (do_keepalive ? 1 : 0); 
@@ -799,7 +833,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
 
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
-        tv.tv_sec = ksocknal_tunables.ksnd_io_timeout;
+        tv.tv_sec = *ksocknal_tunables.ksnd_timeout;
         tv.tv_usec = 0;
         bzero(&sopt, sizeof sopt);
         sopt.sopt_dir = SOPT_SET;
@@ -813,7 +847,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc != 0) { 
                 CFS_NET_EX;
                 CERROR ("Can't set send timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto out;
         }
         sopt.sopt_level = SOL_SOCKET;
@@ -822,7 +856,7 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *may_retry,
         if (rc != 0) {
                 CFS_NET_EX;
                 CERROR ("Can't set receive timeout %d: %d\n",
-                        ksocknal_tunables.ksnd_io_timeout, rc);
+                        *ksocknal_tunables.ksnd_timeout, rc);
                 goto out;
         } 
         option = 1;

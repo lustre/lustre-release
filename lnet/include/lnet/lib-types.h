@@ -227,8 +227,7 @@ typedef struct ptl_nal
         int               nal_refcount;         /* # active instances */
 
         /* fields initialised by the NAL */
-        char        *nal_name;                  /* NAL's type-name */
-        int          nal_type;
+        unsigned int      nal_type;
         
         ptl_err_t  (*nal_startup) (struct ptl_ni *ni, char **interfaces);
         void       (*nal_shutdown) (struct ptl_ni *ni);

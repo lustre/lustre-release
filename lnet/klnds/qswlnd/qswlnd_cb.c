@@ -1132,10 +1132,11 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
         if (nid == targetnid &&                 /* not forwarding */
             ((type == PTL_MSG_GET &&            /* optimize GET? */
               kqswnal_tunables.kqn_optimized_gets != 0 &&
-              le32_to_cpu(hdr->msg.get.sink_length) >= kqswnal_tunables.kqn_optimized_gets) ||
+              le32_to_cpu(hdr->msg.get.sink_length) >= 
+              *kqswnal_tunables.kqn_optimized_gets) ||
              (type == PTL_MSG_PUT &&            /* optimize PUT? */
               kqswnal_tunables.kqn_optimized_puts != 0 &&
-              payload_nob >= kqswnal_tunables.kqn_optimized_puts))) {
+              payload_nob >= *kqswnal_tunables.kqn_optimized_puts))) {
                 ptl_libmd_t        *md = ptlmsg->msg_md;
                 kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(ktx->ktx_buffer + KQSW_HDR_SIZE);
                 
@@ -1190,7 +1191,7 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
                          * responsibility now, whatever happens. */
                 }
                 
-        } else if (payload_nob <= KQSW_TX_MAXCONTIG) {
+        } else if (payload_nob <= *kqswnal_tunables.kqn_tx_maxcontig) {
 
                 /* small message: single frag copied into the pre-mapped buffer */
 
@@ -1341,7 +1342,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         ktx->ktx_args[0] = fwd;
         ktx->ktx_nfrag   = ktx->ktx_firsttmpfrag = 1;
 
-        if (nob <= KQSW_TX_MAXCONTIG) 
+        if (nob <= *kqswnal_tunables.kqn_tx_maxcontig) 
         {
                 /* send payload from ktx's pre-mapped contiguous buffer */
 #if MULTIRAIL_EKC

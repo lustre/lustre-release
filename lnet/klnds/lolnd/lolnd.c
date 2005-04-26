@@ -22,7 +22,6 @@
 #include "lonal.h"
 
 ptl_nal_t klonal_nal = {
-        .nal_name       = "lo",
         .nal_type       = LONAL,
         .nal_startup    = klonal_startup,
         .nal_shutdown   = klonal_shutdown,
@@ -75,14 +74,7 @@ klonal_finalise (void)
 static int __init
 klonal_initialise (void)
 {
-	int   rc;
-
-	rc = ptl_register_nal(&klonal_nal);
-	if (rc != PTL_OK) {
-		CERROR("Can't register LONAL: %d\n", rc);
-		return (-ENOMEM);		/* or something... */
-	}
-
+	ptl_register_nal(&klonal_nal);
 	return (0);
 }
 

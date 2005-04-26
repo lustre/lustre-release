@@ -129,20 +129,24 @@ typedef struct
 
 typedef struct
 {
-        int               ksnd_io_timeout;      /* "stuck" socket timeout (seconds) */
-        int               ksnd_eager_ack;       /* make TCP ack eagerly? */
-        int               ksnd_typed_conns;     /* drive sockets by type? */
-        int               ksnd_min_bulk;        /* smallest "large" message */
-        int               ksnd_buffer_size;     /* socket buffer size */
-        int               ksnd_nagle;           /* enable NAGLE? */
-        int               ksnd_irq_affinity;    /* enable IRQ affinity? */
-        int               ksnd_keepalive_idle;  /* # idle secs before 1st probe */
-        int               ksnd_keepalive_count; /* # probes */
-        int               ksnd_keepalive_intvl; /* time between probes */
+        int              *ksnd_timeout;         /* "stuck" socket timeout (seconds) */
+        int              *ksnd_eager_ack;       /* make TCP ack eagerly? */
+        int              *ksnd_typed_conns;     /* drive sockets by type? */
+        int              *ksnd_min_bulk;        /* smallest "large" message */
+        int              *ksnd_buffer_size;     /* socket buffer size */
+        int              *ksnd_nagle;           /* enable NAGLE? */
+        int              *ksnd_keepalive_idle;  /* # idle secs before 1st probe */
+        int              *ksnd_keepalive_count; /* # probes */
+        int              *ksnd_keepalive_intvl; /* time between probes */
 #if SOCKNAL_ZC
-        unsigned int      ksnd_zc_min_frag;     /* minimum zero copy frag size */
+        unsigned int     *ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif
+#if CPU_AFFINITY
+        int              *ksnd_irq_affinity;    /* enable IRQ affinity? */
+#endif
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         cfs_sysctl_table_header_t *ksnd_sysctl;   /* sysctl interface */
+#endif
 } ksock_tunables_t;
 
 typedef struct
@@ -427,6 +431,7 @@ ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
 
 extern void ksocknal_put_route (ksock_route_t *route);
 extern void ksocknal_put_peer (ksock_peer_t *peer);
+extern int ksocknal_add_peer(ptl_nid_t nid, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (ptl_nid_t nid);
 extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
 extern int ksocknal_del_route (ptl_nid_t nid, __u32 ipaddr,
@@ -478,3 +483,6 @@ extern int ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem,
                                            int *rxmem, int *nagle);
 extern int ksocknal_lib_connect_sock(struct socket **sockp, int *may_retry,
                                      ksock_route_t *route, int local_port);
+
+extern int ksocknal_lib_tunables_init(void);
+extern void ksocknal_lib_tunables_fini(void);

@@ -2413,7 +2413,7 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 .wcr_magic       = cpu_to_le32(IBNAL_MSG_MAGIC),
                 .wcr_version     = cpu_to_le16(IBNAL_MSG_VERSION),
                 .wcr_queue_depth = cpu_to_le32(IBNAL_MSG_QUEUE_SIZE),
-                .wcr_nid         = cpu_to_le64(kibnal_data.kib_nid),
+                .wcr_nid         = cpu_to_le64(kibnal_data.kib_ni->ni_nid),
                 .wcr_incarnation = cpu_to_le64(kibnal_data.kib_incarnation),
         };
 
@@ -2513,7 +2513,7 @@ kibnal_pathreq_callback (void *arg, QUERY *query,
                 .wcr_magic       = cpu_to_le32(IBNAL_MSG_MAGIC),
                 .wcr_version     = cpu_to_le16(IBNAL_MSG_VERSION),
                 .wcr_queue_depth = cpu_to_le16(IBNAL_MSG_QUEUE_SIZE),
-                .wcr_nid         = cpu_to_le64(kibnal_data.kib_nid),
+                .wcr_nid         = cpu_to_le64(kibnal_data.kib_ni->ni_nid),
                 .wcr_incarnation = cpu_to_le64(kibnal_data.kib_incarnation),
         };
 

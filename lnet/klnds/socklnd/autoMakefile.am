@@ -14,7 +14,7 @@ if DARWIN
 
   macos_PROGRAMS := ksocknal
 
-  nodist_ksocknal_SOURCES := socknal.c socknal_cb.c socknal_lib-darwin.c
+  nodist_ksocknal_SOURCES := socknal.c socknal_cb.c socknal_modparams.c socknal_lib-darwin.c
   DIST_SOURCES += socknal_lib-darwin.c socknal_lib-darwin.h
 
   ksocknal_CFLAGS := $(EXTRA_KCFLAGS)

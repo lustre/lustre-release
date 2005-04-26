@@ -173,11 +173,8 @@ PtlFailNid (ptl_handle_ni_t interface,
         struct list_head  *next;
         struct list_head   cull;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_HANDLE_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         if (threshold != 0) {
                 /* Adding a new entry */
@@ -1416,17 +1413,20 @@ do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, int loopback)
 ptl_ni_t *
 ptl_nid2ni (ptl_nid_t nid)
 {
+        struct list_head   *tmp;
+        ptl_ni_t           *ni;
+        
         /* Called holding PTL_LOCK */
 
-        if (list_empty(&ptl_apini.apini_nis))
-                return NULL;
-        
-        if (ptl_apini.apini_nis.next != ptl_apini.apini_nis.prev) {
-                CERROR ("Can't decide which NI\n");
-                return NULL;
+        list_for_each (tmp, &ptl_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+                
+                /* network type & number match in target NID and ni's NID */
+                if (((ni->ni_nid ^ nid)>>32) == 0)
+                        return ni;
         }
-        
-        return list_entry(ptl_apini.apini_nis.next, ptl_ni_t, ni_list);
+
+        return NULL;
 }
 
 ptl_err_t
@@ -1442,11 +1442,8 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
         unsigned long     flags;
         int               rc;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_MD_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
             fail_peer (target.nid, 1))          /* shall we now? */
@@ -1616,11 +1613,8 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
         unsigned long     flags;
         int               rc;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_MD_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
             fail_peer (target.nid, 1))          /* shall we now? */

@@ -152,7 +152,6 @@ typedef struct
         tTS_IB_GID        kib_svc_gid;          /* device/port GID */
         __u16             kib_svc_pkey;         /* device/port pkey */
         
-        ptl_nid_t         kib_nid;              /* my NID */
         struct semaphore  kib_nid_mutex;        /* serialise NID ops */
         struct semaphore  kib_listener_signal;  /* signal IP listener completion */
         struct socket    *kib_listener_sock;    /* IP listener's socket */

@@ -200,11 +200,8 @@ PtlMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
         unsigned long flags;
         int           rc;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_NI_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
@@ -248,11 +245,8 @@ PtlMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
         unsigned long flags;
         int           rc;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_NI_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
@@ -286,11 +280,8 @@ PtlMDUnlink (ptl_handle_md_t mdh)
         ptl_libmd_t     *md;
         unsigned long    flags;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_MD_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
 
@@ -333,11 +324,8 @@ PtlMDUpdate(ptl_handle_md_t mdh,
         unsigned long flags;
         int           rc;
 
-        if (!ptl_init)
-                return PTL_NO_INIT;
-
-        if (ptl_apini.apini_refcount == 0)
-                return PTL_MD_INVALID;
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
 
         PTL_LOCK(flags);
 

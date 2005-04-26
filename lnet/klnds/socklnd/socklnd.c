@@ -26,7 +26,6 @@
 #include "socknal.h"
 
 ptl_nal_t ksocknal_nal = {
-        .nal_name       = "tcp",
         .nal_type       = SOCKNAL,
         .nal_startup    = ksocknal_startup,
         .nal_shutdown   = ksocknal_shutdown,
@@ -36,7 +35,6 @@ ptl_nal_t ksocknal_nal = {
         .nal_recv_pages = ksocknal_recv_pages,
 };
 ksock_nal_data_t        ksocknal_data;
-ksock_tunables_t        ksocknal_tunables;
 
 kpr_nal_interface_t ksocknal_router_interface = {
         kprni_nalid:      SOCKNAL,
@@ -1118,7 +1116,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
 
         /* Set the deadline for the outgoing HELLO to drain */
         conn->ksnc_tx_bufnob = SOCK_WMEM_QUEUED(sock);
-        conn->ksnc_tx_deadline = cfs_time_shift(ksocknal_tunables.ksnd_io_timeout);
+        conn->ksnc_tx_deadline = cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
         mb();       /* order with adding to peer's conn list */
 
         list_add (&conn->ksnc_list, &peer->ksnp_conns);
@@ -1781,12 +1779,29 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                 break;
         }
         case NAL_CMD_ADD_PEER: {
+#if 1
+                CDEBUG(D_WARNING, "ADD_PEER: ignoring "
+                       LPX64"@%u.%u.%u.%u:%d\n",
+                       pcfg->pcfg_nid, 
+                       HIPQUAD(pcfg->pcfg_id),  /* IP */
+                       pcfg->pcfg_misc);        /* port */
+                rc = 0;
+#else
                 rc = ksocknal_add_peer (pcfg->pcfg_nid,
                                         pcfg->pcfg_id, /* IP */
                                         pcfg->pcfg_misc); /* port */
+#endif
                 break;
         }
         case NAL_CMD_DEL_PEER: {
+                if (pcfg->pcfg_flags) {         /* single_share */
+                        CDEBUG(D_WARNING, "DEL_PEER: ignoring "
+                               LPX64"@%u.%u.%u.%u\n",
+                               pcfg->pcfg_nid, 
+                               HIPQUAD(pcfg->pcfg_id)); /* IP */
+                        rc = 0;
+                        break;
+                }
                 rc = ksocknal_del_peer (pcfg->pcfg_nid,
                                         pcfg->pcfg_id, /* IP */
                                         pcfg->pcfg_flags); /* single_share? */
@@ -2197,14 +2212,9 @@ ksocknal_startup (ptl_ni_t *ni, char **interfaces)
 void __exit
 ksocknal_module_fini (void)
 {
-#ifdef CONFIG_SYSCTL
-        if (ksocknal_tunables.ksnd_sysctl != NULL)
-                unregister_sysctl_table (ksocknal_tunables.ksnd_sysctl);
-#endif
         ptl_unregister_nal(&ksocknal_nal);
+        ksocknal_lib_tunables_fini();
 }
-
-extern cfs_sysctl_table_t ksocknal_top_ctl_table[];
 
 int __init
 ksocknal_module_init (void)
@@ -2213,54 +2223,15 @@ ksocknal_module_init (void)
 
         /* packet descriptor must fit in a router descriptor's scratchpad */
         CLASSERT(sizeof (ksock_tx_t) <= sizeof (kprfd_scratch_t));
-        /* the following must be sizeof(int) for proc_dointvec() */
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_io_timeout) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_eager_ack) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_typed_conns) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_min_bulk) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_buffer_size) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_nagle) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_keepalive_idle) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_keepalive_count) == sizeof (int));
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_keepalive_intvl) == sizeof (int));
-#if CPU_AFFINITY
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_irq_affinity) == sizeof (int));
-#endif
-#if SOCKNAL_ZC
-        CLASSERT(sizeof (ksocknal_tunables.ksnd_zc_min_frag) == sizeof (int));
-#endif
         /* check ksnr_connected/connecting field large enough */
         CLASSERT(SOCKNAL_CONN_NTYPES <= 4);
 
-        /* Initialise dynamic tunables to defaults once only */
-        ksocknal_tunables.ksnd_io_timeout      = SOCKNAL_IO_TIMEOUT;
-        ksocknal_tunables.ksnd_eager_ack       = SOCKNAL_EAGER_ACK;
-        ksocknal_tunables.ksnd_typed_conns     = SOCKNAL_TYPED_CONNS;
-        ksocknal_tunables.ksnd_min_bulk        = SOCKNAL_MIN_BULK;
-        ksocknal_tunables.ksnd_buffer_size     = SOCKNAL_BUFFER_SIZE;
-        ksocknal_tunables.ksnd_nagle           = SOCKNAL_NAGLE;
-        ksocknal_tunables.ksnd_keepalive_idle  = SOCKNAL_KEEPALIVE_IDLE;
-        ksocknal_tunables.ksnd_keepalive_count = SOCKNAL_KEEPALIVE_COUNT;
-        ksocknal_tunables.ksnd_keepalive_intvl = SOCKNAL_KEEPALIVE_INTVL;
-#if CPU_AFFINITY
-        ksocknal_tunables.ksnd_irq_affinity = SOCKNAL_IRQ_AFFINITY;
-#endif
-#if SOCKNAL_ZC
-        ksocknal_tunables.ksnd_zc_min_frag  = SOCKNAL_ZC_MIN_FRAG;
-#endif
+        rc = ksocknal_lib_tunables_init();
+        if (rc != 0)
+                return rc;
 
-        rc = ptl_register_nal(&ksocknal_nal);
-        if (rc != PTL_OK) {
-                CERROR("Can't register SOCKNAL: %d\n", rc);
-                return (-ENOMEM);               /* or something... */
-        }
-
-#ifdef CONFIG_SYSCTL
-        /* Press on regardless even if registering sysctl doesn't work */
-        ksocknal_tunables.ksnd_sysctl =
-                register_sysctl_table (ksocknal_top_ctl_table, 0);
-#endif
-        return (0);
+        ptl_register_nal(&ksocknal_nal);
+        return 0;
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
