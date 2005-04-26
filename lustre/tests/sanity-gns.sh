@@ -418,7 +418,6 @@ setup_object() {
     local OBJPATH=$1
     local OBJECT=$2
     local CONTENT=$3
-    local EXTRA_OPT=$4
     
     mkdir -p $OBJPATH || return $?
     echo -n $CONTENT > $OBJPATH/$OBJECT || return $?
@@ -428,15 +427,14 @@ setup_object() {
     echo ""
     echo "================================================================="
     
-    chmod u+s $OBJPATH $EXTRA_OPT
+    chmod u+s $OBJPATH -R
     return $?
 }
 
 cleanup_object() {
     local OBJPATH=$1
-    local EXTRA_OPT=$2
 
-    chmod u-s $OBJPATH $EXTRA_OPT
+    chmod u-s $OBJPATH -R
     umount $OBJPATH >/dev/null 2>&1
     rm -fr $OBJPATH >/dev/null 2>&1
 }
@@ -919,7 +917,7 @@ test_2g() {
 
     disable_gns
 
-    echo "preparing mount object at $DIR/gns_test_2g/$OBJECT..."
+    echo "preparing mount object at $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT..."
     setup_object $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
 $OBJECT "-t ext2 $LOOP_DEV" || error
 
