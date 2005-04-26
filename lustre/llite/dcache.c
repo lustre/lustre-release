@@ -167,10 +167,16 @@ restart:
                         lustre_dump_dentry(dentry, 1);
                         portals_debug_dumpstack(NULL);
                 } else if (d_mountpoint(dentry)) {
-                        CERROR("called on mountpoint (?) dentry=%p, inode=%p "
-                               "ino=%lu\n", dentry, inode, inode->i_ino);
-                        lustre_dump_dentry(dentry, 1);
-                        portals_debug_dumpstack(NULL);
+                        /* For mountpoints we skip removal of the dentry
+                           which happens solely because we have a lock on it
+                           obtained when this dentry was not a mountpoint yet */
+                        CDEBUG(D_DENTRY, "Skippind mountpoint dentry removal "
+                                         "%.*s (%p) parent %p\n",
+                                          dentry->d_name.len,
+                                          dentry->d_name.name,
+                                          dentry, dentry->d_parent);
+
+                        continue;
                 }
 
                 if (atomic_read(&dentry->d_count) == 0) {
