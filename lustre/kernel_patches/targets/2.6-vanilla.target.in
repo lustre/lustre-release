@@ -4,6 +4,7 @@ KERNEL=linux-$lnxmaj.tar.gz
 SERIES=2.6-vanilla
 VERSION=$lnxmaj
 EXTRA_VERSION=lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
 RHBUILD=0
 
 BASE_ARCHS=""

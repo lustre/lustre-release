@@ -5,6 +5,7 @@ KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=rhel-2.4.21
 VERSION=${lnxmaj}
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
 RHBUILD=1
 
 BASE_ARCHS="i686 x86_64 ia64"

@@ -6,6 +6,7 @@ KERNEL=linux-$lnxmaj-$lnxrel.tar.gz
 SERIES=
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
+LUSTRE_VERSION=@VERSION@
 RHBUILD=0
 LINUX26=1
 SUSEBUILD=1
