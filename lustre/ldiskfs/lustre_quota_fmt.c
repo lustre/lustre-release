@@ -550,6 +550,7 @@ out_buf:
 }
 
 /* Delete dquot from tree */
+#ifndef	QFMT_NO_DELETE
 static int lustre_delete_dquot(struct lustre_dquot *dquot)
 {
 	uint tmp = LUSTRE_DQTREEOFF;
@@ -558,6 +559,7 @@ static int lustre_delete_dquot(struct lustre_dquot *dquot)
 		return 0;
 	return remove_tree(dquot, &tmp, 0);
 }
+#endif
 
 /* Find entry in block */
 static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk)
@@ -669,7 +671,8 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 			/* We need to escape back all-zero structure */
 			memset(&empty, 0, sizeof(struct lustre_disk_dqblk));
 			empty.dqb_itime = cpu_to_le64(1);
-			if (!memcmp(&empty, &ddquot, sizeof(struct lustre_disk_dqblk)))
+			if (!memcmp(&empty, &ddquot,
+				    sizeof(struct lustre_disk_dqblk)))
 				ddquot.dqb_itime = 0;
 		}
 		set_fs(fs);
@@ -683,11 +686,12 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 int lustre_commit_dquot(struct lustre_dquot *dquot)
 {
 	int rc = 0;
-	/* We clear the flag everytime so we don't loop when there was an IO error... */
+	/* always clear the flag so we don't loop on an IO error... */
 	clear_bit(DQ_MOD_B, &dquot->dq_flags);
 
-	/* The block/inode usage in admin quotafile isn't the real usage over all cluster,
-	 * so keep the fake dquot entry on disk is meaningless, just remove it */
+	/* The block/inode usage in admin quotafile isn't the real usage
+	 * over all cluster, so keep the fake dquot entry on disk is
+	 * meaningless, just remove it */
 #ifndef	QFMT_NO_DELETE
 	if (test_bit(DQ_FAKE_B, &dquot->dq_flags))
 		rc = lustre_delete_dquot(dquot);
@@ -700,7 +704,7 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
 #endif
 	if (rc < 0)
 		return rc;
-	
+
 	if (lustre_info_dirty(&dquot->dq_info->qi_info[dquot->dq_type]))
 		rc = lustre_write_quota_info(dquot->dq_info, dquot->dq_type);
 
