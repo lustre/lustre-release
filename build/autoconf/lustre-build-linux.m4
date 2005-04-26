@@ -319,6 +319,5 @@ LC_PROG_LINUX
 # AM_CONDITIONALS for linux
 #
 AC_DEFUN([LB_LINUX_CONDITIONALS],
-[AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
-AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
+[AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 ])
