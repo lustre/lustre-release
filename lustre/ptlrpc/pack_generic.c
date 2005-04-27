@@ -97,10 +97,6 @@ void lustre_pack_secdesc(struct ptlrpc_request *req, int size)
 {
 #ifdef __KERNEL__
         struct mds_req_sec_desc *rsd;
-        
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
-        struct group_info *ginfo;
-#endif
 
         rsd = lustre_msg_buf(req->rq_reqmsg,
                              MDS_REQ_SECDESC_OFF, size);
@@ -115,13 +111,11 @@ void lustre_pack_secdesc(struct ptlrpc_request *req, int size)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         task_lock(current);
-        get_group_info(current->group_info);
-        ginfo = current->group_info;
-        task_unlock(current);
-        if (rsd->rsd_ngroups > ginfo->ngroups)
-                rsd->rsd_ngroups = ginfo->ngroups;
-        memcpy(rsd->rsd_groups, ginfo->blocks[0],
+        if (rsd->rsd_ngroups > current->group_info->ngroups)
+                rsd->rsd_ngroups = current->group_info->ngroups;
+        memcpy(rsd->rsd_groups, current->group_info->blocks[0],
                rsd->rsd_ngroups * sizeof(__u32));
+        task_unlock(current);
 #else
         LASSERT(rsd->rsd_ngroups <= NGROUPS);
         if (rsd->rsd_ngroups > current->ngroups)
