@@ -7,20 +7,60 @@ import Lustre
 # XML processing and query
 
 class LustreDB:
+    caching_enabled = 1
+
+    def __init__(self):
+        self.lookup_uuid_cache = {}
+        self.lookup_name_cache = {}
+        self.lookup_class_cache = {}
+        self.lookup_val_cache = {}
+        self.lookup_refs_cache = {}
+        self.lookup_lovtgts_cache = {}
+        self.lookup_nid2srv_cache = {}
+        self.lookup_activedev_cache = {}
+        self.lookup_tgtdev_cache = {}
+        self.lookup_group_cache = {}
+
+        self.lookup_allrefs_cache = None
+        self.lookup_networks_cache = None
+
     def lookup(self, uuid):
         """ lookup returns a new LustreDB instance"""
-        return self._lookup_by_uuid(uuid)
+        if self.caching_enabled and self.lookup_uuid_cache.has_key(uuid):
+            res = self.lookup_uuid_cache[uuid]
+        else:
+            res = self._lookup_by_uuid(uuid)
+            if self.caching_enabled:
+                self.lookup_uuid_cache[uuid] = res
+        return res
 
     def lookup_name(self, name, class_name = ""):
         """ lookup returns a new LustreDB instance"""
-        return self._lookup_by_name(name, class_name)
+        if self.caching_enabled and self.lookup_name_cache.has_key((name, class_name)):
+            res = self.lookup_name_cache[(name, class_name)]
+        else:
+            res = self._lookup_by_name(name, class_name)
+            if self.caching_enabled:
+                self.lookup_name_cache[(name, class_name)] = res
+        return res
 
     def lookup_class(self, class_name):
         """ lookup returns a new LustreDB instance"""
-        return self._lookup_by_class(class_name)
+        if self.caching_enabled and self.lookup_class_cache.has_key(class_name):
+            res = self.lookup_class_cache[class_name]
+        else:
+            res = self._lookup_by_class(class_name)
+            if self.caching_enabled:
+                self.lookup_class_cache[class_name] = res
+        return res
 
     def get_val(self, tag, default=None):
-        v =  self._get_val(tag)
+        if self.caching_enabled and self.lookup_class_cache.has_key(tag):
+            v = self.lookup_val_cache[tag]
+        else:
+            v =  self._get_val(tag)
+            if self.caching_enabled:
+                self.lookup_val_cache[tag] = v
         if v:
             return v
         if default != None:
@@ -31,7 +71,7 @@ class LustreDB:
         return self._get_class()
 
     def get_val_int(self, tag, default=0):
-        str = self._get_val(tag)
+        str = self.get_val(tag)
         try:
             if str:
                 return int(str)
@@ -42,34 +82,55 @@ class LustreDB:
     def get_first_ref(self, tag):
         """ Get the first uuidref of the type TAG. Only
         one is expected.  Returns the uuid."""
-        uuids = self._get_refs(tag)
+        uuids = self.get_refs(tag)
         if len(uuids) > 0:
             return  uuids[0]
         return None
     
     def get_refs(self, tag):
         """ Get all the refs of type TAG.  Returns list of uuids. """
-        uuids = self._get_refs(tag)
+        if self.caching_enabled and self.lookup_refs_cache.has_key(tag):
+            uuids = self.lookup_refs_cache[tag]
+        else:
+            uuids = self._get_refs(tag)
+            if self.caching_enabled:
+                self.lookup_refs_cache[tag] = uuids
         return uuids
 
     def get_all_refs(self):
         """ Get all the refs.  Returns list of uuids. """
-        uuids = self._get_all_refs()
+        if self.caching_enabled and self.lookup_allrefs_cache:
+            uuids = self.lookup_allrefs_cache
+        else:
+            uuids = self._get_all_refs()
+            if self.caching_enabled:
+                self.lookup_allrefs_cache = uuids
         return uuids
 
     def get_lov_tgts(self, tag):
         """ Returns list of lov tgts. """
-        tgts = self._get_lov_tgts(tag)
+        if self.caching_enabled and self.lookup_lovtgts_cache.has_key(tag):
+            tgts = self.lookup_lovtgts_cache[tag]
+        else:
+            tgts = self._get_lov_tgts(tag)
+            if self.caching_enabled:
+                self.lookup_lovtgts_cache[tag] = tgts
         return tgts
  
     def nid2server(self, nid, net_type, cluster_id):
-        netlist = self.lookup_class('network')
-        for net_db in netlist:
-            if (net_db.get_val('nid') == nid and
-                net_db.get_val('nettype') == net_type and
-                net_db.get_val('clusterid') == cluster_id):
-                return net_db
-        return None
+        if self.caching_enabled and self.lookup_nid2srv_cache.has_key((nid, net_type, cluster_id)):
+            res = self.lookup_nid2srv_cache[(nid, net_type, cluster_id)]
+        else:
+            netlist = self.lookup_class('network')
+            for net_db in netlist:
+                if (net_db.get_val('nid') == nid and
+                    net_db.get_val('nettype') == net_type and
+                    net_db.get_val('clusterid') == cluster_id):
+                    res = net_db
+                    break
+            if self.caching_enabled:
+                self.lookup_nid2srv_cache[(nid, net_type, cluster_id)] = res
+        return res
     
     # Find the target_device for target on a node
     # node->profiles->device_refs->target
@@ -81,44 +142,68 @@ class LustreDB:
 
     # get all network uuids for this node
     def get_networks(self):
-        ret = []
-        prof_list = self.get_refs('profile')
-        for prof_uuid in prof_list:
-            prof_db = self.lookup(prof_uuid)
-            net_list = prof_db.get_refs('network')
-            for net_uuid in net_list:
-                ret.append(net_uuid)
+        if self.caching_enabled and self.lookup_networks_cache:
+            ret = self.lookup_networks_cache
+        else:
+            ret = []
+            prof_list = self.get_refs('profile')
+            for prof_uuid in prof_list:
+                prof_db = self.lookup(prof_uuid)
+                net_list = prof_db.get_refs('network')
+                for net_uuid in net_list:
+                    ret.append(net_uuid)
+            if self.caching_enabled:
+                self.lookup_networks_cache = ret
         return ret
 
     def get_active_dev(self, tgtuuid):
-        tgt = self.lookup(tgtuuid)
-        tgt_dev_uuid =tgt.get_first_ref('active')
+        if self.caching_enabled and self.lookup_activedev_cache.has_key(tgtuuid):
+            tgt_dev_uuid = self.lookup_activedev_cache[tgtuuid]
+        else:
+            tgt = self.lookup(tgtuuid)
+            tgt_dev_uuid = tgt.get_first_ref('active')
+            if self.caching_enabled:
+                self.lookup_activedev_cache[tgtuuid] = tgt_dev_uuid
         return tgt_dev_uuid
 
     def get_tgt_dev(self, tgtuuid):
-        prof_list = self.get_refs('profile')
-        for prof_uuid in prof_list:
-            prof_db = self.lookup(prof_uuid)
-            if not prof_db:
-                panic("profile:", profile, "not found.")
-            for ref_class, ref_uuid in prof_db.get_all_refs(): 
-                if ref_class in ('osd', 'mdsdev'):
-                    devdb = self.lookup(ref_uuid)
-                    uuid = devdb.get_first_ref('target')
-                    if tgtuuid == uuid:
-                        return ref_uuid
-        return None
+        if self.caching_enabled and self.lookup_tgtdev_cache.has_key(tgtuuid):
+            res = self.lookup_tgtdev_cache[tgtuuid]
+        else:
+            prof_list = self.get_refs('profile')
+            res = None
+            for prof_uuid in prof_list:
+                prof_db = self.lookup(prof_uuid)
+                if not prof_db:
+                    panic("profile:", profile, "not found.")
+                for ref_class, ref_uuid in prof_db.get_all_refs(): 
+                    if ref_class in ('osd', 'mdsdev'):
+                        devdb = self.lookup(ref_uuid)
+                        uuid = devdb.get_first_ref('target')
+                        if tgtuuid == uuid:
+                            res = ref_uuid
+                            break
+                if not res is None:
+                    break
+            if self.caching_enabled:
+                self.lookup_tgtdev_cache[tgtuuid] = res
+        return res
 
     def get_group(self, group):
-        ret = []
-        devs = self.lookup_class('mds')
-        for tgt in devs:
-            if tgt.get_val('group', "") == group:
-                ret.append(tgt.getUUID())
-        devs = self.lookup_class('ost')
-        for tgt in devs:
-            if tgt.get_val('group', "") == group:
-                ret.append(tgt.getUUID())
+        if self.caching_enabled and self.lookup_group_cache.has_key(group):
+            ret = self.lookup_group_cache[group]
+        else:
+            ret = []
+            devs = self.lookup_class('mds')
+            for tgt in devs:
+                if tgt.get_val('group', "") == group:
+                    ret.append(tgt.getUUID())
+            devs = self.lookup_class('ost')
+            for tgt in devs:
+                if tgt.get_val('group', "") == group:
+                    ret.append(tgt.getUUID())
+            if self.caching_enabled:
+                self.lookup_group_cache[group] = ret
         return ret
 
     # Change the current active device for a target
@@ -130,6 +215,8 @@ class LustreDB:
 
 class LustreDB_XML(LustreDB):
     def __init__(self, dom, root_node):
+        LustreDB.__init__(self)
+
         # init xmlfile
         self.dom_node = dom
         self.root_node = root_node
@@ -306,6 +393,8 @@ class LustreDB_LDAP(LustreDB):
                  user = "cn=Manager, fs=lustre",
                  pw   = ""
                  ):
+        LustreDB.__init__(self)
+
         self._name = name
         self._attrs = attrs
         self._base = base

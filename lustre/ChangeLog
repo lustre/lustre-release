@@ -21,6 +21,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- handle IO errors in 2.6 obdfilter bio completion routine (6046)
 	- automatically evict dead clients (5921)
 	- Update file size properly in create+truncate+fstat case (6196)
+	- Do not unhash mountpoint dentries (5907)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
@@ -39,8 +40,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- support for mountfsoptions and clientoptions to the Lustre LDAP (5873)
 	- improved "lustre status" script
 	- initialize blocksize for non-regular files (6062)
-	- Do not unhash mountpoint dentries (5907)
 	- added --disable-server and --disable-client configure options (5782)
+	- introduce a lookup cache for lconf to avoid repeated DB scans (6204)
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
