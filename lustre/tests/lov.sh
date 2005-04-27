@@ -16,7 +16,7 @@ MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
 
-OSTCOUNT=${OSTCOUNT:-2}
+OSTCOUNT=${OSTCOUNT:-5}
 # OSTDEVN will still override the device for OST N
 
 OSTSIZE=${OSTSIZE:-150000}
