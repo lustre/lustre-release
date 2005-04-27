@@ -21,7 +21,9 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- handle IO errors in 2.6 obdfilter bio completion routine (6046)
 	- automatically evict dead clients (5921)
 	- Update file size properly in create+truncate+fstat case (6196)
-	- Do not unhash mountpoint dentries (5907)
+	- Do not unhash mountpoint dentries, do not allow removal of
+	  mountpoints (5907)
+	- Avoid lock ordering deadlock issue with write/truncate (6203,5654)
 	- reserve enough journal credits in fsfilt_start_log for setattr (4554)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
