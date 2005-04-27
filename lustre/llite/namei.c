@@ -684,11 +684,22 @@ static int ll_rmdir_raw(struct nameidata *nd)
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
+        struct dentry *dentry;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
 
+        /* Check if we have something mounted at the dir we are going to delete
+         * In such a case there would always be dentry present. */
+        dentry = d_lookup(nd->dentry, &nd->last);
+        if (dentry) {
+                int mounted = d_mountpoint(dentry);
+                dput(dentry);
+                if (mounted)
+                        RETURN(-EBUSY);
+        }
+                
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
                                nd->last.len, S_IFDIR);
         rc = mdc_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
