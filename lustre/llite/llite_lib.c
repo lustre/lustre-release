@@ -1102,8 +1102,17 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
 
+                up(&inode->i_sem);
+                UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                DOWN_WRITE_I_ALLOC_SEM(inode);
+                down(&inode->i_sem);
+#else
+                down(&inode->i_sem);
+                DOWN_WRITE_I_ALLOC_SEM(inode);
+#endif
                 if (rc != 0)
                         RETURN(rc);
 
