@@ -112,8 +112,6 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
                 nblocks += EXT3_SINGLEDATA_TRANS_BLOCKS;
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 /* no break */
         case FSFILT_OP_SYMLINK:
                 /* additional block + block bitmap + GDT for long symlink */
@@ -134,9 +132,6 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                         }
                 }
 #endif
-                /* create/update logs for each stripe */
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 /* no break */
         }
         case FSFILT_OP_MKDIR:
@@ -148,12 +143,18 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* modify parent directory */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                         EXT3_DATA_TRANS_BLOCKS;
+                /* create/update logs for each stripe */
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_SETATTR:
                 /* Setattr on inode */
                 nblocks += 1;
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                         EXT3_DATA_TRANS_BLOCKS;
+                /* quota chown log for each stripe */
+                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
                 /* blocks for log header bitmap update OR
@@ -811,7 +812,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 
         /*
          * Putting len of the actual extent we just inserted,
-         * we are asking ext3_ext_walk_space() to continue 
+         * we are asking ext3_ext_walk_space() to continue
          * scaning after that block
          */
         cex->ec_len = nex.ee_len;
@@ -1241,7 +1242,7 @@ struct chkquot {
         __u64                   cq_btime;
         __u64                   cq_itime;
 };
-                                                                                                                 
+
 static inline unsigned int const
 chkquot_hash(qid_t id, int type)
 {
@@ -1262,7 +1263,7 @@ find_chkquot(struct hlist_head *head, qid_t id, int type)
 
         return NULL;
 }
-                                                                                                                 
+
 static struct chkquot *alloc_chkquot(qid_t id, int type)
 {
         struct chkquot *cq;
@@ -1279,7 +1280,7 @@ static struct chkquot *alloc_chkquot(qid_t id, int type)
 
         return cq;
 }
-                                                                                                                 
+
 static struct chkquot *
 cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
       qid_t id, int type, int first_check)
@@ -1288,11 +1289,11 @@ cqget(struct super_block *sb, struct hlist_head *hash, struct list_head *list,
         struct if_dqblk dqb;
         struct chkquot *cq;
         int rc;
-                                                                                                                 
+
         cq = find_chkquot(head, id, type);
         if (cq)
                 return cq;
-        
+
         cq = alloc_chkquot(id, type);
         if (!cq)
                 return NULL;
@@ -1355,12 +1356,12 @@ get_group_desc(struct super_block *sb, int group)
 {
         unsigned long desc_block, desc;
         struct ext3_group_desc *gdp;
-                                                                                                                 
+
         desc_block = group / EXT3_DESC_PER_BLOCK(sb);
         desc = group % EXT3_DESC_PER_BLOCK(sb);
         gdp = (struct ext3_group_desc *)
               EXT3_SB(sb)->s_group_desc[desc_block]->b_data;
-                                                                                                                 
+
         return gdp + desc;
 }
 
@@ -1369,10 +1370,10 @@ read_inode_bitmap(struct super_block *sb, unsigned long group)
 {
         struct ext3_group_desc *desc;
         struct buffer_head *bh;
-                                                                                                                 
+
         desc = get_group_desc(sb, group);
         bh = sb_bread(sb, le32_to_cpu(desc->bg_inode_bitmap));
-                                                                                                                 
+
         return bh;
 }
 
@@ -1381,10 +1382,10 @@ static inline struct inode *ext3_iget_inuse(struct super_block *sb,
                                      int index, unsigned long ino)
 {
         struct inode *inode = NULL;
-                                                                                                                 
+
         if (ext3_test_bit(index, bitmap_bh->b_data))
                 inode = iget(sb, ino);
-                                                                                                                 
+
         return inode;
 }
 
@@ -1408,12 +1409,12 @@ static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
 
         qid[USRQUOTA] = inode->i_uid;
         qid[GRPQUOTA] = inode->i_gid;
-                                                                                                                 
+
         if (S_ISDIR(inode->i_mode) ||
             S_ISREG(inode->i_mode) ||
             S_ISLNK(inode->i_mode))
                 size = inode_get_bytes(inode);
-                                                                                                                 
+
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) if (Q_TYPESET(oqc, cnt)) {
                 cq = cqget(inode->i_sb, qctxt->hash, &qctxt->list, qid[cnt],
                            cnt, qctxt->first_check[cnt]);
@@ -1423,7 +1424,7 @@ static int add_inode_quota(struct inode *inode, struct qchk_ctxt *qctxt,
                 cq->cq_curspace += size;
                 cq->cq_curinodes ++;
         }
-                                                                                                                 
+
         return 0;
 }
 
@@ -1435,10 +1436,10 @@ static int v2_write_dqheader(struct file *f, int type)
         ssize_t size;
         loff_t offset = 0;
         mm_segment_t fs;
-                                                                                                                 
+
         dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
         dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
-                                                                                                                 
+
         fs = get_fs();
         set_fs(KERNEL_DS);
         size = f->f_op->write(f, (char *)&dqhead, sizeof(dqhead), &offset);
@@ -1447,7 +1448,7 @@ static int v2_write_dqheader(struct file *f, int type)
                 CERROR("error writing dqhead in quota file");
                 return -1;
         }
-                                                                                                                 
+
         return 0;
 }
 
@@ -1560,10 +1561,10 @@ static int commit_chkquot(struct super_block *sb, struct qchk_ctxt *qctxt,
         oqc.qc_dqblk.dqb_btime = cq->cq_btime;
         oqc.qc_dqblk.dqb_itime = cq->cq_itime;
         oqc.qc_dqblk.dqb_valid = QIF_ALL;
-        
+
         return fsfilt_ext3_quotactl(sb, &oqc);
 }
- 
+
 static int prune_chkquots(struct super_block *sb,
                           struct qchk_ctxt *qctxt, int error)
 {
@@ -1607,7 +1608,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
         for (i = 0; i < MAXQUOTAS; i++) if (Q_TYPESET(oqc, i)) {
                 rc = quota_onoff(sb, Q_QUOTAON, i);
-                if (!rc || rc == -EBUSY) 
+                if (!rc || rc == -EBUSY)
                         read_old_dqinfo(sb, i, qctxt->dqinfo);
                 else if (rc == -ENOENT)
                         qctxt->first_check[i] = 1;
@@ -1700,9 +1701,9 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
                 rc = lustre_read_dquot(dquot);
                 break;
         case QFILE_WR_DQUOT:
-                if (dquot->dq_dqb.dqb_ihardlimit || 
+                if (dquot->dq_dqb.dqb_ihardlimit ||
                     dquot->dq_dqb.dqb_isoftlimit ||
-                    dquot->dq_dqb.dqb_bhardlimit || 
+                    dquot->dq_dqb.dqb_bhardlimit ||
                     dquot->dq_dqb.dqb_bsoftlimit)
                         clear_bit(DQ_FAKE_B, &dquot->dq_flags);
                 else
