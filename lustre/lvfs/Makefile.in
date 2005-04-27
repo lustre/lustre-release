@@ -1,4 +1,5 @@
-MODULES := lvfs fsfilt_@BACKINGFS@ fsfilt_smfs
+MODULES := lvfs 
+@SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@ fsfilt_smfs
 
 @SNAPFS_TRUE@MODULES += fsfilt_snap_@BACKINGFS@ fsfilt_snap_smfs 
 

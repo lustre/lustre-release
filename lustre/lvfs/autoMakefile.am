@@ -16,10 +16,17 @@ endif
 
 if MODULES
 
-modulefs_DATA = lvfs$(KMODEXT) fsfilt_$(BACKINGFS)$(KMODEXT) fsfilt_smfs$(KMODEXT)
+modulefs_DATA := lvfs$(KMODEXT)
+
+if SERVER
+modulefs_DATA += fsfilt_$(BACKINGFS)$(KMODEXT) fsfilt_smfs$(KMODEXT)
 
 sources: fsfilt_$(BACKINGFS).c fsfilt_smfs.c fsfilt_snap_$(BACKINGFS).c
 	touch sources
+else
+sources:
+
+endif
 
 fsfilt_extN.c: fsfilt_ext3.c
 	sed -e "s/EXT3/EXTN/g" -e "s/ext3/extN/g" $< > $@

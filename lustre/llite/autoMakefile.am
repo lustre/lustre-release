@@ -4,7 +4,9 @@
 # See the file COPYING in this distribution
 
 if MODULES
+if CLIENT
 modulefs_DATA = llite$(KMODEXT)
+endif
 endif
 
 DIST_SOURCES := $(llite-objs:.o=.c) llite_internal.h rw24.c super.c rw26.c super25.c

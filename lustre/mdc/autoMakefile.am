@@ -11,7 +11,9 @@ libmdc_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
+if CLIENT
 modulefs_DATA = mdc$(KMODEXT)
+endif
 endif
 
 DIST_SOURCES = $(mdc-objs:.o=.c) mdc_internal.h

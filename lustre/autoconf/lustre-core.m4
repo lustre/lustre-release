@@ -405,7 +405,9 @@ AC_MSG_RESULT([$enable_smfs])
 # Lustre linux kernel checks
 #
 AC_DEFUN([LC_PROG_LINUX],
-[LC_CONFIG_BACKINGFS
+[if test x$enable_server = xyes ; then
+	LC_CONFIG_BACKINGFS
+fi
 LC_CONFIG_PINGER
 LC_CONFIG_GSS
 LC_CONFIG_SNAPFS
@@ -420,6 +422,26 @@ LC_HEADER_MM_INLINE
 LC_STRUCT_INODE
 LC_FUNC_DEV_SET_RDONLY
 ])
+
+#
+# LC_CONFIG_CLIENT_SERVER
+#
+# Build client/server sides of Lustre
+#
+AC_DEFUN([LC_CONFIG_CLIENT_SERVER],
+[AC_MSG_CHECKING([whether to build Lustre server support])
+AC_ARG_ENABLE([server],
+	AC_HELP_STRING([--disable-server],
+			[disable Lustre server support]),
+	[],[enable_server='yes'])
+AC_MSG_RESULT([$enable_server])
+
+AC_MSG_CHECKING([whether to build Lustre client support])
+AC_ARG_ENABLE([client],
+	AC_HELP_STRING([--disable-client],
+			[disable Lustre client support]),
+	[],[enable_client='yes'])
+AC_MSG_RESULT([$enable_client])])
 
 #
 # LC_CONFIG_LIBLUSTRE
@@ -483,6 +505,8 @@ AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
 AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
+AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
+AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 ])
 
 #

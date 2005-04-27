@@ -7,6 +7,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- drop import inflight refcount on signal_completed_replay error (5255)
        * miscellania
 	- add pid to ldlm debugging output (4922)
+	- add --disable-server and --disable-client configure options (5786)
 
 2004-10-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.3.3

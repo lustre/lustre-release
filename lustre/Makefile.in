@@ -8,15 +8,11 @@ subdir-m += lmv
 subdir-m += ptlrpc
 subdir-m += obdecho
 subdir-m += osc
-subdir-m += mdc
-subdir-m += mds
-subdir-m += obdfilter
-subdir-m += ost
-subdir-m += llite
 subdir-m += cobd
-subdir-m += smfs
 subdir-m += cmobd 
- 
+
+@SERVER_TRUE@subdir-m += smfs mds obdfilter ost
+@CLIENT_TRUE@subdir-m += mdc llite
 
 ifeq ($(PATCHLEVEL),4)
 subdir-m += ptlbd

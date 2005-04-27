@@ -5,9 +5,35 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS = include ldiskfs lvfs obdclass lov ldlm sec ptlrpc      \
-	obdecho osc mdc lmv  mds obdfilter ost llite cobd ptlbd smfs snapfs \
-	cmobd liblustre doc utils tests conf scripts autoconf
+ALWAYS_SUBDIRS := include lvfs obdclass lov ldlm sec ptlrpc	      \
+	obdecho osc lmv cobd ptlbd cmobd doc utils tests conf scripts \
+	autoconf
+
+SERVER_SUBDIRS := ldiskfs smfs snapfs obdfilter ost mds
+
+CLIENT_SUBDIRS := mdc llite
+
+LIBLUSTRE_SUBDIRS := liblustre
+
+SUBDIRS := $(ALWAYS_SUBDIRS)
+
+if SERVER
+SUBDIRS += $(SERVER_SUBDIRS)
+endif
+
+if CLIENT
+SUBDIRS += $(CLIENT_SUBDIRS)
+endif
+
+if LIBLUSTRE
+if !CLIENT
+SUBDIRS += $(CLIENT_SUBDIRS)
+endif
+SUBDIRS += $(LIBLUSTRE_SUBDIRS)
+endif
+
+DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS) \
+	$(LIBLUSTRE_SUBDIRS)
 
 EXTRA_DIST = BUGS FDL Rules.in kernel_patches
 
