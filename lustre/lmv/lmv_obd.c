@@ -639,10 +639,8 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 RETURN(-ENOMEM);
                 
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                if (lmv->tgts[i].ltd_exp == NULL) {
-                        CWARN("%s: NULL export for %d\n", obd->obd_name, i);
+                if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
-                }
 
                 rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, temp, max_age);
                 if (rc) {
