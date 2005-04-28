@@ -499,6 +499,8 @@ typedef enum {
         REINT_UNLINK   = 4,
         REINT_RENAME   = 5,
         REINT_OPEN     = 6,
+//      REINT_CLOSE    = 7,
+//      REINT_WRITE    = 8,
         REINT_MAX
 } mds_reint_t;
 
@@ -787,13 +789,15 @@ typedef enum {
         LCK_PR = 4,
         LCK_CW = 8,
         LCK_CR = 16,
-        LCK_NL = 32
+        LCK_NL = 32,
+//      LCK_GROUP = 64,
 } ldlm_mode_t;
 
 typedef enum {
         LDLM_PLAIN     = 10,
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,
+//      LDLM_IBITS     = 13,
         LDLM_MAX_TYPE
 } ldlm_type_t;
 
@@ -1142,10 +1146,10 @@ static inline struct ll_fid *obdo_fid(struct obdo *oa)
 
 /* qutoa */
 struct qunit_data {
-	__u32 qd_id;
-	__u32 qd_type;
-	__u32 qd_count;
-	__u32 qd_isblk;	/* indicating if it's block quota */
+        __u32 qd_id;
+        __u32 qd_type;
+        __u32 qd_count;
+        __u32 qd_isblk; /* indicating if it's block quota */
 };
 extern void lustre_swab_qdata(struct qunit_data *d);
 
