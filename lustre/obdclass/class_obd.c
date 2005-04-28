@@ -595,13 +595,13 @@ int obd_init_checks(void)
         CDEBUG(D_INFO, "LPU64=%s, LPD64=%s, LPX64=%s, LPSZ=%s, LPSSZ=%s\n",
                LPU64, LPD64, LPX64, LPSZ, LPSSZ);
 
-        CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", OBD_OBJECT_EOF);
+        CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", (__u64)OBD_OBJECT_EOF);
 
         u64val = OBD_OBJECT_EOF;
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 ret = -EINVAL;
         }
         len = snprintf(buf, sizeof(buf), LPX64, u64val);
@@ -614,12 +614,12 @@ int obd_init_checks(void)
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 ret = -EOVERFLOW;
         }
         if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 return -EOVERFLOW;
         }
         if (do_div(div64val, 256) != (u64val & 255)) {
