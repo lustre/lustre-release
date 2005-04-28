@@ -135,7 +135,8 @@ static int expired_lock_main(void *arg)
 
                         /* from waiting_locks_callback, but not in timer */
                         portals_debug_dumplog();
-                        portals_run_lbug_upcall(__FILE__, "waiting_locks_cb",
+                        portals_run_lbug_upcall(__FILE__,
+                                                "waiting_locks_callback",
                                                 expired_lock_thread.elt_dump);
 
                         spin_lock_bh(&waiting_locks_spinlock);
@@ -150,8 +151,8 @@ static int expired_lock_main(void *arg)
                                           l_pending_chain);
                         if ((void *)lock < LP_POISON + PAGE_SIZE &&
                             (void *)lock >= LP_POISON) {
-                                CERROR("free lock on elt list %p\n", lock);
                                 spin_unlock_bh(&waiting_locks_spinlock);
+                                CERROR("free lock on elt list %p\n", lock);
                                 LBUG();
                         }
                         list_del_init(&lock->l_pending_chain);
@@ -186,6 +187,9 @@ static void waiting_locks_callback(unsigned long unused)
 {
         struct ldlm_lock *lock, *last = NULL;
         char str[PTL_NALFMT_SIZE];
+
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
@@ -366,6 +370,8 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
                    conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid, str);
 
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
         ptlrpc_fail_export(lock->l_export);
 }
 
@@ -391,6 +397,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                         ldlm_failed_ast(lock, rc, ast_type);
                 }
         } else if (rc) {
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 if (rc == -EINVAL)
                         LDLM_DEBUG(lock, "client (nid %s) returned %d"
                                    " from %s AST - normal race",
@@ -402,6 +409,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                    (req->rq_repmsg != NULL) ?
                                    req->rq_repmsg->status : 0, ast_type);
                 ldlm_lock_cancel(lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 /* Server-side AST functions are called from ldlm_reprocess_all,
                  * which needs to be told to please restart its reprocessing. */
                 rc = -ERESTART;
@@ -499,10 +507,11 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LASSERT(lock != NULL);
 
         do_gettimeofday(&granted_time);
-        total_enqueue_wait = timeval_sub(&granted_time, &lock->l_enqueued_time);
+        total_enqueue_wait = timeval_sub(&granted_time,&lock->l_enqueued_time);
 
         if (total_enqueue_wait / 1000000 > obd_timeout)
-                LDLM_ERROR(lock, "enqueue wait took %luus", total_enqueue_wait);
+                LDLM_ERROR(lock, "enqueue wait took %luus from %lu",
+                           total_enqueue_wait, lock->l_enqueued_time.tv_sec);
 
         down(&lock->l_resource->lr_lvb_sem);
         if (lock->l_resource->lr_lvb_len) {
@@ -647,7 +656,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         LASSERT(req->rq_export);
 
         if (flags & LDLM_FL_REPLAY) {
-                lock = find_existing_lock(req->rq_export, 
+                lock = find_existing_lock(req->rq_export,
                                           &dlm_req->lock_handle1);
                 if (lock != NULL) {
                         DEBUG_REQ(D_HA, req, "found existing lock cookie "LPX64,
@@ -746,7 +755,8 @@ existing_lock:
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         /* Don't move a pending lock onto the export if it has already
          * been evicted.  Cancel it now instead. (bug 5683) */
-        if (req->rq_export->exp_failed) {
+        if (req->rq_export->exp_failed ||
+            OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT)) {
                 LDLM_ERROR(lock, "lock on destroyed export %p", req->rq_export);
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
@@ -788,6 +798,7 @@ existing_lock:
                         }
                         up(&lock->l_resource->lr_lvb_sem);
                 } else {
+                        ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
                 }
 
@@ -839,7 +850,8 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         }
 
         if (lock) {
-                ldlm_reprocess_all(lock->l_resource);
+                if (!req->rq_status)
+                        ldlm_reprocess_all(lock->l_resource);
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler END");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);

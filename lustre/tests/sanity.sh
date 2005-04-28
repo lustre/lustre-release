@@ -1998,8 +1998,7 @@ test_56() {
                 "lfs find --recursive $DIR/d56 wrong: found $FILENUM, expected $NUMFILESx2"
         FILENUM=`$LFIND $DIR/d56 | grep -c obdidx`
         [ $FILENUM -eq $NUMFILES ] || error \
-                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM,
-		expected $NUMFILES"
+                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM, expected $NUMFILES"
         echo "lfs find --recursive passed."
 
         # test lfs find with file instead of dir
@@ -2017,7 +2016,7 @@ test_56() {
 
         #test lfs find with --obd
         $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
-                error "lfs find --obd wrong_uuid should return error information"
+                error "lfs find --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 echo "skipping other lfs find --obd test" && return
@@ -2026,7 +2025,7 @@ test_56() {
         FOUND=`$LFIND -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs find --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' | \
+        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs find --obd wrong: should not show file on other obd"
         echo "lfs find --obd passed."
@@ -2394,6 +2393,19 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 run_test 72 "Test that remove suid works properly (bug5695) ===="
 
 #b_cray run_test 73 "multiple MDC requests (should not deadlock)"
+
+test_74() { # bug 6149, 6184
+	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
+	#
+	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
+	# will spin in a tight reconnection loop
+	sysctl -w lustre.fail_loc=0x8000030e
+	# get any lock
+	touch $DIR/f74
+	sysctl -w lustre.fail_loc=0
+	true
+}
+run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
