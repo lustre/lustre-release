@@ -71,6 +71,7 @@
 
 /* ...and make consistent... */
 
+#ifdef __KERNEL__
 #if (PTLRPC_MAX_BRW_SIZE > PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
 # undef  PTLRPC_MAX_BRW_SIZE
 # define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE)
@@ -82,10 +83,16 @@
 #if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)
 #error "PTLRPC_MAX_BRW_PAGES isn't a power of two"
 #endif
+#else /* !__KERNEL__ */
+/* PAGE_SIZE isn't a constant, can't use CPP on it.  We assume that the
+ * limit is on the number of pages for large pages, which is currently true. */
+# undef  PTLRPC_MAX_BRW_PAGES
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MAX_BRW_SIZE / PAGE_SIZE)
+#endif /* __KERNEL__ */
 
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
  * buffers */
-#define SVC_BUF_VMALLOC_THRESHOLD (2*PAGE_SIZE)
+#define SVC_BUF_VMALLOC_THRESHOLD (2 * PAGE_SIZE)
 
 /* The following constants determine how memory is used to buffer incoming
  * service requests.
