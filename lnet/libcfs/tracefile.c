@@ -255,7 +255,7 @@ static void collect_pages_on_cpu(void *info)
         tcd->tcd_cur_pages = 0;
         if (pc->pc_want_daemon_pages) {
                 list_splice(&tcd->tcd_daemon_pages, &pc->pc_pages);
-                CFS_INIT_LIST_HEAD(&tcd->tcd_pages);
+                CFS_INIT_LIST_HEAD(&tcd->tcd_daemon_pages);
                 tcd->tcd_cur_daemon_pages = 0;
         }
         spin_unlock(&pc->pc_lock);
@@ -364,6 +364,7 @@ void trace_debug_print(void)
 
         spin_lock_init(&pc.pc_lock);
 
+        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
                 char *p, *file, *fn;
@@ -456,6 +457,7 @@ void trace_flush_pages(void)
 
         spin_lock_init(&pc.pc_lock);
 
+        pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 
