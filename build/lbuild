@@ -523,7 +523,8 @@ publish()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,disable-datestamp -- "$@")
+options=$(getopt -o d:D:h -l disable-datestamp,external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,with-linux: -- "$@")
+
 if [ $? != 0 ] ; then
     usage 1
 fi
