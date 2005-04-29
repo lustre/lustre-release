@@ -1,9 +1,14 @@
-Lustre can currently build against Red Hat 2.4-style kernel-source
-RPMs.  All other kernel-source RPMs are *unsupported* at this time.
+Lustre can currently build against Red Hat 2.4 and SuSE 2.6
+kernel-source RPMs.  All other kernel-source RPMs are *unsupported* at
+this time.
 
 Note that a Lustre-patched kernel is required for building Lustre; in
 most cases a kernel-source RPM from your Linux vendor will not contain
 the necessary patches.
+
+##
+## Instructions for Red Hat 2.4.x kernel-source RPMs
+##
 
 1.  kernel.h
 
@@ -72,3 +77,27 @@ Here is an example for configuring Lustre:
 ./configure --with-linux=/usr/src/linux-2.4.20-28.9_lustre.1.0.3 \
 --with-kernel-source-header=/boot/kernel.h \
 --with-linux-config=/boot/config-2.4.20-28.9_lustre.1.0.3smp
+
+##
+## Instructions for SuSE 2.6.x kernel-source RPMs
+##
+
+1.  kernel-syms
+
+In addition to the kernel-source rpm, you may need to install a
+kernel-syms rpm.  This should be included where you got your kernel
+rpm.
+
+2.  linux-obj
+
+You will need to choose the correct linux-obj directory for your
+machine.  They will be located in /usr/src/linux-$(uname
+-r)-obj/$ARCH/$FLAVOR.  Lustre should be configured with the
+--with-linux-obj option.
+
+3.  Example
+
+Here is an example for configuring Lustre:
+
+./configure --with-linux=/usr/src/linux-2.6.5-7.97 \
+--with-linux-obj=/usr/src/linux-2.6.5-7.97-obj/ppc64/pseries64
