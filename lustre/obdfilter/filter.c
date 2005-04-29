@@ -1450,8 +1450,11 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp != NULL);
 
         fed = &exp->exp_filter_data;
-        data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-        exp->exp_connect_flags = data->ocd_connect_flags;
+
+        if (data != NULL) {
+                data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
+                exp->exp_connect_flags = data->ocd_connect_flags;
+        }
 
         spin_lock_init(&fed->fed_lock);
 
