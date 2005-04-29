@@ -401,6 +401,7 @@ extern void ptl_queue_zombie_ni (ptl_ni_t *ni);
 static inline void
 ptl_ni_decref(ptl_ni_t *ni)
 {
+        /* CAVEAT EMPTOR! must NOT be holding PTL_LOCK() (deadlock) */
         LASSERT (atomic_read(&ni->ni_refcount) > 0);
         if (atomic_dec_and_test(&ni->ni_refcount))
                 ptl_queue_zombie_ni(ni);

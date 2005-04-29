@@ -168,7 +168,6 @@ ptl_fail_nid (ptl_nid_t nid, unsigned int threshold)
         struct list_head   cull;
 
         LASSERT (ptl_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
         
         if (threshold != 0) {
                 /* Adding a new entry */

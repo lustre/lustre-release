@@ -621,12 +621,13 @@ ptl_shutdown_nalnis (void)
                 list_del (&ni->ni_list);
 
                 ni->ni_shutdown = 1;
-                ptl_ni_decref(ni); /* drop apini's ref (shutdown on last ref) */
                 ptl_apini.apini_nzombie_nis++;
-        }
-        PTL_UNLOCK(flags);
+                PTL_UNLOCK(flags);
 
-        PTL_LOCK(flags);
+                ptl_ni_decref(ni); /* drop apini's ref (shutdown on last ref) */
+
+                PTL_LOCK(flags);
+        }
 
         /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
          * and shut them down in guaranteed thread context */
@@ -646,6 +647,7 @@ ptl_shutdown_nalnis (void)
 
                 ni = list_entry(ptl_apini.apini_zombie_nis.next,
                                 ptl_ni_t, ni_list);
+                list_del(&ni->ni_list);
 
                 PTL_UNLOCK(flags);
 
@@ -657,6 +659,7 @@ ptl_shutdown_nalnis (void)
                 PTL_LOCK(flags);
                 ptl_apini.apini_nzombie_nis--;
         }
+        PTL_UNLOCK(flags);
 }
 
 ptl_err_t
@@ -682,11 +685,11 @@ ptl_startup_nalnis (void)
                         break;
                 }
 
+                atomic_set(&ni->ni_refcount, 1);
+                atomic_inc(&nal->nal_refcount);
                 ni->ni_nal = nal;
                 ni->ni_nid = PTL_MKNID(PTL_MKNET(nal->nal_type, 0), 0);
                 /* for now */
-
-                atomic_inc(&nal->nal_refcount);
 
                 rc = (nal->nal_startup)(ni, &interface);
                 if (rc != PTL_OK) {

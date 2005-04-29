@@ -22,17 +22,17 @@
 #include "lonal.h"
 
 ptl_err_t
-klonal_send (ptl_ni_t     *ni,
-             void         *private,
-             ptl_msg_t    *ptlmsg,
-             ptl_hdr_t    *hdr,
-             int           type,
-             ptl_nid_t     nid,
-             ptl_pid_t     pid,
-             unsigned int  payload_niov,
-             struct iovec *payload_iov,
-             size_t        payload_offset,
-             size_t        payload_nob)
+klonal_send (ptl_ni_t        *ni,
+             void            *private,
+             ptl_msg_t       *ptlmsg,
+             ptl_hdr_t       *hdr,
+             int              type,
+             ptl_process_id_t target,
+             int              routing,
+             unsigned int     payload_niov,
+             struct iovec    *payload_iov,
+             size_t           payload_offset,
+             size_t           payload_nob)
 {
         klo_desc_t klod = {
                 .klod_type    = KLOD_IOV,
@@ -42,6 +42,9 @@ klonal_send (ptl_ni_t     *ni,
                 .klod_iov     = { .iov = payload_iov } };
         ptl_err_t rc;
 
+        LASSERT (!routing);
+        LASSERT (target.nid == ni->ni_nid);
+
         rc = ptl_parse(ni, hdr, &klod);
         if (rc == PTL_OK)
                 ptl_finalize(ni, private, ptlmsg, PTL_OK);
@@ -50,17 +53,17 @@ klonal_send (ptl_ni_t     *ni,
 }
 
 ptl_err_t
-klonal_send_pages (ptl_ni_t     *ni,
-                   void         *private,
-                   ptl_msg_t    *ptlmsg,
-                   ptl_hdr_t    *hdr,
-                   int           type,
-                   ptl_nid_t     nid,
-                   ptl_pid_t     pid,
-                   unsigned int  payload_niov,
-                   ptl_kiov_t   *payload_kiov,
-                   size_t        payload_offset,
-                   size_t        payload_nob)
+klonal_send_pages (ptl_ni_t        *ni,
+                   void            *private,
+                   ptl_msg_t       *ptlmsg,
+                   ptl_hdr_t       *hdr,
+                   int              type,
+                   ptl_process_id_t target,
+                   int              routing,
+                   unsigned int     payload_niov,
+                   ptl_kiov_t      *payload_kiov,
+                   size_t           payload_offset,
+                   size_t           payload_nob)
 {
         klo_desc_t klod = {
                 .klod_type     = KLOD_KIOV,
@@ -69,6 +72,9 @@ klonal_send_pages (ptl_ni_t     *ni,
                 .klod_nob      = payload_nob,
                 .klod_iov      = { .kiov = payload_kiov } };
         ptl_err_t   rc;
+
+        LASSERT (!routing);
+        LASSERT (target.nid == ni->ni_nid);
 
         rc = ptl_parse(ni, hdr, &klod);
         if (rc == PTL_OK)

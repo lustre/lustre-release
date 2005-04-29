@@ -163,13 +163,25 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
         /* known hostname? */
         if (('a' <= str[0] && str[0] <= 'z') ||
             ('A' <= str[0] && str[0] <= 'Z')) {
-                struct hostent *he = gethostbyname(str);
-                
-                if (he != NULL) {
-                        __u32 ip = *(__u32 *)he->h_addr;
+                char *tmp;
 
-                        *addr = ntohl(ip);
-                        return 1;
+                PORTAL_ALLOC(tmp, nob + 1);
+                if (tmp != NULL) {
+                        struct hostent *he;
+
+                        memcpy(tmp, str, nob);
+                        tmp[nob] = 0;
+
+                        he = gethostbyname(tmp);
+
+                        PORTAL_FREE(tmp, nob);
+
+                        if (he != NULL) {
+                                __u32 ip = *(__u32 *)he->h_addr;
+                                
+                                *addr = ntohl(ip);
+                                return 1;
+                        }
                 }
         }
 #endif

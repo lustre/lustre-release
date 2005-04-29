@@ -237,6 +237,7 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
         ptl_nid_t            gwnid;
 	struct list_head    *e;
         kpr_route_entry_t   *re;
+        unsigned long        flags;
         ptl_ni_t            *gwni = NULL;
         ptl_ni_t            *tmpni = NULL;
         kpr_gateway_entry_t *ge = NULL;
@@ -248,21 +249,23 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
 
         CDEBUG (D_NET, "lookup "LPX64" from %s\n", target_nid, 
                 (ni == NULL) ? "<>" : libcfs_nid2str(ni->ni_nid));
-        LASSERT (!in_interrupt());
 
         if (ni == NULL) {                       /* ni not determined yet */
                 gwni = ptl_net2ni(target_net);  /* is it a local network? */
                 if (gwni != NULL) {
                         *nip = gwni;
-                        return ni->ni_nid;
+                        return gwni->ni_nid;
                 }
+        } else if (target_net == PTL_NIDNET(ni->ni_nid)) {
+                ptl_ni_addref(ni);    /* extra ref so caller can drop blindly */
+                return ni->ni_nid;
         }
 
-	read_lock (&kpr_rwlock);
+	read_lock_irqsave(&kpr_rwlock, flags);
 
         if (ni != NULL && ni->ni_shutdown) {
                 /* pre-determined ni is shutting down */
-                read_unlock (&kpr_rwlock);
+                read_unlock_irqrestore(&kpr_rwlock, flags);
 		return PTL_NID_ANY;
         }
 
@@ -300,7 +303,7 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
 	}
 
         if (ge == NULL) {
-                read_unlock (&kpr_rwlock);
+                read_unlock_irqrestore(&kpr_rwlock, flags);
                 LASSERT (gwni == NULL);
                 
                 return PTL_NID_ANY;
@@ -308,7 +311,7 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
         
         kpr_update_weight (ge, nob);
         gwnid = ge->kpge_nid;
-	read_unlock (&kpr_rwlock);
+	read_unlock_irqrestore(&kpr_rwlock, flags);
         
         /* NB can't deref 're/ge' after lock released! */
         CDEBUG (D_NET, "lookup %s from %s: %s\n",
@@ -336,6 +339,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         kpr_gateway_entry_t *ge = NULL;
         ptl_ni_t            *dst_ni = NULL;
         ptl_ni_t            *tmp_ni;
+        unsigned long        flags;
 	struct list_head    *e;
         kpr_route_entry_t   *re;
         int                  rc;
@@ -344,11 +348,10 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 libcfs_nid2str(target_nid), libcfs_nid2str(src_ni->ni_nid));
 
         LASSERT (nob == ptl_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
-        LASSERT (!in_interrupt());
 
 	fwd->kprfd_src_ni = src_ni;             /* stash calling ni */
 
-	read_lock (&kpr_rwlock);
+	read_lock_irqsave(&kpr_rwlock, flags);
 
         kpr_fwd_packets++;                      /* (loose) stats accounting */
         kpr_fwd_bytes += nob + sizeof(ptl_hdr_t);
@@ -399,7 +402,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 fwd->kprfd_gateway_nid = ge->kpge_nid;
                 atomic_inc (&kpr_queue_depth);
 
-                read_unlock (&kpr_rwlock);
+                read_unlock_irqrestore(&kpr_rwlock, flags);
 
                 CDEBUG (D_NET, "forward [%p] %s: src ni %s dst ni %s gw %s\n",
                         fwd, libcfs_nid2str(target_nid),
@@ -421,7 +424,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 
 	(fwd->kprfd_callback)(src_ni, fwd->kprfd_callback_arg, rc);
 
-        read_unlock (&kpr_rwlock);
+        read_unlock_irqrestore(&kpr_rwlock, flags);
 }
 
 void
@@ -472,7 +475,7 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
         re->kpre_net = net;
 
         LASSERT(!in_interrupt());
-	write_lock_irqsave (&kpr_rwlock, flags);
+	write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each (e, &kpr_gateways) {
                 kpr_gateway_entry_t *ge2 = list_entry(e, kpr_gateway_entry_t,
@@ -505,7 +508,7 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
         list_add (&re->kpre_list, &kpr_routes);
         kpr_routes_generation++;
 
-        write_unlock_irqrestore (&kpr_rwlock, flags);
+        write_unlock_irqrestore(&kpr_rwlock, flags);
         return (0);
 }
 
@@ -560,9 +563,10 @@ int
 kpr_get_route (int idx, __u32 *net, ptl_nid_t *gateway_nid, __u32 *alive)
 {
 	struct list_head  *e;
+        unsigned long      flags;
 
         LASSERT (!in_interrupt());
-	read_lock(&kpr_rwlock);
+	read_lock_irqsave(&kpr_rwlock, flags);
 
         for (e = kpr_routes.next; e != &kpr_routes; e = e->next) {
                 kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
@@ -574,12 +578,12 @@ kpr_get_route (int idx, __u32 *net, ptl_nid_t *gateway_nid, __u32 *alive)
                         *gateway_nid = ge->kpge_nid;
                         *alive = ge->kpge_alive;
 
-                        read_unlock(&kpr_rwlock);
+                        read_unlock_irqrestore(&kpr_rwlock, flags);
                         return (0);
                 }
         }
 
-        read_unlock (&kpr_rwlock);
+        read_unlock_irqrestore(&kpr_rwlock, flags);
         return (-ENOENT);
 }
 

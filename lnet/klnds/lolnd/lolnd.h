@@ -58,13 +58,13 @@ ptl_err_t klonal_startup (ptl_ni_t *ni, char **interfaces);
 void klonal_shutdown (ptl_ni_t *ni);
 ptl_err_t klonal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_nid_t nid, ptl_pid_t pid,
+                       int type, ptl_process_id_t tgt, int routing,
                        unsigned int payload_niov, 
                        struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
 ptl_err_t klonal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_nid_t nid, ptl_pid_t pid,
+                             int type, ptl_process_id_t tgt, int routing,
                              unsigned int payload_niov, 
                              ptl_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);

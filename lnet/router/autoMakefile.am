@@ -3,5 +3,9 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
+#
+# router is built into portals
+#
+
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kptlrouter-objs:%.o=%.c) router.h
+DIST_SOURCES = router.c proc.c router.h
