@@ -446,7 +446,7 @@ class LCTLInterface:
     network %s
     mynid %s
     quit """ % (net, nid)
-         self.run(cmds)
+        self.run(cmds)
 
     # add an interface
     def add_interface(self, net, ip, netmask = ""):
@@ -468,10 +468,11 @@ class LCTLInterface:
 
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
-        cmds = "\n  add_uuid %s %s@%s" %(uuid, nid, net_type)
+        cmds = "\n  add_uuid %s %s" %(uuid, nid)
         self.run(cmds)
 
     def add_peer(self, net_type, nid, hostaddr, port):
+        """ noop """
 #         if net_type  in ('tcp','openib','ra') and not config.lctl_dump:
 #             cmds =  """
 #   network %s
@@ -510,6 +511,7 @@ class LCTLInterface:
 
     # add a route to a range
     def add_route(self, net, gw, lo, hi):
+        """ noop """
 #         cmds =  """
 #   network %s
 #   add_route %s %s %s
@@ -522,6 +524,7 @@ class LCTLInterface:
 #             e.dump()
 
     def del_route(self, net, gw, lo, hi):
+        """ noop """
 #         cmds =  """
 #   ignore_errors
 #   network %s
@@ -531,6 +534,7 @@ class LCTLInterface:
 
     # add a route to a host
     def add_route_host(self, net, uuid, gw, tgt):
+        """ noop """
 #         self.add_uuid(net, uuid, tgt)
 #         cmds =  """
 #   network %s
@@ -545,6 +549,7 @@ class LCTLInterface:
 
     # add a route to a range
     def del_route_host(self, net, uuid, gw, tgt):
+        """ noop """
 #         self.del_uuid(uuid)
 #         cmds =  """
 #   ignore_errors
@@ -555,6 +560,7 @@ class LCTLInterface:
 
 
     def del_peer(self, net_type, nid, hostaddr):
+        """ noop """
 #         if net_type  in ('tcp',) and not config.lctl_dump:
 #                 cmds =  """
 #   ignore_errors
@@ -589,6 +595,7 @@ class LCTLInterface:
 
     # disconnect all
     def disconnectAll(self, net):
+        """ noop """
 #         cmds =  """
 #   ignore_errors
 #   network %s
