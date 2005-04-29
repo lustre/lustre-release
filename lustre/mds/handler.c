@@ -187,11 +187,6 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         RETURN(retval);
 }
 
-#ifndef DCACHE_DISCONNECTED
-#define DCACHE_DISCONNECTED DCACHE_NFSD_DISCONNECTED
-#endif
-
-
 /* Look up an entry by inode number. */
 /* this function ONLY returns valid dget'd dentries with an initialized inode
    or errors */
@@ -283,8 +278,10 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         LASSERT(exp);
         med = &exp->exp_mds_data;
 
-        data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
-        exp->exp_connect_flags = data->ocd_connect_flags;
+        if (data != NULL) {
+                data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
+                exp->exp_connect_flags = data->ocd_connect_flags;
+        }
 
         OBD_ALLOC(mcd, sizeof(*mcd));
         if (!mcd) {
@@ -296,6 +293,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         med->med_mcd = mcd;
 
         rc = mds_client_add(obd, &obd->u.mds, med, -1);
+        GOTO(out, rc);
 
 out:
         if (rc) {
@@ -904,7 +902,7 @@ static int mds_sync(struct ptlrpc_request *req)
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
         if (body == NULL)
-                GOTO(out, rc = -EPROTO);
+                GOTO(out, rc = -EFAULT);
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK)) {
@@ -1764,7 +1762,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         ping_evictor_start();
-        
+
         sema_init(&mds->mds_quota_info.qi_sem, 1);
         rc = qctxt_init(&mds->mds_quota_ctxt, mds->mds_sb, dqacq_handler);
         if (rc) {
@@ -1772,6 +1770,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 qctxt_cleanup(&mds->mds_quota_ctxt, 0);
                 GOTO(err_fs, rc);
         }
+
 
         RETURN(0);
 

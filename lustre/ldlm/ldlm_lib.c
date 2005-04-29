@@ -545,7 +545,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT_REQSWAB (req, 0);
         str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
-                CERROR("bad target UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -556,14 +556,15 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         }
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                CERROR("UUID '%s' is not available for connect\n", str);
+                DEBUG_REQ(D_ERROR, req, "UUID '%s' not available for connect\n",
+                          str);
                 GOTO(out, rc = -ENODEV);
         }
 
         LASSERT_REQSWAB (req, 1);
         str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
         if (str == NULL) {
-                CERROR("bad client UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -597,9 +598,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         memcpy(&conn, tmp, sizeof conn);
 
         data = lustre_swab_reqbuf(req, 3, sizeof(*data), lustre_swab_connect);
-        if (data == NULL)
-                GOTO(out, rc = -EPROTO);
-
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -655,8 +653,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
-        memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
-               sizeof(*data));
+        if (data)
+                memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
+                       sizeof(*data));
 
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
