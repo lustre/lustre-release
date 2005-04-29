@@ -92,7 +92,6 @@ void class_decref(struct obd_device *obd);
 struct config_llog_instance {
         char * cfg_instance;
         struct obd_uuid cfg_uuid;
-        ptl_nid_t  cfg_local_nid;
 };
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name, 
                             struct config_llog_instance *cfg);

@@ -2107,8 +2107,6 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_SETATTR_REC);
         LASSERTF(OBD_CFG_REC == 274857984, " found %lld\n",
                  (long long)OBD_CFG_REC);
-        LASSERTF(PTL_CFG_REC == 274923520, " found %lld\n",
-                 (long long)PTL_CFG_REC);
         LASSERTF(LLOG_GEN_REC == 274989056, " found %lld\n",
                  (long long)LLOG_GEN_REC);
         LASSERTF(LLOG_HDR_MAGIC == 275010873, " found %lld\n",

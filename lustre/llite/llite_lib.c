@@ -489,7 +489,6 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
 {
         struct lustre_cfg *lcfg = NULL;
         struct lustre_cfg_bufs bufs;
-        struct portals_cfg pcfg;
         char * peer = "MDS_PEER_UUID";
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
@@ -509,42 +508,16 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         class_uuid_unparse(uuid, &mdc_uuid);
         CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
 
-        if (lmd->lmd_local_nid) {
-                PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
-                pcfg.pcfg_nal = lmd->lmd_nal;
-                pcfg.pcfg_nid = lmd->lmd_local_nid;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
-        }
-
-        if (lmd->lmd_nal == SOCKNAL ||
-            lmd->lmd_nal == OPENIBNAL ||
-            lmd->lmd_nal == IIBNAL ||
-            lmd->lmd_nal == VIBNAL ||
-            lmd->lmd_nal == RANAL) {
-                PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
-                pcfg.pcfg_nal     = lmd->lmd_nal;
-                pcfg.pcfg_nid     = lmd->lmd_server_nid;
-                pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
-                pcfg.pcfg_misc    = lmd->lmd_port;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
-        }
-
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
 
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
-        lcfg->lcfg_nal = lmd->lmd_nal;
-        lcfg->lcfg_nid = lmd->lmd_server_nid;
-        LASSERT(lcfg->lcfg_nal);
-        LASSERT(lcfg->lcfg_nid);
+        lcfg->lcfg_nid = lmd->lmd_nid;
+        LASSERT(lcfg->lcfg_nid != PTL_NID_ANY);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
-                GOTO(out_del_conn, err);
+                GOTO(out, err);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
@@ -634,20 +607,6 @@ out_del_uuid:
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
 
-out_del_conn:
-        if (lmd->lmd_nal == SOCKNAL ||
-            lmd->lmd_nal == OPENIBNAL ||
-            lmd->lmd_nal == IIBNAL ||
-            lmd->lmd_nal == VIBNAL ||
-            lmd->lmd_nal == RANAL) {
-                PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
-                pcfg.pcfg_nal     = lmd->lmd_nal;
-                pcfg.pcfg_nid     = lmd->lmd_server_nid;
-                pcfg.pcfg_flags   = 1;          /* single_share */
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
-        }
 out:
         if (rc == 0)
                 rc = err;
@@ -730,7 +689,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
-                cfg.cfg_local_nid = lmd->lmd_local_nid;
                 err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 0);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);

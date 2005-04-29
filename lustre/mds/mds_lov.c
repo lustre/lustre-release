@@ -373,8 +373,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 if (data->ioc_type == LUSTRE_CFG_TYPE) {
                         rec.lrh_type = OBD_CFG_REC;
-                } else if (data->ioc_type == PORTALS_CFG_TYPE) {
-                        rec.lrh_type = PTL_CFG_REC;
                 } else {
                         CERROR("unknown cfg record type:%d \n", data->ioc_type);
                         RETURN(-EINVAL);

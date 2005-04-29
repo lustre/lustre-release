@@ -133,34 +133,7 @@ int init_lib_portals()
         RETURN(rc);
 }
 
-int
-kportal_nal_cmd(struct portals_cfg *pcfg)
-{
-        /* handle portals command if we want */
-        return 0;
-}
-
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
-
-int lib_ioctl_nalcmd(int dev_id, int opc, void * ptr)
-{
-        struct portal_ioctl_data *ptldata;
-
-        if (opc == IOC_PORTAL_NAL_CMD) {
-                ptldata = (struct portal_ioctl_data *) ptr;
-
-                if (ptldata->ioc_nal_cmd == NAL_CMD_REGISTER_MYNID) {
-                        tcpnal_mynid = ptldata->ioc_nid;
-                        printf("mynid: %u.%u.%u.%u\n",
-                                (unsigned)(tcpnal_mynid>>24) & 0xFF,
-                                (unsigned)(tcpnal_mynid>>16) & 0xFF,
-                                (unsigned)(tcpnal_mynid>>8) & 0xFF,
-                                (unsigned)(tcpnal_mynid) & 0xFF);
-                }
-        }
-
-        return (0);
-}
 
 int lib_ioctl(int dev_id, int opc, void * ptr)
 {
@@ -186,13 +159,7 @@ int lib_ioctl(int dev_id, int opc, void * ptr)
 
 int lllib_init(char *dumpfile)
 {
-        if (!g_zconf) {
-                /* this parse only get my nid from config file
-                 * before initialize portals
-                 */
-                if (parse_dump(dumpfile, lib_ioctl_nalcmd))
-                        return -1;
-        } else {
+        if (g_zconf) {
                 /* XXX need setup mynid before tcpnal initialize */
                 tcpnal_mynid = ((uint64_t)getpid() << 32) | time(0);
                 printf("LibLustre: TCPNAL NID: %016llx\n", tcpnal_mynid);
@@ -233,20 +200,15 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
         ptl_nid_t nid = 0;
-        int nal, err, rc = 0;
+        int err, rc = 0;
         ENTRY;
 
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &mdc_uuid);
 
-        if (ptl_parse_nid(&nid, g_zconf_mdsnid)) {
+        nid = libcfs_str2nid(g_zconf_mdsnid);
+        if (nid == PTL_NID_ANY) {
                 CERROR("Can't parse NID %s\n", g_zconf_mdsnid);
-                RETURN(-EINVAL);
-        }
-
-        nal = ptl_name2nal("tcp");
-        if (nal <= 0) {
-                CERROR("Can't parse NAL tcp\n");
                 RETURN(-EINVAL);
         }
 
@@ -254,7 +216,6 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)

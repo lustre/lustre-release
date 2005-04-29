@@ -443,63 +443,63 @@ class LCTLInterface:
     def network(self, net, nid):
         """ set mynid """
         cmds =  """
-  network %s
-  mynid %s
-  quit """ % (net, nid)
-        self.run(cmds)
+    network %s
+    mynid %s
+    quit """ % (net, nid)
+         self.run(cmds)
 
     # add an interface
     def add_interface(self, net, ip, netmask = ""):
         """ add an interface """
-        cmds = """
-  network %s
-  add_interface %s %s
-  quit """ % (net, ip, netmask)
-        self.run(cmds)
+#         cmds = """
+#   network %s
+#   add_interface %s %s
+#   quit """ % (net, ip, netmask)
+#         self.run(cmds)
 
     # delete an interface
     def del_interface(self, net, ip):
         """ delete an interface """
-        cmds = """
-  network %s
-  del_interface %s
-  quit """ % (net, ip)
-        self.run(cmds)
+#         cmds = """
+#   network %s
+#   del_interface %s
+#   quit """ % (net, ip)
+#         self.run(cmds)
 
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
-        cmds = "\n  add_uuid %s %s %s" %(uuid, nid, net_type)
+        cmds = "\n  add_uuid %s %s@%s" %(uuid, nid, net_type)
         self.run(cmds)
 
     def add_peer(self, net_type, nid, hostaddr, port):
-        if net_type  in ('tcp','openib','ra') and not config.lctl_dump:
-            cmds =  """
-  network %s
-  add_peer %s %s %d
-  quit""" % (net_type,
-             nid, hostaddr, port )
-            self.run(cmds)
-        elif net_type in ('iib',) and not config.lctl_dump:
-            cmds =  """
-  network %s
-  add_peer %s
-  quit""" % (net_type,
-             nid )
-            self.run(cmds)
-        elif net_type in ('vib',) and not config.lctl_dump:
-            cmds =  """
-  network %s
-  add_peer %s %s
-  quit""" % (net_type,
-             nid, hostaddr )
-            self.run(cmds)
+#         if net_type  in ('tcp','openib','ra') and not config.lctl_dump:
+#             cmds =  """
+#   network %s
+#   add_peer %s %s %d
+#   quit""" % (net_type,
+#              nid, hostaddr, port )
+#             self.run(cmds)
+#         elif net_type in ('iib',) and not config.lctl_dump:
+#             cmds =  """
+#   network %s
+#   add_peer %s
+#   quit""" % (net_type,
+#              nid )
+#             self.run(cmds)
+#         elif net_type in ('vib',) and not config.lctl_dump:
+#             cmds =  """
+#   network %s
+#   add_peer %s %s
+#   quit""" % (net_type,
+#              nid, hostaddr )
+#             self.run(cmds)
 
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
-            if srv.hostaddr[0]:
-                hostaddr = string.split(srv.hostaddr[0], '/')[0]
-            self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
+#         if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
+#             if srv.hostaddr[0]:
+#                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
+#             self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
 
     # Recover a device
     def recover(self, dev_name, new_conn):
@@ -510,75 +510,75 @@ class LCTLInterface:
 
     # add a route to a range
     def add_route(self, net, gw, lo, hi):
-        cmds =  """
-  network %s
-  add_route %s %s %s
-  quit  """ % (net,
-               gw, lo, hi)
-        try:
-            self.run(cmds)
-        except CommandError, e:
-            log ("ignore: ")
-            e.dump()
+#         cmds =  """
+#   network %s
+#   add_route %s %s %s
+#   quit  """ % (net,
+#                gw, lo, hi)
+#         try:
+#             self.run(cmds)
+#         except CommandError, e:
+#             log ("ignore: ")
+#             e.dump()
 
     def del_route(self, net, gw, lo, hi):
-        cmds =  """
-  ignore_errors
-  network %s
-  del_route %s %s %s
-  quit  """ % (net, gw, lo, hi)
-        self.run(cmds)
+#         cmds =  """
+#   ignore_errors
+#   network %s
+#   del_route %s %s %s
+#   quit  """ % (net, gw, lo, hi)
+#         self.run(cmds)
 
     # add a route to a host
     def add_route_host(self, net, uuid, gw, tgt):
-        self.add_uuid(net, uuid, tgt)
-        cmds =  """
-  network %s
-  add_route %s %s
-  quit """ % (net,
-              gw, tgt)
-        try:
-            self.run(cmds)
-        except CommandError, e:
-            log ("ignore: ")
-            e.dump()
+#         self.add_uuid(net, uuid, tgt)
+#         cmds =  """
+#   network %s
+#   add_route %s %s
+#   quit """ % (net,
+#               gw, tgt)
+#         try:
+#             self.run(cmds)
+#         except CommandError, e:
+#             log ("ignore: ")
+#             e.dump()
 
     # add a route to a range
     def del_route_host(self, net, uuid, gw, tgt):
-        self.del_uuid(uuid)
-        cmds =  """
-  ignore_errors
-  network %s
-  del_route %s %s
-  quit  """ % (net, gw, tgt)
-        self.run(cmds)
+#         self.del_uuid(uuid)
+#         cmds =  """
+#   ignore_errors
+#   network %s
+#   del_route %s %s
+#   quit  """ % (net, gw, tgt)
+#         self.run(cmds)
 
 
     def del_peer(self, net_type, nid, hostaddr):
-        if net_type  in ('tcp',) and not config.lctl_dump:
-                cmds =  """
-  ignore_errors
-  network %s
-  del_peer %s %s single_share
-  quit""" % (net_type,
-             nid, hostaddr)
-                self.run(cmds)
-        elif net_type  in ('openib','iib','vib','ra') and not config.lctl_dump:
-                cmds =  """
-  ignore_errors
-  network %s
-  del_peer %s single_share
-  quit""" % (net_type,
-             nid)
-                self.run(cmds)
+#         if net_type  in ('tcp',) and not config.lctl_dump:
+#                 cmds =  """
+#   ignore_errors
+#   network %s
+#   del_peer %s %s single_share
+#   quit""" % (net_type,
+#              nid, hostaddr)
+#                 self.run(cmds)
+#         elif net_type  in ('openib','iib','vib','ra') and not config.lctl_dump:
+#                 cmds =  """
+#   ignore_errors
+#   network %s
+#   del_peer %s single_share
+#   quit""" % (net_type,
+#              nid)
+#                 self.run(cmds)
 
     # disconnect one connection
-    def disconnect(self, srv):
-        self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
-            if srv.hostaddr[0]:
-                hostaddr = string.split(srv.hostaddr[0], '/')[0]
-            self.del_peer(srv.net_type, srv.nid, hostaddr)
+#     def disconnect(self, srv):
+#         self.del_uuid(srv.nid_uuid)
+#         if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
+#             if srv.hostaddr[0]:
+#                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
+#             self.del_peer(srv.net_type, srv.nid, hostaddr)
 
     def del_uuid(self, uuid):
         cmds =  """
@@ -589,12 +589,12 @@ class LCTLInterface:
 
     # disconnect all
     def disconnectAll(self, net):
-        cmds =  """
-  ignore_errors
-  network %s
-  disconnect
-  quit""" % (net)
-        self.run(cmds)
+#         cmds =  """
+#   ignore_errors
+#   network %s
+#   disconnect
+#   quit""" % (net)
+#         self.run(cmds)
 
     def attach(self, type, name, uuid):
         cmds = """

@@ -34,65 +34,7 @@ void *inter_module_get(char *arg)
                 return NULL;
 }
 
-/* XXX move to proper place */
-#error
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        switch(nal){
-        case TCPNAL:
-                /* userspace NAL */
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
-                break;
-        case QSWNAL:
-        case GMNAL:
-        case IBNAL:
-        case SCIMACNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-struct pingcli_args {
-        ptl_nid_t mynid;
-        ptl_nid_t nid;
-	ptl_pid_t port;
-        int count;
-        int size;
-};
-
 struct task_struct *current;
-
-/* portals interfaces */
-int
-kportal_nal_cmd(struct portals_cfg *pcfg)
-{
-#if 0
-        __u32 nal = pcfg->pcfg_nal;
-        int rc = -EINVAL;
-
-        ENTRY;
-
-        down(&nal_cmd_sem);
-        if (nal > 0 && nal <= NAL_MAX_NR && nal_cmd[nal].nch_handler) {
-                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
-                       pcfg->pcfg_command);
-                rc = nal_cmd[nal].nch_handler(pcfg, nal_cmd[nal].nch_private);
-        }
-        up(&nal_cmd_sem);
-        RETURN(rc);
-#else
-        CERROR("empty function!!!\n");
-        return 0;
-#endif
-}
 
 int init_current(int argc, char **argv)
 { 
@@ -156,7 +98,7 @@ static int connect_echo_client(void)
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
-	int nal, err;
+	int err;
 	ENTRY;
 
         generate_random_uuid(osc_uuid);
@@ -164,13 +106,9 @@ static int connect_echo_client(void)
         generate_random_uuid(echo_uuid);
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
-        if (ptl_parse_nid(&nid, echo_server_nid)) {
+	nid = libcfs_str2nid(echo_server_nid);
+        if (nid == PTL_NID_ANY) {
                 CERROR("Can't parse NID %s\n", echo_server_nid);
-                RETURN(-EINVAL);
-        }
-        nal = ptl_name2nal("tcp");
-        if (nal <= 0) {
-                CERROR("Can't parse NAL tcp\n");
                 RETURN(-EINVAL);
         }
 
@@ -179,7 +117,6 @@ static int connect_echo_client(void)
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        lcfg->lcfg_nal = nal;
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0) {

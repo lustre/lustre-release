@@ -961,7 +961,7 @@ typedef enum {
         MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
         MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
-        PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000,
+//      unused           = LLOG_OP_MAGIC | 0x30000,
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
         LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
         LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
@@ -1127,9 +1127,6 @@ extern void lustre_swab_llog_hdr (struct llog_log_hdr *h);
 extern void lustre_swab_llogd_conn_body (struct llogd_conn_body *d);
 extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
                                  struct llog_rec_tail *tail);
-
-struct portals_cfg;
-extern void lustre_swab_portals_cfg(struct portals_cfg *pcfg);
 
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);

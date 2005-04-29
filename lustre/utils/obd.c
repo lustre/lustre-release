@@ -1855,25 +1855,17 @@ int jt_obd_mdc_lookup(int argc, char **argv)
 
 int jt_obd_close_uuid(int argc, char **argv)
 {
-        int rc, nal;
+        int rc;
         struct obd_ioctl_data data;
 
-        if (argc != 3) {
-                fprintf(stderr, "usage: %s <uuid> <net-type>\n", argv[0]);
+        if (argc != 2) {
+                fprintf(stderr, "usage: %s <uuid>\n", argv[0]);
                 return 0;
-        }
-
-        nal = ptl_name2nal(argv[2]);
-
-        if (nal <= 0) {
-                fprintf (stderr, "Can't parse NAL %s\n", argv[2]);
-                return -1;
         }
 
         IOC_INIT(data);
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_nal = nal;
 
         IOC_PACK(argv[0], data);
         rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CLOSE_UUID, buf);
@@ -1903,7 +1895,7 @@ int jt_cfg_record(int argc, char **argv)
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_RECORD, buf);
         if (rc == 0) {
                 jt_recording = 1;
-                ptl_set_cfg_record_cb(obd_record);
+                // ptl_set_cfg_record_cb(obd_record);
         } else {
                 fprintf(stderr, "OBD_IOC_RECORD failed: %s\n",
                         strerror(errno));
@@ -2000,7 +1992,7 @@ int jt_cfg_endrecord(int argc, char **argv)
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ENDRECORD, buf);
         if (rc == 0) {
                 jt_recording = 0;
-                ptl_set_cfg_record_cb(NULL);
+                // ptl_set_cfg_record_cb(NULL);
         } else {
                 fprintf(stderr, "OBD_IOC_ENDRECORD failed: %s\n",
                         strerror(errno));

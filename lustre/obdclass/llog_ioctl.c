@@ -112,7 +112,6 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case MDS_UNLINK_REC:
                 case MDS_SETATTR_REC:
                 case OBD_CFG_REC:
-                case PTL_CFG_REC:
                 case LLOG_HDR_MAGIC: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
                                       "%02x  [len]: %04d ok\n",

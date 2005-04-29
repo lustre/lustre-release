@@ -65,8 +65,8 @@ command_t cmdlist[] = {
         {"==== network config ====", jt_noop, 0, "network config"},
         {"--net", jt_opt_net, 0, "run <command> after setting network to <net>\n"
          "usage: --net <tcp/elan/myrinet> <command>"},
-        {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet>"},
+        {"network", jt_ptl_network, 0, "show local NIDs; with arg set current\n"
+         "usage: network [tcp|elan|ra...]"},
         {"interface_list", jt_ptl_print_interfaces,0,"print interface entries\n"
          "usage: interface_list"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
@@ -89,8 +89,6 @@ command_t cmdlist[] = {
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
          "usage: mynid [<nid>]"},
-        {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
-         "usage: shownid"},
         {"add_uuid", jt_lcfg_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
