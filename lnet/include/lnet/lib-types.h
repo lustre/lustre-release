@@ -220,17 +220,48 @@ typedef struct {
 
 struct ptl_ni;                                  /* forward ref */
 
+/******************************************************************************/
+/* Portals Router */
+
+typedef void (*kpr_fwd_callback_t)(struct ptl_ni *ni,
+                                   void *arg, int error);
+
+/* space for routing targets to stash "stuff" in a forwarded packet */
+typedef union {
+        long long        _alignment;
+        void            *_space[16];            /* scale with CPU arch */
+} kprfd_scratch_t;
+
+/* Kernel Portals Routing Forwarded message Descriptor */
+typedef struct {
+        struct list_head     kprfd_list;        /* stash in queues (routing target can use) */
+        ptl_nid_t            kprfd_target_nid;  /* final destination NID */
+        ptl_nid_t            kprfd_gateway_nid; /* gateway NID */
+        ptl_hdr_t           *kprfd_hdr;         /* header in wire byte order */
+        int                  kprfd_nob;         /* # payload bytes */
+        int                  kprfd_niov;        /* # payload frags */
+        ptl_kiov_t          *kprfd_kiov;        /* payload fragments */
+        struct ptl_ni       *kprfd_src_ni;      /* originating NI */
+        kpr_fwd_callback_t   kprfd_callback;    /* completion callback */
+        void                *kprfd_callback_arg; /* completion callback arg */
+        kprfd_scratch_t      kprfd_scratch;     /* scratchpad for routing targets */
+} kpr_fwd_desc_t;
+
+/******************************************************************************/
+
 typedef struct ptl_nal
 {
         /* fields managed by portals */
         struct list_head  nal_list;             /* stash in the NAL table */
-        int               nal_refcount;         /* # active instances */
+        atomic_t          nal_refcount;         /* # active instances */
 
         /* fields initialised by the NAL */
         unsigned int      nal_type;
         
         ptl_err_t  (*nal_startup) (struct ptl_ni *ni, char **interfaces);
         void       (*nal_shutdown) (struct ptl_ni *ni);
+
+        int        (*nal_ctl)(struct ptl_ni *ni, unsigned int cmd, void *arg);
         
 	/*
 	 * send: Sends a preformatted header and payload data to a
@@ -242,16 +273,16 @@ typedef struct ptl_nal
 	 * ptl_finalize on completion
 	 */
 	ptl_err_t (*nal_send) 
-                (struct ptl_ni *ni, void *private, ptl_msg_t *cookie, 
-                 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
-                 unsigned int niov, struct iovec *iov, 
+                (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
+                 ptl_hdr_t *hdr, int type, ptl_process_id_t target,
+                 int routing, unsigned int niov, struct iovec *iov, 
                  size_t offset, size_t mlen);
         
 	/* as send, but with a set of page fragments (NULL if not supported) */
 	ptl_err_t (*nal_send_pages)
                 (struct ptl_ni *ni, void *private, ptl_msg_t *cookie, 
-                 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
-                 unsigned int niov, ptl_kiov_t *iov, 
+                 ptl_hdr_t *hdr, int type, ptl_process_id_t target, 
+                 int routing, unsigned int niov, ptl_kiov_t *iov, 
                  size_t offset, size_t mlen);
 	/*
 	 * recv: Receives an incoming message from a remote process.  The
@@ -274,8 +305,12 @@ typedef struct ptl_nal
                  unsigned int niov, ptl_kiov_t *iov, 
                  size_t offset, size_t mlen, size_t rlen);
 
-	/* Calculate a network "distance" to given node */
-	int (*ptl_dist) (struct ptl_ni *ni, ptl_nid_t nid, unsigned long *dist);
+        /* forward a packet for the router */
+        void (*nal_fwd)(struct ptl_ni *ni, kpr_fwd_desc_t *fwd);        
+
+        /* notification of peer health */
+        void (*nal_notify)(struct ptl_ni *ni, ptl_nid_t peer, int alive);
+        
 } ptl_nal_t;
 
 typedef struct ptl_ni {
@@ -283,6 +318,8 @@ typedef struct ptl_ni {
         ptl_nid_t         ni_nid;               /* interface's NID */
         void             *ni_data;              /* instance-specific data */
         ptl_nal_t        *ni_nal;               /* procedural interface */
+        int               ni_shutdown;          /* shutting down? */
+        atomic_t          ni_refcount;          /* reference count */
 } ptl_ni_t;
 
 typedef struct                                  /* loopback descriptor */
@@ -311,6 +348,8 @@ typedef struct
         ptl_ni_limits_t   apini_actual_limits;
 
         struct list_head  apini_nis;            /* NAL instances */
+        struct list_head  apini_zombie_nis;     /* dying NAL instances */
+        int               apini_nzombie_nis;    /* # of NIS to wait for */
 
         int               apini_lh_hash_size;   /* size of lib handle hash table */
         struct list_head *apini_lh_hash_table;  /* all extant lib handles, this interface */

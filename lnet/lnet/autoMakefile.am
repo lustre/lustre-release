@@ -1,6 +1,7 @@
 my_sources =    api-errno.c api-ni.c \
 		lib-me.c lib-msg.c lib-eq.c \
-		lib-md.c lib-move.c
+		lib-md.c lib-move. \
+	        $(top_srcdir)/portals/router/router.c
 
 if !CRAY_PORTALS
 

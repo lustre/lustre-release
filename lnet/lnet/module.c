@@ -25,82 +25,20 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-extern void (kping_client)(struct portal_ioctl_data *);
-
-static int kportal_ioctl(struct portal_ioctl_data *data,
-                         unsigned int cmd, unsigned long arg)
+static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
-        int err;
-        ENTRY;
+        int                rc;
+        ptl_handle_ni_t    nih;
 
-        switch (cmd) {
-        case IOC_PORTAL_PING: {
-                void (*ping)(struct portal_ioctl_data *);
+        rc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
+                       NULL, NULL, &nih);
+        if (!(rc == PTL_OK || rc == PTL_IFACE_DUP))
+                RETURN (-EINVAL);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
-                       data->ioc_count, data->ioc_nid,
-                       libcfs_nid2str(data->ioc_nid));
-                ping = PORTAL_SYMBOL_GET(kping_client);
-                if (!ping)
-                        CERROR("PORTAL_SYMBOL_GET failed\n");
-                else {
-                        ping(data);
-                        PORTAL_SYMBOL_PUT(kping_client);
-                }
-                RETURN(0);
-        }
+        rc = PtlNICtl(nih, cmd, data);
 
-        case IOC_PORTAL_GET_NID: {
-                ptl_handle_ni_t    nih;
-                ptl_process_id_t   pid;
-
-                CDEBUG (D_IOCTL, "Getting nid for nal [%x]\n", data->ioc_nal);
-
-                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        RETURN (-EINVAL);
-
-                err = PtlGetId (nih, &pid);
-                LASSERT (err == PTL_OK);
-
-                PtlNIFini(nih);
-
-                data->ioc_nid = pid.nid;
-                if (copy_to_user ((char *)arg, data, sizeof (*data)))
-                        RETURN (-EFAULT);
-                RETURN(0);
-        }
-
-        case IOC_PORTAL_FAIL_NID: {
-                ptl_handle_ni_t    nih;
-
-                CDEBUG (D_IOCTL, "fail nid: [%d] "LPU64" count %d\n",
-                        data->ioc_nal, data->ioc_nid, data->ioc_count);
-
-                err = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, NULL,
-                                NULL, &nih);
-                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
-                        return (-EINVAL);
-
-                if (err == PTL_OK) {
-                        /* There's no point in failing an interface that
-                         * came into existance just for this */
-                        err = -EINVAL;
-                } else {
-                        err = PtlFailNid (nih, data->ioc_nid, data->ioc_count);
-                        if (err != PTL_OK)
-                                err = -EINVAL;
-                }
-
-                PtlNIFini(nih);
-                RETURN (err);
-        }
-
-        default:
-                RETURN(-EINVAL);
-        }
-        /* Not Reached */
+        PtlNIFini(nih);
+        return rc;
 }
 
 DECLARE_IOCTL_HANDLER(kportal_ioctl_handler, kportal_ioctl);

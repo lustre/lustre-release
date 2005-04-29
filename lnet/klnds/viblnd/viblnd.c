@@ -28,6 +28,7 @@ ptl_nal_t               kibnal_nal = {
         .nal_type       = VIBNAL,
         .nal_startup    = kibnal_startup,
         .nal_shutdown   = kibnal_shutdown,
+        .nal_ctl        = kibnal_ctl,
         .nal_send       = kibnal_send,
         .nal_send_pages = kibnal_send_pages,
         .nal_recv       = kibnal_recv,
@@ -672,19 +673,13 @@ kibnal_add_persistent_peer (ptl_nid_t nid, __u32 ip)
 }
 
 void
-kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
+kibnal_del_peer_locked (kib_peer_t *peer)
 {
         struct list_head *ctmp;
         struct list_head *cnxt;
         kib_conn_t       *conn;
 
-        if (!single_share)
-                peer->ibp_persistence = 0;
-        else if (peer->ibp_persistence > 0)
-                peer->ibp_persistence--;
-
-        if (peer->ibp_persistence != 0)
-                return;
+        peer->ibp_persistence = 0;
 
         if (list_empty(&peer->ibp_conns)) {
                 kibnal_unlink_peer_locked(peer);
@@ -702,7 +697,7 @@ kibnal_del_peer_locked (kib_peer_t *peer, int single_share)
 }
 
 int
-kibnal_del_peer (ptl_nid_t nid, int single_share)
+kibnal_del_peer (ptl_nid_t nid)
 {
         struct list_head  *ptmp;
         struct list_head  *pnxt;
@@ -732,11 +727,8 @@ kibnal_del_peer (ptl_nid_t nid, int single_share)
                         if (!(nid == PTL_NID_ANY || peer->ibp_nid == nid))
                                 continue;
 
-                        kibnal_del_peer_locked (peer, single_share);
+                        kibnal_del_peer_locked (peer);
                         rc = 0;         /* matched something */
-
-                        if (single_share)
-                                goto out;
                 }
         }
  out:
@@ -1177,63 +1169,57 @@ kibnal_close_matching_conns (ptl_nid_t nid)
 }
 
 int
-kibnal_cmd(struct portals_cfg *pcfg, void * private)
+kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 {
-        int rc = -EINVAL;
+        struct portal_ioctl_data *data = arg;
+        int                       rc = -EINVAL;
 
-        LASSERT (pcfg != NULL);
+        LASSERT (ni == kibnal_data.kib_ni);
 
-        switch(pcfg->pcfg_command) {
-        case NAL_CMD_GET_PEER: {
+        switch(data->ioc_command) {
+        case IOC_PORTAL_GET_PEER: {
                 ptl_nid_t   nid = 0;
                 __u32       ip = 0;
                 int         share_count = 0;
 
-                rc = kibnal_get_peer_info(pcfg->pcfg_count,
+                rc = kibnal_get_peer_info(data->ioc_count,
                                           &nid, &ip, &share_count);
-                pcfg->pcfg_nid   = nid;
-                pcfg->pcfg_size  = 0;
-                pcfg->pcfg_id    = ip;
-                pcfg->pcfg_misc  = IBNAL_SERVICE_NUMBER; /* port */
-                pcfg->pcfg_count = 0;
-                pcfg->pcfg_wait  = share_count;
+                data->ioc_nid    = nid;
+                data->ioc_count  = share_count;
+                data->ioc_u32[0] = ip;
+                data->ioc_u32[1] = IBNAL_SERVICE_NUMBER; /* port */
                 break;
         }
-        case NAL_CMD_ADD_PEER: {
-                rc = kibnal_add_persistent_peer (pcfg->pcfg_nid,
-                                                 pcfg->pcfg_id); /* IP */
+        case IOC_PORTAL_ADD_PEER: {
+                rc = kibnal_add_persistent_peer (data->ioc_nid,
+                                                 data->ioc_u32[0]); /* IP */
                 break;
         }
-        case NAL_CMD_DEL_PEER: {
-                rc = kibnal_del_peer (pcfg->pcfg_nid, 
-                                       /* flags == single_share */
-                                       pcfg->pcfg_flags != 0);
+        case IOC_PORTAL_DEL_PEER: {
+                rc = kibnal_del_peer (data->ioc_nid);
                 break;
         }
-        case NAL_CMD_GET_CONN: {
-                kib_conn_t *conn = kibnal_get_conn_by_idx (pcfg->pcfg_count);
+        case IOC_PORTAL_GET_CONN: {
+                kib_conn_t *conn = kibnal_get_conn_by_idx (data->ioc_count);
 
                 if (conn == NULL)
                         rc = -ENOENT;
                 else {
                         rc = 0;
-                        pcfg->pcfg_nid   = conn->ibc_peer->ibp_nid;
-                        pcfg->pcfg_id    = 0;
-                        pcfg->pcfg_misc  = 0;
-                        pcfg->pcfg_flags = 0;
+                        data->ioc_nid = conn->ibc_peer->ibp_nid;
                         kibnal_conn_decref(conn);
                 }
                 break;
         }
-        case NAL_CMD_CLOSE_CONNECTION: {
-                rc = kibnal_close_matching_conns (pcfg->pcfg_nid);
+        case IOC_PORTAL_CLOSE_CONNECTION: {
+                rc = kibnal_close_matching_conns (data->ioc_nid);
                 break;
         }
-        case NAL_CMD_REGISTER_MYNID: {
-                if (pcfg->pcfg_nid == PTL_NID_ANY)
+        case IOC_PORTAL_REGISTER_MYNID: {
+                if (data->ioc_nid == PTL_NID_ANY)
                         rc = -EINVAL;
                 else
-                        rc = kibnal_set_mynid (pcfg->pcfg_nid);
+                        rc = kibnal_set_mynid (data->ioc_nid);
                 break;
         }
         }
@@ -1503,10 +1489,6 @@ kibnal_shutdown (ptl_ni_t *ni)
         switch (kibnal_data.kib_init) {
 
         case IBNAL_INIT_ALL:
-                /* stop calls to nal_cmd */
-                libcfs_nal_cmd_unregister(VIBNAL);
-                /* No new peers */
-
                 /* resetting my NID removes my listener and nukes all current
                  * peers and their connections */
                 kibnal_set_mynid (PTL_NID_ANY);
@@ -1603,6 +1585,7 @@ kibnal_shutdown (ptl_ni_t *ni)
                atomic_read(&portal_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
+        PORTAL_MODULE_UNUSE;
 }
 
 ptl_err_t
@@ -1623,6 +1606,7 @@ kibnal_startup (ptl_ni_t *ni, char **interfaces)
                 return PTL_FAIL;
         }
 
+        PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
 
         kibnal_data.kib_ni = ni;
@@ -1842,14 +1826,6 @@ kibnal_startup (ptl_ni_t *ni, char **interfaces)
                 }
         }
         
-        /*****************************************************/
-
-        rc = libcfs_nal_cmd_register(VIBNAL, &kibnal_cmd, NULL);
-        if (rc != 0) {
-                CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-                goto failed;
-        }
-
         /* flag everything initialised */
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/

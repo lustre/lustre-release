@@ -152,9 +152,9 @@ ptl_err_t gmnal_cb_recv_pages(ptl_ni_t *ni, void *private,
 
 
 ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                        ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-                        unsigned int niov, struct iovec *iov, size_t offset,
-                        size_t len)
+                        ptl_hdr_t *hdr, int type, ptl_process_id_t target,
+                        int routing, unsigned int niov, struct iovec *iov, 
+                        size_t offset, size_t len)
 {
 
 	gmnal_data_t	*nal_data;
@@ -163,10 +163,15 @@ ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 
 
 	CDEBUG(D_TRACE, "gmnal_cb_send niov[%d] offset["LPSZ"] len["LPSZ
-               "] nid["LPU64"]\n", niov, offset, len, nid);
+               "] target %s\n", niov, offset, len, libcfs_id2str(target));
 	nal_data = ni->ni_data;
         CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
         LASSERT (nal_data != NULL);
+
+        if (routing) {
+                CERROR ("Can't route\n");
+                return PTL_FAIL;
+        }
 
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
 		CDEBUG(D_INFO, "This is a small message send\n");
@@ -198,13 +203,13 @@ ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 			}
 			iov++;
 		}
-		gmnal_small_tx(ni, private, cookie, hdr, type, nid, pid,
+		gmnal_small_tx(ni, private, cookie, hdr, type, target.nid, target.pid,
 			       stxd,  len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send is not supported\n");
 		ptl_finalize(ni, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
-		gmnal_large_tx(ni, private, cookie, hdr, type, nid, pid,
+		gmnal_large_tx(ni, private, cookie, hdr, type, target.nid, target.pid,
 				niov, iov, offset, len);
 	}
 	return(PTL_OK);
@@ -212,8 +217,9 @@ ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 
 ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
                               ptl_msg_t *cookie, ptl_hdr_t *hdr, int type,
-                              ptl_nid_t nid, ptl_pid_t pid, unsigned int kniov,
-                              ptl_kiov_t *kiov, size_t offset, size_t len)
+                              ptl_process_id_t target, int routing,
+                              unsigned int kniov, ptl_kiov_t *kiov, 
+                              size_t offset, size_t len)
 {
 
 	gmnal_data_t	*nal_data;
@@ -222,11 +228,16 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
 	gmnal_stxd_t    *stxd = NULL;
 	ptl_err_t       status = PTL_OK;
 
-	CDEBUG(D_TRACE, "gmnal_cb_send_pages nid ["LPU64"] niov[%d] offset["
-               LPSZ"] len["LPSZ"]\n", nid, kniov, offset, len);
+	CDEBUG(D_TRACE, "gmnal_cb_send_pages target %s niov[%d] offset["
+               LPSZ"] len["LPSZ"]\n", libcfs_id2str(target), kniov, offset, len);
 	nal_data = ni->ni_data;
         CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
         LASSERT (nal_data != NULL);
+
+        if (routing) {
+                CERROR ("Can't route\n");
+                return PTL_FAIL;
+        }
 
 	/* HP SFS 1380: Need to do the gm_bcopy after the kmap so we can kunmap
 	 * more aggressively.  This is the fix for a livelock situation under
@@ -275,8 +286,8 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
 			}
                         kiov++;
 		}
-		status = gmnal_small_tx(ni, private, cookie, hdr, type, nid,
-					pid, stxd, len);
+		status = gmnal_small_tx(ni, private, cookie, hdr, type, target.nid,
+					target.pid, stxd, len);
 	} else {
 		int	i = 0;
 		struct  iovec   *iovec = NULL, *iovec_dup = NULL;
@@ -299,8 +310,8 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
                         iovec++;
                         kiov++;
 		}
-		gmnal_large_tx(ni, private, cookie, hdr, type, nid, 
-				pid, kniov, iovec, offset, len);
+		gmnal_large_tx(ni, private, cookie, hdr, type, target.nid, 
+				target.pid, kniov, iovec, offset, len);
 		for (i=0; i<kniov; i++) {
 			kunmap(kiov_dup->kiov_page);
 			kiov_dup++;

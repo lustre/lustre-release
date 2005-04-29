@@ -27,29 +27,24 @@ ptl_nal_t kqswnal_nal =
 	.nal_type       = QSWNAL,
 	.nal_startup    = kqswnal_startup,
 	.nal_shutdown   = kqswnal_shutdown,
+	.nal_ctl        = kqswnal_ctl,
 	.nal_send       = kqswnal_send,
         .nal_send_pages = kqswnal_send_pages,
         .nal_recv       = kqswnal_recv,
         .nal_recv_pages = kqswnal_recv_pages,
+	.nal_fwd        = kqswnal_fwd_packet,
 };
 
 kqswnal_data_t		kqswnal_data;
 
-kpr_nal_interface_t kqswnal_router_interface = {
-	kprni_nalid:	QSWNAL,
-	kprni_arg:	NULL,
-	kprni_fwd:	kqswnal_fwd_packet,
-	kprni_notify:   NULL,			/* we're connectionless */
-};
-
 int
-kqswnal_get_tx_desc (struct portals_cfg *pcfg)
+kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 {
 	unsigned long      flags;
 	struct list_head  *tmp;
 	kqswnal_tx_t      *ktx;
 	ptl_hdr_t         *hdr;
-	int                index = pcfg->pcfg_count;
+	int                index = data->ioc_count;
 	int                rc = -ENOENT;
 
 	spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
@@ -61,16 +56,14 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
 		hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
-		memcpy(pcfg->pcfg_pbuf, ktx,
-		       MIN(sizeof(*ktx), pcfg->pcfg_plen1));
-		pcfg->pcfg_count = le32_to_cpu(hdr->type);
-		pcfg->pcfg_size  = le32_to_cpu(hdr->payload_length);
-		pcfg->pcfg_nid   = le64_to_cpu(hdr->dest_nid);
-		pcfg->pcfg_nid2  = ktx->ktx_nid;
-		pcfg->pcfg_misc  = ktx->ktx_launcher;
-		pcfg->pcfg_flags = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
-				  (!ktx->ktx_isnblk                    ? 0 : 2) |
-				  (ktx->ktx_state << 2);
+		data->ioc_count  = le32_to_cpu(hdr->payload_length);
+		data->ioc_nid    = le64_to_cpu(hdr->dest_nid);
+		data->ioc_u64[0] = ktx->ktx_nid;
+		data->ioc_u32[0] = le32_to_cpu(hdr->type);
+		data->ioc_u32[1] = ktx->ktx_launcher;
+		data->ioc_flags  = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
+				   (!ktx->ktx_isnblk                    ? 0 : 2) |
+				   (ktx->ktx_state << 2);
 		rc = 0;
 		break;
 	}
@@ -80,22 +73,26 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 }
 
 int
-kqswnal_cmd (struct portals_cfg *pcfg, void *private)
+kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg)
 {
-	LASSERT (pcfg != NULL);
-	
-	switch (pcfg->pcfg_command) {
-	case NAL_CMD_GET_TXDESC:
-		return (kqswnal_get_tx_desc (pcfg));
+	struct portal_ioctl_data *data = arg;
 
-	case NAL_CMD_REGISTER_MYNID:
-		CDEBUG (D_IOCTL, "setting NID offset to "LPX64" (was "LPX64")\n",
-			pcfg->pcfg_nid - kqswnal_data.kqn_elanid,
-			kqswnal_data.kqn_nid_offset);
-		kqswnal_data.kqn_nid_offset =
-			pcfg->pcfg_nid - kqswnal_data.kqn_elanid;
-		kqswnal_data.kqn_ni->ni_nid = pcfg->pcfg_nid;
-		return (0);
+	LASSERT (ni == kqswnal_data.kqn_ni);
+
+	switch (cmd) {
+	case IOC_PORTAL_GET_TXDESC:
+		return (kqswnal_get_tx_desc (data));
+
+	case IOC_PORTAL_REGISTER_MYNID:
+		if (data->ioc_nid == ni->ni_nid)
+			return 0;
+		
+		LASSERT (PTL_NIDNET(data->ioc_nid) == PTL_NIDNET(ni->ni_nid));
+
+		CERROR("obsolete IOC_PORTAL_REGISTER_MYNID for %s(%s)\n",
+		       libcfs_nid2str(data->ioc_nid),
+		       libcfs_nid2str(ni->ni_nid));
+		return 0;
 		
 	default:
 		return (-EINVAL);
@@ -119,22 +116,10 @@ kqswnal_shutdown(ptl_ni_t *ni)
 		LASSERT (0);
 
 	case KQN_INIT_ALL:
-                libcfs_nal_cmd_unregister(QSWNAL);
-		/* fall through */
-
 	case KQN_INIT_DATA:
 		break;
-
-	case KQN_INIT_NOTHING:
-		return;
 	}
 
-	/**********************************************************************/
-	/* Tell router we're shutting down.  Any router calls my threads
-	 * make will now fail immediately and the router will stop calling
-	 * into me. */
-	kpr_shutdown (&kqswnal_data.kqn_router);
-	
 	/**********************************************************************/
 	/* Signal the start of shutdown... */
 	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
@@ -224,13 +209,8 @@ kqswnal_shutdown(ptl_ni_t *ni)
 		kpr_fwd_desc_t *fwd = list_entry (kqswnal_data.kqn_idletxd_fwdq.next,
 						  kpr_fwd_desc_t, kprfd_list);
 		list_del (&fwd->kprfd_list);
-		kpr_fwd_done (&kqswnal_data.kqn_router, fwd, -ESHUTDOWN);
+		kpr_fwd_done (ni, fwd, -ESHUTDOWN);
 	}
-
-	/**********************************************************************/
-	/* finalise router */
-
-	kpr_deregister (&kqswnal_data.kqn_router);
 
 	/**********************************************************************/
 	/* Unmap message buffers and free all descriptors and buffers
@@ -323,6 +303,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 
 	printk (KERN_INFO "Lustre: Routing QSW NAL unloaded (final mem %d)\n",
                 atomic_read(&portal_kmemory));
+	PORTAL_MODULE_UNUSE;
 }
 
 ptl_err_t
@@ -347,7 +328,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
         }
 
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
-
+	
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));
 
@@ -377,6 +358,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 
 	/* pointers/lists/locks initialised */
 	kqswnal_data.kqn_init = KQN_INIT_DATA;
+	PORTAL_MODULE_USE;
 	
 #if MULTIRAIL_EKC
 	kqswnal_data.kqn_ep = ep_system();
@@ -404,9 +386,10 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 	}
 #endif
 
-	kqswnal_data.kqn_nid_offset = 0;
-	kqswnal_data.kqn_nnodes     = ep_numnodes (kqswnal_data.kqn_ep);
-	kqswnal_data.kqn_elanid     = ep_nodeid (kqswnal_data.kqn_ep);
+	kqswnal_data.kqn_nnodes = ep_numnodes (kqswnal_data.kqn_ep);
+	kqswnal_data.kqn_elanid = ep_nodeid (kqswnal_data.kqn_ep);
+
+	ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), kqswnal_data.kqn_elanid);
 	
 	/**********************************************************************/
 	/* Get the transmitter */
@@ -681,25 +664,11 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 		}
 	}
 
-	/**********************************************************************/
-	/* Connect to the router */
-	rc = kpr_register (&kqswnal_data.kqn_router, &kqswnal_router_interface);
-	CDEBUG(D_NET, "Can't initialise routing interface (rc = %d): not routing\n",rc);
-
-	rc = libcfs_nal_cmd_register (QSWNAL, &kqswnal_cmd, NULL);
-	if (rc != 0) {
-		CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-		kqswnal_shutdown (ni);
-		return (PTL_FAIL);
-	}
-
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
 
 	printk(KERN_INFO "Lustre: Routing QSW NAL loaded on node %d of %d "
-	       "(Routing %s, initial mem %d)\n", 
-	       kqswnal_data.kqn_elanid, kqswnal_data.kqn_nnodes,
-	       kpr_routing (&kqswnal_data.kqn_router) ? "enabled" : "disabled",
-	       pkmem);
+	       "(initial mem %d)\n", 
+	       kqswnal_data.kqn_elanid, kqswnal_data.kqn_nnodes, pkmem);
 
 	return (PTL_OK);
 }

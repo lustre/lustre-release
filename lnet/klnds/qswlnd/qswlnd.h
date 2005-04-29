@@ -260,9 +260,7 @@ typedef struct
         EP_XMTR           *kqn_eptx;            /* elan transmitter */
         EP_RCVR           *kqn_eprx_small;      /* elan receiver (small messages) */
         EP_RCVR           *kqn_eprx_large;      /* elan receiver (large messages) */
-        kpr_router_t       kqn_router;          /* connection to Kernel Portals Router module */
 
-        ptl_nid_t          kqn_nid_offset;      /* this cluster's NID offset */
         int                kqn_nnodes;          /* this cluster's size */
         int                kqn_elanid;          /* this nodes's elan ID */
 
@@ -281,24 +279,22 @@ extern kqswnal_data_t      kqswnal_data;
 extern int kqswnal_thread_start (int (*fn)(void *arg), void *arg);
 extern void kqswnal_rxhandler(EP_RXD *rxd);
 extern int kqswnal_scheduler (void *);
-extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
+extern void kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
 extern void kqswnal_rx_done (kqswnal_rx_t *krx);
 
 static inline ptl_nid_t
 kqswnal_elanid2nid (int elanid)
 {
-        return (kqswnal_data.kqn_nid_offset + elanid);
+        return PTL_MKNID(PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid), elanid);
 }
 
 static inline int
 kqswnal_nid2elanid (ptl_nid_t nid)
 {
-        /* not in this cluster? */
-        if (nid < kqswnal_data.kqn_nid_offset ||
-            nid >= kqswnal_data.kqn_nid_offset + kqswnal_data.kqn_nnodes)
-                return (-1);
+        int elanid = PTL_NIDADDR(nid);
 
-        return (nid - kqswnal_data.kqn_nid_offset);
+        /* not in this cluster? */
+        return (elanid >= kqswnal_data.kqn_nnodes) ? -1 : elanid;
 }
 
 static inline ptl_nid_t
@@ -378,15 +374,16 @@ ep_free_rcvr(EP_RCVR *r)
 
 ptl_err_t kqswnal_startup (ptl_ni_t *ni, char **interfaces);
 void kqswnal_shutdown (ptl_ni_t *ni);
+int kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kqswnal_send (ptl_ni_t *ni, void *private,
                         ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                        int type, ptl_nid_t nid, ptl_pid_t pid,
+                        int type, ptl_process_id_t tgt, int routing,
                         unsigned int payload_niov, 
                         struct iovec *payload_iov,
                         size_t payload_offset, size_t payload_nob);
 ptl_err_t kqswnal_send_pages (ptl_ni_t *ni, void *private,
                               ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                              int type, ptl_nid_t nid, ptl_pid_t pid,
+                              int type, ptl_process_id_t tgt, int routing,
                               unsigned int payload_niov, 
                               ptl_kiov_t *payload_kiov,
                               size_t payload_offset, size_t payload_nob);

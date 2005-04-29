@@ -253,117 +253,15 @@ do {                                                                    \
 
 #define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
 
-/*
- * eeb cfg
- * ecf6
- * ecfG
- */
-#define PORTALS_CFG_VERSION 0xecf60001
-
-struct portals_cfg {
-        __u32 pcfg_version;
-        __u32 pcfg_command;
-
-        __u32 pcfg_nal;
-        __u32 pcfg_flags;
-
-        __u32 pcfg_gw_nal;
-        __u32 pcfg_padding1;
-
-        __u64 pcfg_nid;
-        __u64 pcfg_nid2;
-        __u64 pcfg_nid3;
-        __u32 pcfg_id;
-        __u32 pcfg_misc;
-        __u32 pcfg_fd;
-        __u32 pcfg_count;
-        __u32 pcfg_size;
-        __u32 pcfg_wait;
-
-        __u32 pcfg_plen1; /* buffers in userspace */
-        __u32 pcfg_plen2; /* buffers in userspace */
-        __u32 pcfg_alloc_size;  /* size of this allocated portals_cfg */
-        char  pcfg_pbuf[0];
-};
-
-#define PCFG_INIT(pcfg, cmd)                            \
-do {                                                    \
-        memset(&(pcfg), 0, sizeof((pcfg)));             \
-        (pcfg).pcfg_version = PORTALS_CFG_VERSION;      \
-        (pcfg).pcfg_command = (cmd);                    \
-                                                        \
-} while (0)
-
-#define PCFG_INIT_PBUF(pcfg, cmd, plen1, plen2)                         \
-        do {                                                            \
-                int bufsize = size_round(sizeof(*(pcfg)));              \
-                bufsize += size_round(plen1) + size_round(plen2);       \
-                PORTAL_ALLOC((pcfg), bufsize);                          \
-                if ((pcfg)) {                                           \
-                        memset((pcfg), 0, bufsize);                     \
-                        (pcfg)->pcfg_version = PORTALS_CFG_VERSION;     \
-                        (pcfg)->pcfg_command = (cmd);                   \
-                        (pcfg)->pcfg_plen1 = (plen1);                   \
-                        (pcfg)->pcfg_plen2 = (plen2);                   \
-                        (pcfg)->pcfg_alloc_size = bufsize;              \
-                }                                                       \
-        } while (0)
-
-#define PCFG_FREE_PBUF(pcfg) PORTAL_FREE((pcfg), (pcfg)->pcfg_alloc_size)
-
-#define PCFG_PBUF(pcfg, idx)                                            \
-        (0 == (idx)                                                     \
-         ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))))               \
-         : (1 == (idx)                                                  \
-            ? ((char *)(pcfg) + size_round(sizeof(*(pcfg))) + size_round(pcfg->pcfg_plen1)) \
-            : (NULL)))
-
-typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
-int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
-int libcfs_nal_cmd(struct portals_cfg *pcfg);
-void libcfs_nal_cmd_unregister(int nal);
-
-struct portal_ioctl_data {
-        __u32 ioc_len;
-        __u32 ioc_version;
-        __u64 ioc_nid;
-        __u64 ioc_nid2;
-        __u64 ioc_nid3;
-        __u32 ioc_count;
-        __u32 ioc_nal;
-        __u32 ioc_nal_cmd;
-        __u32 ioc_fd;
-        __u32 ioc_id;
-
-        __u32 ioc_flags;
-        __u32 ioc_size;
-
-        __u32 ioc_wait;
-        __u32 ioc_timeout;
-        __u32 ioc_misc;
-
-        __u32 ioc_inllen1;
-        char *ioc_inlbuf1;
-        __u32 ioc_inllen2;
-        char *ioc_inlbuf2;
-
-        __u32 ioc_plen1; /* buffers in userspace */
-        char *ioc_pbuf1;
-        __u32 ioc_plen2; /* buffers in userspace */
-        char *ioc_pbuf2;
-
-        char ioc_bulk[0];
-};
-
-
 #ifdef __KERNEL__
 
 #include <libcfs/list.h>
 
+struct portal_ioctl_data;                       /* forward ref */
+
 struct libcfs_ioctl_handler {
         struct list_head item;
-        int (*handle_ioctl)(struct portal_ioctl_data *data,
-                            unsigned int cmd, unsigned long args);
+        int (*handle_ioctl)(unsigned int cmd, struct portal_ioctl_data *data);
 };
 
 #define DECLARE_IOCTL_HANDLER(ident, func)              \

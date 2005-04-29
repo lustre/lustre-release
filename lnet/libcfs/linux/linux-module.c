@@ -76,7 +76,7 @@ int portal_ioctl_getdata(char *buf, char *end, void *arg)
 
         RETURN(0);
 }
-                                                                                                                                                                        
+
 extern struct cfs_psdev_ops          libcfs_psdev_ops;
 
 static int 

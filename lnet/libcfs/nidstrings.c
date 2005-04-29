@@ -24,10 +24,18 @@
 # define EXPORT_SYMTAB
 #endif
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_PORTALS
 
+#include <portals/p30.h>
 #include <libcfs/kp30.h>
-#include <libcfs/libcfs.h>
+#ifndef __KERNEL__
+#include <netdb.h>
+#endif
+
+/* CAVEAT VENDITOR! Keep the canonical string representation of nets/nids
+ * consistent in all conversion functions.  Some code fragments are copied
+ * around for the sake of clarity...
+ */
 
 /* CAVEAT EMPTOR! Racey temporary buffer allocation!
  * Choose the number of nidstrings to support the MAXIMUM expected number of
@@ -36,31 +44,38 @@
  * between getting its string and using it.
  */
 
-static char        libcfs_nidstrings[128][PTL_NALFMT_SIZE];
-static int         libcfs_nidstring_idx;
-static spinlock_t  libcfs_nidstring_lock;
+static char      libcfs_nidstrings[128][PTL_NALFMT_SIZE];
+static int       libcfs_nidstring_idx = 0;
 
-void
-libcfs_init_nidstrings (void)
+#ifdef __KERNEL__
+static spinlock_t libcfs_nidstring_lock;
+
+void libcfs_init_nidstrings (void)
 {
         spin_lock_init(&libcfs_nidstring_lock);
 }
 
+# define NIDSTR_LOCK(f)   spin_lock_irqsave(&libcfs_nidstring_lock, f)
+# define NIDSTR_UNLOCK(f) spin_unlock_irqrestore(&libcfs_nidstring_lock, f)
+#else
+# define NIDSTR_LOCK(f)   (f)                   /* avoid unused var warnings */
+# define NIDSTR_UNLOCK(f) (f)
+#endif
+
 static char *
 libcfs_next_nidstring (void)
 {
-	unsigned long  flags;
 	char          *str;
-	
-	spin_lock_irqsave(&libcfs_nidstring_lock, flags);
-	
+	unsigned long  flags;
+
+	NIDSTR_LOCK(flags);
+
 	str = libcfs_nidstrings[libcfs_nidstring_idx++];
 	if (libcfs_nidstring_idx ==
 	    sizeof(libcfs_nidstrings)/sizeof(libcfs_nidstrings[0]))
 		libcfs_nidstring_idx = 0;
 
-	spin_unlock_irqrestore(&libcfs_nidstring_lock, flags);
-
+        NIDSTR_UNLOCK(flags);
 	return str;
 }
 
@@ -72,14 +87,14 @@ static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
 static void libcfs_num_addr2str(__u32 addr, char *str);
 static int  libcfs_num_str2addr(char *str, int nob, __u32 *addr);
 
-struct nettype {
-        int          type;
-        char        *name;
-        void       (*addr2str)(__u32 addr, char *str);
-        int        (*str2addr)(char *str, int nob, __u32 *addr);
+struct nalstrfns {
+        int          nf_nal;
+        char        *nf_name;
+        void       (*nf_addr2str)(__u32 addr, char *str);
+        int        (*nf_str2addr)(char *str, int nob, __u32 *addr);
 };
 
-static struct nettype  libcfs_nettypes[] = {
+static struct nalstrfns  libcfs_nalstrfns[] = {
         {LONAL,     "lo",     libcfs_lo_addr2str,  libcfs_lo_str2addr},
         {SOCKNAL,   "tcp",    libcfs_ip_addr2str,  libcfs_ip_str2addr},
         {OPENIBNAL, "openib", libcfs_ip_addr2str,  libcfs_ip_str2addr},
@@ -90,7 +105,7 @@ static struct nettype  libcfs_nettypes[] = {
         {GMNAL,     "gm",     libcfs_num_addr2str, libcfs_num_str2addr},
 };
 
-const int libcfs_nnettypes = sizeof(libcfs_nettypes)/sizeof(libcfs_nettypes[0]);
+const int libcfs_nnalstrfns = sizeof(libcfs_nalstrfns)/sizeof(libcfs_nalstrfns[0]);
 
 void
 libcfs_lo_addr2str(__u32 addr, char *str)
@@ -111,7 +126,19 @@ libcfs_lo_str2addr(char *str, int nob, __u32 *addr)
 void
 libcfs_ip_addr2str(__u32 addr, char *str)
 {
-        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u", HIPQUAD(addr));
+#if !defined(__KERNEL__) && defined HAVE_GETHOSTBYNAME
+        __u32           netip = htonl(addr);
+        struct hostent *he = gethostbyaddr(&netip, sizeof(netip), AF_INET);
+        
+        if (he != NULL && 
+            strlen(he->h_name) < PTL_NALFMT_SIZE) {
+                strcpy(str, he->h_name);
+                return;
+        }
+#endif
+        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
+                 (addr >> 24) & 0xff, (addr >> 16) & 0xff,
+                 (addr >> 8) & 0xff, addr & 0xff);
 }
 
 int
@@ -122,17 +149,31 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
         int   c;
         int   d;
         int   n;
-        
-        if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) < 4 ||
-            n != nob)
-                return 0;
 
-        if ((a & ~0xff) != 0 || (b & ~0xff) != 0 ||
-            (c & ~0xff) != 0 || (d & ~0xff) != 0)
-                return 0;
-        
-        *addr = ((a<<24)|(b<<16)|(c<<8)|d);
-        return 1;
+        /* numeric IP? */
+        if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) >= 4 &&
+            n == nob &&
+            (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
+            (c & ~0xff) == 0 && (d & ~0xff) == 0) {
+                *addr = ((a<<24)|(b<<16)|(c<<8)|d);
+                return 1;
+        }
+
+#if !defined(__KERNEL__) && defined HAVE_GETHOSTBYNAME
+        /* known hostname? */
+        if (('a' <= str[0] && str[0] <= 'z') ||
+            ('A' <= str[0] && str[0] <= 'Z')) {
+                struct hostent *he = gethostbyname(str);
+                
+                if (he != NULL) {
+                        __u32 ip = *(__u32 *)he->h_addr;
+
+                        *addr = ntohl(ip);
+                        return 1;
+                }
+        }
+#endif
+        return 0;
 }
 
 void
@@ -155,118 +196,200 @@ libcfs_num_str2addr(char *str, int nob, __u32 *addr)
         return 1;
 }
 
-struct nettype *
-libcfs_get_nettype(int type) 
+struct nalstrfns *
+libcfs_nal2nalstrfns(int nal) 
 {
         int    i;
         
-        for (i = 0; i < libcfs_nnettypes; i++)
-                if (type == libcfs_nettypes[i].type)
-                        return &libcfs_nettypes[i];
+        for (i = 0; i < libcfs_nnalstrfns; i++)
+                if (nal == libcfs_nalstrfns[i].nf_nal)
+                        return &libcfs_nalstrfns[i];
+
+        return NULL;
+}
+
+struct nalstrfns *
+libcfs_name2nalstrfns(char *name)
+{
+        int    i;
+        
+        for (i = 0; i < libcfs_nnalstrfns; i++)
+                if (!strcmp(libcfs_nalstrfns[i].nf_name, name))
+                        return &libcfs_nalstrfns[i];
 
         return NULL;
 }
 
 int
-libcfs_isknown_nettype(int type)
+libcfs_isknown_nal(int nal)
 {
-        return libcfs_get_nettype(type) != NULL;
+        return libcfs_nal2nalstrfns(nal) != NULL;
 }
 
 char *
-libcfs_nettype2str(int type) 
+libcfs_nal2str(int nal) 
 {
         char           *str;
-        struct nettype *nt = libcfs_get_nettype(type);
+        struct nalstrfns *nf = libcfs_nal2nalstrfns(nal);
         
-        if (nt != NULL)
-                return nt->name;
+        if (nf != NULL)
+                return nf->nf_name;
         
         str = libcfs_next_nidstring();
-        snprintf(str, PTL_NALFMT_SIZE, "?%u?", type);
+        snprintf(str, PTL_NALFMT_SIZE, "?%u?", nal);
+        return str;
+}
+
+int
+libcfs_str2nal(char *str)
+{
+        struct nalstrfns *nf = libcfs_name2nalstrfns(str);
+        
+        if (nf != NULL)
+                return nf->nf_nal;
+        
+        return -1;
+}
+
+char *
+libcfs_net2str(__u32 net)
+{
+        int             nal = PTL_NETNAL(net);
+        int             num = PTL_NETNUM(net);
+        struct nalstrfns *nf = libcfs_nal2nalstrfns(nal);
+	char           *str = libcfs_next_nidstring();
+
+        if (nf == NULL) 
+                snprintf(str, PTL_NALFMT_SIZE, "t<%u>%u", nal, num);
+        else if (num == 0)
+                snprintf(str, PTL_NALFMT_SIZE, "%s", nf->nf_name);
+        else
+                snprintf(str, PTL_NALFMT_SIZE, "%s%u", nf->nf_name, num);
+
         return str;
 }
 
 char *
 libcfs_nid2str(ptl_nid_t nid)
 {
-	char           *str = libcfs_next_nidstring();
-	__u32           lo  = (__u32)nid;
-	__u32           hi  = (__u32)(nid>>32);
-        int             nnum  = hi & 0xffff;
-        int             ntype = (hi >> 16) & 0xffff;
-        struct nettype *nettype = libcfs_get_nettype(ntype);
+        __u32           addr = PTL_NIDADDR(nid);
+        __u32           net = PTL_NIDNET(nid);
+        int             nal = PTL_NETNAL(net);
+        int             nnum = PTL_NETNUM(net);
+        struct nalstrfns *nf;
+	char           *str;
         int             nob;
 
-        if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
-        } else if (nettype == NULL) {
-                snprintf(str, PTL_NALFMT_SIZE, "%x@%u.%u", lo, nnum, ntype);
-        } else {
-	        nettype->addr2str(lo, str);
-		nob = strlen(str);
-		if (nnum == 0)
-			snprintf(str + nob, PTL_NALFMT_SIZE - nob,
-				 "@%s", nettype->name);
-		else
-			snprintf(str + nob, PTL_NALFMT_SIZE - nob,
-				 "@%s%u", nettype->name, nnum);
+        if (nid == PTL_NID_ANY)
+                return "PTL_NID_ANY";
+
+        nf = libcfs_nal2nalstrfns(PTL_NETNAL(net));
+	str = libcfs_next_nidstring();
+
+        if (nf == NULL)
+                snprintf(str, PTL_NALFMT_SIZE, "%x@t<%u>%u", addr, nal, nnum);
+        else {
+                nf->nf_addr2str(addr, str);
+                nob = strlen(str);
+                if (nnum == 0)
+                        snprintf(str + nob, PTL_NALFMT_SIZE - nob, "@%s",
+                                 nf->nf_name);
+                else
+                        snprintf(str + nob, PTL_NALFMT_SIZE - nob, "@%s%u",
+                                 nf->nf_name, nnum);
         }
 
         return str;
+}
+
+static struct nalstrfns *
+libcfs_str2net_internal(char *str, __u32 *net)
+{
+        struct nalstrfns *nf;
+        int             nob;
+        int             netnum;
+        int             i;
+
+        for (i = 0; i < libcfs_nnalstrfns; i++) {
+                nf = &libcfs_nalstrfns[i];
+
+                if (!strncmp(str, nf->nf_name, strlen(nf->nf_name)))
+                        break;
+        }
+        if (i == libcfs_nnalstrfns)
+                return NULL;
+
+        nob = strlen(nf->nf_name);
+
+        if (strlen(str) == nob)
+                netnum = 0;
+        else if (nf->nf_nal == LONAL || /* net number not allowed */
+                 sscanf(str + nob, "%u%n", &netnum, &i) < 1 ||
+                 i != strlen(str + nob) ||
+                 (netnum & ~0xffff) != 0)
+                return NULL;
+
+        *net = PTL_MKNET(nf->nf_nal, netnum);
+        return nf;
+}
+
+__u32
+libcfs_str2net(char *str)
+{
+        __u32  net;
+        
+        if (libcfs_str2net_internal(str, &net) != NULL)
+                return net;
+        
+        return PTL_NIDNET(PTL_NID_ANY);
 }
 
 ptl_nid_t
 libcfs_str2nid(char *str)
 {
         char           *sep = strchr(str, '@');
-        struct nettype *nettype;
+        struct nalstrfns *nf;
         int             nob;
-        int             net;
+        __u32           net;
         __u32           addr;
-        int             i;
 
-        if (sep == NULL) {
-                sep = str + strlen(str);
-                net = 0;
-                nettype = libcfs_get_nettype(SOCKNAL);
-                LASSERT (nettype != NULL);
+        if (sep != NULL) {
+                nf = libcfs_str2net_internal(sep + 1, &net);
+                if (nf == NULL)
+                        return PTL_NID_ANY;
         } else {
-                for (i = 0; i < libcfs_nnettypes; i++) {
-                        nettype = &libcfs_nettypes[i];
-
-                        if (!strncmp(sep + 1, nettype->name, 
-				     strlen(nettype->name)))
-                                break;
-                }
-                if (i == libcfs_nnettypes)
-                        return PTL_NID_ANY;
-
-                nob = strlen(nettype->name);
-
-                if (strlen(sep + 1) == nob)
-                        net = 0;
-                else if (nettype->type == LONAL || /* net number not allowed */
-			 sscanf(sep + 1 + nob, "%u%n", &net, &i) < 1 ||
-                         i != strlen(sep + 1 + nob) ||
-                         (net & ~0xffff) != 0)
-                        return PTL_NID_ANY;
+                sep = str + strlen(str);
+                net = PTL_MKNET(SOCKNAL, 0);
+                nf = libcfs_nal2nalstrfns(SOCKNAL);
+                LASSERT (nf != NULL);
         }
-        
-        if (!nettype->str2addr(str, sep - str, &addr))
+
+        if (!nf->nf_str2addr(str, sep - str, &addr))
                 return PTL_NID_ANY;
         
-        return (((__u64)((nettype->type<<16)|net))<<32)|addr;
+        return PTL_MKNID(net, addr);
 }
 #else  /* CRAY_PORTALS */
 int
-libcfs_isknown_nettype(int type)
+libcfs_isknown_nal(int nal)
 {
         return 1;
 }
 
 char *
-libcfs_nettype2str(int type)
+libcfs_nal2str(int nal)
+{
+        return "cray";
+}
+
+int
+libcfs_str2nal(char *str)
+{
+        return 0;
+}
+
+char *
+libcfs_net2str(__u32 net)
 {
         return "cray";
 }
@@ -277,6 +400,12 @@ libcfs_nid2str(ptl_nid_t nid)
         char    *str = libcfs_next_nidstring();
         
 	snprintf(str, PTL_NALFMT_SIZE, "%llx", (unsigned long long)nid);
+}
+
+__u32
+libcfs_str2net(char *str)
+{
+        return 0;
 }
 
 ptl_nid_t
@@ -318,7 +447,26 @@ libcfs_id2str(ptl_process_id_t id)
         return str;
 }
 
-EXPORT_SYMBOL(libcfs_isknown_nettype);
-EXPORT_SYMBOL(libcfs_nettype2str);
+int
+libcfs_str2anynid(ptl_nid_t *nidp, char *str)
+{
+        if (!strcmp(str, "*")) {
+                *nidp = PTL_NID_ANY;
+                return 1;
+        }
+
+        *nidp = libcfs_str2nid(str);
+        return *nidp != PTL_NID_ANY;
+}
+
+#ifdef __KERNEL__
+EXPORT_SYMBOL(libcfs_isknown_nal);
+EXPORT_SYMBOL(libcfs_nal2str);
+EXPORT_SYMBOL(libcfs_str2nal);
+EXPORT_SYMBOL(libcfs_net2str);
 EXPORT_SYMBOL(libcfs_nid2str);
+EXPORT_SYMBOL(libcfs_str2net);
+EXPORT_SYMBOL(libcfs_str2nid);
 EXPORT_SYMBOL(libcfs_id2str);
+EXPORT_SYMBOL(libcfs_str2anynid);
+#endif

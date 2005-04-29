@@ -378,7 +378,7 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         }
 
         if (tx->tx_isfwd) {             /* was a forwarded packet? */
-                kpr_fwd_done (&ksocknal_data.ksnd_router,
+                kpr_fwd_done (ksocknal_data.ksnd_ni,
                               KSOCK_TX_2_KPR_FWD_DESC (tx), 
                               (tx->tx_resid == 0) ? 0 : -ECONNABORTED);
                 EXIT;
@@ -512,42 +512,6 @@ ksocknal_launch_connection_locked (ksock_route_t *route)
         
         spin_unlock_irqrestore (&ksocknal_data.ksnd_connd_lock, flags);
 }
-
-#if 0
-ksock_peer_t *
-ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
-{
-        ptl_nid_t     target_nid;
-        int           rc;
-        ksock_peer_t *peer = ksocknal_find_peer_locked (nid);
-
-        if (peer != NULL)
-                return (peer);
-
-        if (tx->tx_isfwd) {
-                CERROR ("Can't send packet to "LPX64
-                       " %s: routed target is not a peer\n",
-                        nid, libcfs_nid2str(nid));
-                return (NULL);
-        }
-
-        rc = kpr_lookup (&ksocknal_data.ksnd_router, nid, tx->tx_nob,
-                         &target_nid);
-        if (rc != 0) {
-                CERROR ("Can't route to "LPX64" %s: router error %d\n",
-                        nid, libcfs_nid2str(nid), rc);
-                return (NULL);
-        }
-
-        peer = ksocknal_find_peer_locked (target_nid);
-        if (peer != NULL)
-                return (peer);
-
-        CERROR ("Can't send packet to "LPX64" %s: no peer entry\n",
-                target_nid, libcfs_nid2str(target_nid));
-        return (NULL);
-}
-#endif
 
 ksock_conn_t *
 ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
@@ -718,7 +682,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
 }
 
 int
-ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
+ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid, int routing)
 {
         unsigned long     flags;
         ksock_peer_t     *peer;
@@ -762,7 +726,6 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
         
 #if !SOCKNAL_ROUND_ROBIN
         read_lock (g_lock);
-#warning "router issues"
         peer = ksocknal_find_peer_locked(nid);
         if (peer != NULL) {
                 if (ksocknal_find_connectable_route_locked(peer) == NULL) {
@@ -783,7 +746,6 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
 #endif
         write_lock_irqsave(g_lock, flags);
 
-#warning "router issues"
         peer = ksocknal_find_peer_locked(nid);
         if (peer == NULL) {
                 write_unlock_irqrestore(g_lock, flags);
@@ -830,18 +792,18 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
 }
 
 ptl_err_t
-ksocknal_sendmsg(ptl_ni_t     *ni, 
-                 void         *private, 
-                 ptl_msg_t    *cookie,
-                 ptl_hdr_t    *hdr, 
-                 int           type, 
-                 ptl_nid_t     nid, 
-                 ptl_pid_t     pid,
-                 unsigned int  payload_niov, 
-                 struct iovec *payload_iov, 
-                 ptl_kiov_t   *payload_kiov,
-                 size_t        payload_offset,
-                 size_t        payload_nob)
+ksocknal_sendmsg(ptl_ni_t        *ni, 
+                 void            *private, 
+                 ptl_msg_t       *cookie,
+                 ptl_hdr_t       *hdr, 
+                 int              type, 
+                 ptl_process_id_t target,
+                 int              routing,
+                 unsigned int     payload_niov, 
+                 struct iovec    *payload_iov, 
+                 ptl_kiov_t      *payload_kiov,
+                 size_t           payload_offset,
+                 size_t           payload_nob)
 {
         ksock_ltx_t  *ltx;
         int           desc_size;
@@ -850,8 +812,8 @@ ksocknal_sendmsg(ptl_ni_t     *ni,
         /* NB 'private' is different depending on what we're sending.
          * Just ignore it... */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid:"LPX64
-               " pid %d\n", payload_nob, payload_niov, nid , pid);
+        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to %s\n",
+               payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
@@ -918,7 +880,7 @@ ksocknal_sendmsg(ptl_ni_t     *ni,
                                          payload_offset, payload_nob);
         }
 
-        rc = ksocknal_launch_packet(&ltx->ltx_tx, nid);
+        rc = ksocknal_launch_packet(&ltx->ltx_tx, target.nid, routing);
         if (rc == 0)
                 return (PTL_OK);
         
@@ -928,40 +890,41 @@ ksocknal_sendmsg(ptl_ni_t     *ni,
 
 ptl_err_t
 ksocknal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-               ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+               ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
                unsigned int payload_niov, struct iovec *payload_iov,
                size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, nid, pid,
+                                 hdr, type, tgt, routing,
                                  payload_niov, payload_iov, NULL,
                                  payload_offset, payload_len));
 }
 
 ptl_err_t
 ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                     ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                     ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
                      unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
                      size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, nid, pid,
+                                 hdr, type, tgt, routing,
                                  payload_niov, NULL, payload_kiov,
                                  payload_offset, payload_len));
 }
 
 void
-ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
+ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
 {
         ptl_nid_t     nid = fwd->kprfd_gateway_nid;
         ksock_ftx_t  *ftx = (ksock_ftx_t *)&fwd->kprfd_scratch;
+        int           routing;
         int           rc;
         
         CDEBUG (D_NET, "Forwarding [%p] -> "LPX64" ("LPX64"))\n", fwd,
                 fwd->kprfd_gateway_nid, fwd->kprfd_target_nid);
 
-        /* I'm the gateway; must be the last hop */
-        if (nid == ksocknal_data.ksnd_ni->ni_nid)
+        routing = (nid != ksocknal_data.ksnd_ni->ni_nid);
+        if (!routing)
                 nid = fwd->kprfd_target_nid;
 
         /* setup iov for hdr */
@@ -975,9 +938,9 @@ ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         ftx->ftx_tx.tx_nkiov = fwd->kprfd_niov;
         ftx->ftx_tx.tx_kiov  = fwd->kprfd_kiov;
 
-        rc = ksocknal_launch_packet (&ftx->ftx_tx, nid);
+        rc = ksocknal_launch_packet (&ftx->ftx_tx, nid, routing);
         if (rc != 0)
-                kpr_fwd_done (&ksocknal_data.ksnd_router, fwd, rc);
+                kpr_fwd_done (ni, fwd, rc);
 }
 
 int
@@ -1006,7 +969,7 @@ ksocknal_thread_fini (void)
 }
 
 void
-ksocknal_fmb_callback (void *arg, int error)
+ksocknal_fmb_callback (ptl_ni_t *ni, void *arg, int error)
 {
         ksock_fmb_t       *fmb = (ksock_fmb_t *)arg;
         ksock_fmb_pool_t  *fmp = fmb->fmb_pool;
@@ -1071,7 +1034,6 @@ ksocknal_get_idle_fmb (ksock_conn_t *conn)
         ksock_fmb_t      *fmb;
 
         LASSERT (conn->ksnc_rx_state == SOCKNAL_RX_GET_FMB);
-        LASSERT (kpr_routing(&ksocknal_data.ksnd_router));
 
         if (payload_nob <= SOCKNAL_SMALL_FWD_PAGES * CFS_PAGE_SIZE)
                 pool = &ksocknal_data.ksnd_small_fmp;
@@ -1144,7 +1106,7 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
                 CDEBUG (D_NET, "%p "LPX64"->"LPX64" fwd_start (immediate)\n",
                         conn, le64_to_cpu(conn->ksnc_hdr.src_nid), dest_nid);
 
-                kpr_fwd_start (&ksocknal_data.ksnd_router, &fmb->fmb_fwd);
+                kpr_fwd_start (ksocknal_data.ksnd_ni, &fmb->fmb_fwd);
 
                 ksocknal_new_packet (conn, 0);  /* on to next packet */
                 return (1);
@@ -1192,16 +1154,6 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 return;
         }
 
-        if (!kpr_routing(&ksocknal_data.ksnd_router)) {    /* not forwarding */
-                CERROR("dropping packet from "LPX64" (%s) for "LPX64
-                       " (%s): not forwarding\n",
-                       src_nid, libcfs_nid2str(src_nid),
-                       dest_nid, libcfs_nid2str(dest_nid));
-                /* on to new packet (skip this one's body) */
-                ksocknal_new_packet (conn, body_len);
-                return;
-        }
-
         if (body_len > PTL_MTU) {      /* too big to forward */
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): packet size %d too big\n",
@@ -1214,7 +1166,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
         }
 
         /* should have gone direct */
-        peer = ksocknal_get_peer (conn->ksnc_hdr.dest_nid);
+        peer = ksocknal_find_peer (conn->ksnc_hdr.dest_nid);
         if (peer != NULL) {
                 CERROR ("dropping packet from "LPX64" (%s) for "LPX64
                         "(%s): target is a peer\n",
@@ -1402,7 +1354,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 /* forward the packet. NB ksocknal_init_fmb() put fmb into
                  * conn->ksnc_cookie */
                 fmb = (ksock_fmb_t *)conn->ksnc_cookie;
-                kpr_fwd_start (&ksocknal_data.ksnd_router, &fmb->fmb_fwd);
+                kpr_fwd_start (ksocknal_data.ksnd_ni, &fmb->fmb_fwd);
 
                 /* no slop in forwarded packets */
                 LASSERT (conn->ksnc_rx_nob_left == 0);

@@ -208,10 +208,26 @@ void portals_debug_dumplog(void);
 #define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 
 /* support decl needed both by kernel and liblustre */
-int   libcfs_isknown_nettype(int type);
-char *libcfs_nettype2str(int type);
-char *libcfs_nid2str(ptl_nid_t nid);
-char *libcfs_id2str(ptl_process_id_t id);
+int        libcfs_isknown_nal(int type);
+char      *libcfs_nal2str(int type);
+int        libcfs_str2nal(char *str);
+char      *libcfs_net2str(__u32 net);
+char      *libcfs_nid2str(ptl_nid_t nid);
+__u32      libcfs_str2net(char *str);
+ptl_nid_t  libcfs_str2nid(char *str);
+int        libcfs_str2anynid(ptl_nid_t *nid, char *str);
+char      *libcfs_id2str(ptl_process_id_t id);
+
+#if !CRAY_PORTALS
+/* how a lustre portals NID encodes net:address */
+#define PTL_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
+#define PTL_NIDNET(nid)       ((__u32)(((nid) >> 32)) & 0xffffffff)
+#define PTL_MKNID(net,addr)   ((((__u64)(net))<<32)|((__u64)(addr)))
+/* how net encodes type:number */
+#define PTL_NETNUM(net)       ((net) & 0xffff)
+#define PTL_NETNAL(net)       (((net) >> 16) & 0xffff)
+#define PTL_MKNET(nal,num)    ((((__u32)(nal))<<16)|((__u32)(num)))
+#endif
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -235,9 +251,33 @@ struct portals_device_userstate
  * USER LEVEL STUFF BELOW
  */
 
-#define PORTAL_IOCTL_VERSION 0x00010008
-#define PING_SYNC       0
-#define PING_ASYNC      1
+#define PORTAL_IOCTL_VERSION 0x00010009
+
+struct portal_ioctl_data {
+        __u32 ioc_len;
+        __u32 ioc_version;
+
+        __u64 ioc_nid;
+        __u64 ioc_u64[1];
+
+        __u32 ioc_flags;
+        __u32 ioc_count;
+        __u32 ioc_net;
+        __u32 ioc_u32[6];
+
+        __u32 ioc_inllen1;
+        char *ioc_inlbuf1;
+        __u32 ioc_inllen2;
+        char *ioc_inlbuf2;
+
+        __u32 ioc_plen1; /* buffers in userspace */
+        char *ioc_pbuf1;
+        __u32 ioc_plen2; /* buffers in userspace */
+        char *ioc_pbuf2;
+
+        char ioc_bulk[0];
+};
+
 
 struct portal_ioctl_hdr {
         __u32 ioc_len;
@@ -364,58 +404,51 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 /* ioctls for manipulating snapshots 30- */
 #define IOC_PORTAL_TYPE                   'e'
 #define IOC_PORTAL_MIN_NR                 30
+/* libcfs ioctls */
+#define IOC_PORTAL_PANIC                   _IOWR('e', 30, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 31, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 32, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 33, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 34, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_MEMHOG                  _IOWR('e', 36, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_PING                    _IOWR('e', 37, IOCTL_PORTAL_TYPE)
+/* portals ioctls */
+#define IOC_PORTAL_GET_NI                  _IOWR('e', 50, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_FAIL_NID                _IOWR('e', 51, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_ADD_ROUTE               _IOWR('e', 52, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_DEL_ROUTE               _IOWR('e', 53, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_ROUTE               _IOWR('e', 54, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
+/* nal ioctls */
+#define IOC_PORTAL_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_PUSH_CONNECTION         _IOWR('e', 72, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_CONN                _IOWR('e', 73, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_DEL_PEER                _IOWR('e', 74, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_ADD_PEER                _IOWR('e', 75, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_PEER                _IOWR('e', 76, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_TXDESC              _IOWR('e', 77, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_ADD_INTERFACE           _IOWR('e', 78, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_DEL_INTERFACE           _IOWR('e', 79, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_INTERFACE           _IOWR('e', 80, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_GET_GMID                _IOWR('e', 81, IOCTL_PORTAL_TYPE)
 
-#define IOC_PORTAL_PING                    _IOWR('e', 30, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_MAX_NR                             81
 
-#define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_PANIC                   _IOWR('e', 34, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_NID                 _IOWR('e', 36, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, IOCTL_PORTAL_TYPE)
-/* gap: use me! */
-#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MEMHOG                  _IOWR('e', 42, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MAX_NR                             42
 
 enum {
-        QSWNAL    = 1,
+        LONAL     = 1,
         SOCKNAL   = 2,
-        GMNAL     = 3,
-        /*          4 unused */
-        /*          5 unused */
-        ROUTER    = 6,
-        OPENIBNAL = 7,
-        IIBNAL    = 8,
-        LONAL     = 9,
-        RANAL     = 10,
-        VIBNAL    = 11,
-        NAL_ENUM_END_MARKER
+        QSWNAL    = 3,
+        GMNAL     = 4,
+        OPENIBNAL = 5,
+        IIBNAL    = 6,
+        VIBNAL    = 7,
+        RANAL     = 8,
 };
 
 #define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
-
-#define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
-
-/* unused                            100 */
-#define NAL_CMD_CLOSE_CONNECTION     101
-#define NAL_CMD_REGISTER_MYNID       102
-#define NAL_CMD_PUSH_CONNECTION      103
-#define NAL_CMD_GET_CONN             104
-#define NAL_CMD_DEL_PEER             105
-#define NAL_CMD_ADD_PEER             106
-#define NAL_CMD_GET_PEER             107
-#define NAL_CMD_GET_TXDESC           108
-#define NAL_CMD_ADD_ROUTE            109
-#define NAL_CMD_DEL_ROUTE            110
-#define NAL_CMD_GET_ROUTE            111
-#define NAL_CMD_NOTIFY_ROUTER        112
-#define NAL_CMD_ADD_INTERFACE        113
-#define NAL_CMD_DEL_INTERFACE        114
-#define NAL_CMD_GET_INTERFACE        115
-
 
 enum {
         DEBUG_DAEMON_START       =  1,

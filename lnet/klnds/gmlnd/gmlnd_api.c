@@ -31,7 +31,7 @@ gmnal_data_t	*global_nal_data = NULL;
 #define         GLOBAL_NID_STR_LEN      16
 char            global_nid_str[GLOBAL_NID_STR_LEN] = {0};
 
-extern int gmnal_cmd(struct portals_cfg *pcfg, void *private);
+extern int gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 
 /*
  *      Write the global nid /proc/sys/gmnal/globalnid
@@ -67,9 +67,6 @@ gmnal_shutdown(ptl_ni_t *ni)
         nal_data = (gmnal_data_t *)ni->ni_data;
         LASSERT(nal_data == global_nal_data);
 	CDEBUG(D_TRACE, "gmnal_shutdown: nal_data [%p]\n", nal_data);
-
-        /* Stop portals calling our ioctl handler */
-        libcfs_nal_cmd_unregister(GMNAL);
 
         /* XXX for shutdown "under fire" we probably need to set a shutdown
          * flag so when portals calls us we fail immediately and dont queue any
@@ -292,23 +289,6 @@ gmnal_startup(ptl_ni_t *ni, char **interfaces)
 	CDEBUG(D_INFO, "portals_pid is [%u]\n", ni->ni_pid);
 	CDEBUG(D_INFO, "portals_nid is ["LPU64"]\n", ni->ni_nid);
 	
-	if (libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, nal_data) != 0) {
-		CDEBUG(D_INFO, "libcfs_nal_cmd_register failed\n");
-
-                /* XXX these cleanup cases should be restructured to
-                 * minimise duplication... */
-		gmnal_stop_rxthread(nal_data);
-		gmnal_stop_ctthread(nal_data);
-		gmnal_free_txd(nal_data);
-		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
-		gm_close(nal_data->gm_port);
-		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
-		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
-        }
-
         /* might be better to initialise this at module load rather than in
          * NAL startup */
         nal_data->sysctl = NULL;
@@ -318,6 +298,7 @@ gmnal_startup(ptl_ni_t *ni, char **interfaces)
 
 	global_nal_data = nal_data;
 
+        PORTAL_MODULE_USE;
 	return(PTL_OK);
 }
 
@@ -325,6 +306,7 @@ ptl_nal_t the_gm_nal = {
         .nal_type           = GMNAL,
         .nal_startup        = gmnal_startup,
         .nal_shutdown       = gmnal_shutdown,
+        .nal_cmd            = gmnal_ctl,
         .nal_send           = gmnal_cb_send,
         .nal_send_pages     = gmnal_cb_send_pages,
         .nal_recv           = gmnal_cb_recv,

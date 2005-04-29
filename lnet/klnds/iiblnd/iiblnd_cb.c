@@ -1488,18 +1488,18 @@ init_tx:
 }
 
 static ptl_err_t
-kibnal_sendmsg(ptl_ni_t     *ni, 
-               void         *private,
-               ptl_msg_t    *ptlmsg,
-               ptl_hdr_t    *hdr, 
-               int           type, 
-               ptl_nid_t     nid, 
-               ptl_pid_t     pid,
-               unsigned int  payload_niov, 
-               struct iovec *payload_iov, 
-               ptl_kiov_t   *payload_kiov,
-               size_t        payload_offset,
-               size_t        payload_nob)
+kibnal_sendmsg(ptl_ni_t        *ni, 
+               void            *private,
+               ptl_msg_t       *ptlmsg,
+               ptl_hdr_t       *hdr, 
+               int              type, 
+               ptl_process_id_t target,
+               int              routing,
+               unsigned int     payload_niov, 
+               struct iovec    *payload_iov, 
+               ptl_kiov_t      *payload_kiov,
+               size_t           payload_offset,
+               size_t           payload_nob)
 {
         kib_msg_t  *ibmsg;
         kib_tx_t   *tx;
@@ -1507,8 +1507,8 @@ kibnal_sendmsg(ptl_ni_t     *ni,
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid:"LPX64
-               " pid %d\n", payload_nob, payload_niov, nid , pid);
+        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to %s\n", 
+               payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
@@ -1518,6 +1518,11 @@ kibnal_sendmsg(ptl_ni_t     *ni,
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
+        if (routing) {
+                CERROR ("Can't route\n");
+                return PTL_FAIL;
+        }
+        
         switch (type) {
         default:
                 LBUG();
@@ -1539,7 +1544,7 @@ kibnal_sendmsg(ptl_ni_t     *ni,
                 /* Incoming message consistent with immediate reply? */
                 if (rx->rx_msg->ibm_type != IBNAL_MSG_IMMEDIATE) {
                         CERROR ("REPLY to "LPX64" bad opbm type %d!!!\n",
-                                nid, rx->rx_msg->ibm_type);
+                                target.nid, rx->rx_msg->ibm_type);
                         return (PTL_FAIL);
                 }
 
@@ -1547,7 +1552,7 @@ kibnal_sendmsg(ptl_ni_t     *ni,
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
                 if (nob >= IBNAL_MSG_SIZE) {
                         CERROR("REPLY for "LPX64" too big (RDMA not requested): %d\n", 
-                               nid, payload_nob);
+                               target.nid, payload_nob);
                         return (PTL_FAIL);
                 }
                 break;
@@ -1558,7 +1563,7 @@ kibnal_sendmsg(ptl_ni_t     *ni,
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[ptlmsg->msg_md->md_length]);
                 if (nob > IBNAL_MSG_SIZE)
                         return (kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, 
-                                                          nid, ptlmsg, hdr));
+                                                          target.nid, ptlmsg, hdr));
                 break;
 
         case PTL_MSG_ACK:
@@ -1570,7 +1575,7 @@ kibnal_sendmsg(ptl_ni_t     *ni,
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
                 if (nob > IBNAL_MSG_SIZE)
                         return (kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA,
-                                                          nid, ptlmsg, hdr));
+                                                          target.nid, ptlmsg, hdr));
                 
                 break;
         }
@@ -1580,7 +1585,7 @@ kibnal_sendmsg(ptl_ni_t     *ni,
                                   in_interrupt()));
         if (tx == NULL) {
                 CERROR ("Can't send %d to "LPX64": tx descs exhausted%s\n", 
-                        type, nid, in_interrupt() ? " (intr)" : "");
+                        type, target.nid, in_interrupt() ? " (intr)" : "");
                 return (PTL_NO_SPACE);
         }
 
@@ -1605,30 +1610,30 @@ kibnal_sendmsg(ptl_ni_t     *ni,
         /* ptlmsg gets finalized when tx completes */
         tx->tx_ptlmsg[0] = ptlmsg;
 
-        kibnal_launch_tx(tx, nid);
+        kibnal_launch_tx(tx, target.nid);
         return (PTL_OK);
 }
 
 ptl_err_t
 kibnal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+             ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing, 
              unsigned int payload_niov, struct iovec *payload_iov,
              size_t payload_offset, size_t payload_len)
 {
         return (kibnal_sendmsg(ni, private, cookie,
-                               hdr, type, nid, pid,
+                               hdr, type, tgt, routing,
                                payload_niov, payload_iov, NULL,
                                payload_offset, payload_len));
 }
 
 ptl_err_t
 kibnal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                   ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
                    unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
                    size_t payload_offset, size_t payload_len)
 {
         return (kibnal_sendmsg(ni, private, cookie,
-                               hdr, type, nid, pid,
+                               hdr, type, tgt, routing,
                                payload_niov, NULL, payload_kiov,
                                payload_offset, payload_len));
 }

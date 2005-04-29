@@ -39,8 +39,7 @@ static ptl_err_t do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr,
                               void *private, int loopback);
 
 static ptl_libmd_t *
-ptl_match_md(int index, int op_mask,
-             ptl_nid_t src_nid, ptl_pid_t src_pid,
+ptl_match_md(int index, int op_mask, ptl_process_id_t src,
              ptl_size_t rlength, ptl_size_t roffset,
              ptl_match_bits_t match_bits, ptl_msg_t *msg,
              ptl_size_t *mlength_out, ptl_size_t *offset_out)
@@ -53,8 +52,8 @@ ptl_match_md(int index, int op_mask,
         ptl_size_t        offset;
         ENTRY;
 
-        CDEBUG (D_NET, "Request from "LPX64".%d of length %d into portal %d "
-                "MB="LPX64"\n", src_nid, src_pid, rlength, index, match_bits);
+        CDEBUG (D_NET, "Request from %s of length %d into portal %d "
+                "MB="LPX64"\n", libcfs_id2str(src), rlength, index, match_bits);
 
         if (index < 0 || index >= ptl_apini.apini_nportals) {
                 CERROR("Invalid portal %d not in [0-%d]\n",
@@ -82,14 +81,11 @@ ptl_match_md(int index, int op_mask,
 
                 /* mismatched ME nid/pid? */
                 if (me->me_match_id.nid != PTL_NID_ANY &&
-                    me->me_match_id.nid != src_nid)
+                    me->me_match_id.nid != src.nid)
                         continue;
 
-                CDEBUG(D_NET, "match_id.pid [%x], src_pid [%x]\n",
-                       me->me_match_id.pid, src_pid);
-
                 if (me->me_match_id.pid != PTL_PID_ANY &&
-                    me->me_match_id.pid != src_pid)
+                    me->me_match_id.pid != src.pid)
                         continue;
 
                 /* mismatched ME matchbits? */
@@ -121,18 +117,17 @@ ptl_match_md(int index, int op_mask,
                 }
 
                 /* Commit to this ME/MD */
-                CDEBUG(D_NET, "Incoming %s index %x from "LPX64"/%u of "
+                CDEBUG(D_NET, "Incoming %s index %x from %s of "
                        "length %d/%d into md "LPX64" [%d] + %d\n",
                        (op_mask == PTL_MD_OP_PUT) ? "put" : "get",
-                       index, src_nid, src_pid, mlength, rlength,
+                       index, libcfs_id2str(src), mlength, rlength,
                        md->md_lh.lh_cookie, md->md_niov, offset);
 
                 ptl_commit_md(md, msg);
                 md->md_offset = offset + mlength;
 
                 /* NB Caller sets ev.type and ev.hdr_data */
-                msg->msg_ev.initiator.nid = src_nid;
-                msg->msg_ev.initiator.pid = src_pid;
+                msg->msg_ev.initiator = src;
                 msg->msg_ev.pt_index = index;
                 msg->msg_ev.match_bits = match_bits;
                 msg->msg_ev.rlength = rlength;
@@ -156,16 +151,15 @@ ptl_match_md(int index, int op_mask,
         }
 
  failed:
-        CERROR ("Dropping %s from "LPX64".%d portal %d match "LPX64
+        CERROR ("Dropping %s from %s portal %d match "LPX64
                 " offset %d length %d: no match\n",
                 (op_mask == PTL_MD_OP_GET) ? "GET" : "PUT",
-                src_nid, src_pid, index, match_bits, roffset, rlength);
+                libcfs_id2str(src), index, match_bits, roffset, rlength);
         RETURN(NULL);
 }
 
 ptl_err_t
-PtlFailNid (ptl_handle_ni_t interface, 
-            ptl_nid_t nid, unsigned int threshold)
+ptl_fail_nid (ptl_nid_t nid, unsigned int threshold)
 {
         ptl_test_peer_t   *tp;
         unsigned long      flags;
@@ -693,9 +687,6 @@ ptl_lo_txkiov (ptl_ni_t     *ni,
                void         *private,
                ptl_msg_t    *libmsg,
                ptl_hdr_t    *hdr,
-               int           type,
-               ptl_nid_t     nid,
-               ptl_pid_t     pid,
                unsigned int  payload_niov,
                ptl_kiov_t   *payload_kiov,
                size_t        payload_offset,
@@ -790,9 +781,6 @@ ptl_lo_txiov (ptl_ni_t     *ni,
               void         *private,
               ptl_msg_t    *libmsg,
               ptl_hdr_t    *hdr,
-              int           type,
-              ptl_nid_t     nid,
-              ptl_pid_t     pid,
               unsigned int  payload_niov,
               struct iovec *payload_iov,
               size_t        payload_offset,
@@ -853,49 +841,82 @@ ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
 
 ptl_err_t
 ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-          ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+          ptl_hdr_t *hdr, int type, ptl_process_id_t target,
           ptl_libmd_t *md, ptl_size_t offset, ptl_size_t len)
 {
-        int loopback = (nid == ni->ni_nid);
+        ptl_nid_t gw_nid;
+        int       routing;
+        int       loopback;
+        ptl_err_t rc;
 
+        /* CAVEAT EMPTOR! ni != NULL == interface pre-determined (ACK) */
+
+        gw_nid = kpr_lookup (&ni, target.nid, sizeof(*hdr) + len);
+        if (gw_nid == PTL_NID_ANY) {
+                CERROR("No route to %s\n", libcfs_id2str(target));
+                return PTL_FAIL;
+        }
+
+        routing = (gw_nid != ni->ni_nid);       /* gateway will forward */
+        loopback = (target.nid == ni->ni_nid);  /* it's for me! */
+
+        if (routing && loopback) {              /* very strange */
+                CERROR("Inconsistent route table: target %s gw %s ni %s\n",
+                       libcfs_id2str(target), libcfs_nid2str(gw_nid), 
+                       libcfs_nid2str(ni->ni_nid));
+                rc = PTL_FAIL;
+                goto out;
+        }
+
+        hdr->type           = cpu_to_le32(type);
+        hdr->dest_nid       = cpu_to_le64(target.nid);
+        hdr->dest_pid       = cpu_to_le32(target.pid);
+        hdr->src_nid        = cpu_to_le64(ni->ni_nid);
+        hdr->src_pid        = cpu_to_le64(ptl_apini.apini_pid);
+        hdr->payload_length = cpu_to_le32(len);
+
+        /* set the completion event's initiator.nid now we know it */
+        if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
+                msg->msg_ev.initiator.nid = ni->ni_nid;
+                
+        if (routing)
+                target.nid = gw_nid;
+        
         if (len == 0) {
                 if (loopback)
-                        return ptl_lo_txiov(ni, private, msg,
-                                            hdr, type, nid, pid,
-                                            0, NULL,
-                                            offset, len);
+                        rc = ptl_lo_txiov(ni, private, msg, hdr,
+                                          0, NULL, offset, len);
                 else
-                        return (ni->ni_nal->nal_send)(ni, private, msg,
-                                                      hdr, type, nid, pid,
-                                                      0, NULL,
-                                                      offset, len);
-        }
-
-        if ((md->md_options & PTL_MD_KIOV) == 0) {
+                        rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, 
+                                                    type, target, routing,
+                                                    0, NULL, offset, len);
+        } else if ((md->md_options & PTL_MD_KIOV) == 0) {
                 if (loopback)
-                        return ptl_lo_txiov(ni, private, msg,
-                                            hdr, type, nid, pid,
-                                            md->md_niov, md->md_iov.iov,
+                        rc = ptl_lo_txiov(ni, private, msg, hdr, 
+                                          md->md_niov, md->md_iov.iov,
+                                          offset, len);
+                else
+                        rc = (ni->ni_nal->nal_send)
+                                     (ni, private, msg, hdr, 
+                                      type, target, routing,
+                                      md->md_niov, md->md_iov.iov,
+                                      offset, len);
+        } else {
+                if (loopback)
+                        rc =  ptl_lo_txkiov(ni, private, msg, hdr, 
+                                            md->md_niov, md->md_iov.kiov,
                                             offset, len);
                 else
-                        return (ni->ni_nal->nal_send)(ni, private, msg,
-                                                      hdr, type, nid, pid,
-                                                      md->md_niov,
-                                                      md->md_iov.iov,
-                                                      offset, len);
+                        rc = (ni->ni_nal->nal_send_pages)
+                                     (ni, private, msg, hdr, 
+                                      type, target, routing,
+                                      md->md_niov, md->md_iov.kiov,
+                                      offset, len);
         }
 
-        if (loopback)
-                return ptl_lo_txkiov(ni, private, msg,
-                                     hdr, type, nid, pid,
-                                     md->md_niov, md->md_iov.kiov,
-                                     offset, len);
-        else
-                return (ni->ni_nal->nal_send_pages)(ni, private, msg,
-                                                    hdr, type, nid, pid,
-                                                    md->md_niov, 
-                                                    md->md_iov.kiov,
-                                                    offset, len);
+ out:
+        ptl_ni_decref(ni);                      /* lose ref from kpr_lookup */
+        return rc;
 }
 
 static void
@@ -955,6 +976,8 @@ ptl_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
 {
         ptl_size_t       mlength = 0;
         ptl_size_t       offset = 0;
+        ptl_process_id_t src = {.nid = hdr->src_nid,
+                                .pid = hdr->src_pid};
         ptl_err_t        rc;
         ptl_libmd_t     *md;
         unsigned long    flags;
@@ -966,8 +989,7 @@ ptl_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
 
         PTL_LOCK(flags);
 
-        md = ptl_match_md(hdr->msg.put.ptl_index, PTL_MD_OP_PUT,
-                          hdr->src_nid, hdr->src_pid,
+        md = ptl_match_md(hdr->msg.put.ptl_index, PTL_MD_OP_PUT, src,
                           hdr->payload_length, hdr->msg.put.offset,
                           hdr->msg.put.match_bits, msg,
                           &mlength, &offset);
@@ -997,8 +1019,8 @@ ptl_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
                               hdr->payload_length);
 
         if (rc != PTL_OK)
-                CERROR(LPX64": error on receiving PUT from "LPX64": %d\n",
-                       ni->ni_nid, hdr->src_nid, rc);
+                CERROR("%s: error on receiving PUT from %s: %d\n",
+                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
 
         return (rc);
 }
@@ -1009,6 +1031,8 @@ ptl_parse_get(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
 {
         ptl_size_t       mlength = 0;
         ptl_size_t       offset = 0;
+        ptl_process_id_t src = {.nid = hdr->src_nid,
+                                .pid = hdr->src_pid};
         ptl_libmd_t     *md;
         ptl_hdr_t        reply;
         unsigned long    flags;
@@ -1022,8 +1046,7 @@ ptl_parse_get(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
 
         PTL_LOCK(flags);
 
-        md = ptl_match_md(hdr->msg.get.ptl_index, PTL_MD_OP_GET,
-                          hdr->src_nid, hdr->src_pid,
+        md = ptl_match_md(hdr->msg.get.ptl_index, PTL_MD_OP_GET, src,
                           hdr->msg.get.sink_length, hdr->msg.get.src_offset,
                           hdr->msg.get.match_bits, msg,
                           &mlength, &offset);
@@ -1041,23 +1064,16 @@ ptl_parse_get(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
         PTL_UNLOCK(flags);
 
         memset (&reply, 0, sizeof (reply));
-        reply.type     = cpu_to_le32(PTL_MSG_REPLY);
-        reply.dest_nid = cpu_to_le64(hdr->src_nid);
-        reply.dest_pid = cpu_to_le32(hdr->src_pid);
-        reply.src_nid  = cpu_to_le64(ni->ni_nid);
-        reply.src_pid  = cpu_to_le32(ptl_apini.apini_pid);
-        reply.payload_length = cpu_to_le32(mlength);
-
         reply.msg.reply.dst_wmd = hdr->msg.get.return_wmd;
 
         /* NB call ptl_send() _BEFORE_ ptl_recv() completes the incoming
          * message.  Some NALs _require_ this to implement optimized GET */
 
-        rc = ptl_send (ni, private, msg, &reply, PTL_MSG_REPLY,
-                       hdr->src_nid, hdr->src_pid, md, offset, mlength);
+        rc = ptl_send (ni, private, msg, &reply, PTL_MSG_REPLY, src,
+                       md, offset, mlength);
         if (rc != PTL_OK)
-                CERROR(LPX64": Unable to send REPLY for GET from "LPX64": %d\n",
-                       ni->ni_nid, hdr->src_nid, rc);
+                CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
+                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
 
         /* Discard any junk after the hdr */
         if (!loopback)
@@ -1071,6 +1087,8 @@ static ptl_err_t
 ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
                 ptl_msg_t *msg, int loopback)
 {
+        ptl_process_id_t src = {.nid = hdr->src_nid,
+                                .pid = hdr->src_pid};
         ptl_libmd_t     *md;
         int              rlength;
         int              length;
@@ -1082,8 +1100,9 @@ ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
         /* NB handles only looked up by creator (no flips) */
         md = ptl_wire_handle2md(&hdr->msg.reply.dst_wmd);
         if (md == NULL || md->md_threshold == 0) {
-                CERROR (LPX64": Dropping REPLY from "LPX64" for %s MD "
-                        LPX64"."LPX64"\n", ni->ni_nid, hdr->src_nid,
+                CERROR ("%s: Dropping REPLY from %s for %s "
+                        "MD "LPX64"."LPX64"\n", 
+                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
                         (md == NULL) ? "invalid" : "inactive",
                         hdr->msg.reply.dst_wmd.wh_interface_cookie,
                         hdr->msg.reply.dst_wmd.wh_object_cookie);
@@ -1098,10 +1117,10 @@ ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
 
         if (length > md->md_length) {
                 if ((md->md_options & PTL_MD_TRUNCATE) == 0) {
-                        CERROR (LPX64": Dropping REPLY from "LPX64
-                                " length %d for MD "LPX64" would overflow (%d)\n",
-                                ni->ni_nid, hdr->src_nid, length,
-                                hdr->msg.reply.dst_wmd.wh_object_cookie,
+                        CERROR ("%s: Dropping REPLY from %s length %d "
+                                "for MD "LPX64" would overflow (%d)\n",
+                                libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
+                                length, hdr->msg.reply.dst_wmd.wh_object_cookie,
                                 md->md_length);
                         PTL_UNLOCK(flags);
                         return (PTL_FAIL);
@@ -1109,16 +1128,14 @@ ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
                 length = md->md_length;
         }
 
-        CDEBUG(D_NET, LPX64": Reply from "LPX64
-               " of length %d/%d into md "LPX64"\n",
-               ni->ni_nid, hdr->src_nid, length, rlength,
-               hdr->msg.reply.dst_wmd.wh_object_cookie);
+        CDEBUG(D_NET, "%s: Reply from %s of length %d/%d into md "LPX64"\n",
+               libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), 
+               length, rlength, hdr->msg.reply.dst_wmd.wh_object_cookie);
 
         ptl_commit_md(md, msg);
 
         msg->msg_ev.type = PTL_EVENT_REPLY_END;
-        msg->msg_ev.initiator.nid = hdr->src_nid;
-        msg->msg_ev.initiator.pid = hdr->src_pid;
+        msg->msg_ev.initiator = src;
         msg->msg_ev.rlength = rlength;
         msg->msg_ev.mlength = length;
         msg->msg_ev.offset = 0;
@@ -1137,8 +1154,8 @@ ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
                 rc = ptl_recv(ni, private, msg, md, 0, length, rlength);
 
         if (rc != PTL_OK)
-                CERROR(LPX64": error on receiving REPLY from "LPX64": %d\n",
-                       ni->ni_nid, hdr->src_nid, rc);
+                CERROR("%s: error on receiving REPLY from %s: %d\n",
+                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
 
         return (rc);
 }
@@ -1147,8 +1164,10 @@ static ptl_err_t
 ptl_parse_ack(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, 
               ptl_msg_t *msg, int loopback)
 {
-        ptl_libmd_t   *md;
-        unsigned long  flags;
+        ptl_process_id_t src = {.nid = hdr->src_nid,
+                                .pid = hdr->src_pid};
+        ptl_libmd_t     *md;
+        unsigned long    flags;
 
         /* Convert ack fields to host byte order */
         hdr->msg.ack.match_bits = le64_to_cpu(hdr->msg.ack.match_bits);
@@ -1159,25 +1178,24 @@ ptl_parse_ack(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private,
         /* NB handles only looked up by creator (no flips) */
         md = ptl_wire_handle2md(&hdr->msg.ack.dst_wmd);
         if (md == NULL || md->md_threshold == 0) {
-                CERROR (LPX64": Dropping ACK from "LPX64" to %s MD "
-                       LPX64"."LPX64"\n", ni->ni_nid, hdr->src_nid,
-                       (md == NULL) ? "invalid" : "inactive",
-                       hdr->msg.ack.dst_wmd.wh_interface_cookie,
-                       hdr->msg.ack.dst_wmd.wh_object_cookie);
+                CERROR ("%s: Dropping ACK from %s to %s MD "LPX64"."LPX64"\n",
+                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
+                        (md == NULL) ? "invalid" : "inactive",
+                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
+                        hdr->msg.ack.dst_wmd.wh_object_cookie);
 
                 PTL_UNLOCK(flags);
                 return (PTL_FAIL);
         }
 
-        CDEBUG(D_NET, LPX64": ACK from "LPX64" into md "LPX64"\n",
-               ni->ni_nid, hdr->src_nid, 
+        CDEBUG(D_NET, "%s: ACK from %s into md "LPX64"\n",
+               libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), 
                hdr->msg.ack.dst_wmd.wh_object_cookie);
 
         ptl_commit_md(md, msg);
 
         msg->msg_ev.type = PTL_EVENT_ACK;
-        msg->msg_ev.initiator.nid = hdr->src_nid;
-        msg->msg_ev.initiator.pid = hdr->src_pid;
+        msg->msg_ev.initiator = src;
         msg->msg_ev.mlength = hdr->msg.ack.mlength;
         msg->msg_ev.match_bits = hdr->msg.ack.match_bits;
 
@@ -1222,11 +1240,15 @@ hdr_type_string (ptl_hdr_t *hdr)
 void
 ptl_print_hdr(ptl_hdr_t * hdr)
 {
+        ptl_process_id_t src = {.nid = hdr->src_nid,
+                                .pid = hdr->src_pid};
+        ptl_process_id_t dst = {.nid = hdr->dest_nid,
+                                .pid = hdr->dest_pid};
         char *type_str = hdr_type_string (hdr);
 
         CWARN("P3 Header at %p of type %s\n", hdr, type_str);
-        CWARN("    From nid/pid "LPX64"/%u", hdr->src_nid, hdr->src_pid);
-        CWARN("    To nid/pid "LPX64"/%u\n", hdr->dest_nid, hdr->dest_pid);
+        CWARN("    From %s\n", libcfs_id2str(src));
+        CWARN("    To   %s\n", libcfs_id2str(dst));
 
         switch (hdr->type) {
         default:
@@ -1310,11 +1332,11 @@ do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, int loopback)
                 if (mv->magic == PORTALS_PROTO_MAGIC &&
                     mv->version_major == PORTALS_PROTO_VERSION_MAJOR &&
                     mv->version_minor == PORTALS_PROTO_VERSION_MINOR) {
-                        CWARN (LPX64": Dropping unexpected HELLO message: "
-                               "magic %d, version %d.%d from "LPD64"\n",
-                               ni->ni_nid, mv->magic,
+                        CWARN ("%s: Dropping unexpected HELLO message: "
+                               "magic %d, version %d.%d from %s\n",
+                               libcfs_nid2str(ni->ni_nid), mv->magic,
                                mv->version_major, mv->version_minor,
-                               hdr->src_nid);
+                               libcfs_nid2str(hdr->src_nid));
 
                         /* it's good but we don't want it */
                         ptl_drop_message(ni, private, hdr, loopback);
@@ -1322,11 +1344,11 @@ do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, int loopback)
                 }
 
                 /* we got garbage */
-                CERROR (LPX64": Bad HELLO message: "
-                        "magic %d, version %d.%d from "LPD64"\n",
-                        ni->ni_nid, mv->magic,
+                CERROR ("%s: Bad HELLO message: "
+                        "magic %d, version %d.%d from %s\n",
+                        libcfs_nid2str(ni->ni_nid), mv->magic,
                         mv->version_major, mv->version_minor,
-                        hdr->src_nid);
+                        libcfs_nid2str(hdr->src_nid));
                 return PTL_FAIL;
         }
 
@@ -1336,17 +1358,19 @@ do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, int loopback)
         case PTL_MSG_REPLY:
                 hdr->dest_nid = le64_to_cpu(hdr->dest_nid);
                 if (hdr->dest_nid != ni->ni_nid) {
-                        CERROR(LPX64": BAD dest NID in %s message from"
-                               LPX64" to "LPX64" (not me)\n",
-                               ni->ni_nid, hdr_type_string(hdr),
-                               hdr->src_nid, hdr->dest_nid);
+                        CERROR("%s: BAD dest NID in %s message from %s to %s"
+                               "(not me)\n", libcfs_nid2str(ni->ni_nid), 
+                               hdr_type_string(hdr), 
+                               libcfs_nid2str(hdr->src_nid),
+                               libcfs_nid2str(hdr->dest_nid));
                         return PTL_FAIL;
                 }
                 break;
 
         default:
-                CERROR(LPX64": Bad message type 0x%x from "LPX64"\n",
-                       ni->ni_nid, hdr->type, hdr->src_nid);
+                CERROR("%s: Bad message type 0x%x from %s\n",
+                       libcfs_nid2str(ni->ni_nid), hdr->type, 
+                       libcfs_nid2str(hdr->src_nid));
                 return PTL_FAIL;
         }
 
@@ -1356,20 +1380,19 @@ do_ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, int loopback)
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
             fail_peer (hdr->src_nid, 0))        /* shall we now? */
         {
-                CERROR(LPX64": Dropping incoming %s from "LPX64
-                       ": simulated failure\n",
-                       ni->ni_nid, hdr_type_string (hdr),
-                       hdr->src_nid);
+                CERROR("%s: Dropping incoming %s from %s: simulated failure\n",
+                       libcfs_nid2str(ni->ni_nid), hdr_type_string (hdr),
+                       libcfs_nid2str(hdr->src_nid));
                 ptl_drop_message(ni, private, hdr, loopback);
                 return PTL_OK;
         }
 
         msg = ptl_msg_alloc();
         if (msg == NULL) {
-                CERROR(LPX64": Dropping incoming %s from "LPX64
-                       ": can't allocate a ptl_msg_t\n",
-                       ni->ni_nid, hdr_type_string (hdr),
-                       hdr->src_nid);
+                CERROR("%s: Dropping incoming %s from %s: "
+                       "can't allocate a ptl_msg_t\n",
+                       libcfs_nid2str(ni->ni_nid), hdr_type_string (hdr),
+                       libcfs_nid2str(hdr->src_nid));
                 ptl_drop_message(ni, private, hdr, loopback);
                 return PTL_OK;
         }
@@ -1435,7 +1458,6 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
        ptl_ac_index_t ac, ptl_match_bits_t match_bits,
        ptl_size_t offset, ptl_hdr_data_t hdr_data)
 {
-        ptl_ni_t         *ni;
         ptl_msg_t        *msg;
         ptl_hdr_t         hdr;
         ptl_libmd_t      *md;
@@ -1448,48 +1470,33 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
             fail_peer (target.nid, 1))          /* shall we now? */
         {
-                CERROR("Dropping PUT to "LPX64": simulated failure\n",
-                       target.nid);
+                CERROR("Dropping PUT to %s: simulated failure\n",
+                       libcfs_id2str(target));
                 return PTL_PROCESS_INVALID;
         }
 
         msg = ptl_msg_alloc();
         if (msg == NULL) {
-                CERROR("Dropping PUT to "LPX64": ENOMEM on ptl_msg_t\n",
-                       target.nid);
+                CERROR("Dropping PUT to %s: ENOMEM on ptl_msg_t\n",
+                       libcfs_id2str(target));
                 return PTL_NO_SPACE;
         }
 
         PTL_LOCK(flags);
 
-        ni = ptl_nid2ni(target.nid);
-        if (ni == NULL) {
-                ptl_msg_free(msg);
-                PTL_UNLOCK(flags);
-
-                CERROR("Dropping PUT to "LPX64": not reachable\n", target.nid);
-                return PTL_PROCESS_INVALID;
-        }
-        
         md = ptl_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0) {
                 ptl_msg_free(msg);
                 PTL_UNLOCK(flags);
 
-                CERROR("Dropping PUT to "LPX64": MD invalid\n", target.nid);
+                CERROR("Dropping PUT to %s: MD invalid\n", 
+                       libcfs_id2str(target));
                 return PTL_MD_INVALID;
         }
 
-        CDEBUG(D_NET, LPX64": PtlPut -> "LPX64":%lu\n",
-               ni->ni_nid, target.nid, (unsigned long)target.pid);
+        CDEBUG(D_NET, "PtlPut -> %s\n", libcfs_id2str(target));
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = cpu_to_le32(PTL_MSG_PUT);
-        hdr.dest_nid = cpu_to_le64(target.nid);
-        hdr.dest_pid = cpu_to_le32(target.pid);
-        hdr.src_nid  = cpu_to_le64(ni->ni_nid);
-        hdr.src_pid  = cpu_to_le32(ptl_apini.apini_pid);
-        hdr.payload_length = cpu_to_le32(md->md_length);
 
         /* NB handles only looked up by creator (no flips) */
         if (ack == PTL_ACK_REQ) {
@@ -1508,7 +1515,7 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
         ptl_commit_md(md, msg);
 
         msg->msg_ev.type = PTL_EVENT_SEND_END;
-        msg->msg_ev.initiator.nid = ni->ni_nid;
+        msg->msg_ev.initiator.nid = PTL_NID_ANY;
         msg->msg_ev.initiator.pid = ptl_apini.apini_pid;
         msg->msg_ev.pt_index = portal;
         msg->msg_ev.match_bits = match_bits;
@@ -1525,12 +1532,12 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
 
         PTL_UNLOCK(flags);
 
-        rc = ptl_send (ni, NULL, msg, &hdr, PTL_MSG_PUT,
-                       target.nid, target.pid, md, 0, md->md_length);
+        rc = ptl_send (NULL, NULL, msg, &hdr, PTL_MSG_PUT, target, 
+                       md, 0, md->md_length);
         if (rc != PTL_OK) {
-                CERROR(LPX64": Error sending PUT to "LPX64": %d\n",
-                       ni->ni_nid, target.nid, rc);
-                ptl_finalize (ni, NULL, msg, rc);
+                CERROR("Error sending PUT to %s: %d\n",
+                       libcfs_id2str(target), rc);
+                ptl_finalize (NULL, NULL, msg, rc);
         }
 
         /* completion will be signalled by an event */
@@ -1556,21 +1563,22 @@ ptl_create_reply_msg (ptl_ni_t *ni, ptl_nid_t peer_nid, ptl_msg_t *getmsg)
         LASSERT (getmd->md_pending > 0);
 
         if (msg == NULL) {
-                CERROR (LPX64": Dropping REPLY from "LPX64": can't allocate msg\n",
-                        ni->ni_nid, peer_nid);
+                CERROR ("%s: Dropping REPLY from %s: can't allocate msg\n",
+                        libcfs_nid2str(ni->ni_nid), libcfs_nid2str(peer_nid));
                 goto drop;
         }
 
         if (getmd->md_threshold == 0) {
-                CERROR (LPX64": Dropping REPLY from "LPX64" for inactive MD %p\n",
-                        ni->ni_nid, peer_nid, getmd);
+                CERROR ("%s: Dropping REPLY from %s for inactive MD %p\n",
+                        libcfs_nid2str(ni->ni_nid), libcfs_nid2str(peer_nid), 
+                        getmd);
                 goto drop_msg;
         }
 
         LASSERT (getmd->md_offset == 0);
 
-        CDEBUG(D_NET, LPX64": Reply from "LPX64" md %p\n", 
-               ni->ni_nid, peer_nid, getmd);
+        CDEBUG(D_NET, "%s: Reply from %s md %p\n", 
+               libcfs_nid2str(ni->ni_nid), libcfs_nid2str(peer_nid), getmd);
 
         ptl_commit_md (getmd, msg);
 
@@ -1606,7 +1614,6 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
        ptl_pt_index_t portal, ptl_ac_index_t ac,
        ptl_match_bits_t match_bits, ptl_size_t offset)
 {
-        ptl_ni_t         *ni;
         ptl_msg_t        *msg;
         ptl_hdr_t         hdr;
         ptl_libmd_t      *md;
@@ -1619,48 +1626,33 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
             fail_peer (target.nid, 1))          /* shall we now? */
         {
-                CERROR("Dropping GET to "LPX64": simulated failure\n",
-                       target.nid);
+                CERROR("Dropping GET to %s: simulated failure\n",
+                       libcfs_id2str(target));
                 return PTL_PROCESS_INVALID;
         }
 
         msg = ptl_msg_alloc();
         if (msg == NULL) {
-                CERROR("Dropping GET to "LPX64": ENOMEM on ptl_msg_t\n",
-                       target.nid);
+                CERROR("Dropping GET to %s: ENOMEM on ptl_msg_t\n",
+                       libcfs_id2str(target));
                 return PTL_NO_SPACE;
         }
 
         PTL_LOCK(flags);
-
-        ni = ptl_nid2ni(target.nid);
-        if (ni == NULL) {
-                ptl_msg_free(msg);
-                PTL_UNLOCK(flags);
-
-                CERROR("Dropping GET to "LPX64": not reachable\n", target.nid);
-                return PTL_PROCESS_INVALID;
-        }
 
         md = ptl_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0) {
                 ptl_msg_free(msg);
                 PTL_UNLOCK(flags);
 
-                CERROR("Dropping GET to "LPX64": MD invalid\n", target.nid);
+                CERROR("Dropping GET to %s: MD invalid\n",
+                       libcfs_id2str(target));
                 return PTL_MD_INVALID;
         }
 
-        CDEBUG(D_NET, LPX64": PtlGet -> "LPX64":%lu\n",
-               ni->ni_nid, target.nid, (unsigned long)target.pid);
+        CDEBUG(D_NET, "PtlGet -> %s\n", libcfs_id2str(target));
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = cpu_to_le32(PTL_MSG_GET);
-        hdr.dest_nid = cpu_to_le64(target.nid);
-        hdr.dest_pid = cpu_to_le32(target.pid);
-        hdr.src_nid  = cpu_to_le64(ni->ni_nid);
-        hdr.src_pid  = cpu_to_le32(ptl_apini.apini_pid);
-        hdr.payload_length = 0;
 
         /* NB handles only looked up by creator (no flips) */
         hdr.msg.get.return_wmd.wh_interface_cookie = 
@@ -1675,7 +1667,7 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
         ptl_commit_md(md, msg);
 
         msg->msg_ev.type = PTL_EVENT_SEND_END;
-        msg->msg_ev.initiator.nid = ni->ni_nid;
+        msg->msg_ev.initiator.nid = PTL_NID_ANY;
         msg->msg_ev.initiator.pid = ptl_apini.apini_pid;
         msg->msg_ev.pt_index = portal;
         msg->msg_ev.match_bits = match_bits;
@@ -1691,12 +1683,12 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
 
         PTL_UNLOCK(flags);
 
-        rc = ptl_send (ni, NULL, msg, &hdr, PTL_MSG_GET,
-                       target.nid, target.pid, NULL, 0, 0);
+        rc = ptl_send (NULL, NULL, msg, &hdr, PTL_MSG_GET, target, 
+                       NULL, 0, 0);
         if (rc != PTL_OK) {
-                CERROR(LPX64": error sending GET to "LPX64": %d\n",
-                       ni->ni_nid, target.nid, rc);
-                ptl_finalize (ni, NULL, msg, rc);
+                CERROR("error sending GET to %s: %d\n",
+                       libcfs_id2str(target), rc);
+                ptl_finalize (NULL, NULL, msg, rc);
         }
 
         /* completion will be signalled by an event */

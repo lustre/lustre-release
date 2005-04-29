@@ -84,21 +84,12 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
                 LASSERT(msg->msg_ev.type == PTL_EVENT_PUT_END);
 
                 memset (&ack, 0, sizeof (ack));
-                ack.type     = cpu_to_le32(PTL_MSG_ACK);
-                ack.dest_nid = cpu_to_le64(msg->msg_ev.initiator.nid);
-                ack.dest_pid = cpu_to_le32(msg->msg_ev.initiator.pid);
-                ack.src_nid  = cpu_to_le64(ni->ni_nid);
-                ack.src_pid  = cpu_to_le32(ptl_apini.apini_pid);
-                ack.payload_length = 0;
-
                 ack.msg.ack.dst_wmd = msg->msg_ack_wmd;
                 ack.msg.ack.match_bits = msg->msg_ev.match_bits;
                 ack.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
                 rc = ptl_send (ni, private, NULL, &ack, PTL_MSG_ACK,
-                               msg->msg_ev.initiator.nid, 
-                               msg->msg_ev.initiator.pid,
-                               NULL, 0, 0);
+                               msg->msg_ev.initiator, NULL, 0, 0);
                 if (rc != PTL_OK) {
                         /* send failed: there's nothing else to clean up. */
                         CERROR("Error %d sending ACK to "LPX64"\n",

@@ -39,19 +39,13 @@ ptl_err_t PtlNIDist(ptl_handle_ni_t   interface_in,
 ptl_err_t PtlNIHandle(ptl_handle_any_t handle_in, 
 		      ptl_handle_ni_t *interface_out);
 
-
 /* 
  * PtlFailNid
  *
- * Not an official Portals 3 API call.  It provides a way of simulating
- * communications failures to all (nid == PTL_NID_ANY), or specific peers
- * (via multiple calls), either until further notice (threshold == -1), or
- * for a specific number of messages.  Passing a threshold of zero, "heals"
- * the given peer.
+ * Not an official Portals 3 API call.  It provides a way of calling
+ * network-specific functions 
  */
-ptl_err_t PtlFailNid(ptl_handle_ni_t ni, 
-		     ptl_nid_t       nid, 
-		     unsigned int    threshold);
+int PtlNICtl(ptl_handle_ni_t interface, unsigned int cmd, void *arg);
 
 /*
  * PtlSnprintHandle: 
@@ -153,4 +147,6 @@ ptl_err_t PtlGet(ptl_handle_md_t  md_in,
 		 ptl_ac_index_t   cookie_in,
 		 ptl_match_bits_t match_bits_in, 
 		 ptl_size_t       offset_in);
+
+
 #endif

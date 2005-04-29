@@ -37,7 +37,6 @@
 
 #include <gm.h>
 
-#define GMNAL_IOC_GET_GNID 1
 /*
  *      portals always uses unit 0
  *      Can this be configurable?

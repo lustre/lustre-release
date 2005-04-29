@@ -177,7 +177,7 @@ typedef struct
         atomic_t          ksnd_npeers;          /* total # peers extant */
         atomic_t          ksnd_nclosing_conns;  /* # closed conns extant */
 
-        kpr_router_t      ksnd_router;          /* THE router */
+        void             *ksnd_router;          /* router callback arg */
 
         ksock_fmb_pool_t  ksnd_small_fmp;       /* small message forwarding buffers */
         ksock_fmb_pool_t  ksnd_large_fmp;       /* large message forwarding buffers */
@@ -210,8 +210,7 @@ typedef struct
 
 #define SOCKNAL_INIT_NOTHING    0
 #define SOCKNAL_INIT_DATA       1
-#define SOCKNAL_INIT_LISTENER   2
-#define SOCKNAL_INIT_ALL        3
+#define SOCKNAL_INIT_ALL        2
 
 /* A packet just assembled for transmission is represented by 1 or more
  * struct iovec fragments (the first frag contains the portals header),
@@ -486,17 +485,16 @@ ksocknal_peer_decref (ksock_peer_t *peer)
 
 ptl_err_t ksocknal_startup (ptl_ni_t *ni, char **interfaces);
 void ksocknal_shutdown (ptl_ni_t *ni);
+int ksocknal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t ksocknal_send (ptl_ni_t *ni, void *private,
                          ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                         int type, ptl_nid_t nid, ptl_pid_t pid,
-                         unsigned int payload_niov, 
-                         struct iovec *payload_iov,
+                         int type, ptl_process_id_t tgt, int routing,
+                         unsigned int payload_niov, struct iovec *payload_iov,
                          size_t payload_offset, size_t payload_nob);
 ptl_err_t ksocknal_send_pages (ptl_ni_t *ni, void *private,
                                ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                               int type, ptl_nid_t nid, ptl_pid_t pid,
-                               unsigned int payload_niov, 
-                               ptl_kiov_t *payload_kiov,
+                               int type, ptl_process_id_t tgt, int routing,
+                               unsigned int payload_niov, ptl_kiov_t *payload_kiov,
                                size_t payload_offset, size_t payload_nob);
 ptl_err_t ksocknal_recv(ptl_ni_t *ni, void *private,
                         ptl_msg_t *ptlmsg, unsigned int niov,
@@ -510,7 +508,7 @@ ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
 
 extern int ksocknal_add_peer(ptl_nid_t nid, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (ptl_nid_t nid);
-extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
+extern ksock_peer_t *ksocknal_find_peer (ptl_nid_t nid);
 extern int ksocknal_create_conn (ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
@@ -522,9 +520,9 @@ extern int ksocknal_close_matching_conns (ptl_nid_t nid, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_tx_done (ksock_tx_t *tx, int asynch);
-extern void ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
-extern void ksocknal_fmb_callback (void *arg, int error);
-extern void ksocknal_notify (void *arg, ptl_nid_t gw_nid, int alive);
+extern void ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
+extern void ksocknal_fmb_callback (ptl_ni_t *ni, void *arg, int error);
+extern void ksocknal_notify (ptl_ni_t *ni, ptl_nid_t gw_nid, int alive);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);
 extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);

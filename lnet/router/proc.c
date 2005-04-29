@@ -143,11 +143,11 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
                 re = list_entry(prd->curr, kpr_route_entry_t, kpre_list);
                 ge = re->kpre_gateway;
 
-                line_len = sprintf(page + chunk_len,
-                        "%12s  "LPX64" : "LPX64" - "LPX64", %s\n",
-                        nal2name(ge->kpge_nalid), ge->kpge_nid,
-                        re->kpre_lo_nid, re->kpre_hi_nid,
-                        ge->kpge_alive ? "up" : "down");
+                line_len = sprintf(page + chunk_len, 
+                                   "net %12s: gateway %s %s\n",
+                                   libcfs_net2str(re->kpre_net),
+                                   libcfs_nid2str(ge->kpge_nid),
+                                   ge->kpge_alive ? "up" : "down");
                 chunk_len += line_len;
                 user_len += line_len;
 

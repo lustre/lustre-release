@@ -411,17 +411,16 @@ extern kib_tunables_t  kibnal_tunables;
 
 ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
 void kibnal_shutdown (ptl_ni_t *ni);
+int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_nid_t nid, ptl_pid_t pid,
-                       unsigned int payload_niov, 
-                       struct iovec *payload_iov,
+                       int type, ptl_process_id_t tgt, int routing,
+                       unsigned int payload_niov, struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
 ptl_err_t kibnal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_nid_t nid, ptl_pid_t pid,
-                             unsigned int payload_niov, 
-                             ptl_kiov_t *payload_kiov,
+                             int type, ptl_process_id_t tgt, int routing,
+                             unsigned int payload_niov, ptl_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);
 ptl_err_t kibnal_recv(ptl_ni_t *ni, void *private,
                       ptl_msg_t *ptlmsg, unsigned int niov,
@@ -438,7 +437,7 @@ extern void kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid,
 extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
 extern kib_peer_t *kibnal_create_peer(ptl_nid_t nid);
 extern void kibnal_destroy_peer(kib_peer_t *peer);
-extern int kibnal_del_peer(ptl_nid_t nid, int single_share);
+extern int kibnal_del_peer(ptl_nid_t nid);
 extern kib_peer_t *kibnal_find_peer_locked(ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked(kib_peer_t *peer);
 extern int  kibnal_close_stale_conns_locked(kib_peer_t *peer,

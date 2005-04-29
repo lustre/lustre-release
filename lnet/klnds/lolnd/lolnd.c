@@ -57,8 +57,6 @@ klonal_startup (ptl_ni_t *ni, char **interfaces)
 
 	CDEBUG (D_NET, "start\n");
 
-#warning fixme
-        ni->ni_nid = 0;
         klonal_instanced = 1;
 
 	PORTAL_MODULE_USE;

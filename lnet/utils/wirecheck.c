@@ -5,6 +5,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <portals/api-support.h>
+
+/* This ghastly hack to allows me to include lib-types.h It doesn't affect any
+ * assertions generated here (but fails-safe if it ever does) */
+typedef struct {
+        int     counter;
+} atomic_t;
+
 #include <portals/lib-types.h>
 
 #include <string.h>
@@ -25,14 +32,14 @@ do {                                            \
 
 #define STRINGIFY(a) #a
 
-#define CHECK_DEFINE(a)                                         \
-do {                                                            \
-        printf ("        CLASSERT ("#a" == "STRINGIFY(a)");\n"); \
+#define CHECK_DEFINE(a)                                                 \
+do {                                                                    \
+        printf ("        CLASSERT ("#a" == "STRINGIFY(a)");\n");        \
 } while (0)
 
 #define CHECK_VALUE(a)                                  \
 do {                                                    \
-        printf ("        CLASSERT ("#a" == %d);\n", a);  \
+        printf ("        CLASSERT ("#a" == %d);\n", a); \
 } while (0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                \

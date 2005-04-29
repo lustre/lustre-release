@@ -33,8 +33,9 @@ int num_stxds = 5;
 int gm_port_id = 4;
 
 int
-gmnal_cmd(struct portals_cfg *pcfg, void *private)
+gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 {
+        struct portal_ioctl_data *data = arg;
 	gmnal_data_t	*nal_data = NULL;
 	char		*name = NULL;
 	int		nid = -2;
@@ -42,18 +43,20 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 	gm_status_t	gm_status;
 
 
-	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n", 
-	       pcfg->pcfg_command, private);
-	nal_data = (gmnal_data_t*)private;
-	switch(pcfg->pcfg_command) {
-	/*
-	 * just reuse already defined GET_NID. Should define GMNAL version
-	 */
-	case(GMNAL_IOC_GET_GNID):
+	CDEBUG(D_TRACE, "gmnal_cmd [%d] ni_data [%p]\n", cmd, ni->ni_data);
+	nal_data = (gmnal_data_t*)ni->ni_data;
+	switch(cmd) {
+	case IOC_PORTAL_GET_GMID:
 
-		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
-		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
-	
+		PORTAL_ALLOC(name, data->ioc_plen1);
+                if (name == NULL)
+                        return -ENOMEM;
+                
+		if (copy_from_user(name, data->ioc_pbuf1, data->ioc_plen1)) {
+                        PORTAL_FREE(name, data->ioc_plen1);
+                        return -EFAULT;
+                }
+                
 		GMNAL_GM_LOCK(nal_data);
 		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
                 gm_status = gm_host_name_to_node_id_ex (nal_data->gm_port, 0, name, &nid);
@@ -61,9 +64,13 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
                 if (gm_status != GM_SUCCESS) {
                         CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) failed[%d]\n",
                                 name, gm_status);
-                        return (-1);
-                } else
-		        CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
+                        PORTAL_FREE(name, data->ioc_plen1);
+                        return -ENOENT;
+                }
+
+                CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
+                PORTAL_FREE(name, data->ioc_plen1);
+                
 		GMNAL_GM_LOCK(nal_data);
 		gm_status = gm_node_id_to_global_id(nal_data->gm_port, 
 						    nid, &gnid);
@@ -71,18 +78,18 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		if (gm_status != GM_SUCCESS) {
 			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n", 
 			       gm_status);
-			return(-1);
+                        return -ENOENT;
 		}
 		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
-		copy_to_user(PCFG_PBUF(pcfg, 2), &gnid, pcfg->pcfg_plen2);
-	break;
+
+                /* gnid returned to userspace in ioc_nid!!! */
+                data->ioc_nid = gnid;
+                return 0;
+        
 	default:
-		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
-		pcfg->pcfg_nid2 = -1;
+		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", cmd);
+                return -EINVAL;
 	}
-
-
-	return(0);
 }
 
 

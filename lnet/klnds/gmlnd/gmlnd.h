@@ -251,11 +251,6 @@ typedef struct _gmnal_data_t {
 extern gmnal_data_t	*global_nal_data;
 
 /*
- * for ioctl get pid
- */
-#define GMNAL_IOC_GET_GNID 1	
-
-/*
  *	Return codes
  */
 #define GMNAL_STATUS_OK	0

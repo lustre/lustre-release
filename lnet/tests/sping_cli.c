@@ -98,7 +98,7 @@ static void pingcli_callback(ptl_event_t *ev)
 }
 
 
-static struct pingcli_data *
+static void
 pingcli_start(struct portal_ioctl_data *args)
 {
         ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
@@ -106,13 +106,16 @@ pingcli_start(struct portal_ioctl_data *args)
         int rc;
 
         client->tsk = current;
-        client->args = args;
-
+        client->nid = args->ioc_nid;
+        client->count = args->ioc_count;
+        client->size = args->ioc_u32[0];
+        client->timeout = args->ioc_u32[1];
+        
         CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  "
                 "size %u, count: %u, timeout: %u\n",
-                args->ioc_nid,
-                libcfs_nid2str(args->ioc_nid),
-                args->ioc_size, args->ioc_count, args->ioc_timeout);
+                client->nid,
+                libcfs_nid2str(client->nid),
+                client->size, client->count, client->timeout);
 
 
         PORTAL_ALLOC (client->outbuf, STDSIZE) ;
@@ -120,7 +123,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
                 pingcli_shutdown (nih, 4);
-                return (NULL);
+                return;
         }
 
         PORTAL_ALLOC (client->inbuf,  STDSIZE);
@@ -129,7 +132,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
                 pingcli_shutdown (nih, 4);
-                return (NULL);
+                return;
         }
 
         /* Aquire and initialize the proper nal for portals. */
@@ -138,7 +141,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("PtlNIInit: error %d\n", rc);
                 pingcli_shutdown (nih, 4);
-                return (NULL);
+                return;
         }
 
         /* Based on the initialization aquire our unique portal ID. */
@@ -146,7 +149,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("PtlGetId error %d\n", rc);
                 pingcli_shutdown (nih, 2);
-                return (NULL);
+                return;
         }
 
         /* Setup the local match entries */
@@ -154,7 +157,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->id_local.pid = PTL_PID_ANY;
 
         /* Setup the remote match entries */
-        client->id_remote.nid = args->ioc_nid;
+        client->id_remote.nid = client->nid;
         client->id_remote.pid = 0;
 
         if ((rc = PtlMEAttach (nih, PTL_PING_CLIENT,
@@ -163,7 +166,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("PtlMEAttach error %d\n", rc);
                 pingcli_shutdown (nih, 2);
-                return (NULL);
+                return;
         }
 
         /* Allocate the event queue for this network interface */
@@ -171,7 +174,7 @@ pingcli_start(struct portal_ioctl_data *args)
         {
                 CERROR ("PtlEQAlloc error %d\n", rc);
                 pingcli_shutdown (nih, 2);
-                return (NULL);
+                return;
         }
 
 
@@ -188,7 +191,7 @@ pingcli_start(struct portal_ioctl_data *args)
                               PTL_UNLINK, &client->md_in_head_h))) {
                 CERROR ("PtlMDAttach error %d\n", rc);
                 pingcli_shutdown (nih, 1);
-                return (NULL);
+                return;
         }
 
         /* Setup the outgoing ping header */
@@ -206,31 +209,29 @@ pingcli_start(struct portal_ioctl_data *args)
                            PTL_UNLINK, &client->md_out_head_h))) {
                 CERROR ("PtlMDBind error %d\n", rc);
                 pingcli_shutdown (nih, 1);
-                return (NULL);
+                return;
         }
         /* Put the ping packet */
         if((rc = PtlPut (client->md_out_head_h, PTL_NOACK_REQ,
                          client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
                 PDEBUG ("PtlPut (header)", rc);
                 pingcli_shutdown (nih, 1);
-                return NULL;
+                return;
         }
 
         count = 0;
         set_current_state (TASK_INTERRUPTIBLE);
-        rc = schedule_timeout (20 * args->ioc_timeout);
+        rc = schedule_timeout (20 * client->timeout);
         if (rc == 0) {
                 CERROR ("Time out on the server\n");
                 pingcli_shutdown (nih, 2);
-                return NULL;
+                return;
         } else {
                 CWARN("Received respose from the server \n");
         }
 
         pingcli_shutdown (nih, 2);
 
-        /* Success! */
-        return NULL;
 } /* pingcli_setup() */
 
 

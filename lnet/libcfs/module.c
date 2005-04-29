@@ -28,15 +28,6 @@
 #include <portals/p30.h>
 #include <libcfs/kp30.h>
 
-struct nal_cmd_handler {
-        int                  nch_number;
-        nal_cmd_handler_fn  *nch_handler;
-        void                *nch_private;
-};
-
-static struct nal_cmd_handler nal_cmd[16];
-struct semaphore nal_cmd_mutex;
-
 void
 kportal_memhog_free (struct portals_device_userstate *pdu)
 {
@@ -180,144 +171,36 @@ static int libcfs_psdev_release(unsigned long flags, void *args)
         RETURN(0);
 }
 
-static inline void freedata(void *data, int len)
-{
-        PORTAL_FREE(data, len);
-}
-
-struct nal_cmd_handler *
-libcfs_find_nal_cmd_handler(int nal)
-{
-        int    i;
-
-        for (i = 0; i < sizeof(nal_cmd)/sizeof(nal_cmd[0]); i++)
-                if (nal_cmd[i].nch_handler != NULL &&
-                    nal_cmd[i].nch_number == nal)
-                        return (&nal_cmd[i]);
-
-        return (NULL);
-}
-
-int
-libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *private)
-{
-        struct nal_cmd_handler *cmd;
-        int                     i;
-        int                     rc;
-
-        CDEBUG(D_IOCTL, "Register NAL %x, handler: %p\n", nal, handler);
-
-        mutex_down(&nal_cmd_mutex);
-
-        if (libcfs_find_nal_cmd_handler(nal) != NULL) {
-                mutex_up (&nal_cmd_mutex);
-                return (-EBUSY);
-        }
-
-        cmd = NULL;
-        for (i = 0; i < sizeof(nal_cmd)/sizeof(nal_cmd[0]); i++)
-                if (nal_cmd[i].nch_handler == NULL) {
-                        cmd = &nal_cmd[i];
-                        break;
-                }
-
-        if (cmd == NULL) {
-                rc = -EBUSY;
-        } else {
-                rc = 0;
-                cmd->nch_number = nal;
-                cmd->nch_handler = handler;
-                cmd->nch_private = private;
-        }
-
-        mutex_up(&nal_cmd_mutex);
-
-        return rc;
-}
-EXPORT_SYMBOL(libcfs_nal_cmd_register);
-
-void
-libcfs_nal_cmd_unregister(int nal)
-{
-        struct nal_cmd_handler *cmd;
-
-        CDEBUG(D_IOCTL, "Unregister NAL %x\n", nal);
-
-        mutex_down(&nal_cmd_mutex);
-        cmd = libcfs_find_nal_cmd_handler(nal);
-        LASSERT (cmd != NULL);
-        cmd->nch_handler = NULL;
-        cmd->nch_private = NULL;
-        mutex_up(&nal_cmd_mutex);
-}
-EXPORT_SYMBOL(libcfs_nal_cmd_unregister);
-
-int
-libcfs_nal_cmd(struct portals_cfg *pcfg)
-{
-#if CRAY_PORTALS
-        /* pretend success */
-        RETURN(0);
-#else
-        struct nal_cmd_handler *cmd;
-        __u32 nal = pcfg->pcfg_nal;
-        int   rc = -EINVAL;
-        ENTRY;
-
-        if (pcfg->pcfg_version != PORTALS_CFG_VERSION) {
-                RETURN(-EINVAL);
-        }
-
-        mutex_down(&nal_cmd_mutex);
-        cmd = libcfs_find_nal_cmd_handler(nal);
-        if (cmd != NULL) {
-                CDEBUG(D_IOCTL, "calling handler nal: %x, cmd: %d\n", nal,
-                       pcfg->pcfg_command);
-                rc = cmd->nch_handler(pcfg, cmd->nch_private);
-        } else {
-                CERROR("invalid nal: %x, cmd: %d\n", nal, pcfg->pcfg_command);
-        }
-        mutex_up(&nal_cmd_mutex);
-
-        RETURN(rc);
-#endif
-}
-EXPORT_SYMBOL(libcfs_nal_cmd);
-
 static struct rw_semaphore ioctl_list_sem;
 static struct list_head ioctl_list;
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
-        down_read(&ioctl_list_sem);
+
+        down_write(&ioctl_list_sem);
         if (!list_empty(&hand->item))
                 rc = -EBUSY;
-        up_read(&ioctl_list_sem);
-
-        if (rc == 0) {
-                down_write(&ioctl_list_sem);
+        else
                 list_add_tail(&hand->item, &ioctl_list);
-                up_write(&ioctl_list_sem);
-        }
-        RETURN(0);
+        up_write(&ioctl_list_sem);
+
+        return rc;
 }
 EXPORT_SYMBOL(libcfs_register_ioctl);
 
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
-        down_read(&ioctl_list_sem);
+
+        down_write(&ioctl_list_sem);
         if (list_empty(&hand->item))
                 rc = -ENOENT;
-        up_read(&ioctl_list_sem);
-
-        if (rc == 0) {
-                down_write(&ioctl_list_sem);
+        else
                 list_del_init(&hand->item);
-                up_write(&ioctl_list_sem);
-        }
-        RETURN(0);
+        up_write(&ioctl_list_sem);
+
+        return rc;
 }
 EXPORT_SYMBOL(libcfs_deregister_ioctl);
 
@@ -352,7 +235,8 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 RETURN(0);
 #if LWT_SUPPORT
         case IOC_PORTAL_LWT_CONTROL:
-                err = lwt_control (data->ioc_flags, data->ioc_misc);
+                err = lwt_control ((data->ioc_flags & 1) != 0, 
+                                   (data->ioc_flags & 2) != 0);
                 break;
 
         case IOC_PORTAL_LWT_SNAPSHOT: {
@@ -362,13 +246,13 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 
                 err = lwt_snapshot (&now, &ncpu, &total_size,
                                     data->ioc_pbuf1, data->ioc_plen1);
-                data->ioc_nid = now;
-                data->ioc_count = ncpu;
-                data->ioc_misc = total_size;
+                data->ioc_u64[0] = now;
+                data->ioc_u32[0] = ncpu;
+                data->ioc_u32[1] = total_size;
 
                 /* Hedge against broken user/kernel typedefs (e.g. cycles_t) */
-                data->ioc_nid2 = sizeof(lwt_event_t);
-                data->ioc_nid3 = offsetof(lwt_event_t, lwte_where);
+                data->ioc_u32[2] = sizeof(lwt_event_t);
+                data->ioc_u32[3] = offsetof(lwt_event_t, lwte_where);
 
                 if (err == 0 &&
                     copy_to_user((char *)arg, data, sizeof (*data)))
@@ -384,46 +268,6 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                         err = -EFAULT;
                 break;
 #endif
-        case IOC_PORTAL_NAL_CMD: {
-                struct portals_cfg pcfg;
-
-                if (data->ioc_plen1 != sizeof(pcfg)) {
-                        CERROR("Bad ioc_plen1 %d (wanted "LPSZ")\n",
-                               data->ioc_plen1, sizeof(pcfg));
-                        err = -EINVAL;
-                        break;
-                }
-
-                if (copy_from_user(&pcfg, (void *)data->ioc_pbuf1,
-                                   sizeof(pcfg))) {
-                        err = -EFAULT;
-                        break;
-                }
-
-                CDEBUG (D_IOCTL, "nal command nal %x cmd %d\n", pcfg.pcfg_nal,
-                        pcfg.pcfg_command);
-                if (pcfg.pcfg_version != PORTALS_CFG_VERSION) {
-                        /* set this so userspace can tell when they
-                         * have an incompatible version and print a
-                         * decent message to the user
-                         */
-                        pcfg.pcfg_version = PORTALS_CFG_VERSION;
-                        if (copy_to_user((char *)data->ioc_pbuf1, &pcfg,
-                                         sizeof (pcfg)))
-                                err = -EFAULT;
-                        else
-                                err = -EINVAL;
-                } else {
-                        err = libcfs_nal_cmd(&pcfg);
-
-                        if (err == 0 &&
-                            copy_to_user((char *)data->ioc_pbuf1, &pcfg,
-                                         sizeof (pcfg)))
-                                err = -EFAULT;
-                }
-                break;
-        }
-
         case IOC_PORTAL_MEMHOG:
                 if (pfile->private_data == NULL) {
                         err = -EINVAL;
@@ -438,17 +282,39 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 }
                 break;
 
+        case IOC_PORTAL_PING: {
+                extern void (kping_client)(struct portal_ioctl_data *);
+                void (*ping)(struct portal_ioctl_data *);
+
+                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
+                       data->ioc_count, data->ioc_nid,
+                       libcfs_nid2str(data->ioc_nid));
+                ping = PORTAL_SYMBOL_GET(kping_client);
+                if (!ping)
+                        CERROR("PORTAL_SYMBOL_GET failed\n");
+                else {
+                        ping(data);
+                        PORTAL_SYMBOL_PUT(kping_client);
+                }
+                RETURN(0);
+        }
+
         default: {
                 struct libcfs_ioctl_handler *hand;
                 err = -EINVAL;
                 down_read(&ioctl_list_sem);
                 list_for_each_entry(hand, &ioctl_list, item) {
-                        err = hand->handle_ioctl(data, cmd, (unsigned long)arg);
-                        if (err != -EINVAL)
+                        err = hand->handle_ioctl(cmd, data);
+                        if (err != -EINVAL) {
+                                if (copy_to_user((char *)arg, 
+                                                 data, sizeof (*data)))
+                                        err = -EFAULT;
                                 break;
+                        }
                 }
                 up_read(&ioctl_list_sem);
-                } break;
+                break;
+        }
         }
 
         RETURN(err);
@@ -484,7 +350,6 @@ static int init_libcfs_module(void)
         libcfs_init_nidstrings();
         init_rwsem(&tracefile_sem);
         init_mutex(&trace_thread_sem);
-        init_mutex(&nal_cmd_mutex);
         init_rwsem(&ioctl_list_sem);
         CFS_INIT_LIST_HEAD(&ioctl_list);
 

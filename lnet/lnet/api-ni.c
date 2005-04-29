@@ -166,11 +166,11 @@ ptl_register_nal (ptl_nal_t *nal)
         ptl_mutex_enter();
 
         LASSERT (ptl_init);
-        LASSERT (libcfs_isknown_nettype(nal->nal_type));
+        LASSERT (libcfs_isknown_nal(nal->nal_type));
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == NULL);
         
         list_add (&nal->nal_list, &ptl_nal_table);
-        nal->nal_refcount = 0;
+        atomic_set(&nal->nal_refcount, 0);
 
         ptl_mutex_exit();
 }
@@ -182,7 +182,7 @@ ptl_unregister_nal (ptl_nal_t *nal)
 
         LASSERT (ptl_init);
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == nal);
-        LASSERT (nal->nal_refcount == 0);
+        LASSERT (atomic_read(&nal->nal_refcount) == 0);
         
         list_del (&nal->nal_list);
 
@@ -409,9 +409,9 @@ ptl_invalidate_handle (ptl_libhandle_t *lh)
 }
 
 int
-ptl_startup_apini(ptl_pid_t requested_pid,
-                  ptl_ni_limits_t *requested_limits,
-                  ptl_ni_limits_t *actual_limits)
+ptl_apini_init(ptl_pid_t requested_pid,
+               ptl_ni_limits_t *requested_limits,
+               ptl_ni_limits_t *actual_limits)
 {
         int               rc = PTL_OK;
         int               ptl_size;
@@ -435,6 +435,7 @@ ptl_startup_apini(ptl_pid_t requested_pid,
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_active_eqs);
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_test_peers);
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_nis);
+        CFS_INIT_LIST_HEAD (&ptl_apini.apini_zombie_nis);
 
 #ifdef __KERNEL__
         spin_lock_init (&ptl_apini.apini_lock);
@@ -490,7 +491,7 @@ ptl_startup_apini(ptl_pid_t requested_pid,
 }
 
 int
-ptl_shutdown_apini (void)
+ptl_apini_fini (void)
 {
         int       idx;
         
@@ -499,9 +500,14 @@ ptl_shutdown_apini (void)
          * descriptors, even those that appear committed to a network op (eg MD
          * with non-zero pending count) */
 
+        ptl_fail_nid(PTL_NID_ANY, 0);
+
+        LASSERT (list_empty(&ptl_apini.apini_test_peers));
         LASSERT (ptl_apini.apini_refcount == 0);
         LASSERT (list_empty(&ptl_apini.apini_nis));
-
+        LASSERT (list_empty(&ptl_apini.apini_zombie_nis));
+        LASSERT (ptl_apini.apini_nzombie_nis == 0);
+               
         for (idx = 0; idx < ptl_apini.apini_nportals; idx++)
                 while (!list_empty (&ptl_apini.apini_portals[idx])) {
                         ptl_me_t *me = list_entry (ptl_apini.apini_portals[idx].next,
@@ -553,24 +559,103 @@ ptl_shutdown_apini (void)
         return (PTL_OK);
 }
 
+ptl_ni_t  *
+ptl_net2ni (__u32 net)
+{
+        struct list_head *tmp;
+        ptl_ni_t         *ni;
+        unsigned long     flags;
+
+        PTL_LOCK(flags);
+        list_for_each (tmp, &ptl_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+
+                if (PTL_NIDNET(ni->ni_nid) == net) {
+                        ptl_ni_addref(ni);
+                        PTL_UNLOCK(flags);
+                        return ni;
+                }
+        }
+        
+        PTL_UNLOCK(flags);
+        return NULL;
+}
+
+void
+ptl_queue_zombie_ni (ptl_ni_t *ni)
+{
+        unsigned long flags;
+
+        LASSERT (atomic_read(&ni->ni_refcount) == 0);
+        LASSERT (ptl_init);
+        
+        PTL_LOCK(flags);
+        list_add_tail(&ni->ni_list, &ptl_apini.apini_zombie_nis);
+        PTL_UNLOCK(flags);
+}
+
 void
 ptl_shutdown_nalnis (void)
 {
+        int                i;
         ptl_ni_t          *ni;
+        ptl_nal_t         *nal;
         struct list_head  *tmp;
         struct list_head  *nxt;
+        unsigned long      flags;
+
+        /* NB called holding the global mutex */
 
         /* All quiet on the API front */
         LASSERT (ptl_apini.apini_refcount == 0);
-        
-        list_for_each_safe (tmp, nxt, &ptl_apini.apini_nis) {
-                ni = list_entry(tmp, ptl_ni_t, ni_list);
+        LASSERT (list_empty(&ptl_apini.apini_zombie_nis));
+        LASSERT (ptl_apini.apini_nzombie_nis == 0);
 
-                (ni->ni_nal->nal_shutdown)(ni);
-                ni->ni_nal->nal_refcount--;
+        /* First unlink the NIs from the global list and drop its ref.  When
+         * the last ref goes, the NI is queued on apini_zombie_nis....*/
+
+        PTL_LOCK(flags);
+        while (!list_empty(&ptl_apini.apini_nis)) {
+                ni = list_entry(ptl_apini.apini_nis.next, 
+                                ptl_ni_t, ni_list);
                 list_del (&ni->ni_list);
 
+                ni->ni_shutdown = 1;
+                ptl_ni_decref(ni); /* drop apini's ref (shutdown on last ref) */
+                ptl_apini.apini_nzombie_nis++;
+        }
+        PTL_UNLOCK(flags);
+
+        PTL_LOCK(flags);
+
+        /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
+         * and shut them down in guaranteed thread context */
+        i = 2;
+        while (ptl_apini.apini_nzombie_nis != 0) {
+
+                while (list_empty(&ptl_apini.apini_zombie_nis)) {
+                        PTL_UNLOCK(flags);
+                        ++i;
+                        if ((i & (-i)) == i)
+                                CDEBUG(D_WARNING,"Waiting for %d zombie NIs\n",
+                                       ptl_apini.apini_nzombie_nis);
+                        set_current_state(TASK_UNINTERRUPTIBLE);
+                        schedule_timeout(cfs_time_seconds(1));
+                        PTL_LOCK(flags);
+                }
+
+                ni = list_entry(ptl_apini.apini_zombie_nis.next,
+                                ptl_ni_t, ni_list);
+
+                PTL_UNLOCK(flags);
+
+                LASSERT (!in_interrupt());
+                atomic_dec(&ni->ni_nal->nal_refcount);
+                (ni->ni_nal->nal_shutdown)(ni);
                 PORTAL_FREE(ni, sizeof(*ni));
+
+                PTL_LOCK(flags);
+                ptl_apini.apini_nzombie_nis--;
         }
 }
 
@@ -579,9 +664,12 @@ ptl_startup_nalnis (void)
 {
         ptl_nal_t         *nal;
         ptl_ni_t          *ni;
+        ptl_ni_t          *ni2;
         struct list_head  *tmp;
+        struct list_head  *tmp2;
         ptl_err_t          rc = PTL_OK;
         char              *interface = NULL;
+        unsigned long      flags;
         
         list_for_each (tmp, &ptl_nal_table) {
                 nal = list_entry(tmp, ptl_nal_t, nal_list);
@@ -589,25 +677,29 @@ ptl_startup_nalnis (void)
                 PORTAL_ALLOC(ni, sizeof(*ni));
                 if (ni == NULL) {
                         CERROR("Can't allocate NI for %s NAL\n", 
-                               libcfs_nettype2str(nal->nal_type));
+                               libcfs_nal2str(nal->nal_type));
                         rc = PTL_FAIL;
                         break;
                 }
 
                 ni->ni_nal = nal;
-                //                ni->ni_nid = (nal->nal_type << 16)
-                nal->nal_refcount++;
+                ni->ni_nid = PTL_MKNID(PTL_MKNET(nal->nal_type, 0), 0);
+                /* for now */
+
+                atomic_inc(&nal->nal_refcount);
 
                 rc = (nal->nal_startup)(ni, &interface);
                 if (rc != PTL_OK) {
                         CERROR("Error %d staring up NI %s\n",
-                               rc, libcfs_nettype2str(nal->nal_type));
+                               rc, libcfs_nal2str(nal->nal_type));
                         PORTAL_FREE(ni, sizeof(*ni));
-                        nal->nal_refcount--;
+                        atomic_dec(&nal->nal_refcount);
                         break;
                 }
 
-                list_add(&ni->ni_list, &ptl_apini.apini_nis);
+                PTL_LOCK(flags);
+                list_add_tail(&ni->ni_list, &ptl_apini.apini_nis);
+                PTL_UNLOCK(flags);
         }
  
         if (rc != PTL_OK)
@@ -681,14 +773,15 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
                 goto out;
         }
 
-        rc = ptl_startup_apini(requested_pid, 
-                               requested_limits, actual_limits);
+        rc = ptl_apini_init(requested_pid, requested_limits, actual_limits);
         if (rc != PTL_OK)
                 goto out;
 
+        kpr_initialise();
+        
         rc = ptl_startup_nalnis();
         if (rc != PTL_OK) {
-                ptl_shutdown_apini();
+                ptl_apini_fini();
                 goto out;
         }
 
@@ -715,11 +808,76 @@ PtlNIFini(ptl_handle_ni_t ni)
         ptl_apini.apini_refcount--;
         if (ptl_apini.apini_refcount == 0) {
                 ptl_shutdown_nalnis();
-                ptl_shutdown_apini();
+                kpr_finalise();
+                ptl_apini_fini();
         }
 
         ptl_mutex_exit ();
         return PTL_OK;
+}
+
+int
+PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
+{
+        struct portal_ioctl_data *data = arg;
+        struct list_head         *tmp;
+        ptl_ni_t                 *ni;
+        int                       rc;
+        unsigned long             flags;
+        int                       count;
+
+        ptl_mutex_enter ();
+        
+        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_refcount > 0);
+
+        switch (cmd) {
+        case IOC_PORTAL_GET_NI:
+                count = data->ioc_count;
+                data->ioc_nid = PTL_NID_ANY;
+                rc = -ENOENT;
+
+                PTL_LOCK(flags);
+                list_for_each (tmp, &ptl_apini.apini_nis) {
+                        if (count-- != 0)
+                                continue;
+         
+                        ni = list_entry(tmp, ptl_ni_t, ni_list);
+                        data->ioc_nid = ni->ni_nid;
+                        rc = 0;
+                        break;
+                }
+                PTL_UNLOCK(flags);
+                break;
+
+        case IOC_PORTAL_FAIL_NID:
+                rc = ptl_fail_nid(data->ioc_nid, data->ioc_count);
+                break;
+                
+        case IOC_PORTAL_ADD_ROUTE:
+        case IOC_PORTAL_DEL_ROUTE:
+        case IOC_PORTAL_GET_ROUTE:
+        case IOC_PORTAL_NOTIFY_ROUTER:
+                rc = kpr_ctl(cmd, arg);
+                break;
+
+        default:
+                ni = ptl_net2ni(data->ioc_net);
+                if (ni == NULL) {
+                        rc = -EINVAL;
+                } else {
+                        if (ni->ni_nal->nal_ctl == NULL)
+                                rc = -EINVAL;
+                        else
+                                rc = ni->ni_nal->nal_ctl(ni, cmd, arg);
+
+                        ptl_ni_decref(ni);
+                }
+                break;
+        }
+        
+        ptl_mutex_exit();
+        return rc;
 }
 
 ptl_err_t

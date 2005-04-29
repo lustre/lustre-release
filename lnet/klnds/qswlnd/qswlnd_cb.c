@@ -32,7 +32,7 @@ kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
         do_gettimeofday (&now);
         then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
 
-        kpr_notify(&kqswnal_data.kqn_router, ktx->ktx_nid, 0, then);
+        kpr_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
 
 void
@@ -424,7 +424,7 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
 {
         switch (ktx->ktx_state) {
         case KTX_FORWARDING:       /* router asked me to forward this packet */
-                kpr_fwd_done (&kqswnal_data.kqn_router,
+                kpr_fwd_done (kqswnal_data.kqn_ni,
                               (kpr_fwd_desc_t *)ktx->ktx_args[0], error);
                 break;
 
@@ -1001,22 +1001,21 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
 }
 
 static ptl_err_t
-kqswnal_sendmsg (ptl_ni_t     *ni,
-                 void         *private,
-                 ptl_msg_t    *ptlmsg,
-                 ptl_hdr_t    *hdr,
-                 int           type,
-                 ptl_nid_t     nid,
-                 ptl_pid_t     pid,
-                 unsigned int  payload_niov,
-                 struct iovec *payload_iov,
-                 ptl_kiov_t   *payload_kiov,
-                 size_t        payload_offset,
-                 size_t        payload_nob)
+kqswnal_sendmsg (ptl_ni_t        *ni,
+                 void            *private,
+                 ptl_msg_t       *ptlmsg,
+                 ptl_hdr_t       *hdr,
+                 int              type,
+                 ptl_process_id_t target,
+                 int              routing,
+                 unsigned int     payload_niov,
+                 struct iovec    *payload_iov,
+                 ptl_kiov_t      *payload_kiov,
+                 size_t           payload_offset,
+                 size_t           payload_nob)
 {
         kqswnal_tx_t      *ktx;
         int                rc;
-        ptl_nid_t          targetnid;
 #if KQSW_CHECKSUM
         int                i;
         kqsw_csum_t        csum;
@@ -1026,8 +1025,8 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
         /* NB 1. hdr is in network byte order */
         /*    2. 'private' depends on the message type */
         
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid: "LPX64
-               " pid %u\n", payload_nob, payload_niov, nid, pid);
+        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to %s\n",
+               payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
@@ -1052,20 +1051,10 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
                 return ((rc == 0) ? PTL_OK : PTL_FAIL);
         }
 
-        targetnid = nid;
-        if (kqswnal_nid2elanid (nid) < 0) {     /* Can't send direct: find gateway? */
-                rc = kpr_lookup (&kqswnal_data.kqn_router, nid, 
-                                 sizeof (ptl_hdr_t) + payload_nob, &targetnid);
-                if (rc != 0) {
-                        CERROR("Can't route to "LPX64": router error %d\n",
-                               nid, rc);
-                        return (PTL_FAIL);
-                }
-                if (kqswnal_nid2elanid (targetnid) < 0) {
-                        CERROR("Bad gateway "LPX64" for "LPX64"\n",
-                               targetnid, nid);
-                        return (PTL_FAIL);
-                }
+        
+        if (kqswnal_nid2elanid (target.nid) < 0) {
+                CERROR("%s not in my cluster\n", libcfs_nid2str(target.nid));
+                return PTL_FAIL;
         }
 
         /* I may not block for a transmit descriptor if I might block the
@@ -1074,13 +1063,13 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
                                           type == PTL_MSG_REPLY ||
                                           in_interrupt()));
         if (ktx == NULL) {
-                CERROR ("Can't get txd for msg type %d for "LPX64"\n",
-                        type, ptlmsg->msg_ev.initiator.nid);
+                CERROR ("Can't get txd for msg type %d for %s\n",
+                        type, libcfs_nid2str(target.nid));
                 return (PTL_NO_SPACE);
         }
 
         ktx->ktx_state   = KTX_SENDING;
-        ktx->ktx_nid     = targetnid;
+        ktx->ktx_nid     = target.nid;
         ktx->ktx_args[0] = private;
         ktx->ktx_args[1] = ptlmsg;
         ktx->ktx_args[2] = NULL;    /* set when a GET commits to REPLY */
@@ -1129,7 +1118,7 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
          * portals header. */
         ktx->ktx_nfrag = ktx->ktx_firsttmpfrag = 1;
 
-        if (nid == targetnid &&                 /* not forwarding */
+        if (!routing &&                         /* target.nid is final dest */
             ((type == PTL_MSG_GET &&            /* optimize GET? */
               kqswnal_tunables.kqn_optimized_gets != 0 &&
               le32_to_cpu(hdr->msg.get.sink_length) >= 
@@ -1183,7 +1172,7 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
                 if (type == PTL_MSG_GET) {
                         /* Allocate reply message now while I'm in thread context */
                         ktx->ktx_args[2] = ptl_create_reply_msg (
-                                kqswnal_data.kqn_ni, nid, ptlmsg);
+                                kqswnal_data.kqn_ni, target.nid, ptlmsg);
                         if (ktx->ktx_args[2] == NULL)
                                 goto out;
 
@@ -1239,10 +1228,10 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
         rc = kqswnal_launch (ktx);
 
  out:
-        CDEBUG(rc == 0 ? D_NET : D_ERROR, 
-               "%s "LPSZ" bytes to "LPX64" via "LPX64": rc %d\n", 
+        CDEBUG(rc == 0 ? D_NET : D_ERROR, "%s "LPSZ" bytes to %s%s: rc %d\n", 
                rc == 0 ? "Sent" : "Failed to send",
-               payload_nob, nid, targetnid, rc);
+               payload_nob, libcfs_nid2str(target.nid), 
+               routing ? "(routing)" : "", rc);
 
         if (rc != 0) {
                 if (ktx->ktx_state == KTX_GETTING &&
@@ -1266,43 +1255,43 @@ kqswnal_sendmsg (ptl_ni_t     *ni,
 }
 
 ptl_err_t
-kqswnal_send (ptl_ni_t     *ni,
-              void         *private,
-              ptl_msg_t    *ptlmsg,
-              ptl_hdr_t    *hdr,
-              int           type,
-              ptl_nid_t     nid,
-              ptl_pid_t     pid,
-              unsigned int  payload_niov,
-              struct iovec *payload_iov,
-              size_t        payload_offset,
-              size_t        payload_nob)
+kqswnal_send (ptl_ni_t        *ni,
+              void            *private,
+              ptl_msg_t       *ptlmsg,
+              ptl_hdr_t       *hdr,
+              int              type,
+              ptl_process_id_t tgt,
+              int              routing,
+              unsigned int     payload_niov,
+              struct iovec    *payload_iov,
+              size_t           payload_offset,
+              size_t           payload_nob)
 {
-        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, nid, pid,
+        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, tgt, routing,
                                  payload_niov, payload_iov, NULL, 
                                  payload_offset, payload_nob));
 }
 
 ptl_err_t
-kqswnal_send_pages (ptl_ni_t     *ni,
-                    void         *private,
-                    ptl_msg_t    *ptlmsg,
-                    ptl_hdr_t    *hdr,
-                    int           type,
-                    ptl_nid_t     nid,
-                    ptl_pid_t     pid,
-                    unsigned int  payload_niov,
-                    ptl_kiov_t   *payload_kiov,
-                    size_t        payload_offset,
-                    size_t        payload_nob)
+kqswnal_send_pages (ptl_ni_t        *ni,
+                    void            *private,
+                    ptl_msg_t       *ptlmsg,
+                    ptl_hdr_t       *hdr,
+                    int              type,
+                    ptl_process_id_t tgt,
+                    int              routing,
+                    unsigned int     payload_niov,
+                    ptl_kiov_t      *payload_kiov,
+                    size_t           payload_offset,
+                    size_t           payload_nob)
 {
-        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, nid, pid,
+        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, tgt, routing,
                                  payload_niov, NULL, payload_kiov, 
                                  payload_offset, payload_nob));
 }
 
 void
-kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
+kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
 {
         int             rc;
         kqswnal_tx_t   *ktx;
@@ -1323,14 +1312,8 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         if (ktx == NULL)        /* can't get txd right now */
                 return;         /* fwd will be scheduled when tx desc freed */
 
-        if (nid == kqswnal_data.kqn_ni->ni_nid) /* gateway is me */
+        if (nid == ni->ni_nid)                  /* gateway is me */
                 nid = fwd->kprfd_target_nid;    /* target is final dest */
-
-        if (kqswnal_nid2elanid (nid) < 0) {
-                CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
-                rc = -EHOSTUNREACH;
-                goto out;
-        }
 
         /* copy hdr into pre-mapped buffer */
         memcpy(ktx->ktx_buffer, fwd->kprfd_hdr, sizeof(ptl_hdr_t));
@@ -1341,6 +1324,12 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         ktx->ktx_state   = KTX_FORWARDING;
         ktx->ktx_args[0] = fwd;
         ktx->ktx_nfrag   = ktx->ktx_firsttmpfrag = 1;
+
+        if (kqswnal_nid2elanid (nid) < 0) {
+                CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
+                rc = -EHOSTUNREACH;
+                goto out;
+        }
 
         if (nob <= *kqswnal_tunables.kqn_tx_maxcontig) 
         {
@@ -1384,7 +1373,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
 }
 
 void
-kqswnal_fwd_callback (void *arg, int error)
+kqswnal_fwd_callback (ptl_ni_t *ni, void *arg, int error)
 {
         kqswnal_rx_t *krx = (kqswnal_rx_t *)arg;
 
@@ -1552,7 +1541,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
                       hdr, payload_nob, niov, krx->krx_kiov,
                       kqswnal_fwd_callback, krx);
 
-        kpr_fwd_start (&kqswnal_data.kqn_router, &krx->krx_fwd);
+        kpr_fwd_start (kqswnal_data.kqn_ni, &krx->krx_fwd);
 }
 
 /* Receive Interrupt Handler: posts to schedulers */

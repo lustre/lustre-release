@@ -32,12 +32,6 @@
 #define SMFS_DEV_ID  2
 #define SMFS_DEV_PATH "/dev/snapdev"
 
-int ptl_name2nal(char *str);
-int ptl_parse_ipaddr (__u32 *ipaddrp, char *str);
-int ptl_parse_anynid (ptl_nid_t *nidp, char *str);
-int ptl_parse_nid (ptl_nid_t *nidp, char *str);
-char * ptl_nid2str (char *buffer, ptl_nid_t nid);
-
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
 int jt_ptl_print_interfaces(int argc, char **argv);
@@ -51,7 +45,6 @@ int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
 int jt_ptl_print_active_txs(int argc, char **argv);
 int jt_ptl_ping(int argc, char **argv);
-int jt_ptl_shownid(int argc, char **argv);
 int jt_ptl_mynid(int argc, char **argv);
 int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */
@@ -76,8 +69,6 @@ int jt_dbg_clear_debug_buf(int argc, char **argv);
 int jt_dbg_mark_debug_buf(int argc, char **argv);
 int jt_dbg_modules(int argc, char **argv);
 int jt_dbg_panic(int argc, char **argv);
-
-int ptl_set_cfg_record_cb(cfg_record_cb_t cb);
 
 /* l_ioctl.c */
 typedef int (ioc_handler_t)(int dev_id, unsigned int opc, void *buf);

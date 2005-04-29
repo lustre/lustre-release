@@ -53,7 +53,10 @@ struct pingsrv_data {
  
 struct pingcli_data {
         
-        struct portal_ioctl_data *args;
+	int                     count;
+	int                     size;
+	ptl_nid_t               nid;
+	int                     timeout;
         ptl_handle_me_t 	me;
         ptl_handle_eq_t		eq;
         char           	       *inbuf;    

@@ -19,7 +19,7 @@ sbin_PROGRAMS = debugctl
 
 lib_LIBRARIES = libptlctl.a
 
-libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
+libptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c parser.c parser.h
 
 if UTILS
 if !CRAY_PORTALS
@@ -46,3 +46,6 @@ routerstat_SOURCES = routerstat.c
 debugctl_SOURCES = debugctl.c
 debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
+
+nidstrings.c: @top_srcdir@/portals/libcfs/nidstrings.c
+	ln -sf $< $@

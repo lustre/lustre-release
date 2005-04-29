@@ -357,16 +357,56 @@ ptl_handle2me (ptl_handle_me_t *handle)
         return (lh_entry (lh, ptl_me_t, me_lh));
 }
 
-/*
- * When the NAL detects an incoming message header, it should call
- * ptl_parse() decode it.  If the message header is garbage, ptl_parse()
- * returns immediately with failure, otherwise the NAL callbacks will be
- * called to receive the message body.  They are handed the private cookie
- * as a way for the NAL to maintain state about which transaction is being
- * processed.  An extra parameter, ptl_msg contains the lib-level message
- * state for passing to ptl_finalize() when the message body has been
- * received.
- */
+/******************************************************************************/
+/* Portals Router */
+
+/* NI APIs */
+int       kpr_routing(void);
+ptl_nid_t kpr_lookup(ptl_ni_t **ni, ptl_nid_t nid, int nob);
+void      kpr_fwd_start(ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
+void      kpr_fwd_done(ptl_ni_t *ni, kpr_fwd_desc_t *fwd, int error);
+int       kpr_notify(ptl_ni_t *ni, ptl_nid_t peer, int alive, time_t when);
+
+/* internal APIs */
+int       kpr_ctl(unsigned int cmd, void *arg);
+void      kpr_initialise(void);
+void      kpr_finalise(void);
+
+static inline void
+kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, ptl_hdr_t *hdr,
+              int nob, int niov, ptl_kiov_t *kiov,
+              kpr_fwd_callback_t callback, void *callback_arg)
+{
+        fwd->kprfd_target_nid   = nid;
+        fwd->kprfd_gateway_nid  = nid;
+        fwd->kprfd_hdr          = hdr;
+        fwd->kprfd_nob          = nob;
+        fwd->kprfd_niov         = niov;
+        fwd->kprfd_kiov         = kiov;
+        fwd->kprfd_callback     = callback;
+        fwd->kprfd_callback_arg = callback_arg;
+}
+
+/******************************************************************************/
+
+static inline void
+ptl_ni_addref(ptl_ni_t *ni) 
+{
+        LASSERT (atomic_read(&ni->ni_refcount) > 0);
+        atomic_inc(&ni->ni_refcount);
+}
+
+extern void ptl_queue_zombie_ni (ptl_ni_t *ni);
+
+static inline void
+ptl_ni_decref(ptl_ni_t *ni)
+{
+        LASSERT (atomic_read(&ni->ni_refcount) > 0);
+        if (atomic_dec_and_test(&ni->ni_refcount))
+                ptl_queue_zombie_ni(ni);
+}
+
+extern ptl_ni_t *ptl_net2ni (__u32 net);
 extern void ptl_enq_event_locked (void *private,
                                   ptl_eq_t *eq, ptl_event_t *ev);
 extern void ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, 
@@ -375,7 +415,7 @@ extern ptl_err_t ptl_parse (ptl_ni_t *ni, ptl_hdr_t *hdr, void *private);
 extern ptl_msg_t *ptl_create_reply_msg (ptl_ni_t *ni, ptl_nid_t peer_nid, 
                                         ptl_msg_t *get_msg);
 extern void ptl_print_hdr (ptl_hdr_t * hdr);
-
+extern ptl_err_t ptl_fail_nid(ptl_nid_t nid, unsigned int threshold);
 
 extern ptl_size_t ptl_iov_nob (int niov, struct iovec *iov);
 extern void ptl_copy_iov2buf (char *dest, int niov, struct iovec *iov, 
@@ -398,7 +438,7 @@ extern int ptl_extract_kiov (int dst_niov, ptl_kiov_t *dst,
 extern ptl_err_t ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
                            ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);
 extern ptl_err_t ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                           ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                           ptl_hdr_t *hdr, int type, ptl_process_id_t target,
                            ptl_libmd_t *md, ptl_size_t offset, ptl_size_t len);
 
 extern void ptl_me_unlink(ptl_me_t *me);

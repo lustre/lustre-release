@@ -1,4 +1,2 @@
-MODULES := kptlrouter
-kptlrouter-objs := router.o proc.o
 
 @INCLUDE_RULES@

@@ -3,15 +3,5 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-if MODULES
-if !CRAY_PORTALS
-
-if LINUX
-modulenet_DATA = kptlrouter$(KMODEXT)
-endif
-
-endif
-endif
-
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = $(kptlrouter-objs:%.o=%.c) router.h

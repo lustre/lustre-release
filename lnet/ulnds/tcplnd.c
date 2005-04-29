@@ -60,8 +60,8 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
                       ptl_msg_t *cookie,
                       ptl_hdr_t *hdr,
                       int type,
-                      ptl_nid_t nid,
-                      ptl_pid_t pid,
+                      ptl_process_id_t target,
+                      int routing,
                       unsigned int niov,
                       struct iovec *iov,
                       size_t offset,
@@ -77,9 +77,14 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
     int   ntiov;
     int i;
 
+    if (routing) {
+            CERROR("Can't route\n");
+            return PTL_FAIL;
+    }
+    
     if (!(c=force_tcp_connection((manager)b->lower,
-                                 PNAL_IP(nid,b),
-                                 PNAL_PORT(nid,pid),
+                                 PNAL_IP(target.nid,b),
+                                 PNAL_PORT(target.nid,target.pid),
                                  b->local)))
         return(PTL_FAIL);
 

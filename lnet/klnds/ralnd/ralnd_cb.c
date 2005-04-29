@@ -569,18 +569,18 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
 }
 
 ptl_err_t
-kranal_do_send (ptl_ni_t     *ni,
-                void         *private,
-                ptl_msg_t    *ptlmsg,
-                ptl_hdr_t    *hdr,
-                int           type,
-                ptl_nid_t     nid,
-                ptl_pid_t     pid,
-                unsigned int  niov,
-                struct iovec *iov,
-                ptl_kiov_t   *kiov,
-                int           offset,
-                int           nob)
+kranal_do_send (ptl_ni_t        *ni,
+                void            *private,
+                ptl_msg_t       *ptlmsg,
+                ptl_hdr_t       *hdr,
+                int              type,
+                ptl_process_id_t target,
+                int              routing,
+                unsigned int     niov,
+                struct iovec    *iov,
+                ptl_kiov_t      *kiov,
+                int              offset,
+                int              nob)
 {
         kra_conn_t *conn;
         kra_tx_t   *tx;
@@ -588,8 +588,8 @@ kranal_do_send (ptl_ni_t     *ni,
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending %d bytes in %d frags to nid:"LPX64" pid %d\n",
-               nob, niov, nid, pid);
+        CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
+               nob, niov, libcfs_id2str(target));
 
         LASSERT (nob == 0 || niov > 0);
         LASSERT (niov <= PTL_MD_MAX_IOV);
@@ -597,6 +597,11 @@ kranal_do_send (ptl_ni_t     *ni,
         LASSERT (!in_interrupt());
         /* payload is either all vaddrs or all pages */
         LASSERT (!(kiov != NULL && iov != NULL));
+
+        if (routing) {
+                CERROR ("Can't route\n");
+                return PTL_FAIL;
+        }
 
         switch(type) {
         default:
@@ -610,7 +615,7 @@ kranal_do_send (ptl_ni_t     *ni,
                 if (conn->rac_rxmsg->ram_type == RANAL_MSG_IMMEDIATE) {
                         if (nob > RANAL_FMA_MAX_DATA) {
                                 CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
-                                       nob, nid);
+                                       nob, target.nid);
                                 return PTL_FAIL;
                         }
                         break;                  /* RDMA not expected */
@@ -619,7 +624,7 @@ kranal_do_send (ptl_ni_t     *ni,
                 /* Incoming message consistent with RDMA? */
                 if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
                         CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
-                               nid, conn->rac_rxmsg->ram_type);
+                               target.nid, conn->rac_rxmsg->ram_type);
                         return PTL_FAIL;
                 }
 
@@ -677,10 +682,9 @@ kranal_do_send (ptl_ni_t     *ni,
                         return PTL_FAIL;
                 }
 
-                tx->tx_ptlmsg[1] = ptl_create_reply_msg(kranal_data.kra_ni, 
-                                                        nid, ptlmsg);
+                tx->tx_ptlmsg[1] = ptl_create_reply_msg(ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
-                        CERROR("Can't create reply for GET to "LPX64"\n", nid);
+                        CERROR("Can't create reply for GET to "LPX64"\n", target.nid);
                         kranal_tx_done(tx, rc);
                         return PTL_FAIL;
                 }
@@ -688,7 +692,7 @@ kranal_do_send (ptl_ni_t     *ni,
                 tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.get.ragm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
-                kranal_launch_tx(tx, nid);
+                kranal_launch_tx(tx, target.nid);
                 return PTL_OK;
 
         case PTL_MSG_ACK:
@@ -714,7 +718,7 @@ kranal_do_send (ptl_ni_t     *ni,
                 tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.putreq.raprm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
-                kranal_launch_tx(tx, nid);
+                kranal_launch_tx(tx, target.nid);
                 return PTL_OK;
         }
 
@@ -736,32 +740,30 @@ kranal_do_send (ptl_ni_t     *ni,
 
         tx->tx_msg.ram_u.immediate.raim_hdr = *hdr;
         tx->tx_ptlmsg[0] = ptlmsg;
-        kranal_launch_tx(tx, nid);
+        kranal_launch_tx(tx, target.nid);
         return PTL_OK;
 }
 
 ptl_err_t
 kranal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+             ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
              unsigned int niov, struct iovec *iov,
              size_t offset, size_t len)
 {
         return kranal_do_send(ni, private, cookie,
-                              hdr, type, nid, pid,
-                              niov, iov, NULL,
-                              offset, len);
+                              hdr, type, tgt, routing,
+                              niov, iov, NULL, offset, len);
 }
 
 ptl_err_t
 kranal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                   ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
                    unsigned int niov, ptl_kiov_t *kiov,
                    size_t offset, size_t len)
 {
         return kranal_do_send(ni, private, cookie,
-                              hdr, type, nid, pid,
-                              niov, NULL, kiov,
-                              offset, len);
+                              hdr, type, tgt, routing,
+                              niov, NULL, kiov, offset, len);
 }
 
 ptl_err_t

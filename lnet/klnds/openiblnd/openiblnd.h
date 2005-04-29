@@ -207,8 +207,7 @@ typedef struct
 #define IBNAL_INIT_PD              3
 #define IBNAL_INIT_FMR             4
 #define IBNAL_INIT_TXD             5
-#define IBNAL_INIT_CQ              6
-#define IBNAL_INIT_ALL             7
+#define IBNAL_INIT_ALL             6
 
 typedef struct kib_acceptsock                   /* accepted socket queued for connd */
 {
@@ -507,17 +506,16 @@ kibnal_wreqid_is_rx (__u64 wreqid)
 
 ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
 void kibnal_shutdown (ptl_ni_t *ni);
+int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_nid_t nid, ptl_pid_t pid,
-                       unsigned int payload_niov, 
-                       struct iovec *payload_iov,
+                       int type, ptl_process_id_t tgt, int routing,
+                       unsigned int payload_niov, struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
 ptl_err_t kibnal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_nid_t nid, ptl_pid_t pid,
-                             unsigned int payload_niov, 
-                             ptl_kiov_t *payload_kiov,
+                             int type, ptl_process_id_t tgt, int routing,
+                             unsigned int payload_niov, ptl_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);
 ptl_err_t kibnal_recv(ptl_ni_t *ni, void *private,
                       ptl_msg_t *ptlmsg, unsigned int niov,
@@ -540,7 +538,7 @@ extern int kibnal_listener_procint(ctl_table *table, int write,
                                    size_t *lenp);
 extern kib_peer_t *kibnal_create_peer (ptl_nid_t nid);
 extern void kibnal_put_peer (kib_peer_t *peer);
-extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
+extern int kibnal_del_peer (ptl_nid_t nid);
 extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
 extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
@@ -577,8 +575,3 @@ extern void kibnal_start_active_rdma (int type, int status,
                                       unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       int offset, int nob);
-
-
-
-
-

@@ -29,6 +29,7 @@ ptl_nal_t kranal_nal = {
         .nal_type       = RANAL,
         .nal_startup    = kranal_startup,
         .nal_shutdown   = kranal_shutdown,
+        .nal_ctl        = kranal_ctl,
         .nal_send       = kranal_send,
         .nal_send_pages = kranal_send_pages,
         .nal_recv       = kranal_recv,
@@ -1280,7 +1281,7 @@ kranal_set_mynid(ptl_nid_t nid)
         /* Delete all existing peers and their connections after new
          * NID/connstamp set to ensure no old connections in our brave
          * new world. */
-        kranal_del_peer(PTL_NID_ANY, 0);
+        kranal_del_peer(PTL_NID_ANY);
 
         if (nid != PTL_NID_ANY)
                 rc = kranal_start_listener();
@@ -1460,19 +1461,13 @@ kranal_add_persistent_peer (ptl_nid_t nid, __u32 ip, int port)
 }
 
 void
-kranal_del_peer_locked (kra_peer_t *peer, int single_share)
+kranal_del_peer_locked (kra_peer_t *peer)
 {
         struct list_head *ctmp;
         struct list_head *cnxt;
         kra_conn_t       *conn;
 
-        if (!single_share)
-                peer->rap_persistence = 0;
-        else if (peer->rap_persistence > 0)
-                peer->rap_persistence--;
-
-        if (peer->rap_persistence != 0)
-                return;
+        peer->rap_persistence = 0;
 
         if (list_empty(&peer->rap_conns)) {
                 kranal_unlink_peer_locked(peer);
@@ -1487,7 +1482,7 @@ kranal_del_peer_locked (kra_peer_t *peer, int single_share)
 }
 
 int
-kranal_del_peer (ptl_nid_t nid, int single_share)
+kranal_del_peer (ptl_nid_t nid)
 {
         unsigned long      flags;
         struct list_head  *ptmp;
@@ -1516,11 +1511,8 @@ kranal_del_peer (ptl_nid_t nid, int single_share)
                         if (!(nid == PTL_NID_ANY || peer->rap_nid == nid))
                                 continue;
 
-                        kranal_del_peer_locked(peer, single_share);
+                        kranal_del_peer_locked(peer);
                         rc = 0;         /* matched something */
-
-                        if (single_share)
-                                goto out;
                 }
         }
  out:
@@ -1629,65 +1621,60 @@ kranal_close_matching_conns (ptl_nid_t nid)
 }
 
 int
-kranal_cmd(struct portals_cfg *pcfg, void * private)
+kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 {
-        int rc = -EINVAL;
+        struct portal_ioctl_data *data = arg;
+        int                       rc = -EINVAL;
 
-        LASSERT (pcfg != NULL);
+        LASSERT (ni == kranal_data.kra_ni);
 
-        switch(pcfg->pcfg_command) {
-        case NAL_CMD_GET_PEER: {
+        switch(cmd) {
+        case IOC_PORTAL_GET_PEER: {
                 ptl_nid_t   nid = 0;
                 __u32       ip = 0;
                 int         port = 0;
                 int         share_count = 0;
 
-                rc = kranal_get_peer_info(pcfg->pcfg_count,
+                rc = kranal_get_peer_info(data->ioc_count,
                                           &nid, &ip, &port, &share_count);
-                pcfg->pcfg_nid   = nid;
-                pcfg->pcfg_size  = 0;
-                pcfg->pcfg_id    = ip;
-                pcfg->pcfg_misc  = port;
-                pcfg->pcfg_count = 0;
-                pcfg->pcfg_wait  = share_count;
+                data->ioc_nid    = nid;
+                data->ioc_count  = share_count;
+                data->ioc_u32[0] = ip;
+                data->ioc_u32[1] = port;
                 break;
         }
-        case NAL_CMD_ADD_PEER: {
-                rc = kranal_add_persistent_peer(pcfg->pcfg_nid,
-                                                pcfg->pcfg_id, /* IP */
-                                                pcfg->pcfg_misc); /* port */
+        case IOC_PORTAL_ADD_PEER: {
+                rc = kranal_add_persistent_peer(data->ioc_nid,
+                                                data->ioc_u32[0], /* IP */
+                                                data->ioc_u32[1]); /* port */
                 break;
         }
-        case NAL_CMD_DEL_PEER: {
-                rc = kranal_del_peer(pcfg->pcfg_nid,
-                                     /* flags == single_share */
-                                     pcfg->pcfg_flags != 0);
+        case IOC_PORTAL_DEL_PEER: {
+                rc = kranal_del_peer(data->ioc_nid);
                 break;
         }
-        case NAL_CMD_GET_CONN: {
-                kra_conn_t *conn = kranal_get_conn_by_idx(pcfg->pcfg_count);
+        case IOC_PORTAL_GET_CONN: {
+                kra_conn_t *conn = kranal_get_conn_by_idx(data->ioc_count);
 
                 if (conn == NULL)
                         rc = -ENOENT;
                 else {
                         rc = 0;
-                        pcfg->pcfg_nid   = conn->rac_peer->rap_nid;
-                        pcfg->pcfg_id    = conn->rac_device->rad_id;
-                        pcfg->pcfg_misc  = 0;
-                        pcfg->pcfg_flags = 0;
+                        data->ioc_nid    = conn->rac_peer->rap_nid;
+                        data->ioc_u32[0] = conn->rac_device->rad_id;
                         kranal_conn_decref(conn);
                 }
                 break;
         }
-        case NAL_CMD_CLOSE_CONNECTION: {
-                rc = kranal_close_matching_conns(pcfg->pcfg_nid);
+        case IOC_PORTAL_CLOSE_CONNECTION: {
+                rc = kranal_close_matching_conns(data->ioc_nid);
                 break;
         }
-        case NAL_CMD_REGISTER_MYNID: {
-                if (pcfg->pcfg_nid == PTL_NID_ANY)
+        case IOC_PORTAL_REGISTER_MYNID: {
+                if (data->ioc_nid == PTL_NID_ANY)
                         rc = -EINVAL;
                 else
-                        rc = kranal_set_mynid(pcfg->pcfg_nid);
+                        rc = kranal_set_mynid(data->ioc_nid);
                 break;
         }
         }
@@ -1825,10 +1812,6 @@ kranal_shutdown (ptl_ni_t *ni)
                 LBUG();
 
         case RANAL_INIT_ALL:
-                /* stop calls to nal_cmd */
-                libcfs_nal_cmd_unregister(RANAL);
-                /* No new persistent peers */
-
                 /* resetting my NID to unadvertises me, removes my
                  * listener and nukes all current peers */
                 kranal_set_mynid(PTL_NID_ANY);
@@ -1920,6 +1903,7 @@ kranal_shutdown (ptl_ni_t *ni)
                atomic_read(&portal_kmemory));
 
         kranal_data.kra_init = RANAL_INIT_NOTHING;
+        PORTAL_MODULE_UNUSE;
 }
 
 ptl_err_t
@@ -1985,6 +1969,7 @@ kranal_startup (ptl_ni_t *ni, char **interfaces)
 
         /* OK to call kranal_api_shutdown() to cleanup now */
         kranal_data.kra_init = RANAL_INIT_DATA;
+        PORTAL_MODULE_USE;
 
         kranal_data.kra_peer_hash_size = RANAL_PEER_HASH_SIZE;
         PORTAL_ALLOC(kranal_data.kra_peers,
@@ -2054,16 +2039,10 @@ kranal_startup (ptl_ni_t *ni, char **interfaces)
                 }
         }
 
-        rc = libcfs_nal_cmd_register(RANAL, &kranal_cmd, NULL);
-        if (rc != 0) {
-                CERROR("Can't initialise command interface (rc = %d)\n", rc);
-                goto failed;
-        }
-
         /* flag everything initialised */
         kranal_data.kra_init = RANAL_INIT_ALL;
         /*****************************************************/
-
+        
         CDEBUG(D_MALLOC, "initial kmem %d\n", atomic_read(&portal_kmemory));
         printk(KERN_INFO "Lustre: RapidArray NAL loaded "
                "(initial mem %d)\n", pkmem);

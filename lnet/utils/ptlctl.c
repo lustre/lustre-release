@@ -41,7 +41,6 @@ command_t list[] = {
         {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [nid]"},
         {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)"},
         {"ping", jt_ptl_ping, 0, "do a ping test (args: nid [count] [size] [timeout])"},
-        {"shownid", jt_ptl_shownid, 0, "print the local NID"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local NID (args: [hostname])"},
         {"add_route", jt_ptl_add_route, 0, 
          "add an entry to the routing table (args: gatewayNID targetNID [targetNID])"},

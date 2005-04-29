@@ -447,17 +447,16 @@ kranal_page2phys (struct page *p)
 
 ptl_err_t kranal_startup (ptl_ni_t *ni, char **interfaces);
 void kranal_shutdown (ptl_ni_t *ni);
+int kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kranal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_nid_t nid, ptl_pid_t pid,
-                       unsigned int payload_niov, 
-                       struct iovec *payload_iov,
+                       int type, ptl_process_id_t tgt, int routing,
+                       unsigned int payload_niov, struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
 ptl_err_t kranal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_nid_t nid, ptl_pid_t pid,
-                             unsigned int payload_niov, 
-                             ptl_kiov_t *payload_kiov,
+                             int type, ptl_process_id_t tgt, int routing,
+                             unsigned int payload_niov, ptl_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);
 ptl_err_t kranal_recv(ptl_ni_t *ni, void *private,
                       ptl_msg_t *ptlmsg, unsigned int niov,
@@ -479,7 +478,7 @@ extern void kranal_schedule_conn (kra_conn_t *conn);
 extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
 extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
-extern int kranal_del_peer (ptl_nid_t nid, int single_share);
+extern int kranal_del_peer (ptl_nid_t nid);
 extern void kranal_device_callback (RAP_INT32 devid, RAP_PVOID arg);
 extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
 extern int kranal_connd (void *arg);

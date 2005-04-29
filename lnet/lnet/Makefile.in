@@ -1,6 +1,18 @@
 MODULES := portals
+
+router_objs := $(ROUTER)r_router.o
+router_objs += $(ROUTER)r_proc.o
+
 portals-objs := api-errno.o api-ni.o
 portals-objs += lib-me.o lib-msg.o lib-eq.o lib-md.o
 portals-objs += lib-move.o module.o
+portals-objs += $(router_objs)
+
+default: all
+
+r_%.c:  ../router/%.c
+	ln -sf $< $@
+
+EXTRA_PRE_CFLAGS := -I../router
 
 @INCLUDE_RULES@
