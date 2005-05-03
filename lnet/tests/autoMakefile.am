@@ -16,5 +16,5 @@ endif
 endif
 endif
 
-MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c pingsrv.c pingcli.c spingsrv.c spingcli.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  pingsrv.c pingcli.c spingsrv.c spingcli.c
 DIST_SOURCES = ping_srv.c ping_cli.c sping_srv.c sping_cli.c ping.h

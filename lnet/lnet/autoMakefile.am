@@ -42,5 +42,5 @@ install-data-hook: $(install_data_hook)
 
 EXTRA_DIST := Info.plist
 
-MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c portals
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  portals
 DIST_SOURCES = $(portals-objs:%.o=%.c)
