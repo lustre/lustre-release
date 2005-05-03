@@ -1,9 +1,0 @@
-# Copyright (C) 2001  Cluster File Systems, Inc.
-#
-# This code is issued under the GNU General Public License.
-# See the file COPYING in this distribution
-
-modulefs_DATA = mgmt-svc$(KMODEXT) mgmt-cli$(KMODEXT)
-
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES = $(mgmt-svc-objs:.o=.c) $(mgc-cli-objs:.o=.c)
