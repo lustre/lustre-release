@@ -47,6 +47,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- initialize blocksize for non-regular files (6062)
 	- added --disable-server and --disable-client configure options (5782)
 	- introduce a lookup cache for lconf to avoid repeated DB scans (6204)
+	- Vanilla 2.4.29 support
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
