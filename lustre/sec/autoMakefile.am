@@ -19,4 +19,4 @@ modulefs_DATA = ptlrpcs$(KMODEXT)
 endif
 
 DIST_SOURCES = $(ptlrpcs-objs:.o=.c)
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

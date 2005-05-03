@@ -15,4 +15,4 @@ modulefs_DATA = lov$(KMODEXT)
 endif # MODULES
 
 DIST_SOURCES = $(lov-objs:.o=.c) lov_internal.h
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

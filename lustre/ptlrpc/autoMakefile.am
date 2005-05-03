@@ -32,5 +32,5 @@ if MODULES
 modulefs_DATA = ptlrpc$(KMODEXT)
 endif # MODULES
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c ldlm_*.c l_lock.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

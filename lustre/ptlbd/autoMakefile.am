@@ -9,5 +9,5 @@ modulefs_DATA = ptlbd$(KMODEXT)
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(ptlbd-objs:%.o=%.c)

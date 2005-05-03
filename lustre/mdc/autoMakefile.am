@@ -17,4 +17,4 @@ endif
 endif
 
 DIST_SOURCES = $(mdc-objs:.o=.c) mdc_internal.h
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

@@ -7,5 +7,5 @@ if MODULES
 modulefs_DATA = cmobd$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(cmobd-objs:%.o=%.c) cm_internal.h

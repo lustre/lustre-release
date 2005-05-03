@@ -20,4 +20,4 @@ endif
 
 DIST_SOURCES = $(ptlrpcs_gss-objs:.o=.c) gss_internal.h gss_api.h gss_asn1.h \
                gss_err.h gss_krb5.h
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

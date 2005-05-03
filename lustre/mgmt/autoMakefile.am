@@ -5,5 +5,5 @@
 
 modulefs_DATA = mgmt-svc$(KMODEXT) mgmt-cli$(KMODEXT)
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(mgmt-svc-objs:.o=.c) $(mgc-cli-objs:.o=.c)

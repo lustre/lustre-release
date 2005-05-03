@@ -14,5 +14,5 @@ modulefs_DATA = obdclass$(KMODEXT) confobd$(KMODEXT)
 noinst_DATA = llog_test$(KMODEXT)
 endif # MODULES
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c llog-test.c 
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c 
 DIST_SOURCES = $(filter-out llog-test.c,$(obdclass-objs:.o=.c)) confobd.c llog_test.c

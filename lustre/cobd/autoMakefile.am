@@ -8,4 +8,4 @@ modulefs_DATA := cobd$(KMODEXT)
 endif
 
 DIST_SOURCES = $(cobd-objs:.o=.c)
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

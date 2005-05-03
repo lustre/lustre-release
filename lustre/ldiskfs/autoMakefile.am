@@ -71,7 +71,7 @@ foo-check:
 	@echo "ldiskfs_OBJECTS: $(ldiskfs_OBJECTS)"
 	@echo "ldiskfs_LDADD: $(ldiskfs_LDADD)"
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 CLEANFILES = sources *.c *.h
 
 clean: clean-am

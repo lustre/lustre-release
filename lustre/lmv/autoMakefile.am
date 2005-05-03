@@ -15,4 +15,4 @@ modulefs_DATA = lmv$(KMODEXT)
 endif # MODULES
 
 DIST_SOURCES = $(lmv-objs:.o=.c) lmv_internal.h
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
