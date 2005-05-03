@@ -42,5 +42,5 @@ install-data-hook: $(install_data_hook)
 EXTRA_DIST := Info.plist
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  linux-*.c 
-MOSTLYCLEANFILES += linux darwin/*.o libcfs
+MOSTLYCLEANFILES += linux/*.o darwin/*.o libcfs
 DIST_SOURCES := $(libcfs-all-objs:%.o=%.c) tracefile.h
