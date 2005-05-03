@@ -13,5 +13,5 @@ endif
 endif
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c
 DIST_SOURCES = $(kptlrouter-objs:%.o=%.c) router.h

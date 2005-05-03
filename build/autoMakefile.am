@@ -10,7 +10,7 @@ EXTRA_DIST := Makefile Makefile.in.toplevel		       \
 
 CONFIG_CLEAN_FILES := lustre.spec
 
-MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c
+MOSTLYCLEANFILES = .*.flags .*.flags *.o *.ko *.mod.c
 
 distclean: distclean-recursive
 	@true
