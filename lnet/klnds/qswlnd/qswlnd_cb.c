@@ -1341,12 +1341,6 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         if (nid == kqswnal_lib.libnal_ni.ni_pid.nid) /* gateway is me */
                 nid = fwd->kprfd_target_nid;    /* target is final dest */
 
-        if (kqswnal_nid2elanid (nid) < 0) {
-                CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
-                rc = -EHOSTUNREACH;
-                goto out;
-        }
-
         /* copy hdr into pre-mapped buffer */
         memcpy(ktx->ktx_buffer, fwd->kprfd_hdr, sizeof(ptl_hdr_t));
 
@@ -1356,6 +1350,12 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         ktx->ktx_state   = KTX_FORWARDING;
         ktx->ktx_args[0] = fwd;
         ktx->ktx_nfrag   = ktx->ktx_firsttmpfrag = 1;
+
+        if (kqswnal_nid2elanid (nid) < 0) {
+                CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
+                rc = -EHOSTUNREACH;
+                goto out;
+        }
 
         if (nob <= KQSW_TX_MAXCONTIG) 
         {
