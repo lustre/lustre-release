@@ -1841,17 +1841,17 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 data = (struct obd_ioctl_data *)buf;
 
                 if (sizeof(*desc) > data->ioc_inllen1) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 
                 if (sizeof(uuidp->uuid) * count > data->ioc_inllen2) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 
                 if (sizeof(__u32) * count > data->ioc_inllen3) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 

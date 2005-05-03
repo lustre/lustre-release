@@ -330,25 +330,23 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err) 
+                RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
                 CERROR("Version mismatch kernel vs application\n");
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         if (hdr.ioc_len > OBD_MAX_IOCTL_BUFFER) {
                 CERROR("User buffer len %d exceeds %d max buffer\n",
                        hdr.ioc_len, OBD_MAX_IOCTL_BUFFER);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         if (hdr.ioc_len < sizeof(struct obd_ioctl_data)) {
-                printk("LustreError: OBD: user buffer too small for ioctl\n");
-                return -EINVAL;
+                CERROR("user buffer too small for ioctl (%d)\n", hdr.ioc_len);
+                RETURN(-EINVAL);
         }
 
         /* XXX allocate this more intelligently, using kmalloc when
@@ -363,14 +361,15 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         data = (struct obd_ioctl_data *)*buf;
 
         err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
-        if ( err ) {
-                EXIT;
-                return err;
+        if (err) {
+                OBD_VFREE(*buf, hdr.ioc_len);
+                RETURN(err);
         }
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
-                return -EINVAL;
+                OBD_VFREE(*buf, hdr.ioc_len);
+                RETURN(-EINVAL);
         }
 
         if (data->ioc_inllen1) {
@@ -392,8 +391,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
         }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 static inline void obd_ioctl_freedata(char *buf, int len)
