@@ -7,5 +7,5 @@ if MODULES
 modulefs_DATA = obdfilter$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c
 DIST_SOURCES = $(obdfilter-objs:%.o=%.c) filter_io_24.c filter_io_26.c filter_internal.h

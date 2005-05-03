@@ -7,6 +7,6 @@ if MODULES
 modulefs_DATA = mds$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c
 DIST_SOURCES := $(mds-objs:%.o=%.c) mds_internal.h 
 DIST_SOURCES += quota_context.c quota_master.c

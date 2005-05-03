@@ -14,5 +14,5 @@ if MODULES
 modulefs_DATA = obdecho$(KMODEXT)
 endif # MODULES
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES = .*.flags *.o *.ko *.mod.c
 DIST_SOURCES = $(obdecho-objs:%.o=%.c)
