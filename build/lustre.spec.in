@@ -8,7 +8,6 @@ Version: %{version}
 Release: @RELEASE@
 Copyright: GPL
 Group: Utilities/System
-Requires: lustre-modules
 Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
 BuildRoot: /var/tmp/lustre-%{version}-root
