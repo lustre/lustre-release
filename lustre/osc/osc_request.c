@@ -2905,12 +2905,12 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 data = (struct obd_ioctl_data *)buf;
 
                 if (sizeof(*desc) > data->ioc_inllen1) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         GOTO(out, err = -EINVAL);
                 }
 
                 if (data->ioc_inllen2 < sizeof(uuid)) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         GOTO(out, err = -EINVAL);
                 }
 
