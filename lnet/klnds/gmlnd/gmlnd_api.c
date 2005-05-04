@@ -93,7 +93,7 @@ gmnal_shutdown(ptl_ni_t *ni)
 
 
 int
-gmnal_startup(ptl_ni_t *ni, char **interfaces)
+gmnal_startup(ptl_ni_t *ni)
 {
 	gmnal_data_t	*nal_data = NULL;
 	gmnal_srxd_t	*srxd = NULL;
@@ -110,6 +110,11 @@ gmnal_startup(ptl_ni_t *ni, char **interfaces)
                 return PTL_FAIL;
         }
 
+        if (ni->ni_interfaces[0] != NULL) {
+                CERROR("Explicit interface config not supported\n");
+                return PTL_FAIL;
+        }
+        
 	PORTAL_ALLOC(nal_data, sizeof(gmnal_data_t));
 	if (!nal_data) {
 		CDEBUG(D_ERROR, "can't get memory\n");

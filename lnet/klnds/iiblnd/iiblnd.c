@@ -1299,7 +1299,7 @@ static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
 #undef roundup_power
 
 ptl_err_t
-kibnal_startup (ptl_ni_t *ni, char **interfaces)
+kibnal_startup (ptl_ni_t *ni)
 {
         int                 pkmem = atomic_read(&portal_kmemory);
         IB_PORT_ATTRIBUTES *pattr;
@@ -1313,6 +1313,11 @@ kibnal_startup (ptl_ni_t *ni, char **interfaces)
         /* Only 1 instance supported */
         if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
                 CERROR ("Only 1 instance supported\n");
+                return PTL_FAIL;
+        }
+
+        if (ni->ni_interfaces[0] != NULL) {
+                CERROR("Explicit interface config not supported\n");
                 return PTL_FAIL;
         }
         

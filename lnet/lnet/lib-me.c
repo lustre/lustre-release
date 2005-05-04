@@ -38,7 +38,7 @@ PtlMEAttach(ptl_handle_ni_t interface,
         ptl_me_t      *me;
         unsigned long  flags;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if (portal >= ptl_apini.apini_nportals)
@@ -82,7 +82,7 @@ PtlMEInsert(ptl_handle_me_t current_meh,
         ptl_me_t     *new_me;
         unsigned long flags;
 
-        LASSERT (ptl_init);        
+        LASSERT (ptl_apini.apini_init);        
         LASSERT (ptl_apini.apini_refcount > 0);
         
         new_me = ptl_me_alloc();
@@ -126,7 +126,7 @@ PtlMEUnlink(ptl_handle_me_t meh)
         ptl_me_t     *me;
         int           rc;
 
-        LASSERT (ptl_init);        
+        LASSERT (ptl_apini.apini_init);        
         LASSERT (ptl_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);

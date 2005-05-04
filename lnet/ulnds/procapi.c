@@ -125,7 +125,7 @@ procbridge __global_procbridge = NULL;
  * error wrapper to cut down clutter.
  */
 ptl_err_t
-procbridge_startup (ptl_ni_t *ni, char **interfaces)
+procbridge_startup (ptl_ni_t *ni)
 {
     procbridge p;
     bridge b;

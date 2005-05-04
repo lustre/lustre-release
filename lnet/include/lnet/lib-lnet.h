@@ -24,7 +24,6 @@
 #include <portals/p30.h>
 #include <portals/lib-types.h>
 
-extern int           ptl_init;                  /* PtlInit()/PtlFini() counter */
 extern ptl_apini_t   ptl_apini;                 /* THE network interface (at the API) */
 
 static inline int ptl_is_wire_handle_none (ptl_handle_wire_t *wh)
@@ -45,11 +44,15 @@ static inline int ptl_md_exhausted (ptl_libmd_t *md)
         spin_lock_irqsave(&ptl_apini.apini_lock, flags)                 
 #define PTL_UNLOCK(flags)                                               \
         spin_unlock_irqrestore(&ptl_apini.apini_lock, flags)               
+#define PTL_MUTEX_DOWN(m) mutex_down(m)
+#define PTL_MUTEX_UP(m)   mutex_up(m)
 #else                                                                   
 #define PTL_LOCK(flags)                                                 \
         (pthread_mutex_lock(&ptl_apini.apini_mutex), (flags) = 0)       
 #define PTL_UNLOCK(flags)                                               \
         pthread_mutex_unlock(&ptl_apini.apini_mutex)
+#define PTL_MUTEX_DOWN(m) pthread_mutex_lock(m)
+#define PTL_MUTEX_UP(m)   pthread_mutex_up(m)
 #endif
 
 #ifdef PTL_USE_LIB_FREELIST

@@ -856,7 +856,7 @@ kibnal_whole_mem(void)
         return kibnal_data.kib_md.md_handle != NULL;
 }
 
-extern ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
+extern ptl_err_t kibnal_startup (ptl_ni_t *ni);
 extern void kibnal_shutdown (ptl_ni_t *ni);
 extern int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,

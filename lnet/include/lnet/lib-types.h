@@ -258,7 +258,7 @@ typedef struct ptl_nal
         /* fields initialised by the NAL */
         unsigned int      nal_type;
         
-        ptl_err_t  (*nal_startup) (struct ptl_ni *ni, char **interfaces);
+        ptl_err_t  (*nal_startup) (struct ptl_ni *ni);
         void       (*nal_shutdown) (struct ptl_ni *ni);
 
         int        (*nal_ctl)(struct ptl_ni *ni, unsigned int cmd, void *arg);
@@ -313,6 +313,8 @@ typedef struct ptl_nal
         
 } ptl_nal_t;
 
+#define PTL_MAX_INTERFACES   8
+
 typedef struct ptl_ni {
         struct list_head  ni_list;              /* chain on apini_nis */
         ptl_nid_t         ni_nid;               /* interface's NID */
@@ -320,6 +322,7 @@ typedef struct ptl_ni {
         ptl_nal_t        *ni_nal;               /* procedural interface */
         int               ni_shutdown;          /* shutting down? */
         atomic_t          ni_refcount;          /* reference count */
+        char             *ni_interfaces[PTL_MAX_INTERFACES]; /* equivalent interfaces to use */
 } ptl_ni_t;
 
 typedef struct                                  /* loopback descriptor */
@@ -339,13 +342,34 @@ typedef struct                                  /* loopback descriptor */
 
 typedef struct
 {
+        /* Stuff initialised at PtlInit() */
+        int               apini_init;           /* PtlInit() called? */
         int               apini_refcount;       /* PtlNIInit/PtlNIFini counter */
+        
+        struct list_head  apini_nals;           /* registered NALs */
+
+#ifdef __KERNEL__
+        spinlock_t        apini_lock;
+        cfs_waitq_t       apini_waitq;
+        struct semaphore  apini_api_mutex;
+        struct semaphore  apini_nal_mutex;
+#else
+        pthread_mutex_t   apini_mutex;
+        pthread_cond_t    apini_cond;
+        pthread_mutex_t   apini_api_mutex;
+        pthread_mutex_t   apini_nal_mutex;
+#endif
+
+        /* Stuff initialised at PtlNIInit() */
 
         int               apini_nportals;       /* # portals */
         struct list_head *apini_portals;        /* the vector of portals */
 
         ptl_pid_t         apini_pid;            /* requested pid */
         ptl_ni_limits_t   apini_actual_limits;
+
+        char             *apini_net_tokens;     /* tokenized 'networks' */
+        int               apini_net_tokens_nob;
 
         struct list_head  apini_nis;            /* NAL instances */
         struct list_head  apini_zombie_nis;     /* dying NAL instances */
@@ -364,18 +388,9 @@ typedef struct
         ptl_freelist_t    apini_free_mds;
         ptl_freelist_t    apini_free_eqs;
 #endif
-
         struct list_head  apini_active_msgs;
         struct list_head  apini_active_mds;
         struct list_head  apini_active_eqs;
-
-#ifdef __KERNEL__
-        spinlock_t        apini_lock;
-        cfs_waitq_t       apini_waitq;
-#else
-        pthread_mutex_t   apini_mutex;
-        pthread_cond_t    apini_cond;
-#endif
 
         struct {
                 long       recv_count;

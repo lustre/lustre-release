@@ -307,7 +307,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 }
 
 ptl_err_t
-kqswnal_startup (ptl_ni_t *ni, char **interfaces)
+kqswnal_startup (ptl_ni_t *ni)
 {
 #if MULTIRAIL_EKC
 	EP_RAILMASK       all_rails = EP_RAILMASK_ALL;
@@ -321,12 +321,19 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 	int               elan_page_idx;
 	int               pkmem = atomic_read(&portal_kmemory);
 
+	LASSERT (ni->ni_nal == &kqswnal_nal);
+
 	/* Only 1 instance supported */
 	if (kqswnal_data.kqn_init != KQN_INIT_NOTHING) {
                 CERROR ("Only 1 instance supported\n");
                 return PTL_FAIL;
         }
 
+        if (ni->ni_interfaces[0] != NULL) {
+                CERROR("Explicit interface config not supported\n");
+                return PTL_FAIL;
+        }
+        
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
 	
 	/* ensure all pointers NULL etc */
@@ -454,7 +461,7 @@ kqswnal_startup (ptl_ni_t *ni, char **interfaces)
 			      &dmareq, &kqswnal_data.kqn_eptxdmahandle);
 	if (rc != DDI_SUCCESS)
 	{
-		CERROR ("Can't reserve rx dma space\n");
+		CERROR ("Can't reserve tx dma space\n");
 		kqswnal_shutdown (ni);
 		return (PTL_NO_SPACE);
 	}

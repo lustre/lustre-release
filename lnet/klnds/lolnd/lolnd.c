@@ -45,7 +45,7 @@ klonal_shutdown(ptl_ni_t *ni)
 }
 
 ptl_err_t
-klonal_startup (ptl_ni_t *ni, char **interfaces)
+klonal_startup (ptl_ni_t *ni)
 {
 	LASSERT (ni->ni_nal == &klonal_nal);
 

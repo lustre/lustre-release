@@ -1882,7 +1882,7 @@ kibnal_shutdown (ptl_ni_t *ni)
 }
 
 ptl_err_t
-kibnal_startup (ptl_ni_t *ni, char **interfaces)
+kibnal_startup (ptl_ni_t *ni)
 {
         struct timeval    tv;
         int               pkmem = atomic_read(&portal_kmemory);
@@ -1897,6 +1897,11 @@ kibnal_startup (ptl_ni_t *ni, char **interfaces)
                 return PTL_FAIL;
         }
 
+        if (ni->ni_interfaces[0] != NULL) {
+                CERROR("Explicit interface config not supported\n");
+                return PTL_FAIL;
+        }
+        
         PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
 

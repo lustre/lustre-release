@@ -167,7 +167,7 @@ ptl_fail_nid (ptl_nid_t nid, unsigned int threshold)
         struct list_head  *next;
         struct list_head   cull;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         
         if (threshold != 0) {
                 /* Adding a new entry */
@@ -1463,7 +1463,7 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
         unsigned long     flags;
         int               rc;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */
@@ -1619,7 +1619,7 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
         unsigned long     flags;
         int               rc;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if (!list_empty (&ptl_apini.apini_test_peers) && /* normally we don't */

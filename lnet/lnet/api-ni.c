@@ -22,9 +22,12 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-int               ptl_init;                     /* PtlInit() flag */
-struct list_head  ptl_nal_table;                /* registered NALs */
 ptl_apini_t       ptl_apini;                    /* THE network interface (at the API) */
+
+#define DEFAULT_NETWORKS  "tcp"
+static char *networks = DEFAULT_NETWORKS;
+CFS_MODULE_PARM(networks, "s", charp, 0444,
+                "local networks (default='"DEFAULT_NETWORKS"')");
 
 void ptl_assert_wire_constants (void)
 {
@@ -119,37 +122,14 @@ void ptl_assert_wire_constants (void)
         CLASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.hello.type) == 4);
 }
 
-#ifdef __KERNEL__
-struct semaphore ptl_mutex ;
-
-static void ptl_mutex_enter (void) 
-{
-        mutex_down (&ptl_mutex);
-}
-
-static void ptl_mutex_exit (void)
-{
-        mutex_up (&ptl_mutex);
-}
-#else
-static void ptl_mutex_enter (void)
-{
-}
-
-static void ptl_mutex_exit (void) 
-{
-}
-#endif
-
-
 ptl_nal_t *
 ptl_find_nal_by_type (int type) 
 {
         ptl_nal_t          *nal;
         struct list_head   *tmp;
 
-        /* holding mutex */
-        list_for_each (tmp, &ptl_nal_table) {
+        /* holding nal mutex */
+        list_for_each (tmp, &ptl_apini.apini_nals) {
                 nal = list_entry(tmp, ptl_nal_t, nal_list);
 
                 if (nal->nal_type == type)
@@ -163,30 +143,30 @@ ptl_find_nal_by_type (int type)
 void
 ptl_register_nal (ptl_nal_t *nal)
 {
-        ptl_mutex_enter();
+        PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (libcfs_isknown_nal(nal->nal_type));
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == NULL);
         
-        list_add (&nal->nal_list, &ptl_nal_table);
+        list_add (&nal->nal_list, &ptl_apini.apini_nals);
         atomic_set(&nal->nal_refcount, 0);
 
-        ptl_mutex_exit();
+        PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 }
 
 void
 ptl_unregister_nal (ptl_nal_t *nal)
 {
-        ptl_mutex_enter();
+        PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == nal);
         LASSERT (atomic_read(&nal->nal_refcount) == 0);
         
         list_del (&nal->nal_list);
 
-        ptl_mutex_exit();
+        PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 }
 
 #ifndef PTL_USE_LIB_FREELIST
@@ -420,6 +400,14 @@ ptl_apini_init(ptl_pid_t requested_pid,
 
         LASSERT (ptl_apini.apini_refcount == 0);
 
+        ptl_apini.apini_net_tokens_nob = strlen(networks) + 1;
+        PORTAL_ALLOC(ptl_apini.apini_net_tokens,
+                     ptl_apini.apini_net_tokens_nob);
+        if (ptl_apini.apini_net_tokens == NULL) {
+                CERROR("Can't allocate net tokens\n");
+                goto out;
+        }
+        
         ptl_apini.apini_pid = requested_pid;
 
         rc = ptl_descriptor_setup (requested_limits, 
@@ -436,14 +424,6 @@ ptl_apini_init(ptl_pid_t requested_pid,
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_test_peers);
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_nis);
         CFS_INIT_LIST_HEAD (&ptl_apini.apini_zombie_nis);
-
-#ifdef __KERNEL__
-        spin_lock_init (&ptl_apini.apini_lock);
-        cfs_waitq_init (&ptl_apini.apini_waitq);
-#else
-        pthread_mutex_init(&ptl_apini.apini_mutex, NULL);
-        pthread_cond_init(&ptl_apini.apini_cond, NULL);
-#endif
 
         ptl_apini.apini_interface_cookie = ptl_create_interface_cookie();
 
@@ -485,6 +465,9 @@ ptl_apini_init(ptl_pid_t requested_pid,
         if (rc != PTL_OK) {
                 ptl_cleanup_handle_hash ();
                 ptl_descriptor_cleanup ();
+                if (ptl_apini.apini_net_tokens != NULL)
+                        PORTAL_FREE(ptl_apini.apini_net_tokens, 
+                                    ptl_apini.apini_net_tokens_nob);
         }
 
         RETURN (rc);
@@ -550,6 +533,7 @@ ptl_apini_fini (void)
 
         ptl_cleanup_handle_hash ();
         ptl_descriptor_cleanup ();
+        PORTAL_FREE(ptl_apini.apini_net_tokens, ptl_apini.apini_net_tokens_nob);
 
 #ifndef __KERNEL__
         pthread_mutex_destroy(&ptl_apini.apini_mutex);
@@ -587,7 +571,7 @@ ptl_queue_zombie_ni (ptl_ni_t *ni)
         unsigned long flags;
 
         LASSERT (atomic_read(&ni->ni_refcount) == 0);
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         
         PTL_LOCK(flags);
         list_add_tail(&ni->ni_list, &ptl_apini.apini_zombie_nis);
@@ -662,54 +646,363 @@ ptl_shutdown_nalnis (void)
         PTL_UNLOCK(flags);
 }
 
+void ptl_syntax(char *name, char *str, int offset, int width)
+{
+        const char *dots = "................................"
+                           "................................"
+                           "................................"
+                           "................................"
+                           "................................"
+                           "................................"
+                           "................................"
+                           "................................";
+        const char *dashes = "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------"
+                             "--------------------------------";
+        
+	LCONSOLE_ERROR("Error parsing '%s=\"%s\"'\n", name, str);
+	LCONSOLE_ERROR("here...........%.*s..%.*s|%.*s|\n", 
+                       strlen(name), dots, offset, dots,
+                       (width < 1) ? 0 : width - 1, dashes);
+}
+
+int
+ptl_nis_conflict(ptl_ni_t *ni1, ptl_ni_t *ni2)
+{
+        int               i;
+        int               j;
+
+        if (PTL_NETNAL(PTL_NIDNET(ni1->ni_nid)) != /* different NALs */
+            PTL_NETNAL(PTL_NIDNET(ni2->ni_nid)))
+                return 0;
+
+        if (ni1 != ni2 &&
+            PTL_NIDNET(ni1->ni_nid) == PTL_NIDNET(ni2->ni_nid)) {
+                CERROR("Duplicate network: %s\n",
+                       libcfs_net2str(PTL_NIDNET(ni1->ni_nid)));
+                return 1;
+        }
+
+        if (ni1->ni_interfaces[0] == NULL ||   
+            ni2->ni_interfaces[0] == NULL) {
+                /* one (or both) using all available interfaces */
+                if (ni1 != ni2) {
+                        CERROR("Interface conflict: %s, %s\n",
+                               libcfs_net2str(PTL_NIDNET(ni1->ni_nid)),
+                               libcfs_net2str(PTL_NIDNET(ni2->ni_nid)));
+                        return 1;
+                }
+                return 0;
+        }
+        
+        for (i = 0; i < PTL_MAX_INTERFACES; i++) {
+                if (ni1->ni_interfaces[i] == NULL)
+                        break;
+
+                for (j = 0; j < PTL_MAX_INTERFACES; j++) {
+                        if (ni2->ni_interfaces[j] == NULL)
+                                break;
+
+                        if (ni1 == ni2 && i == j)
+                                continue;
+
+                        if (strcmp(ni1->ni_interfaces[i],
+                                   ni2->ni_interfaces[j]))
+                                continue;
+                        
+                        CERROR("Duplicate interface: %s(%s), %s(%s)\n",
+                               libcfs_net2str(PTL_NIDNET(ni1->ni_nid)),
+                               ni1->ni_interfaces[i],
+                               libcfs_net2str(PTL_NIDNET(ni2->ni_nid)),
+                               ni2->ni_interfaces[i]);
+                        return 1;
+                }
+        }
+        
+        return 0;
+}
+
+ptl_err_t
+ptl_check_ni_conflicts(ptl_ni_t *ni, struct list_head *nilist)
+{
+        struct list_head *tmp;
+        ptl_ni_t         *ni2;
+
+        /* Yes! ni just added to this list.  
+         * Check its network is unique and its interfaces don't conflict */
+        LASSERT (ni == list_entry(nilist->prev, ptl_ni_t, ni_list));
+        
+        list_for_each (tmp, nilist) {
+                ni2 = list_entry(tmp, ptl_ni_t, ni_list);
+
+                if (ptl_nis_conflict(ni, ni2))
+                        return PTL_FAIL;
+        }
+        
+        return PTL_OK;
+}
+
+int
+ptl_iswhite (char c)
+{
+	switch (c) {
+	case ' ':
+	case '\t':
+	case '\n':
+	case '\r':
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+char *
+ptl_trimwhite(char *str)
+{
+	char *end;
+	
+	while (ptl_iswhite(*str))
+		str++;
+	
+	end = str + strlen(str);
+	while (end > str) {
+		if (!ptl_iswhite(end[-1]))
+			break;
+		end--;
+	}
+
+	*end = 0;
+	return str;
+}
+
+ptl_err_t
+ptl_parse_networks(struct list_head *nilist)
+{
+        char     *tokens = ptl_apini.apini_net_tokens;
+        char     *str = tokens;
+        ptl_ni_t *ni = NULL;
+        __u32     net;
+        int       rc;
+
+        LASSERT (ptl_apini.apini_net_tokens_nob == strlen(networks) + 1);
+        memcpy (tokens, networks, ptl_apini.apini_net_tokens_nob);
+
+        while (str != NULL && *str != 0) {
+                char      *comma = strchr(str, ',');
+                char      *bracket = strchr(str, '(');
+                int        niface;
+		char      *iface;
+
+                PORTAL_ALLOC(ni, sizeof(*ni));
+                if (ni == NULL) {
+                        CERROR ("ENOMEM parsing 'networks=\"%s\"'\n", networks);
+                        goto failed;
+                }
+                /* zero counters/flags, NULL pointers... */
+                memset(ni, 0, sizeof(*ni));
+                list_add_tail(&ni->ni_list, nilist);
+                
+                if (bracket == NULL ||
+		    (comma != NULL && comma < bracket)) {
+			if (comma != NULL)
+				*comma++ = 0;
+			net = libcfs_str2net(ptl_trimwhite(str));
+			
+			if (net == PTL_NIDNET(PTL_NID_ANY)) {
+                                ptl_syntax("networks", networks, 
+                                           str - tokens, strlen(str));
+                                goto failed;
+                        }
+
+                        ni->ni_nid = PTL_MKNID(net, 0);
+                        if (ptl_check_ni_conflicts(ni, nilist) != PTL_OK)
+                                goto failed;
+
+			str = comma;
+			continue;
+		}
+
+		*bracket = 0;
+		net = libcfs_str2net(ptl_trimwhite(str));
+		if (net == PTL_NIDNET(PTL_NID_ANY)) {
+                        ptl_syntax("networks", networks,
+                                   str - tokens, strlen(str));
+                        goto failed;
+                } 
+
+                ni->ni_nid = PTL_MKNID(net, 0);
+
+                niface = 0;
+		iface = bracket + 1;
+
+		bracket = strchr(iface, ')');
+		if (bracket == NULL) {
+                        ptl_syntax ("networks", networks,
+                                    iface - tokens, strlen(iface));
+                        goto failed;
+		}
+
+		*bracket = 0;
+		do {
+			comma = strchr(iface, ',');
+			if (comma != NULL)
+				*comma++ = 0;
+			
+			iface = ptl_trimwhite(iface);
+			if (*iface == 0) {
+                                ptl_syntax("networks", networks, 
+                                           iface - tokens, strlen(iface));
+                                goto failed;
+                        }
+
+                        if (niface == PTL_MAX_INTERFACES) {
+                                LCONSOLE_ERROR("Too many interfaces for %s\n",
+                                               libcfs_net2str(PTL_NIDNET(ni->ni_nid)));
+                                goto failed;
+                        }
+
+                        ni->ni_interfaces[niface++] = iface;
+			iface = comma;
+		} while (iface != NULL);
+
+                if (ptl_check_ni_conflicts(ni, nilist) != PTL_OK)
+                        goto failed;
+                
+		str = bracket + 1;
+		comma = strchr(bracket + 1, ',');
+		if (comma != NULL) {
+			*comma = 0;
+			str = ptl_trimwhite(str);
+			if (*str != 0) {
+                                ptl_syntax ("networks", networks,
+                                            str - tokens, strlen(str));
+                                goto failed;
+                        }
+			str = comma + 1;
+			continue;
+		}
+		
+		str = ptl_trimwhite(str);
+		if (*str != 0) {
+                        ptl_syntax ("networks", networks,
+                                    str - tokens, strlen(str));
+                        goto failed;
+                }
+	}
+
+        if (list_empty(nilist)) {
+                LCONSOLE_ERROR("No networks specified\n");
+                goto failed;
+        }
+        return PTL_OK;
+
+ failed:
+        while (!list_empty(nilist)) {
+                ni = list_entry(nilist->next, ptl_ni_t, ni_list);
+                
+                list_del(&ni->ni_list);
+                PORTAL_FREE(ni, sizeof(*ni));
+        }
+        return PTL_FAIL;
+}
+
+ptl_err_t
+ptl_load_nal (int type)
+{
+        CERROR("Automatic NAL loading not implemented (%s)\n",
+               libcfs_nal2str(type));
+        return PTL_FAIL;
+}
+
 ptl_err_t
 ptl_startup_nalnis (void)
 {
         ptl_nal_t         *nal;
         ptl_ni_t          *ni;
-        ptl_ni_t          *ni2;
-        struct list_head  *tmp;
-        struct list_head  *tmp2;
+        struct list_head   nilist;
         ptl_err_t          rc = PTL_OK;
         char              *interface = NULL;
         unsigned long      flags;
-        
-        list_for_each (tmp, &ptl_nal_table) {
-                nal = list_entry(tmp, ptl_nal_t, nal_list);
+        int                nal_type;
+        int                retry;
 
-                PORTAL_ALLOC(ni, sizeof(*ni));
-                if (ni == NULL) {
-                        CERROR("Can't allocate NI for %s NAL\n", 
-                               libcfs_nal2str(nal->nal_type));
-                        rc = PTL_FAIL;
-                        break;
+        INIT_LIST_HEAD(&nilist);
+        rc = ptl_parse_networks(&nilist);
+        if (rc != PTL_OK)
+                return rc;
+        
+        while (!list_empty(&nilist)) {
+                ni = list_entry(nilist.next, ptl_ni_t, ni_list);
+                nal_type = PTL_NETNAL(PTL_NIDNET(ni->ni_nid));
+
+                LASSERT (libcfs_isknown_nal(nal_type));
+
+                PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
+
+                for (retry = 0;; retry = 1) {
+                        nal = ptl_find_nal_by_type(nal_type);
+                        if (nal != NULL)
+                                break;
+                        
+                        PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
+
+                        if (retry) {
+                                CERROR("Can't load NAL %s\n",
+                                       libcfs_nal2str(nal_type));
+                                goto failed;
+                        }
+
+                        rc = ptl_load_nal(nal_type);
+                        if (rc != PTL_OK)
+                                goto failed;
+
+                        PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
                 }
 
                 atomic_set(&ni->ni_refcount, 1);
                 atomic_inc(&nal->nal_refcount);
                 ni->ni_nal = nal;
-                ni->ni_nid = PTL_MKNID(PTL_MKNET(nal->nal_type, 0), 0);
-                /* for now */
 
-                rc = (nal->nal_startup)(ni, &interface);
+                rc = (nal->nal_startup)(ni);
+
+                PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
+
                 if (rc != PTL_OK) {
                         CERROR("Error %d staring up NI %s\n",
                                rc, libcfs_nal2str(nal->nal_type));
-                        PORTAL_FREE(ni, sizeof(*ni));
                         atomic_dec(&nal->nal_refcount);
-                        break;
+                        goto failed;
                 }
 
+                list_del(&ni->ni_list);
+                
                 PTL_LOCK(flags);
                 list_add_tail(&ni->ni_list, &ptl_apini.apini_nis);
                 PTL_UNLOCK(flags);
         }
- 
-        if (rc != PTL_OK)
-                ptl_shutdown_nalnis();
 
-        return rc;
+        return PTL_OK;
+        
+ failed:
+        ptl_shutdown_nalnis();
+
+        while (!list_empty(&nilist)) {
+                ni = list_entry(nilist.next, ptl_ni_t, ni_list);
+                list_del(&ni->ni_list);
+                PORTAL_FREE(ni, sizeof(*ni));
+        }
+        
+        return PTL_FAIL;
 }
+
+#ifndef __KERNEL__
+extern ptl_nal_t tcpnal_nal;
+#endif
 
 ptl_err_t
 PtlInit(int *max_interfaces)
@@ -717,28 +1010,29 @@ PtlInit(int *max_interfaces)
         LASSERT(!strcmp(ptl_err_str[PTL_MAX_ERRNO], "PTL_MAX_ERRNO"));
         ptl_assert_wire_constants ();
 
-        ptl_mutex_enter();
-
-        LASSERT (!ptl_init);
+        LASSERT (!ptl_apini.apini_init);
         
-        CFS_INIT_LIST_HEAD(&ptl_nal_table);
         ptl_apini.apini_refcount = 0;
+        CFS_INIT_LIST_HEAD(&ptl_apini.apini_nals);
 
-#ifndef __KERNEL__
-        /* process  */
+#ifdef __KERNEL__
+        spin_lock_init (&ptl_apini.apini_lock);
+        cfs_waitq_init (&ptl_apini.apini_waitq);
+        init_mutex(&ptl_apini.apini_nal_mutex);
+        init_mutex(&ptl_apini.apini_api_mutex);
+#else
+        pthread_mutex_init(&ptl_apini.apini_mutex, NULL);
+        pthread_cond_init(&ptl_apini.apini_cond, NULL);
+        pthread_mutex_init(&ptl_apini.apini_nal_mutex);
+        pthread_mutex_init(&ptl_apini.apini_api_mutex);
+
         /* Kernel NALs register themselves when their module loads, and
          * unregister themselves when their module is unloaded.  Userspace NALs
          * are plugged in explicitly here... */
-        {
-                extern ptl_nal_t tcpnal_nal;
-
-                ptl_register_nal (&tcpnal_nal);
-        }
+        ptl_register_nal (&tcpnal_nal);
 #endif
-        ptl_init = 1;
+        ptl_apini.apini_init = 1;
 
-        ptl_mutex_exit();
-        
         if (max_interfaces != NULL)
                 *max_interfaces = 1;
 
@@ -748,14 +1042,16 @@ PtlInit(int *max_interfaces)
 void
 PtlFini(void)
 {
-        ptl_mutex_enter();
-
-        LASSERT (ptl_init);
-        LASSERT (list_empty(&ptl_nal_table));
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount == 0);
-        ptl_init = 0;
 
-        ptl_mutex_exit();
+#ifndef __KERNEL__
+        /* See comment where tcpnal_nal registers itself */
+        ptl_unregister_nal(&tcpnal_nal);
+#endif
+        LASSERT (list_empty(&ptl_apini.apini_nals));
+
+        ptl_apini.apini_init = 0;
 }
 
 ptl_err_t
@@ -765,9 +1061,9 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
 {
         int         rc;
 
-        ptl_mutex_enter ();
+        PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         CDEBUG(D_OTHER, "refs %d\n", ptl_apini.apini_refcount);
 
         if (ptl_apini.apini_refcount > 0) {
@@ -795,17 +1091,16 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         /* Handle can be anything; PTL_INVALID_HANDLE isn't wise though :) */
 
  out:
-        ptl_mutex_exit ();
-
+        PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
         return rc;
 }
 
 ptl_err_t
 PtlNIFini(ptl_handle_ni_t ni)
 {
-        ptl_mutex_enter ();
+        PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         ptl_apini.apini_refcount--;
@@ -815,7 +1110,7 @@ PtlNIFini(ptl_handle_ni_t ni)
                 ptl_apini_fini();
         }
 
-        ptl_mutex_exit ();
+        PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
         return PTL_OK;
 }
 
@@ -829,9 +1124,7 @@ PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
         unsigned long             flags;
         int                       count;
 
-        ptl_mutex_enter ();
-        
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         switch (cmd) {
@@ -879,7 +1172,6 @@ PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
                 break;
         }
         
-        ptl_mutex_exit();
         return rc;
 }
 
@@ -889,7 +1181,7 @@ PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
         ptl_ni_t      *ni;
         unsigned long  flags;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         /* pretty useless; just return the NID of the first local interface */
@@ -915,7 +1207,7 @@ PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
 ptl_err_t
 PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t *ni_out)
 {
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         *ni_out = handle_in;
@@ -931,7 +1223,7 @@ PtlSnprintHandle(char *str, int len, ptl_handle_any_t h)
 ptl_err_t
 PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
 {
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         *uid = 0;                               /* fake it */
@@ -942,7 +1234,7 @@ ptl_err_t
 PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
           unsigned long *distance_out)
 {
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         return 1;                               /* fake it */
@@ -952,7 +1244,7 @@ ptl_err_t
 PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
             ptl_sr_value_t *status_out)
 {
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         return PTL_FAIL;                        /* not supported */
@@ -962,7 +1254,7 @@ ptl_err_t
 PtlACEntry(ptl_handle_ni_t ni_in, ptl_ac_index_t index_in,
            ptl_process_id_t match_id_in, ptl_pt_index_t portal_in)
 {
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         return PTL_FAIL;                        /* not supported */

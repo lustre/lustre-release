@@ -2052,7 +2052,7 @@ ksocknal_init_incarnation (void)
 }
 
 ptl_err_t
-ksocknal_startup (ptl_ni_t *ni, char **interfaces)
+ksocknal_startup (ptl_ni_t *ni)
 {
         int               pkmem = atomic_read(&portal_kmemory);
         int               rc;
@@ -2066,6 +2066,11 @@ ksocknal_startup (ptl_ni_t *ni, char **interfaces)
                 return PTL_FAIL;
         }
 
+        if (ni->ni_interfaces[0] != NULL) {
+                CERROR("Explicit interface config not supported\n");
+                return PTL_FAIL;
+        }
+        
         memset (&ksocknal_data, 0, sizeof (ksocknal_data)); /* zero pointers */
 
         ksocknal_data.ksnd_ni = ni;             /* temp hack */

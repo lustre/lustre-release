@@ -409,7 +409,7 @@ typedef struct kib_peer
 extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
-ptl_err_t kibnal_startup (ptl_ni_t *ni, char **interfaces);
+ptl_err_t kibnal_startup (ptl_ni_t *ni);
 void kibnal_shutdown (ptl_ni_t *ni);
 int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,

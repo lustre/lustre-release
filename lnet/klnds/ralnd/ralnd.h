@@ -445,7 +445,7 @@ kranal_page2phys (struct page *p)
         return page_to_phys(p);
 }
 
-ptl_err_t kranal_startup (ptl_ni_t *ni, char **interfaces);
+ptl_err_t kranal_startup (ptl_ni_t *ni);
 void kranal_shutdown (ptl_ni_t *ni);
 int kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kranal_send (ptl_ni_t *ni, void *private,

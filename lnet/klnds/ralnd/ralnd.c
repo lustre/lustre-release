@@ -1907,7 +1907,7 @@ kranal_shutdown (ptl_ni_t *ni)
 }
 
 ptl_err_t
-kranal_startup (ptl_ni_t *ni, char **interfaces)
+kranal_startup (ptl_ni_t *ni)
 {
         struct timeval    tv;
         int               pkmem = atomic_read(&portal_kmemory);
@@ -2014,19 +2014,51 @@ kranal_startup (ptl_ni_t *ni, char **interfaces)
 
         LASSERT (kranal_data.kra_ndevs == 0);
 
-        for (i = 0; i < sizeof(kranal_devids)/sizeof(kranal_devids[0]); i++) {
-                LASSERT (i < RANAL_MAXDEVS);
+        if (ni->ni_interfaces[0] == NULL) {
+                /* Use all available RapidArray devices */
+                for (i = 0; i < sizeof(kranal_devids)/sizeof(kranal_devids[0]); i++) {
+                        LASSERT (i < RANAL_MAXDEVS);
 
-                dev = &kranal_data.kra_devices[kranal_data.kra_ndevs];
+                        dev = &kranal_data.kra_devices[kranal_data.kra_ndevs];
 
-                rc = kranal_device_init(kranal_devids[i], dev);
-                if (rc == 0)
+                        rc = kranal_device_init(kranal_devids[i], dev);
+                        if (rc == 0)
+                                kranal_data.kra_ndevs++;
+                }
+
+                if (kranal_data.kra_ndevs == 0) {
+                        CERROR("Can't initialise any RapidArray devices\n");
+                        goto failed;
+                }
+        } else {
+                /* Use specified RapidArray devices */
+                for (i = 0; i < PTL_MAX_INTERFACES; i++) {
+                        int   devid;
+                        int   len;
+
+                        if (kranal_data.kra_ndevs == RANAL_MAXDEVS) {
+                                CERROR("Too many interfaces\n");
+                                goto failed;
+                        }
+
+                        dev = &kranal_data.kra_devices[kranal_data.kra_ndevs];
+
+                        if (sscanf(ni->ni_interfaces[i], "%d%n", &devid, &len) < 1 ||
+                            len != strlen(ni->ni_interfaces[i])) {
+                                CERROR("Can't parse interface '%s'\n", 
+                                       ni->ni_interfaces[i]);
+                                goto failed;
+                        }
+                        
+                        rc = kranal_device_init(devid, dev);
+                        if (rc != 0) {
+                                CERROR("Can't open interface '%s': %d\n",
+                                       ni->ni_interfaces[i], rc);
+                                goto failed;
+                        }
+                        
                         kranal_data.kra_ndevs++;
-        }
-        
-        if (kranal_data.kra_ndevs == 0) {
-                CERROR("Can't initialise any RapidArray devices\n");
-                goto failed;
+                }
         }
         
         for (i = 0; i < kranal_data.kra_ndevs; i++) {

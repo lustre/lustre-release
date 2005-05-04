@@ -42,14 +42,12 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 }
 
 DECLARE_IOCTL_HANDLER(kportal_ioctl_handler, kportal_ioctl);
-extern struct semaphore ptl_mutex;
 
 static int init_kportals_module(void)
 {
         int rc;
         ENTRY;
 
-        init_mutex(&ptl_mutex);
         rc = PtlInit(NULL);
         if (rc) {
                 CERROR("PtlInit: error %d\n", rc);

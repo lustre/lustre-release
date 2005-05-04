@@ -90,19 +90,52 @@ static int  libcfs_num_str2addr(char *str, int nob, __u32 *addr);
 struct nalstrfns {
         int          nf_nal;
         char        *nf_name;
+        char        *nf_modname;
         void       (*nf_addr2str)(__u32 addr, char *str);
         int        (*nf_str2addr)(char *str, int nob, __u32 *addr);
 };
 
 static struct nalstrfns  libcfs_nalstrfns[] = {
-        {LONAL,     "lo",     libcfs_lo_addr2str,  libcfs_lo_str2addr},
-        {SOCKNAL,   "tcp",    libcfs_ip_addr2str,  libcfs_ip_str2addr},
-        {OPENIBNAL, "openib", libcfs_ip_addr2str,  libcfs_ip_str2addr},
-        {IIBNAL,    "iib",    libcfs_ip_addr2str,  libcfs_ip_str2addr},
-        {VIBNAL,    "vib",    libcfs_ip_addr2str,  libcfs_ip_str2addr},
-        {RANAL,     "ra",     libcfs_ip_addr2str,  libcfs_ip_str2addr},
-        {QSWNAL,    "elan",   libcfs_num_addr2str, libcfs_num_str2addr},
-        {GMNAL,     "gm",     libcfs_num_addr2str, libcfs_num_str2addr},
+        {.nf_nal      = LONAL,     
+         .nf_name     = "lo",         
+         .nf_modname  = "klonal",  
+         .nf_addr2str = libcfs_lo_addr2str,  
+         .nf_str2addr = libcfs_lo_str2addr},
+        {.nf_nal      = SOCKNAL,    
+         .nf_name     = "tcp",     
+         .nf_modname  = "ksocknal",  
+         .nf_addr2str = libcfs_ip_addr2str,  
+         .nf_str2addr = libcfs_ip_str2addr},
+        {.nf_nal      = OPENIBNAL, 
+         .nf_name     = "openib", 
+         .nf_modname  = "kopenibnal",  
+         .nf_addr2str = libcfs_ip_addr2str,  
+         .nf_str2addr = libcfs_ip_str2addr},
+        {.nf_nal      = IIBNAL,    
+         .nf_name     = "iib",       
+         .nf_modname  = "kiibnal",  
+         .nf_addr2str = libcfs_ip_addr2str,  
+         .nf_str2addr = libcfs_ip_str2addr},
+        {.nf_nal      = VIBNAL,    
+         .nf_name     = "vib",       
+         .nf_modname  = "kvibnal",  
+         .nf_addr2str = libcfs_ip_addr2str,  
+         .nf_str2addr = libcfs_ip_str2addr},
+        {.nf_nal      = RANAL,     
+         .nf_name     = "ra",         
+         .nf_modname  = "kranal",  
+         .nf_addr2str = libcfs_ip_addr2str,  
+         .nf_str2addr = libcfs_ip_str2addr},
+        {.nf_nal      = QSWNAL,   
+         .nf_name     = "elan",       
+         .nf_modname  = "kqswnal", 
+         .nf_addr2str = libcfs_num_addr2str, 
+         .nf_str2addr = libcfs_num_str2addr},
+        {.nf_nal      = GMNAL,     
+         .nf_name     = "gm",         
+         .nf_modname  = "kgmnal", 
+         .nf_addr2str = libcfs_num_addr2str, 
+         .nf_str2addr = libcfs_num_str2addr},
 };
 
 const int libcfs_nnalstrfns = sizeof(libcfs_nalstrfns)/sizeof(libcfs_nalstrfns[0]);
@@ -236,6 +269,14 @@ int
 libcfs_isknown_nal(int nal)
 {
         return libcfs_nal2nalstrfns(nal) != NULL;
+}
+
+char *
+libcfs_nal2modname(int nal) 
+{
+        struct nalstrfns *nf = libcfs_nal2nalstrfns(nal);
+
+        return (nf == NULL) ? NULL : nf->nf_modname;
 }
 
 char *
@@ -386,6 +427,12 @@ int
 libcfs_isknown_nal(int nal)
 {
         return 1;
+}
+
+char *
+libcfs_nal2modname(int nal)
+{
+        return "cray";
 }
 
 char *

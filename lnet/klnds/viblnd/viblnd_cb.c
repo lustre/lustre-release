@@ -1179,7 +1179,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
                 resid -= wrknob;
                 if (wrknob < srcfrag->rf_nob) {
                         kibnal_rf_set(srcfrag, 
-                                      kibnal_rf_addr(srcfrag) + resid, 
+                                      kibnal_rf_addr(srcfrag) + wrknob, 
                                       srcfrag->rf_nob - wrknob);
                 } else {
                         srcfrag++;
@@ -1188,7 +1188,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
                 
                 if (wrknob < dstfrag->rf_nob) {
                         kibnal_rf_set(dstfrag,
-                                      kibnal_rf_addr(dstfrag) + resid,
+                                      kibnal_rf_addr(dstfrag) + wrknob,
                                       dstfrag->rf_nob - wrknob);
                 } else {
                         dstfrag++;

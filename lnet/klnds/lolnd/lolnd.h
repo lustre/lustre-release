@@ -54,7 +54,7 @@ typedef struct
         }                klod_iov;
 } klo_desc_t;
 
-ptl_err_t klonal_startup (ptl_ni_t *ni, char **interfaces);
+ptl_err_t klonal_startup (ptl_ni_t *ni);
 void klonal_shutdown (ptl_ni_t *ni);
 ptl_err_t klonal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,

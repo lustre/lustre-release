@@ -372,7 +372,7 @@ ep_free_rcvr(EP_RCVR *r)
 }
 #endif
 
-ptl_err_t kqswnal_startup (ptl_ni_t *ni, char **interfaces);
+ptl_err_t kqswnal_startup (ptl_ni_t *ni);
 void kqswnal_shutdown (ptl_ni_t *ni);
 int kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t kqswnal_send (ptl_ni_t *ni, void *private,

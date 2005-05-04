@@ -200,7 +200,7 @@ PtlMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
         unsigned long flags;
         int           rc;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
@@ -245,7 +245,7 @@ PtlMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
         unsigned long flags;
         int           rc;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
@@ -280,7 +280,7 @@ PtlMDUnlink (ptl_handle_md_t mdh)
         ptl_libmd_t     *md;
         unsigned long    flags;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
@@ -324,7 +324,7 @@ PtlMDUpdate(ptl_handle_md_t mdh,
         unsigned long flags;
         int           rc;
 
-        LASSERT (ptl_init);
+        LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
         PTL_LOCK(flags);

@@ -209,6 +209,7 @@ void portals_debug_dumplog(void);
 
 /* support decl needed both by kernel and liblustre */
 int        libcfs_isknown_nal(int type);
+char      *libcfs_nal2modname(int type);
 char      *libcfs_nal2str(int type);
 int        libcfs_str2nal(char *str);
 char      *libcfs_net2str(__u32 net);
@@ -438,6 +439,8 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 
 
 enum {
+        /* Only add to these values (i.e. don't ever change or redefine them):
+         * network addresses depend on them... */
         LONAL     = 1,
         SOCKNAL   = 2,
         QSWNAL    = 3,

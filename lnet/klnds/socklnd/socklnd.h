@@ -483,7 +483,7 @@ ksocknal_peer_decref (ksock_peer_t *peer)
 }
 
 
-ptl_err_t ksocknal_startup (ptl_ni_t *ni, char **interfaces);
+ptl_err_t ksocknal_startup (ptl_ni_t *ni);
 void ksocknal_shutdown (ptl_ni_t *ni);
 int ksocknal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 ptl_err_t ksocknal_send (ptl_ni_t *ni, void *private,
