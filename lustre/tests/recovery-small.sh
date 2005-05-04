@@ -136,14 +136,14 @@ run_test 9 "pause bulk on OST (bug 1420)"
 
 #bug 1521
 test_10() {
-    do_facet client mcreate $MOUNT/f10        || return 1
-    drop_bl_callback "chmod 0777 $MOUNT/f10"  || return 2
+    do_facet client mcreate $MOUNT/$tfile        || return 1
+    drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
     # wait for the mds to evict the client
     #echo "sleep $(($TIMEOUT*2))"
     #sleep $(($TIMEOUT*2))
-    do_facet client touch  $MOUNT/f10 || echo "touch failed, evicted"
-    do_facet client checkstat -v -p 0777 $MOUNT/f10  || return 3
-    do_facet client "munlink $MOUNT/f10"
+    do_facet client touch $MOUNT/$tfile || echo "touch failed, evicted"
+    do_facet client checkstat -v -p 0777 $MOUNT/$tfile  || return 3
+    do_facet client "munlink $MOUNT/$tfile"
 }
 run_test 10 "finish request on server after client eviction (bug 1521)"
 
@@ -420,6 +420,18 @@ test_26() {      # bug 5921 - evict dead exports
 	return 0
 }
 run_test 26 "evict dead exports"
+
+test_28() {      # bug 6086 - error adding new clients
+	do_facet client mcreate $MOUNT/$tfile        || return 1
+	drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
+	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
+	do_facet mds sysctl -w lustre.fail_loc=0x8000012f
+	# fail once (evicted), reconnect fail (fail_loc), ok
+	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
+	rm -f $MOUNT/$tfile
+	fail mds		# verify MDS last_rcvd can be loaded
+}
+run_test 28 "handle error adding new clients (bug 6086)"
 
 test_50() {     # bug 4834 - failover under load failures
 	mkdir -p $DIR/$tdir

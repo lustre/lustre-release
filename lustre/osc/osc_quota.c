@@ -100,20 +100,19 @@ static struct osc_quota_info *alloc_qinfo(struct client_obd *cli,
 {
         struct osc_quota_info *oqi;
         ENTRY;
-                                                                                                                             
-        OBD_SLAB_ALLOC(oqi, qinfo_cachep, SLAB_KERNEL,
-                       sizeof(*oqi));
+
+        OBD_SLAB_ALLOC(oqi, qinfo_cachep, SLAB_KERNEL, sizeof(*oqi));
         if(!oqi)
                 RETURN(NULL);
-                                                                                                                             
+
         INIT_LIST_HEAD(&oqi->oqi_hash);
         oqi->oqi_cli = cli;
         oqi->oqi_id = id;
         oqi->oqi_type = type;
-                                                                                                                             
+
         RETURN(oqi);
 }
-                                                                                                                             
+
 static void free_qinfo(struct osc_quota_info *oqi)
 {
         OBD_SLAB_FREE(oqi, qinfo_cachep, sizeof(*oqi));

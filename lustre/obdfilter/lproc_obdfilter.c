@@ -369,7 +369,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_pages.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  1 << i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -393,7 +393,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_discont_pages.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -416,7 +416,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_discont_blocks.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -440,7 +440,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_write_rpc_hist.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%u:\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -463,7 +463,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                 unsigned long w = filter->fo_w_io_time.oh_buckets[i];
                 read_cum += r;
                 write_cum += w;
-                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                seq_printf(seq, "%10u:\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                                  1 << i, r, pct(r, read_tot),
                                  pct(read_cum, read_tot), w,
                                  pct(w, write_tot),
@@ -487,12 +487,15 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
 
                 read_cum += r;
                 write_cum += w;
+                if (read_cum == 0 && write_cum == 0)
+                        continue;
+
                 if (i < 10)
-                        seq_printf(seq, "%d", 1<<i);
+                        seq_printf(seq, "%u", 1<<i);
                 else if (i < 20)
-                        seq_printf(seq, "%dK", 1<<(i-10));
+                        seq_printf(seq, "%uK", 1<<(i-10));
                 else
-                        seq_printf(seq, "%dM", 1<<(i-20));
+                        seq_printf(seq, "%uM", 1<<(i-20));
 
                 seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
                            r, pct(r, read_tot), pct(read_cum, read_tot), 

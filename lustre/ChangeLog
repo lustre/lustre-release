@@ -27,6 +27,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- reserve enough journal credits in fsfilt_start_log for setattr (4554)
 	- ldlm_enqueue freed-export error path would always LBUG (6149,6184)
 	- don't reference lr_lvb_data until after we hold lr_lvb_sem (6170)
+	- don't overwrite last_rcvd if there is a *_client_add() error (6068)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)

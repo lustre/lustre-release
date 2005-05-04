@@ -110,10 +110,16 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
         fcd->fcd_last_xid = 0;
 
         off = fed->fed_lr_off;
-        fsfilt_add_journal_cb(exp->exp_obd, last_rcvd, oti->oti_handle,
-                              filter_commit_cb, NULL);
-        err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp, fcd,
-                                  sizeof(*fcd), &off, 0);
+        if (off <= 0) {
+                CERROR("%s: client idx %d is %lld\n", exp->exp_obd->obd_name,
+                       fed->fed_lr_idx, fed->fed_lr_off);
+                err = -EINVAL;
+        } else {
+                fsfilt_add_journal_cb(exp->exp_obd, last_rcvd, oti->oti_handle,
+                                      filter_commit_cb, NULL);
+                err = fsfilt_write_record(exp->exp_obd, filter->fo_rcvd_filp,
+                                          fcd, sizeof(*fcd), &off, 0);
+        }
         if (err) {
                 log_pri = D_ERROR;
                 if (rc == 0)
@@ -148,6 +154,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
         ENTRY;
 
         LASSERT(bitmap != NULL);
+        LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
         /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid))
@@ -161,7 +168,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
         repeat:
                 if (cl_idx >= FILTER_LR_MAX_CLIENTS) {
                         CERROR("no client slots - fix FILTER_LR_MAX_CLIENTS\n");
-                        RETURN(-ENOMEM);
+                        RETURN(-EOVERFLOW);
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
                         cl_idx = find_next_zero_bit(bitmap,
@@ -180,6 +187,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
         fed->fed_lr_idx = cl_idx;
         fed->fed_lr_off = le32_to_cpu(filter->fo_fsd->fsd_client_start) +
                 cl_idx * le16_to_cpu(filter->fo_fsd->fsd_client_size);
+        LASSERTF(fed->fed_lr_off > 0, "fed_lr_off = %llu\n", fed->fed_lr_off);
 
         CDEBUG(D_INFO, "client at index %d (%llu) with UUID '%s' added\n",
                fed->fed_lr_idx, fed->fed_lr_off, fed->fed_fcd->fcd_uuid);
@@ -235,19 +243,24 @@ static int filter_client_free(struct obd_export *exp)
         if (fed->fed_fcd == NULL)
                 RETURN(0);
 
-        if (exp->exp_flags & OBD_OPT_FAILOVER)
-                GOTO(free, 0);
-
         /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid ) == 0)
                 GOTO(free, 0);
+
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
+               fed->fed_lr_idx, off, fed->fed_fcd->fcd_uuid);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
         off = fed->fed_lr_off;
 
-        CDEBUG(D_INFO, "freeing client at idx %u (%lld) with UUID '%s'\n",
-               fed->fed_lr_idx, fed->fed_lr_off, fed->fed_fcd->fcd_uuid);
+        /* Don't clear fed_lr_idx here as it is likely also unset.  At worst
+         * we leak a client slot that will be cleaned on the next recovery. */
+        if (off <= 0) {
+                CERROR("%s: client idx %d has med_off %lld\n",
+                       obd->obd_name, fed->fed_lr_idx, off);
+                GOTO(free, rc = -EINVAL);
+        }
 
         /* Clear the bit _after_ zeroing out the client so we don't
            race with filter_client_add and zero out new clients.*/
@@ -257,21 +270,23 @@ static int filter_client_free(struct obd_export *exp)
                 LBUG();
         }
 
-        memset(&zero_fcd, 0, sizeof zero_fcd);
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
-                                 sizeof(zero_fcd), &off, 0);
+        if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
+                memset(&zero_fcd, 0, sizeof zero_fcd);
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = fsfilt_write_record(obd, filter->fo_rcvd_filp, &zero_fcd,
+                                         sizeof(zero_fcd), &off, 0);
 
-        if (rc == 0)
-                /* update server's transno */
-                filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                          filter->fo_fsd, 1);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                if (rc == 0)
+                        /* update server's transno */
+                        filter_update_server_data(obd, filter->fo_rcvd_filp,
+                                                  filter->fo_fsd, 1);
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-        CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-               "zeroing disconnecting client %s at idx %u (%llu) in %s rc %d\n",
-               fed->fed_fcd->fcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
-               LAST_RCVD, rc);
+                CDEBUG(rc == 0 ? D_INFO : D_ERROR,
+                       "zeroing out client %s at idx %u (%llu) in %s rc %d\n",
+                       fed->fed_fcd->fcd_uuid, fed->fed_lr_idx, fed->fed_lr_off,
+                       LAST_RCVD, rc);
+        }
 
         if (!test_and_clear_bit(fed->fed_lr_idx, filter->fo_last_rcvd_slots)) {
                 CERROR("FILTER client %u: bit already clear in bitmap!!\n",
@@ -279,10 +294,12 @@ static int filter_client_free(struct obd_export *exp)
                 LBUG();
         }
 
+        EXIT;
 free:
         OBD_FREE(fed->fed_fcd, sizeof(*fed->fed_fcd));
+        fed->fed_fcd = NULL;
 
-        RETURN(0);
+        return 0;
 }
 
 static int filter_free_server_data(struct filter_obd *filter)
@@ -475,7 +492,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                        sizeof exp->exp_client_uuid.uuid);
                 fed = &exp->exp_filter_data;
                 fed->fed_fcd = fcd;
-                filter_client_add(obd, filter, fed, cl_idx);
+                rc = filter_client_add(obd, filter, fed, cl_idx);
+                LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
+
                 /* create helper if export init gets more complex */
                 spin_lock_init(&fed->fed_lock);
 
@@ -1431,7 +1450,7 @@ static int filter_cleanup(struct obd_device *obd)
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid, struct obd_connect_data *data)
+                          struct obd_uuid *cluuid,struct obd_connect_data *data)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;

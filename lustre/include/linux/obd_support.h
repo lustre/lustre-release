@@ -91,6 +91,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_OST_SETATTR         0x12c
 #define OBD_FAIL_MDS_QUOTACHECK_NET      0x12d
 #define OBD_FAIL_MDS_QUOTACTL_NET        0x12e
+#define OBD_FAIL_MDS_CLIENT_ADD          0x12f
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

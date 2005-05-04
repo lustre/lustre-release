@@ -295,8 +295,8 @@ cleanup_dentry:
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle, obd_id **ids,
-                              struct llog_cookie **ret_logcookies, 
+                              struct dentry *dchild, void **handle,
+                              obd_id **ids, struct llog_cookie **ret_logcookies,
                               int *setattr_async_flag)
 {
         struct obdo *oa;

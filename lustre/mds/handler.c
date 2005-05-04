@@ -366,7 +366,7 @@ static int mds_destroy_export(struct obd_export *export)
         spin_unlock(&med->med_open_lock);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 out:
-        mds_client_free(export, !(export->exp_flags & OBD_OPT_FAILOVER));
+        mds_client_free(export);
 
         RETURN(rc);
 }

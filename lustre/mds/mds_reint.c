@@ -126,7 +126,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                 }
         }
 
-        off = med->med_off;
+        off = med->med_lr_off;
 
         transno = req->rq_reqmsg->transno;
         if (rc != 0) {
@@ -147,10 +147,15 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         mcd->mcd_last_result = cpu_to_le32(rc);
         mcd->mcd_last_data = cpu_to_le32(op_data);
 
-        fsfilt_add_journal_cb(req->rq_export->exp_obd, transno, handle,
-                              mds_commit_cb, NULL);
-        err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd, sizeof(*mcd),
-                                  &off, 0);
+        if (off <= 0) {
+                CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
+                err = -EINVAL;
+        } else {
+                fsfilt_add_journal_cb(req->rq_export->exp_obd, transno, handle,
+                                      mds_commit_cb, NULL);
+                err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd,
+                                          sizeof(*mcd), &off, 0);
+        }
 
         if (err) {
                 log_pri = D_ERROR;
@@ -160,7 +165,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         DEBUG_REQ(log_pri, req,
                   "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
-                  transno, rc, mcd->mcd_uuid, med->med_idx, err);
+                  transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
 
         err = mds_lov_write_objids(obd);
         if (err) {
@@ -390,7 +395,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 CERROR("Error unpack md %p\n", lmm);
                 GOTO(cleanup, rc);
         }
-        
+
         cleanup_phase = 2;
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
@@ -401,7 +406,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
-                                                                                                                             
+
         /* do setattr from mds to ost asynchronously */
         rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
         if (rc)
@@ -417,7 +422,7 @@ cleanup:
                 if (logcookies)
                         OBD_FREE(logcookies, mds->mds_max_cookiesize);
         }
-                                                                                                                             
+
         RETURN(rc);
 }
 
@@ -484,17 +489,17 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb);
 
-        /* start a log jounal handle if needed*/
+        /* start a log jounal handle if needed */
         if (S_ISREG(inode->i_mode) &&
             rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
                 lmm_size = mds->mds_max_mdsize;
                 OBD_ALLOC(lmm, lmm_size);
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
-                
+
                 cleanup_phase = 2;
                 rc = mds_get_md(obd, inode, lmm, &lmm_size, need_lock);
-                if (rc < 0) 
+                if (rc < 0)
                         GOTO(cleanup, rc);
 
                 handle = fsfilt_start_log(obd, inode, FSFILT_OP_SETATTR, NULL,
@@ -543,20 +548,19 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
 
                 lum = rec->ur_eadata;
-                /* if lmm_stripe_size is -1,  then delete the stripe 
-                        info from the dir */
-                if (S_ISDIR(inode->i_mode) && 
+                /* if lmm_stripe_size is -1 then delete stripe info from dir */
+                if (S_ISDIR(inode->i_mode) &&
                     lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0);
                         if (rc)
                                 GOTO(cleanup, rc);
                 } else {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_osc_exp, 0, 
+                                           mds->mds_osc_exp, 0,
                                            &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(cleanup, rc);
-                        
+
                         obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                         rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
@@ -603,7 +607,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                       mds_cancel_cookies_cb, mlcd);
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         /* do mds to ost setattr if needed */
-        if (!rc && !err && lmm_size) 
+        if (!rc && !err && lmm_size)
                 mds_osc_setattr_async(obd, inode, lmm, lmm_size, logcookies);
 
         switch (cleanup_phase) {
@@ -633,7 +637,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         /* trigger dqrel/dqacq for original owner and new owner */
         if (rec->ur_iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
-                mds_adjust_qunit(obd, rec->ur_iattr.ia_uid, 
+                mds_adjust_qunit(obd, rec->ur_iattr.ia_uid,
                                  rec->ur_iattr.ia_gid, 0, 0, rc);
                 mds_adjust_qunit(obd, child_uid, child_gid, 0, 0, rc);
         }
@@ -846,12 +850,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1);
                         if (rc > 0) {
                                 down(&inode->i_sem);
-                                rc = fsfilt_set_md(obd, inode, handle, 
+                                rc = fsfilt_set_md(obd, inode, handle,
                                                    &lmm, lmm_size);
                                 up(&inode->i_sem);
                         }
                         if (rc)
-                                CERROR("error on copy stripe info: rc = %d\n", 
+                                CERROR("error on copy stripe info: rc = %d\n",
                                         rc);
                 }
 
@@ -907,9 +911,9 @@ cleanup:
                 LBUG();
         }
         req->rq_status = rc;
-        
+
         /* trigger dqacq on the owner of child and parent */
-        mds_adjust_qunit(obd, current->fsuid, current->fsgid, 
+        mds_adjust_qunit(obd, current->fsuid, current->fsgid,
                          parent_uid, parent_gid, rc);
         return 0;
 }
@@ -1402,7 +1406,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         child_gid = child_inode->i_gid;
         parent_uid = dparent->d_inode->i_uid;
         parent_gid = dparent->d_inode->i_gid;
-        
+
         cleanup_phase = 2; /* dchild has a lock */
 
         /* We have to do these checks ourselves, in case we are making an

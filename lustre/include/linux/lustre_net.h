@@ -291,7 +291,7 @@ struct ptlrpc_request {
                 rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1;
-        int rq_phase;
+        int rq_phase; /* one of RQ_PHASE_* */
         atomic_t rq_refcount;   /* client-side refcount for SENT race */
 
         int rq_request_portal;  /* XXX FIXME bug 249 */

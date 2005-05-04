@@ -56,6 +56,9 @@
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset.
+ *
+ * It should not be possible to fail adding an existing client - otherwise
+ * mds_init_server_data() callsite needs to be fixed.
  */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_idx)
@@ -65,6 +68,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         ENTRY;
 
         LASSERT(bitmap != NULL);
+        LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
@@ -76,9 +80,10 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         if (new_client) {
                 cl_idx = find_first_zero_bit(bitmap, MDS_MAX_CLIENTS);
         repeat:
-                if (cl_idx >= MDS_MAX_CLIENTS) {
+                if (cl_idx >= MDS_MAX_CLIENTS ||
+                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
                         CERROR("no room for clients - fix MDS_MAX_CLIENTS\n");
-                        return -ENOMEM;
+                        return -EOVERFLOW;
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
                         cl_idx = find_next_zero_bit(bitmap, MDS_MAX_CLIENTS,
@@ -96,13 +101,14 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
                cl_idx, med->med_mcd->mcd_uuid);
 
-        med->med_idx = cl_idx;
-        med->med_off = le32_to_cpu(mds->mds_server_data->msd_client_start) +
+        med->med_lr_idx = cl_idx;
+        med->med_lr_off = le32_to_cpu(mds->mds_server_data->msd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->msd_client_size));
+        LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
         if (new_client) {
                 struct obd_run_ctxt saved;
-                loff_t off = med->med_off;
+                loff_t off = med->med_lr_off;
                 struct file *file = mds->mds_rcvd_filp;
                 int rc;
 
@@ -114,13 +120,13 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                 if (rc)
                         return rc;
                 CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
-                       med->med_idx, med->med_off,
+                       med->med_lr_idx, med->med_lr_off,
                        (unsigned int)sizeof(*med->med_mcd));
         }
         return 0;
 }
 
-int mds_client_free(struct obd_export *exp, int clear_client)
+int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
@@ -128,47 +134,59 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         struct mds_client_data zero_mcd;
         struct obd_run_ctxt saved;
         int rc;
-        unsigned long *bitmap = mds->mds_client_bitmap;
+        loff_t off;
+        ENTRY;
 
         if (!med->med_mcd)
                 RETURN(0);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
-                GOTO(free_and_out, 0);
+                GOTO(free, 0);
 
-        CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
-               med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
+               med->med_lr_idx, med->med_lr_off, med->med_mcd->mcd_uuid);
 
-        LASSERT(bitmap);
+        LASSERT(mds->mds_client_bitmap != NULL);
+
+        off = med->med_lr_off;
+
+        /* Don't clear med_lr_idx here as it is likely also unset.  At worst
+         * we leak a client slot that will be cleaned on the next recovery. */
+        if (off <= 0) {
+                CERROR("%s: client idx %d has offset %lld\n",
+                        obd->obd_name, med->med_lr_idx, off);
+                GOTO(free, rc = -EINVAL);
+        }
 
         /* Clear the bit _after_ zeroing out the client so we don't
            race with mds_client_add and zero out new clients.*/
-        if (!test_bit(med->med_idx, bitmap)) {
+        if (!test_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
-                       med->med_idx);
+                       med->med_lr_idx);
                 LBUG();
         }
 
-        if (clear_client) {
+        if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
                 memset(&zero_mcd, 0, sizeof zero_mcd);
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
-                                         sizeof(zero_mcd), &med->med_off, 1);
+                                         sizeof(zero_mcd), &off, 1);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
-                       med->med_mcd->mcd_uuid, med->med_idx, LAST_RCVD, rc);
+                       med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }
 
-        if (!test_and_clear_bit(med->med_idx, bitmap)) {
+        if (!test_and_clear_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
-                       med->med_idx);
+                       med->med_lr_idx);
                 LBUG();
         }
 
- free_and_out:
+        EXIT;
+free:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
         med->med_mcd = NULL;
 
@@ -323,7 +341,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        sizeof exp->exp_client_uuid.uuid);
                 med = &exp->exp_mds_data;
                 med->med_mcd = mcd;
-                mds_client_add(obd, mds, med, cl_idx);
+                rc = mds_client_add(obd, mds, med, cl_idx);
+                LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
+
                 /* create helper if export init gets more complex */
                 INIT_LIST_HEAD(&med->med_open_head);
                 spin_lock_init(&med->med_open_lock);
@@ -338,7 +358,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        cl_idx, last_transno);
 
                 if (last_transno > mds->mds_last_transno)
-                       mds->mds_last_transno = last_transno;
+                        mds->mds_last_transno = last_transno;
         }
 
         if (mcd)
