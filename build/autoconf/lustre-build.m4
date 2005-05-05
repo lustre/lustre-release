@@ -492,7 +492,7 @@ LC_CONFIG_FILES
 
 AC_SUBST(ac_configure_args)
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT
