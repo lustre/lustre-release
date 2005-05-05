@@ -52,6 +52,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- introduce a lookup cache for lconf to avoid repeated DB scans (6204)
 	- Vanilla 2.4.29 support
 	- increase maximum number of obd devices to 520 (6242)
+	- remove the tcp-zero-copy patch from the suse-2.4 series (5902)
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
