@@ -345,6 +345,7 @@ typedef struct
         /* Stuff initialised at PtlInit() */
         int               apini_init;           /* PtlInit() called? */
         int               apini_refcount;       /* PtlNIInit/PtlNIFini counter */
+        int               apini_niinit_self;    /* Have I called PtlNIInit myself? */
         
         struct list_head  apini_nals;           /* registered NALs */
 

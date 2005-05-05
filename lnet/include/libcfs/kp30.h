@@ -421,6 +421,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_DEL_ROUTE               _IOWR('e', 53, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_GET_ROUTE               _IOWR('e', 54, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_UNCONFIGURE             _IOWR('e', 56, IOCTL_PORTAL_TYPE)
 /* nal ioctls */
 #define IOC_PORTAL_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)

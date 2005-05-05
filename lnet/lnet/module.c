@@ -27,17 +27,42 @@
 
 static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
+        ptl_err_t          initrc;
         int                rc;
         ptl_handle_ni_t    nih;
 
-        rc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
-                       NULL, NULL, &nih);
-        if (!(rc == PTL_OK || rc == PTL_IFACE_DUP))
+        if (cmd == IOC_PORTAL_UNCONFIGURE) {
+                /* ghastly hack to prevent repeated net config */
+                PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
+                initrc = ptl_apini.apini_niinit_self;
+                ptl_apini.apini_niinit_self = 0;
+                rc = ptl_apini.apini_refcount;
+                PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
+
+                if (initrc) {
+                        rc--;
+                        PtlNIFini((ptl_handle_ni_t){0});
+                }
+                
+                return rc == 0 ? 0 : -EBUSY;
+        }
+        
+        initrc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
+                           NULL, NULL, &nih);
+        if (!(initrc == PTL_OK || initrc == PTL_IFACE_DUP))
                 RETURN (-EINVAL);
 
         rc = PtlNICtl(nih, cmd, data);
 
-        PtlNIFini(nih);
+        if (initrc == PTL_OK) {
+                PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
+                /* I instantiated the network */
+                ptl_apini.apini_niinit_self = 1;
+                PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
+        } else {
+                PtlNIFini(nih);
+        }
+        
         return rc;
 }
 

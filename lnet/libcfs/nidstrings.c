@@ -520,6 +520,7 @@ libcfs_str2anynid(ptl_nid_t *nidp, char *str)
 
 #ifdef __KERNEL__
 EXPORT_SYMBOL(libcfs_isknown_nal);
+EXPORT_SYMBOL(libcfs_nal2modname);
 EXPORT_SYMBOL(libcfs_nal2str);
 EXPORT_SYMBOL(libcfs_str2nal);
 EXPORT_SYMBOL(libcfs_net2str);

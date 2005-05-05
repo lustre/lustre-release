@@ -310,6 +310,23 @@ int jt_ptl_network(int argc, char **argv)
         int                      set = argc >= 2;
         int                      count;
         int                      rc;
+
+        if (set && !strcmp(argv[1], "unconfigure")) {
+                PORTAL_IOC_INIT(data);
+                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
+                
+                if (rc == 0) {
+                        printf ("portals ready to unload\n");
+                        return 0;
+                }
+                
+                if (errno == EBUSY)
+                        fprintf(stderr, "Portals still in use\n");
+                else
+                        fprintf(stderr, "Unconfigure error %d: %s\n",
+                                errno, strerror(errno));
+                return -1;
+        }
         
         if (set) {
                 net = libcfs_str2net(argv[1]);

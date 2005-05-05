@@ -27,6 +27,10 @@ static char *networks = DEFAULT_NETWORKS;
 CFS_MODULE_PARM(networks, "s", charp, 0444,
                 "local networks (default='"DEFAULT_NETWORKS"')");
 
+static int nal_load_timeout = 10;
+CFS_MODULE_PARM(nal_load_timeout, "i", int, 0444,
+                "seconds to wait for a NAL to load");
+
 ptl_apini_t       ptl_apini;                    /* THE network interface (at the API) */
 
 void ptl_assert_wire_constants (void)
@@ -638,9 +642,50 @@ ptl_shutdown_nalnis (void)
 ptl_err_t
 ptl_load_nal (int type)
 {
-        CERROR("Automatic NAL loading not implemented (%s)\n",
-               libcfs_nal2str(type));
-        return PTL_FAIL;
+        /* Called holding api_mutex */
+        static char cmd[256];
+
+        char *envp[] = {
+                "HOME=/",
+                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
+                NULL};
+        char *argv[] = {
+                "/bin/sh",
+                "-c",
+                cmd,
+                NULL};
+        int timeout = nal_load_timeout;
+        int rc;
+
+        snprintf(cmd, sizeof(cmd), "modprobe %s > /dev/console",
+                 libcfs_nal2modname(type));
+        
+        rc = USERMODEHELPER(argv[0], argv, envp);
+        if (rc < 0) {
+                CERROR("Error %d trying '%s' '%s' '%s'\n",
+                       rc, argv[0], argv[1], argv[2]);
+                return PTL_FAIL;
+        }
+
+        do {
+                set_current_state(TASK_UNINTERRUPTIBLE);
+                schedule_timeout(cfs_time_seconds(1));
+                timeout--;
+
+                PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
+                rc = (ptl_find_nal_by_type(type) == NULL) ? PTL_FAIL : PTL_OK;
+                PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
+                
+        } while (rc != PTL_OK && timeout > 0);
+
+        if (rc != PTL_OK) {
+                LCONSOLE_ERROR("Timeout waiting for NAL %s to load\n",
+                               libcfs_nal2str(type));
+                LCONSOLE_ERROR("cmd: \"%s %s '%s'\"\n",
+                               argv[0], argv[1], argv[2]);
+        }
+
+        return rc;
 }
 
 ptl_err_t
@@ -670,7 +715,7 @@ ptl_startup_nalnis (void)
 
                 for (retry = 0;; retry = 1) {
                         nal = ptl_find_nal_by_type(nal_type);
-                        if (nal != NULL)
+                        if (nal != NULL) 
                                 break;
                         
                         PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
@@ -873,35 +918,31 @@ PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
                         break;
                 }
                 PTL_UNLOCK(flags);
-                break;
+                return rc;
 
         case IOC_PORTAL_FAIL_NID:
-                rc = ptl_fail_nid(data->ioc_nid, data->ioc_count);
-                break;
+                return ptl_fail_nid(data->ioc_nid, data->ioc_count);
                 
         case IOC_PORTAL_ADD_ROUTE:
         case IOC_PORTAL_DEL_ROUTE:
         case IOC_PORTAL_GET_ROUTE:
         case IOC_PORTAL_NOTIFY_ROUTER:
-                rc = kpr_ctl(cmd, arg);
-                break;
+                return kpr_ctl(cmd, arg);
 
         default:
                 ni = ptl_net2ni(data->ioc_net);
-                if (ni == NULL) {
-                        rc = -EINVAL;
-                } else {
-                        if (ni->ni_nal->nal_ctl == NULL)
-                                rc = -EINVAL;
-                        else
-                                rc = ni->ni_nal->nal_ctl(ni, cmd, arg);
+                if (ni == NULL)
+                        return -EINVAL;
 
-                        ptl_ni_decref(ni);
-                }
-                break;
+                if (ni->ni_nal->nal_ctl == NULL)
+                        rc = -EINVAL;
+                else
+                        rc = ni->ni_nal->nal_ctl(ni, cmd, arg);
+
+                ptl_ni_decref(ni);
+                return rc;
         }
-        
-        return rc;
+        /* not reached */
 }
 
 ptl_err_t

@@ -53,7 +53,7 @@ ptl_syntax(char *name, char *str, int offset, int width)
         
 	LCONSOLE_ERROR("Error parsing '%s=\"%s\"'\n", name, str);
 	LCONSOLE_ERROR("here...........%.*s..%.*s|%.*s|\n", 
-                       strlen(name), dots, offset, dots,
+                       (int)strlen(name), dots, offset, dots,
                        (width < 1) ? 0 : width - 1, dashes);
 }
 
