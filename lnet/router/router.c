@@ -23,7 +23,7 @@
 
 #include "router.h"
 
-struct kpr_state;
+kpr_state_t kpr_state;
 
 static int forwarding = 0;
 CFS_MODULE_PARM(forwarding, "i", int, 0444,
