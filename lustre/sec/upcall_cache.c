@@ -68,7 +68,7 @@ static void free_entry(struct upcall_cache_entry *entry)
         LASSERT(cache->free_entry);
         LASSERT(atomic_read(&entry->ue_refcount) == 0);
 
-        CDEBUG(D_OTHER, "destroy %s entry %p for key "LPU64"\n",
+        CDEBUG(D_SEC, "destroy %s entry %p for key "LPU64"\n",
                cache->uc_name, entry, entry->ue_key);
 
         list_del(&entry->ue_hash);
@@ -100,14 +100,22 @@ static inline int refresh_entry(struct upcall_cache_entry *entry)
 
 static int check_unlink_entry(struct upcall_cache_entry *entry)
 {
+        /* upcall will be issued upon new entries immediately
+         * after they are created
+         */
+        LASSERT(!UC_CACHE_IS_NEW(entry));
+
         if (UC_CACHE_IS_VALID(entry) &&
             time_before(get_seconds(), entry->ue_expire))
                 return 0;
 
-        if (UC_CACHE_IS_ACQUIRING(entry) &&
-            time_after(get_seconds(), entry->ue_acquire_expire)) {
-                UC_CACHE_SET_EXPIRED(entry);
-                wake_up_all(&entry->ue_waitq);
+        if (UC_CACHE_IS_ACQUIRING(entry)) {
+                if (time_before(get_seconds(), entry->ue_acquire_expire))
+                        return 0;
+                else {
+                        UC_CACHE_SET_EXPIRED(entry);
+                        wake_up_all(&entry->ue_waitq);
+                }
         } else if (!UC_CACHE_IS_INVALID(entry)) {
                 UC_CACHE_SET_EXPIRED(entry);
         }
@@ -313,6 +321,25 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
                 RETURN(-EINVAL);
         }
 
+        if (!UC_CACHE_IS_ACQUIRING(entry)) {
+                if (UC_CACHE_IS_VALID(entry)) {
+                        /* This should not happen, just give a warning
+                         * at this moment.
+                         */
+                        CWARN("entry %p(key "LPU64", ac %ld, ex %ld): "
+                              "already valid???\n", entry, entry->ue_key,
+                              entry->ue_acquire_expire, entry->ue_expire);
+                        GOTO(out, rc = 0);
+                }
+
+                CWARN("stale entry %p: cur %lu, key "LPU64", ref %d, "
+                      "fl %u, ac %ld, ex %ld\n",
+                       entry, get_seconds(), entry->ue_key,
+                       atomic_read(&entry->ue_refcount), entry->ue_flags,
+                       entry->ue_acquire_expire, entry->ue_expire);
+                GOTO(out, rc = -EINVAL);
+        }
+
         if (!UC_CACHE_IS_ACQUIRING(entry) ||
             UC_CACHE_IS_INVALID(entry) ||
             UC_CACHE_IS_EXPIRED(entry)) {
@@ -341,7 +368,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
         }
 
         UC_CACHE_SET_VALID(entry);
-        CDEBUG(D_OTHER, "create ucache entry %p(key "LPU64")\n",
+        CDEBUG(D_SEC, "create ucache entry %p(key "LPU64")\n",
                entry, entry->ue_key);
 out:
         wake_up_all(&entry->ue_waitq);
