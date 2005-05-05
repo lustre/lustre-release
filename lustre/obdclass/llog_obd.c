@@ -68,7 +68,6 @@ int llog_cleanup(struct llog_ctxt *ctxt)
                 rc = CTXTP(ctxt, cleanup)(ctxt);
 
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
-        ctxt->loc_exp = NULL;
         OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);

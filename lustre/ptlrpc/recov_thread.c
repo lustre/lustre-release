@@ -340,6 +340,13 @@ static int log_commit_thread(void *arg)
                         }
                         up(&llcd->llcd_ctxt->loc_sem);
 
+                        if (!import || (import == LP_POISON)) {
+                                CERROR("No import %p (llcd=%p, ctxt=%p)\n",
+                                       import, llcd, llcd->llcd_ctxt);
+                                llcd_put(llcd);
+                                continue;
+                        }
+
                         request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);

@@ -505,7 +505,7 @@ int mds_lov_synchronize(void *data)
         struct obd_device *obd;
         struct obd_uuid *uuid;
         unsigned long flags;
-        int rc;
+        int rc = 0;
 
         lock_kernel();
         ptlrpc_daemonize();
@@ -527,7 +527,7 @@ int mds_lov_synchronize(void *data)
         rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
                           "mds_conn", 0, uuid);
         if (rc != 0)
-                RETURN(rc);
+                GOTO(out, rc);
 
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
@@ -535,7 +535,7 @@ int mds_lov_synchronize(void *data)
         if (rc != 0) {
                 CERROR("%s: failed at llog_origin_connect: %d\n",
                        obd->obd_name, rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         CWARN("MDS %s: %s now active, resetting orphans\n",
@@ -544,10 +544,12 @@ int mds_lov_synchronize(void *data)
         if (rc != 0) {
                 CERROR("%s: failed at mds_lov_clearorphans: %d\n",
                        obd->obd_name, rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
-        RETURN(0);
+out:
+        class_export_put(obd->obd_self_export);
+        RETURN(rc);
 }
 
 int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
@@ -563,6 +565,9 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
 
         mlsi->mlsi_obd = obd;
         mlsi->mlsi_uuid = uuid;
+        
+        /* We need to lock the mds in place for our new thread context. */
+        class_export_get(obd->obd_self_export);
 
         rc = kernel_thread(mds_lov_synchronize, mlsi, CLONE_VM | CLONE_FILES);
         if (rc < 0)

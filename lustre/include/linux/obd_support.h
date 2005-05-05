@@ -143,6 +143,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OSC_LOCK_CP_AST         0x404
 #define OBD_FAIL_OSC_MATCH               0x405
 #define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
+#define OBD_FAIL_OSC_SHUTDOWN            0x407
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

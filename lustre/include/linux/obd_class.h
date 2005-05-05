@@ -285,7 +285,7 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd)
+static inline int obd_precleanup(struct obd_device *obd, int cleanup_stage)
 {
         int rc;
         ENTRY;
@@ -293,7 +293,7 @@ static inline int obd_precleanup(struct obd_device *obd)
         OBD_CHECK_OP(obd, precleanup, 0);
         OBD_COUNTER_INCREMENT(obd, precleanup);
 
-        rc = OBP(obd, precleanup)(obd);
+        rc = OBP(obd, precleanup)(obd, cleanup_stage);
         RETURN(rc);
 }
 

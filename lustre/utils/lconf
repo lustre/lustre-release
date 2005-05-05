@@ -1550,13 +1550,10 @@ class LOV(Module):
             lctl.lov_add_obd(self.name, self.uuid, target_uuid, index, gen)
 
     def cleanup(self):
-        for (osc, index, gen, active) in self.osclist:
-            target_uuid = osc.target_uuid
-            if is_prepared(osc.name):
-                lctl.lov_del_obd(self.name, self.uuid, target_uuid, index, gen)
-            osc.cleanup()
         if is_prepared(self.name):
             Module.cleanup(self)
+        for (osc, index, gen, active) in self.osclist:
+            osc.cleanup()
         if self.config_only:
             panic("Can't clean up config_only LOV ", self.name)
 

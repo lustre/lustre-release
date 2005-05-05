@@ -556,8 +556,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         }
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                DEBUG_REQ(D_ERROR, req, "UUID '%s' not available for connect\n",
-                          str);
+                DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
+                       " for connect (%s)\n", str,
+                       !target ? "no target" : 
+                       (target->obd_stopping ? "stopping" : "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
 
@@ -843,6 +845,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
+        ENTRY;
 
         LASSERT(obd->obd_stopping);
 
@@ -867,6 +870,7 @@ void target_cleanup_recovery(struct obd_device *obd)
                 list_del(&req->rq_list);
                 target_release_saved_req(req);
         }
+        EXIT;
 }
 
 void target_abort_recovery(void *data)
@@ -1407,7 +1411,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         req->rq_status = rc;
         rc = ptlrpc_reply(req);
         
-        RETURN(rc);	
+        RETURN(rc);     
 }
  
 EXPORT_SYMBOL(target_committed_to_req);

@@ -474,7 +474,14 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
-                LASSERT(mod->mod_open_req->rq_type != LI_POISON);
+                if (mod->mod_open_req->rq_type == LI_POISON) {
+                        /* FIXME This should be an ASSERT, but until we
+                           figure out why it can be poisoned here, give 
+                           a reasonable return. */
+                        CERROR("LBUG POISONED req %p!\n", mod->mod_open_req);
+                        ptlrpc_free_req(req);
+                        GOTO(out, rc = -EIO);
+                }
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
@@ -715,10 +722,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_INC_USE_COUNT;
 #else
-	if (!try_module_get(THIS_MODULE)) {
-		CERROR("Can't get module. Is it alive?");
-		return -EINVAL;
-	}
+        if (!try_module_get(THIS_MODULE)) {
+                CERROR("Can't get module. Is it alive?");
+                return -EINVAL;
+        }
 #endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
@@ -754,7 +761,7 @@ out:
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
 #else
-	module_put(THIS_MODULE);
+        module_put(THIS_MODULE);
 #endif
 
         return rc;
@@ -1071,9 +1078,13 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd)
+static int mdc_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
+        ENTRY;
+        
+        if (stage < 2) 
+                RETURN(0);
 
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)

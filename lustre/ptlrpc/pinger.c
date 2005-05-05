@@ -47,7 +47,7 @@ int ptlrpc_ping(struct obd_import *imp)
         req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
                               NULL);
         if (req) {
-                DEBUG_REQ(D_HA, req, "pinging %s->%s",
+                DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
@@ -149,7 +149,7 @@ static int ptlrpc_pinger_main(void *arg)
                         } else {
                                 if (!imp->imp_pingable)
                                         continue;
-                                CDEBUG(D_HA,
+                                CDEBUG(D_INFO,
                                        "don't need to ping %s (%lu > %lu)\n",
                                        imp->imp_target_uuid.uuid,
                                        imp->imp_next_ping, this_ping);
@@ -170,7 +170,7 @@ static int ptlrpc_pinger_main(void *arg)
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-                CDEBUG(D_HA, "next ping in %lu (%lu)\n", time_to_next_ping,
+                CDEBUG(D_INFO, "next ping in %lu (%lu)\n", time_to_next_ping,
                        this_ping + PING_INTERVAL * HZ);
                 if (time_to_next_ping > 0) {
                         lwi = LWI_TIMEOUT(max_t(long, time_to_next_ping, HZ),

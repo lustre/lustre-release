@@ -349,7 +349,7 @@ static int mds_destroy_export(struct obd_export *export)
 
                 /* If you change this message, be sure to update
                  * replay_single:test_46 */
-                CDEBUG(D_INODE, "force closing file handle for %.*s (%s:%lu)\n",
+                CDEBUG(D_INODE|D_IOCTL, "force closing file handle for %.*s (%s:%lu)\n",
                        dentry->d_name.len, dentry->d_name.name,
                        ll_bdevname(dentry->d_inode->i_sb, btmp),
                        dentry->d_inode->i_ino);
@@ -360,7 +360,7 @@ static int mds_destroy_export(struct obd_export *export)
                                    !(export->exp_flags & OBD_OPT_FAILOVER));
 
                 if (rc)
-                        CDEBUG(D_INODE, "Error closing file: %d\n", rc);
+                        CDEBUG(D_INODE|D_IOCTL, "Error closing file: %d\n", rc);
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);
@@ -1852,6 +1852,10 @@ int mds_postrecov(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc, item = 0;
+        ENTRY;
+
+        if (obd->obd_fail) 
+                RETURN(0);
 
         LASSERT(!obd->obd_recovering);
         LASSERT(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT) != NULL);
@@ -1932,16 +1936,22 @@ int mds_lov_clean(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_precleanup(struct obd_device *obd)
+static int mds_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
         ENTRY;
 
-        mds_lov_set_cleanup_flags(obd);
-        target_cleanup_recovery(obd);
-        mds_lov_disconnect(obd);
-        mds_lov_clean(obd);
-        llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+        switch (stage) {
+        case 1:
+                mds_lov_set_cleanup_flags(obd);
+                target_cleanup_recovery(obd);
+                break;
+        case 2:
+                mds_lov_disconnect(obd);
+                mds_lov_clean(obd);
+                llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+                rc = obd_llog_finish(obd, 0);
+        }
         RETURN(rc);
 }
 
@@ -1986,8 +1996,6 @@ static int mds_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-
-        obd_llog_finish(obd, 0);
 
         mntput(mds->mds_vfsmnt);
         mds->mds_sb = NULL;

@@ -1373,10 +1373,19 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         return rc;
 }
 
-static int filter_precleanup(struct obd_device *obd)
+static int filter_precleanup(struct obd_device *obd, int stage)
 {
-        target_cleanup_recovery(obd);
-        return (0);
+        int rc = 0;
+        ENTRY;
+
+        switch(stage) {
+        case 1:                                                         
+                target_cleanup_recovery(obd);
+                break;
+        case 2:                                 
+                rc = obd_llog_finish(obd, 0);
+        }
+        RETURN(rc);
 }
 
 static int filter_cleanup(struct obd_device *obd)
@@ -1430,8 +1439,6 @@ static int filter_cleanup(struct obd_device *obd)
                 must_relock++;
         }
         
-        obd_llog_finish(obd, 0);
-
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;

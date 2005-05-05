@@ -273,7 +273,7 @@ static int import_select_connection(struct obd_import *imp)
 
         /* if not found, simply choose the current one */
         if (!found) {
-                CWARN("%s: continuing with current connection\n",
+                CDEBUG(D_NET, "%s: continuing with current connection\n",
                       imp->imp_obd->obd_name);
                 LASSERT(imp->imp_conn_current);
                 imp_conn = imp->imp_conn_current;
@@ -305,7 +305,7 @@ static int import_select_connection(struct obd_import *imp)
         class_export_put(dlmexp);
 
         imp->imp_conn_current = imp_conn;
-        CDEBUG(D_HA, "%s: import %p using connection %s\n",
+        CDEBUG(D_NET, "%s: import %p using connection %s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
         spin_unlock(&imp->imp_lock);
 

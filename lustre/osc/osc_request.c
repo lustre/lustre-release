@@ -3018,6 +3018,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         char *bufs[1] = {key};
         ENTRY;
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
+
         if (keylen == strlen("next_id") &&
             memcmp(key, "next_id", strlen("next_id")) == 0) {
                 if (vallen != sizeof(obd_id))
@@ -3239,6 +3241,21 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
+static int osc_precleanup(struct obd_device *obd, int stage)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (stage < 2) 
+                RETURN(0);
+
+        rc = obd_llog_finish(obd, 0);
+        if (rc != 0)
+                CERROR("failed to cleanup llogging subsystems\n");
+
+        RETURN(rc);
+}
+
 int osc_cleanup(struct obd_device *obd)
 {
         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
@@ -3258,7 +3275,6 @@ int osc_cleanup(struct obd_device *obd)
 
         rc = client_obd_cleanup(obd);
         ptlrpcd_decref();
-        obd_llog_finish(obd, 0);
         RETURN(rc);
 }
 
@@ -3266,6 +3282,7 @@ int osc_cleanup(struct obd_device *obd)
 struct obd_ops osc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_setup                = osc_setup,
+        .o_precleanup           = osc_precleanup,
         .o_cleanup              = osc_cleanup,
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
