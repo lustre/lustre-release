@@ -272,6 +272,9 @@ tarflags()
 	*.tar.bz2)
 	    echo 'jxf'
 	    ;;
+	*.tar)
+	    echo 'xf'
+	    ;;
 	*)
 	    fatal 1 "tarflags(): Unrecognized tar extension in file: $1"
 	    ;;
