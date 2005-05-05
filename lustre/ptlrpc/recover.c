@@ -318,9 +318,11 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
+                CWARN("setting import %s INACTIVE by administrator request\n",
+                      imp->imp_target_uuid.uuid);
                 ptlrpc_invalidate_import(imp);
                 imp->imp_deactive = 1;
-        } 
+        }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
@@ -341,6 +343,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp);
 
+        imp->imp_deactive = 0;
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 
         RETURN(rc);

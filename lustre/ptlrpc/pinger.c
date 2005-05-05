@@ -115,9 +115,12 @@ static int ptlrpc_pinger_main(void *arg)
                         spin_lock_irqsave(&imp->imp_lock, flags);
                         level = imp->imp_state;
                         force = imp->imp_force_verify;
-                        if (force)
-                                imp->imp_force_verify = 0;
+                        imp->imp_force_verify = 0;
                         spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+                               "level %s/%u force %u deactive %u pingable %u\n",
+                               ptlrpc_import_state_name(level), level,
+                               force, imp->imp_deactive, imp->imp_pingable);
 
                         if (force ||
                             /* if the next ping is within, say, 5 jiffies from
@@ -127,26 +130,26 @@ static int ptlrpc_pinger_main(void *arg)
                                     !imp->imp_deactive) {
                                         /* wait at least a timeout before
                                            trying recovery again. */
-                                        imp->imp_next_ping = jiffies + 
+                                        imp->imp_next_ping = jiffies +
                                                 obd_timeout * HZ;
                                         ptlrpc_initiate_recovery(imp);
-                                }
-                                else if (level != LUSTRE_IMP_FULL ||
+                                } else if (level != LUSTRE_IMP_FULL ||
                                          imp->imp_obd->obd_no_recov) {
-                                        CDEBUG(D_HA,
-                                               "not pinging %s (in recovery "
-                                               "or recovery disabled: %s)\n",
+                                        CDEBUG(D_HA, "not pinging %s "
+                                               "(in recovery: %s or recovery "
+                                               "disabled: %u/%u)\n",
                                                imp->imp_target_uuid.uuid,
-                                               ptlrpc_import_state_name(level));
-                                }
-                                else if (imp->imp_pingable || force) {
+                                               ptlrpc_import_state_name(level),
+                                               imp->imp_deactive,
+                                               imp->imp_obd->obd_no_recov);
+                                } else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
 
                         } else {
-                                if (!imp->imp_pingable) 
+                                if (!imp->imp_pingable)
                                         continue;
-                                CDEBUG(D_HA, 
+                                CDEBUG(D_HA,
                                        "don't need to ping %s (%lu > %lu)\n",
                                        imp->imp_target_uuid.uuid,
                                        imp->imp_next_ping, this_ping);
@@ -162,15 +165,16 @@ static int ptlrpc_pinger_main(void *arg)
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_ping = this_ping + (PING_INTERVAL * HZ) - jiffies;
                 /* The ping sent by ptlrpc_send_rpc may get sent out
-                   say .01 second after this.  
+                   say .01 second after this.
                    ptlrpc_pinger_sending_on_import will then set the
-                   next ping time to next_ping + .01 sec, which means 
+                   next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
                 CDEBUG(D_HA, "next ping in %lu (%lu)\n", time_to_next_ping,
                        this_ping + PING_INTERVAL * HZ);
                 if (time_to_next_ping > 0) {
-                        lwi = LWI_TIMEOUT(time_to_next_ping, NULL, NULL);
+                        lwi = LWI_TIMEOUT(max_t(long, time_to_next_ping, HZ),
+                                          NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
                                      thread->t_flags & (SVC_STOPPING|SVC_EVENT),
                                      &lwi);

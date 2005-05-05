@@ -305,9 +305,8 @@ static int import_select_connection(struct obd_import *imp)
         class_export_put(dlmexp);
 
         imp->imp_conn_current = imp_conn;
-        CWARN("%s: Using connection %s\n",
-               imp->imp_obd->obd_name,
-               imp_conn->oic_uuid.uuid);
+        CDEBUG(D_HA, "%s: import %p using connection %s\n",
+               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
         spin_unlock(&imp->imp_lock);
 
         RETURN(0);
