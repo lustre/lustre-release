@@ -1,0 +1,46 @@
+my_sources =    api-errno.c api-ni.c api-wrap.c \
+		lib-init.c lib-me.c lib-msg.c lib-eq.c \
+		lib-md.c lib-move.c lib-ni.c lib-pid.c
+
+if !CRAY_PORTALS
+
+if LIBLUSTRE
+noinst_LIBRARIES= libportals.a
+libportals_a_SOURCES= $(my_sources)
+libportals_a_CPPFLAGS = $(LLCPPFLAGS)
+libportals_a_CFLAGS = $(LLCFLAGS)
+endif
+
+if MODULES
+
+if LINUX
+modulenet_DATA = portals$(KMODEXT)
+endif # LINUX
+
+if DARWIN
+macos_PROGRAMS := portals
+
+portals_SOURCES := api-errno.c api-ni.c api-wrap.c
+portals_SOURCES += lib-init.c lib-me.c lib-msg.c lib-eq.c lib-md.c
+portals_SOURCES += lib-move.c lib-ni.c lib-pid.c module.c
+
+portals_CFLAGS := $(EXTRA_KCFLAGS)
+portals_LDFLAGS := $(EXTRA_KLDFLAGS)
+portals_LDADD := $(EXTRA_KLIBS)
+
+plist_DATA := Info.plist
+
+install_data_hook := fix-kext-ownership
+
+endif # DARWIN
+
+endif # MODULES
+
+endif # CRAY_PORTALS
+
+install-data-hook: $(install_data_hook)
+
+EXTRA_DIST := Info.plist
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  portals
+DIST_SOURCES = $(portals-objs:%.o=%.c)

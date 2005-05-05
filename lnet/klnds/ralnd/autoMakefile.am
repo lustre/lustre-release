@@ -1,0 +1,15 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if MODULES
+if !CRAY_PORTALS
+if BUILD_RANAL
+modulenet_DATA = kranal$(KMODEXT)
+endif
+endif
+endif
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+DIST_SOURCES = $(kranal-objs:%.o=%.c) ranal.h

@@ -1,0 +1,174 @@
+# lustre.spec
+%define version @VERSION@
+%define kversion @LINUXRELEASE@
+
+Summary: Lustre File System
+Name: lustre
+Version: %{version}
+Release: @RELEASE@
+Copyright: GPL
+Group: Utilities/System
+Source: lustre-%{version}.tar.gz
+URL: http://clusterfs.com/
+BuildRoot: /var/tmp/lustre-%{version}-root
+Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap
+Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}, lustre-ldap = %{version}
+
+%description
+Userspace tools and files for the Lustre file system.
+
+%package modules
+Summary: Kernel Lustre modules for Linux %{kversion}
+Requires: modutils >= 2.4.10
+Group: Development/Kernel
+
+%description modules
+Lustre file system, server and network drivers for Linux %{kversion}.
+
+%package source
+Summary: Object-Based Disk storage driver source
+Group: Development/Kernel
+
+%description source
+Lustre sources for further development
+
+# Since the RPMs we ship are to be used on both SLES and RHEL, we
+# can't include any dependency information (since the package names
+# are different on the two platforms).
+#
+# Instead, we can build these empty meta-packages that only include
+# dependency information.  These let people get the correct
+# dependencies for their platform and lets them use tools like yum and
+# red carpet to install the correct files.
+#
+# Unfortunately I have not seen this come up on the lists much, so I
+# have disabled them (by commenting out their empty files section
+# below) until it's clear that they resolve more confusion than they
+# add.
+
+%package deps-sles
+Summary: Lustre dependencies meta-package for SLES
+Group: Utilities/System
+Provides: lustre-deps = %{version}
+Requires: lustre = %{version}, sles-release, python-xml
+Conflicts: lustre-deps-rhel
+
+%description deps-sles
+This package has RPM dependencies appropriate for SLES systems.
+
+%package deps-rhel
+Summary: Lustre dependencies meta-package for RHEL
+Group: Utilities/System
+Provides: lustre-deps = %{version}
+Requires: lustre = %{version}, redhat-release, PyXML
+Conflicts: lustre-deps-sles
+
+%description deps-rhel
+This package has RPM dependencies appropriate for RHEL, RHL, and FC
+systems.
+
+%prep
+%setup -qn lustre-%{version}
+
+%build
+# if RPM_BUILD_NCPUS unset, set it
+if [ -z "$RPM_BUILD_NCPUS" ] ; then
+    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat 2>/dev/null || echo 0 :)
+    if [ $RPM_BUILD_NCPUS -eq 0 ] ; then
+        RPM_BUILD_NCPUS=1
+    fi
+    if [ $RPM_BUILD_NCPUS -gt 8 ] ; then
+        RPM_BUILD_NCPUS=8
+    fi
+fi
+
+rm -rf $RPM_BUILD_ROOT
+
+# Set an explicit path to our Linux tree, if we can.
+cd $RPM_BUILD_DIR/lustre-%{version}
+./configure @ac_configure_args@ \
+	--sysconfdir=%{_sysconfdir} \
+	--mandir=%{_mandir} \
+	--libdir=%{_libdir}
+make -j $RPM_BUILD_NCPUS -s
+
+%install
+make install DESTDIR=$RPM_BUILD_ROOT
+# hack to avoid changing the libsysio code for "make install"
+rm -f $RPM_BUILD_ROOT%{_libdir}/libsysio.a
+
+# Create the pristine source directory.
+cd $RPM_BUILD_DIR/lustre-%{version}
+mkdir -p $RPM_BUILD_ROOT/usr/src
+rm -f lustre-source
+ln -s $RPM_BUILD_ROOT/usr/src lustre-source
+make distdir distdir=lustre-source/lustre-%{version}
+
+%files
+%attr(-, root, root) /sbin/mount.lustre
+%attr(-, root, root) /usr/sbin/*
+%attr(-, root, root) /usr/bin/*
+%attr(-, root, root) %{_libdir}/lustre/python
+%attr(-, root, root) /usr/share/lustre/examples
+
+%attr(-, root, root) /etc/init.d/lustre
+%attr(-, root, root) /etc/init.d/lustrefs
+
+%attr(-, root, root) %{_libdir}/libptlctl.a
+%attr(-, root, root) %{_libdir}/liblustreapi.a
+%attr(-, root, root) /usr/include/lustre
+%attr(-, root, root) /usr/include/linux/lustre_idl.h
+
+%attr(-, root, root) %{_mandir}/man?/*
+
+%attr(-, root, root) /etc/openldap/slapd-lustre.conf
+%attr(-, root, root) /etc/openldap/schema/lustre.schema
+%attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
+%attr(-, root, root) /usr/share/lustre/top.ldif
+
+%files modules
+%attr(-, root, root) %doc COPYING
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre
+
+%files source
+%attr(-, root, root) /usr/src/lustre-%{version}
+
+# uncomment these lines to enable deps packages
+# %files deps-sles
+# %files deps-rhel
+
+%post
+if [ -f /etc/init.d/lustre ] ; then
+	/sbin/chkconfig --add lustre
+	/sbin/chkconfig --add lustrefs
+fi
+
+%preun
+if [ $1 = 0 -a -f /etc/init.d/lustre ] ; then
+	/sbin/chkconfig --del lustre
+	/sbin/chkconfig --del lustrefs
+fi
+
+%post modules
+if [ ! -e /dev/obd ]; then
+   mknod /dev/obd c 10 241
+fi
+if [ ! -e /dev/portals ]; then
+   mknod /dev/portals c 10 240
+fi
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%postun modules
+if [ -f /boot/System.map-%{kversion} ]; then
+	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
+else
+	depmod -ae %{kversion} || exit 0
+fi
+
+%clean
+rm -rf $RPM_BUILD_ROOT
