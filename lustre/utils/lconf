@@ -3497,7 +3497,7 @@ def sys_set_ptldebug(ptldebug):
     if ptldebug:
         try:
             val = eval(ptldebug, ptldebug_names)
-            val = "0x%x" % (id(val) & 0xffffffffL)
+            val = "0x%x" % (val & 0xffffffffL)
             sysctl('portals/debug', val)
         except NameError, e:
             panic(str(e))
@@ -3508,7 +3508,7 @@ def sys_set_subsystem(subsystem):
     if subsystem:
         try:
             val = eval(subsystem, subsystem_names)
-            val = "0x%x" % (id(val) & 0xffffffffL)
+            val = "0x%x" % (val & 0xffffffffL)
             sysctl('portals/subsystem_debug', val)
         except NameError, e:
             panic(str(e))
