@@ -432,7 +432,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 void *handle;
                 struct inode *inode = obd->u.mds.mds_sb->s_root->d_inode;
                 BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("setting device %s read-only\n",
+                CERROR("*** setting device %s read-only ***\n",
                        ll_bdevname(obd->u.mds.mds_sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
