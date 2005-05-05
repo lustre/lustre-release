@@ -206,14 +206,14 @@ extern kmem_cache_t *ll_async_page_slab;
 extern size_t ll_async_page_slab_size;
 struct ll_async_page {
         int              llap_magic;
-        void            *llap_cookie;
-        struct page     *llap_page;
-        struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
         unsigned int     llap_write_queued:1,
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1;
+        void            *llap_cookie;
+        struct page     *llap_page;
+        struct list_head llap_pending_write;
         struct list_head llap_pglist_item;
         /* user credit information for oss enforcement quota */
         struct obd_ucred llap_ouc;
