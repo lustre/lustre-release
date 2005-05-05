@@ -510,6 +510,7 @@ next:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(qctxt_adjust_qunit);
 
 int
 qctxt_wait_on_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
@@ -541,6 +542,7 @@ next:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(qctxt_wait_on_dqacq);
 
 int
 qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
@@ -564,6 +566,7 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
 
         RETURN(0);
 }
+EXPORT_SYMBOL(qctxt_init);
 
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 {
@@ -586,3 +589,4 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
         spin_unlock(&qunit_hash_lock);
         EXIT;
 }
+EXPORT_SYMBOL(qctxt_cleanup);
