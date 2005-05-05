@@ -775,8 +775,26 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_READ_BYTES,
                             count);
 
-        if (!lsm)
-                RETURN(0);
+        if (!lsm) {
+                /* Read on file with no objects should return zero-filled
+                 * buffers up to file size (we can get non-zero sizes with
+                 * mknod + truncate, then opening file for read. This is a
+                 * common pattern in NFS case, it seems). Bug 6243 */
+                int notzeroed;
+                /* Since there are no objects on OSTs, we have nothing to get
+                 * lock on and so we are forced to access inode->i_size
+                 * unguarded */
+                if (count > inode->i_size - *ppos)
+                        count = inode->i_size - *ppos;
+                /* Make sure to correctly adjust the file pos pointer for
+                 * EFAULT case */
+                notzeroed = clear_user(buf, count);
+                count -= notzeroed;
+                *ppos += count;
+                if (!count)
+                        RETURN(-EFAULT);
+                RETURN(count);
+        }
         
         node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
                                   LCK_PR);

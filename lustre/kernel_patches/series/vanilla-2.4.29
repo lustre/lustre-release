@@ -1,6 +1,7 @@
 uml-patch-2.4.29-1.patch
 uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-export-end_iomem.patch
+uml-exprt-clearuser.patch
 configurable-x86-stack-2.4.20.patch
 configurable-x86_64-2.4.21.patch
 dev_read_only_2.4.20-rh.patch
