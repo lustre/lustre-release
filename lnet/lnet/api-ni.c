@@ -638,56 +638,6 @@ ptl_shutdown_nalnis (void)
         PTL_UNLOCK(flags);
 }
 
-
-ptl_err_t
-ptl_load_nal (int type)
-{
-        /* Called holding api_mutex */
-        static char cmd[256];
-
-        char *envp[] = {
-                "HOME=/",
-                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-                NULL};
-        char *argv[] = {
-                "/bin/sh",
-                "-c",
-                cmd,
-                NULL};
-        int timeout = nal_load_timeout;
-        int rc;
-
-        snprintf(cmd, sizeof(cmd), "modprobe %s > /dev/console",
-                 libcfs_nal2modname(type));
-        
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error %d trying '%s' '%s' '%s'\n",
-                       rc, argv[0], argv[1], argv[2]);
-                return PTL_FAIL;
-        }
-
-        do {
-                set_current_state(TASK_UNINTERRUPTIBLE);
-                schedule_timeout(cfs_time_seconds(1));
-                timeout--;
-
-                PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
-                rc = (ptl_find_nal_by_type(type) == NULL) ? PTL_FAIL : PTL_OK;
-                PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
-                
-        } while (rc != PTL_OK && timeout > 0);
-
-        if (rc != PTL_OK) {
-                LCONSOLE_ERROR("Timeout waiting for NAL %s to load\n",
-                               libcfs_nal2str(type));
-                LCONSOLE_ERROR("cmd: \"%s %s '%s'\"\n",
-                               argv[0], argv[1], argv[2]);
-        }
-
-        return rc;
-}
-
 ptl_err_t
 ptl_startup_nalnis (void)
 {
@@ -726,9 +676,7 @@ ptl_startup_nalnis (void)
                                 goto failed;
                         }
 
-                        rc = ptl_load_nal(nal_type);
-                        if (rc != PTL_OK)
-                                goto failed;
+                        request_module(libcfs_nal2modname(nal_type));
 
                         PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
                 }
