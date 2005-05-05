@@ -431,6 +431,12 @@ class LCTLInterface:
             raise CommandError(self.lctl, out, rc)
         return rc, out
 
+    def unconfigure_network(self):
+        """get portals to unreference itself"""
+        cmds = """
+  network unconfigure"""
+        self.run(cmds)
+  
     def clear_log(self, dev, log):
         """ clear an existing log """
         cmds =  """
@@ -1208,6 +1214,9 @@ class kmod:
             if rc:
                 log('! unable to unload module:', mod)
                 logall(out)
+            if mod == 'ptlrpc' and not config.noexec:
+                # remove any self-ref portals created
+                lctl.unconfigure_network()
 
 # ============================================================
 # Classes to prepare and cleanup the various objects
