@@ -35,7 +35,8 @@ unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 EXPORT_SYMBOL(portal_subsystem_debug);
 
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
-                             D_RPCTRACE | D_VFSTRACE);
+                             D_RPCTRACE | D_VFSTRACE | D_CONFIG | D_IOCTL |
+                             D_CONSOLE);
 EXPORT_SYMBOL(portal_debug);
 
 unsigned int portal_printk;
