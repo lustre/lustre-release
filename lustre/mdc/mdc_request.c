@@ -477,7 +477,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                 if (mod->mod_open_req->rq_type == LI_POISON) {
                         /* FIXME This should be an ASSERT, but until we
                            figure out why it can be poisoned here, give 
-                           a reasonable return. */
+                           a reasonable return. bug 6155 */
                         CERROR("LBUG POISONED req %p!\n", mod->mod_open_req);
                         ptlrpc_free_req(req);
                         GOTO(out, rc = -EIO);
