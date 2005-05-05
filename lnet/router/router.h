@@ -65,16 +65,24 @@ typedef struct
         time_t                  kpru_when;
 } kpr_upcall_t;
 
+typedef struct{
+        struct list_head        kpr_routes;     /* net -> gateways lookup */
+        struct list_head        kpr_gateways;   /* known gateways */
+        unsigned long long      kpr_generation; /* validity stamp */
+        rwlock_t                kpr_rwlock;     /* stabilize */
+
+        atomic_t                kpr_queue_depth; /* packets being forwarded */
+
+        unsigned long long      kpr_fwd_bytes;  /* counters */
+        unsigned long long      kpr_fwd_packets;
+        unsigned long long      kpr_fwd_errors;
+        spinlock_t              kpr_stats_lock; /* serialise */
+        
+} kpr_state_t;
+
+extern kpr_state_t  kpr_state;
+
 extern void kpr_proc_init (void);
 extern void kpr_proc_fini (void);
-
-extern unsigned int       kpr_routes_generation;
-extern unsigned long long kpr_fwd_bytes;
-extern unsigned long      kpr_fwd_packets;
-extern unsigned long      kpr_fwd_errors;
-extern atomic_t           kpr_queue_depth;
-
-extern struct list_head   kpr_routes;
-extern rwlock_t           kpr_rwlock;
 
 #endif /* _KPLROUTER_H */

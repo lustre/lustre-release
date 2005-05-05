@@ -22,220 +22,247 @@
  */
 
 #include "router.h"
+#include <linux/seq_file.h>
 
 #define KPR_PROC_ROUTER "sys/portals/router"
 #define KPR_PROC_ROUTES "sys/portals/routes"
 
-/* Used for multi-page route list book keeping */
-struct proc_route_data {
-        struct list_head *curr;
-        unsigned int generation;
-        off_t skip;
-        rwlock_t proc_route_rwlock;
-} kpr_read_routes_data;
-
-/* nal2name support re-used from utils/portals.c */
-struct name2num {
-        char *name;
-        int   num;
-} nalnames[] = {
-        { "any",         0},
-        { "elan",        QSWNAL},
-        { "tcp",         SOCKNAL},
-        { "gm",          GMNAL},
-        { "ib",          OPENIBNAL},
-        { "iib",         IIBNAL},
-        { "lo",          LONAL},
-        { NULL,          -1}
-};
-
-static struct name2num *name2num_lookup_num(struct name2num *table, int num)
+static int 
+kpr_proc_stats_read (char *page, char **start, off_t off,
+                     int count, int *eof, void *data)
 {
-        while (table->name != NULL)
-                if (num == table->num)
-                        return (table);
-                else
-                        table++;
-        return (NULL);
-}
-
-static char *nal2name(int nal)
-{
-        struct name2num *e = name2num_lookup_num(nalnames, nal);
-        return ((e == NULL) ? "???" : e->name);
-}
-
-
-static int kpr_proc_router_read(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
-{
-        unsigned long long bytes = kpr_fwd_bytes;
-        unsigned long      packets = kpr_fwd_packets;
-        unsigned long      errors = kpr_fwd_errors;
-        unsigned int       qdepth = atomic_read (&kpr_queue_depth);
-        int                len;
-
-        *eof = 1;
-        if (off != 0)
-                return (0);
-
-        len = sprintf(page, "%Ld %ld %ld %d\n", bytes, packets, errors, qdepth);
+        unsigned long long bytes;
+        unsigned long long packets;
+        unsigned long long errors;
+        unsigned int       qdepth;
+        unsigned long      flags;
 
         *start = page;
-        return (len);
+        *eof = 1;
+        if (off != 0)
+                return 0;
+        
+        spin_lock_irqsave(&kpr_state.kpr_stats_lock, flags);
+
+        bytes   = kpr_state.kpr_fwd_bytes;
+        packets = kpr_state.kpr_fwd_packets;
+        errors  = kpr_state.kpr_fwd_errors;
+        qdepth  = atomic_read(&kpr_state.kpr_queue_depth);
+
+        spin_unlock_irqrestore(&kpr_state.kpr_stats_lock, flags);
+
+        return sprintf(page, "%Ld %Ld %Ld %d\n", bytes, packets, errors, qdepth);
 }
 
-static int kpr_proc_router_write(struct file *file, const char *ubuffer,
-                                 unsigned long count, void *data)
+static int 
+kpr_proc_stats_write(struct file *file, const char *ubuffer,
+                     unsigned long count, void *data)
 {
-        /* Ignore what we've been asked to write, and just zero the stats */
-        kpr_fwd_bytes = 0;
-        kpr_fwd_packets = 0;
-        kpr_fwd_errors = 0;
+        unsigned long      flags;
 
+        spin_lock_irqsave(&kpr_state.kpr_stats_lock, flags);
+
+        /* just zero the stats */
+        kpr_state.kpr_fwd_bytes = 0;
+        kpr_state.kpr_fwd_packets = 0;
+        kpr_state.kpr_fwd_errors = 0;
+
+        spin_unlock_irqrestore(&kpr_state.kpr_stats_lock, flags);
         return (count);
 }
 
-static int kpr_proc_routes_read(char *page, char **start, off_t off,
-                                int count, int *eof, void *data)
+typedef struct {
+        unsigned long long   sri_generation;
+        kpr_route_entry_t   *sri_route;
+        loff_t               sri_off;
+} kpr_seq_route_iterator_t;
+
+int
+kpr_seq_routes_seek (kpr_seq_route_iterator_t *sri, loff_t off)
 {
-        struct proc_route_data  *prd = data;
-        kpr_route_entry_t       *re;
-        kpr_gateway_entry_t     *ge;
-        int                     chunk_len = 0;
-        int                     line_len = 0;
-        int                     user_len = 0;
-        int                     rc = 0;
-
-        *eof = 1;
-        *start = page;
-
-        write_lock(&(prd->proc_route_rwlock));
-
-        if (prd->curr == NULL) {
-                if (off != 0)
-                        goto routes_read_exit;
-
-                /* First pass, initialize our private data */
-                prd->curr = kpr_routes.next;
-                prd->generation = kpr_routes_generation;
-                prd->skip = 0;
+        struct list_head  *tmp;
+        int                rc;
+        unsigned long      flags;
+        loff_t             here;
+        
+        read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
+        
+        if (sri->sri_route != NULL &&
+            sri->sri_generation != kpr_state.kpr_generation) {
+                /* tables have changed */
+                rc = -ESTALE;
         } else {
-                /* Abort route list generation change */
-                if (prd->generation != kpr_routes_generation) {
-                        prd->curr = NULL;
-                        rc = sprintf(page, "\nError: Routes Changed\n");
-                        goto routes_read_exit;
+                if (sri->sri_route == NULL || sri->sri_off > off) {
+                        /* search from start */
+                        tmp = kpr_state.kpr_routes.next;
+                        here = 0;
+                } else {
+                        /* continue search */
+                        tmp = &sri->sri_route->kpre_list;
+                        here = sri->sri_off;
                 }
 
-                /* All the routes have been walked */
-                if (prd->curr == &kpr_routes) {
-                        prd->curr = NULL;
-                        goto routes_read_exit;
+                sri->sri_generation = kpr_state.kpr_generation;
+                sri->sri_off        = off;
+                sri->sri_route      = NULL;
+                rc                  = -ENOENT;
+                
+                while (tmp != &kpr_state.kpr_routes) {
+                        if (here == off) {
+                                sri->sri_route =
+                                        list_entry(tmp, kpr_route_entry_t, 
+                                                   kpre_list);
+                                rc = 0;
+                                break;
+                        }
+                        tmp = tmp->next;
+                        here++;
                 }
-        }
-
-        read_lock(&kpr_rwlock);
-        *start = page + prd->skip;
-        user_len = -prd->skip;
-
-        while ((prd->curr != NULL) && (prd->curr != &kpr_routes)) {
-                re = list_entry(prd->curr, kpr_route_entry_t, kpre_list);
-                ge = re->kpre_gateway;
-
-                line_len = sprintf(page + chunk_len, 
-                                   "net %12s: gateway %s %s\n",
-                                   libcfs_net2str(re->kpre_net),
-                                   libcfs_nid2str(ge->kpge_nid),
-                                   ge->kpge_alive ? "up" : "down");
-                chunk_len += line_len;
-                user_len += line_len;
-
-                /* Abort the route list changed */
-                if (prd->curr->next == NULL) {
-                        prd->curr = NULL;
-                        read_unlock(&kpr_rwlock);
-                        rc = sprintf(page, "\nError: Routes Changed\n");
-                        goto routes_read_exit;
-                }
-
-                prd->curr = prd->curr->next;
-
-                /* The route table will exceed one page, break the while loop
-                 * so the function can be re-called with a new page.
-                 */
-                if ((chunk_len > (PAGE_SIZE - 80)) || (user_len > count))
-                        break;
-        }
-
-        *eof = 0;
-
-        /* Caller received only a portion of the last entry, the
-         * remaining will be delivered in the next page if asked for.
-         */
-        if (user_len > count) {
-                prd->curr = prd->curr->prev;
-                prd->skip = line_len - (user_len - count);
-                read_unlock(&kpr_rwlock);
-                rc = count;
-                goto routes_read_exit;
-        }
-
-        /* Not enough data to entirely satify callers request */
-        prd->skip = 0;
-        read_unlock(&kpr_rwlock);
-        rc = user_len;
-
-routes_read_exit:
-        write_unlock(&(prd->proc_route_rwlock));
+        } 
+        
+        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
         return rc;
 }
 
-static int kpr_proc_routes_write(struct file *file, const char *ubuffer,
-                                 unsigned long count, void *data)
+static void *
+kpr_seq_routes_start (struct seq_file *s, loff_t *pos) 
 {
-        /* no-op; lctl should be used to adjust the routes */
-        return (count);
+        kpr_seq_route_iterator_t *sri;
+        unsigned long             flags;
+        int                       rc;
+        
+        PORTAL_ALLOC(sri, sizeof(*sri));
+        if (sri == NULL)
+                return NULL;
+
+        sri->sri_route = NULL;
+        rc = kpr_seq_routes_seek(sri, *pos);
+        if (rc == 0)
+                return sri;
+        
+        PORTAL_FREE(sri, sizeof(*sri));
+        return NULL;
 }
 
-void kpr_proc_init(void)
+static void
+kpr_seq_routes_stop (struct seq_file *s, void *iter)
 {
-        struct proc_dir_entry *router_entry;
-        struct proc_dir_entry *routes_entry;
+        kpr_seq_route_iterator_t  *sri = iter;
+        
+        if (sri != NULL)
+                PORTAL_FREE(sri, sizeof(*sri));
+}
+
+static void *
+kpr_seq_routes_next (struct seq_file *s, void *iter, loff_t *pos)
+{
+        kpr_seq_route_iterator_t *sri = iter;
+        unsigned long             flags;
+        int                       rc;
+        loff_t                    next = *pos + 1;
+
+        rc = kpr_seq_routes_seek(sri, next);
+        if (rc != 0) {
+                PORTAL_FREE(sri, sizeof(*sri));
+                return NULL;
+        }
+        
+        *pos = next;
+        return sri;
+}
+
+static int 
+kpr_seq_routes_show (struct seq_file *s, void *iter)
+{
+        kpr_seq_route_iterator_t *sri = iter;
+        unsigned long             flags;
+        __u32                     net;
+        ptl_nid_t                 nid;
+        int                       alive;
+        int                       stale;
+
+        read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
+
+        LASSERT (sri->sri_route != NULL);
+
+        if (sri->sri_generation != kpr_state.kpr_generation) {
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                return -ESTALE;
+        }
+
+        net = sri->sri_route->kpre_net;
+        nid = sri->sri_route->kpre_gateway->kpge_nid;
+        alive = sri->sri_route->kpre_gateway->kpge_alive;
+
+        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+
+        seq_printf(s, "net %12s: gateway %s %s\n",
+                   libcfs_net2str(net), libcfs_nid2str(nid),
+                   alive ? "up" : "down");
+        return 0;
+}
+
+static struct seq_operations kpr_routes_sops = {
+        .start = kpr_seq_routes_start,
+        .stop  = kpr_seq_routes_stop,
+        .next  = kpr_seq_routes_next,
+        .show  = kpr_seq_routes_show,
+};
+
+static int
+kpr_seq_routes_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file       *sf;
+        int                    rc;
+        
+        rc = seq_open(file, &kpr_routes_sops);
+        if (rc == 0) {
+                sf = file->private_data;
+                sf->private = dp->data;
+        }
+        
+        return rc;
+}
+
+static struct file_operations kpr_routes_fops = {
+        .owner   = THIS_MODULE,
+        .open    = kpr_seq_routes_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+void 
+kpr_proc_init(void)
+{
+        struct proc_dir_entry *stats;
+        struct proc_dir_entry *routes;
 
         /* Initialize KPR_PROC_ROUTER */
-        router_entry = create_proc_entry (KPR_PROC_ROUTER,
-                S_IFREG | S_IRUGO | S_IWUSR, NULL);
-
-        if (router_entry == NULL) {
+        stats = create_proc_entry (KPR_PROC_ROUTER, 0644, NULL);
+        if (stats == NULL) {
                 CERROR("couldn't create proc entry %s\n", KPR_PROC_ROUTER);
                 return;
         }
 
-        router_entry->data = NULL;
-        router_entry->read_proc = kpr_proc_router_read;
-        router_entry->write_proc = kpr_proc_router_write;
+        stats->data = NULL;
+        stats->read_proc = kpr_proc_stats_read;
+        stats->write_proc = kpr_proc_stats_write;
 
         /* Initialize KPR_PROC_ROUTES */
-        routes_entry = create_proc_entry (KPR_PROC_ROUTES,
-                S_IFREG | S_IRUGO | S_IWUSR, NULL);
-
-        if (routes_entry == NULL) {
+        routes = create_proc_entry (KPR_PROC_ROUTES, 0444, NULL);
+        if (routes == NULL) {
                 CERROR("couldn't create proc entry %s\n", KPR_PROC_ROUTES);
                 return;
         }
-
-        kpr_read_routes_data.curr = NULL;
-        kpr_read_routes_data.generation = 0;
-        kpr_read_routes_data.skip = 0;
-        kpr_read_routes_data.proc_route_rwlock = RW_LOCK_UNLOCKED;
-
-        routes_entry->data = &kpr_read_routes_data;
-        routes_entry->read_proc = kpr_proc_routes_read;
-        routes_entry->write_proc = kpr_proc_routes_write;
+        
+        routes->proc_fops = &kpr_routes_fops;
+        routes->data = NULL;
 }
 
-void kpr_proc_fini(void)
+void
+kpr_proc_fini(void)
 {
         remove_proc_entry(KPR_PROC_ROUTER, 0);
         remove_proc_entry(KPR_PROC_ROUTES, 0);

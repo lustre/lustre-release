@@ -364,7 +364,7 @@ ptl_handle2me (ptl_handle_me_t *handle)
 /* Portals Router */
 
 /* NI APIs */
-int       kpr_routing(void);
+int       kpr_forwarding(void);
 ptl_nid_t kpr_lookup(ptl_ni_t **ni, ptl_nid_t nid, int nob);
 void      kpr_fwd_start(ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
 void      kpr_fwd_done(ptl_ni_t *ni, kpr_fwd_desc_t *fwd, int error);
@@ -372,7 +372,8 @@ int       kpr_notify(ptl_ni_t *ni, ptl_nid_t peer, int alive, time_t when);
 
 /* internal APIs */
 int       kpr_ctl(unsigned int cmd, void *arg);
-void      kpr_initialise(void);
+int       kpr_add_route(__u32 net, ptl_nid_t gateway_nid);
+int       kpr_initialise(void);
 void      kpr_finalise(void);
 
 static inline void
@@ -454,5 +455,8 @@ extern void ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd);
 extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
 #endif
+
+extern ptl_err_t ptl_parse_routes (char *route_str);
+extern ptl_err_t ptl_parse_networks (struct list_head *nilist, char *networks);
 
 #endif

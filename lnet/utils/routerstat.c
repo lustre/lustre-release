@@ -22,14 +22,14 @@ do_stat (int fd)
    static char  buffer[1024];
    static double last = 0.0;
    static unsigned long long old_bytes;
-   static unsigned long      old_packets;
-   static unsigned long      old_errors;
+   static unsigned long long old_packets;
+   static unsigned long long old_errors;
    double now;
    double t;
    unsigned long long new_bytes, bytes;
-   unsigned long      new_packets, packets;
-   unsigned long      new_errors, errors;
-   unsigned long      depth;
+   unsigned long long new_packets, packets;
+   unsigned long long new_errors, errors;
+   unsigned long long depth;
    int    n;
    
    lseek (fd, 0, SEEK_SET);
@@ -42,7 +42,7 @@ do_stat (int fd)
    }	 
    buffer[n] = 0;
    
-   n = sscanf (buffer, "%Lu %lu %lu %lu",
+   n = sscanf (buffer, "%Lu %Lu %Lu %Lu",
 	       &new_bytes, &new_packets, &new_errors, &depth);
    
    if (n < 3)
@@ -52,9 +52,9 @@ do_stat (int fd)
    }
    
    if (last == 0.0)
-      printf ("%llu bytes, %lu packets (sz %lld), %lu errors", 
+      printf ("%llu bytes, %llu packets (sz %lld), %llu errors", 
 	      new_bytes, new_packets,
-	      (long long)((new_packets == 0) ? 0LL : new_bytes/new_packets),
+	      ((new_packets == 0) ? 0LL : new_bytes/new_packets),
 	      new_errors);
    else
    {
@@ -64,26 +64,28 @@ do_stat (int fd)
 	  bytes = -1ULL - old_bytes + new_bytes + 1;
       else
 	  bytes = new_bytes - old_bytes;
+
       if (new_packets < old_packets)
 	  packets = -1UL - old_packets + new_packets + 1;
       else
 	  packets = new_packets - old_packets;
+
       if (new_errors < old_errors)
 	  errors = -1UL - old_errors + new_errors + 1;
       else
 	  errors = new_errors - old_errors;
       
-      printf ("%9llu bytes (%7.2fMb/s), %7lu packets (sz %5lld, %5ld/s), %lu errors (%ld/s)", 
+      printf ("%9llu bytes (%7.2fMb/s), %7llu packets (sz %5lld, %5lld/s), %llu errors (%lld/s)", 
 	      bytes, ((double)bytes)/((1<<20) * t),
-	      packets, (long long)((packets == 0) ? 0LL : bytes/packets), (long)(packets/t),
-	      errors, (long)(errors/t));
+	      packets, (packets == 0) ? 0LL : bytes/packets, packets/t,
+	      errors, errors/t);
    }
    old_bytes = new_bytes;
    old_packets = new_packets;
    old_errors = new_errors;
 
    if (n == 4)
-      printf (", depth (%ld)\n", depth);
+      printf (", depth (%lld)\n", depth);
    else
       printf ("\n");
 

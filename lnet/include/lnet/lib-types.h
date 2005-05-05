@@ -368,9 +368,6 @@ typedef struct
         ptl_pid_t         apini_pid;            /* requested pid */
         ptl_ni_limits_t   apini_actual_limits;
 
-        char             *apini_net_tokens;     /* tokenized 'networks' */
-        int               apini_net_tokens_nob;
-
         struct list_head  apini_nis;            /* NAL instances */
         struct list_head  apini_zombie_nis;     /* dying NAL instances */
         int               apini_nzombie_nis;    /* # of NIS to wait for */

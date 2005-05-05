@@ -51,8 +51,8 @@ ksocknal_set_mynid(ptl_nid_t nid)
          * are coming from.  This is not a very graceful solution to this
          * problem. */
 
-        CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->ni_nid);
+        CDEBUG(D_IOCTL, "setting mynid to %s (old nid=%s)\n",
+               libcfs_nid2str(nid), libcfs_nid2str(ni->ni_nid));
 
         LASSERT (PTL_NIDNET(nid) == PTL_NIDNET(ni->ni_nid));
         ni->ni_nid = nid;
@@ -139,7 +139,8 @@ ksocknal_create_peer (ptl_nid_t nid)
 void
 ksocknal_destroy_peer (ksock_peer_t *peer)
 {
-        CDEBUG (D_NET, "peer "LPX64" %p deleted\n", peer->ksnp_nid, peer);
+        CDEBUG (D_NET, "peer %s %p deleted\n", 
+                libcfs_nid2str(peer->ksnp_nid), peer);
 
         LASSERT (atomic_read (&peer->ksnp_refcount) == 0);
         LASSERT (list_empty (&peer->ksnp_conns));
@@ -171,8 +172,9 @@ ksocknal_find_peer_locked (ptl_nid_t nid)
                 if (peer->ksnp_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read (&peer->ksnp_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid), 
+                       atomic_read(&peer->ksnp_refcount));
                 return (peer);
         }
         return (NULL);
@@ -299,14 +301,14 @@ ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
         if (route->ksnr_myipaddr != conn->ksnc_myipaddr) {
                 if (route->ksnr_myipaddr == 0) {
                         /* route wasn't bound locally yet (the initial route) */
-                        CWARN("Binding "LPX64" %u.%u.%u.%u to %u.%u.%u.%u\n",
-                              peer->ksnp_nid,
+                        CWARN("Binding %s %u.%u.%u.%u to %u.%u.%u.%u\n",
+                              libcfs_nid2str(peer->ksnp_nid),
                               HIPQUAD(route->ksnr_ipaddr),
                               HIPQUAD(conn->ksnc_myipaddr));
                 } else {
-                        CWARN("Rebinding "LPX64" %u.%u.%u.%u from "
+                        CWARN("Rebinding %s %u.%u.%u.%u from "
                               "%u.%u.%u.%u to %u.%u.%u.%u\n",
-                              peer->ksnp_nid,
+                              libcfs_nid2str(peer->ksnp_nid),
                               HIPQUAD(route->ksnr_ipaddr),
                               HIPQUAD(route->ksnr_myipaddr),
                               HIPQUAD(conn->ksnc_myipaddr));
@@ -348,8 +350,9 @@ ksocknal_add_route_locked (ksock_peer_t *peer, ksock_route_t *route)
                 route2 = list_entry(tmp, ksock_route_t, ksnr_list);
 
                 if (route2->ksnr_ipaddr == route->ksnr_ipaddr) {
-                        CERROR ("Duplicate route "LPX64" %u.%u.%u.%u\n",
-                                peer->ksnp_nid, HIPQUAD(route->ksnr_ipaddr));
+                        CERROR ("Duplicate route %s %u.%u.%u.%u\n",
+                                libcfs_nid2str(peer->ksnp_nid), 
+                                HIPQUAD(route->ksnr_ipaddr));
                         LBUG();
                 }
         }
@@ -1136,8 +1139,8 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
          * code below probably isn't going to work. */
         if (route != NULL &&
             route->ksnr_ipaddr != conn->ksnc_ipaddr) {
-                CERROR("Route "LPX64" %u.%u.%u.%u connected to %u.%u.%u.%u\n",
-                       peer->ksnp_nid,
+                CERROR("Route %s %u.%u.%u.%u connected to %u.%u.%u.%u\n",
+                       libcfs_nid2str(peer->ksnp_nid),
                        HIPQUAD(route->ksnr_ipaddr),
                        HIPQUAD(conn->ksnc_ipaddr));
         }
@@ -1189,8 +1192,8 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
 
         rc = ksocknal_close_stale_conns_locked(peer, incarnation);
         if (rc != 0)
-                CERROR ("Closed %d stale conns to nid "LPX64" ip %d.%d.%d.%d\n",
-                        rc, conn->ksnc_peer->ksnp_nid,
+                CERROR ("Closed %d stale conns to nid %s ip %d.%d.%d.%d\n",
+                        rc, libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
                         HIPQUAD(conn->ksnc_ipaddr));
 
         write_unlock_irqrestore (global_lock, flags);
@@ -1203,9 +1206,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_connsock_decref(conn);
         }
 
-        CWARN("New conn nid:"LPX64" %u.%u.%u.%u -> %u.%u.%u.%u/%d"
-              " incarnation:"LPX64" sched[%d]/%d\n",
-              nid, HIPQUAD(conn->ksnc_myipaddr),
+        CWARN("New conn %s %u.%u.%u.%u -> %u.%u.%u.%u/%d"
+              " incarnation:"LPD64" sched[%d]/%d\n",
+              libcfs_nid2str(nid), HIPQUAD(conn->ksnc_myipaddr),
               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
 
@@ -1399,9 +1402,9 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_BODY:
-                CERROR("Completing partial receive from "LPX64
+                CERROR("Completing partial receive from %s"
                        ", ip %d.%d.%d.%d:%d, with error\n",
-                       conn->ksnc_peer->ksnp_nid,
+                       libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
                        HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
                 ptl_finalize (ksocknal_data.ksnd_ni, NULL, 
                               conn->ksnc_cookie, PTL_FAIL);
@@ -1459,9 +1462,10 @@ ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation)
                 if (conn->ksnc_incarnation == incarnation)
                         continue;
 
-                CWARN("Closing stale conn nid:"LPX64" ip:%08x/%d "
-                      "incarnation:"LPX64"("LPX64")\n",
-                      peer->ksnp_nid, conn->ksnc_ipaddr, conn->ksnc_port,
+                CWARN("Closing stale conn %s ip:%08x/%d "
+                      "incarnation:"LPD64"("LPD64")\n",
+                      libcfs_nid2str(peer->ksnp_nid), 
+                      conn->ksnc_ipaddr, conn->ksnc_port,
                       conn->ksnc_incarnation, incarnation);
 
                 count++;
@@ -1536,7 +1540,8 @@ ksocknal_notify (ptl_ni_t *ni, ptl_nid_t gw_nid, int alive)
         /* The router is telling me she's been notified of a change in
          * gateway state.... */
 
-        CDEBUG (D_NET, "gw "LPX64" %s\n", gw_nid, alive ? "up" : "down");
+        CDEBUG (D_NET, "gw %s %s\n", libcfs_nid2str(gw_nid), 
+                alive ? "up" : "down");
 
         if (!alive) {
                 /* If the gateway crashed, close all open connections... */
@@ -2166,8 +2171,8 @@ ksocknal_startup (ptl_ni_t *ni)
                 return (rc);
         }
 
-        if (kpr_routing()) {
-                /* Only allocate forwarding buffers if there's a router */
+        if (kpr_forwarding()) {
+                /* Only allocate forwarding buffers if we're a gateway */
 
                 for (i = 0; i < (SOCKNAL_SMALL_FWD_NMSGS +
                                  SOCKNAL_LARGE_FWD_NMSGS); i++) {
@@ -2215,7 +2220,7 @@ ksocknal_startup (ptl_ni_t *ni)
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
         printk(KERN_INFO "Lustre: Routing socket NAL loaded "
-               "(initial mem %d, incarnation "LPX64")\n",
+               "(initial mem %d, incarnation "LPD64")\n",
                pkmem, ksocknal_data.ksnd_incarnation);
         
         return (0);

@@ -88,7 +88,7 @@ kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, int niov, ptl_kiov_
                                                  kqswnal_nid2elanid(ktx->ktx_nid));
         rail = ktx->ktx_rail;
         if (rail < 0) {
-                CERROR("No rails available for "LPX64"\n", ktx->ktx_nid);
+                CERROR("No rails available for %s\n", libcfs_nid2str(ktx->ktx_nid));
                 return (-ENETDOWN);
         }
         railmask = 1 << rail;
@@ -209,7 +209,7 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
                                                  kqswnal_nid2elanid(ktx->ktx_nid));
         rail = ktx->ktx_rail;
         if (rail < 0) {
-                CERROR("No rails available for "LPX64"\n", ktx->ktx_nid);
+                CERROR("No rails available for %s\n", libcfs_nid2str(ktx->ktx_nid));
                 return (-ENETDOWN);
         }
         railmask = 1 << rail;
@@ -466,8 +466,8 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 
         if (status != EP_SUCCESS) {
 
-                CERROR ("Tx completion to "LPX64" failed: %d\n", 
-                        ktx->ktx_nid, status);
+                CERROR ("Tx completion to %s failed: %d\n", 
+                        libcfs_nid2str(ktx->ktx_nid), status);
 
                 kqswnal_notify_peer_down(ktx);
                 status = -EHOSTDOWN;
@@ -565,7 +565,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 return (0);
 
         default: /* fatal error */
-                CERROR ("Tx to "LPX64" failed: %d\n", ktx->ktx_nid, rc);
+                CERROR ("Tx to %s failed: %d\n", libcfs_nid2str(ktx->ktx_nid), rc);
                 kqswnal_notify_peer_down(ktx);
                 return (-EHOSTUNREACH);
         }
@@ -744,13 +744,13 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, ptl_nid_t expected_nid)
 
         if (hdr->type != type) {
                 CERROR ("Unexpected optimized get/put type %d (%d expected)"
-                        "from "LPX64"\n", hdr->type, type, nid);
+                        "from %s\n", hdr->type, type, libcfs_nid2str(nid));
                 return (NULL);
         }
         
         if (hdr->src_nid != nid) {
-                CERROR ("Unexpected optimized get/put source NID "
-                        LPX64" from "LPX64"\n", hdr->src_nid, nid);
+                CERROR ("Unexpected optimized get/put source NID %s from %s\n",
+                        libcfs_nid2str(hdr->src_nid), libcfs_nid2str(nid));
                 return (NULL);
         }
 
@@ -879,8 +879,8 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
            actually sending a portals message with it */
         ktx = kqswnal_get_idle_tx(NULL, 0);
         if (ktx == NULL) {
-                CERROR ("Can't get txd for RDMA with "LPX64"\n",
-                        ptlmsg->msg_ev.initiator.nid);
+                CERROR ("Can't get txd for RDMA with %s\n",
+                        libcfs_nid2str(ptlmsg->msg_ev.initiator.nid));
                 return (-ENOMEM);
         }
 
@@ -1305,8 +1305,8 @@ kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         LBUG ();
 #endif
         /* The router wants this NAL to forward a packet */
-        CDEBUG (D_NET, "forwarding [%p] to "LPX64", payload: %d frags %d bytes\n",
-                fwd, nid, niov, nob);
+        CDEBUG (D_NET, "forwarding [%p] to %s, payload: %d frags %d bytes\n",
+                fwd, libcfs_nid2str(nid), niov, nob);
 
         ktx = kqswnal_get_idle_tx (fwd, 0);
         if (ktx == NULL)        /* can't get txd right now */
@@ -1326,7 +1326,8 @@ kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         ktx->ktx_nfrag   = ktx->ktx_firsttmpfrag = 1;
 
         if (kqswnal_nid2elanid (nid) < 0) {
-                CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
+                CERROR("Can't forward [%p] to %s: not a peer\n", 
+                       fwd, libcfs_nid2str(nid));
                 rc = -EHOSTUNREACH;
                 goto out;
         }
@@ -1363,7 +1364,8 @@ kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         rc = kqswnal_launch (ktx);
  out:
         if (rc != 0) {
-                CERROR ("Failed to forward [%p] to "LPX64": %d\n", fwd, nid, rc);
+                CERROR ("Failed to forward [%p] to %s: %d\n", 
+                        fwd, libcfs_nid2str(nid), rc);
 
                 /* complete now (with failure) */
                 kqswnal_tx_done (ktx, rc);
@@ -1383,8 +1385,9 @@ kqswnal_fwd_callback (ptl_ni_t *ni, void *arg, int error)
         {
                 ptl_hdr_t *hdr = (ptl_hdr_t *)page_address (krx->krx_kiov[0].kiov_page);
 
-                CERROR("Failed to route packet from "LPX64" to "LPX64": %d\n",
-                       le64_to_cpu(hdr->src_nid), le64_to_cpu(hdr->dest_nid),error);
+                CERROR("Failed to route packet from %s to %s: %d\n",
+                       libcfs_nid2str(le64_to_cpu(hdr->src_nid)), 
+                       libcfs_nid2str(le64_to_cpu(hdr->dest_nid)), error);
         }
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
@@ -1512,8 +1515,9 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         if (kqswnal_nid2elanid (dest_nid) >= 0)  /* should have gone direct to peer */
         {
-                CERROR("dropping packet from "LPX64" for "LPX64
-                       ": target is peer\n", le64_to_cpu(hdr->src_nid), dest_nid);
+                CERROR("dropping packet from %s for %s: target is peer\n", 
+                       libcfs_nid2str(le64_to_cpu(hdr->src_nid)), 
+                       libcfs_nid2str(dest_nid));
 
                 kqswnal_rx_decref (krx);
                 return;
@@ -1610,10 +1614,11 @@ kqswnal_csum_error (kqswnal_rx_t *krx, int ishdr)
 {
         ptl_hdr_t *hdr = (ptl_hdr_t *)page_address (krx->krx_kiov[0].kiov_page);
 
-        CERROR ("%s checksum mismatch %p: dnid "LPX64", snid "LPX64
-                ", dpid %d, spid %d, type %d\n",
+        CERROR ("%s checksum mismatch %p: dnid %s, snid %s, "
+                "dpid %d, spid %d, type %d\n",
                 ishdr ? "Header" : "Payload", krx,
-                le64_to_cpu(hdr->dest_nid), le64_to_cpu(hdr->src_nid)
+                libcfs_nid2str(le64_to_cpu(hdr->dest_nid)), 
+                libcfs_nid2str(le64_to_cpu(hdr->src_nid)),
                 le32_to_cpu(hdr->dest_pid), le32_to_cpu(hdr->src_pid),
                 le32_to_cpu(hdr->type));
 
@@ -1920,8 +1925,8 @@ kqswnal_scheduler (void *arg)
 
                         rc = kqswnal_launch (ktx);
                         if (rc != 0) {
-                                CERROR("Failed delayed transmit to "LPX64
-                                       ": %d\n", ktx->ktx_nid, rc);
+                                CERROR("Failed delayed transmit to %s: %d\n", 
+                                       libcfs_nid2str(ktx->ktx_nid), rc);
                                 kqswnal_tx_done (ktx, rc);
                         }
                         atomic_dec (&kqswnal_data.kqn_pending_txs);

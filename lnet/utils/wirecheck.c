@@ -181,8 +181,8 @@ system_string (char *cmdline, char *str, int len)
 int
 main (int argc, char **argv)
 {
-        char unameinfo[80];
-        char gccinfo[80];
+        char unameinfo[256];
+        char gccinfo[256];
 
         system_string("uname -a", unameinfo, sizeof(unameinfo));
         system_string("gcc -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
