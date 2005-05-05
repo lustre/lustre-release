@@ -84,25 +84,25 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
 
         /* 64 KB is the largest common page size I'm aware of (on ia64), but
          * check the local page size just in case. */
-        page_size = 65536;
+        page_size = LOV_MIN_STRIPE_SIZE;
         if (getpagesize() > page_size) {
                 page_size = getpagesize();
-                fprintf(stderr, "WARNING: your page size (%d) is larger than "
-                        "expected.\n", page_size);
+                fprintf(stderr, "WARNING: your page size (%u) is larger than "
+                        "expected (%u).\n", page_size, LOV_MIN_STRIPE_SIZE);
         }
-        if ((stripe_size < 0 || stripe_size % 65536) &&
+        if ((stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) &&
             !(isdir && stripe_size == -1)) {
                 rc = -EINVAL;
                 err_msg("error: stripe_size must be an even "
                         "multiple of %d bytes.\n", page_size);
                 goto out;
         }
-        if (stripe_offset < -1 || stripe_offset > 65534) {
+        if (stripe_offset < -1 || stripe_offset > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe offset %d\n", stripe_offset);
                 goto out;
         }
-        if (stripe_count < -1 || stripe_count > 65534) {
+        if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe count %d\n", stripe_count);
                 goto out;

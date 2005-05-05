@@ -734,7 +734,8 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
  *  LOV data structures
  */
 
-#define LOV_MIN_STRIPE_SIZE 65536UL /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_SIZE 65536   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MAX_STRIPE_COUNT  160   /* until bug 4424 is fixed */
 
 #define LOV_MAX_UUID_BUFFER_SIZE  8192
 /* The size of the buffer the lov/mdc reserves for the

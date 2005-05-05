@@ -393,7 +393,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 
                 desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
         } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                CWARN("default_stripe_size "LPU64" isn't a multiple of %lu\n",
+                CWARN("default_stripe_size "LPU64" isn't a multiple of %u\n",
                       desc->ld_default_stripe_size, LOV_MIN_STRIPE_SIZE);
                 CWARN("Please update config and run --write-conf on MDS\n");
 

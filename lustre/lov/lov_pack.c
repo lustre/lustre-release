@@ -141,6 +141,11 @@ int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
         if (!stripe_count || stripe_count > lov->desc.ld_active_tgt_count)
                 stripe_count = lov->desc.ld_active_tgt_count;
+        /* for now, we limit the stripe count directly, when bug 4424 is
+         * fixed this needs to be somewhat dynamic based on whether ext3
+         * can handle larger EA sizes. */
+        if (stripe_count > LOV_MAX_STRIPE_COUNT)
+                stripe_count = LOV_MAX_STRIPE_COUNT;
 
         return stripe_count;
 }
@@ -368,7 +373,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         /* 64kB is the largest common page size we see (ia64), and matches the
          * check in lfs */
         if (lum.lmm_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                CDEBUG(D_IOCTL, "stripe size %u not multiple of %lu, fixing\n",
+                CDEBUG(D_IOCTL, "stripe size %u not multiple of %u, fixing\n",
                        lum.lmm_stripe_size, LOV_MIN_STRIPE_SIZE);
                 lum.lmm_stripe_size = LOV_MIN_STRIPE_SIZE;
         }
