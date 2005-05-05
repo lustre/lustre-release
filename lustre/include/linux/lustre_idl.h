@@ -197,6 +197,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 //#define MSG_CONNECT_PEER        0x8
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
+#define MSG_CONNECT_ASYNC       0x40
 
 /* Connect flags */
 
