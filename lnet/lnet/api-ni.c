@@ -636,6 +636,10 @@ ptl_shutdown_nalnis (void)
                 ptl_apini.apini_nzombie_nis--;
         }
         PTL_UNLOCK(flags);
+
+        LASSERT (ptl_apini.apini_network_tokens != NULL);
+        PORTAL_FREE(ptl_apini.apini_network_tokens,
+                    ptl_apini.apini_network_tokens_nob);
 }
 
 ptl_err_t
@@ -652,8 +656,8 @@ ptl_startup_nalnis (void)
 
         INIT_LIST_HEAD(&nilist);
         rc = ptl_parse_networks(&nilist, networks);
-        if (rc != PTL_OK)
-                return rc;
+        if (rc != PTL_OK) 
+                goto failed;
         
         while (!list_empty(&nilist)) {
                 ni = list_entry(nilist.next, ptl_ni_t, ni_list);

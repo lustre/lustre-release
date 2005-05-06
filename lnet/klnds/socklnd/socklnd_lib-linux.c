@@ -948,6 +948,189 @@ ksocknal_lib_connect_sock(struct socket **sockp, int *fatal,
         return rc;
 }
 
+int
+ksocknal_lib_getifaddr(struct socket *sock, char *name, __u32 *ip, __u32 *mask)
+{
+	mm_segment_t   oldmm = get_fs();
+	struct ifreq   ifr;
+	int            rc;
+	__u32          val;
+
+	LASSERT (strnlen(name, IFNAMSIZ) < IFNAMSIZ);
+	
+	strcpy(ifr.ifr_name, name);
+	ifr.ifr_addr.sa_family = AF_INET;
+	set_fs(KERNEL_DS);
+	rc = sock->ops->ioctl(sock, SIOCGIFADDR, (unsigned long)&ifr);
+	set_fs(oldmm);
+
+	if (rc != 0)
+		return rc;
+
+	val = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
+	*ip = ntohl(val);
+
+	strcpy(ifr.ifr_name, name);
+	ifr.ifr_addr.sa_family = AF_INET;
+	set_fs(KERNEL_DS);
+	rc = sock->ops->ioctl(sock, SIOCGIFNETMASK, (unsigned long)&ifr);
+	set_fs(oldmm);
+	
+	if (rc != 0)
+		return rc;
+	
+	val = ((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr.s_addr;
+	*mask = ntohl(val);
+	return 0;
+}
+
+int
+ksocknal_lib_init_if (ksock_interface_t *iface, char *name)
+{
+	struct socket  *sock;
+	int             rc;
+	int             nob;
+
+	rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
+	if (rc != 0) {
+		CERROR ("Can't create socket: %d\n", rc);
+		return rc;
+	}
+	
+	nob = strnlen(name, IFNAMSIZ);
+	if (nob == IFNAMSIZ) {
+		CERROR("Interface name %s too long\n", name);
+		rc -EINVAL;
+	} else {
+		CLASSERT (sizeof(iface->ksni_name) >= IFNAMSIZ);
+		strcpy(iface->ksni_name, name);
+
+		rc = ksocknal_lib_getifaddr(sock, name,
+					    &iface->ksni_ipaddr,
+					    &iface->ksni_netmask);
+		if (rc != 0)
+			CERROR("Can't get IP address for interface %s\n", name);
+	}
+
+	sock_release(sock);
+	return rc;
+}
+
+int
+ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs)
+{
+	int             nalloc = PTL_MAX_INTERFACES;
+	char            name[IFNAMSIZ];
+	int             nfound;
+	int             nused;
+	struct socket  *sock;
+	struct ifconf   ifc;
+	struct ifreq   *ifr;
+	mm_segment_t    oldmm = get_fs();
+	__u32           ipaddr;
+	__u32           netmask;
+	int             rc;
+	int             i;
+
+	rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
+	if (rc != 0) {
+		CERROR ("Can't create socket: %d\n", rc);
+		return rc;
+	}
+
+	for (;;) {
+		PORTAL_ALLOC(ifr, nalloc * sizeof(*ifr));
+		if (ifr == NULL) {
+			CERROR ("ENOMEM enumerating up to %d interfaces\n", nalloc);
+			rc = -ENOMEM;
+			goto out0;
+		}
+		
+		ifc.ifc_buf = (char *)ifr;
+		ifc.ifc_len = nalloc * sizeof(*ifr);
+		
+		set_fs(KERNEL_DS);
+		rc = sock->ops->ioctl(sock, SIOCGIFCONF, (unsigned long)&ifc);
+		set_fs(oldmm);
+
+		if (rc < 0) {
+			CERROR ("Error %d enumerating interfaces\n", rc);
+			goto out1;
+		}
+		
+		LASSERT (rc == 0);
+		nfound = rc/sizeof(*ifr);
+		LASSERT (nfound <= nalloc);
+		
+		if (nfound <= nalloc)
+			break;
+		
+		/* Assume there are more interfaces */
+		if (nalloc >= 16 * PTL_MAX_INTERFACES) {
+			CWARN("Too many interfaces: "
+			      "only trying the first %d\n", nfound);
+			break;
+		}
+
+		nalloc *= 2;
+	}
+
+	for (i = nused = 0; i < nfound; i++) {
+		strncpy(name, ifr[i].ifr_name, IFNAMSIZ); /* ensure terminated name */
+		name[IFNAMSIZ-1] = 0;
+		
+		if (!strncmp(name, "lo", 2)) {
+			CDEBUG(D_WARNING, "ignoring %s\n", name);
+			continue;
+		}
+		
+		strcpy(ifr[i].ifr_name, name);
+		set_fs(KERNEL_DS);
+		rc = sock->ops->ioctl(sock, SIOCGIFFLAGS, 
+				      (unsigned long)&ifr[i]);
+		set_fs(oldmm);
+
+		if (rc != 0) {
+			CDEBUG(D_WARNING, "Can't get flags for %s\n", name);
+			continue;
+		}
+
+		if ((ifr[i].ifr_flags & IFF_UP) == 0) {
+			CDEBUG(D_WARNING, "Interface %s down\n", name);
+			continue;
+		}
+
+		rc = ksocknal_lib_getifaddr(sock, name, &ipaddr, &netmask);
+		if (rc != 0) {
+			CDEBUG(D_WARNING, 
+			       "Can't get IP address or netmask for %s\n",
+			       name);
+			continue;
+		}
+
+		if (nused >= nifs) {
+			CWARN("Too many available interfaces: "
+			      "only using the first %d\n", nused);
+			break;
+		}
+		
+		memset(&ifs[nused], 0, sizeof(ifs[nused]));
+		
+		CLASSERT(sizeof(ifs[nused].ksni_name) >= IFNAMSIZ);
+		strcpy(ifs[nused].ksni_name, name);
+		ifs[nused].ksni_ipaddr = ipaddr;
+		ifs[nused].ksni_netmask = netmask;
+		nused++;
+	}
+
+	rc = nused;
+ out1:
+	PORTAL_FREE(ifr, nalloc * sizeof(*ifr));
+ out0:
+	sock_release(sock);
+	return rc;
+}
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct tcp_opt *sock2tcp_opt(struct sock *sk)
 {

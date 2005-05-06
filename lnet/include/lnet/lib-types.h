@@ -313,7 +313,7 @@ typedef struct ptl_nal
         
 } ptl_nal_t;
 
-#define PTL_MAX_INTERFACES   8
+#define PTL_MAX_INTERFACES   16
 
 typedef struct ptl_ni {
         struct list_head  ni_list;              /* chain on apini_nis */
@@ -377,6 +377,9 @@ typedef struct
         struct list_head *apini_lh_hash_table;  /* all extant lib handles, this interface */
         __u64             apini_next_object_cookie; /* cookie generator */
         __u64             apini_interface_cookie; /* uniquely identifies this ni in this epoch */
+
+        char             *apini_network_tokens; /* space for network names */
+        int               apini_network_tokens_nob;
         
         struct list_head  apini_test_peers;
         

@@ -201,6 +201,8 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 		return PTL_FAIL;
         }
 
+        ptl_apini.apini_network_tokens = tokens;
+        ptl_apini.apini_network_tokens_nob = tokensize;
         memcpy (tokens, networks, tokensize);
 	str = tokens;
 
@@ -311,7 +313,6 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                 LCONSOLE_ERROR("No networks specified\n");
                 goto failed;
         }
-	PORTAL_FREE(tokens, tokensize);
         return PTL_OK;
 
  failed:
@@ -322,6 +323,8 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                 PORTAL_FREE(ni, sizeof(*ni));
         }
 	PORTAL_FREE(tokens, tokensize);
+        ptl_apini.apini_network_tokens = NULL;
+
         return PTL_FAIL;
 }
 

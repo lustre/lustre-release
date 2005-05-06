@@ -76,8 +76,6 @@
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
 #define SOCKNAL_ENOMEM_RETRY    CFS_MIN_DELAY   /* jiffies between retries */
 
-#define SOCKNAL_MAX_INTERFACES  16              /* Largest number of interfaces we bind */
-
 #define SOCKNAL_ROUND_ROBIN     0               /* round robin / load balance */
 
 #define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
@@ -120,12 +118,13 @@ typedef struct
         int               ksni_sched:6;         /* which scheduler (assumes < 64) */
 } ksock_irqinfo_t;
 
-typedef struct
+typedef struct                                  /* in-use interface */
 {
         __u32             ksni_ipaddr;          /* interface's IP address */
         __u32             ksni_netmask;         /* interface's network mask */
         int               ksni_nroutes;         /* # routes using (active) */
         int               ksni_npeers;          /* # peers using (passive) */
+        char              ksni_name[16];        /* interface name */
 } ksock_interface_t;
 
 typedef struct
@@ -205,7 +204,7 @@ typedef struct
         ptl_ni_t         *ksnd_ni;              /* NI instance (tmp hack) */
 
         int               ksnd_ninterfaces;
-        ksock_interface_t ksnd_interfaces[SOCKNAL_MAX_INTERFACES]; /* published interfaces */
+        ksock_interface_t ksnd_interfaces[PTL_MAX_INTERFACES]; /* active interfaces */
 } ksock_nal_data_t;
 
 #define SOCKNAL_INIT_NOTHING    0
@@ -382,7 +381,7 @@ typedef struct ksock_peer
         struct list_head    ksnp_tx_queue;      /* waiting packets */
         cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
         int                 ksnp_n_passive_ips; /* # of... */
-        __u32               ksnp_passive_ips[SOCKNAL_MAX_INTERFACES]; /* preferred local interfaces */
+        __u32               ksnp_passive_ips[PTL_MAX_INTERFACES]; /* preferred local interfaces */
 } ksock_peer_t;
 
 typedef struct ksock_connreq
@@ -561,3 +560,7 @@ extern void ksocknal_lib_abort_accept(struct socket *sock);
 
 extern int ksocknal_lib_tunables_init(void);
 extern void ksocknal_lib_tunables_fini(void);
+
+extern int ksocknal_lib_init_if (ksock_interface_t *iface, char *name);
+extern int ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs);
+

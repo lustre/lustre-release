@@ -1698,7 +1698,7 @@ ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
         int                 rc;
 
         LASSERT (conn->ksnc_type != SOCKNAL_CONN_NONE);
-        LASSERT (nipaddrs <= SOCKNAL_MAX_INTERFACES);
+        LASSERT (nipaddrs <= PTL_MAX_INTERFACES);
 
         /* No need for getconnsock/putconnsock */
         LASSERT (!conn->ksnc_closing);
@@ -1867,7 +1867,7 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
 
         nips = __le32_to_cpu (hdr.payload_length) / sizeof (__u32);
 
-        if (nips > SOCKNAL_MAX_INTERFACES ||
+        if (nips > PTL_MAX_INTERFACES ||
             nips * sizeof(__u32) != __le32_to_cpu (hdr.payload_length)) {
                 CERROR("Bad payload length %d from %s ip %u.%u.%u.%u\n",
                        __le32_to_cpu (hdr.payload_length),
