@@ -419,6 +419,20 @@ test_20() {
 
 run_test 20 "test extra readahead page left in cache ===="
 
+test_21() { # Bug 5907
+	mkdir $DIR1/d21
+	mount /etc $DIR1/d21 --bind # Poor man's mount.
+	rmdir $DIR1/d21 && error "Removed mounted directory"
+	rmdir $DIR2/d21 && echo "Removed mounted directory from another mountpoint, needs to be fixed"
+	test -d $DIR1/d21 || error "Monted directory disappeared"
+	umount $DIR1/d21
+	test -d $DIR2/d21 || test -d $DIR1/d21 && error "Removed dir still visible after umount"
+	true
+}
+
+run_test 21 " Try to remove mountpoint on another dir ===="
+
+
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
