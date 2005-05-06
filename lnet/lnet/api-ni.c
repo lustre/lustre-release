@@ -675,8 +675,9 @@ ptl_startup_nalnis (void)
                         PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 
                         if (retry) {
-                                CERROR("Can't load NAL %s\n",
-                                       libcfs_nal2str(nal_type));
+                                CERROR("Can't load NAL %s, module %s\n",
+                                       libcfs_nal2str(nal_type),
+                                       libcfs_nal2modname(nal_type));
                                 goto failed;
                         }
 

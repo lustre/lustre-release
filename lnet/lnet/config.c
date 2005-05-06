@@ -612,10 +612,29 @@ ptl_parse_route (char *str)
 }
 
 ptl_err_t
+ptl_parse_route_tbs(struct list_head *tbs)
+{
+	ptl_text_buf_t   *ptb;
+
+	while (!list_empty(tbs)) {
+		ptb = list_entry(tbs->next, ptl_text_buf_t, ptb_list);
+
+		if (ptl_parse_route(ptb->ptb_text) < 0) {
+			ptl_free_text_bufs(tbs);
+			return PTL_FAIL;
+		}
+
+		list_del(&ptb->ptb_list);
+		ptl_free_text_buf(ptb);
+	}
+
+        return PTL_OK;
+}
+
+ptl_err_t
 ptl_parse_routes (char *routes)
 {
 	struct list_head  tbs;
-	ptl_text_buf_t   *ptb;
 	int               rc = PTL_OK;
 
 	INIT_LIST_HEAD(&tbs);
@@ -623,26 +642,27 @@ ptl_parse_routes (char *routes)
 	if (ptl_str2tbs_sep(&tbs, routes) < 0) {
 		CERROR("Error parsing routes\n");
 		rc = PTL_FAIL;
-		goto out;
-	}
+	} else {
+                rc = ptl_parse_route_tbs(&tbs);
+        }
 
-	/* Parse expanded cmds */
-	while (!list_empty(&tbs)) {
-		ptb = list_entry(tbs.next, ptl_text_buf_t, ptb_list);
-
-		if (ptl_parse_route(ptb->ptb_text) < 0) {
-			ptl_free_text_bufs(&tbs);
-			rc = PTL_FAIL;
-			goto out;
-		}
-
-		list_del(&ptb->ptb_list);
-		ptl_free_text_buf(ptb);
-	}
-
- out:
 	LASSERT (ptl_tbnob == 0);
 	return rc;
 }
 
+ptl_err_t
+ptl_read_route_table (char *fname) 
+{
+        int rc = PTL_FAIL;
+        
+        /* read chunks into a page buffer
+         * ptl_str2tbs_sep(buffer)
+         * if last tb is partial, copy to start of buffer
+         * and read next chunk from there
+         * then just ptl_parse_route_tbs() 
+         */
+
+	LASSERT (ptl_tbnob == 0);
+        return rc;
+}
 

@@ -2173,16 +2173,10 @@ ksocknal_startup (ptl_ni_t *ni)
                 }
         }
 
-        rc = ksocknal_start_listener();
-        if (rc != 0) {
-                CERROR("Can't start listener: %d\n", rc);
-                goto failed;
-        }
-
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_lib_enumerate_ifs(ksocknal_data.ksnd_interfaces,
                                                 PTL_MAX_INTERFACES);
-                if (rc != 0)
+                if (rc < 0)
                         goto failed;
 
                 if (rc == 0) {
@@ -2205,6 +2199,12 @@ ksocknal_startup (ptl_ni_t *ni)
                                ksocknal_data.ksnd_interfaces[0].ksni_ipaddr);
         CDEBUG(D_WARNING, "Set NID to %s\n", libcfs_nid2str(ni->ni_nid));
         
+        rc = ksocknal_start_listener();
+        if (rc != 0) {
+                CERROR("Can't start listener: %d\n", rc);
+                goto failed;
+        }
+
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 

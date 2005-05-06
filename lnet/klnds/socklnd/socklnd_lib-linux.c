@@ -1059,7 +1059,8 @@ ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs)
 		}
 		
 		LASSERT (rc == 0);
-		nfound = rc/sizeof(*ifr);
+
+		nfound = ifc.ifc_len/sizeof(*ifr);
 		LASSERT (nfound <= nalloc);
 		
 		if (nfound <= nalloc)
@@ -1121,6 +1122,9 @@ ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs)
 		ifs[nused].ksni_ipaddr = ipaddr;
 		ifs[nused].ksni_netmask = netmask;
 		nused++;
+
+	        CDEBUG(D_WARNING, "Added interface %s: %u.%u.%u.%u\n", 
+		       name, HIPQUAD(ipaddr));
 	}
 
 	rc = nused;
