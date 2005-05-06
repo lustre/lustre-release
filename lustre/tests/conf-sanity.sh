@@ -624,7 +624,7 @@ test_15() {
 	[ ! `cp $LUSTRE/utils/llmount $MOUNTLUSTRE` ] || return $?
 	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
 	# load llite module on the client if it isn't in /lib/modules
-	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
+	do_node `hostname` $LCONF --nosetup --node client_facet $XMLCONFIG
 	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
 		`facet_active_host mds1`:/mds1_svc/client_facet $MOUNT ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
