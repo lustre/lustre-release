@@ -352,7 +352,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         if (cli->cl_mgmtcli_obd) {
                 mgmtcli_deregister_for_events_t dereg_f;
 
-                dereg_f = symbol_get("mgmtcli_deregister_for_events");
+                dereg_f = (mgmtcli_deregister_for_events_t)symbol_get("mgmtcli_deregister_for_events");
                 dereg_f(cli->cl_mgmtcli_obd, obddev);
                 symbol_put("mgmtcli_deregister_for_events");
         }
