@@ -448,11 +448,11 @@ class LCTLInterface:
 
     def network(self, net, nid):
         """ set mynid """
-        cmds =  """
-    network %s
-    mynid %s
-    quit """ % (net, nid)
-        self.run(cmds)
+#        cmds =  """
+#    network %s
+#    mynid %s
+#    quit """ % (net, nid)
+#        self.run(cmds)
 
     # add an interface
     def add_interface(self, net, ip, netmask = ""):
