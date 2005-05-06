@@ -747,6 +747,7 @@ static int mds_open_by_id(struct ptlrpc_request *req,
                 RETURN(rc);
         }
 
+        up(&pending_dir->i_sem);
         if (dchild->d_inode != NULL) {
                 mds_inode_set_orphan(dchild->d_inode);
                 mds_pack_inode2body(req2obd(req), body,
