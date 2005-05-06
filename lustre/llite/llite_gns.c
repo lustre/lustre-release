@@ -69,6 +69,24 @@ ll_gns_wait_for_mount(struct dentry *dentry,
         RETURN(-ETIME);
 }
 
+/* 
+ * sending a signal known to be ignored to cause restarting syscall if GNS mount
+ * function returns -ERESTARTSYS.
+ */
+static void
+ll_gns_send_signal(void)
+{
+        struct task_struct *task = current;
+        int signal = SIGCONT;
+
+        read_lock(&tasklist_lock);
+        spin_lock_irq(&task->sighand->siglock);
+        sigaddset(&task->pending.signal, signal);
+        spin_unlock_irq(&task->sighand->siglock);
+        read_unlock(&tasklist_lock);
+        set_tsk_thread_flag(task, TIF_SIGPENDING);
+}
+
 /*
  * tries to mount the mount object under passed @dentry. In the case of success
  * @dentry will become mount point and 0 will be returned. Error code will be
@@ -99,6 +117,12 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 RETURN(-EINVAL);
         }
         
+        if (mnt == NULL) {
+                CERROR("suid directory found, but no "
+                       "vfsmount available.\n");
+                RETURN(-EINVAL);
+        }
+
         /* 
          * another thead is in progress or just finished mounting the
          * dentry. Handling that.
@@ -106,20 +130,32 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
             sbi->ll_gns_state == LL_GNS_FINISHED) {
                 /* 
-                 * check if another thread is trying to mount some GNS dentry
-                 * too. Letting it know that we busy and make ll_lookup_it() to
-                 * restart syscall and try again later.
+                 * another thread is trying to mount GNS dentry. We'd like to
+                 * handling that.
                  */
                 spin_unlock(&sbi->ll_gns_lock);
-                RETURN(-EAGAIN);
+
+                /* 
+                 * check if dentry is mount point already, if so, do not restart
+                 * syscal.
+                 */
+                if (d_mountpoint(dentry))
+                        RETURN(0);
+
+                /* 
+                 * causing syscall to restart and find this dentry already
+                 * mounted.
+                 */
+                ll_gns_send_signal();
+                RETURN(-ERESTARTSYS);
+
+#if 0
+                wait_for_completion(&sbi->ll_gns_mount_finished);
+                if (d_mountpoint(dentry))
+                        RETURN(0);
+#endif
         }
         LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
-
-        if (mnt == NULL) {
-                CERROR("suid directory found, but no "
-                       "vfsmount available.\n");
-                RETURN(-EINVAL);
-        }
 
         CDEBUG(D_INODE, "mounting dentry %p\n", dentry);
 
@@ -243,7 +279,8 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         
         up(&sbi->ll_gns_sem);
 
-        rc = USERMODEHELPER(argv[0], argv, NULL);
+        /* do not wait for helper complete here. */
+        rc = call_usermodehelper(argv[0], argv, NULL, 0);
         if (rc) {
                 CERROR("failed to call GNS upcall %s, err = %d\n",
                        sbi->ll_gns_upcall, rc);
@@ -251,13 +288,11 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
 
         /*
-         * wait for mount completion. This is actually not needed, because
-         * USERMODEHELPER() returns only when usermode process finishes. But we
-         * doing this just for case USERMODEHELPER() semantics will be changed
-         * or usermode upcall program will start mounting in backgound and
-         * return instantly. --umka
+         * waiting for dentry become mount point GNS_WAIT_ATTEMPTS times by 1
+         * second.
          */
         rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
+        complete_all(&sbi->ll_gns_mount_finished);
         if (rc == 0) {
                 struct dentry *rdentry;
                 struct vfsmount *rmnt;
@@ -303,6 +338,7 @@ cleanup:
                         dput(dchild);
         case 1:
                 free_page((unsigned long)pathpage);
+                complete_all(&sbi->ll_gns_mount_finished);
         case 0:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;

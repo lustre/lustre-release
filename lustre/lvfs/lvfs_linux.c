@@ -574,7 +574,7 @@ lvfs_memdbg_check_remove(void *ptr)
 EXPORT_SYMBOL(lvfs_memdbg_check_remove);
 #endif
 
-static void lvfs_memdbg_show(void)
+void lvfs_memdbg_show(void)
 {
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
         struct hlist_node *node = NULL;
@@ -606,6 +606,7 @@ static void lvfs_memdbg_show(void)
 #endif
         }
 }
+EXPORT_SYMBOL(lvfs_memdbg_show);
 
 static int __init lvfs_linux_init(void)
 {

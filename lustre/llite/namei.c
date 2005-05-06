@@ -405,11 +405,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
             ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN))))
         {
                 rc = ll_gns_mount_object(dentry, nd->mnt);
-                if (rc == -EAGAIN) {
-                        /* 
-                         * making system to restart syscall as currently GNS is
-                         * in mounting progress.
-                         */
+                if (rc == -ERESTARTSYS) {
+                        /* causing syscall restart */
                         GOTO(out, retval = ERR_PTR(-ERESTARTSYS));
                 }
 
@@ -429,7 +426,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                          * reg file.
                          */
                         CDEBUG(D_INODE, "failed to mount %*s, err %d\n",
-                               (int)dentry->d_name.len, dentry->d_name.name);
+                               (int)dentry->d_name.len, dentry->d_name.name, rc);
                 }
         }
         

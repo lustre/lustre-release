@@ -212,6 +212,19 @@ do {                                                                         \
 } while(0)
 
 #ifdef __KERNEL__
+
+/*
+ * sleep_on() is known to be racy, using wait_event() interface instead as
+ * recommended. --umka
+ */
+#define OBD_SLEEP_ON(wq)                                                     \
+do {                                                                         \
+        DEFINE_WAIT(__wait);                                                 \
+        prepare_to_wait(&wq, &__wait, TASK_UNINTERRUPTIBLE);                 \
+        schedule();                                                          \
+        finish_wait(&wq, &__wait);                                           \
+} while (0)
+
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
@@ -220,7 +233,7 @@ do {                                                                         \
 do {                                                            \
         if  (OBD_FAIL_CHECK_ONCE(id)) {                         \
                 CERROR("obd_race id %x sleeping\n", (id));      \
-                sleep_on(&obd_race_waitq);                      \
+                OBD_SLEEP_ON(obd_race_waitq);                   \
                 CERROR("obd_fail_race id %x awake\n", (id));    \
         } else if ((obd_fail_loc & OBD_FAIL_MASK_LOC) ==        \
                     ((id) & OBD_FAIL_MASK_LOC)) {               \
@@ -320,6 +333,7 @@ struct mem_track {
         int m_size;
 };
 
+void lvfs_memdbg_show(void);
 void lvfs_memdbg_insert(struct mem_track *mt);
 void lvfs_memdbg_remove(struct mem_track *mt);
 struct mem_track *lvfs_memdbg_find(void *ptr);

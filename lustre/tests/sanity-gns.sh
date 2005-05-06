@@ -97,7 +97,7 @@ check_kernel_version() {
 }
 
 run_one() {
-	if ! mount | grep -q $DIR; then
+	if ! cat /proc/mounts | grep -q $DIR; then
 		$START
 	fi
 	echo $PTLDEBUG >/proc/sys/portals/debug	
@@ -959,6 +959,8 @@ $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC || {
     
     disable_gns
 
+    echo ""
+    echo "turning SUID on $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT off"
     chmod u-s $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT
 
     enable_gns

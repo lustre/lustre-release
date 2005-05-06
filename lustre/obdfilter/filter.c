@@ -3106,15 +3106,16 @@ static struct obd_ops filter_sanobd_ops = {
 static int __init obdfilter_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
+        int size, rc;
 
         printk(KERN_INFO "Lustre: Filtering OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(filter, &lvars);
 
-        OBD_ALLOC(obdfilter_created_scratchpad,
-                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
-                  sizeof(*obdfilter_created_scratchpad));
+        size = OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
+                sizeof(*obdfilter_created_scratchpad);
+        
+        OBD_ALLOC(obdfilter_created_scratchpad, size);
         if (obdfilter_created_scratchpad == NULL) {
                 CERROR ("Can't allocate scratchpad\n");
                 return -ENOMEM;
@@ -3123,9 +3124,7 @@ static int __init obdfilter_init(void)
         rc = class_register_type(&filter_obd_ops, NULL, lvars.module_vars,
                                  OBD_FILTER_DEVICENAME);
         if (rc) {
-                OBD_FREE(obdfilter_created_scratchpad,
-                         OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
-                         sizeof(*obdfilter_created_scratchpad));
+                OBD_FREE(obdfilter_created_scratchpad, size);
                 return rc;
         }
 
@@ -3133,9 +3132,7 @@ static int __init obdfilter_init(void)
                                  OBD_FILTER_SAN_DEVICENAME);
         if (rc) {
                 class_unregister_type(OBD_FILTER_DEVICENAME);
-                OBD_FREE(obdfilter_created_scratchpad,
-                         OBDFILTER_CREATED_SCRATCHPAD_ENTRIES * 
-                         sizeof(*obdfilter_created_scratchpad));
+                OBD_FREE(obdfilter_created_scratchpad, size);
         }
         return rc;
 }

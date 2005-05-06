@@ -70,6 +70,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         spin_lock_init(&sbi->ll_gns_lock);
         INIT_LIST_HEAD(&sbi->ll_gns_sbi_head);
         init_waitqueue_head(&sbi->ll_gns_waitq);
+        init_completion(&sbi->ll_gns_mount_finished);
 
         /* this later may be reset via /proc/fs/... */
         memcpy(sbi->ll_gns_oname, ".mntinfo", strlen(".mntinfo"));
@@ -1029,7 +1030,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data *op_data;
         int ia_valid = attr->ia_valid;
-        int rc = 0;
+        int err, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
@@ -1107,7 +1108,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * NB: ATTR_SIZE will only be set at this point if the size
                  * resides on the MDS, ie, this file has no objects. */
                 attr->ia_valid &= ~ATTR_SIZE;
-                inode_setattr(inode, attr);
+                err = inode_setattr(inode, attr);
+                if (err) {
+                        CERROR("inode_setattr() failed, inode=%lu/%u(%p), "
+                               "err = %d\n", (unsigned long)inode->i_ino,
+                               inode->i_generation, inode, err);
+                        /* should we go to error path here? --umka */
+                }
                  
                 ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
@@ -1136,7 +1143,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
-                inode_setattr(inode, attr);
+                err = inode_setattr(inode, attr);
+                if (err) {
+                        CERROR("inode_setattr() failed, inode=%lu/%u(%p), "
+                               "err = %d\n", (unsigned long)inode->i_ino,
+                               inode->i_generation, inode, err);
+                        /* should we go to error path here? --umka */
+                }
         }
 
         /* We really need to get our PW lock before we change inode->i_size.

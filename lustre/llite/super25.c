@@ -33,6 +33,7 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
+#include <linux/obd_support.h>
 #include "llite_internal.h"
 
 struct super_block * ll_get_sb(struct file_system_type *fs_type,

@@ -139,15 +139,6 @@ void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
-void ll_intent_free(struct lookup_intent *it)
-{
-        if (it->d.fs_data) {
-                OBD_SLAB_FREE(it->d.fs_data, ll_intent_slab,
-                               sizeof(struct lustre_intent_data));
-                it->d.fs_data = NULL;
-        }
-}
-
 void ll_unhash_aliases(struct inode *inode)
 {
         struct list_head *tmp, *head;
@@ -277,7 +268,7 @@ int ll_intent_alloc(struct lookup_intent *it)
                 return 0;
         }
         OBD_SLAB_ALLOC(it->d.fs_data, ll_intent_slab, SLAB_KERNEL,
-                        sizeof(struct lustre_intent_data));
+                       sizeof(struct lustre_intent_data));
         if (!it->d.fs_data) {
                 CERROR("Failed to allocate memory for lustre specific intent "
                        "data\n");
@@ -285,8 +276,16 @@ int ll_intent_alloc(struct lookup_intent *it)
         }
 
         it->it_op_release = ll_intent_release;
-
         return 0;
+}
+
+void ll_intent_free(struct lookup_intent *it)
+{
+        if (it->d.fs_data) {
+                OBD_SLAB_FREE(it->d.fs_data, ll_intent_slab,
+                              sizeof(struct lustre_intent_data));
+                it->d.fs_data = NULL;
+        }
 }
 
 static inline int 
@@ -516,16 +515,19 @@ out:
          * lookup control path, which is always made with parent's i_sem taken.
          * --umka
          */
-        if (!((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
-            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN))))
+        if (((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
+            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN)))) {
+                
+                /* special "." and ".." has to be always revalidated */
+                if (rc && !ll_special_name(de) && nd != NULL && !(nd->flags & LOOKUP_LAST)) {
+                        ll_intent_drop_lock(it);
+                        rc = 0;
+                }
+                
+                ll_intent_release(it);
 		return rc;
-	    
-	/* special "." and ".." has to be always revalidated */
-        if (rc && !ll_special_name(de) && nd != NULL && !(nd->flags & LOOKUP_LAST)) {
-                ll_intent_drop_lock(it);
-                return 0;
         }
-
+	    
         return rc;
 do_lookup:
         it = &lookup_it;
@@ -537,7 +539,8 @@ do_lookup:
                             de->d_name.len, NULL, 0, NULL,
                             it, 0, &req, ll_mdc_blocking_ast);
         if (rc >= 0) {
-                struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*mds_body));
+                struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg, 1,
+                                                           sizeof(*mds_body));
 
                 /* See if we got same inode, if not - return error */
                 if (id_equal_stc(&cid, &mds_body->id1))

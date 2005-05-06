@@ -96,6 +96,7 @@ struct ll_sb_info {
         int                       ll_gns_state;
         struct timer_list         ll_gns_timer;
         struct list_head          ll_gns_sbi_head;
+        struct completion         ll_gns_mount_finished;
 
         unsigned long             ll_gns_tick;
         unsigned long             ll_gns_timeout;
@@ -488,5 +489,34 @@ ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
         data->create_mode = mode;
         data->mod_time = LTIME_S(CURRENT_TIME);
 }
+
+#if 0
+/* 
+ * this was needed for catching correct calling place of ll_intent_alloc() with
+ * missed ll_intent_free() causing memory leak. --umka
+ */
+#define ll_intent_alloc(it)                                             \
+        ({                                                              \
+                int err;                                                \
+                OBD_SLAB_ALLOC((it)->d.fs_data, ll_intent_slab, SLAB_KERNEL, \
+                               sizeof(struct lustre_intent_data));      \
+                if (!(it)->d.fs_data) {                                 \
+                        err = -ENOMEM;                                  \
+                } else {                                                \
+                        err = 0;                                        \
+                }                                                       \
+                (it)->it_op_release = ll_intent_release;                \
+                err;                                                    \
+        })
+
+#define ll_intent_free(it)                                      \
+        do {                                                    \
+                if ((it)->d.fs_data) {                                  \
+                        OBD_SLAB_FREE((it)->d.fs_data, ll_intent_slab,  \
+                                      sizeof(struct lustre_intent_data)); \
+                        (it)->d.fs_data = NULL;                         \
+                }                                                       \
+        } while (0)
+#endif
 
 #endif /* LLITE_INTERNAL_H */

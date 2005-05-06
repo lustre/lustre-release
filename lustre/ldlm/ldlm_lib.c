@@ -318,14 +318,14 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                         GOTO(err_import, rc = -ENOSYS);
                 }
 
-                register_f = inter_module_get("mgmtcli_register_for_events");
+                register_f = (mgmtcli_register_for_events_t)symbol_get("mgmtcli_register_for_events");
                 if (!register_f) {
                         CERROR("can't i_m_g mgmtcli_register_for_events\n");
                         GOTO(err_import, rc = -ENOSYS);
                 }
 
                 rc = register_f(mgmt_obd, obddev, &imp->imp_target_uuid);
-                inter_module_put("mgmtcli_register_for_events");
+                symbol_put("mgmtcli_register_for_events");
 
                 if (!rc)
                         cli->cl_mgmtcli_obd = mgmt_obd;
@@ -352,9 +352,9 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         if (cli->cl_mgmtcli_obd) {
                 mgmtcli_deregister_for_events_t dereg_f;
 
-                dereg_f = inter_module_get("mgmtcli_deregister_for_events");
+                dereg_f = symbol_get("mgmtcli_deregister_for_events");
                 dereg_f(cli->cl_mgmtcli_obd, obddev);
-                inter_module_put("mgmtcli_deregister_for_events");
+                symbol_put("mgmtcli_deregister_for_events");
         }
 
         /* Here we try to drop the security structure after destroy import,
