@@ -988,7 +988,9 @@ test_48() {
     createmany -o $DIR/${tfile}- 100
     $CHECKSTAT $DIR/${tfile}-99 || return 1
     mds_evict_client
-    df $MOUNT || df $MOUNT || return 2
+    df $MOUNT || echo "first df failed" 
+    sleep 1 
+    df $MOUNT || return 2
     sleep 1
     $CHECKSTAT $DIR/${tfile}-99 || return 3
 
@@ -1025,7 +1027,7 @@ run_test 50 "Double OSC recovery, don't LASSERT (3812)"
 
 # bug 3462 - simultaneous MDC requests
 test_51a() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     touch $DIR/${tdir}-2/f
@@ -1034,12 +1036,12 @@ test_51a() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000115"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
     $CHECKSTAT -t file $DIR/${tdir}-2/f || return 1
 
-    fail mds
+    fail mds1
 
     wait $pid || return 2
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
@@ -1048,7 +1050,7 @@ test_51a() {
 run_test 51a "|X| close request while two MDC requests in flight"
 
 test_51b() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/$tdir-1
     mkdir -p $DIR/$tdir-2
     multiop $DIR/$tdir-1/f O_c &
@@ -1056,15 +1058,15 @@ test_51b() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000107"
     touch $DIR/${tdir}-2/f &
     usleep 500
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
     kill -USR1 $pid
     wait $pid || return 1
                                                                                                                              
-    fail mds
+    fail mds1
 
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
     $CHECKSTAT -t file $DIR/${tdir}-2/f || return 3
@@ -1073,7 +1075,7 @@ test_51b() {
 run_test 51b "|X| open request while two MDC requests in flight"
 
 test_51c() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     multiop $DIR/${tdir}-1/f O_c &
@@ -1081,15 +1083,15 @@ test_51c() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000107"
     touch $DIR/${tdir}-2/f &
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000115"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    fail mds
+    fail mds1
 
     wait $pid || return 1
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
@@ -1099,7 +1101,7 @@ test_51c() {
 run_test 51c "|X| open request and close request while two MDC requests in flight"
 
 test_51d() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     touch $DIR/${tdir}-2/f
@@ -1108,12 +1110,12 @@ test_51d() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000122"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
     #$CHECKSTAT -t file $DIR/${tdir}-2/f || return 1
 
-    fail mds
+    fail mds1
 
     wait $pid || return 2
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 3
@@ -1122,7 +1124,7 @@ test_51d() {
 run_test 51d "|X| close reply while two MDC requests in flight"
 
 test_51e() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/$tdir-1
     mkdir -p $DIR/$tdir-2
     multiop $DIR/$tdir-1/f O_c &
@@ -1130,15 +1132,15 @@ test_51e() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000119"
     touch $DIR/${tdir}-2/f &
     usleep 500
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
     kill -USR1 $pid
     wait $pid || return 1
 
-    fail mds
+    fail mds1
 
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
     $CHECKSTAT -t file $DIR/${tdir}-2/f || return 3
@@ -1147,7 +1149,7 @@ test_51e() {
 run_test 51e "|X| open reply while two MDC requests in flight"
 
 test_51f() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     multiop $DIR/${tdir}-1/f O_c &
@@ -1155,15 +1157,15 @@ test_51f() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000119"
     touch $DIR/${tdir}-2/f &
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000122"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    fail mds
+    fail mds1
 
     wait $pid || return 1
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
@@ -1173,7 +1175,7 @@ test_51f() {
 run_test 51f "|X| open reply and close reply while two MDC requests in flight"
 
 test_51g() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     multiop $DIR/${tdir}-1/f O_c &
@@ -1181,15 +1183,15 @@ test_51g() {
     # give multiop a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000119"
     touch $DIR/${tdir}-2/f &
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000115"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    fail mds
+    fail mds1
 
     wait $pid || return 1
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
@@ -1199,23 +1201,23 @@ test_51g() {
 run_test 51g "|X| open reply and close request while two MDC requests in flight"
 
 test_51h() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     mkdir -p $DIR/${tdir}-1
     mkdir -p $DIR/${tdir}-2
     multiop $DIR/${tdir}-1/f O_c &
     pid=$!
-    # give multiop a chance to open
+    # give multio:wp a chance to open
     sleep 1
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000107"
     touch $DIR/${tdir}-2/f &
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000122"
     kill -USR1 $pid
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    fail mds
+    fail mds1
 
     wait $pid || return 1
     $CHECKSTAT -t file $DIR/${tdir}-1/f || return 2
@@ -1240,27 +1242,27 @@ test_52() {
 run_test 52 "time out lock replay (3764)"
 
 test_53() {
-    replay_barrier_nodf mds
+    replay_barrier_nodf mds1
     f1=$DIR/${tfile}-1
     cat <<EOF > $f1
 #!/bin/sh
 true
 EOF
     chmod +x $f1
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x80000107"
     $f1 || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0"
 
-    fail mds
+    fail mds1
     rm -f $f1
 }
 run_test 53 "|X| open request and close reply while two MDC requests in flight"
 
 test_54() {
-    replay_barrier mds
+    replay_barrier mds1
     createmany -o $DIR/$tfile 20
     unlinkmany $DIR/$tfile 20
-    fail mds
+    fail mds1
 }
 run_test 54 "|X| open request and close reply while two MDC requests in flight"
 
@@ -1268,9 +1270,9 @@ run_test 54 "|X| open request and close reply while two MDC requests in flight"
 test_55() {
     sysctl -w portals.debug=-1 portals.debug_mb=25
     ln -s foo $DIR/$tfile
-    replay_barrier mds
+    replay_barrier mds1
     #drop_reply "cat $DIR/$tfile"
-    fail mds
+    fail mds1
     sleep 10
     lctl dk /r/tmp/debug
 }
@@ -1279,12 +1281,12 @@ run_test 55 "don't replay a symlink open request (3440)"
 #b3761 ASSERTION(hash != 0) failed
 test_56() {
 # OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x8000012b"
     touch $DIR/$tfile
     pid=$!
     # give a chance for touch to run
     sleep 5
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x0"
     wait $pid || return 1
     rm $DIR/$tfile
     return 0
