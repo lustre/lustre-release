@@ -282,9 +282,8 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         /* do not wait for helper complete here. */
         rc = call_usermodehelper(argv[0], argv, NULL, 0);
         if (rc) {
-                CERROR("failed to call GNS upcall %s, err = %d\n",
-                       sbi->ll_gns_upcall, rc);
-                GOTO(cleanup, rc);
+                CWARN("failed to call GNS upcall %s, err = %d, "
+                      "checking for mount anyway\n", sbi->ll_gns_upcall, rc);
         }
 
         /*

@@ -327,10 +327,12 @@ check_gns() {
     echo "$UPCALL_PATH" > /proc/fs/lustre/llite/fs0/gns_upcall || return $?
     echo "upcall:  $(cat /proc/fs/lustre/llite/fs0/gns_upcall)"
 
+#    local OLD_PWD=$(pwd)
     case "$MODE" in
 	GENERIC)
 	    echo -n "mount on open $OBJECT1/test_file1 (generic): "
 	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 || return $?
+#	    cd $OBJECT1 || return $?
 	    ;;
 	CONCUR1)
 	    local i=1
@@ -388,6 +390,8 @@ check_gns() {
 	    echo "invalid testing mode $MODE"
 	    return 1
     esac
+
+#    cd $OLD_PWD
     
     check_mnt $OBJECT1 || {
 	echo "fail"

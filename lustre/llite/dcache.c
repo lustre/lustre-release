@@ -516,7 +516,7 @@ out:
          * --umka
          */
         if (((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
-            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN)))) {
+            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN | IT_GETATTR)))) {
                 
                 /* special "." and ".." has to be always revalidated */
                 if (rc && !ll_special_name(de) && nd != NULL && !(nd->flags & LOOKUP_LAST)) {

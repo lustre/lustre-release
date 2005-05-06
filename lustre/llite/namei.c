@@ -402,7 +402,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (nd &&
             dentry->d_inode != NULL && dentry->d_inode->i_mode & S_ISUID &&
             S_ISDIR(dentry->d_inode->i_mode) &&
-            ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN))))
+            ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN | IT_GETATTR))))
         {
                 rc = ll_gns_mount_object(dentry, nd->mnt);
                 if (rc == -ERESTARTSYS) {
