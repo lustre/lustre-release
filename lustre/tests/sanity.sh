@@ -752,6 +752,7 @@ test_24s() {
        $CHECKSTAT -t dir $DIR/R15a/b/c || error "$DIR/R15a/b/c missing"
 }
 run_test 24s "mkdir .../R15a/b/c; rename .../R15a .../R15a/b/c ="
+
 test_24t() {
        mkdir $DIR/R16a $DIR/R16a/b $DIR/R16a/b/c
        mrename $DIR/R16a/b/c $DIR/R16a && error "rename to sub-subdir worked!"
@@ -759,6 +760,26 @@ test_24t() {
        $CHECKSTAT -t dir $DIR/R16a/b/c || error "$DIR/R16a/b/c missing"
 }
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
+
+test_24u() {
+        rm -rf /tmp/R17*
+        mkdir $DIR/R17_dir
+        echo "aaa" > $DIR/R17_file
+        mv $DIR/R17_dir /tmp/
+        $CHECKSTAT -t dir /tmp/R17_dir || error "move dir out 1"
+        $CHECKSTAT -a $DIR/R17_dir || error "move dir out 2"
+        mv $DIR/R17_file /tmp/
+        $CHECKSTAT -t file /tmp/R17_file || error "move file out 1"
+        $CHECKSTAT -a $DIR/R17_file || error "move file out 2"
+
+        mv /tmp/R17_dir $DIR/
+        $CHECKSTAT -t dir $DIR/R17_dir || error "move dir in 3"
+        $CHECKSTAT -a /tmp/R17_dir || error "move dir in 4"
+        mv /tmp/R17_file $DIR/
+        $CHECKSTAT -t file $DIR/R17_file || error "move file in 3"
+        $CHECKSTAT -a /tmp/R17_file || error "move file in 4"
+}
+run_test 24u "rename across lustre file system"
 
 test_25a() {
 	echo '== symlink sanity ============================================='
