@@ -909,7 +909,7 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         int err;
         ENTRY;
         
-        if (srcnd->mnt != tgtnd)
+        if (srcnd->mnt != tgtnd->mnt)
                 RETURN(-EXDEV);
 
         CDEBUG(D_VFSTRACE,"VFS Op:oldname=%.*s,src_dir=%lu/%u(%p),newname=%.*s,"
