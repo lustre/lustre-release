@@ -208,6 +208,28 @@ int mds_md_disconnect(struct obd_device *obd, int flags)
         RETURN(rc);
 }
 
+int mds_md_reconnect(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct obd_statfs osfs;
+        int err;
+        ENTRY;
+
+        /* We don't know state of connections to another MDSes
+         * before the failure. If MDS we were connected to before
+         * the failure gets failed, then it will wait for us to
+         * reconnect and will timed recovery out. bug 4920 */
+        if (mds->mds_md_connected == 0)
+                RETURN(0);
+        if (mds->mds_md_obd == NULL)
+                RETURN(0);
+
+        err = obd_statfs(mds->mds_md_obd, &osfs, jiffies - HZ);
+        if (err)
+                CERROR("can't reconnect to MDSes after recovery: %d\n", err);
+        RETURN(0);
+}
+
 int mds_md_get_attr(struct obd_device *obd, struct inode *inode,
                     struct mea **mea, int *mea_size)
 {

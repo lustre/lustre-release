@@ -176,6 +176,7 @@ int mds_handle(struct ptlrpc_request *req);
 extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_dt_clean(struct obd_device *obd);
 int mds_postrecov(struct obd_device *obd);
+int mds_postrecov_common(struct obd_device *obd);
 extern struct lvfs_callback_ops mds_lvfs_ops;
 
 extern int mds_iocontrol(unsigned int cmd,
@@ -259,6 +260,7 @@ void mds_unlock_slave_objs(struct obd_device *, struct dentry *,
 int mds_lock_and_check_slave(int, struct ptlrpc_request *, struct lustre_handle *);
 int mds_convert_mea_ea(struct obd_device *, struct inode *, struct lov_mds_md *, int);
 int mds_is_dir_empty(struct obd_device *, struct dentry *);
+int mds_md_reconnect(struct obd_device *obd);
 
 /* mds_lsd.c */
 struct upcall_cache *__mds_get_global_lsd_cache(void);

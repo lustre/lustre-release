@@ -805,7 +805,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         class_import_put(revimp);
 
-        rc = obd_connect_post(export, connect_flags);
+        rc = obd_connect_post(export, initial_conn, connect_flags);
 out:
         if (rc)
                 req->rq_status = rc;

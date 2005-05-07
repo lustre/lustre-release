@@ -312,7 +312,7 @@ int mds_dt_connect(struct obd_device *obd, char * lov_name)
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
         if (!obd->obd_recovering)
-                rc = mds_postrecov(obd);
+                rc = mds_postrecov_common(obd);
         RETURN(rc);
 
 err_reg:

@@ -1634,7 +1634,8 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         RETURN(0);
 }
 
-static int filter_connect_post(struct obd_export *exp, unsigned long connect_flags)
+static int filter_connect_post(struct obd_export *exp, unsigned initial,
+                               unsigned long connect_flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_export_data *fed;

@@ -609,6 +609,7 @@ static inline int obd_connect(struct lustre_handle *conn,
 }
 
 static inline int obd_connect_post(struct obd_export *exp,
+                                   unsigned initial,
                                    unsigned long flags)
 {
         int rc;
@@ -618,7 +619,7 @@ static inline int obd_connect_post(struct obd_export *exp,
         if (!OBT(exp->exp_obd) || !OBP((exp->exp_obd), connect_post))
                 RETURN(0);
         OBD_COUNTER_INCREMENT(exp->exp_obd, connect_post);
-        rc = OBP(exp->exp_obd, connect_post)(exp, flags);
+        rc = OBP(exp->exp_obd, connect_post)(exp, initial, flags);
         RETURN(rc);
 }
 

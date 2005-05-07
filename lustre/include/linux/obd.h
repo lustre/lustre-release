@@ -717,7 +717,7 @@ struct obd_ops {
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *data,
                          unsigned long flags);
-        int (*o_connect_post)(struct obd_export *exp, unsigned long flags);
+        int (*o_connect_post)(struct obd_export *exp, unsigned, unsigned long);
         int (*o_disconnect)(struct obd_export *exp, unsigned long flags);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,

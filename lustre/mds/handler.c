@@ -562,12 +562,29 @@ out:
         return rc;
 }
 
-static int mds_connect_post(struct obd_export *exp, unsigned long flags)
+static int mds_connect_post(struct obd_export *exp, unsigned initial,
+                            unsigned long flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
+        struct mds_export_data *med;
+        struct mds_client_data *mcd;
         int rc = 0;
         ENTRY;
+
+        med = &exp->exp_mds_data;
+        mcd = med->med_mcd;
+
+        if (initial) {
+                /* some one reconnect initially, we have to reset
+                 * data existing export can have. bug 6102 */
+                if (mcd->mcd_last_xid != 0)
+                        CDEBUG(D_HA, "initial reconnect to existing export\n");
+                mcd->mcd_last_transno = 0;
+                mcd->mcd_last_xid = 0;
+                mcd->mcd_last_result = 0;
+                mcd->mcd_last_data = 0;
+        }
 
         if (!(flags & OBD_OPT_MDS_CONNECTION)) {
                 if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
@@ -3313,7 +3330,7 @@ err_llog:
         return rc;
 }
 
-int mds_postrecov(struct obd_device *obd)
+int mds_postrecov_common(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct llog_ctxt *ctxt;
@@ -3369,6 +3386,16 @@ err_llog:
                 CERROR("%s: failed to cleanup llogging subsystems\n",
                         obd->obd_name);
         goto out;
+}
+
+int mds_postrecov(struct obd_device *obd)
+{
+        int rc;
+        ENTRY;
+        rc = mds_postrecov_common(obd);
+        if (rc == 0)
+                rc = mds_md_reconnect(obd);
+        RETURN(rc);
 }
 
 int mds_dt_clean(struct obd_device *obd)
