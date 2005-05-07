@@ -1513,8 +1513,8 @@ kqswnal_parse (kqswnal_rx_t *krx)
         LASSERTF (0, "checksums for forwarded packets not implemented\n");
 #endif
 
-        if (kqswnal_nid2elanid (dest_nid) >= 0)  /* should have gone direct to peer */
-        {
+        if (PTL_NIDNET(dest_nid) == PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid)) {
+                /* should have gone direct to peer */
                 CERROR("dropping packet from %s for %s: target is peer\n", 
                        libcfs_nid2str(le64_to_cpu(hdr->src_nid)), 
                        libcfs_nid2str(dest_nid));
@@ -1942,7 +1942,7 @@ kqswnal_scheduler (void *arg)
                         spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 
                         /* If we're shutting down, this will just requeue fwd on kqn_idletxd_fwdq */
-                        kqswnal_fwd_packet (NULL, fwd);
+                        kqswnal_fwd_packet (kqswnal_data.kqn_ni, fwd);
 
                         did_something = 1;
                         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);

@@ -243,9 +243,6 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
 	int                  rc = -ENOENT;
         __u32                target_net = PTL_NIDNET(target_nid);
         
-        /* Caller wants to know if 'target_nid' can be reached via a gateway
-         * ON HER OWN NETWORK */
-
         CDEBUG (D_NET, "lookup "LPX64" from %s\n", target_nid, 
                 (ni == NULL) ? "<>" : libcfs_nid2str(ni->ni_nid));
 
@@ -256,9 +253,14 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
                         return gwni->ni_nid;
                 }
         } else if (target_net == PTL_NIDNET(ni->ni_nid)) {
-                ptl_ni_addref(ni);    /* extra ref so caller can drop blindly */
+                /* Caller wants to know if 'target_nid' can be reached via a
+                 * gateway ON HER OWN NETWORK */
+                ptl_ni_addref(ni); /* extra ref so caller can drop blindly */
                 return ni->ni_nid;
         }
+
+        CDEBUG(D_NET, "%s from %s\n", libcfs_nid2str(target_nid),
+               (ni == NULL) ? "<none>" : libcfs_nid2str(ni->ni_nid));
 
 	read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
@@ -283,22 +285,37 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
                         if (PTL_NIDNET(ni->ni_nid) != /* gateway not on ni's net */
                             PTL_NIDNET(re->kpre_gateway->kpge_nid))
                                 continue;
-                        tmpni = NULL;
+
+                        if (ge != NULL &&
+                            kpr_ge_isbetter (ge, re->kpre_gateway))
+                                continue;
+
+                } else if (gwni != NULL &&
+                           PTL_NIDNET(gwni->ni_nid) ==
+                           PTL_NIDNET(ge->kpge_nid)) {
+                        /* another gateway on the same net */
+
+                        if (kpr_ge_isbetter(ge, re->kpre_gateway))
+                                continue;
                 } else {
-                        tmpni = ptl_net2ni(PTL_NIDNET(ge->kpge_nid));
+                        /* another gateway on a new/different net */
+
+                        tmpni = ptl_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
                         if (tmpni == NULL)      /* gateway not on a local net */
                                 continue;
-                }
                 
-                if (ge == NULL ||
-                    kpr_ge_isbetter (re->kpre_gateway, ge)) {
+                        if (ge != NULL &&
+                            kpr_ge_isbetter(ge, re->kpre_gateway)) {
+                                ptl_ni_decref(tmpni);
+                                continue;
+                        }
+                        
                         if (gwni != NULL)
                                 ptl_ni_decref(gwni);
-                        ge = re->kpre_gateway;
                         gwni = tmpni;
-                } else if (tmpni != NULL) {
-                        ptl_ni_decref(tmpni);
                 }
+
+                ge = re->kpre_gateway;
 	}
 
         if (ge == NULL) {
@@ -308,7 +325,7 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
                 return PTL_NID_ANY;
         }
         
-        kpr_update_weight (ge, nob);
+        kpr_update_weight(ge, nob);
         gwnid = ge->kpge_nid;
 	read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
         
@@ -335,8 +352,8 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         __u32                target_net = PTL_NIDNET(target_nid);
         __u32                source_net = PTL_NIDNET(src_ni->ni_nid);
         int                  nob = fwd->kprfd_nob;
-        kpr_gateway_entry_t *ge = NULL;
-        ptl_ni_t            *dst_ni = NULL;
+        kpr_gateway_entry_t *ge;
+        ptl_ni_t            *dst_ni;
         ptl_ni_t            *tmp_ni;
         unsigned long        flags;
 	struct list_head    *e;
@@ -346,6 +363,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         CDEBUG (D_NET, "forward [%p] %s from %s\n", fwd,
                 libcfs_nid2str(target_nid), libcfs_nid2str(src_ni->ni_nid));
 
+        LASSERT (target_net != source_net);
         LASSERT (nob == ptl_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
 
 	fwd->kprfd_src_ni = src_ni;             /* stash calling ni */
@@ -368,8 +386,32 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 		goto out;
         }
 
-	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
+        /* Is the target_nid on a local network? */
+        dst_ni = ptl_net2ni(target_net);
+        if (dst_ni != NULL) {
+                if (dst_ni->ni_nal->nal_fwd == NULL) {
+                        rc = -EHOSTUNREACH;
+                        goto out;
+                }
 
+                fwd->kprfd_gateway_nid = dst_ni->ni_nid;
+                atomic_inc (&kpr_state.kpr_queue_depth);
+
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+
+                CDEBUG (D_NET, "forward [%p] %s: src ni %s dst ni %s\n",
+                        fwd, libcfs_nid2str(target_nid),
+                        libcfs_nid2str(src_ni->ni_nid),
+                        libcfs_nid2str(dst_ni->ni_nid));
+
+                dst_ni->ni_nal->nal_fwd(dst_ni, fwd);
+                ptl_ni_decref(dst_ni);
+                return;
+        }
+        
+	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
+        dst_ni = NULL;
+        ge = NULL;
         list_for_each (e, &kpr_state.kpr_routes) {
 		re = list_entry (e, kpr_route_entry_t, kpre_list);
 
@@ -391,14 +433,17 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                         continue;
                 }
                 
-                if (ge == NULL ||
-                    kpr_ge_isbetter (re->kpre_gateway, ge)) {
-                        if (dst_ni != NULL)
-                                ptl_ni_decref(dst_ni);
-                                
-                        dst_ni = tmp_ni;
-                        ge = re->kpre_gateway;
+                if (ge != NULL &&
+                    kpr_ge_isbetter(ge, re->kpre_gateway)) {
+                        ptl_ni_decref(tmp_ni);
+                        continue;
                 }
+                
+                if (dst_ni != NULL)
+                        ptl_ni_decref(dst_ni);
+                                
+                dst_ni = tmp_ni;
+                ge = re->kpre_gateway;
         }
         
         if (ge != NULL) {

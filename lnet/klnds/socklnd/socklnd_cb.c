@@ -1156,13 +1156,15 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 return;
         }
 
-        if (body_len > PTL_MTU) {      /* too big to forward */
+        if (PTL_NIDNET(conn->ksnc_hdr.dest_nid) ==
+            PTL_NIDNET(ksocknal_data.ksnd_ni->ni_nid)) {
+                /* should have gone direct */
                 CERROR ("dropping packet from %s for %s: "
-                        "packet size %d too big\n",
+                        "target is a peer\n",
                         libcfs_nid2str(src_nid),
-                        libcfs_nid2str(dest_nid),
-                        body_len);
-                /* on to new packet (skip this one's body) */
+                        libcfs_nid2str(dest_nid));
+
+                /* on to next packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
         }
@@ -1176,17 +1178,14 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                 ksocknal_new_packet (conn, body_len); /* on to new packet */
                 return;
         }
-        
-        /* should have gone direct */
-        peer = ksocknal_find_peer (conn->ksnc_hdr.dest_nid);
-        if (peer != NULL) {
-                CERROR ("dropping packet from %s for %s: "
-                        "target is a peer\n",
-                        libcfs_nid2str(src_nid),
-                        libcfs_nid2str(dest_nid));
-                ksocknal_peer_decref(peer);  /* drop ref from get above */
 
-                /* on to next packet (skip this one's body) */
+        if (body_len > PTL_MTU) {      /* too big to forward */
+                CERROR ("dropping packet from %s for %s: "
+                        "packet size %d too big\n",
+                        libcfs_nid2str(src_nid),
+                        libcfs_nid2str(dest_nid),
+                        body_len);
+                /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
         }

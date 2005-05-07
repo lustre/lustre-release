@@ -25,6 +25,10 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
+static int config_on_load = 1;
+CFS_MODULE_PARM(config_on_load, "i", int, 0444,
+                "configure network at module load");
+
 static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
         ptl_err_t          initrc;
@@ -50,7 +54,7 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
         initrc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
                            NULL, NULL, &nih);
         if (!(initrc == PTL_OK || initrc == PTL_IFACE_DUP))
-                RETURN (-EINVAL);
+                RETURN (-ENETDOWN);
 
         rc = PtlNICtl(nih, cmd, data);
 
@@ -79,6 +83,21 @@ static int init_kportals_module(void)
                 RETURN(rc);
         }
 
+        if (config_on_load) {
+                ptl_handle_ni_t    nih;
+
+                PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
+                ptl_apini.apini_niinit_self = 1;
+                PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
+
+                rc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
+                               NULL, NULL, &nih);
+                if (rc != PTL_OK) {
+                        PtlFini();
+                        return -ENETDOWN;
+                }
+        }
+        
         rc = libcfs_register_ioctl(&kportal_ioctl_handler);
         LASSERT (rc == 0);
 

@@ -27,10 +27,6 @@ static char *networks = DEFAULT_NETWORKS;
 CFS_MODULE_PARM(networks, "s", charp, 0444,
                 "local networks (default='"DEFAULT_NETWORKS"')");
 
-static int nal_load_timeout = 10;
-CFS_MODULE_PARM(nal_load_timeout, "i", int, 0444,
-                "seconds to wait for a NAL to load");
-
 ptl_apini_t       ptl_apini;                    /* THE network interface (at the API) */
 
 void ptl_assert_wire_constants (void)

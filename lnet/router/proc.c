@@ -24,7 +24,7 @@
 #include "router.h"
 #include <linux/seq_file.h>
 
-#define KPR_PROC_ROUTER "sys/portals/router"
+#define KPR_PROC_STATS  "sys/portals/router_stats"
 #define KPR_PROC_ROUTES "sys/portals/routes"
 
 static int 
@@ -239,10 +239,10 @@ kpr_proc_init(void)
         struct proc_dir_entry *stats;
         struct proc_dir_entry *routes;
 
-        /* Initialize KPR_PROC_ROUTER */
-        stats = create_proc_entry (KPR_PROC_ROUTER, 0644, NULL);
+        /* Initialize KPR_PROC_STATS */
+        stats = create_proc_entry (KPR_PROC_STATS, 0644, NULL);
         if (stats == NULL) {
-                CERROR("couldn't create proc entry %s\n", KPR_PROC_ROUTER);
+                CERROR("couldn't create proc entry %s\n", KPR_PROC_STATS);
                 return;
         }
 
@@ -264,6 +264,6 @@ kpr_proc_init(void)
 void
 kpr_proc_fini(void)
 {
-        remove_proc_entry(KPR_PROC_ROUTER, 0);
+        remove_proc_entry(KPR_PROC_STATS, 0);
         remove_proc_entry(KPR_PROC_ROUTES, 0);
 }
