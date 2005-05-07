@@ -263,7 +263,7 @@ struct ldlm_lock {
 #define LDLM_IBITS       13
 
 #define LDLM_MIN_TYPE 10
-#define LDLM_MAX_TYPE 13
+#define LDLM_MAX_TYPE 14
 
 struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;
