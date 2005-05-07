@@ -2483,8 +2483,8 @@ def find_local_servers(srv_list):
     result = []
 
     for srv in srv_list:
-        if local_cluster(srv.net_type, srv.cluster_id):
-            result.append(srv)
+#        if local_cluster(srv.net_type, srv.cluster_id):
+        result.append(srv)
     return result
 
 def local_cluster(net_type, cluster_id):
