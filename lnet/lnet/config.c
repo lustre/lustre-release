@@ -439,18 +439,48 @@ ptl_str2tbs_sep (struct list_head *tbs, char *str)
 }
 
 int
+ptl_expand1tb (struct list_head *list, 
+	       char *str, char *sep1, char *sep2, unsigned int n)
+{
+	char            num[16];
+	int             len1 = sep1 - str;
+	int             len2 = strlen(sep2 + 1);
+	int             nnob;
+	ptl_text_buf_t *ptb;
+
+	LASSERT (*sep1 == '[');
+	LASSERT (*sep2 == ']');
+
+	snprintf(num, sizeof(num), "%u", n);
+	nnob = strlen(num);
+	if (nnob == sizeof(num) - 1)
+		return -EINVAL;
+	
+	ptb = ptl_new_text_buf(len1 + nnob + len2 + 1);
+	if (ptb == NULL)
+		return -ENOMEM;
+	
+	memcpy(ptb->ptb_text, str, len1);
+	memcpy(&ptb->ptb_text[len1], num, nnob);
+	memcpy(&ptb->ptb_text[len1+nnob], sep2 + 1, len2);
+	ptb->ptb_text[len1 + nnob + len2] = 0;
+	
+	list_add_tail(&ptb->ptb_list, list);
+	return 0;
+}
+
+int
 ptl_str2tbs_expand (struct list_head *tbs, char *str)
 {
 	struct list_head  pending;
 	char             *sep;
-	int               nob;
-	ptl_text_buf_t   *ptb;
+	char             *sep2;
+	char             *parsed;
 	int               lo;
 	int               hi;
 	int               stride;
 	int               i;
 	int               scanned;
-	int               scanned2;
 
 	INIT_LIST_HEAD(&pending);
 	
@@ -458,49 +488,68 @@ ptl_str2tbs_expand (struct list_head *tbs, char *str)
 	if (sep == NULL)			/* nothing to expand */
 		return 0;
 		
-	/* check it's a valid range... */
-	nob = sep - str;
-
-	if (sscanf(sep + 1, "%d-%d%n", &lo, &hi, &scanned) < 2)
-		goto failed;
-
-	if (sep[1 + scanned] != '/')
-		stride = 1;
-	else if (sscanf(sep + 1 + scanned + 1, "%d%n", &stride, &scanned2) < 1)
-		goto failed;
-	else
-		scanned += 1 + scanned2;
+	parsed = sep + 1;
 	
-	if (sep[scanned + 1] != ']')
+	if (sscanf(parsed, "%d%n", &lo, &scanned) < 1)
 		goto failed;
 
-	if (hi < 0 || lo < 0 || stride < 0 || hi < lo || 
-	    (hi - lo) % stride != 0)
+	parsed += scanned;
+	if (*parsed == '-') {
+		/* [lo-hi] or [lo-hi/stride] */
+		parsed++;
+		if (sscanf(parsed, "%d%n", &hi, &scanned) < 1)
+			goto failed;
+
+		parsed += scanned;
+		if (*parsed != '/') {
+			stride = 1;
+		} else {
+			parsed++;
+			if (sscanf(parsed, "%d%n", &stride, &scanned) < 1)
+				goto failed;
+
+			parsed += scanned;
+		}
+		
+		if (*parsed != ']')
+			goto failed;
+
+		if (hi < 0 || lo < 0 || stride < 0 || hi < lo || 
+		    (hi - lo) % stride != 0)
+			goto failed;
+
+		for (i = lo; i <= hi; i += stride)
+			if (ptl_expand1tb(&pending, str, sep, parsed, i) != 0)
+				goto failed;
+
+	} else if (*parsed == ',') {
+		/* [a,b,c,d,e,f,g...] */
+		sep2 = strchr(parsed, ']');
+		if (sep2 == NULL)
+			goto failed;
+
+		if (ptl_expand1tb(&pending, str, sep, sep2, lo) != 0)
+			goto failed;
+		
+		while (*parsed == ',') {
+			parsed++;
+			if (sscanf(parsed, "%d%n", &lo, &scanned) < 1)
+				goto failed;
+
+			parsed += scanned;
+
+			if (ptl_expand1tb(&pending, str, sep, sep2, lo) != 0)
+				goto failed;
+		}
+		
+		if (*parsed != ']')
+			goto failed;
+
+	} else
 		goto failed;
-
-	/* ...and expand it */
-	for (i = lo; i <= hi; i += stride) {
-		char            num[16];
-		ptl_text_buf_t *ptb;
-
-		snprintf(num, sizeof(num), "%d", i);
-		if (strlen(num) == sizeof(num) - 1)
-			goto failed;
-
-		ptb = ptl_new_text_buf(nob + strlen(num) + 
-				      strlen(sep + 1 + scanned + 1));
-		if (ptb == NULL)
-			goto failed;
-			
-		memcpy(ptb->ptb_text, str, sep - str);
-		strcpy(&ptb->ptb_text[nob], num);
-		strcat(&ptb->ptb_text[nob], &sep[1 + scanned + 1]);
-
-		list_add_tail(&ptb->ptb_list, &pending);
-	}
-
+		
 	list_splice(&pending, tbs->prev);
-	return (hi + 1 - lo);
+	return 1;
 	
  failed:
 	ptl_free_text_bufs(&pending);
