@@ -509,7 +509,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct dentry *parent, *dchild;
+        struct dentry *parent = NULL, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
         struct list_head *t;
@@ -531,14 +531,19 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return; /* error looking up parent or child */
         }
 
-        parent = mds_id2dentry(obd, rec->ur_id1, NULL);
-        LASSERTF(!IS_ERR(parent), "lid "DLID4" rc %ld\n", 
-                 OLID4(rec->ur_id1), PTR_ERR(parent));
-
-        dchild = ll_lookup_one_len(rec->ur_name, parent, 
-                                   rec->ur_namelen - 1);
-        LASSERTF(!IS_ERR(dchild), "parent "DLID4" child %s rc %ld\n",
-                 OLID4(rec->ur_id1), rec->ur_name, PTR_ERR(dchild));
+        if (rec->ur_namelen == 1) {
+                CDEBUG(D_HA, "OPEN by fid "DLID4" (RESENT)\n",
+                       OLID4(rec->ur_id1));
+                dchild = mds_id2dentry(obd, rec->ur_id1, NULL);
+        } else {
+                parent = mds_id2dentry(obd, rec->ur_id1, NULL);
+                LASSERTF(!IS_ERR(parent), "lid "DLID4" rc %ld\n", 
+                                OLID4(rec->ur_id1), PTR_ERR(parent));
+                dchild = ll_lookup_one_len(rec->ur_name, parent, 
+                                rec->ur_namelen - 1);
+                LASSERTF(!IS_ERR(dchild), "parent "DLID4" child %s rc %ld\n",
+                                OLID4(rec->ur_id1), rec->ur_name, PTR_ERR(dchild));
+        }
 
         if (!dchild->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */
@@ -617,7 +622,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
  out_dput:
         if (put_child)
                 l_dput(dchild);
-        l_dput(parent);
+        if (parent)
+                l_dput(parent);
         EXIT;
 }
 
