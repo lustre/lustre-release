@@ -24,5 +24,8 @@ void ptlrpc_deactivate_import(struct obd_import *imp);
 void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc);
 void ptlrpc_fail_import(struct obd_import *imp, int generation);
 void ptlrpc_fail_export(struct obd_export *exp);
+int ptlrpc_check_suspend(void);
+void ptlrpc_activate_timeouts(void);
+void ptlrpc_deactivate_timeouts(void);
 
 #endif

@@ -95,6 +95,8 @@ struct ldlm_bl_work_item {
 
 #ifdef __KERNEL__
 
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock);
+
 static inline int have_expired_locks(void)
 {
         int need_to_run;
@@ -179,6 +181,7 @@ static void waiting_locks_callback(unsigned long unused)
         if (obd_dump_on_timeout)
                 portals_debug_dumplog();
 
+repeat:
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
@@ -187,6 +190,24 @@ static void waiting_locks_callback(unsigned long unused)
                 if ((lock->l_callback_timeout > jiffies) ||
                     (lock->l_req_mode == LCK_GROUP))
                         break;
+
+                if (ptlrpc_check_suspend()) {
+                        /* there is a case when we talk to one mds, holding
+                         * lock from another mds. this way we easily can get
+                         * here, if second mds is being recovered. so, we
+                         * suspend timeouts. bug 6019 */
+
+                        LDLM_ERROR(lock, "recharge timeout: %s@%s nid %s ",
+                                   lock->l_export->exp_client_uuid.uuid,
+                                   lock->l_export->exp_connection->c_remote_uuid.uuid,
+                                   ptlrpc_peernid2str(&lock->l_export->exp_connection->c_peer, str));
+
+                        list_del_init(&lock->l_pending_chain);
+                        spin_unlock_bh(&waiting_locks_spinlock);
+                        ldlm_add_waiting_lock(lock);
+
+                        goto repeat;
+                }
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
                            "%s@%s nid %s ",

@@ -214,6 +214,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                                LPD64"\n", rc, req->rq_xid);
                         RETURN(rc);
                 }
+                imp->imp_reqs_replayed++;
                 *inflight = 1;
         }
         RETURN(rc);

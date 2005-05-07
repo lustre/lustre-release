@@ -101,6 +101,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                       imp->imp_obd->obd_name, 
                       imp->imp_target_uuid.uuid,
                       imp->imp_connection->c_remote_uuid.uuid);
+                ptlrpc_deactivate_timeouts();
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
@@ -191,6 +192,7 @@ void ptlrpc_activate_import(struct obd_import *imp)
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         obd_import_event(obd, imp, IMP_EVENT_ACTIVE);
+        ptlrpc_activate_timeouts();
 }
 
 void ptlrpc_fail_import(struct obd_import *imp, int generation)
@@ -397,6 +399,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                                         MSG_CONNECT_INITIAL);
                 imp->imp_replayable = 1; 
         }
+        
+        imp->imp_reqs_replayed = imp->imp_locks_replayed = 0;
 
         ptlrpcd_add_req(request);
         rc = 0;
@@ -459,6 +463,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 imp->imp_conn_cnt = request->rq_repmsg->conn_cnt;
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                ptlrpc_pinger_sending_on_import(imp);
                 GOTO(finish, rc = 0);
         }
 
@@ -686,10 +691,13 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 ptlrpc_activate_import(imp);
-                CWARN("%s: connection restored to %s@%s\n",
+                CWARN("%s: connection restored to %s@%s, "
+                       "%d/%d req/lock replayed\n",
                       imp->imp_obd->obd_name, 
                       imp->imp_target_uuid.uuid,
-                      imp->imp_connection->c_remote_uuid.uuid);
+                      imp->imp_connection->c_remote_uuid.uuid,
+                      imp->imp_reqs_replayed,
+                      imp->imp_locks_replayed);
         }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {

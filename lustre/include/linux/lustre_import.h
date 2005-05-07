@@ -101,10 +101,15 @@ struct obd_import {
                                   imp_dlm_fake:1, imp_server_timeout:1,
                                   imp_initial_recov:1, imp_force_verify:1,
                                   imp_pingable:1, imp_resend_replay:1,
-                                  imp_deactive:1;
+                                  imp_deactive:1,
+                                  imp_waiting_ping_reply:1;
         __u32                     imp_connect_op;
         __u32                     imp_connect_flags;
         struct obd_connect_data   imp_connect_data;
+
+        unsigned long             imp_last_ping_xid;
+        int                       imp_reqs_replayed;
+        int                       imp_locks_replayed;
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

@@ -591,6 +591,7 @@ struct obd_import *class_new_import(void)
         INIT_LIST_HEAD(&imp->imp_conn_list);
         INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
+        imp->imp_waiting_ping_reply = 0;
 
         return imp;
 }

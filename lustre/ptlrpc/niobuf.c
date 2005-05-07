@@ -478,7 +478,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         ptlrpc_request_addref(request);        /* +1 ref for the SENT callback */
 
         request->rq_sent = LTIME_S(CURRENT_TIME);
-        ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(&request->rq_req_md_h, 
                           request->rq_reqbuf, request->rq_reqdata_len,
                           PTL_NOACK_REQ, &request->rq_req_cbid, 

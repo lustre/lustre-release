@@ -1289,7 +1289,12 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
 static int expired_request(void *data)
 {
         struct ptlrpc_request *req = data;
+        struct obd_import *imp;
         ENTRY;
+
+        /* some failure can suspend regular timeouts */
+        if (ptlrpc_check_suspend())
+                RETURN(1);
 
         RETURN(ptlrpc_expire_one_request(req));
 }
@@ -1465,9 +1470,12 @@ restart:
                 timeout = MAX(req->rq_timeout * HZ, 1);
                 DEBUG_REQ(D_NET, req, "-- sleeping for %d jiffies", timeout);
         }
+repeat:
         lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
                                req);
-        l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
+        rc = l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
+        if (rc == -ETIMEDOUT && ptlrpc_check_and_wait_suspend(req))
+                goto repeat;
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "

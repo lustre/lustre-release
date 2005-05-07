@@ -50,6 +50,9 @@ int ldlm_expired_completion_wait(void *data)
         if (lock->l_conn_export == NULL) {
                 static unsigned long next_dump = 0, last_dump = 0;
 
+                if (ptlrpc_check_suspend())
+                        RETURN(0);
+
                 LDLM_ERROR(lock, "lock timed out; not entering recovery in "
                            "server code, just going back to sleep");
                 if (time_after(jiffies, next_dump)) {
@@ -1036,6 +1039,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
         LDLM_DEBUG(lock, "replaying lock:");
 
+        imp->imp_locks_replayed++;
         atomic_inc(&req->rq_import->imp_replay_inflight);
         req->rq_async_args.pointer_arg[0] = lock;
         req->rq_interpret_reply = replay_lock_interpret;

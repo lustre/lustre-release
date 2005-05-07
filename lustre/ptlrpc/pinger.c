@@ -35,8 +35,32 @@
 #include <linux/obd_class.h>
 #include "ptlrpc_internal.h"
 
+#define PINGER_RATE     3 /* how many pings we'll do in obd_timeout period */
+
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
+
+static int ptlrpc_ping_interpret(struct ptlrpc_request *req,
+                                    void *data, int rc)
+{
+        struct obd_import *imp = req->rq_import;
+        DEBUG_REQ(D_HA, req, "ping reply");
+        if (imp->imp_waiting_ping_reply == 0)
+                DEBUG_REQ(D_ERROR, req, "late ping reply?");
+        if (imp->imp_last_ping_xid != req->rq_xid)
+                DEBUG_REQ(D_ERROR, req, "uh, wrong ping reply on x%lx",
+                          imp->imp_last_ping_xid);
+        else
+                imp->imp_last_ping_xid = 0;
+
+        /* if ping reply is an error, don't drop "replied" flag
+         * on import, so pinger will invalidate it */
+        if (ptlrpc_client_replied(req) && req->rq_repmsg->type == PTL_RPC_MSG_ERR)
+                return 0;
+        
+        imp->imp_waiting_ping_reply = 0;
+        return 0;
+}
 
 int ptlrpc_ping(struct obd_import *imp) 
 {
@@ -51,6 +75,10 @@ int ptlrpc_ping(struct obd_import *imp)
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
                 req->rq_replen = lustre_msg_size(0, NULL);
+                req->rq_interpret_reply = ptlrpc_ping_interpret;
+                req->rq_timeout = obd_timeout / PINGER_RATE;
+                imp->imp_waiting_ping_reply = 1;
+                imp->imp_last_ping_xid = req->rq_xid;
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
@@ -63,12 +91,97 @@ int ptlrpc_ping(struct obd_import *imp)
 }
 
 #ifdef __KERNEL__
-int ptlrpc_next_ping(struct obd_import *imp)
+static inline int ptlrpc_next_ping(struct obd_import *imp)
+{
+        return jiffies + (obd_timeout / PINGER_RATE * HZ);
+}
+
+static inline int ptlrpc_next_reconnect(struct obd_import *imp)
 {
         if (imp->imp_server_timeout)
-                return jiffies + (obd_timeout / 4 * HZ);
-        else
                 return jiffies + (obd_timeout / 2 * HZ);
+        else
+                return jiffies + (obd_timeout * HZ);
+}
+
+static atomic_t suspend_timeouts = ATOMIC_INIT(0);
+static wait_queue_head_t suspend_timeouts_waitq;
+
+void ptlrpc_deactivate_timeouts(void)
+{
+        CDEBUG(D_HA, "deactivate timeouts\n");
+        atomic_inc(&suspend_timeouts);
+}
+                
+void ptlrpc_activate_timeouts(void)
+{
+        CDEBUG(D_HA, "activate timeouts\n");
+        LASSERT(atomic_read(&suspend_timeouts) > 0);
+        if (atomic_dec_and_test(&suspend_timeouts))
+                wake_up(&suspend_timeouts_waitq);
+}
+
+int ptlrpc_check_suspend(void)
+{
+        if (atomic_read(&suspend_timeouts))
+                return 1;
+        return 0;
+}
+
+int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req)
+{
+        struct l_wait_info lwi;
+
+        if (atomic_read(&suspend_timeouts)) {
+                DEBUG_REQ(D_NET, req, "-- suspend %d regular timeout",
+                          atomic_read(&suspend_timeouts));
+                lwi = LWI_INTR(NULL, NULL);
+                l_wait_event(suspend_timeouts_waitq,
+                             atomic_read(&suspend_timeouts) == 0, &lwi);
+                DEBUG_REQ(D_NET, req, "-- recharge regular timeout");
+                return 1;
+        }
+        return 0;
+}
+
+static void ptlrpc_pinger_process_import(struct obd_import *imp,
+                                         unsigned long this_ping)
+{
+        unsigned long flags;
+        int force, level;
+
+        spin_lock_irqsave(&imp->imp_lock, flags);
+        level = imp->imp_state;
+        force = imp->imp_force_verify;
+        if (force)
+                imp->imp_force_verify = 0;
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+        if (imp->imp_next_ping > this_ping && force == 0)
+                return;
+
+        if (level == LUSTRE_IMP_DISCON && !imp->imp_deactive) {
+                /* wait at least a timeout before trying recovery again */
+                imp->imp_next_ping = ptlrpc_next_reconnect(imp);
+                ptlrpc_initiate_recovery(imp);
+        } else if (level != LUSTRE_IMP_FULL || imp->imp_obd->obd_no_recov) {
+                CDEBUG(D_HA, "not pinging %s (in recovery "
+                       " or recovery disabled: %s)\n",
+                       imp->imp_target_uuid.uuid,
+                       ptlrpc_import_state_name(level));
+        } else if (level == LUSTRE_IMP_FULL && imp->imp_waiting_ping_reply &&
+                        imp->imp_next_ping >= this_ping && imp->imp_pingable) {
+                CDEBUG(D_HA, "%s: %s hasn't respond on ping x%lu\n",
+                       imp->imp_obd->obd_uuid.uuid,
+                       imp->imp_target_uuid.uuid, imp->imp_last_ping_xid);
+                CDEBUG(D_ERROR, "%s: %s hasn't respond on ping x%lu\n",
+                       imp->imp_obd->obd_uuid.uuid,
+                       imp->imp_target_uuid.uuid, imp->imp_last_ping_xid);
+                ptlrpc_fail_import(imp, 0);
+        } else if (imp->imp_pingable || force) {
+                imp->imp_next_ping = ptlrpc_next_ping(imp);
+                ptlrpc_ping(imp);
+        }
 }
 
 static int ptlrpc_pinger_main(void *arg)
@@ -110,45 +223,13 @@ static int ptlrpc_pinger_main(void *arg)
                         struct obd_import *imp =
                                 list_entry(iter, struct obd_import,
                                            imp_pinger_chain);
-                        int force, level;
-                        unsigned long flags;
 
+                        ptlrpc_pinger_process_import(imp, this_ping);
 
-                        spin_lock_irqsave(&imp->imp_lock, flags);
-                        level = imp->imp_state;
-                        force = imp->imp_force_verify;
-                        if (force)
-                                imp->imp_force_verify = 0;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
-
-                        if (imp->imp_next_ping <= this_ping || force) {
-                                if (level == LUSTRE_IMP_DISCON &&
-                                    !imp->imp_deactive) {
-                                        /* wait at least a timeout before
-                                           trying recovery again. */
-                                        imp->imp_next_ping =
-                                                ptlrpc_next_ping(imp);
-                                        ptlrpc_initiate_recovery(imp);
-                                } else if (level != LUSTRE_IMP_FULL ||
-                                           imp->imp_obd->obd_no_recov) {
-                                        CDEBUG(D_HA, 
-                                               "not pinging %s (in recovery "
-                                               "or recovery disabled: %s)\n",
-                                               imp->imp_target_uuid.uuid,
-                                               ptlrpc_import_state_name(level));
-                                } else if (imp->imp_pingable || force) {
-                                        ptlrpc_ping(imp);
-                                }
-
-                        } else if (imp->imp_pingable) {
-                                CDEBUG(D_HA, "don't need to ping %s "
-                                       "(%lu > %lu)\n",
-                                       imp->imp_target_uuid.uuid,
-                                       imp->imp_next_ping, this_ping);
-                        }
                         CDEBUG(D_OTHER, "%s: pingable %d, next_ping %lu(%lu)\n",
                                 imp->imp_target_uuid.uuid,
                                 imp->imp_pingable, imp->imp_next_ping, jiffies);
+
                         if (imp->imp_pingable && imp->imp_next_ping &&
                             imp->imp_next_ping - jiffies < time_to_next_ping &&
                             imp->imp_next_ping > jiffies)
@@ -194,6 +275,8 @@ int ptlrpc_start_pinger(void)
 #endif
         ENTRY;
 
+        LASSERT(obd_timeout > PINGER_RATE);
+
         if (pinger_thread != NULL)
                 RETURN(-EALREADY);
 
@@ -201,6 +284,7 @@ int ptlrpc_start_pinger(void)
         if (pinger_thread == NULL)
                 RETURN(-ENOMEM);
         init_waitqueue_head(&pinger_thread->t_ctl_waitq);
+        init_waitqueue_head(&suspend_timeouts_waitq);
 
         d.name = "ll_ping";
         d.thread = pinger_thread;
@@ -246,7 +330,7 @@ int ptlrpc_stop_pinger(void)
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
         down(&pinger_sem);
-        imp->imp_next_ping = jiffies + (obd_timeout * HZ);
+        imp->imp_next_ping = ptlrpc_next_ping(imp);
         up(&pinger_sem);
 }
 
