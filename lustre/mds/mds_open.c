@@ -935,7 +935,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 }
                 goto got_child;
         }
-        
+       
+restart:
         dparent = mds_id2locked_dentry(obd, rec->ur_id1, NULL, parent_mode,
                                        parent_lockh, &update_mode, rec->ur_name,
                                        rec->ur_namelen - 1, MDS_INODELOCK_UPDATE);
@@ -990,28 +991,45 @@ int mds_open(struct mds_update_record *rec, int offset,
 got_child:
         cleanup_phase = 2; /* child dentry */
 
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-
         if (dchild->d_flags & DCACHE_CROSS_REF) {
-                struct ldlm_res_id res_id = { . name = {0} };
-                ldlm_policy_data_t policy;
-                int flags = 0;
+                CDEBUG(D_OTHER, "cross reference: "DLID4"\n", OLID4(rec->ur_id1));
+                
+                /* we're gonna acquire LOOKUP lock on the child,
+                 * but we have already locked parent and our order
+                 * may conflict with enqueue_order_locks(). so,
+                 * drop parent lock and acquire both the locks in
+                 * common order. bug 6190 */
+                ldlm_lock_decref(parent_lockh, parent_mode);
+                l_dput(dchild);
+                l_dput(dparent);
+                cleanup_phase = 0;
+
+                rc = mds_get_parent_child_locked(obd, mds, rec->ur_id1,
+                                                 parent_lockh, &dparent,
+                                                 LCK_PR, MDS_INODELOCK_UPDATE,
+                                                 &update_mode, rec->ur_name,
+                                                 rec->ur_namelen, child_lockh,
+                                                 &dchild, LCK_PR,
+                                                 MDS_INODELOCK_LOOKUP);
+
+                if (rc)
+                        GOTO(cleanup, rc);
+
+                if (dchild->d_inode || !(dchild->d_flags & DCACHE_CROSS_REF)) {
+                        /* wow! someone unlink and create new one yet */
+                        CDEBUG(D_OTHER, "nice race, repeat lookup\n");
+                        ldlm_lock_decref(parent_lockh, parent_mode);
+                        ldlm_lock_decref(child_lockh, LCK_PR);
+                        l_dput(dchild);
+                        l_dput(dparent);
+                        LASSERT(rec->ur_namelen > 1);
+                        GOTO(restart, rc);
+                }
 
                 mds_pack_dentry2body(obd, body, dchild, 1);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
+                intent_set_disposition(rep, DISP_LOOKUP_EXECD);
 
-                CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
-                       OLID4(&body->id1));
-                
-                res_id.name[0] = dchild->d_fid;
-                res_id.name[1] = dchild->d_mdsnum;
-                
-                policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      res_id, LDLM_IBITS, &policy,
-                                      LCK_PR, &flags, mds_blocking_ast,
-                                      ldlm_completion_ast, NULL, NULL,
-                                      NULL, 0, NULL, child_lockh);
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)
                         ldlm_lock_decref(parent_lockh + 1, update_mode);
@@ -1024,6 +1042,8 @@ got_child:
                 RETURN(rc);
         }
         
+        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+
         if (dchild->d_inode)
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
         else
