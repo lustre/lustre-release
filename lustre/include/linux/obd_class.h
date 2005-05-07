@@ -154,8 +154,10 @@ void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp, unsigned long flags);
-void class_disconnect_exports(struct obd_device *obddev, unsigned long flags);
-void class_disconnect_stale_exports(struct obd_device *obddev, unsigned long flags);
+void class_disconnect_exports(struct obd_device *, unsigned long);
+int class_disconnect_stale_exports(struct obd_device *,
+                                   int (*test_export)(struct obd_export *), 
+                                   unsigned long);
 
 /* generic operations shared by various OBD types */
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);

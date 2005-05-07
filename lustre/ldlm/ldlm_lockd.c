@@ -399,6 +399,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 RETURN(0);
         }
 
+        LASSERTF(lock->l_export->exp_obd->obd_recovering == 0,
+                 "BUG 6063: lock collide during recovery");
+
         LASSERT(lock);
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
@@ -1676,4 +1679,3 @@ EXPORT_SYMBOL(target_send_reply);
 EXPORT_SYMBOL(target_queue_recovery_request);
 EXPORT_SYMBOL(target_handle_ping);
 EXPORT_SYMBOL(target_handle_disconnect);
-EXPORT_SYMBOL(target_queue_final_reply);

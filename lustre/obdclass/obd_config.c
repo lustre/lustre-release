@@ -116,8 +116,9 @@ static int class_attach(struct lustre_cfg *lcfg)
         init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
         init_waitqueue_head(&obd->obd_next_transno_waitq);
-        INIT_LIST_HEAD(&obd->obd_recovery_queue);
-        INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
+        INIT_LIST_HEAD(&obd->obd_req_replay_queue);
+        INIT_LIST_HEAD(&obd->obd_lock_replay_queue);
+        INIT_LIST_HEAD(&obd->obd_final_req_queue);
 
         spin_lock_init(&obd->obd_uncommitted_replies_lock);
         INIT_LIST_HEAD(&obd->obd_uncommitted_replies);

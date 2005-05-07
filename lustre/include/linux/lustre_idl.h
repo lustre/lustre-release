@@ -174,6 +174,8 @@ struct lustre_msg {
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
+#define MSG_REQ_REPLAY_DONE    8
+#define MSG_LOCK_REPLAY_DONE  16
 
 static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {

@@ -1228,15 +1228,6 @@ int ost_handle(struct ptlrpc_request *req)
         }
 
 out_check_req:
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        rc = target_queue_final_reply(req, rc);
-                        GOTO(out_free_oti, rc);
-                }
-                /* Lost a race with recovery; let the error path DTRT. */
-                rc = req->rq_status = -ENOTCONN;
-        }
 
         if (!rc)
                 oti_to_request(oti, req);

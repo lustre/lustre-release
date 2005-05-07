@@ -648,15 +648,22 @@ struct obd_device {
         spinlock_t                       obd_processing_task_lock;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
+        int                              obd_replayed_locks;
         int                              obd_requests_queued_for_recovery;
         wait_queue_head_t                obd_next_transno_waitq;
         struct list_head                 obd_uncommitted_replies;
         spinlock_t                       obd_uncommitted_replies_lock;
         struct timer_list                obd_recovery_timer;
-        struct list_head                 obd_recovery_queue;
-        struct list_head                 obd_delayed_reply_queue;
         time_t                           obd_recovery_start;
         time_t                           obd_recovery_end;
+
+        atomic_t                         obd_req_replay_clients;
+        atomic_t                         obd_lock_replay_clients;
+
+        struct list_head                 obd_req_replay_queue;
+        struct list_head                 obd_lock_replay_queue;
+        struct list_head                 obd_final_req_queue;
+        int                              obd_recovery_stage;
 
         union {
                 struct filter_obd        filter;

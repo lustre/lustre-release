@@ -589,7 +589,7 @@ static int signal_completed_replay(struct obd_import *imp)
 
         req->rq_replen = lustre_msg_size(0, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
+        req->rq_reqmsg->flags |= MSG_LOCK_REPLAY_DONE | MSG_REQ_REPLAY_DONE;
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 

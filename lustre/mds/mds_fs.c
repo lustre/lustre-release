@@ -380,9 +380,17 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 spin_lock_init(&med->med_open_lock);
 
                 mcd = NULL;
-                exp->exp_replay_needed = 1;
+                exp->exp_req_replay_needed = 1;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
+
+                /* track clients to separate req replay
+                 * from lock replay. bug 6063 */
+                atomic_inc(&obd->obd_req_replay_clients);
+                exp->exp_req_replay_needed = 1;
+                atomic_inc(&obd->obd_lock_replay_clients);
+                exp->exp_lock_replay_needed = 1;
+                
                 class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
