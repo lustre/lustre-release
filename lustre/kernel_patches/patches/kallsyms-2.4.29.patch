@@ -60,15 +60,15 @@ Index: linux-2.4.29/arch/ppc/vmlinux.lds
 Index: linux-2.4.29/arch/i386/config.in
 ===================================================================
 --- linux-2.4.29.orig/arch/i386/config.in	2005-05-08 23:07:09.946514032 +0300
-+++ linux-2.4.29/arch/i386/config.in	2005-05-08 23:07:11.218320688 +0300
-@@ -449,6 +449,7 @@
-    if [ "$CONFIG_ISDN" != "n" ]; then
-       source drivers/isdn/Config.in
-    fi
++++ linux-2.4.29/arch/i386/config.in	2005-05-08 23:33:00.395809912 +0300
+@@ -512,6 +512,7 @@
+    bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ
+    bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
+    bool '  Compile the kernel with frame pointers' CONFIG_FRAME_POINTER
 +   bool '  Load all symbols for debugging/kksymoops' CONFIG_KALLSYMS
  fi
- endmenu
  
+ int 'Kernel messages buffer length shift (0 = default)' CONFIG_LOG_BUF_SHIFT 0
 Index: linux-2.4.29/arch/ia64/config.in
 ===================================================================
 --- linux-2.4.29.orig/arch/ia64/config.in	2005-05-08 23:06:26.936052616 +0300
