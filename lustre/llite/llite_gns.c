@@ -40,6 +40,8 @@ static spinlock_t gns_lock = SPIN_LOCK_UNLOCKED;
 static struct ptlrpc_thread gns_thread;
 static struct ll_gns_ctl gns_ctl;
 
+#define CONCUR_GNS_RESTART_APPROACH 0
+
 /*
  * waits until passed dentry gets mountpoint or timeout and attempts are
  * exhausted. Returns 1 if dentry became mountpoint and 0 otherwise.
@@ -69,6 +71,7 @@ ll_gns_wait_for_mount(struct dentry *dentry,
         RETURN(-ETIME);
 }
 
+#if (CONCUR_GNS_RESTART_APPROACH == 1)
 /* 
  * sending a signal known to be ignored to cause restarting syscall if GNS mount
  * function returns -ERESTARTSYS.
@@ -86,6 +89,7 @@ ll_gns_send_signal(void)
         read_unlock(&tasklist_lock);
         set_tsk_thread_flag(task, TIF_SIGPENDING);
 }
+#endif
 
 /*
  * tries to mount the mount object under passed @dentry. In the case of success
@@ -108,20 +112,17 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 RETURN(-EINVAL);
 
         sbi = ll_i2sbi(dentry->d_inode);
-        LASSERT(sbi != NULL);
-
-        spin_lock(&sbi->ll_gns_lock);
-
-        if (sbi->ll_gns_state == LL_GNS_DISABLED) {
-                spin_unlock(&sbi->ll_gns_lock);
-                RETURN(-EINVAL);
-        }
         
         if (mnt == NULL) {
                 CERROR("suid directory found, but no "
                        "vfsmount available.\n");
                 RETURN(-EINVAL);
         }
+
+        if (atomic_read(&sbi->ll_gns_enabled) == 0)
+                RETURN(-EINVAL);
+
+        spin_lock(&sbi->ll_gns_lock);
 
         /* 
          * another thead is in progress or just finished mounting the
@@ -142,14 +143,18 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 if (d_mountpoint(dentry))
                         RETURN(0);
 
+#if (CONCUR_GNS_RESTART_APPROACH == 1)
                 /* 
-                 * causing syscall to restart and find this dentry already
-                 * mounted.
+                 * causing syscall to restart and possibly find this dentry
+                 * already mounted.
                  */
                 ll_gns_send_signal();
                 RETURN(-ERESTARTSYS);
-
-#if 0
+#else
+                /* 
+                 * waiting for GNS complete and check dentry again, it may be
+                 * mounted already.
+                 */
                 wait_for_completion(&sbi->ll_gns_mount_finished);
                 if (d_mountpoint(dentry))
                         RETURN(0);
@@ -212,7 +217,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 
         /* check if found child is regular file */
         if (!S_ISREG(dchild->d_inode->i_mode))
-                GOTO(cleanup, rc = -EOPNOTSUPP);
+                GOTO(cleanup, rc = -EBADF);
 
         mntget(mnt);
 
@@ -280,7 +285,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         up(&sbi->ll_gns_sem);
 
         /* do not wait for helper complete here. */
-        rc = call_usermodehelper(argv[0], argv, NULL, 0);
+        rc = call_usermodehelper(argv[0], argv, NULL, 1);
         if (rc) {
                 CWARN("failed to call GNS upcall %s, err = %d, "
                       "checking for mount anyway\n", sbi->ll_gns_upcall, rc);
@@ -291,12 +296,10 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * second.
          */
         rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
-        complete_all(&sbi->ll_gns_mount_finished);
         if (rc == 0) {
                 struct dentry *rdentry;
                 struct vfsmount *rmnt;
-                
-                /* mount is successful */
+               
                 LASSERT(sbi->ll_gns_state == LL_GNS_FINISHED);
 
                 rmnt = mntget(mnt);
@@ -337,11 +340,11 @@ cleanup:
                         dput(dchild);
         case 1:
                 free_page((unsigned long)pathpage);
-                complete_all(&sbi->ll_gns_mount_finished);
         case 0:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;
                 spin_unlock(&sbi->ll_gns_lock);
+                complete_all(&sbi->ll_gns_mount_finished);
         }
         return rc;
 }

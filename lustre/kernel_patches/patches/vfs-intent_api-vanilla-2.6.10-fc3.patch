@@ -38,7 +38,7 @@ Index: linux-2.6.10/fs/open.c
  	int error;
  
 -	error = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
-+	intent_init(&nd.intent.open, IT_GETATTR);
++	intent_init(&nd.intent.open, IT_CHDIR);
 +	error = __user_walk_it(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
  	if (error)
  		goto out;

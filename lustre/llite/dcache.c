@@ -312,7 +312,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         struct it_cb_data icbd;
         struct lustre_id pid;
         struct lustre_id cid;
-        int orig_it, rc = 0;
+        int gns_it, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s (%p), intent=%s\n", de->d_name.name,
@@ -351,8 +351,10 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 nd->mnt->mnt_last_used = jiffies;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
-        orig_it = it ? it->it_op : IT_OPEN;
+
+        gns_it = it ? it->it_op : IT_OPEN;
         ll_frob_intent(&it, &lookup_it);
+
         LASSERT(it != NULL);
 
         if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock as
@@ -388,7 +390,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 ll_intent_release(&lookup_it);
         }
 
-#if 1
+        /* open lock stuff */
         if ((it->it_op == IT_OPEN) && de->d_inode) {
                 struct inode *inode = de->d_inode;
                 struct ll_inode_info *lli = ll_i2info(inode);
@@ -444,7 +446,6 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                         ldlm_lock_decref(&lockh, lockmode);
                 }
         }
-#endif
 
 do_lock:
         rc = md_intent_lock(exp, &pid, de->d_name.name, de->d_name.len,
@@ -498,16 +499,6 @@ out:
                 return 0;
         }
 
-        CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
-               "inode %p refc %d\n", de->d_name.len,
-               de->d_name.name, de, de->d_parent, de->d_inode,
-               atomic_read(&de->d_count));
-
-        ll_lookup_finish_locks(it, de);
-        de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-        if (it == &lookup_it)
-                ll_intent_release(it);
-
         /* 
          * if we found that this is possible GNS mount and dentry is still valid
          * and may be used by system, we drop the lock and return 0, that means
@@ -515,19 +506,29 @@ out:
          * lookup control path, which is always made with parent's i_sem taken.
          * --umka
          */
-        if (((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
-            !(flags & LOOKUP_CONTINUE || (orig_it & (IT_CHDIR | IT_OPEN | IT_GETATTR)))) {
-                
-                /* special "." and ".." has to be always revalidated */
-                if (rc && !ll_special_name(de) && nd != NULL && !(nd->flags & LOOKUP_LAST)) {
+        if (rc &&
+            !(!((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
+              !(flags & LOOKUP_CONTINUE || (gns_it & (IT_CHDIR | IT_OPEN))))) {
+                /* 
+                 * special "." and ".." has to be always revalidated because
+                 * they never should be passed to lookup()
+                 */
+                if (!ll_special_name(de)) {
                         ll_intent_drop_lock(it);
-                        rc = 0;
+                        ll_intent_free(it);
+                        ll_unhash_aliases(de->d_inode);
+                        return 0;
                 }
-                
-                ll_intent_release(it);
-		return rc;
         }
-	    
+
+        CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
+               "inode %p refc %d\n", de->d_name.len,
+               de->d_name.name, de, de->d_parent, de->d_inode,
+               atomic_read(&de->d_count));
+
+        ll_lookup_finish_locks(it, de);
+        de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+        ll_intent_release(it);
         return rc;
 do_lookup:
         it = &lookup_it;

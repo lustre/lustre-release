@@ -189,7 +189,7 @@ rm -rf $DIR/[Rdfs][1-9]*
 build_test_filter
 
 echo preparing for tests involving mounts
-EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
+EXT2_DEV=${EXT2_DEV:-$TMP/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 >/dev/null 2>&1
 
@@ -245,11 +245,11 @@ setup_upcall() {
     local LOG=$3
     local BG=$4
     
-    test "x$BG" = "xBACKGROUND" && 
+    test "x$BG" = "xBG" && 
 	BG="&" || BG=""
     
-    test "x$MODE" = "xDEADLOCK" &&
-	INJECTION="touch \$MNTPATH/file"
+#    test "x$MODE" = "xDEADLOCK" &&
+#	INJECTION="touch \$MNTPATH/file"
     
     cat > $UPCALL <<- EOF
 #!/bin/sh
@@ -303,7 +303,7 @@ check_mnt()
 }
 
 check_gns() {
-    local LOG="/tmp/gns-log"
+    local LOG="$TMP/gns-log"
     local UPCALL_PATH=""
     
     local UPCALL=$1
@@ -313,9 +313,10 @@ check_gns() {
     local TICK=$5
     local MODE=$6
     local BG=$7
+    local OP=$8
     
     rm -fr $LOG >/dev/null 2>&1
-    UPCALL_PATH="/tmp/gns-upcall-$UPCALL.sh"
+    UPCALL_PATH="$TMP/gns-upcall-$UPCALL.sh"
     
     echo "generating upcall $UPCALL_PATH"
     setup_upcall $UPCALL_PATH $UPCALL $LOG $BG || return $rc
@@ -327,20 +328,40 @@ check_gns() {
     echo "$UPCALL_PATH" > /proc/fs/lustre/llite/fs0/gns_upcall || return $?
     echo "upcall:  $(cat /proc/fs/lustre/llite/fs0/gns_upcall)"
 
-#    local OLD_PWD=$(pwd)
+    echo -n "mount on $OP: "
+
+    local OLD_PWD=$(pwd)
+    
     case "$MODE" in
 	GENERIC)
-	    echo -n "mount on open $OBJECT1/test_file1 (generic): "
-	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 || return $?
-#	    cd $OBJECT1 || return $?
+	    case "$OP" in
+		OPEN)
+		    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1
+		    ;;
+		CHDIR)
+		    cd $OBJECT1 || return $?
+		    ;;
+		*)
+		    echo "invalid testing operation $OP"
+		    return 1
+	    esac
 	    ;;
 	CONCUR1)
 	    local i=1
 	    local nr=20
 	
-	    echo -n "mount on open $OBJECT1/test_file1 ($nr threads): "
 	    for ((;i<=$nr;i++)); do 
-		echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+		case "$OP" in
+		    OPEN)
+			echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+			;;
+		    CHDIR)
+			cd $OBJECT1 >/dev/null 2>&1 &
+			;;
+		    *)
+			echo "invalid testing operation $OP"
+			return 1
+		esac
 	    done
 	
 	    wait
@@ -355,10 +376,19 @@ check_gns() {
 		echo "not defined object2 for concurrent2 testing"
 		return 1
 	    }
-	    echo -n "mount on open $OBJECT1/test_file1: "
-	    echo -n "mount on open $OBJECT2/test_file1: "
-	    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 &
-	    echo -n "test data" > $OBJECT2/test_file1 >/dev/null 2>&1 &
+	    case "$OP" in
+	        OPEN)
+		    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 &
+		    echo -n "test data" > $OBJECT2/test_file1 >/dev/null 2>&1 &
+		    ;;
+		CHDIR)
+		    cd $OBJECT1 >/dev/null 2>&1 &
+		    cd $OBJECT2 >/dev/null 2>&1 &
+		    ;;
+		*)
+		    echo "invalid testing operation $OP"
+		    return 1
+	    esac
 	    
 	    wait
 	    
@@ -368,15 +398,25 @@ check_gns() {
 		return $RETVAL
 	    ;;
 	CONCUR3)
-	    echo -n "mount on open $OBJECT1/test_file1: "
-	    
 	    local i=1
 	    local nr=20
 	    
 	    for ((;i<$nr;i++)); do
-		touch $OBJECT1/file$i &
-		echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
-		mkdir $OBJECT1/dir$i &
+		case "$OP" in
+	    	    OPEN)
+			touch $OBJECT1/file$i &
+			echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+			mkdir $OBJECT1/dir$i &
+			;;
+		    CHDIR)
+			touch $OBJECT1/file$i &
+			cd $OBJECT1 >/dev/null 2>&1 &
+			mkdir $OBJECT1/dir$i &
+			;;
+		    *)
+			echo "invalid testing operation $OP"
+			return 1
+		esac
 	    done
 
 	    wait
@@ -391,7 +431,7 @@ check_gns() {
 	    return 1
     esac
 
-#    cd $OLD_PWD
+    test "x$OP" = "xCHDIR" && cd $OLD_PWD
     
     check_mnt $OBJECT1 || {
 	echo "fail"
@@ -487,7 +527,7 @@ disable_gns()
 
 test_1a() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_1a"
+    local LOOP_FILE="$TMP/gns_loop_1a"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -512,8 +552,23 @@ test_1a() {
     echo ""
     echo "testing GNS with GENERIC upcall 3 times on the row"
     
+    echo ""
+    echo "testing OPEN operation"
+    
     for ((i=0;i<3;i++)); do
-	check_gns GENERIC $DIR/gns_test_1a $DIR/gns_test_1a $TIMOUT $TICK GENERIC || {
+	check_gns GENERIC $DIR/gns_test_1a $DIR/gns_test_1a $TIMOUT $TICK GENERIC FG OPEN || {
+	    disable_gns
+	    cleanup_object $DIR/gns_test_1a
+	    cleanup_loop $LOOP_DEV $LOOP_FILE
+	    error
+	}
+    done
+    
+    echo ""
+    echo "testing CHDIR operation"
+    
+    for ((i=0;i<3;i++)); do
+	check_gns GENERIC $DIR/gns_test_1a $DIR/gns_test_1a $TIMOUT $TICK GENERIC FG CHDIR || {
 	    disable_gns
 	    cleanup_object $DIR/gns_test_1a
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
@@ -525,13 +580,14 @@ test_1a() {
 
     cleanup_object $DIR/gns_test_1a
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 1a " general GNS test - mount/umount (GENERIC) ================"
 
 test_1b() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_1b"
+    local LOOP_FILE="$TMP/gns_loop_1b"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -557,25 +613,21 @@ test_1b() {
     echo "testing GNS with DEADLOCK upcall 3 times on the row"
     
     for ((i=0;i<3;i++)); do
-	check_gns DEADLOCK $DIR/gns_test_1b $DIR/gns_test_1b $TIMOUT $TICK GENERIC || {
-	    disable_gns
-	    cleanup_object $DIR/gns_test_1b
-	    cleanup_loop $LOOP_DEV $LOOP_FILE
-	    error
-	}
+	check_gns DEADLOCK $DIR/gns_test_1b $DIR/gns_test_1b $TIMOUT $TICK GENERIC FG OPEN
     done
     
     disable_gns
 
     cleanup_object $DIR/gns_test_1b
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 1b " general GNS test - mount/umount (DEADLOCK) ==============="
 
 test_1c() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_1c"
+    local LOOP_FILE="$TMP/gns_loop_1c"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -602,29 +654,31 @@ test_1c() {
     local i=0
     
     for ((;i<4;i++)); do
-	local MODE="GENERIC"
-	
-	test $(($i%2)) -eq 1 && MODE="DEADLOCK"
-	
-	check_gns $MODE $DIR/gns_test_1c $DIR/gns_test_1c $TIMOUT $TICK GENERIC || {
-	    disable_gns
-	    cleanup_object $DIR/gns_test_1c
-	    cleanup_loop $LOOP_DEV $LOOP_FILE
-	    error
+	test $(($i%2)) -eq 1 && {
+	    check_gns DEADLOCK $DIR/gns_test_1c $DIR/gns_test_1c $TIMOUT $TICK GENERIC FG OPEN
+	} || {
+	    check_gns GENERIC $DIR/gns_test_1c $DIR/gns_test_1c $TIMOUT $TICK GENERIC FG OPEN || {
+		disable_gns
+		cleanup_object $DIR/gns_test_1c
+		cleanup_loop $LOOP_DEV $LOOP_FILE
+		error "generic upcall does not work!"
+	    }
 	}
+	
     done
     
     disable_gns
 
     cleanup_object $DIR/gns_test_1c
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 1c " general GNS test - mount/umount (GENERIC/DEADLOCK) ========"
 
 test_1d() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_1d"
+    local LOOP_FILE="$TMP/gns_loop_1d"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -647,15 +701,11 @@ test_1d() {
     enable_gns
 
     echo ""
-    echo "testing GNS with GENERIC/DEADLOCK upcall 4 times on the row in CONCUR1 mode"
+    echo "testing GNS with GENERIC upcall 4 times on the row in CONCUR1 mode"
     local i=0
     
     for ((;i<4;i++)); do
-	local MODE="GENERIC"
-	
-	test $(($i%2)) -eq 1 && MODE="DEADLOCK"
-	
-	check_gns $MODE $DIR/gns_test_1d $DIR/gns_test_1d $TIMOUT $TICK CONCUR1 || {
+	check_gns GENERIC $DIR/gns_test_1d $DIR/gns_test_1d $TIMOUT $TICK CONCUR1 FG OPEN || {
 	    disable_gns
 	    cleanup_object $DIR/gns_test_1d
 	    cleanup_loop $LOOP_DEV $LOOP_FILE
@@ -667,13 +717,14 @@ test_1d() {
 
     cleanup_object $DIR/gns_test_1d
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 1d " general GNS test - concurrent mount ======================="
 
 test_1e() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_1e"
+    local LOOP_FILE="$TMP/gns_loop_1e"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -701,7 +752,7 @@ test_1e() {
     echo ""
     echo "testing GNS with GENERIC upcall in CONCUR2 mode"
     
-    check_gns GENERIC $DIR/gns_test_1e1 $DIR/gns_test_1e2 $TIMOUT $TICK CONCUR2 || {
+    check_gns GENERIC $DIR/gns_test_1e1 $DIR/gns_test_1e2 $TIMOUT $TICK CONCUR2 FG OPEN || {
 	disable_gns
         cleanup_object $DIR/gns_test_1e1
         cleanup_object $DIR/gns_test_1e2
@@ -714,6 +765,7 @@ test_1e() {
     cleanup_object $DIR/gns_test_1e1
     cleanup_object $DIR/gns_test_1e2
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 1e " general GNS test - concurrent mount of 2 GNS mounts ======="
@@ -738,7 +790,7 @@ test_2a() {
     echo ""
     echo "testing GNS with GENERIC upcall"
     
-    check_gns GENERIC $DIR/gns_test_2a $DIR/gns_test_2a $TIMOUT $TICK GENERIC && {
+    check_gns GENERIC $DIR/gns_test_2a $DIR/gns_test_2a $TIMOUT $TICK GENERIC FG OPEN && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2a
 	rm -fr $DIR/gns_test_2a
@@ -748,6 +800,7 @@ test_2a() {
     disable_gns
     chmod u-s $DIR/gns_test_2a
     rm -fr $DIR/gns_test_2a
+    return 0
 }
 
 run_test 2a " odd conditions (mount object is symlink) ============="
@@ -771,7 +824,7 @@ test_2b() {
     echo ""
     echo "testing GNS with GENERIC upcall"
     
-    check_gns GENERIC $DIR/gns_test_2b $DIR/gns_test_2b $TIMOUT $TICK GENERIC && {
+    check_gns GENERIC $DIR/gns_test_2b $DIR/gns_test_2b $TIMOUT $TICK GENERIC FG OPEN && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2b
 	rm -fr $DIR/gns_test_2b
@@ -781,6 +834,7 @@ test_2b() {
     disable_gns
     chmod u-s $DIR/gns_test_2b
     rm -fr $DIR/gns_test_2b
+    return 0
 }
 
 run_test 2b " odd conditions (mount object is directory) ==========="
@@ -804,7 +858,7 @@ test_2c() {
     echo ""
     echo "testing GNS with GENERIC upcall"
     
-    check_gns GENERIC $DIR/gns_test_2c $DIR/gns_test_2c $TIMOUT $TICK GENERIC && {
+    check_gns GENERIC $DIR/gns_test_2c $DIR/gns_test_2c $TIMOUT $TICK GENERIC FG OPEN && {
 	disable_gns
 	chmod u-s -R $DIR/gns_test_2c
 	rm -fr $DIR/gns_test_2c
@@ -814,6 +868,7 @@ test_2c() {
     disable_gns
     chmod u-s $DIR/gns_test_2c
     rm -fr $DIR/gns_test_2c
+    return 0
 }
 
 run_test 2c " odd conditions (mount object is recursive dir) ======="
@@ -837,7 +892,7 @@ test_2d() {
     echo ""
     echo "testing GNS with GENERIC upcall"
     
-    check_gns GENERIC $DIR/gns_test_2d $DIR/gns_test_2d $TIMOUT $TICK GENERIC && {
+    check_gns GENERIC $DIR/gns_test_2d $DIR/gns_test_2d $TIMOUT $TICK GENERIC FG OPEN && {
 	disable_gns
 	chmod u-s $DIR/gns_test_2d
 	rm -fr $DIR/gns_test_2d
@@ -847,6 +902,7 @@ test_2d() {
     disable_gns
     chmod u-s $DIR/gns_test_2d
     rm -fr $DIR/gns_test_2d
+    return 0
 }
 
 run_test 2d " odd conditions (mount object is absent) =============="
@@ -874,13 +930,14 @@ test_2e() {
     echo "..a" > /proc/fs/lustre/llite/fs0/gns_object_name
     test "x$(cat /proc/fs/lustre/llite/fs0/gns_object_name)" = "x..a" || 
 	error "'..a' is not set as mount object name"
+    return 0
 }
 
 run_test 2e " odd conditions ('.' and '..' as mount object) ============="
 
 test_2f() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_2f"
+    local LOOP_FILE="$TMP/gns_loop_2f"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -903,28 +960,27 @@ test_2f() {
     enable_gns
 
     echo ""
-    echo "testing GNS with DEADLOCK upcall in CONCUR3 mode"
+    echo "testing GNS with GENERIC upcall in CONCUR3 mode"
     
-    local MODE="DEADLOCK"
-	
-    check_gns $MODE $DIR/gns_test_2f $DIR/gns_test_2f $TIMOUT $TICK CONCUR3 || {
+    check_gns GENERIC $DIR/gns_test_2f $DIR/gns_test_2f $TIMOUT $TICK CONCUR3 FG OPEN || {
         disable_gns
         cleanup_object $DIR/gns_test_2f
         cleanup_loop $LOOP_DEV $LOOP_FILE
-        error
+        error "mount during modifying mount point does not work"
     }
     
     disable_gns
 
     cleanup_object $DIR/gns_test_2f
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 2f " odd conditions (mount point is modifying during mount) ===="
 
 test_2g() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_2g"
+    local LOOP_FILE="$TMP/gns_loop_2g"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -949,12 +1005,10 @@ $OBJECT "-t ext2 $LOOP_DEV" || error
     enable_gns
 
     echo ""
-    echo "testing GNS with DEADLOCK upcall in GENERIC mode"
+    echo "testing GNS with GENERIC upcall in GENERIC mode"
     
-    local MODE="DEADLOCK"
-	
-    check_gns $MODE $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
-$DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC || {
+    check_gns GENERIC $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
+$DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC FG OPEN || {
         disable_gns
         cleanup_object $DIR/gns_test_2g
         cleanup_loop $LOOP_DEV $LOOP_FILE
@@ -969,8 +1023,8 @@ $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC || {
 
     enable_gns
 
-    check_gns $MODE $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
-$DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC && {
+    check_gns GENERIC $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT \
+$DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC FG OPEN && {
         disable_gns
         cleanup_object $DIR/gns_test_2g
         cleanup_loop $LOOP_DEV $LOOP_FILE
@@ -981,13 +1035,14 @@ $DIR/gns_test_2g/$OBJECT/$OBJECT/$OBJECT $TIMOUT $TICK GENERIC && {
 
     cleanup_object $DIR/gns_test_2g
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 2g " odd conditions (mount point is recursive marked SUID dir) ="
 
 test_2h() {
     local LOOP_DEV=$(find_free_loop 2>/dev/null)
-    local LOOP_FILE="/tmp/gns_loop_2h"
+    local LOOP_FILE="$TMP/gns_loop_2h"
     local OBJECT=".mntinfo"
     local TIMOUT=5
     local TICK=1
@@ -1013,7 +1068,7 @@ test_2h() {
     echo "testing GNS with GENERIC upcall in GENERIC mode"
     
     check_gns GENERIC $DIR/gns_test_2h $DIR/gns_test_2h \
-$TIMOUT $TICK GENERIC BACKGROUND || {
+$TIMOUT $TICK GENERIC BG OPEN || {
         disable_gns
         cleanup_object $DIR/gns_test_2h
         cleanup_loop $LOOP_DEV $LOOP_FILE
@@ -1024,6 +1079,7 @@ $TIMOUT $TICK GENERIC BACKGROUND || {
 
     cleanup_object $DIR/gns_test_2h
     cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
 }
 
 run_test 2h " odd conditions (mounting in background) ==================="

@@ -362,7 +362,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
-        int rc, orig_it;
+        int rc, gns_it;
         ENTRY;
 
         if (dentry->d_name.len > EXT3_NAME_LEN)
@@ -378,7 +378,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (nd != NULL)
                 nd->mnt->mnt_last_used = jiffies;
 
-        orig_it = it ? it->it_op : IT_OPEN;
+        gns_it = nd ? nd->intent.open.it_op : IT_OPEN;
         ll_frob_intent(&it, &lookup_it);
 
         icbd.icbd_childp = &dentry;
@@ -399,10 +399,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         ll_lookup_finish_locks(it, dentry);
 
-        if (nd &&
-            dentry->d_inode != NULL && dentry->d_inode->i_mode & S_ISUID &&
-            S_ISDIR(dentry->d_inode->i_mode) &&
-            ((flags & LOOKUP_CONTINUE) || (orig_it & (IT_CHDIR | IT_OPEN | IT_GETATTR))))
+        if (nd && dentry->d_inode != NULL &&
+            dentry->d_inode->i_mode & S_ISUID && S_ISDIR(dentry->d_inode->i_mode) &&
+            ((flags & LOOKUP_CONTINUE) || (gns_it & (IT_CHDIR | IT_OPEN))))
         {
                 rc = ll_gns_mount_object(dentry, nd->mnt);
                 if (rc == -ERESTARTSYS) {
@@ -415,9 +414,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                          * just reporting about GNS failures, lookup() is
                          * successful, do not stop it.
                          *
-                         * GNS failure may be that found object is found in SUID
-                         * bit marked dir but it is not regular file and we
-                         * should lookup further until we find correct mount
+                         * GNS failure may be that object is found in SUID bit
+                         * marked dir but it is not regular file and we should
+                         * lookup further until we find correct mount
                          * object. This will allow to perform GNS mount is the
                          * following case for instance:
                          *

@@ -220,7 +220,7 @@ do {                                                                         \
 #define OBD_SLEEP_ON(wq)                                                     \
 do {                                                                         \
         DEFINE_WAIT(__wait);                                                 \
-        prepare_to_wait(&wq, &__wait, TASK_UNINTERRUPTIBLE);                 \
+        prepare_to_wait(&wq, &__wait, TASK_INTERRUPTIBLE);                   \
         schedule();                                                          \
         finish_wait(&wq, &__wait);                                           \
 } while (0)

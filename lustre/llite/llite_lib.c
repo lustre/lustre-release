@@ -83,6 +83,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 
         /* default values, may be changed via /proc/fs/... */
         sbi->ll_gns_state = LL_GNS_IDLE;
+        atomic_set(&sbi->ll_gns_enabled, 1);
         sbi->ll_gns_tick = GNS_TICK_TIMEOUT;
         sbi->ll_gns_timeout = GNS_MOUNT_TIMEOUT;
 
@@ -1108,14 +1109,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * NB: ATTR_SIZE will only be set at this point if the size
                  * resides on the MDS, ie, this file has no objects. */
                 attr->ia_valid &= ~ATTR_SIZE;
+
+                /* 
+                 * assigning inode_setattr() to @err to disable warning that
+                 * function's result should be checked by by caller. error is
+                 * impossible here, as vmtruncate() control path is disabled.
+                 */
                 err = inode_setattr(inode, attr);
-                if (err) {
-                        CERROR("inode_setattr() failed, inode=%lu/%u(%p), "
-                               "err = %d\n", (unsigned long)inode->i_ino,
-                               inode->i_generation, inode, err);
-                        /* should we go to error path here? --umka */
-                }
-                 
                 ll_update_inode(inode, &md);
                 ptlrpc_req_finished(request);
 
@@ -1142,14 +1142,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         }
                 }
 
-                /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
+                /* won't invoke vmtruncate, as we already cleared ATTR_SIZE */
                 err = inode_setattr(inode, attr);
-                if (err) {
-                        CERROR("inode_setattr() failed, inode=%lu/%u(%p), "
-                               "err = %d\n", (unsigned long)inode->i_ino,
-                               inode->i_generation, inode, err);
-                        /* should we go to error path here? --umka */
-                }
+                /* 
+                 * assigning inode_setattr() to @err to disable warning that
+                 * function's result should be checked by by caller. error is
+                 * impossible here, as vmtruncate() control path is disabled.
+                 */
         }
 
         /* We really need to get our PW lock before we change inode->i_size.

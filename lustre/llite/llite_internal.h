@@ -93,6 +93,7 @@ struct ll_sb_info {
         struct semaphore          ll_gns_sem;
         spinlock_t                ll_gns_lock;
         wait_queue_head_t         ll_gns_waitq;
+        atomic_t                  ll_gns_enabled;
         int                       ll_gns_state;
         struct timer_list         ll_gns_timer;
         struct list_head          ll_gns_sbi_head;
@@ -117,7 +118,6 @@ struct ll_gns_ctl {
 #define LL_GNS_IDLE               (1 << 0)
 #define LL_GNS_MOUNTING           (1 << 1)
 #define LL_GNS_FINISHED           (1 << 2)
-#define LL_GNS_DISABLED           (1 << 3)
 
 /* mounts checking flags */
 #define LL_GNS_UMOUNT             (1 << 0)

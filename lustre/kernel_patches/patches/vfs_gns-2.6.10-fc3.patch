@@ -30,8 +30,8 @@ Index: linux-2.6.10/include/linux/dcache.h
  
 -#define DCACHE_CROSS_REF       0x0040  /* entry points to inode on another MDS */
 +#define DCACHE_CROSS_REF        0x0040  /* entry points to inode on another MDS */
-+#define DCACHE_GNS_PENDING      0x0080  /* entry is GNS pending mount point */
-+#define DCACHE_GNS_MOUNTING     0x0100  /* entry is GNS mount in progress */
++
++
 +
  
  extern spinlock_t dcache_lock;
