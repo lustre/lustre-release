@@ -25,7 +25,8 @@ if [ -f $TMP ]; then
 	else
 		[ -r CVS/Tag ] && TAG=CVS/Tag
 		[ -z "$TAG" -a -r lustre/CVS/Tag ] && TAG=lustre/CVS/Tag
-		echo "CVS: Branch: `sed 's/^T//' $TAG`" >> $TMP
+		[ "$TAG" ] && BRANCH="`sed 's/^T//' $TAG`" || BRANCH="HEAD"
+		echo "CVS: Branch $BRANCH" >> $TMP
 	fi
 	echo "CVS: did you update the ChangeLog for a bug fix?" >> $TMP
 	echo "CVS: did you update the hours spent in Bugzilla?" >> $TMP
