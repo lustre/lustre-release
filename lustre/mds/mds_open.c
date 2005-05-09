@@ -1005,6 +1005,10 @@ got_child:
                  * may conflict with enqueue_order_locks(). so,
                  * drop parent lock and acquire both the locks in
                  * common order. bug 6190 */
+#ifdef S_PDIROPS
+                if (parent_lockh[1].cookie != 0)
+                        ldlm_lock_decref(parent_lockh + 1, update_mode);
+#endif
                 ldlm_lock_decref(parent_lockh, parent_mode);
                 l_dput(dchild);
                 l_dput(dparent);
