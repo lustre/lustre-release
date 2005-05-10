@@ -171,11 +171,6 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (inode == NULL)
                         break;
 
-                if (bits & MDS_INODELOCK_UPDATE)
-                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                                  &(ll_i2info(inode)->lli_flags));
-
-
                 if (lock->l_resource->lr_name.name[0] != id_fid(&li->lli_id) ||
                     lock->l_resource->lr_name.name[1] != id_group(&li->lli_id)) {
                         LDLM_ERROR(lock, "data mismatch with object %lu/%lu",
