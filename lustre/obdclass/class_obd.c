@@ -89,7 +89,7 @@ int proc_version;
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
-unsigned int ldlm_timeout = 6;  /* seconds */
+unsigned int ldlm_timeout = 30; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 

@@ -1,4 +1,9 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.3
+       * bug fixes
+	- increase ldlm_timeout to avoid timeouts for long truncates (6172)
+
+2005-05-10  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
        NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous
 	     versions of Lustre.  Please update all servers and clients to
