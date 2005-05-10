@@ -2,7 +2,10 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
 	- increase ldlm_timeout to avoid timeouts for long truncates (6172)
-
+	- fix a collection of import/export refcount and cleanup ordering
+	  issues for safer force cleanup (5949,4834)
+	- fix lfs to handle large numbers of targets (6223)
+	
 2005-05-10  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
        NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous
@@ -35,7 +38,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't overwrite last_rcvd if there is a *_client_add() error (6068)
 	- Correctly handle reads of files with no objects (6243)
 	- lctl recover will also mark a device active if deactivate used (5933)
-	- fix lfs to handle large numbers of targets (6223)
 	* miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
