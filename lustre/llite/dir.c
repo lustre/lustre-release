@@ -840,8 +840,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(rc?:error);
         }
+        case OBD_IOC_GETNAME: {  
+                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
+                if (!obd)
+                        RETURN(-EFAULT);
+                if (copy_to_user((void *)arg, obd->obd_name, 
+                                strlen(obd->obd_name) + 1))
+                        RETURN (-EFAULT);
+                RETURN(0);
+        }
         default:
-                return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);
+                RETURN(obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg));
         }
 }
 

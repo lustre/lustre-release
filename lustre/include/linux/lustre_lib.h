@@ -427,6 +427,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
+#define OBD_IOC_GETNAME                _IOR ('f', 131, long)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)

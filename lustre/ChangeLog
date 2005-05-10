@@ -30,7 +30,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't overwrite last_rcvd if there is a *_client_add() error (6068)
 	- Correctly handle reads of files with no objects (6243)
 	- lctl recover will also mark a device active if deactivate used (5933)
-       * miscellania
+	- fix lfs to handle large numbers of targets (6223)
+	* miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
 	- don't write config llogs to MDS for mounts not from that MDS (5617)
