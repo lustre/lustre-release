@@ -528,7 +528,8 @@ out:
 
         ll_lookup_finish_locks(it, de);
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-        ll_intent_release(it);
+        if (it == &lookup_it)
+                ll_intent_release(it);
         return rc;
 do_lookup:
         it = &lookup_it;
