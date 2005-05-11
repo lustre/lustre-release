@@ -866,7 +866,7 @@ test_2c() {
     }
     
     disable_gns
-    chmod u-s $DIR/gns_test_2c
+    chmod u-s -R $DIR/gns_test_2c
     rm -fr $DIR/gns_test_2c
     return 0
 }
