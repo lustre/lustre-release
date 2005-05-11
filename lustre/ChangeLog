@@ -35,7 +35,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- reserve enough journal credits in fsfilt_start_log for setattr (4554)
 	- ldlm_enqueue freed-export error path would always LBUG (6149,6184)
 	- don't reference lr_lvb_data until after we hold lr_lvb_sem (6170)
-	- don't overwrite last_rcvd if there is a *_client_add() error (6068)
+	- don't overwrite last_rcvd if there is a *_client_add() error (6086)
 	- Correctly handle reads of files with no objects (6243)
 	- lctl recover will also mark a device active if deactivate used (5933)
 	* miscellania
