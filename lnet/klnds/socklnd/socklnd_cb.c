@@ -378,7 +378,7 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         }
 
         if (tx->tx_isfwd) {             /* was a forwarded packet? */
-                kpr_fwd_done (ksocknal_data.ksnd_ni,
+                kpr_fwd_done (tx->tx_conn->ksnc_peer->ksnp_ni,
                               KSOCK_TX_2_KPR_FWD_DESC (tx), 
                               (tx->tx_resid == 0) ? 0 : -ECONNABORTED);
                 EXIT;
@@ -388,7 +388,7 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         /* local send */
         ltx = KSOCK_TX_2_KSOCK_LTX (tx);
 
-        ptl_finalize (ksocknal_data.ksnd_ni, 
+        ptl_finalize (tx->tx_conn->ksnc_peer->ksnp_ni, 
                       ltx->ltx_private, ltx->ltx_cookie,
                       (tx->tx_resid == 0) ? PTL_OK : PTL_FAIL);
 
@@ -682,7 +682,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
 }
 
 int
-ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid, int routing)
+ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid, int routing)
 {
         unsigned long     flags;
         ksock_peer_t     *peer;
@@ -715,7 +715,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid, int routing)
         
  again:
         if (create_peer) {
-                rc = ksocknal_add_peer(nid, (__u32)nid,
+                rc = ksocknal_add_peer(ni, nid, PTL_NIDADDR(nid),
                                        *ksocknal_tunables.ksnd_port);
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
@@ -726,7 +726,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid, int routing)
         
 #if !SOCKNAL_ROUND_ROBIN
         read_lock (g_lock);
-        peer = ksocknal_find_peer_locked(nid);
+        peer = ksocknal_find_peer_locked(ni, nid);
         if (peer != NULL) {
                 if (ksocknal_find_connectable_route_locked(peer) == NULL) {
                         conn = ksocknal_find_conn_locked (tx, peer);
@@ -746,7 +746,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid, int routing)
 #endif
         write_lock_irqsave(g_lock, flags);
 
-        peer = ksocknal_find_peer_locked(nid);
+        peer = ksocknal_find_peer_locked(ni, nid);
         if (peer == NULL) {
                 write_unlock_irqrestore(g_lock, flags);
 
@@ -880,7 +880,7 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
                                          payload_offset, payload_nob);
         }
 
-        rc = ksocknal_launch_packet(&ltx->ltx_tx, target.nid, routing);
+        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target.nid, routing);
         if (rc == 0)
                 return (PTL_OK);
         
@@ -924,7 +924,7 @@ ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
                 libcfs_nid2str(fwd->kprfd_gateway_nid), 
                 libcfs_nid2str(fwd->kprfd_target_nid));
 
-        routing = (nid != ksocknal_data.ksnd_ni->ni_nid);
+        routing = (nid != ni->ni_nid);
         if (!routing)
                 nid = fwd->kprfd_target_nid;
 
@@ -939,7 +939,7 @@ ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         ftx->ftx_tx.tx_nkiov = fwd->kprfd_niov;
         ftx->ftx_tx.tx_kiov  = fwd->kprfd_kiov;
 
-        rc = ksocknal_launch_packet (&ftx->ftx_tx, nid, routing);
+        rc = ksocknal_launch_packet (ni, &ftx->ftx_tx, nid, routing);
         if (rc != 0)
                 kpr_fwd_done (ni, fwd, rc);
 }
@@ -1106,7 +1106,7 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
                         libcfs_nid2str(le64_to_cpu(conn->ksnc_hdr.src_nid)), 
                         libcfs_nid2str(dest_nid));
 
-                kpr_fwd_start (ksocknal_data.ksnd_ni, &fmb->fmb_fwd);
+                kpr_fwd_start (conn->ksnc_peer->ksnp_ni, &fmb->fmb_fwd);
 
                 ksocknal_new_packet (conn, 0);  /* on to next packet */
                 return (1);
@@ -1133,7 +1133,6 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
 void
 ksocknal_fwd_parse (ksock_conn_t *conn)
 {
-        ksock_peer_t *peer;
         ptl_nid_t     dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
         ptl_nid_t     src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
         int           body_len = le32_to_cpu(conn->ksnc_hdr.payload_length);
@@ -1157,7 +1156,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
         }
 
         if (PTL_NIDNET(conn->ksnc_hdr.dest_nid) ==
-            PTL_NIDNET(ksocknal_data.ksnd_ni->ni_nid)) {
+            PTL_NIDNET(conn->ksnc_peer->ksnp_ni->ni_nid)) {
                 /* should have gone direct */
                 CERROR ("dropping packet from %s for %s: "
                         "target is a peer\n",
@@ -1315,7 +1314,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
         case SOCKNAL_RX_HEADER:
                 if (conn->ksnc_hdr.type != cpu_to_le32(PTL_MSG_HELLO) &&
                     le64_to_cpu(conn->ksnc_hdr.dest_nid) != 
-                    ksocknal_data.ksnd_ni->ni_nid) {
+                    conn->ksnc_peer->ksnp_ni->ni_nid) {
                         /* This packet isn't for me */
                         ksocknal_fwd_parse (conn);
                         switch (conn->ksnc_rx_state) {
@@ -1332,7 +1331,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 }
 
                 /* sets wanted_len, iovs etc */
-                rc = ptl_parse(ksocknal_data.ksnd_ni, &conn->ksnc_hdr, conn);
+                rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
 
                 if (rc != PTL_OK) {
                         /* I just received garbage: give up on this conn */
@@ -1348,7 +1347,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
         case SOCKNAL_RX_BODY:
                 /* payload all received */
-                ptl_finalize(ksocknal_data.ksnd_ni, NULL, conn->ksnc_cookie, PTL_OK);
+                ptl_finalize(conn->ksnc_peer->ksnp_ni, NULL, conn->ksnc_cookie, PTL_OK);
                 /* Fall through */
 
         case SOCKNAL_RX_SLOP:
@@ -1367,7 +1366,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 /* forward the packet. NB ksocknal_init_fmb() put fmb into
                  * conn->ksnc_cookie */
                 fmb = (ksock_fmb_t *)conn->ksnc_cookie;
-                kpr_fwd_start (ksocknal_data.ksnd_ni, &fmb->fmb_fwd);
+                kpr_fwd_start (conn->ksnc_peer->ksnp_ni, &fmb->fmb_fwd);
 
                 /* no slop in forwarded packets */
                 LASSERT (conn->ksnc_rx_nob_left == 0);
@@ -1690,6 +1689,8 @@ int
 ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
+        ptl_ni_t           *ni = conn->ksnc_peer->ksnp_ni;
+        ksock_net_t        *net = ni->ni_data;
         struct socket      *sock = conn->ksnc_sock;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
@@ -1707,13 +1708,12 @@ ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
         hmv->version_major = cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
 
-        hdr.src_nid        = cpu_to_le64 (ksocknal_data.ksnd_ni->ni_nid);
+        hdr.src_nid        = cpu_to_le64 (ni->ni_nid);
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
 
         hdr.msg.hello.type = cpu_to_le32 (conn->ksnc_type);
-        hdr.msg.hello.incarnation =
-                cpu_to_le64 (ksocknal_data.ksnd_incarnation);
+        hdr.msg.hello.incarnation = cpu_to_le64 (net->ksnn_incarnation);
 
         /* Receiver is eager */
         rc = ksocknal_lib_sock_write (sock, &hdr, sizeof(hdr));

@@ -157,8 +157,16 @@ typedef struct
 
 typedef struct
 {
+        __u64             ksnn_incarnation;     /* my epoch */
+        atomic_t          ksnn_npeers;          /* # peers */
+        int               ksnn_ninterfaces;     /* IP interfaces */
+        ksock_interface_t ksnn_interfaces[PTL_MAX_INTERFACES];
+} ksock_net_t;
+
+typedef struct
+{
         int               ksnd_init;            /* initialisation state */
-        __u64             ksnd_incarnation;     /* my epoch */
+        int               ksnd_nnets;           /* # networks set up */
 
         int               ksnd_listener_shutdown; /* listener start/stop/rc */
         struct socket    *ksnd_listener_sock;   /* listener's socket */
@@ -172,11 +180,6 @@ typedef struct
         int               ksnd_shuttingdown;    /* tell threads to exit */
         int               ksnd_nschedulers;     /* # schedulers */
         ksock_sched_t    *ksnd_schedulers;      /* their state */
-
-        atomic_t          ksnd_npeers;          /* total # peers extant */
-        atomic_t          ksnd_nclosing_conns;  /* # closed conns extant */
-
-        void             *ksnd_router;          /* router callback arg */
 
         ksock_fmb_pool_t  ksnd_small_fmp;       /* small message forwarding buffers */
         ksock_fmb_pool_t  ksnd_large_fmp;       /* large message forwarding buffers */
@@ -201,10 +204,6 @@ typedef struct
 
         ksock_irqinfo_t   ksnd_irqinfo[NR_IRQS];/* irq->scheduler lookup */
 
-        ptl_ni_t         *ksnd_ni;              /* NI instance (tmp hack) */
-
-        int               ksnd_ninterfaces;
-        ksock_interface_t ksnd_interfaces[PTL_MAX_INTERFACES]; /* active interfaces */
 } ksock_nal_data_t;
 
 #define SOCKNAL_INIT_NOTHING    0
@@ -380,6 +379,7 @@ typedef struct ksock_peer
         struct list_head    ksnp_routes;        /* routes */
         struct list_head    ksnp_tx_queue;      /* waiting packets */
         cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
+        ptl_ni_t           *ksnp_ni;            /* which network */
         int                 ksnp_n_passive_ips; /* # of... */
         __u32               ksnp_passive_ips[PTL_MAX_INTERFACES]; /* preferred local interfaces */
 } ksock_peer_t;
@@ -505,9 +505,9 @@ ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
                               size_t mlen, size_t rlen);
 
 
-extern int ksocknal_add_peer(ptl_nid_t nid, __u32 ip, int port);
-extern ksock_peer_t *ksocknal_find_peer_locked (ptl_nid_t nid);
-extern ksock_peer_t *ksocknal_find_peer (ptl_nid_t nid);
+extern int ksocknal_add_peer(ptl_ni_t *ni, ptl_nid_t nid, __u32 ip, int port);
+extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, ptl_nid_t nid);
+extern ksock_peer_t *ksocknal_find_peer (ptl_ni_t *ni, ptl_nid_t nid);
 extern int ksocknal_create_conn (ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
