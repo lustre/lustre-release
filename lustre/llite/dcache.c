@@ -510,9 +510,24 @@ out:
         }
 
         if (rc == 0) {
-                if (it == &lookup_it)
+                if (it == &lookup_it) {
+                        /* 
+                         * releasing intent with cloberring ->magic etc. as this
+                         * is our @lookup_it which will not be used out of this
+                         * function.  --umka
+                         */
                         ll_intent_release(it);
-
+                } else {
+                        /* 
+                         * as dentry is not revalidated, ll_llokup_it() me be
+                         * called. Thus we should make sure that lock is dropped
+                         * and intent freed without clobbering ->magic, etc. We
+                         * free intent allocated in ll__frob_intent() called in
+                         * this function.  --umka
+                         */
+                        ll_intent_drop_lock(it);
+                        ll_intent_free(it);
+                }
                 ll_unhash_aliases(de->d_inode);
                 return 0;
         }
@@ -524,7 +539,7 @@ out:
          * lookup control path, which is always made with parent's i_sem taken.
          * --umka
          */
-        if (rc &&
+        if (rc && atomic_read(&ll_i2sbi(de->d_inode)->ll_gns_enabled) &&
             !(!((de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode)) ||
               !(flags & LOOKUP_CONTINUE || (gns_it & (IT_CHDIR | IT_OPEN))))) {
                 /* 
@@ -534,7 +549,7 @@ out:
                 if (!ll_special_name(de)) {
                         /* 
                          * releasing intent for lookup case as @it in this time
-                         * our private it and will not be used anymore in thois
+                         * our private it and will not be used anymore in this
                          * control path.  --umka
                          */
                         if (it == &lookup_it) {
@@ -563,9 +578,11 @@ out:
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
 
         /* 
-         * this should be released with no check for @lookup_it. In the case it
-         * is not @lookup_it we're freeing LUSTRE_IT(it) where @it passed to us
-         * and allocated in ll_frob_intent().  --umka
+         * here @it should be released in both cases, as in the case @it is not
+         * @lookup_it we release intent allocated in ll_frob_intent(). Here we
+         * can use ll_intent_release() which also clobers ->magic as dentry is
+         * revalidated and this intent will not be passed to ll_lookup_it() and
+         * will not confuse it.  --umka
          */
         ll_intent_release(it);
         return rc;
