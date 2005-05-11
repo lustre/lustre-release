@@ -38,7 +38,7 @@ extern int obd_memmax;
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;          /* seconds */
-#define PING_INTERVAL (obd_timeout / 4)
+#define PING_INTERVAL max(obd_timeout / 4, 1U)
 extern unsigned int ldlm_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
