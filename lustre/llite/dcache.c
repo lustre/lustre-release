@@ -369,6 +369,12 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 /* If there was no lookup lock, no point in even checking for
                    UPDATE lock */
                 if (!rc) {
+                        /* 
+                         * freeing @it allocated in ll_frob_intent() above in
+                         * this function before replacing @it by @lookup_it and
+                         * thus lossing it.  --umka
+                         */
+                        ll_intent_free(it);
                         it = &lookup_it;
                         if (!req) {
                                 ll_intent_free(it);
@@ -377,6 +383,12 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                         GOTO(out, rc);
                 }
                 if (it_disposition(&lookup_it, DISP_LOOKUP_NEG)) {
+                        /* 
+                         * freeing @it allocated in ll_frob_intent() above in
+                         * this function before replacing @it by @lookup_it and
+                         * thus lossing it.  --umka
+                         */
+                        ll_intent_free(it);
                         it = &lookup_it;
                         ll_intent_free(it);
                         GOTO(out, rc = 0);
@@ -438,6 +450,12 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                         memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh,
                                sizeof(lockh));
                         LUSTRE_IT(it)->it_lock_mode = lockmode;
+
+                        /* 
+                         * we do not check here for possible GNS dentry as if
+                         * file is opened on it, it is mounted already and we do
+                         * not need do anything. --umka
+                         */
                         RETURN(1);
                 } else {
                         /* Hm, interesting. Lock is present, but no open
@@ -514,8 +532,23 @@ out:
                  * they never should be passed to lookup()
                  */
                 if (!ll_special_name(de)) {
-                        ll_intent_drop_lock(it);
-                        ll_intent_free(it);
+                        /* 
+                         * releasing intent for lookup case as @it in this time
+                         * our private it and will not be used anymore in thois
+                         * control path.  --umka
+                         */
+                        if (it == &lookup_it) {
+                                ll_intent_release(it);
+                        } else {
+                                /* 
+                                 * dropping lock and freeing intent allocated in
+                                 * ll_frob_intent(). Do not release it (that is
+                                 * do not put it->magic to 0), as it will be
+                                 * used later by ll_lookup_it(). --umka 
+                                 */
+                                ll_intent_drop_lock(it);
+                                ll_intent_free(it);
+                        }
                         ll_unhash_aliases(de->d_inode);
                         return 0;
                 }
@@ -528,8 +561,13 @@ out:
 
         ll_lookup_finish_locks(it, de);
         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
-        if (it == &lookup_it)
-                ll_intent_release(it);
+
+        /* 
+         * this should be released with no check for @lookup_it. In the case it
+         * is not @lookup_it we're freeing LUSTRE_IT(it) where @it passed to us
+         * and allocated in ll_frob_intent().  --umka
+         */
+        ll_intent_release(it);
         return rc;
 do_lookup:
         it = &lookup_it;
