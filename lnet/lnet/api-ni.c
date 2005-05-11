@@ -139,7 +139,6 @@ ptl_find_nal_by_type (int type)
         return NULL;
 }
 
-
 void
 ptl_register_nal (ptl_nal_t *nal)
 {
@@ -553,6 +552,25 @@ ptl_net2ni (__u32 net)
         return NULL;
 }
 
+int
+ptl_islocalnid (ptl_nid_t nid)
+{
+        struct list_head *tmp;
+        ptl_ni_t         *ni;
+        unsigned long     flags;
+
+        PTL_LOCK(flags);
+        list_for_each (tmp, &ptl_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+
+                if (ni->ni_nid == nid)
+                        return 1;
+        }
+        
+        PTL_UNLOCK(flags);
+        return 0;
+}
+
 void
 ptl_queue_zombie_ni (ptl_ni_t *ni)
 {
@@ -654,7 +672,7 @@ ptl_startup_nalnis (void)
         rc = ptl_parse_networks(&nilist, networks);
         if (rc != PTL_OK) 
                 goto failed;
-        
+
         while (!list_empty(&nilist)) {
                 ni = list_entry(nilist.next, ptl_ni_t, ni_list);
                 nal_type = PTL_NETNAL(PTL_NIDNET(ni->ni_nid));
@@ -743,10 +761,14 @@ PtlInit(int *max_interfaces)
         pthread_cond_init(&ptl_apini.apini_cond, NULL);
         pthread_mutex_init(&ptl_apini.apini_nal_mutex);
         pthread_mutex_init(&ptl_apini.apini_api_mutex);
+#endif
 
-        /* Kernel NALs register themselves when their module loads, and
-         * unregister themselves when their module is unloaded.  Userspace NALs
-         * are plugged in explicitly here... */
+        /* NALs in separate modules register themselves when their module
+         * loads, and unregister themselves when their module is unloaded.
+         * Otherwise they are plugged in explicitly here... */
+
+        ptl_register_nal (&ptl_lonal);
+#ifndef __KERNEL__
         ptl_register_nal (&tcpnal_nal);
 #endif
         ptl_apini.apini_init = 1;

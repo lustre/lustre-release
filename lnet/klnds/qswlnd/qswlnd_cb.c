@@ -1492,22 +1492,27 @@ void
 kqswnal_parse (kqswnal_rx_t *krx)
 {
         ptl_hdr_t      *hdr = (ptl_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
-        ptl_nid_t       dest_nid = le64_to_cpu(hdr->dest_nid);
+        ptl_nid_t       dest_nid;
         int             payload_nob;
         int             nob;
         int             niov;
+        int             rc;
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        if (ptl_islocalnid(dest_nid)) {         /* It's for me :) */
-                /* I ignore parse errors since I'm not consuming a byte
+        rc = ptl_parse (kqswnal_data.kqn_ni, hdr, krx);
+        
+        if (rc != PTL_IFACE_DUP) {
+                /* It's for me or there's been some error.
+                 * However I ignore parse errors since I'm not consuming a byte
                  * stream */
-                (void)ptl_parse (kqswnal_data.kqn_ni, hdr, krx);
 
                 /* Drop my ref; any RDMA activity takes an additional ref */
                 kqswnal_rx_decref(krx);
                 return;
         }
+
+        dest_nid = le64_to_cpu(hdr->dest_nid);
 
 #if KQSW_CHECKSUM
         LASSERTF (0, "checksums for forwarded packets not implemented\n");

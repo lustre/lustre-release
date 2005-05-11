@@ -131,7 +131,10 @@ ptl_nis_conflict(ptl_ni_t *ni1, ptl_ni_t *ni2)
                 }
                 return 0;
         }
-        
+#if 0
+        /* leave this commented out so the same interface can be included explicitly in 2
+         * networks. */
+
         for (i = 0; i < PTL_MAX_INTERFACES; i++) {
                 if (ni1->ni_interfaces[i] == NULL)
                         break;
@@ -155,7 +158,7 @@ ptl_nis_conflict(ptl_ni_t *ni1, ptl_ni_t *ni2)
                         return 1;
                 }
         }
-        
+#endif   
         return 0;
 }
 
@@ -165,8 +168,7 @@ ptl_check_ni_conflicts(ptl_ni_t *ni, struct list_head *nilist)
         struct list_head *tmp;
         ptl_ni_t         *ni2;
 
-        /* Yes! ni just added to this list.  
-         * Check its network is unique and its interfaces don't conflict */
+        /* Yes! ni _has_ just been added to this list. */
         LASSERT (ni == list_entry(nilist->prev, ptl_ni_t, ni_list));
         
         list_for_each (tmp, nilist) {
@@ -206,6 +208,12 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
         memcpy (tokens, networks, tokensize);
 	str = tokens;
 
+        /* Add in the loopback network */
+        /* zero counters/flags, NULL pointers... */
+        memset(&ptl_loni, 0, sizeof(ptl_loni));
+        ptl_loni.ni_nid = PTL_MKNID(PTL_MKNET(LONAL, 0), 0);
+        list_add_tail(&ptl_loni.ni_list, nilist);
+        
         while (str != NULL && *str != 0) {
                 char      *comma = strchr(str, ',');
                 char      *bracket = strchr(str, '(');

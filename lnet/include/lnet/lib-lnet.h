@@ -411,9 +411,13 @@ ptl_ni_decref(ptl_ni_t *ni)
                 ptl_queue_zombie_ni(ni);
 }
 
+extern ptl_nal_t ptl_lonal;
+extern ptl_ni_t  ptl_loni;
+
 extern ptl_err_t ptl_get_apinih (ptl_handle_ni_t *nih);
 
 extern ptl_ni_t *ptl_net2ni (__u32 net);
+extern int ptl_islocalnid (ptl_nid_t nid);
 extern void ptl_enq_event_locked (void *private,
                                   ptl_eq_t *eq, ptl_event_t *ev);
 extern void ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, 

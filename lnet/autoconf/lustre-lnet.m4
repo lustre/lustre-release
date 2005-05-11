@@ -747,8 +747,6 @@ portals/knals/iibnal/Makefile
 portals/knals/iibnal/autoMakefile
 portals/knals/vibnal/Makefile
 portals/knals/vibnal/autoMakefile
-portals/knals/lonal/Makefile
-portals/knals/lonal/autoMakefile
 portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
 portals/knals/ranal/Makefile

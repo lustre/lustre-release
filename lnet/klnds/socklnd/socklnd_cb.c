@@ -1312,9 +1312,10 @@ ksocknal_process_receive (ksock_conn_t *conn)
         
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_HEADER:
-                if (conn->ksnc_hdr.type != cpu_to_le32(PTL_MSG_HELLO) &&
-                    !ptl_islocalnid(le64_to_cpu(conn->ksnc_hdr.dest_nid))) {
-                        /* This packet isn't for me */
+                rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
+
+                if (rc == PTL_IFACE_DUP) {
+                        /* This packet isn't for me (still in net byte order) */
                         ksocknal_fwd_parse (conn);
                         switch (conn->ksnc_rx_state) {
                         case SOCKNAL_RX_HEADER: /* skipped (zero payload) */
@@ -1328,9 +1329,6 @@ ksocknal_process_receive (ksock_conn_t *conn)
                         }
                         /* Not Reached */
                 }
-
-                /* sets wanted_len, iovs etc */
-                rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
 
                 if (rc != PTL_OK) {
                         /* I just received garbage: give up on this conn */
