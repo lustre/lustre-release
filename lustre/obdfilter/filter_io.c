@@ -527,7 +527,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_WRITE,
+        /* This iobuf is for reading any partial pages from disk */
+        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_READ,
                                 obj->ioo_bufcnt, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
