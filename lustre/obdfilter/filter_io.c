@@ -318,7 +318,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
-        for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt; 
+        for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
                 lnb->dentry = dentry;
                 lnb->offset = rnb->offset;
@@ -327,8 +327,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 if (inode->i_size <= rnb->offset)
                       /* If there's no more data, abort early.
-                      * lnb->page == NULL and lnb->rc == 0, so it's
-                      * easy to detect later. */
+                       * lnb->page == NULL and lnb->rc == 0, so it's
+                       * easy to detect later. */
                         break;
                 else
                         rc = filter_alloc_dio_page(obd, inode, lnb);
@@ -527,7 +527,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_READ,
+        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_WRITE,
                                 obj->ioo_bufcnt, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
