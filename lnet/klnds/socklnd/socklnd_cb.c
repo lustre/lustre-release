@@ -1683,11 +1683,11 @@ void ksocknal_write_callback (ksock_conn_t *conn)
 }
 
 int
-ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
+ksocknal_send_hello (ksock_conn_t *conn, 
+                     ptl_nid_t srcnid, __u64 incarnation,
+                     __u32 *ipaddrs, int nipaddrs)
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
-        ptl_ni_t           *ni = conn->ksnc_peer->ksnp_ni;
-        ksock_net_t        *net = ni->ni_data;
         struct socket      *sock = conn->ksnc_sock;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
@@ -1695,7 +1695,7 @@ ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
         int                 rc;
 
         LASSERT (conn->ksnc_type != SOCKNAL_CONN_NONE);
-        LASSERT (nipaddrs <= PTL_MAX_INTERFACES);
+        LASSERT (0 <= nipaddrs && nipaddrs <= PTL_MAX_INTERFACES);
 
         /* No need for getconnsock/putconnsock */
         LASSERT (!conn->ksnc_closing);
@@ -1705,14 +1705,18 @@ ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
         hmv->version_major = cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
 
-        hdr.src_nid        = cpu_to_le64 (ni->ni_nid);
+        hdr.src_nid        = cpu_to_le64 (srcnid);
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
 
         hdr.msg.hello.type = cpu_to_le32 (conn->ksnc_type);
-        hdr.msg.hello.incarnation = cpu_to_le64 (net->ksnn_incarnation);
+        hdr.msg.hello.incarnation = cpu_to_le64 (incarnation);
 
-        /* Receiver is eager */
+        for (i = 0; i < nipaddrs; i++) {
+                ipaddrs[i] = __cpu_to_le32 (ipaddrs[i]);
+        }
+
+        /* Receiver should be eager */
         rc = ksocknal_lib_sock_write (sock, &hdr, sizeof(hdr));
         if (rc != 0) {
                 CERROR ("Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
@@ -1723,10 +1727,6 @@ ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs)
         if (nipaddrs == 0)
                 return (0);
         
-        for (i = 0; i < nipaddrs; i++) {
-                ipaddrs[i] = __cpu_to_le32 (ipaddrs[i]);
-        }
-
         rc = ksocknal_lib_sock_write (sock, ipaddrs, nipaddrs * sizeof(*ipaddrs));
         if (rc != 0)
                 CERROR ("Error %d sending HELLO payload (%d)"

@@ -80,7 +80,6 @@ libcfs_next_nidstring (void)
 }
 
 #if !CRAY_PORTALS
-static void libcfs_lo_addr2str(__u32 addr, char *str);
 static int  libcfs_lo_str2addr(char *str, int nob, __u32 *addr);
 static void libcfs_ip_addr2str(__u32 addr, char *str);
 static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
@@ -99,7 +98,7 @@ static struct nalstrfns  libcfs_nalstrfns[] = {
         {.nf_nal      = LONAL,     
          .nf_name     = "lo",         
          .nf_modname  = "klonal",  
-         .nf_addr2str = libcfs_lo_addr2str,  
+         .nf_addr2str = libcfs_num_addr2str,  
          .nf_str2addr = libcfs_lo_str2addr},
         {.nf_nal      = SOCKNAL,    
          .nf_name     = "tcp",     
@@ -140,18 +139,9 @@ static struct nalstrfns  libcfs_nalstrfns[] = {
 
 const int libcfs_nnalstrfns = sizeof(libcfs_nalstrfns)/sizeof(libcfs_nalstrfns[0]);
 
-void
-libcfs_lo_addr2str(__u32 addr, char *str)
-{
-        /* don't print anything */
-}
-
 int
 libcfs_lo_str2addr(char *str, int nob, __u32 *addr)
 {
-        if (nob != 0)                           /* expecting the empty string */
-                return 0;
-        
         *addr = 0;
         return 1;
 }

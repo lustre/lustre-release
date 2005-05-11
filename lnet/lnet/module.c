@@ -78,7 +78,7 @@ static int init_kportals_module(void)
         ENTRY;
 
         rc = PtlInit(NULL);
-        if (rc) {
+        if (rc != PTL_OK) {
                 CERROR("PtlInit: error %d\n", rc);
                 RETURN(rc);
         }
@@ -93,8 +93,10 @@ static int init_kportals_module(void)
                 rc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
                                NULL, NULL, &nih);
                 if (rc != PTL_OK) {
-                        PtlFini();
-                        return -ENETDOWN;
+                        /* Can't PtlFini or fail now if I loaded NALs */
+                        PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
+                        ptl_apini.apini_niinit_self = 0;
+                        PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
                 }
         }
         

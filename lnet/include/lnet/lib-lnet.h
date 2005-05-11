@@ -412,7 +412,7 @@ ptl_ni_decref(ptl_ni_t *ni)
 }
 
 extern ptl_nal_t ptl_lonal;
-extern ptl_ni_t  ptl_loni;
+extern ptl_ni_t *ptl_loni;
 
 extern ptl_err_t ptl_get_apinih (ptl_handle_ni_t *nih);
 

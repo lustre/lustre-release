@@ -636,9 +636,9 @@ ksocknal_local_ipvec (ptl_ni_t *ni, __u32 *ipaddrs)
         read_lock (&ksocknal_data.ksnd_global_lock);
 
         nip = net->ksnn_ninterfaces;
-        for (i = 0; i < nip; i++) {
-                LASSERT (i < PTL_MAX_INTERFACES);
+        LASSERT (nip < PTL_MAX_INTERFACES);
 
+        for (i = 0; i < nip; i++) {
                 ipaddrs[i] = net->ksnn_interfaces[i].ksni_ipaddr;
                 LASSERT (ipaddrs[i] != 0);
         }
@@ -990,7 +990,6 @@ ksocknal_stop_listener(void)
 int
 ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
 {
-        int                passive = (type == SOCKNAL_CONN_NONE);
         rwlock_t          *global_lock = &ksocknal_data.ksnd_global_lock;
         __u32              ipaddrs[PTL_MAX_INTERFACES];
         int                nipaddrs;
@@ -1007,7 +1006,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
         ksock_tx_t        *tx;
         int                rc;
 
-        LASSERT (route == NULL || !passive);
+        LASSERT (route == NULL == (type == SOCKNAL_CONN_NONE));
 
         rc = ksocknal_lib_setup_sock (sock);
         if (rc != 0)
@@ -1043,14 +1042,16 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
         if (rc != 0)
                 goto failed_1;
 
-        if (!passive) {
-                /* Active connection sends HELLO eagerly */
-                rc = ksocknal_local_ipvec(route->ksnr_peer->ksnp_ni, ipaddrs);
-                if (rc < 0)
-                        goto failed_1;
-                nipaddrs = rc;
+        if (route != NULL) {
+                ptl_ni_t     *ni = route->ksnr_peer->ksnp_ni;
+                ksock_net_t  *net = ni->ni_data;
 
-                rc = ksocknal_send_hello (conn, ipaddrs, nipaddrs);
+                /* Active connection sends HELLO eagerly */
+                nipaddrs = ksocknal_local_ipvec(ni, ipaddrs);
+
+                rc = ksocknal_send_hello (conn, ni->ni_nid, 
+                                          net->ksnn_incarnation,
+                                          ipaddrs, nipaddrs);
                 if (rc != 0)
                         goto failed_1;
         }
@@ -1108,14 +1109,20 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 write_unlock_irqrestore(global_lock, flags);
         }
 
-        if (!passive) {
+        if (route != NULL) {
+                /* additional routes after interface exchange? */
                 ksocknal_create_routes(peer, conn->ksnc_port,
                                        ipaddrs, nipaddrs);
                 rc = 0;
         } else {
-                rc = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-                LASSERT (rc >= 0);
-                rc = ksocknal_send_hello (conn, ipaddrs, rc);
+                ptl_ni_t    *ni = peer->ksnp_ni;
+                ksock_net_t *net = ni->ni_data;
+
+                nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
+
+                rc = ksocknal_send_hello (conn, ni->ni_nid,
+                                          net->ksnn_incarnation,
+                                          ipaddrs, nipaddrs);
         }
         if (rc < 0)
                 goto failed_2;

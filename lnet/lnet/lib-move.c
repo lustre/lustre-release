@@ -576,7 +576,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
           ptl_libmd_t *md, ptl_size_t offset, ptl_size_t len)
 {
         ptl_nid_t gw_nid;
-        int       routing;
+        int       routing = 0;
         ptl_err_t rc;
 
         /* CAVEAT EMPTOR! ni != NULL == interface pre-determined (ACK) */
@@ -587,17 +587,23 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                 return PTL_FAIL;
         }
 
-        if (target.nid != ni->ni_nid) {
-                /* will gateway have to forward? */
-                routing = (gw_nid != ni->ni_nid);
-        } else {
-                /* it's for me! */
-                ptl_ni_addref(&ptl_loni);
-                ptl_ni_decref(ni);
-                ni = &ptl_loni;
-                routing = 0;
+        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL) {
+                if (target.nid != ni->ni_nid) {
+                        /* will gateway have to forward? */
+                        routing = (gw_nid != ni->ni_nid);
+                } else if (allow_destination_aliases) {
+                        /* it's for me (force lonal) */
+                        ptl_ni_addref(ptl_loni);
+                        ptl_ni_decref(ni);
+                        ni = ptl_loni;
+                } else {
+                        ptl_ni_decref(ni);
+                        CERROR("Attempt to send to self via %s, not LONAL\n",
+                               libcfs_nid2str(target.nid));
+                        return PTL_FAIL;
+                }
         }
-
+        
         hdr->type           = cpu_to_le32(type);
         hdr->dest_nid       = cpu_to_le64(target.nid);
         hdr->dest_pid       = cpu_to_le32(target.pid);
@@ -1047,7 +1053,8 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
                 if (!allow_destination_aliases) {
                         /* dest is another local NI; sender should have used
                          * this node's NID on its own network */
-                        CERROR ("%s: Dropping message from %s: nid %s is a local alias\n",
+                        CERROR ("%s: Dropping message from %s: nid %s "
+                                "is a local alias\n",
                                 libcfs_nid2str(ni->ni_nid),
                                 libcfs_nid2str(le64_to_cpu(hdr->src_nid)),
                                 libcfs_nid2str(dest_nid));

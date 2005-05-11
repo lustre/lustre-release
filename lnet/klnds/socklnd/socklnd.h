@@ -528,9 +528,10 @@ extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern int ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs);
-extern int ksocknal_recv_hello (ksock_conn_t *conn,
-                                ptl_nid_t *nid, __u64 *incarnation, __u32 *ipaddrs);
+extern int ksocknal_send_hello (ksock_conn_t *conn, ptl_nid_t nid,
+                                __u64 incarnation, __u32 *ipaddrs, int nipaddrs);
+extern int ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid, 
+                                __u64 *incarnation, __u32 *ipaddrs);
 
 extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);

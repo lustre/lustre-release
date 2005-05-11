@@ -208,11 +208,16 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
         memcpy (tokens, networks, tokensize);
 	str = tokens;
 
+        PORTAL_ALLOC(ptl_loni, sizeof(*ptl_loni));
+        if (ptl_loni == NULL) {
+                CERROR("Can't allocate LO NI\n");
+                goto failed;
+        }
         /* Add in the loopback network */
         /* zero counters/flags, NULL pointers... */
-        memset(&ptl_loni, 0, sizeof(ptl_loni));
-        ptl_loni.ni_nid = PTL_MKNID(PTL_MKNET(LONAL, 0), 0);
-        list_add_tail(&ptl_loni.ni_list, nilist);
+        memset(ptl_loni, 0, sizeof(*ptl_loni));
+        ptl_loni->ni_nid = PTL_MKNID(PTL_MKNET(LONAL, 0), 0);
+        list_add_tail(&ptl_loni->ni_list, nilist);
         
         while (str != NULL && *str != 0) {
                 char      *comma = strchr(str, ',');

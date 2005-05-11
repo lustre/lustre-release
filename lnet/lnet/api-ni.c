@@ -644,6 +644,7 @@ ptl_shutdown_nalnis (void)
                 LASSERT (!in_interrupt());
                 atomic_dec(&ni->ni_nal->nal_refcount);
                 (ni->ni_nal->nal_shutdown)(ni);
+
                 PORTAL_FREE(ni, sizeof(*ni));
 
                 PTL_LOCK(flags);
@@ -763,6 +764,11 @@ PtlInit(int *max_interfaces)
         pthread_mutex_init(&ptl_apini.apini_api_mutex);
 #endif
 
+        ptl_apini.apini_init = 1;
+
+        if (max_interfaces != NULL)
+                *max_interfaces = 1;
+
         /* NALs in separate modules register themselves when their module
          * loads, and unregister themselves when their module is unloaded.
          * Otherwise they are plugged in explicitly here... */
@@ -771,10 +777,6 @@ PtlInit(int *max_interfaces)
 #ifndef __KERNEL__
         ptl_register_nal (&tcpnal_nal);
 #endif
-        ptl_apini.apini_init = 1;
-
-        if (max_interfaces != NULL)
-                *max_interfaces = 1;
 
         return PTL_OK;
 }
@@ -785,10 +787,12 @@ PtlFini(void)
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount == 0);
 
-#ifndef __KERNEL__
         /* See comment where tcpnal_nal registers itself */
+#ifndef __KERNEL__
         ptl_unregister_nal(&tcpnal_nal);
 #endif
+        ptl_unregister_nal(&ptl_lonal);
+
         LASSERT (list_empty(&ptl_apini.apini_nals));
 
         ptl_apini.apini_init = 0;
