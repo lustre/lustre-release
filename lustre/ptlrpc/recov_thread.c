@@ -272,6 +272,7 @@ static int log_commit_thread(void *arg)
 
                 sending_list = &lcm->lcm_llcd_pending;
         resend:
+                import = NULL;
                 if (lcm->lcm_flags & LLOG_LCM_FL_EXIT) {
                         lcm->lcm_llcd_maxfree = 0;
                         lcm->lcm_llcd_minfree = 0;

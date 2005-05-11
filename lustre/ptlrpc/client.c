@@ -190,6 +190,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
 
         LASSERT((unsigned long)imp > 0x1000);
         LASSERT(imp != LP_POISON);
+        LASSERT((unsigned long)imp->imp_client > 0x1000);
+        LASSERT(imp->imp_client != LP_POISON);
 
         OBD_ALLOC(request, sizeof(*request));
         if (!request) {

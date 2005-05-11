@@ -587,6 +587,8 @@ static void import_handle_addref(void *import)
 
 struct obd_import *class_import_get(struct obd_import *import)
 {
+        LASSERT(atomic_read(&import->imp_refcount) >= 0);
+        LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
         CDEBUG(D_IOCTL, "import %p refcount=%d\n", import,
                atomic_read(&import->imp_refcount));
