@@ -784,6 +784,11 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 /* Since there are no objects on OSTs, we have nothing to get
                  * lock on and so we are forced to access inode->i_size
                  * unguarded */
+
+                /* Read beyond end of file */
+                if (*ppos >= inode->i_size)
+                        RETURN(0);
+
                 if (count > inode->i_size - *ppos)
                         count = inode->i_size - *ppos;
                 /* Make sure to correctly adjust the file pos pointer for

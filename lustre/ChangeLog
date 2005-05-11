@@ -5,6 +5,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix a collection of import/export refcount and cleanup ordering
 	  issues for safer force cleanup (5949,4834)
 	- fix lfs to handle large numbers of targets (6223)
+	- Fix reads after EOF on files with no objects to return 0 (6264,6243)
 	
 2005-05-10  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
