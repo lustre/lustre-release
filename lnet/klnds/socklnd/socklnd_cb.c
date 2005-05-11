@@ -1313,8 +1313,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_HEADER:
                 if (conn->ksnc_hdr.type != cpu_to_le32(PTL_MSG_HELLO) &&
-                    le64_to_cpu(conn->ksnc_hdr.dest_nid) != 
-                    conn->ksnc_peer->ksnp_ni->ni_nid) {
+                    !ptl_islocalnid(le64_to_cpu(conn->ksnc_hdr.dest_nid))) {
                         /* This packet isn't for me */
                         ksocknal_fwd_parse (conn);
                         switch (conn->ksnc_rx_state) {

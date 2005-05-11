@@ -1499,7 +1499,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        if (dest_nid == kqswnal_data.kqn_ni->ni_nid) { /* It's for me :) */
+        if (ptl_islocalnid(dest_nid)) {         /* It's for me :) */
                 /* I ignore parse errors since I'm not consuming a byte
                  * stream */
                 (void)ptl_parse (kqswnal_data.kqn_ni, hdr, krx);

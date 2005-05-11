@@ -5,6 +5,5 @@
 @BUILD_VIBNAL_TRUE@subdir-m += vibnal
 @BUILD_QSWNAL_TRUE@subdir-m += qswnal
 subdir-m += socknal
-subdir-m += lonal
 
 @INCLUDE_RULES@
