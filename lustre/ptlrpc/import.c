@@ -643,7 +643,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                                    CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
-                RETURN(rc);
+                RETURN(rc < 0 ? rc : 0);
 #else
                 ptlrpc_invalidate_import(imp, 1);
 
