@@ -1,11 +1,35 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
-	- increase ldlm_timeout to avoid timeouts for long truncates (6172)
-	- fix a collection of import/export refcount and cleanup ordering
-	  issues for safer force cleanup (5949,4834)
-	- fix lfs to handle large numbers of targets (6223)
-	- Fix reads after EOF on files with no objects to return 0 (6264,6243)
+
+Severity   : minor
+Frequency  : rare (extremely heavy IO load with hundreds of clients)
+Bugzilla   : 6172
+Description: Client is evicted, gets IO error writing to file
+Details    : lock ordering changes for bug 5492 reintroduced bug 3267 and
+             caused clients to be evicted for AST timeouts.  The fixes in
+	     bug 5192 mean we no longer need to have such short AST timeouts
+	     so ldlm_timeout has been increased.
+
+Severity   : major
+Frequency  : occasional during --force or --failover shutdown under load
+Bugzilla   : 5949, 4834
+Description: Server oops/LBUG if stopped with --force or --failover under load
+Details    : a collection of import/export refcount and cleanup ordering
+	     issues fixed for safer force cleanup
+
+Severity   : major
+Frequency  : only filesystems larger than 120 OSTs
+Bugzilla   : 5990, 6223
+Description: lfs getstripe would oops on a very large filesystem
+Details    : lov_getconfig used kfree on vmalloc'd memory
+
+Severity   : minor
+Frequency  : only filesystems exporting via NFS to Solaris 10 clients
+Bugzilla   : 6242, 6243
+Description: reading from files that had been truncated to a non-zero size
+             but never opened returned no data
+Details    : ll_file_read() reads zeros from no-object files to EOF
 	
 2005-05-10  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
