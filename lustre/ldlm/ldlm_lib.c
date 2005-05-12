@@ -900,7 +900,7 @@ void target_abort_recovery(void *data)
 static void target_recovery_expired(unsigned long castmeharder)
 {
         struct obd_device *obd = (struct obd_device *)castmeharder;
-        CERROR("recovery timed out, aborting\n");
+        CERROR("%s: recovery timed out, aborting\n", obd->obd_name);
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering)
                 obd->obd_abort_recovery = 1;
