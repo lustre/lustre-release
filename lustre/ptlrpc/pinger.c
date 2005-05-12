@@ -55,7 +55,10 @@ static int ptlrpc_ping_interpret(struct ptlrpc_request *req,
 
         /* if ping reply is an error, don't drop "replied" flag
          * on import, so pinger will invalidate it */
-        if (ptlrpc_client_replied(req) && req->rq_repmsg->type == PTL_RPC_MSG_ERR)
+        if (ptlrpc_client_replied(req) && req->rq_repmsg == NULL)
+                CWARN("replied (%d) w/o rep buffer?\n", req->rq_replied);
+        if (ptlrpc_client_replied(req) && req->rq_repmsg &&
+                        req->rq_repmsg->type == PTL_RPC_MSG_ERR)
                 return 0;
         
         imp->imp_waiting_ping_reply = 0;
