@@ -1030,6 +1030,53 @@ cleanup:
         return rc;
 }
 
+int lmv_enqueue_remote(struct obd_export *exp, int lock_type,
+                       struct lookup_intent *it, int lock_mode,
+                       struct mdc_op_data *data, struct lustre_handle *lockh,
+                       void *lmm, int lmmsize, ldlm_completion_callback cb_compl,
+                       ldlm_blocking_callback cb_blocking, void *cb_data)
+{
+        struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lustre_handle plock;
+        struct mdc_op_data rdata;
+        struct mds_body *body = NULL;
+        int rc = 0, pmode;
+        ENTRY;
+
+        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
+        LASSERT(body != NULL);
+
+        if (!(body->valid & OBD_MD_MDS))
+                RETURN(0);
+
+        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DLID4" -> "DLID4"\n",
+               LL_IT2STR(it), OLID4(&data->id1), OLID4(&body->id1));
+
+        /* we got LOOKUP lock, but we really need attrs */
+        pmode = LUSTRE_IT(it)->it_lock_mode;
+        LASSERT(pmode != 0);
+        memcpy(&plock, lockh, sizeof(plock));
+        LUSTRE_IT(it)->it_lock_mode = 0;
+        LUSTRE_IT(it)->it_data = NULL;
+        LASSERT((body->valid & OBD_MD_FID) != 0);
+
+        memcpy(&rdata, data, sizeof(rdata));
+        rdata.id1 = body->id1;
+        rdata.name = NULL;
+        rdata.namelen = 0;
+
+        LUSTRE_IT(it)->it_disposition &= ~DISP_ENQ_COMPLETE;
+        ptlrpc_req_finished(req);
+
+        rc = md_enqueue(lmv->tgts[id_group(&rdata.id1)].ltd_exp, 
+                        lock_type, it, lock_mode, &rdata, lockh, lmm, 
+                        lmmsize, cb_compl, cb_blocking, cb_data);
+        ldlm_lock_decref(&plock, pmode);
+        RETURN(rc);
+}
+
 int lmv_enqueue(struct obd_export *exp, int lock_type,
                 struct lookup_intent *it, int lock_mode,
                 struct mdc_op_data *data, struct lustre_handle *lockh,
@@ -1070,6 +1117,10 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
         rc = md_enqueue(lmv->tgts[id_group(&data->id1)].ltd_exp, 
                         lock_type, it, lock_mode, data, lockh, lmm, 
                         lmmsize, cb_compl, cb_blocking, cb_data);
+        if (rc == 0 && it->it_op == IT_OPEN)
+                rc = lmv_enqueue_remote(exp, lock_type, it, lock_mode,
+                                        data, lockh, lmm, lmmsize,
+                                        cb_compl, cb_blocking, cb_data);
         RETURN(rc);
 }
 
