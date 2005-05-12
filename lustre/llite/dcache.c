@@ -491,22 +491,11 @@ out:
                  * they never should be passed to lookup()
                  */
                 if (!ll_special_name(de)) {
-                        /* XXX umka: if req not NULL we might need free
-                         *     the req we already obtianed?
-                         */
                         LASSERT(req == NULL);
-
                         if (it == &lookup_it) {
                                 ll_intent_release(it);
                         } else {
-                                /* 
-                                 * dropping lock and freeing intent allocated in
-                                 * ll_frob_intent(). Do not release it (that is
-                                 * do not put it->magic to 0), as it will be
-                                 * used later by ll_lookup_it(). --umka 
-                                 */
                                 ll_intent_drop_lock(it);
-                                ll_intent_free(it);
                         }
                         ll_unhash_aliases(de->d_inode);
                         RETURN (0);

@@ -399,10 +399,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
             ((flags & LOOKUP_CONTINUE) || (gns_it & (IT_CHDIR | IT_OPEN))))
         {
                 rc = ll_gns_mount_object(dentry, nd->mnt);
-                if (rc == -ERESTARTSYS) {
-                        /* causing syscall restart */
+                if (rc == -ERESTARTSYS)
                         GOTO(out, retval = ERR_PTR(-ERESTARTSYS));
-                }
 
                 if (rc) {
                         /* 

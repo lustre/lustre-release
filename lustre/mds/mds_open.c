@@ -1039,7 +1039,7 @@ got_child:
                 mds_pack_dentry2body(obd, body, dchild, 1);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-
+                
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)
                         ldlm_lock_decref(parent_lockh + 1, update_mode);

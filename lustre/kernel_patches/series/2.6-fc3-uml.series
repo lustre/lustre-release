@@ -22,4 +22,4 @@ vfs_gns-2.6.10-fc3.patch
 vfs_lookup_in_file-2.6.patch
 jbd-2.6.10-jcberr.patch
 hostfs_readdir_large.patch
-
+vfs-intent_release_umount-vanilla-2.6.10-fc3.patch

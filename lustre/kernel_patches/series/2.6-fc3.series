@@ -24,4 +24,4 @@ jbd-2.6.10-jcberr.patch
 hostfs_readdir_large.patch
 linux-2.6.10-fc3-left.patch
 linux-2.6.10-fc3-lkcd.patch 
-
+vfs-intent_release_umount-vanilla-2.6.10-fc3.patch

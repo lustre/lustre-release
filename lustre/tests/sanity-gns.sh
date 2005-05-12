@@ -1084,6 +1084,63 @@ $TIMOUT $TICK GENERIC BG OPEN || {
 
 run_test 2h " odd conditions (mounting in background) ==================="
 
+test_3a() {
+    local LOOP_DEV=$(find_free_loop 2>/dev/null)
+    local LOOP_FILE="$TMP/gns_loop_3a"
+    local OBJECT=".mntinfo"
+    local TIMOUT=5
+    local TICK=1
+
+    test "x$LOOP_DEV" != "x" && test -b $LOOP_DEV ||
+	error "can't find free loop device"
+
+    echo "preparing loop device $LOOP_DEV <-> $LOOP_FILE..."
+    cleanup_loop $LOOP_DEV $LOOP_FILE
+    setup_loop $LOOP_DEV $LOOP_FILE || error
+
+    echo "setting up GNS timeouts and mount object..."
+    setup_gns $OBJECT $TIMOUT $TICK || error
+
+    disable_gns
+
+    echo "preparing mount object at $DIR/gns_test_3a/$OBJECT..."
+    setup_object $DIR/gns_test_3a $OBJECT "-t ext2 $LOOP_DEV" || error
+
+    enable_gns
+
+    echo ""
+    echo "testing GNS with GENERIC upcall in GENERIC mode"
+    
+    check_gns GENERIC $DIR/gns_test_3a $DIR/gns_test_3a \
+$TIMOUT $TICK GENERIC FG OPEN || {
+        disable_gns
+        cleanup_object $DIR/gns_test_3a
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+        error
+    }
+    
+    chmod u-s $DIR/gns_test_3a || {
+        disable_gns
+        cleanup_object $DIR/gns_test_3a
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+	error "can't chmod u-s $DIR/gns_test_3a"
+    }
+    
+    check_mnt $DIR/gns_test_3a && {
+        disable_gns
+        cleanup_object $DIR/gns_test_3a
+        cleanup_loop $LOOP_DEV $LOOP_FILE
+	error "chmod u-s $DIR/gns_test_3a caused mounting"
+    }
+    
+    disable_gns
+    cleanup_object $DIR/gns_test_3a
+    cleanup_loop $LOOP_DEV $LOOP_FILE
+    return 0
+}
+
+run_test 3a " removing mnt by chmod u-s ================================="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
