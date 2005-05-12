@@ -2316,14 +2316,9 @@ cleanup:
         switch(cleanup_phase) {
         case 3:
                 if (fcc != NULL) {
-                        if (oti != NULL)
-                                fsfilt_add_journal_cb(obd, 0, oti->oti_handle,
-                                                      filter_cancel_cookies_cb,
-                                                      fcc);
-                        else
-                                fsfilt_add_journal_cb(obd, 0, handle,
-                                                      filter_cancel_cookies_cb,
-                                                      fcc);
+                        fsfilt_add_journal_cb(obd, 0,
+                                              oti ? oti->oti_handle : handle,
+                                              filter_cancel_cookies_cb, fcc);
                 }
                 rc = filter_finish_transno(exp, oti, rc);
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
@@ -2403,7 +2398,7 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
 
         down(&dentry->d_inode->i_sem);
-        rc = filemap_fdatasync(dentry->d_inode->i_mapping);
+        rc = filemap_fdatawrite(dentry->d_inode->i_mapping);
         if (rc == 0) {
                 /* just any file to grab fsync method - "file" arg unused */
                 struct file *file = filter->fo_rcvd_filp;

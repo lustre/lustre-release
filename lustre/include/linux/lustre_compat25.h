@@ -44,9 +44,8 @@
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
-#define TryLockPage(page)                TestSetPageLocked(page)
-#define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
-#define Page_Uptodate(page)              PageUptodate(page)
+#define TryLockPage(page)               TestSetPageLocked(page)
+#define Page_Uptodate(page)             PageUptodate(page)
 #define ll_redirty_page(page)           set_page_dirty(page)
 
 #define KDEVT_INIT(val)                 (val)
@@ -167,6 +166,7 @@ typedef long sector_t;
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
 #define ll_call_writepage(inode, page)  \
                                (inode)->i_mapping->a_ops->writepage(page)
+#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
 #define ll_truncate_complete_page(page) truncate_complete_page(page)
 
@@ -236,8 +236,8 @@ static inline void cond_resched(void)
 #define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
 #define __clear_page_ll_data(page) page->private = 0
 #define PageWriteback(page) 0
-#define set_page_writeback(page)
-#define end_page_writeback(page)
+#define set_page_writeback(page) do {} while (0)
+#define end_page_writeback(page) do {} while (0)
 
 static inline int mapping_mapped(struct address_space *mapping)
 {
