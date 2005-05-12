@@ -379,7 +379,7 @@ struct gss_sec {
 #ifdef __KERNEL__
         spinlock_t              gs_lock;
         struct list_head        gs_upcalls;
-        char                    gs_pipepath[64];
+        char                   *gs_pipepath;
         struct dentry          *gs_depipe;
 #endif
 };
@@ -1559,6 +1559,7 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
         struct ptlrpc_sec *sec;
 #ifdef __KERNEL__
         char *pos;
+        int   pipepath_len;
 #endif
         ENTRY;
 
@@ -1581,15 +1582,20 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
         INIT_LIST_HEAD(&gsec->gs_upcalls);
         spin_lock_init(&gsec->gs_lock);
 
-        snprintf(gsec->gs_pipepath, sizeof(gsec->gs_pipepath),
-                 LUSTRE_PIPEDIR"/%s", pipe_dir);
+        pipepath_len = strlen(LUSTRE_PIPEDIR) + strlen(pipe_dir) +
+                       strlen(gsec->gs_mech->gm_name) + 3;
+        OBD_ALLOC(gsec->gs_pipepath, pipepath_len);
+        if (!gsec->gs_pipepath)
+                goto err_mech_put;
+
+        sprintf(gsec->gs_pipepath, LUSTRE_PIPEDIR"/%s", pipe_dir);
         if (IS_ERR(rpc_mkdir(gsec->gs_pipepath, NULL))) {
                 CERROR("can't make pipedir %s\n", gsec->gs_pipepath);
-                goto err_mech_put;
+                goto err_free_path;
         }
 
-        snprintf(gsec->gs_pipepath, sizeof(gsec->gs_pipepath),
-                 LUSTRE_PIPEDIR"/%s/%s", pipe_dir, gsec->gs_mech->gm_name); 
+        sprintf(gsec->gs_pipepath, LUSTRE_PIPEDIR"/%s/%s", pipe_dir,
+                gsec->gs_mech->gm_name); 
         gsec->gs_depipe = rpc_mkpipe(gsec->gs_pipepath, gsec,
                                      &gss_upcall_ops, RPC_PIPE_WAIT_FOR_OPEN);
         if (IS_ERR(gsec->gs_depipe)) {
@@ -1627,6 +1633,8 @@ err_rmdir:
         LASSERT(pos);
         *pos = 0;
         rpc_rmdir(gsec->gs_pipepath);
+err_free_path:
+        OBD_FREE(gsec->gs_pipepath, pipepath_len);
 err_mech_put:
 #endif
         kgss_mech_put(gsec->gs_mech);
@@ -1641,6 +1649,7 @@ void gss_destroy_sec(struct ptlrpc_sec *sec)
         struct gss_sec *gsec;
 #ifdef __KERNEL__
         char *pos;
+        int   pipepath_len;
 #endif
         ENTRY;
 
@@ -1651,11 +1660,13 @@ void gss_destroy_sec(struct ptlrpc_sec *sec)
         LASSERT(!atomic_read(&sec->ps_refcount));
         LASSERT(!atomic_read(&sec->ps_credcount));
 #ifdef __KERNEL__
+        pipepath_len = strlen(gsec->gs_pipepath) + 1;
         rpc_unlink(gsec->gs_pipepath);
         pos = strrchr(gsec->gs_pipepath, '/');
         LASSERT(pos);
         *pos = 0;
         rpc_rmdir(gsec->gs_pipepath);
+        OBD_FREE(gsec->gs_pipepath, pipepath_len);
 #endif
 
         kgss_mech_put(gsec->gs_mech);
