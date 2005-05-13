@@ -481,6 +481,25 @@ install_kernel()
     popd >/dev/null
 }
 
+cleanup_libmodules()
+{
+    (( $INSTALL_LUSTRE )) || return 0
+
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
+    KVERREL="${VERSION}-${EXTRA_VERSION}"
+    i="$DESTDIR/lib/modules/${FULL_VERSION}"
+
+    rm -f $i/build
+    rm -f $i/source
+
+    if (( $LINUX26 )) ; then
+	ln -sf ../../../usr/src/linux-${KVERREL}-obj/${TARGET_ARCH}/${TARGET_CONFIG} $i/build
+	ln -sf ../../../usr/src/linux-${KVERREL} $i/source
+    else
+	ln -sf ../../../usr/src/linux-${KVERREL} $i/build
+    fi
+}
+
 install_lustre()
 {
     (( $INSTALL_LUSTRE )) || return 0
@@ -708,6 +727,8 @@ install_kernel
 install_lustre
 
 install_kms
+
+cleanup_libmodules
 
 save_headers
 

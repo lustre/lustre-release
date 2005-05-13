@@ -435,7 +435,11 @@ EOF
 [ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade
 [ -x /sbin/mkkerneldoth ] && /sbin/mkkerneldoth
 if [ -x /sbin/new-kernel-pkg ] ; then
-        /sbin/new-kernel-pkg --mkinitrd --depmod --install %{KVERREL}${flavor}
+	if /sbin/new-kernel-pkg 2>&1 | grep package >/dev/null ; then
+		PACKAGE_ARG="--package kernel-${flavor}"
+	fi
+        /sbin/new-kernel-pkg $PACKAGE_ARG --mkinitrd --depmod \
+		--install %{KVERREL}${flavor}
 fi
 EOF
 				;;
@@ -608,8 +612,6 @@ pushd lustre >/dev/null
 # specific
 for i in $RPM_BUILD_ROOT/lib/modules/* ; do
   rm -f $i/modules.*
-  rm -f $i/build
-  ln -sf ../../../usr/src/linux-%{KVERREL} $i/build
 %ifarch %{ntplarchs}
   # remove legacy pcmcia symlink that's no longer useful
   rm -rf $i/pcmcia
