@@ -57,6 +57,10 @@ case "$lustretag" in
 	lustretag="b1_4"
 	;;
 
+    b_ptlrpc_cleanup)
+       portalstag="b_ptlrpc_cleanup"
+       ;;
+
     b_release_*)
 	portalstag=$lustretag
 	;;
