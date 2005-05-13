@@ -86,7 +86,7 @@ check_kernel_version() {
 }
 
 run_one() {
-	if ! mount | grep -q $DIR; then
+	if ! cat /proc/mounts | grep -q $DIR; then
 		$START
 	fi
 	echo $PTLDEBUG >/proc/sys/portals/debug	
