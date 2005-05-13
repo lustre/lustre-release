@@ -31,7 +31,7 @@ Description: reading from files that had been truncated to a non-zero size
              but never opened returned no data
 Details    : ll_file_read() reads zeros from no-object files to EOF
 	
-2005-05-10  Cluster File Systems, Inc. <info@clusterfs.com>
+2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
        NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous
 	     versions of Lustre.  Please update all servers and clients to
@@ -86,6 +86,8 @@ Details    : ll_file_read() reads zeros from no-object files to EOF
 	- Vanilla 2.4.29 support
 	- increase maximum number of obd devices to 520 (6242)
 	- remove the tcp-zero-copy patch from the suse-2.4 series (5902)
+	- Quadrics Elan drivers are now included for the RHEL 3 2.4.21 and
+	  SLES 9 2.6.5 kernels
 	- limit stripes per file to 160 (the maximum EA size) (6093)
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
