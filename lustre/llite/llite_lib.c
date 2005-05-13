@@ -289,6 +289,11 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
+                if (md.lsm != NULL)
+                    obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
+                if (md.mea != NULL)
+                    obd_free_memmd(sbi->ll_md_exp,
+                                   (struct lov_stripe_md**)&md.mea);
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
