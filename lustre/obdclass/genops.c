@@ -706,6 +706,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
  * again. */
 int class_disconnect(struct obd_export *export)
 {
+        int already_disconnected;
         ENTRY;
 
         if (export == NULL) {
@@ -714,10 +715,15 @@ int class_disconnect(struct obd_export *export)
                 RETURN(-EINVAL);
         }
 
-        /* XXX this shouldn't have to be here, but double-disconnect will crash
-         * otherwise, and sometimes double-disconnect happens.  abort_recovery,
-         * for example. */
-        if (list_empty(&export->exp_handle.h_link))
+        spin_lock(&export->exp_lock);
+        already_disconnected = export->exp_disconnected;
+        export->exp_disconnected = 1;
+        spin_unlock(&export->exp_lock);
+
+        /* class_cleanup, abort_recovery, ptlrpc_fail_export, and
+           ping_evictor_fail_export all end up in here, and if any of them
+           race we shouldn't call extra class_export_puts. */
+        if (already_disconnected) 
                 RETURN(0);
 
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
@@ -1131,6 +1137,8 @@ void ping_evictor_stop(void)
    the network is up.) */
 void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 {
+        struct obd_export *oldest_exp;
+        time_t oldest_time;
         LASSERT(exp);
 
         /* Compensate for slow machines, etc, by faking our request time
@@ -1158,16 +1166,19 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 
         list_move_tail(&exp->exp_obd_chain_timed, 
                        &exp->exp_obd->obd_exports_timed);
+        oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
+                                struct obd_export, exp_obd_chain_timed);
+        oldest_time = oldest_exp->exp_last_request_time;
+        spin_unlock(&exp->exp_obd->obd_dev_lock);
         
+        if (exp->exp_obd->obd_recoverable_clients > 0) 
+                /* be nice to everyone during recovery */
+                return;
+
         /* Note - racing to start/reset the obd_eviction timer is safe */
         if (exp->exp_obd->obd_eviction_timer == 0) { 
-                struct obd_export *oldest_exp;
                 /* Check if the oldest entry is expired. */
-                oldest_exp = list_entry(exp->exp_obd->obd_exports_timed.next,
-                                        struct obd_export, exp_obd_chain_timed);
-                spin_unlock(&exp->exp_obd->obd_dev_lock);
-                
-                if (CURRENT_SECONDS > (oldest_exp->exp_last_request_time +
+                if (CURRENT_SECONDS > (oldest_time +
                                        (3 * obd_timeout / 2) + extra_delay)) {
                         /* We need a second timer, in case the net was
                            down and it just came back. Since the pinger
@@ -1176,12 +1187,10 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS + 
                                 3 * PING_INTERVAL;
                         CDEBUG(D_PET,
-                               "Thinking about evicting old export %s at %ld\n",
-                               oldest_exp->exp_client_uuid.uuid,
-                               oldest_exp->exp_last_request_time);
+                               "Thinking about evicting old export from %ld\n",
+                               oldest_time);
                 }
         } else {
-                spin_unlock(&exp->exp_obd->obd_dev_lock);
                 if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +
                                        extra_delay)) {
                         /* The evictor won't evict anyone who we've heard from
