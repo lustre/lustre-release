@@ -283,6 +283,27 @@ AC_DEFUN([LB_LINUX_TRY_MAKE],
 [LB_LINUX_COMPILE_IFELSE([AC_LANG_PROGRAM([[$1]], [[$2]])], [$3], [$4], [$5], [$6])])
 
 #
+# LB_LINUX_CONFIG_BIG_STACK
+#
+# check for big stack patch
+#
+AC_DEFUN([LB_LINUX_CONFIG_BIG_STACK],
+[if test "x$ARCH_UM" = "x" -a "x$linux25" = "xno" ; then
+	case $target_cpu in
+		i?86 | x86_64)
+			LB_LINUX_CONFIG([STACK_SIZE_16KB],[],[
+				LB_LINUX_CONFIG([STACK_SIZE_32KB],[],[
+					LB_LINUX_CONFIG([STACK_SIZE_64KB],[],[
+						AC_MSG_ERROR([Lustre requires that Linux is configured with at least a 16KB stack.])
+					])
+				])
+			])
+			;;
+	esac
+fi
+])
+
+#
 # LB_PROG_LINUX
 #
 # linux tests
@@ -305,6 +326,8 @@ if test "x$ARCH_UM" = "x" ; then
 	AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
 fi
 ])
+
+LB_LINUX_CONFIG_BIG_STACK
 
 # Portals tests
 LP_PROG_LINUX
