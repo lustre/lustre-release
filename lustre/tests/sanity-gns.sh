@@ -338,6 +338,9 @@ check_gns() {
 		OPEN)
 		    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1
 		    ;;
+		LIST)
+		    ls -la $OBJECT1/
+		    ;;
 		CHDIR)
 		    cd $OBJECT1 || return $?
 		    ;;
@@ -354,6 +357,9 @@ check_gns() {
 		case "$OP" in
 		    OPEN)
 			echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+			;;
+		    LIST)
+			ls -la $OBJECT1/
 			;;
 		    CHDIR)
 			cd $OBJECT1 >/dev/null 2>&1 &
@@ -381,6 +387,10 @@ check_gns() {
 		    echo -n "test data" > $OBJECT1/test_file1 >/dev/null 2>&1 &
 		    echo -n "test data" > $OBJECT2/test_file1 >/dev/null 2>&1 &
 		    ;;
+		LIST)
+		    ls -la $OBJECT1/
+		    ls -la $OBJECT2/
+		    ;;
 		CHDIR)
 		    cd $OBJECT1 >/dev/null 2>&1 &
 		    cd $OBJECT2 >/dev/null 2>&1 &
@@ -406,6 +416,11 @@ check_gns() {
 	    	    OPEN)
 			touch $OBJECT1/file$i &
 			echo -n "test data" > $OBJECT1/test_file$i >/dev/null 2>&1 &
+			mkdir $OBJECT1/dir$i &
+			;;
+		    LIST)
+			touch $OBJECT1/file &
+			ls -la $OBJECT1/ &
 			mkdir $OBJECT1/dir$i &
 			;;
 		    CHDIR)
@@ -1140,6 +1155,119 @@ $TIMOUT $TICK GENERIC FG OPEN || {
 }
 
 run_test 3a " removing mnt by chmod u-s ================================="
+
+test_3b() {
+    local LOOP_FILE1="$TMP/gns_loop_3b1"
+    local LOOP_FILE2="$TMP/gns_loop_3b2"
+    local LOOP_FILE3="$TMP/gns_loop_3b3"
+    local OBJECT=".mntinfo"
+    local LOOP_DEV1=""
+    local LOOP_DEV2=""
+    local LOOP_DEV3=""
+    local TIMOUT=5
+    local TICK=1
+
+    disable_gns
+
+    LOOP_DEV1=$(find_free_loop 2>/dev/null)
+    test "x$LOOP_DEV1" != "x" && test -b $LOOP_DEV1 ||
+	error "can't find free loop device"
+
+    echo "preparing loop device $LOOP_DEV1 <-> $LOOP_FILE1..."
+    cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+    setup_loop $LOOP_DEV1 $LOOP_FILE1 || error
+
+    LOOP_DEV2=$(find_free_loop 2>/dev/null)
+    test "x$LOOP_DEV2" != "x" && test -b $LOOP_DEV2 || {
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+	error "can't find free loop device"
+    }
+
+    echo "preparing loop device $LOOP_DEV2 <-> $LOOP_FILE2..."
+    cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+    setup_loop $LOOP_DEV2 $LOOP_FILE2 || {
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+	error
+    }
+    
+    LOOP_DEV3=$(find_free_loop 2>/dev/null)
+    test "x$LOOP_DEV3" != "x" && test -b $LOOP_DEV3 || {
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+	error "can't find free loop device"
+    }
+
+    echo "preparing loop device $LOOP_DEV3 <-> $LOOP_FILE3..."
+    cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+    setup_loop $LOOP_DEV3 $LOOP_FILE3 || {
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+	error
+    }
+
+    # prepare object1
+    echo "preparing mount object at $DIR/gns_test_3b1/$OBJECT..."
+    setup_object $DIR/gns_test_3b1 $OBJECT "-t ext2 $LOOP_DEV1" || {
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+        cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+	error
+    }
+    
+    # prepare object2
+    mkdir -p $TMP/mnt || error
+    mount -t ext2 $LOOP_DEV2 $TMP/mnt || {
+        cleanup_object $DIR/gns_test_3b1
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+        cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+	error "cannot mount $LOOP_DEV2"
+    }
+
+    echo "preparing mount object at $TMP/mnt/gns_test_3b2/$OBJECT..."
+    setup_object $TMP/mnt/gns_test_3b2 $OBJECT "-t ext2 $LOOP_DEV3" || {
+        cleanup_object $DIR/gns_test_3b1
+	umount $TMP/mnt
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+        cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+	error
+    }
+    umount $TMP/mnt || error
+
+    echo "setting up GNS timeouts and mount object..."
+    setup_gns $OBJECT $TIMOUT $TICK || {
+        cleanup_object $DIR/gns_test_3b1
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+        cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+	error
+    }
+
+    enable_gns
+
+    echo ""
+    echo "testing GNS with GENERIC upcall in CONCUR2 mode"
+    
+    check_gns GENERIC $DIR/gns_test_3b1/gns_test_3b2 $DIR/gns_test_3b1/gns_test_3b2 $TIMOUT $TICK GENERIC FG LIST || {
+	disable_gns
+        cleanup_object $DIR/gns_test_3b1
+        cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+        cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+        cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+        error
+    }
+    
+    disable_gns
+
+    cleanup_object $DIR/gns_test_3b1
+    cleanup_loop $LOOP_DEV1 $LOOP_FILE1
+    cleanup_loop $LOOP_DEV2 $LOOP_FILE2
+    cleanup_loop $LOOP_DEV3 $LOOP_FILE3
+    return 0
+}
+
+run_test 3b " general GNS test - concurrent mount of 2 GNS mounts ======="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
