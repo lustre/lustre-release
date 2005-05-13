@@ -228,7 +228,7 @@ Index: linux-2.6.7/include/linux/fs.h
  #define S_NOQUOTA	64	/* Inode is not counted to quota */
  #define S_DIRSYNC	128	/* Directory modifications are synchronous */
  #define S_NOCMTIME	256	/* Do not update file c/mtime */
-+#define S_PDIROPS	256	/* Parallel directory operations */
++#define S_PDIROPS	512	/* Parallel directory operations */
  
  /*
   * Note that nosuid etc flags are inode-specific: setting some file-system
