@@ -66,10 +66,10 @@ cleanup() {
     for mds in `mds_list`; do
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
-    stop_lgssd
-    stop_lsvcgssd
     stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log
+    stop_lgssd
+    stop_lsvcgssd
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -85,10 +85,10 @@ setup() {
     gen_config
 
     start_krb5_kdc || exit 1
-    start ost --reformat $OSTLCONFARGS 
-    start ost2 --reformat $OSTLCONFARGS 
     start_lsvcgssd || exit 2
     start_lgssd || exit 3
+    start ost --reformat $OSTLCONFARGS 
+    start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     for mds in `mds_list`; do
 	start $mds --reformat $MDSLCONFARGS

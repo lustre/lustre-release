@@ -38,21 +38,6 @@ PTLDEBUG=${PTLDEBUG:-0}
 
 . krb5_env.sh
 
-if [ $UID -ne 0 ]; then
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-fi
-
-if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
-    start_krb5_kdc || exit 1
-    if [ $RUNAS_ID -ne $UID ]; then
-        $RUNAS ./krb5_refresh_cache.sh || exit 2
-    fi
-fi
-
 export NAME=${NAME:-local}
 
 SAVE_PWD=$PWD

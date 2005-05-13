@@ -8,6 +8,7 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 export NAME=$NAME
+. krb5_env.sh
 clean() {
         echo -n "cln.."
         sh llmountcleanup.sh > /dev/null || exit 20
