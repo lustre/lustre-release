@@ -9,6 +9,10 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
+# Skip these tests
+# 21 - open vs. unlink out of order replay: isn't solved yet
+ALWAYS_EXCEPT="21"
+
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
@@ -27,7 +31,7 @@ gen_config() {
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	MDS=mds1_svc
+	MDS=mds1
     fi
 
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
@@ -466,6 +470,45 @@ test_20() {     # bug 3822 - evicting client with enqueued lock
                error "client not evicted" || true
 }
 run_test 20 "ldlm_handle_enqueue succeeds on evicted export (3822)"
+
+# $1 - number of mountpoint
+# $2 - mds
+function find_dev_for_fs_and_mds()
+{
+	local fsuuid=`cat /proc/fs/lustre/llite/fs$1/uuid`
+	$LCTL device_list | awk "/mdc.*$2.*$fsuuid/ {print \$4}"
+}
+
+test_21() {
+	mdc1dev=`find_dev_for_fs_and_mds 0 mds1`
+	mdc2dev=`find_dev_for_fs_and_mds 1 mds1`
+	multiop $MOUNT1/f21 O
+	cancel_lru_locks MDC
+	# generate IT_OPEN to be replayed against existing file
+	multiop $MOUNT1/f21 o_Sc &
+	pid=$!
+	
+	# IT_OPEN will be committed by the failover time
+	replay_barrier mds1
+
+	# generate MDS_REINT_UNLINK to be replayed
+	rm -f $MOUNT2/f21 || return 1
+
+	# disable recovery on the both clients
+	$LCTL --device %$mdc1dev disable_recovery
+	$LCTL --device %$mdc2dev disable_recovery
+	facet_failover mds1
+
+	# let unlink to be replayed first
+	$LCTL --device %$mdc2dev enable_recovery
+	sleep $((TIMEOUT/2))
+
+	# now let open to be replaye
+	$LCTL --device %$mdc1dev enable_recovery
+	kill -USR1 $pid
+	wait $pid || return 2
+}
+run_test 21 "open vs. unlink out of order replay"
 
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
