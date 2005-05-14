@@ -2779,6 +2779,10 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 err = ptlrpc_set_import_active(obd->u.cli.cl_import,
                                                data->ioc_offset);
                 GOTO(out, err);
+        case IOC_OSC_CTL_RECOVERY:
+                err = ptlrpc_import_control_recovery(obd->u.cli.cl_import,
+                                                     data->ioc_offset);
+                GOTO(out, err);
         default:
                 CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n", cmd, current->comm);
                 GOTO(out, err = -ENOTTY);

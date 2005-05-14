@@ -13,6 +13,7 @@
 #define IOC_OSC_TYPE         'h'
 #define IOC_OSC_MIN_NR       20
 #define IOC_OSC_SET_ACTIVE   _IOWR(IOC_OSC_TYPE, 21, struct obd_device *)
+#define IOC_OSC_CTL_RECOVERY _IOWR(IOC_OSC_TYPE, 22, struct obd_device *)
 #define IOC_OSC_MAX_NR       50
 
 #define IOC_MDC_TYPE         'i'

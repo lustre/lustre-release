@@ -775,6 +775,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case IOC_OSC_SET_ACTIVE:
                 rc = ptlrpc_set_import_active(imp, data->ioc_offset);
                 GOTO(out, rc);
+        case IOC_OSC_CTL_RECOVERY:
+                rc = ptlrpc_import_control_recovery(imp, data->ioc_offset);
+                GOTO(out, rc);
         case OBD_IOC_PARSE: {
                 ctxt = llog_get_context(&exp->exp_obd->obd_llogs,
                                         LLOG_CONFIG_REPL_CTXT);

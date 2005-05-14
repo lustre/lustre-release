@@ -132,6 +132,7 @@ EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_activate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
+EXPORT_SYMBOL(ptlrpc_import_control_recovery);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_require_repack);

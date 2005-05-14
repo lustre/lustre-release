@@ -27,5 +27,6 @@ void ptlrpc_fail_export(struct obd_export *exp);
 int ptlrpc_check_suspend(void);
 void ptlrpc_activate_timeouts(void);
 void ptlrpc_deactivate_timeouts(void);
+int ptlrpc_import_control_recovery(struct obd_import *imp, int disable);
 
 #endif

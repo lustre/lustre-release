@@ -70,6 +70,8 @@ int jt_obd_test_ldlm(int argc, char **argv);
 int jt_obd_ldlm_regress_start(int argc, char **argv);
 int jt_obd_ldlm_regress_stop(int argc, char **argv);
 int jt_obd_dump_ldlm(int argc, char **argv);
+int jt_obd_disable_recovery(int argc, char **argv);
+int jt_obd_enable_recovery(int argc, char **argv);
 int jt_obd_activate(int argc, char **argv);
 int jt_obd_deactivate(int argc, char **argv);
 int jt_obd_recover(int argc, char **argv);

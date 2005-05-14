@@ -1938,6 +1938,37 @@ int jt_obd_activate(int argc, char **argv)
         return do_activate(argc, argv, 1);
 }
 
+static int do_control_recovery(int argc, char **argv, int flag)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOC_INIT(data);
+        if (argc != 1)
+                return CMD_HELP;
+
+        /* reuse offset for 'active' */
+        data.ioc_offset = flag;
+
+        IOC_PACK(argv[0], data);
+        rc = l2_ioctl(OBD_DEV_ID, IOC_OSC_CTL_RECOVERY, buf);
+        if (rc)
+                fprintf(stderr, "error: %s: failed: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+
+        return rc;
+}
+
+int jt_obd_disable_recovery(int argc, char **argv)
+{
+        return do_control_recovery(argc, argv, 1);
+}
+
+int jt_obd_enable_recovery(int argc, char **argv)
+{
+        return do_control_recovery(argc, argv, 0);
+}
+
 int jt_obd_recover(int argc, char **argv)
 {
         int rc;

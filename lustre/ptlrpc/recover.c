@@ -354,6 +354,24 @@ int ptlrpc_import_in_recovery(struct obd_import *imp)
         return in_recovery;
 }
 
+int ptlrpc_import_control_recovery(struct obd_import *imp, int disable)
+{
+        unsigned long flags;
+
+        /* with imp_deactivate == 1 pinger won't initiate re-connect */
+        spin_lock_irqsave(&imp->imp_lock, flags);
+        if (disable)
+                imp->imp_deactive = 1;
+        else
+                imp->imp_deactive = 0;
+        if (imp->imp_state == LUSTRE_IMP_DISCON) {
+                imp->imp_force_verify = 1;
+                ptlrpc_pinger_wake_up();
+        }
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        RETURN(0);
+}
+
 static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                                           char *new_uuid)
 {

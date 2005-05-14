@@ -223,6 +223,8 @@ command_t cmdlist[] = {
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
+        {"disable_recovery", jt_obd_disable_recovery, 0, "disable recovery on an import\n"},
+        {"enable_recovery", jt_obd_enable_recovery, 0, "enable recovery on an import\n"},
         {"activate", jt_obd_activate, 0, "activate an import\n"},
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import\n"},
         {"recover", jt_obd_recover, 0, "usage: recover [<connection UUID>]"},
