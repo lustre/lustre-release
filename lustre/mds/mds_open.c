@@ -999,6 +999,7 @@ got_child:
 
         if (dchild->d_flags & DCACHE_CROSS_REF) {
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n", OLID4(rec->ur_id1));
+                LASSERT(rec->ur_namelen > 1);
                 
                 /* we're gonna acquire LOOKUP lock on the child,
                  * but we have already locked parent and our order
@@ -1025,26 +1026,26 @@ got_child:
                 if (rc)
                         GOTO(cleanup, rc);
 
+#ifdef S_PDIROPS
+                if (parent_lockh[1].cookie != 0)
+                        ldlm_lock_decref(parent_lockh + 1, update_mode);
+#endif
+                ldlm_lock_decref(parent_lockh, parent_mode);
+
                 if (dchild->d_inode || !(dchild->d_flags & DCACHE_CROSS_REF)) {
-                        /* wow! someone unlink and create new one yet */
-                        CDEBUG(D_OTHER, "nice race, repeat lookup\n");
-                        ldlm_lock_decref(parent_lockh, parent_mode);
-                        ldlm_lock_decref(child_lockh, LCK_PR);
+                        CDEBUG(D_OTHER, "race: name changed (%p)\n",
+                               dchild->d_inode);
+                        if (dchild->d_inode)
+                                ldlm_lock_decref(child_lockh, LCK_PR);
                         l_dput(dchild);
                         l_dput(dparent);
-                        LASSERT(rec->ur_namelen > 1);
                         GOTO(restart, rc);
                 }
 
                 mds_pack_dentry2body(obd, body, dchild, 1);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-                
-#ifdef S_PDIROPS
-                if (parent_lockh[1].cookie != 0)
-                        ldlm_lock_decref(parent_lockh + 1, update_mode);
-#endif
-                ldlm_lock_decref(parent_lockh, parent_mode);
+
                 if (mea)
                         OBD_FREE(mea, mea_size);
                 l_dput(dchild);
