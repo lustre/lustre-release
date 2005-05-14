@@ -811,9 +811,7 @@ run_test 27a "one stripe file =================================="
 
 test_27c() {
 	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
 	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
@@ -824,9 +822,7 @@ test_27c() {
 run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
@@ -834,9 +830,7 @@ test_27d() {
 run_test 27d "create file with default settings ================"
 
 test_27e() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
 	$LSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
@@ -844,9 +838,7 @@ test_27e() {
 run_test 27e "lstripe existing file (should return error) ======"
 
 test_27f() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$LFIND $DIR/d27/fbad || error "lfind failed"
@@ -854,9 +846,7 @@ test_27f() {
 run_test 27f "lstripe with bad stripe size (should return error)"
 
 test_27g() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$MCREATE $DIR/d27/fnone || error "mcreate failed"
 	pass
 	log "== test 27h: lfind with no objects ============================"
@@ -869,14 +859,13 @@ test_27g() {
 run_test 27g "test lfind ======================================="
 
 test_27j() {
-        if [ ! -d $DIR/d27 ]; then
-                mkdir $DIR/d27
-        fi
-        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
+	mkdir -p $DIR/d27
+	$LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
+	mkdir -p $DIR/d27
 	FILE=$DIR/d27/f27k
 	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
 	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
@@ -890,6 +879,7 @@ test_27k() { # bug 2844
 run_test 27k "limit i_blksize for broken user apps ============="
 
 test_27l() {
+	mkdir -p $DIR/d27
 	mcreate $DIR/f27l || error "creating file"
 	$RUNAS $LSTRIPE $DIR/f27l 65536 -1 1 && \
 		error "lstripe should have failed" || true
@@ -897,29 +887,29 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-        [ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
-        if [ $ORIGFREE -gt $MAXFREE ]; then
-                echo "skipping out-of-space test on OST0"
-                return
-        fi
-        mkdir -p $DIR/d27
-        $LSTRIPE $DIR/d27/f27m_1 0 0 1
-        dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
-                error "dd should fill OST0"
-        i=2
-        while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
-                i=`expr $i + 1`
-                [ $i -gt 256 ] && break
-        done
-        i=`expr $i + 1`
-        touch $DIR/d27/f27m_$i
-        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
-                error "OST0 was full but new created file still use it"
-        i=`expr $i + 1`
-        touch $DIR/d27/f27m_$i
-        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
-                error "OST0 was full but new created file still use it"
-        rm $DIR/d27/f27m_1
+	[ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
+	if [ $ORIGFREE -gt $MAXFREE ]; then
+		echo "skipping out-of-space test on OST0"
+		return
+	fi
+	mkdir -p $DIR/d27
+	$LSTRIPE $DIR/d27/f27m_1 0 0 1
+	dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
+		error "dd should fill OST0"
+	i=2
+	while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
+		i=`expr $i + 1`
+		[ $i -gt 256 ] && break
+	done
+	i=`expr $i + 1`
+	touch $DIR/d27/f27m_$i
+	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+		error "OST0 was full but new created file still use it"
+	i=`expr $i + 1`
+	touch $DIR/d27/f27m_$i
+	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+		error "OST0 was full but new created file still use it"
+	rm $DIR/d27/f27m_1
 }
 run_test 27m "create file while OST0 was full =================="
 
@@ -1323,6 +1313,20 @@ test_34e() {
 	$CHECKSTAT -s 1000 $DIR/f34e || error
 }
 run_test 34e "create objects, some with size and some without =="
+
+test_34f() { # bug 6242, 6243
+	SIZE34F=48000
+	rm -f $DIR/f34f
+	$MCREATE $DIR/f34f || error
+	$TRUNCATE $DIR/f34f $SIZE34F || error "truncating $DIR/f3f to $SIZE34F"
+	dd if=$DIR/f34f of=$TMP/f34f
+	$CHECKSTAT -s $SIZE34F $TMP/f34f || error "$TMP/f34f not $SIZE34F bytes"
+	dd if=/dev/zero of=$TMP/f34fzero bs=$SIZE34F count=1
+	cmp $DIR/f34f $TMP/f34fzero || error "$DIR/f34f not all zero"
+	cmp $TMP/f34f $TMP/f34fzero || error "$TMP/f34f not all zero"
+	rm $TMP/f34f $TMP/f34fzero $DIR/f34f
+}
+run_test 34f "read from a file with no objects until EOF ======="
 
 test_35a() {
 	cp /bin/sh $DIR/f35a
