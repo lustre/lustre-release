@@ -510,6 +510,44 @@ test_21() {
 }
 run_test 21 "open vs. unlink out of order replay"
 
+test_22() {	# bug 6063 - AST during recovery
+	mdc1dev=`find_dev_for_fs_and_mds 0 mds1`
+	mdc2dev=`find_dev_for_fs_and_mds 1 mds1`
+	$LCTL --device %$mdc1dev disable_recovery
+	$LCTL --device %$mdc2dev disable_recovery
+
+	replay_barrier mds1
+	mkdir $MOUNT1/${tdir}-1	# client1: request to be replayed 
+	ls $MOUNT2		# client2: take lock needed for
+	facet_failover mds1
+
+	# let's recover 2nd connection with granted UPDATE lock
+	$LCTL --device %$mdc2dev enable_recovery
+	sleep $((TIMEOUT / 2))
+
+	$LCTL mark "first recovered?"
+	LOCKS=`grep -v '^0$' /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count`
+	if [ "$LOCKS" != "" ]; then
+		echo "The lock got replayed before mkdir is replayed: $LOCKS"
+		echo 0 >${IMP1}
+		return 1
+	fi
+
+	# let's recover 1st connection with mkdir replay that needs the lock 
+	$LCTL --device %$mdc1dev enable_recovery
+	sleep $TIMEOUT
+	$LCTL mark "second recovered?"
+
+	LOCKS=`grep -v '^0$' /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count`
+	if [ "$LOCKS" != "1" ]; then
+		echo "The lock hasn't replayed: $LOCKS"
+		return 2
+	fi
+
+	return 0
+}
+run_test 22 "AST during recovery"
+
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
 	if [ $NOW ]; then
