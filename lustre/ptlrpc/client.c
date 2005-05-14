@@ -868,8 +868,6 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         if (replied)
                 RETURN(0);
 
-        DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu)", (long)req->rq_sent); 
-
         ptlrpc_unregister_reply (req);
 
         if (obd_dump_on_timeout)
@@ -1289,7 +1287,6 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
 static int expired_request(void *data)
 {
         struct ptlrpc_request *req = data;
-        struct obd_import *imp;
         ENTRY;
 
         /* some failure can suspend regular timeouts */
