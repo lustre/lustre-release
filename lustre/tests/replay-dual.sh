@@ -529,7 +529,7 @@ test_22() {	# bug 6063 - AST during recovery
 	LOCKS=`grep -v '^0$' /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count`
 	if [ "$LOCKS" != "" ]; then
 		echo "The lock got replayed before mkdir is replayed: $LOCKS"
-		echo 0 >${IMP1}
+		$LCTL --device %$mdc1dev enable_recovery
 		return 1
 	fi
 
