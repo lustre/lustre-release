@@ -453,30 +453,24 @@ ptl_str2tbs_sep (struct list_head *tbs, char *str)
 
 int
 ptl_expand1tb (struct list_head *list, 
-	       char *str, char *sep1, char *sep2, unsigned int n)
+	       char *str, char *sep1, char *sep2, 
+	       char *item, int itemlen)
 {
-	char            num[16];
 	int             len1 = sep1 - str;
 	int             len2 = strlen(sep2 + 1);
-	int             nnob;
 	ptl_text_buf_t *ptb;
 
 	LASSERT (*sep1 == '[');
 	LASSERT (*sep2 == ']');
 
-	snprintf(num, sizeof(num), "%u", n);
-	nnob = strlen(num);
-	if (nnob == sizeof(num) - 1)
-		return -EINVAL;
-	
-	ptb = ptl_new_text_buf(len1 + nnob + len2 + 1);
+	ptb = ptl_new_text_buf(len1 + itemlen + len2 + 1);
 	if (ptb == NULL)
 		return -ENOMEM;
 	
 	memcpy(ptb->ptb_text, str, len1);
-	memcpy(&ptb->ptb_text[len1], num, nnob);
-	memcpy(&ptb->ptb_text[len1+nnob], sep2 + 1, len2);
-	ptb->ptb_text[len1 + nnob + len2] = 0;
+	memcpy(&ptb->ptb_text[len1], item, itemlen);
+	memcpy(&ptb->ptb_text[len1+itemlen], sep2 + 1, len2);
+	ptb->ptb_text[len1 + itemlen + len2] = 0;
 	
 	list_add_tail(&ptb->ptb_list, list);
 	return 0;
@@ -485,14 +479,17 @@ ptl_expand1tb (struct list_head *list,
 int
 ptl_str2tbs_expand (struct list_head *tbs, char *str)
 {
+	char              num[16];
 	struct list_head  pending;
 	char             *sep;
 	char             *sep2;
 	char             *parsed;
+	char             *enditem;
 	int               lo;
 	int               hi;
 	int               stride;
 	int               i;
+	int               nob;
 	int               scanned;
 
 	INIT_LIST_HEAD(&pending);
@@ -500,66 +497,56 @@ ptl_str2tbs_expand (struct list_head *tbs, char *str)
 	sep = strchr(str, '[');
 	if (sep == NULL)			/* nothing to expand */
 		return 0;
-		
-	parsed = sep + 1;
-	
-	if (sscanf(parsed, "%d%n", &lo, &scanned) < 1)
-		goto failed;
 
-	parsed += scanned;
-	if (*parsed == '-') {
-		/* [lo-hi] or [lo-hi/stride] */
-		parsed++;
-		if (sscanf(parsed, "%d%n", &hi, &scanned) < 1)
+        sep2 = strchr(sep, ']');
+        if (sep2 == NULL)
+                goto failed;
+
+	for (parsed = sep; parsed < sep2; parsed = enditem) {
+
+		enditem = ++parsed;
+		while (enditem < sep2 && *enditem != ',')
+			enditem++;
+
+		if (enditem == parsed)		/* no empty items */
 			goto failed;
 
-		parsed += scanned;
-		if (*parsed != '/') {
+                if (sscanf(parsed, "%d-%d/%d%n", &lo, &hi, &stride, &scanned) < 3) {
+
+			if (sscanf(parsed, "%d-%d%n", &lo, &hi, &scanned) < 2) {
+
+				/* simple string enumeration */
+				if (ptl_expand1tb(&pending, str, sep, sep2,
+						  parsed, enditem - parsed) != 0)
+					goto failed;
+				
+				continue;
+			}
+			
 			stride = 1;
-		} else {
-			parsed++;
-			if (sscanf(parsed, "%d%n", &stride, &scanned) < 1)
-				goto failed;
-
-			parsed += scanned;
 		}
-		
-		if (*parsed != ']')
-			goto failed;
 
+		/* range expansion */
+
+		if (enditem != parsed + scanned) /* no trailing junk */
+			goto failed;
+                        
 		if (hi < 0 || lo < 0 || stride < 0 || hi < lo || 
 		    (hi - lo) % stride != 0)
 			goto failed;
+                        
+		for (i = lo; i <= hi; i += stride) {
 
-		for (i = lo; i <= hi; i += stride)
-			if (ptl_expand1tb(&pending, str, sep, parsed, i) != 0)
+			snprintf(num, sizeof(num), "%d", i);
+			nob = strlen(num);
+			if (nob + 1 == sizeof(num))
 				goto failed;
-
-	} else if (*parsed == ',') {
-		/* [a,b,c,d,e,f,g...] */
-		sep2 = strchr(parsed, ']');
-		if (sep2 == NULL)
-			goto failed;
-
-		if (ptl_expand1tb(&pending, str, sep, sep2, lo) != 0)
-			goto failed;
-		
-		while (*parsed == ',') {
-			parsed++;
-			if (sscanf(parsed, "%d%n", &lo, &scanned) < 1)
-				goto failed;
-
-			parsed += scanned;
-
-			if (ptl_expand1tb(&pending, str, sep, sep2, lo) != 0)
+			
+			if (ptl_expand1tb(&pending, str, sep, sep2, 
+					  num, nob) != 0)
 				goto failed;
 		}
-		
-		if (*parsed != ']')
-			goto failed;
-
-	} else
-		goto failed;
+	}
 		
 	list_splice(&pending, tbs->prev);
 	return 1;
@@ -573,19 +560,24 @@ int
 ptl_parse_route (char *str)
 {
 	/* static scratch buffer OK (single threaded) */
-	static char      cmd[PAGE_SIZE];
+	static char       cmd[PAGE_SIZE];
 
-	struct list_head gateways;
-	__u32            net = 0;		/* avoid a warning */
-	ptl_nid_t        nid;
-	ptl_text_buf_t  *ptb;
-	ptl_text_buf_t  *tb2;
-	int              rc;
-	char            *sep;
-	char            *token;
-	int              ntokens = 0;
+	struct list_head  nets;
+	struct list_head  gateways;
+	struct list_head *tmp1;
+	struct list_head *tmp2;
+	__u32             net;
+	ptl_nid_t         nid;
+	ptl_text_buf_t   *ptb;
+	ptl_text_buf_t   *tb2;
+	int               rc;
+	char             *sep;
+	char             *token = str;
+	int               ntokens = 0;
+        int               myrc = -1;
 
 	INIT_LIST_HEAD(&gateways);
+	INIT_LIST_HEAD(&nets);
 
 	/* save a copy of the string for error messages */
 	strncpy(cmd, str, sizeof(cmd) - 1);
@@ -597,11 +589,9 @@ ptl_parse_route (char *str)
 		while (ptl_iswhite(*sep))
 			sep++;
 		if (*sep == 0) {
-			if (ntokens < 3) {
-				ptl_syntax("routes", cmd, sep - str, -1);
-				return -1;
-			}
-			return 0;
+			if (ntokens < 3)
+                                goto token_error;
+			break;
 		}
 
 		ntokens++;
@@ -618,59 +608,80 @@ ptl_parse_route (char *str)
 				continue;
 			goto token_error;
 		}
-			
-		if (ntokens == 2) {
-			net = libcfs_str2net(token);
-			if (net != PTL_NIDNET(PTL_NID_ANY))
-				continue;
-			goto token_error;
-		}
 
+		if (ntokens == 2)
+			tmp2 = &nets;		/* expanding nets */
+		else
+			tmp2 = &gateways;	/* expanding gateways */
+			
 		ptb = ptl_new_text_buf(strlen(token));
-		if (ptb == NULL) {
-			CERROR ("Error parsing routes\n");
-			return -1;
-		}
+		if (ptb == NULL)
+			goto out;
 
 		strcpy(ptb->ptb_text, token);
+		tmp1 = &ptb->ptb_list;
+		list_add (tmp1, tmp2);
+		
+		while (tmp1 != tmp2) {
+			ptb = list_entry(tmp1, ptl_text_buf_t, ptb_list);
 
-		list_add (&ptb->ptb_list, &gateways);
-		while (!list_empty(&gateways)) {
-			ptb = list_entry(gateways.next, 
-					ptl_text_buf_t, ptb_list);
-
-			/* Add ptb's expansions right after it */
-			rc = ptl_str2tbs_expand(ptb->ptb_list.next, 
-						ptb->ptb_text);
+			rc = ptl_str2tbs_expand(tmp1->next, ptb->ptb_text);
 			if (rc < 0)
 				goto token_error;
-		
-			if (rc == 0) {
-				/* no expansions: check gateway nid */
+
+			tmp1 = tmp1->next;
+			
+			if (rc > 0) {		/* expanded! */
+				list_del(&ptb->ptb_list);
+				ptl_free_text_buf(ptb);
+				continue;
+			}
+
+			if (ntokens == 2) {
+				net = libcfs_str2net(ptb->ptb_text);
+				if (net == PTL_NIDNET(PTL_NID_ANY))
+					goto token_error;
+			} else {
 				nid = libcfs_str2nid(ptb->ptb_text);
 				if (nid == PTL_NID_ANY)
 					goto token_error;
-
-				rc = kpr_add_route (net, nid);
-				if (rc != 0) {
-					CERROR("Can't create route "
-					       "to %s via %s\n",
-					       libcfs_net2str(net),
-					       libcfs_nid2str(nid));
-					goto error;
-				}
 			}
-
-			list_del(&ptb->ptb_list);
-			ptl_free_text_buf(ptb);
 		}
 	}
 
+	LASSERT (!list_empty(&nets));
+	LASSERT (!list_empty(&gateways));
+
+	list_for_each (tmp1, &nets) {
+		ptb = list_entry(tmp1, ptl_text_buf_t, ptb_list);
+		net = libcfs_str2net(ptb->ptb_text);
+		LASSERT (net != PTL_NIDNET(PTL_NID_ANY));
+
+		list_for_each (tmp2, &gateways) {
+			ptb = list_entry(tmp2, ptl_text_buf_t, ptb_list);
+			nid = libcfs_str2nid(ptb->ptb_text);
+			LASSERT (nid != PTL_NID_ANY);
+
+                        rc = kpr_add_route (net, nid);
+                        if (rc != 0) {
+                                CERROR("Can't create route "
+                                       "to %s via %s\n",
+                                       libcfs_net2str(net),
+                                       libcfs_nid2str(nid));
+                                goto out;
+                        }
+		}
+	}
+
+        myrc = 0;
+        goto out;
+        
  token_error:
 	ptl_syntax("routes", cmd, token - str, strlen(token));
- error:
+ out:
+	ptl_free_text_bufs(&nets);
 	ptl_free_text_bufs(&gateways);
-	return -1;
+	return myrc;
 }
 
 ptl_err_t
@@ -719,7 +730,7 @@ ptl_read_route_table (char *fname)
         
         /* read chunks into a page buffer
          * ptl_str2tbs_sep(buffer)
-         * if last tb is partial, copy to start of buffer
+         * if last ptb is partial, copy to start of buffer
          * and read next chunk from there
          * then just ptl_parse_route_tbs() 
          */
