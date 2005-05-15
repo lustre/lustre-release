@@ -297,28 +297,56 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                 rc = dreq->dr_error;
         RETURN(rc);
 }
-
-static void filter_clear_page_cache(struct inode *inode, 
-				    struct dio_request *iobuf)
+  
+/* These are our hacks to keep our directio/bh IO coherent with ext3's
+ * page cache use.  Most notably ext3 reads file data into the page
+ * cache when it is zeroing the tail of partial-block truncates and
+ * leaves it there, sometimes generating io from it at later truncates.
+ * This removes the partial page and its buffers from the page cache,
+ * so it should only ever cause a wait in rare cases, as otherwise we
+ * always do full-page IO to the OST.
+ *
+ * The call to truncate_complete_page() will call journal_invalidatepage()
+ * to free the buffers and drop the page from cache.  The buffers should
+ * not be dirty, because we already called fdatasync/fdatawait on them.
+ */
+static int filter_clear_page_cache(struct inode *inode,
+                                   struct dio_request *iobuf)
 {
         struct page *page;
-        int i;
-
-        for (i = 0; i < iobuf->dr_npages ; i++) {
+        int i, rc, rc2;
+  
+        /* This is nearly generic_osync_inode, without the waiting on the inode
+        rc = generic_osync_inode(inode, inode->i_mapping,
+                                  OSYNC_DATA|OSYNC_METADATA);
+        */
+        rc = filemap_fdatawrite(inode->i_mapping);
+        rc2 = sync_mapping_buffers(inode->i_mapping);
+        if (rc == 0)
+                rc = rc2;
+        rc2 = filemap_fdatawait(inode->i_mapping);
+        if (rc == 0)
+                rc = rc2;
+        if (rc != 0)
+                RETURN(rc);
+ 
+        /* be careful to call this after fsync_inode_data_buffers has waited
+         * for IO to complete before we evict it from the cache */
+        for (i = 0; i < iobuf->dr_npages; i++) {
                 page = find_lock_page(inode->i_mapping,
-                                      iobuf->dr_pages[i]->index);
+                                       iobuf->dr_pages[i]->index);
                 if (page == NULL)
-                        continue;
+                       continue;
                 if (page->mapping != NULL) {
-			wait_on_page_writeback(page);
-                        block_invalidatepage(page, 0);
-                        ll_truncate_complete_page(page);
+                       wait_on_page_writeback(page);
+                       ll_truncate_complete_page(page);
                 }
+  
                 unlock_page(page);
                 page_cache_release(page);
         }
+        return 0;
 }
-
 /* Must be called with i_sem taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                      struct obd_export *exp, struct iattr *attr,
@@ -373,23 +401,9 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                         RETURN(rc);
         }
 
-        /* This is nearly osync_inode, without the waiting
-        rc = generic_osync_inode(inode, inode->i_mapping,
-                                 OSYNC_DATA|OSYNC_METADATA); */
-        rc = filemap_fdatawrite(inode->i_mapping);
-        rc2 = sync_mapping_buffers(inode->i_mapping);
-        if (rc == 0)
-                rc = rc2;
-        rc2 = filemap_fdatawait(inode->i_mapping);
-        if (rc == 0)
-                rc = rc2;
-
+        rc = filter_clear_page_cache(inode, dreq);
         if (rc != 0)
                 RETURN(rc);
-
-        /* be careful to call this after fsync_inode_data_buffers has waited
-         * for IO to complete before we evict it from the cache */
-        filter_clear_page_cache(inode, dreq);
 
         RETURN(filter_do_bio(obd, inode, dreq, rw));
 }
@@ -511,7 +525,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 rc = err;
 
         if (obd_sync_filter && !err)
-                LASSERT(oti->oti_transno <= obd->obd_last_committed);
+                LASSERTF(oti->oti_transno <= obd->obd_last_committed,
+                         "oti_transno "LPU64" last_committed "LPU64"\n",
+                         oti->oti_transno, obd->obd_last_committed);
 
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 
