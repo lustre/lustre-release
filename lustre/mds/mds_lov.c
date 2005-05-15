@@ -311,8 +311,11 @@ int mds_dt_connect(struct obd_device *obd, char * lov_name)
          * set_nextid().  The class driver can help us here, because
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
-        if (!obd->obd_recovering)
+        if (!obd->obd_recovering) {
                 rc = mds_postrecov_common(obd);
+                if (rc > 0) 
+                        rc = 0;
+        }
         RETURN(rc);
 
 err_reg:
