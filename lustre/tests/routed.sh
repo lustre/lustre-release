@@ -64,9 +64,10 @@ echo; echo -n "adding MDS on: $MDSNODE"
 eval "NODE$MDSNODE=y"
 $LMC --add net --node $MDSNODE --nid `h2$SERVER_NETTYPE $MDSNODE` \
 	--nettype $SERVER_NETTYPE --cluster_id $SERVER_CLUSTER
-$LMC --add mds --node $MDSNODE --mds mds-$FSNAME --dev $MDSDEV $MDSOPT
+$LMC --add mds --node $MDSNODE --mds mds-$FSNAME --dev $MDSDEV $MDSOPT  \
+	--size $MDSSIZE
 $LMC --add lov --lov lov-$FSNAME --mds mds-$FSNAME --stripe_sz $STRIPE_BYTES \
-        --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 # MDS route to elan client
 for R in $ROUTERS; do
 	echo -n " [r=$R]"
@@ -78,6 +79,7 @@ for R in $ROUTERS; do
 		--target_cluster_id $SERVER_CLUSTER
 done
 
+--dev $OSTDEV --size $OSTSIZE
 # OSTNODE
 COUNT=1
 for OSTNODE in $OSTNODES; do
@@ -106,7 +108,8 @@ for OSTNODE in $OSTNODES; do
 	fi
 
 	$LMC --add ost --node $OSTNODE --ost ost-$FSNAME-$OSTNODE-$DEV	\
-		--lov lov-$FSNAME $OSTFAILOVER --dev $OSTDEV $OSTOPT
+		--lov lov-$FSNAME $OSTFAILOVER --dev $OSTDEV --size $OSTSIZE \
+		$OSTOPT
 	COUNT=`expr $COUNT + 1`
 done
 
