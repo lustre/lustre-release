@@ -559,7 +559,7 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
 
         re->kpre_gateway = ge;
         ge->kpge_refcount++;
-        list_add (&re->kpre_list, &kpr_state.kpr_routes);
+        list_add_tail(&re->kpre_list, &kpr_state.kpr_routes);
         kpr_state.kpr_generation++;
 
         write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);

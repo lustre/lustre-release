@@ -620,7 +620,7 @@ ptl_parse_route (char *str)
 
 		strcpy(ptb->ptb_text, token);
 		tmp1 = &ptb->ptb_list;
-		list_add (tmp1, tmp2);
+		list_add_tail(tmp1, tmp2);
 		
 		while (tmp1 != tmp2) {
 			ptb = list_entry(tmp1, ptl_text_buf_t, ptb_list);
