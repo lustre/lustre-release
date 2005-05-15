@@ -73,6 +73,7 @@ kpr_proc_stats_write(struct file *file, const char *ubuffer,
 
 typedef struct {
         unsigned long long   sri_generation;
+        kpr_net_entry_t     *sri_net;
         kpr_route_entry_t   *sri_route;
         loff_t               sri_off;
 } kpr_seq_route_iterator_t;
@@ -80,46 +81,67 @@ typedef struct {
 int
 kpr_seq_routes_seek (kpr_seq_route_iterator_t *sri, loff_t off)
 {
-        struct list_head  *tmp;
+        struct list_head  *n;
+        struct list_head  *r;
         int                rc;
         unsigned long      flags;
         loff_t             here;
         
         read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
         
-        if (sri->sri_route != NULL &&
+        if (sri->sri_net != NULL &&
             sri->sri_generation != kpr_state.kpr_generation) {
                 /* tables have changed */
                 rc = -ESTALE;
+                goto out;
+        }
+        
+        if (sri->sri_net == NULL || sri->sri_off > off) {
+                /* search from start */
+                n = kpr_state.kpr_nets.next;
+                r = NULL;
+                here = 0;
         } else {
-                if (sri->sri_route == NULL || sri->sri_off > off) {
-                        /* search from start */
-                        tmp = kpr_state.kpr_routes.next;
-                        here = 0;
-                } else {
-                        /* continue search */
-                        tmp = &sri->sri_route->kpre_list;
-                        here = sri->sri_off;
-                }
-
-                sri->sri_generation = kpr_state.kpr_generation;
-                sri->sri_off        = off;
-                sri->sri_route      = NULL;
-                rc                  = -ENOENT;
+                /* continue search */
+                n = &sri->sri_net->kpne_list;
+                r = &sri->sri_route->kpre_list;
+                here = sri->sri_off;
+        }
+        
+        sri->sri_generation = kpr_state.kpr_generation;
+        sri->sri_off        = off;
+        
+        while (n != &kpr_state.kpr_nets) {
+                kpr_net_entry_t *ne = 
+                        list_entry(n, kpr_net_entry_t, kpne_list);
                 
-                while (tmp != &kpr_state.kpr_routes) {
+                if (r == NULL)
+                        r = ne->kpne_routes.next;
+                
+                while (r != &ne->kpne_routes) {
+                        kpr_route_entry_t *re =
+                                list_entry(r, kpr_route_entry_t,
+                                           kpre_list);
+                        
                         if (here == off) {
-                                sri->sri_route =
-                                        list_entry(tmp, kpr_route_entry_t, 
-                                                   kpre_list);
+                                sri->sri_net = ne;
+                                sri->sri_route = re;
                                 rc = 0;
-                                break;
+                                goto out;
                         }
-                        tmp = tmp->next;
+                        
+                        r = r->next;
                         here++;
                 }
-        } 
-        
+                
+                r = NULL;
+                n = n->next;
+        }
+
+        sri->sri_net   = NULL;
+        sri->sri_route = NULL;
+        rc             = -ENOENT;
+ out:
         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
         return rc;
 }
@@ -135,7 +157,7 @@ kpr_seq_routes_start (struct seq_file *s, loff_t *pos)
         if (sri == NULL)
                 return NULL;
 
-        sri->sri_route = NULL;
+        sri->sri_net = NULL;
         rc = kpr_seq_routes_seek(sri, *pos);
         if (rc == 0)
                 return sri;
@@ -183,6 +205,7 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
 
         read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
+        LASSERT (sri->sri_net != NULL);
         LASSERT (sri->sri_route != NULL);
 
         if (sri->sri_generation != kpr_state.kpr_generation) {
@@ -190,7 +213,7 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
                 return -ESTALE;
         }
 
-        net = sri->sri_route->kpre_net;
+        net = sri->sri_net->kpne_net;
         nid = sri->sri_route->kpre_gateway->kpge_nid;
         alive = sri->sri_route->kpre_gateway->kpge_alive;
 

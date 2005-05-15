@@ -54,8 +54,14 @@ typedef struct
 {
 	struct list_head   	kpre_list;
         kpr_gateway_entry_t    *kpre_gateway;
-        __u32                   kpre_net;
 } kpr_route_entry_t;
+
+typedef struct
+{
+        struct list_head        kpne_list;
+        struct list_head        kpne_routes;
+        __u32                   kpne_net;
+} kpr_net_entry_t;
 
 typedef struct
 {
@@ -66,7 +72,7 @@ typedef struct
 } kpr_upcall_t;
 
 typedef struct{
-        struct list_head        kpr_routes;     /* net -> gateways lookup */
+        struct list_head        kpr_nets;       /* net -> gateways lookup */
         struct list_head        kpr_gateways;   /* known gateways */
         unsigned long long      kpr_generation; /* validity stamp */
         rwlock_t                kpr_rwlock;     /* stabilize */

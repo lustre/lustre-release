@@ -235,7 +235,9 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
         ptl_ni_t            *ni = *nip;
         ptl_nid_t            gwnid;
 	struct list_head    *e;
+        kpr_net_entry_t     *ne = NULL;
         kpr_route_entry_t   *re;
+        int                  found;
         unsigned long        flags;
         ptl_ni_t            *gwni = NULL;
         ptl_ni_t            *tmpni = NULL;
@@ -271,11 +273,23 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
         }
 
 	/* Search routes for one that has a gateway to target_nid on the callers network */
-        list_for_each (e, &kpr_state.kpr_routes) {
+        found = 0;
+        list_for_each (e, &kpr_state.kpr_nets) {
+		ne = list_entry (e, kpr_net_entry_t, kpne_list);
+                
+                found = ne->kpne_net == target_net;
+                if (found)
+                        break;
+        }
+        
+        if (!found) {
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                return PTL_NID_ANY;
+        }
+        
+	/* Search routes for one that has a gateway to target_nid on the callers network */
+        list_for_each (e, &ne->kpne_routes) {
 		re = list_entry (e, kpr_route_entry_t, kpre_list);
-
-                if (re->kpre_net != target_net) /* incorrect target net */
-			continue;
 
                 if (!re->kpre_gateway->kpge_alive) /* gateway down */
                         continue;
@@ -357,8 +371,10 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         ptl_ni_t            *tmp_ni;
         unsigned long        flags;
 	struct list_head    *e;
+        kpr_net_entry_t     *ne = NULL;
         kpr_route_entry_t   *re;
         int                  rc;
+        int                  found;
 
         CDEBUG (D_NET, "forward [%p] %s from %s\n", fwd,
                 libcfs_nid2str(target_nid), libcfs_nid2str(src_ni->ni_nid));
@@ -375,24 +391,19 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         kpr_state.kpr_fwd_bytes += nob + sizeof(ptl_hdr_t);
         spin_unlock(&kpr_state.kpr_stats_lock);
 
-        if (!kpr_forwarding()) {
-                /* I'm not a router */
-                rc = -EHOSTUNREACH;
-                goto out;
-        }
+        rc = -ESHUTDOWN;
+	if (src_ni->ni_shutdown)                /* caller is shutting down */
+		goto failed;
 
-	if (src_ni->ni_shutdown) {              /* caller is shutting down */
-                rc = -ESHUTDOWN;
-		goto out;
-        }
+        rc = -ENETUNREACH;
+        if (!kpr_forwarding())                  /* I'm not a router */
+                goto failed;
 
         /* Is the target_nid on a local network? */
         dst_ni = ptl_net2ni(target_net);
         if (dst_ni != NULL) {
-                if (dst_ni->ni_nal->nal_fwd == NULL) {
-                        rc = -EHOSTUNREACH;
-                        goto out;
-                }
+                if (dst_ni->ni_nal->nal_fwd == NULL)
+                        goto failed;
 
                 fwd->kprfd_gateway_nid = dst_ni->ni_nid;
                 atomic_inc (&kpr_state.kpr_queue_depth);
@@ -408,15 +419,25 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 ptl_ni_decref(dst_ni);
                 return;
         }
+
+        /* Search nets */
+        found = 0;
+        list_for_each (e, &kpr_state.kpr_nets) {
+                ne = list_entry (e, kpr_net_entry_t, kpne_list);
+
+                found = (ne->kpne_net == target_net);
+                if (found)
+                        break;
+        }
+
+        if (!found)
+                goto failed;
         
 	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
         dst_ni = NULL;
         ge = NULL;
-        list_for_each (e, &kpr_state.kpr_routes) {
+        list_for_each (e, &ne->kpne_routes) {
 		re = list_entry (e, kpr_route_entry_t, kpre_list);
-
-                if (re->kpre_net != target_net) /* no match */
-			continue;
 
 		if (PTL_NIDNET(re->kpre_gateway->kpge_nid) == source_net)
 			continue;               /* don't route to same net */
@@ -445,30 +466,30 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 dst_ni = tmp_ni;
                 ge = re->kpre_gateway;
         }
+
+        LASSERT ((ge == NULL) == (dst_ni == NULL));
         
-        if (ge != NULL) {
-                LASSERT (dst_ni != NULL);
+        if (ge == NULL)
+                goto failed;
                 
-                kpr_update_weight (ge, nob);
+        kpr_update_weight (ge, nob);
 
-                fwd->kprfd_gateway_nid = ge->kpge_nid;
-                atomic_inc (&kpr_state.kpr_queue_depth);
+        fwd->kprfd_gateway_nid = ge->kpge_nid;
+        atomic_inc (&kpr_state.kpr_queue_depth);
 
-                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
-                CDEBUG (D_NET, "forward [%p] %s: src ni %s dst ni %s gw %s\n",
-                        fwd, libcfs_nid2str(target_nid),
-                        libcfs_nid2str(src_ni->ni_nid),
-                        libcfs_nid2str(dst_ni->ni_nid),
-                        libcfs_nid2str(fwd->kprfd_gateway_nid));
+        CDEBUG (D_NET, "forward [%p] %s: src ni %s dst ni %s gw %s\n",
+                fwd, libcfs_nid2str(target_nid),
+                libcfs_nid2str(src_ni->ni_nid),
+                libcfs_nid2str(dst_ni->ni_nid),
+                libcfs_nid2str(fwd->kprfd_gateway_nid));
 
-                dst_ni->ni_nal->nal_fwd(dst_ni, fwd);
-                ptl_ni_decref(dst_ni);
-                return;
-	}
+        dst_ni->ni_nal->nal_fwd(dst_ni, fwd);
+        ptl_ni_decref(dst_ni);
+        return;
 
-        rc = -EHOSTUNREACH;
- out:
+ failed:
         spin_lock_irqsave(&kpr_state.kpr_stats_lock, flags);
         kpr_state.kpr_fwd_errors++;
         spin_unlock_irqrestore(&kpr_state.kpr_stats_lock, flags);
@@ -500,8 +521,9 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
 {
 	unsigned long	     flags;
 	struct list_head    *e;
-	kpr_route_entry_t   *re;
-        kpr_gateway_entry_t *ge;
+	kpr_net_entry_t     *ne = NULL;
+	kpr_route_entry_t   *re = NULL;
+        kpr_gateway_entry_t *ge = NULL;
         int                  dup = 0;
 
         CDEBUG(D_NET, "Add route: net %s : gw %s\n",
@@ -510,9 +532,20 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
         if (gateway_nid == PTL_NID_ANY)
                 return (-EINVAL);
 
-        PORTAL_ALLOC (ge, sizeof (*ge));
-        if (ge == NULL)
-                return (-ENOMEM);
+        /* Assume net, route, gateway all new */
+        PORTAL_ALLOC(ge, sizeof(*ge));
+        PORTAL_ALLOC(re, sizeof(*re));
+        PORTAL_ALLOC(ne, sizeof(*ne));
+
+        if (ge == NULL || re == NULL || ne == NULL) {
+                if (ge != NULL)
+                        PORTAL_FREE(ge, sizeof(*ge));
+                if (re != NULL)
+                        PORTAL_FREE(re, sizeof(*re));
+                if (ne != NULL)
+                        PORTAL_FREE(ne, sizeof(*ne));
+                return -ENOMEM;
+        }
 
         ge->kpge_nid   = gateway_nid;
         ge->kpge_alive = 1;
@@ -520,20 +553,51 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
         ge->kpge_refcount = 0;
         atomic_set (&ge->kpge_weight, 0);
 
-        PORTAL_ALLOC (re, sizeof (*re));
-        if (re == NULL) {
-                PORTAL_FREE (ge, sizeof (*ge));
-                return (-ENOMEM);
-        }
-
-        re->kpre_net = net;
-
+        ne->kpne_net = net;
+        INIT_LIST_HEAD(&ne->kpne_routes);
+        
         LASSERT(!in_interrupt());
 	write_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
+        list_for_each (e, &kpr_state.kpr_nets) {
+                kpr_net_entry_t *ne2 = 
+                        list_entry(e, kpr_net_entry_t, kpne_list);
+                
+                if (ne2->kpne_net == net) {
+                        PORTAL_FREE(ne, sizeof(*ne));
+                        ne = ne2;
+                        dup = 1;
+                        break;
+                }
+        }
+        
+        if (!dup) {
+                list_add_tail(&ne->kpne_list, &kpr_state.kpr_nets);
+        } else {
+                dup = 0;
+                list_for_each (e, &ne->kpne_routes) {
+                        kpr_route_entry_t *re2 = 
+                                list_entry(e, kpr_route_entry_t, kpre_list);
+                        
+                        dup = (re2->kpre_gateway->kpge_nid == gateway_nid);
+                        if (dup)
+                                break;
+                }
+                
+                if (dup) {
+                        write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+
+                        PORTAL_FREE(re, sizeof(*re));
+                        PORTAL_FREE(ge, sizeof(*ge));
+                        return -EINVAL;
+                }
+        }
+
+        list_add_tail(&re->kpre_list, &ne->kpne_routes);
+                
         list_for_each (e, &kpr_state.kpr_gateways) {
-                kpr_gateway_entry_t *ge2 = list_entry(e, kpr_gateway_entry_t,
-                                                      kpge_list);
+                kpr_gateway_entry_t *ge2 = 
+                        list_entry(e, kpr_gateway_entry_t, kpge_list);
 
                 if (ge2->kpge_nid == gateway_nid) {
                         PORTAL_FREE (ge, sizeof (*ge));
@@ -559,20 +623,24 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
 
         re->kpre_gateway = ge;
         ge->kpge_refcount++;
-        list_add_tail(&re->kpre_list, &kpr_state.kpr_routes);
         kpr_state.kpr_generation++;
 
         write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
-        return (0);
+        return 0;
 }
 
 int
 kpr_del_route (__u32 net, ptl_nid_t gw_nid)
 {
-        unsigned long      flags;
-        int                rc = -ENOENT;
-        struct list_head  *e;
-        struct list_head  *n;
+        unsigned long        flags;
+        kpr_net_entry_t     *ne;
+        kpr_route_entry_t   *re;
+        kpr_gateway_entry_t *ge;
+        struct list_head    *e1;
+        struct list_head    *n1;
+        struct list_head    *e2;
+        struct list_head    *n2;
+        int                  rc = -ENOENT;
 
         CDEBUG(D_NET, "Del route: net %s : gw %s\n",
                libcfs_net2str(net), libcfs_nid2str(gw_nid));
@@ -583,62 +651,80 @@ kpr_del_route (__u32 net, ptl_nid_t gw_nid)
 
         write_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
-        list_for_each_safe (e, n, &kpr_state.kpr_routes) {
-                kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
-                                                   kpre_list);
-                kpr_gateway_entry_t *ge = re->kpre_gateway;
-
-                if (!(net == PTL_NIDNET(PTL_NID_ANY) ||
-                      net == re->kpre_net))
+        list_for_each_safe (e1, n1, &kpr_state.kpr_nets) {
+                ne = list_entry(e1, kpr_net_entry_t, kpne_list);
+                
+                if (!(net != PTL_NIDNET(PTL_NID_ANY) ||
+                      net == ne->kpne_net))
                         continue;
+                
+                list_for_each_safe (e2, n2, &ne->kpne_routes) {
+                        re = list_entry(e2, kpr_route_entry_t, kpre_list);
+                        ge = re->kpre_gateway;
+                        
+                        if (!(gw_nid == PTL_NID_ANY ||
+                              gw_nid == ge->kpge_nid))
+                                continue;
 
-                if (!(gw_nid == PTL_NID_ANY ||
-                      gw_nid == ge->kpge_nid))
-                        continue;
+                        rc = 0;
 
-                rc = 0;
+                        if (--ge->kpge_refcount == 0) {
+                                list_del (&ge->kpge_list);
+                                PORTAL_FREE (ge, sizeof (*ge));
+                        }
 
-                if (--ge->kpge_refcount == 0) {
-                        list_del (&ge->kpge_list);
-                        PORTAL_FREE (ge, sizeof (*ge));
+                        list_del(&re->kpre_list);
+                        PORTAL_FREE(re, sizeof (*re));
                 }
 
-                list_del (&re->kpre_list);
-                PORTAL_FREE(re, sizeof (*re));
+                if (list_empty(&ne->kpne_routes)) {
+                        list_del(&ne->kpne_list);
+                        PORTAL_FREE(ne, sizeof(*ne));
+                }
         }
 
-        kpr_state.kpr_generation++;
+        if (rc == 0)
+                kpr_state.kpr_generation++;
+
         write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
-        return (rc);
+        return rc;
 }
 
 int
 kpr_get_route (int idx, __u32 *net, ptl_nid_t *gateway_nid, __u32 *alive)
 {
-	struct list_head  *e;
-        unsigned long      flags;
+	struct list_head    *e1;
+	struct list_head    *e2;
+        kpr_net_entry_t     *ne;
+        kpr_route_entry_t   *re;
+        kpr_gateway_entry_t *ge;
+        unsigned long        flags;
 
         LASSERT (!in_interrupt());
 	read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
-        for (e = kpr_state.kpr_routes.next; e != &kpr_state.kpr_routes; e = e->next) {
-                kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
-                                                     kpre_list);
-                kpr_gateway_entry_t *ge = re->kpre_gateway;
+        list_for_each (e1, &kpr_state.kpr_nets) {
+                ne = list_entry(e1, kpr_net_entry_t, kpne_list);
                 
-                if (idx-- == 0) {
-                        *net = re->kpre_net;
-                        *gateway_nid = ge->kpge_nid;
-                        *alive = ge->kpge_alive;
+                list_for_each (e2, &ne->kpne_routes) {
+                        re = list_entry(e2, kpr_route_entry_t, kpre_list);
+                        ge = re->kpre_gateway;
+                
+                        if (idx-- == 0) {
+                                *net = ne->kpne_net;
+                                *gateway_nid = ge->kpge_nid;
+                                *alive = ge->kpge_alive;
 
-                        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
-                        return (0);
+                                read_unlock_irqrestore(&kpr_state.kpr_rwlock, 
+                                                       flags);
+                                return 0;
+                        }
                 }
         }
-
+        
         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
-        return (-ENOENT);
+        return -ENOENT;
 }
 
 int 
@@ -673,13 +759,21 @@ kpr_finalise (void)
 #ifdef __KERNEL__
         kpr_proc_fini();
 #endif
-        while (!list_empty (&kpr_state.kpr_routes)) {
-                kpr_route_entry_t *re = list_entry(kpr_state.kpr_routes.next,
-                                                   kpr_route_entry_t,
-                                                   kpre_list);
+        while (!list_empty (&kpr_state.kpr_nets)) {
+                kpr_net_entry_t *ne = list_entry(kpr_state.kpr_nets.next,
+                                                 kpr_net_entry_t, kpne_list);
+                
+                while (!list_empty (&ne->kpne_routes)) {
+                        kpr_route_entry_t *re = list_entry(ne->kpne_routes.next,
+                                                           kpr_route_entry_t,
+                                                           kpre_list);
 
-                list_del(&re->kpre_list);
-                PORTAL_FREE(re, sizeof (*re));
+                        list_del(&re->kpre_list);
+                        PORTAL_FREE(re, sizeof(*re));
+                }
+
+                list_del(&ne->kpne_list);
+                PORTAL_FREE(ne, sizeof(*ne));
         }
 
         while (!list_empty (&kpr_state.kpr_gateways)) {
@@ -705,7 +799,7 @@ kpr_initialise (void)
 
         memset(&kpr_state, 0, sizeof(kpr_state));
 
-        INIT_LIST_HEAD(&kpr_state.kpr_routes);
+        INIT_LIST_HEAD(&kpr_state.kpr_nets);
         INIT_LIST_HEAD(&kpr_state.kpr_gateways);
         rwlock_init(&kpr_state.kpr_rwlock);
         spin_lock_init(&kpr_state.kpr_stats_lock);
