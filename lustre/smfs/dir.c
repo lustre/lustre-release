@@ -166,15 +166,15 @@ do_rehash:
 }
 
 static int smfs_do_lookup (struct inode * dir, 
-                                      struct dentry * dentry,
-                                      struct nameidata *nd,
-                                      struct inode **inode, int * flags)
+                           struct dentry * dentry,
+                           struct nameidata *nd,
+                           struct inode **inode)
 {
         struct inode *cache_dir = I2CI(dir);
         struct inode *parent = I2CI(dentry->d_parent->d_inode);
         struct dentry *cache_dentry = NULL;
         struct dentry *cache_parent = NULL;
-        struct dentry *rdentry = NULL;
+        struct dentry *rdentry = NULL, *tmp = NULL;
         int rc = 0;
         struct hook_msg msg = {
                 .dentry = dentry,
@@ -191,35 +191,43 @@ static int smfs_do_lookup (struct inode * dir,
         /* preparing artificial backing fs dentries. */
         cache_parent = pre_smfs_dentry(NULL, parent, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
-        if (!cache_dentry || !cache_parent) 
-                RETURN(-ENOMEM);
+        if (!cache_dentry || !cache_parent) {
+                rc = -ENOMEM;
+                goto exit;
+        }
         
         SMFS_PRE_HOOK(dir, HOOK_LOOKUP, &msg);
         
         /* perform lookup in backing fs. */
         rdentry = cache_dir->i_op->lookup(cache_dir, cache_dentry, nd);
         if (rdentry) {
-                if (IS_ERR(rdentry))
+                if (IS_ERR(rdentry)) {
                         rc = PTR_ERR(rdentry);
-        } else {
-                rdentry = dget(cache_dentry);
-        }
-        
-        if (!rc && rdentry->d_inode) {
-                *inode = smfs_get_inode(dir->i_sb, rdentry->d_inode->i_ino, 
-                                       dir, 0);
-                if (!(*inode)) {
-                        rc = -ENOENT;
+                        rdentry = NULL;
                 }
-        }
-
-        SMFS_POST_HOOK(dir, HOOK_LOOKUP, &msg, rc);
+                else {
+                        tmp = rdentry;
+                        //copy fields if DCACHE_CROSS_REF
+                        smfs_update_dentry(dentry, tmp);
+                }
+        } else 
+                tmp = cache_dentry;
         
-        if (!rc) {
-                smfs_update_dentry(dentry, rdentry);
-                *flags = rdentry->d_flags;
+        SMFS_POST_HOOK(dir, HOOK_LOOKUP, &msg, rc);
+     
+        if (tmp && tmp->d_inode) {
+                *inode = smfs_get_inode(dir->i_sb, tmp->d_inode->i_ino, 
+                                        dir, 0); 
+                if (!(*inode))
+                        rc = -ENOENT;
+        }
+        
+        if (rdentry) {
+                LASSERT(atomic_read(&rdentry->d_count) > 0);
                 dput(rdentry);
         }
+        
+exit:
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);
         
@@ -232,11 +240,10 @@ static struct dentry * smfs_iopen_lookup(struct inode * dir,
 {
         struct dentry * alternate = NULL;
 	struct inode *inode = NULL;
-        int flags = 0;
         int rc = 0;
         ENTRY;
         
-        rc = smfs_do_lookup(dir, dentry, nd, &inode, &flags);
+        rc = smfs_do_lookup(dir, dentry, nd, &inode);
 	if (rc)
                 RETURN(ERR_PTR(rc));
         
@@ -278,15 +285,14 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
 {
         struct dentry * rdentry = NULL;
         struct inode * inode = NULL;
-        int flags = 0;
         int rc;
         
-        rc = smfs_do_lookup(dir, dentry, nd, &inode, &flags);
+        rc = smfs_do_lookup(dir, dentry, nd, &inode);
         if (rc)
                 RETURN(ERR_PTR(rc));
         
         //lmv stuff. Special dentry that has no inode.
-        if (flags & DCACHE_CROSS_REF) {
+        if (dentry->d_flags & DCACHE_CROSS_REF) {
                 d_add(dentry, NULL);
                 RETURN(NULL);
         }

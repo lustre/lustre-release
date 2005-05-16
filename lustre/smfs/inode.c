@@ -48,7 +48,7 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
 
                 /* getting backing fs inode. */
                 LASSERT(sargs);
-                ino = sargs ? sargs->s_ino : inode->i_ino;
+                ino = inode->i_ino;
                 cache_inode = iget(S2CSB(inode->i_sb), ino); 
                 
                 OBD_ALLOC(inode->u.generic_ip,
@@ -68,11 +68,10 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
                         inode->i_op = &smfs_iopen_iops;
                         inode->i_fop = &smfs_iopen_fops;
                 }
-                if (sargs) { 
-                        struct inode *dir = sargs->s_inode; 
-                        if (dir)
-                                I2SMI(inode)->smi_flags = I2SMI(dir)->smi_flags;
-                }
+                //inherit parent inode flags
+                if (sargs->s_inode) 
+                        I2SMI(inode)->smi_flags = I2SMI(sargs->s_inode)->smi_flags;
+                
         } else
                 LBUG();
 }
@@ -139,6 +138,10 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 int smfs_set_inode(struct inode *inode, void *opaque)
 {
+        struct smfs_iget_args *sargs = opaque;
+        
+        inode->i_ino = sargs->s_ino;
+        
         return 0;
 }
 
@@ -155,11 +158,11 @@ static struct inode *smfs_iget(struct super_block *sb, ino_t hash,
                         smfs_init_inode_info(inode, (void*)sargs);
                         unlock_new_inode(inode);
                 }
-                //inode->i_ino = hash;
+                
                 CDEBUG(D_INODE, "inode: %lu/%u(%p) index %d "
                        "ino %d\n", inode->i_ino, inode->i_generation,
                        inode, sargs->s_index, sargs->s_ino);
-                inode->i_ino = hash;
+                
         }
         return inode;
 }
