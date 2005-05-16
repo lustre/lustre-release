@@ -462,7 +462,6 @@ extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
 #endif
 
-extern ptl_err_t ptl_read_route_table(char *route_table);
 extern ptl_err_t ptl_parse_routes (char *route_str);
 extern ptl_err_t ptl_parse_networks (struct list_head *nilist, char *networks);
 

@@ -409,12 +409,17 @@ ptl_str2tbs_sep (struct list_head *tbs, char *str)
 	struct list_head  pending;
 	char             *sep;
 	int               nob;
+        int               i;
 	ptl_text_buf_t   *ptb;
 
 	INIT_LIST_HEAD(&pending);
 
 	/* Split 'str' into separate commands */
 	for (;;) {
+                /* skip leading whitespace */
+                while (ptl_iswhite(*str))
+                        str++;
+                
 		/* scan for separator or comment */
 		for (sep = str; *sep != 0; sep++)
 			if (ptl_issep(*sep) || *sep == '#')
@@ -428,7 +433,12 @@ ptl_str2tbs_sep (struct list_head *tbs, char *str)
 				return -1;
 			}
 			
-			memcpy(ptb->ptb_text, str, nob);
+                        for (i = 0; i < nob; i++)
+                                if (ptl_iswhite(str[i]))
+                                        ptb->ptb_text[i] = ' ';
+                                else
+                                        ptb->ptb_text[i] = str[i];
+
 			ptb->ptb_text[nob] = 0;
 
 			list_add_tail(&ptb->ptb_list, &pending);
@@ -589,7 +599,7 @@ ptl_parse_route (char *str)
 		while (ptl_iswhite(*sep))
 			sep++;
 		if (*sep == 0) {
-			if (ntokens < 3)
+			if (ntokens < 2)
                                 goto token_error;
 			break;
 		}
@@ -603,13 +613,7 @@ ptl_parse_route (char *str)
 		if (*sep != 0)
 			*sep++ = 0;
 		
-		if (ntokens == 1) {
-			if (!strcmp(token, "route"))
-				continue;
-			goto token_error;
-		}
-
-		if (ntokens == 2)
+		if (ntokens == 1)
 			tmp2 = &nets;		/* expanding nets */
 		else
 			tmp2 = &gateways;	/* expanding gateways */
@@ -637,7 +641,7 @@ ptl_parse_route (char *str)
 				continue;
 			}
 
-			if (ntokens == 2) {
+			if (ntokens == 1) {
 				net = libcfs_str2net(ptb->ptb_text);
 				if (net == PTL_NIDNET(PTL_NID_ANY))
 					goto token_error;
@@ -722,20 +726,3 @@ ptl_parse_routes (char *routes)
 	LASSERT (ptl_tbnob == 0);
 	return rc;
 }
-
-ptl_err_t
-ptl_read_route_table (char *fname) 
-{
-        int rc = PTL_FAIL;
-        
-        /* read chunks into a page buffer
-         * ptl_str2tbs_sep(buffer)
-         * if last ptb is partial, copy to start of buffer
-         * and read next chunk from there
-         * then just ptl_parse_route_tbs() 
-         */
-
-	LASSERT (ptl_tbnob == 0);
-        return rc;
-}
-

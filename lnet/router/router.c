@@ -33,10 +33,6 @@ static char *routes = "";
 CFS_MODULE_PARM(routes, "s", charp, 0444,
                 "routes to non-local networks");
 
-static char *route_table = "";
-CFS_MODULE_PARM(route_table, "s", charp, 0444,
-                "file containing routes");
-
 int
 kpr_forwarding ()
 {
@@ -804,17 +800,9 @@ kpr_initialise (void)
         rwlock_init(&kpr_state.kpr_rwlock);
         spin_lock_init(&kpr_state.kpr_stats_lock);
 
-        if (routes[0] != 0 &&
-            route_table[0] != 0) {
-                LCONSOLE_ERROR("Please set either 'routes' or "
-                               "'route_table' but not both\n");
-                return -EINVAL;
-        }
-
-        if (route_table[0] != 0)
-                rc = ptl_read_route_table(route_table);
-        else
-                rc = ptl_parse_routes(routes);
+        rc = ptl_parse_routes(routes);
+        if (rc != PTL_OK)
+                kpr_finalise();
 
 #ifdef __KERNEL__
         if (rc == PTL_OK)
