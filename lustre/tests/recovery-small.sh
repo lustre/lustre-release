@@ -512,15 +512,13 @@ test_51() {
 run_test 51 "failover MDS during recovery"
 
 test_52_guts() {
-	do_facet client "writemany -q -a $DIR/$tdir/$tfile 0 5" &
+	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
 	fail ost
 	rc=0
-	sleep 5
-	kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID || rc=$?
 	# active client process should see an EIO for down OST
 	[ $rc -eq 5 ] && { echo "writemany correctly failed $rc" && return 0; }
