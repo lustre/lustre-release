@@ -83,6 +83,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 
         /* default values, may be changed via /proc/fs/... */
         sbi->ll_gns_state = LL_GNS_IDLE;
+	sbi->ll_gns_pending_dentry = NULL;
         atomic_set(&sbi->ll_gns_enabled, 1);
         sbi->ll_gns_tick = GNS_TICK_TIMEOUT;
         sbi->ll_gns_timeout = GNS_MOUNT_TIMEOUT;

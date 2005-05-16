@@ -98,6 +98,7 @@ struct ll_sb_info {
         struct timer_list         ll_gns_timer;
         struct list_head          ll_gns_sbi_head;
         struct completion         ll_gns_mount_finished;
+	struct dentry            *ll_gns_pending_dentry;
 
         unsigned long             ll_gns_tick;
         unsigned long             ll_gns_timeout;

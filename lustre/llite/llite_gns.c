@@ -40,8 +40,6 @@ static spinlock_t gns_lock = SPIN_LOCK_UNLOCKED;
 static struct ptlrpc_thread gns_thread;
 static struct ll_gns_ctl gns_ctl;
 
-#define CONCUR_GNS_RESTART_APPROACH 0
-
 /*
  * waits until passed dentry gets mountpoint or timeout and attempts are
  * exhausted. Returns 1 if dentry became mountpoint and 0 otherwise.
@@ -70,26 +68,6 @@ ll_gns_wait_for_mount(struct dentry *dentry,
         }
         RETURN(-ETIME);
 }
-
-#if (CONCUR_GNS_RESTART_APPROACH == 1)
-/* 
- * sending a signal known to be ignored to cause restarting syscall if GNS mount
- * function returns -ERESTARTSYS.
- */
-static void
-ll_gns_send_signal(void)
-{
-        struct task_struct *task = current;
-        int signal = SIGCONT;
-
-        read_lock(&tasklist_lock);
-        spin_lock_irq(&task->sighand->siglock);
-        sigaddset(&task->pending.signal, signal);
-        spin_unlock_irq(&task->sighand->siglock);
-        read_unlock(&tasklist_lock);
-        set_tsk_thread_flag(task, TIF_SIGPENDING);
-}
-#endif
 
 /*
  * tries to mount the mount object under passed @dentry. In the case of success
@@ -123,19 +101,19 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 RETURN(-EINVAL);
 
         spin_lock(&sbi->ll_gns_lock);
-
+	
         /* 
          * another thead is in progress or just finished mounting the
          * dentry. Handling that.
          */
-        if (sbi->ll_gns_state == LL_GNS_MOUNTING ||
-            sbi->ll_gns_state == LL_GNS_FINISHED) {
+        if (sbi->ll_gns_state != LL_GNS_IDLE) {
                 /* 
                  * another thread is trying to mount GNS dentry. We'd like to
                  * handling that.
                  */
                 spin_unlock(&sbi->ll_gns_lock);
 
+        restart:
                 /* 
                  * check if dentry is mount point already, if so, do not restart
                  * syscal.
@@ -143,14 +121,14 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 if (d_mountpoint(dentry))
                         RETURN(0);
 
-#if (CONCUR_GNS_RESTART_APPROACH == 1)
-                /* 
-                 * causing syscall to restart and possibly find this dentry
-                 * already mounted.
-                 */
-                ll_gns_send_signal();
-                RETURN(-ERESTARTSYS);
-#else
+                spin_lock(&sbi->ll_gns_lock);
+		if (sbi->ll_gns_pending_dentry && 
+		    is_subdir(sbi->ll_gns_pending_dentry, dentry)) {
+            		spin_unlock(&sbi->ll_gns_lock);
+			RETURN(-EAGAIN);
+		}
+                spin_unlock(&sbi->ll_gns_lock);
+
                 /* 
                  * waiting for GNS complete and check dentry again, it may be
                  * mounted already.
@@ -158,14 +136,25 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                 wait_for_completion(&sbi->ll_gns_mount_finished);
                 if (d_mountpoint(dentry))
                         RETURN(0);
-#endif
+
+                /* 
+                 * check for he case when there are few waiters and all they are
+                 * awakened, but only one will find GNS state LL_GNS_IDLE, and
+                 * the rest will face with LL_GNS_MOUNTING.  --umka
+                 */
+                spin_lock(&sbi->ll_gns_lock);
+                if (sbi->ll_gns_state != LL_GNS_IDLE) {
+                        spin_unlock(&sbi->ll_gns_lock);
+                        goto restart;
+                }
+                spin_unlock(&sbi->ll_gns_lock);
         }
         LASSERT(sbi->ll_gns_state == LL_GNS_IDLE);
-
         CDEBUG(D_INODE, "mounting dentry %p\n", dentry);
 
         /* mounting started */
         sbi->ll_gns_state = LL_GNS_MOUNTING;
+	sbi->ll_gns_pending_dentry = dentry;
         spin_unlock(&sbi->ll_gns_lock);
 
         /* we need to build an absolute pathname to pass to mount */
@@ -193,8 +182,7 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         /* 
          * recursive lookup with trying to mount SUID bit marked directories on
          * the way is not possible here, as lookup_one_len() does not pass @nd
-         * to ->lookup() and this is checked in ll_lookup_it(). So, do not
-         * handle possible -EAGAIN here.
+         * to ->lookup() and this is checked in ll_lookup_it().
          */
         dchild = ll_lookup_one_len(sbi->ll_gns_oname, dentry,
                                    strlen(sbi->ll_gns_oname));
@@ -343,8 +331,12 @@ cleanup:
         case 0:
                 spin_lock(&sbi->ll_gns_lock);
                 sbi->ll_gns_state = LL_GNS_IDLE;
+		sbi->ll_gns_pending_dentry = NULL;
                 spin_unlock(&sbi->ll_gns_lock);
+
+                /* waking up all waiters after GNS state is LL_GNS_IDLE */
                 complete_all(&sbi->ll_gns_mount_finished);
+                init_completion(&sbi->ll_gns_mount_finished);
         }
         return rc;
 }

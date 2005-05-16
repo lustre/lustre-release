@@ -351,13 +351,13 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd, int flags)
 {
-        struct dentry *save = dentry, *retval;
         struct lookup_intent *it = flags ? &nd->intent.open : NULL;
-        struct lustre_id pid;
-        struct it_cb_data icbd;
-        struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
-        int rc, gns_it;
+        struct dentry *save = dentry, *retval;
+        struct ptlrpc_request *req = NULL;
+        int rc, gns_it, gns_flags;
+        struct it_cb_data icbd;
+        struct lustre_id pid;
         ENTRY;
 
         if (dentry->d_name.len > EXT3_NAME_LEN)
@@ -374,6 +374,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 nd->mnt->mnt_last_used = jiffies;
 
         gns_it = nd ? nd->intent.open.it_op : IT_OPEN;
+        gns_flags = nd ? nd->flags : LOOKUP_CONTINUE;
         ll_frob_intent(&it, &lookup_it);
 
         icbd.icbd_childp = &dentry;
@@ -396,12 +397,13 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         if (nd && dentry->d_inode != NULL &&
             dentry->d_inode->i_mode & S_ISUID && S_ISDIR(dentry->d_inode->i_mode) &&
-            ((flags & LOOKUP_CONTINUE) || (gns_it & (IT_CHDIR | IT_OPEN))))
+            ((gns_flags & LOOKUP_CONTINUE) || (gns_it & (IT_CHDIR | IT_OPEN))))
         {
+                CDEBUG(D_DENTRY, "possible GNS dentry %*s %p found, "
+                       "mounting it\n", (int)dentry->d_name.len,
+                       dentry->d_name.name, dentry);
+                
                 rc = ll_gns_mount_object(dentry, nd->mnt);
-                if (rc == -ERESTARTSYS)
-                        GOTO(out, retval = ERR_PTR(-ERESTARTSYS));
-
                 if (rc) {
                         /* 
                          * just reporting about GNS failures, lookup() is
@@ -417,7 +419,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                          * where all ".mntinfo" are dirs and only last one is
                          * reg file.
                          */
-                        CDEBUG(D_INODE, "failed to mount %*s, err %d\n",
+                        CDEBUG(D_DENTRY, "failed to mount %*s, err %d\n",
                                (int)dentry->d_name.len, dentry->d_name.name, rc);
                 }
         }

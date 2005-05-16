@@ -308,11 +308,11 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
 {
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct ptlrpc_request *req = NULL;
+        int gns_it, gns_flags, rc = 0;
         struct obd_export *exp;
         struct it_cb_data icbd;
         struct lustre_id pid;
         struct lustre_id cid;
-        int gns_it, rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%s (%p), intent=%s\n", de->d_name.name,
@@ -322,8 +322,10 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         if (de->d_inode == NULL)
                 RETURN(0);
 
-        /* Root of the tree is always valid, attributes would be fixed in
-          ll_inode_revalidate_it */
+        /*
+         * root of the tree is always valid, attributes would be fixed in
+         * ll_inode_revalidate_it()
+         */
         if (de->d_sb->s_root == de)
                 RETURN(1);
 
@@ -351,8 +353,8 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 nd->mnt->mnt_last_used = jiffies;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDC_REVALIDATE_PAUSE, 5);
-
-        gns_it = it ? it->it_op : IT_OPEN;
+        gns_it = nd ? nd->intent.open.it_op : IT_OPEN;
+        gns_flags = nd ? nd->flags : LOOKUP_CONTINUE;
 
         if (it && it->it_op == IT_GETATTR)
                 it = NULL; /* will use it_lookup */
@@ -483,14 +485,18 @@ out:
          * lookup control path, which is always made with parent's i_sem taken.
          * --umka
          */
-        if (atomic_read(&ll_i2sbi(de->d_inode)->ll_gns_enabled) &&
+        if (nd && atomic_read(&ll_i2sbi(de->d_inode)->ll_gns_enabled) &&
             (de->d_inode->i_mode & S_ISUID) && S_ISDIR(de->d_inode->i_mode) &&
-            (flags & LOOKUP_CONTINUE || (gns_it & (IT_CHDIR | IT_OPEN)))) {
+            (gns_flags & LOOKUP_CONTINUE || (gns_it & (IT_CHDIR | IT_OPEN)))) {
                 /* 
                  * special "." and ".." has to be always revalidated because
                  * they never should be passed to lookup()
                  */
                 if (!ll_special_name(de)) {
+                        CDEBUG(D_DENTRY, "possible GNS dentry %*s %p found, "
+                               "causing mounting\n", (int)de->d_name.len,
+                               de->d_name.name, de);
+                        
                         LASSERT(req == NULL);
                         if (it == &lookup_it) {
                                 ll_intent_release(it);
@@ -498,7 +504,7 @@ out:
                                 ll_intent_drop_lock(it);
                         }
                         ll_unhash_aliases(de->d_inode);
-                        RETURN (0);
+                        RETURN(0);
                 }
         }
 
