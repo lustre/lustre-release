@@ -519,6 +519,8 @@ test_52_guts() {
 	FAILURE_MODE="SOFT"
 	fail ost
 	rc=0
+	sleep 5
+	kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID || rc=$?
 	# active client process should see an EIO for down OST
 	[ $rc -eq 5 ] && { echo "writemany correctly failed $rc" && return 0; }

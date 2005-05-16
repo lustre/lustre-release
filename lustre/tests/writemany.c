@@ -25,6 +25,15 @@ char cmdname[512];
 int o_abort = 0;
 int o_quiet = 0;
 
+void usage(char *name)
+{
+        fprintf(stderr, "usage: %s [opts] <dirname> <seconds> <threads>\n",
+                name);
+        fprintf(stderr, "  -q quiet\n");
+        fprintf(stderr, "  -a abort other children on first err\n");
+        exit(1);
+}
+
 
 struct kid_list_t {
         pid_t kid;
@@ -187,16 +196,6 @@ int run_one_child(char *file, int thread, int seconds)
                        rc);
 
         return rc;
-}
-
-void usage(char *name)
-{
-        fprintf(stderr,
-                "usage: %s [opts] <dirname> <seconds> <threads>\n",
-                name);
-        fprintf(stderr, "  -q quiet\n");
-        fprintf(stderr, "  -a abort other children on first err\n");
-        exit(1);
 }
 
 int main(int argc, char *argv[])
