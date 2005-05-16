@@ -76,17 +76,11 @@ count=`grep "SystemBackup" /tmp/lustre-v|wc -l`
 count=`expr $count - 1`
 if [ $count -gt 0 ]; then
 	head -$count /tmp/lustre-v > $backpath/lustre-current
-	rm -f /tmp/lustre-v
 else
 	# The file should be empty now, it's the last uninstall
 	rm -f $backpath/lustre-current
-	rm -f /tmp/lustre-v
-	if [ $count -ne 0 ]; then
-		# no backup version in the lustre-current file
-		echo "No backup information anymore, installation is likely failed!"
-		exit 4
-	fi
 fi
+rm -f /tmp/lustre-v
 
 # remove unused files
 echo "uninstall lustre modules and utilities......"
