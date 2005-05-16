@@ -65,8 +65,7 @@ static struct obd_type *class_search_type(char *name)
         spin_lock(&obd_types_lock);
         list_for_each(tmp, &obd_types) {
                 type = list_entry(tmp, struct obd_type, typ_chain);
-                if (strlen(type->typ_name) == strlen(name) &&
-                    strcmp(type->typ_name, name) == 0) {
+                if (strcmp(type->typ_name, name) == 0) {
                         spin_unlock(&obd_types_lock);
                         return type;
                 }
