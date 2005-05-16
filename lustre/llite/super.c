@@ -64,7 +64,7 @@ static struct super_block *lustre_read_super(struct super_block *sb,
 static void ll_umount_lustre(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        ll_gns_check_all(sbi, LL_GNS_UMOUNT);
+        ll_gns_check_mounts(sbi, LL_GNS_UMOUNT);
 }
 
 static struct file_system_type lustre_lite_fs_type = {

@@ -98,6 +98,12 @@ void ll_destroy_inodecache(void)
                  "ll_inode_cache: not all structures were freed\n");
 }
 
+static void ll_umount_lustre(struct super_block *sb)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        ll_gns_check_mounts(sbi, LL_GNS_UMOUNT);
+}
+
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
@@ -106,7 +112,8 @@ struct super_operations lustre_super_operations =
         .clear_inode   = ll_clear_inode,
         .put_super     = lustre_put_super,
         .statfs        = ll_statfs,
-        .umount_begin  = ll_umount_begin
+        .umount_begin  = ll_umount_begin,
+        .umount_lustre = ll_umount_lustre
 };
 
 struct file_system_type lustre_lite_fs_type = {
@@ -144,9 +151,9 @@ static int __init init_lustre_lite(void)
                 goto out;
         }
         ll_intent_slab = kmem_cache_create("lustre_intent_data",
-                                              sizeof(struct lustre_intent_data),
-                                              0, SLAB_HWCACHE_ALIGN, NULL,
-                                              NULL);
+                                    	   sizeof(struct lustre_intent_data),
+                                           0, SLAB_HWCACHE_ALIGN, NULL,
+                                           NULL);
         if (ll_intent_slab == NULL) {
                 kmem_cache_destroy(ll_file_data_slab);
                 ll_destroy_inodecache();
