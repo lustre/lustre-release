@@ -30,7 +30,14 @@ Bugzilla   : 6242, 6243
 Description: reading from files that had been truncated to a non-zero size
              but never opened returned no data
 Details    : ll_file_read() reads zeros from no-object files to EOF
-	
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 6200
+Description: A bug in MDS/OSS recovery could cause the OSS to fail an assertion
+Details    : There's little harm in just aborting MDS/OSS recovery and letting
+ it try again next time, so I removed the LASSERT and return an error instead.
+
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
        NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous
