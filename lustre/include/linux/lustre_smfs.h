@@ -419,15 +419,10 @@ static int smfs_d_delete(struct dentry * dentry)
         return 1;
 }
 
-static inline void d_unalloc(struct dentry *dentry)
-{
-        struct dentry_operations dop = {
-                .d_delete = smfs_d_delete,
-        };
-        //this will invoke unhash and kill for dentry
-        dentry->d_op = &dop;
-        dput(dentry); /* this will free the dentry memory */
-}
+static struct dentry_operations sm_dop = {
+        .d_delete = smfs_d_delete,
+};
+
 
 static inline void smfs_update_dentry(struct dentry *dentry,
                                       struct dentry *cache_dentry)
@@ -447,12 +442,6 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
 {
         struct dentry *cache_dentry = NULL;
         
-        /*if (!parent_dentry) {
-                cache_dentry = d_find_alias(cache_inode);
-                if (cache_dentry) 
-                        RETURN(cache_dentry);
-        }*/
-        
         cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
         if (!cache_dentry)
                 RETURN(NULL);
@@ -470,6 +459,8 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
                 atomic_inc(&cache_inode->i_count); //d_instantiate suppose that
                 d_add(cache_dentry, cache_inode);
         }
+        //defines d_delete op to force killing dentry
+        cache_dentry->d_op = &sm_dop;
         
         RETURN(cache_dentry);
 }
@@ -477,7 +468,7 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
 static inline void post_smfs_dentry(struct dentry *cache_dentry)
 {
         if (cache_dentry)
-                d_unalloc(cache_dentry);
+                dput(cache_dentry);
         
 }
 
