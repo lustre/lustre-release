@@ -876,7 +876,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                                           LCK_PW);
         if (IS_ERR(node))
                 RETURN(PTR_ERR(node));
-        
+
         tree.lt_fd = file->private_data;
         rc = ll_tree_lock(&tree, node, buf, count, 
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);

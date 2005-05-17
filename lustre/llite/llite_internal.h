@@ -107,6 +107,10 @@ struct ll_ra_info {
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
+/* flags for sbi->ll_flags */
+#define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
+#define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
+
 struct ll_sb_info {
         struct list_head          ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
@@ -217,6 +221,8 @@ struct ll_async_page {
         struct list_head llap_pglist_item;
         /* user credit information for oss enforcement quota */
         struct obd_ucred llap_ouc;
+        /* checksum for paranoid I/O debugging */
+        __u32 llap_checksum;
 };
 
 enum {
@@ -394,8 +400,6 @@ int ll_tree_lock(struct ll_lock_tree *tree,
                  const char *buf, size_t count, int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
 
-
-#define LL_SBI_NOLCK            0x1
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 

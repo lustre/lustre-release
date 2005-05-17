@@ -961,7 +961,7 @@ int oig_wait(struct obd_io_group *oig)
         return oig->oig_rc;
 }
 
-                
+
 /* Ping evictor thread */
 #define PET_READY     1
 #define PET_TERMINATE 2

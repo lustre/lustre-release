@@ -291,6 +291,9 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
 
+        /* Flags section */
+        unsigned int             cl_checksum:1; /* debug checksums */
+
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 

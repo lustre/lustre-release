@@ -44,6 +44,7 @@
 # else
 #  include <linux/locks.h>
 # endif
+# include <linux/crc32.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif
@@ -62,6 +63,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
+#include <linux/lustre_debug.h>
 #include "osc_internal.h"
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
@@ -301,9 +303,9 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 
         memcpy(&body->oa, oa, sizeof(*oa));
         request->rq_replen = lustre_msg_size(1, &size);
-        /* do mds to ost setattr asynchronouly */                                                                       
+        /* do mds to ost setattr asynchronouly */
         ptlrpcd_add_req(request);
-                                                                                                                             
+
         RETURN(rc);
 }
 
@@ -716,37 +718,29 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
-#if CHECKSUM_BULK
-static obd_count cksum_blocks(int nob, obd_count page_count,
-                              struct brw_page *pga)
+static obd_count osc_checksum_bulk(int nob, obd_count page_count,
+                                   struct brw_page *pga)
 {
-        obd_count cksum = 0;
+        __u32 cksum = ~0;
 
         LASSERT (page_count > 0);
-        while (nob > 0) {
+        while (nob > 0 && page_count > 0) {
                 char *ptr = kmap(pga->pg);
-                int psum, off = pga->off & ~PAGE_MASK;
+                int off = pga->off & ~PAGE_MASK;
                 int count = pga->count > nob ? nob : pga->count;
 
-                while (count > 0) {
-                        ost_checksum(&cksum, &psum, ptr + off,
-                                     count > CHECKSUM_CHUNK ?
-                                     CHECKSUM_CHUNK : count);
-                        LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
-                                       off, psum);
-                        off += CHECKSUM_CHUNK;
-                        count -= CHECKSUM_CHUNK;
-                }
+                cksum = crc32_le(cksum, ptr + off, count);
                 kunmap(pga->pg);
+                LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
+                               off, cksum);
 
                 nob -= pga->count;
                 page_count--;
                 pga++;
         }
 
-        return (cksum);
+        return cksum;
 }
-#endif
 
 static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
@@ -837,14 +831,22 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
 
         /* size[0] still sizeof (*body) */
         if (opc == OST_WRITE) {
-#if CHECKSUM_BULK
-                body->oa.o_valid |= OBD_MD_FLCKSUM;
-                body->oa.o_cksum = cksum_pages(requested_nob, page_count, pga);
-#endif
+                if (unlikely(cli->cl_checksum)) {
+                        body->oa.o_valid |= OBD_MD_FLCKSUM;
+                        body->oa.o_cksum = osc_checksum_bulk(requested_nob,
+                                                             page_count, pga);
+                        CDEBUG(D_PAGE, "checksum at write origin: %x\n",
+                               body->oa.o_cksum);
+                        /* save this in 'oa', too, for later checking */
+                        oa->o_valid |= OBD_MD_FLCKSUM;
+                        oa->o_cksum = body->oa.o_cksum;
+                }
                 /* 1 RC per niobuf */
                 size[1] = sizeof(__u32) * niocount;
                 req->rq_replen = lustre_msg_size(2, size);
         } else {
+                if (unlikely(cli->cl_checksum))
+                        body->oa.o_valid |= OBD_MD_FLCKSUM;
                 /* 1 RC for the whole I/O */
                 req->rq_replen = lustre_msg_size(1, size);
         }
@@ -859,6 +861,39 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         return (rc);
 }
 
+static void check_write_csum(__u32 cli, __u32 srv, int requested_nob,
+                             obd_count page_count, struct brw_page *pga)
+{
+        __u32 new_csum;
+
+        if (srv == cli) {
+                CDEBUG(D_PAGE, "checksum %x confirmed\n", cli);
+                return;
+        }
+
+        new_csum = osc_checksum_bulk(requested_nob, page_count, pga);
+
+        if (new_csum == srv) {
+                CERROR("BAD CHECKSUM (WRITE): pages were mutated on the client"
+                       "after we checksummed them (original client csum:"
+                       " %x; server csum: %x; client csum now: %x)\n",
+                       cli, srv, new_csum);
+                return;
+        }
+
+        if (new_csum == cli) {
+                CERROR("BAD CHECKSUM (WRITE): pages were mutated in transit "
+                       "(original client csum: %x; server csum: %x; client "
+                       "csum now: %x)\n", cli, srv, new_csum);
+                return;
+        }
+
+        CERROR("BAD CHECKSUM (WRITE): pages were mutated in transit, and the "
+               "current page contents don't match the originals OR what the "
+               "server received (original client csum: %x; server csum: %x; "
+               "client csum now: %x)\n", cli, srv, new_csum);
+}
+
 static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                                 int requested_nob, int niocount,
                                 obd_count page_count, struct brw_page *pga,
@@ -866,6 +901,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
 {
         struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct ost_body *body;
+        __u32 client_cksum = 0;
         ENTRY;
 
         if (rc < 0 && rc != -EDQUOT)
@@ -886,6 +922,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         if (rc < 0)
                 RETURN(rc);
 
+        if (unlikely(oa->o_valid & OBD_MD_FLCKSUM))
+                client_cksum = oa->o_cksum; /* save for later */
+
         osc_update_grant(cli, body);
         memcpy(oa, &body->oa, sizeof(*oa));
 
@@ -896,10 +935,17 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 }
                 LASSERT (req->rq_bulk->bd_nob == requested_nob);
 
+                if (unlikely((oa->o_valid & OBD_MD_FLCKSUM) &&
+                             client_cksum)) {
+                        check_write_csum(client_cksum, oa->o_cksum,
+                                         requested_nob, page_count, pga);
+                }
+
                 RETURN(check_write_rcs(req, requested_nob, niocount,
                                        page_count, pga));
         }
 
+        /* The rest of this function executes only for OST_READs */
         if (rc > requested_nob) {
                 CERROR("Unexpected rc %d (%d requested)\n", rc, requested_nob);
                 RETURN(-EPROTO);
@@ -914,39 +960,45 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         if (rc < requested_nob)
                 handle_short_read(rc, page_count, pga);
 
-#if CHECKSUM_BULK
-        if (oa->o_valid & OBD_MD_FLCKSUM) {
-                const struct ptlrpc_peer *peer =
+        if (unlikely(oa->o_valid & OBD_MD_FLCKSUM)) {
+                struct ptlrpc_peer *peer =
                         &req->rq_import->imp_connection->c_peer;
                 static int cksum_counter;
-                obd_count server_cksum = oa->o_cksum;
-                obd_count cksum = cksum_pages(rc, page_count, pga);
+                __u32 cksum = osc_checksum_bulk(rc, page_count, pga);
+                __u32 server_cksum = oa->o_cksum;
                 char str[PTL_NALFMT_SIZE];
 
-                portals_nid2str(peer->peer_ni->pni_number, peer->peer_nid, str);
+                ptlrpc_peernid2str(peer, str);
+
+                if (server_cksum == ~0 && rc > 0) {
+                        CERROR("Protocol error: server %s set the 'checksum' "
+                               "bit, but didn't send a checksum.  Not fatal, "
+                               "but please tell CFS.\n", str);
+                        RETURN(0);
+                }
 
                 cksum_counter++;
                 if (server_cksum != cksum) {
-                        CERROR("Bad checksum: server %x, client %x, server NID "
-                               LPX64" (%s)\n", server_cksum, cksum,
-                               peer->peer_nid, str);
+                        CERROR("Bad checksum: server %x != client %x, server "
+                               "NID "LPX64" (%s)\n", server_cksum, cksum,
+                               peer->peer_id.nid, str);
                         cksum_counter = 0;
                         oa->o_cksum = cksum;
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
                         CWARN("Checksum %u from "LPX64" (%s) OK: %x\n",
-                              cksum_counter, peer->peer_nid, str, cksum);
+                              cksum_counter, peer->peer_id.nid, str, cksum);
                 }
-                CDEBUG(D_PAGE, "checksum %x\n", cksum);
-        } else {
+                CDEBUG(D_PAGE, "checksum %x confirmed\n", cksum);
+        } else if (unlikely(client_cksum)) {
                 static int cksum_missed;
 
                 cksum_missed++;
                 if ((cksum_missed & (-cksum_missed)) == cksum_missed)
                         CERROR("Request checksum %u from "LPX64", no reply\n",
                                cksum_missed,
-                               req->rq_import->imp_connection->c_peer.peer_id.nid);
+                            req->rq_import->imp_connection->c_peer.peer_id.nid);
         }
-#endif
+
         RETURN(0);
 }
 
@@ -3018,10 +3070,12 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         char *bufs[1] = {key};
         ENTRY;
 
+#define KEY_IS(str) \
+        (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
+
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
-        if (keylen == strlen("next_id") &&
-            memcmp(key, "next_id", strlen("next_id")) == 0) {
+        if (KEY_IS("next_id")) {
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
                 obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
@@ -3032,16 +3086,14 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (keylen == strlen("growth_count") &&
-            memcmp(key, "growth_count", strlen("growth_count")) == 0) {
+        if (KEY_IS("growth_count")) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
                 RETURN(0);
         }
 
-        if (keylen == strlen("unlinked") &&
-            memcmp(key, "unlinked", keylen) == 0) {
+        if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
@@ -3050,8 +3102,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         }
 
 
-        if (keylen == strlen("initial_recov") &&
-            memcmp(key, "initial_recov", strlen("initial_recov")) == 0) {
+        if (KEY_IS("initial_recov")) {
                 struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
@@ -3062,8 +3113,14 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (keylen < strlen("mds_conn") ||
-            memcmp(key, "mds_conn", strlen("mds_conn")) != 0)
+        if (KEY_IS("checksum")) {
+                if (vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                exp->exp_obd->u.cli.cl_checksum = (*(int *)val) ? 1 : 0;
+                RETURN(0);
+        }
+
+        if (!KEY_IS("mds_conn"))
                 RETURN(-EINVAL);
 
 

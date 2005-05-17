@@ -261,6 +261,40 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
         return count;
 }
 
+static int ll_rd_checksum(char *page, char **start, off_t off,
+                          int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        return snprintf(page, count, "%u\n",
+                        (sbi->ll_flags & LL_SBI_CHECKSUM) ? 1 : 0);
+}
+
+static int ll_wr_checksum(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val)
+                sbi->ll_flags |= LL_SBI_CHECKSUM;
+        else
+                sbi->ll_flags &= ~LL_SBI_CHECKSUM;
+
+        rc = obd_set_info(sbi->ll_osc_exp, strlen("checksum"), "checksum",
+                          sizeof(val), &val);
+        if (rc)
+                CWARN("Failed to set OSC checksum flags: %d\n", rc);
+
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -275,6 +309,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },
         { "max_cached_mb", ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
+        { "checksum_pages", ll_rd_checksum, ll_wr_checksum, 0 },
         { 0 }
 };
 

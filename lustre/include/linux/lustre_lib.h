@@ -480,25 +480,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * we define this to be 2T - 4k, which is the ext3 maxbytes. */
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
-#define CHECKSUM_CHUNK 4096
-#define CHECKSUM_BULK 0
 #define POISON_BULK 0
-
-#if CHECKSUM_BULK
-static inline void ost_checksum(obd_count *cksum,int *psum, void *addr, int len)
-{
-        unsigned char *ptr = (unsigned char *)addr;
-        int sum = 0;
-
-        /* very stupid, but means I don't have to think about byte order */
-        while (len-- > 0)
-                sum += *ptr++;
-
-        *cksum = (*cksum << 2) + sum;
-        if (psum)
-                *psum = sum;
-}
-#endif
 
 static inline int ll_insecure_random_int(void)
 {

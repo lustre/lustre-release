@@ -38,6 +38,15 @@ Description: A bug in MDS/OSS recovery could cause the OSS to fail an assertion
 Details    : There's little harm in just aborting MDS/OSS recovery and letting
  it try again next time, so I removed the LASSERT and return an error instead.
 
+Severity   : enhancement
+Bugzilla   : 5902
+Description: New debugging infrastructure for tracking down data corruption
+Details    : The I/O checksum code was replaced to: (a) control it at runtime,
+             (b) cover more of the client-side code path, and (c) try to narrow
+             down where problems occurred
+
+------------------------------------------------------------------------------
+
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2
        NOTE: Lustre 1.4.2 uses an incompatible network protocol than previous

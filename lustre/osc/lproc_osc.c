@@ -35,8 +35,8 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off, int count,
-                             int *eof, void *data)
+static int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off,
+                                    int count, int *eof, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -48,8 +48,8 @@ int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
-                             unsigned long count, void *data)
+static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -69,8 +69,8 @@ int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         return count;
 }
 
-int osc_rd_max_rpcs_in_flight(char *page, char **start, off_t off, int count,
-                              int *eof, void *data)
+static int osc_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -82,8 +82,8 @@ int osc_rd_max_rpcs_in_flight(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
-                              unsigned long count, void *data)
+static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -103,8 +103,8 @@ int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         return count;
 }
 
-int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
-                        int *eof, void *data)
+static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
+                               int *eof, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -117,8 +117,8 @@ int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%u\n", val);
 }
 
-int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
-                        unsigned long count, void *data)
+static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -139,8 +139,8 @@ int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         return count;
 }
 
-int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off, int count,
-                           int *eof, void *data)
+static int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -152,8 +152,8 @@ int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_rd_cur_grant_bytes(char *page, char **start, off_t off, int count,
-                           int *eof, void *data)
+static int osc_rd_cur_grant_bytes(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
@@ -165,8 +165,8 @@ int osc_rd_cur_grant_bytes(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int osc_rd_create_count(char *page, char **start, off_t off, int count,
-                        int *eof, void *data)
+static int osc_rd_create_count(char *page, char **start, off_t off, int count,
+                               int *eof, void *data)
 {
         struct obd_device *obd = data;
 
@@ -177,8 +177,8 @@ int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         obd->u.cli.cl_oscc.oscc_grow_count);
 }
 
-int osc_wr_create_count(struct file *file, const char *buffer,
-                        unsigned long count, void *data)
+static int osc_wr_create_count(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
 {
         struct obd_device *obd = data;
         int val, rc;
@@ -200,8 +200,8 @@ int osc_wr_create_count(struct file *file, const char *buffer,
         return count;
 }
 
-int osc_rd_prealloc_next_id(char *page, char **start, off_t off, int count,
-                            int *eof, void *data)
+static int osc_rd_prealloc_next_id(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
 
@@ -212,8 +212,8 @@ int osc_rd_prealloc_next_id(char *page, char **start, off_t off, int count,
                         obd->u.cli.cl_oscc.oscc_next_id);
 }
 
-int osc_rd_prealloc_last_id(char *page, char **start, off_t off, int count,
-                            int *eof, void *data)
+static int osc_rd_prealloc_last_id(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
 
@@ -222,6 +222,36 @@ int osc_rd_prealloc_last_id(char *page, char **start, off_t off, int count,
 
         return snprintf(page, count, LPU64"\n",
                         obd->u.cli.cl_oscc.oscc_last_id);
+}
+
+static int osc_rd_checksum(char *page, char **start, off_t off, int count,
+                           int *eof, void *data)
+{
+        struct obd_device *obd = data;
+
+        if (obd == NULL)
+                return 0;
+
+        return snprintf(page, count, "%d\n",
+                        obd->u.cli.cl_checksum ? 1 : 0);
+}
+
+static int osc_wr_checksum(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        if (obd == NULL)
+                return 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.cli.cl_checksum = (val ? 1 : 0);
+
+        return count;
 }
 
 static struct lprocfs_vars lprocfs_obd_vars[] = {
@@ -246,6 +276,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
         { "prealloc_next_id", osc_rd_prealloc_next_id, 0, 0 },
         { "prealloc_last_id", osc_rd_prealloc_last_id, 0, 0 },
+        { "checksums", osc_rd_checksum, osc_wr_checksum, 0 },
         { 0 }
 };
 

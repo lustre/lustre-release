@@ -40,6 +40,7 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
+#include <linux/crc32.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -131,10 +132,29 @@ void ll_truncate(struct inode *inode)
 
         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
 
+        /* XXX I'm pretty sure this is a hack to paper over a more fundamental
+         * race condition. */
         if (lov_merge_size(lsm, 0) == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
                        lsm->lsm_object_id, inode->i_size);
                 GOTO(out_unlock, 0);
+        }
+
+        if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
+                     (inode->i_size & ~PAGE_MASK))) {
+                /* If the truncate leaves behind a partial page, update its
+                 * checksum. */
+                struct page *page = find_get_page(inode->i_mapping,
+                                             inode->i_size >> PAGE_CACHE_SHIFT);
+                if (page != NULL) {
+                        struct ll_async_page *llap = llap_cast_private(page);
+                        if (llap != NULL) {
+                                llap->llap_checksum =
+                                        crc32_le(0, kmap(page), PAGE_SIZE);
+                                kunmap(page);
+                        }
+                        page_cache_release(page);
+                }
         }
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
@@ -557,7 +577,29 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
         spin_unlock(&sbi->ll_lock);
 
-out:
+ out:
+        if (unlikely(sbi->ll_flags & LL_SBI_CHECKSUM)) {
+                __u32 csum = 0;
+                csum = crc32_le(csum, kmap(page), PAGE_SIZE);
+                kunmap(page);
+                if (origin == LLAP_ORIGIN_READAHEAD ||
+                    origin == LLAP_ORIGIN_READPAGE) {
+                        llap->llap_checksum = 0;
+                } else if (origin == LLAP_ORIGIN_COMMIT_WRITE ||
+                           llap->llap_checksum == 0) {
+                        llap->llap_checksum = csum;
+                        CDEBUG(D_PAGE, "page %p cksum %x\n", page, csum);
+                } else if (llap->llap_checksum == csum) {
+                        /* origin == LLAP_ORIGIN_WRITEPAGE */
+                        CDEBUG(D_PAGE, "page %p cksum %x confirmed\n",
+                               page, csum);
+                } else {
+                        /* origin == LLAP_ORIGIN_WRITEPAGE */
+                        LL_CDEBUG_PAGE(D_ERROR, page, "old cksum %x != new "
+                                       "%x!\n", llap->llap_checksum, csum);
+                }
+        }
+
         llap->llap_origin = origin;
         RETURN(llap);
 }
@@ -568,6 +610,7 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
 {
         unsigned long size_index = inode->i_size >> PAGE_SHIFT;
         struct obd_io_group *oig;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc;
         ENTRY;
 
@@ -601,6 +644,22 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                size_index, to, size_to);
                 if (to < size_to)
                         to = size_to;
+        }
+
+        /* compare the checksum once before the page leaves llite */
+        if (unlikely((sbi->ll_flags & LL_SBI_CHECKSUM) &&
+                     llap->llap_checksum != 0)) {
+                __u32 csum = 0;
+                struct page *page = llap->llap_page;
+                csum = crc32_le(csum, kmap(page), PAGE_SIZE);
+                kunmap(page);
+                if (llap->llap_checksum == csum) {
+                        CDEBUG(D_PAGE, "page %p cksum %x confirmed\n",
+                               page, csum);
+                } else {
+                        CERROR("page %p old cksum %x != new cksum %x!\n",
+                               page, llap->llap_checksum, csum);
+                }
         }
 
         rc = obd_queue_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig,

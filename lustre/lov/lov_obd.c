@@ -2037,15 +2037,18 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         if (KEY_IS("next_id")) {
                 if (vallen != lov->desc.ld_tgt_count)
                         RETURN(-EINVAL);
+                vallen = sizeof(obd_id);
+        }
+
+        if (KEY_IS("next_id") || KEY_IS("checksum")) {
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         /* OST was disconnected */
                         if (!lov->tgts[i].ltd_exp)
                                 continue;
 
-                        /* initialize all OSCs, even inactive ones */
-                        err = obd_set_info(lov->tgts[i].ltd_exp,
-                                          keylen, key, sizeof(obd_id),
-                                          ((obd_id*)val) + i);
+                        /* hit all OSCs, even inactive ones */
+                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
+                                           vallen, ((obd_id*)val) + i);
                         if (!rc)
                                 rc = err;
                 }

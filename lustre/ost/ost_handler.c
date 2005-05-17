@@ -36,6 +36,7 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
+#include <linux/crc32.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
@@ -343,33 +344,24 @@ static void free_per_page_niobufs (int npages, struct niobuf_remote *pp_rnb,
         OBD_FREE(pp_rnb, sizeof(*pp_rnb) * npages);
 }
 
-#if CHECKSUM_BULK
-obd_count ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
+static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
 {
-        obd_count cksum = 0;
+        __u32 cksum = ~0;
         int i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
                 struct page *page = desc->bd_iov[i].kiov_page;
                 char *ptr = kmap(page);
-                int psum, off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
-                int count = desc->bd_iov[i].kiov_len;
+                int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
 
-                while (count > 0) {
-                        ost_checksum(&cksum, &psum, ptr + off,
-                                     count > CHECKSUM_CHUNK ?
-                                     CHECKSUM_CHUNK : count);
-                        LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n",
-                                       off, psum);
-                        off += CHECKSUM_CHUNK;
-                        count -= CHECKSUM_CHUNK;
-                }
+                cksum = crc32_le(cksum, ptr + off, desc->bd_iov[i].kiov_len);
                 kunmap(page);
+                LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n",
+                               off, cksum);
         }
 
         return cksum;
 }
-#endif
 
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
@@ -386,7 +378,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int                      npages;
         int                      nob = 0;
         int                      rc;
-        int                      i;
+        int                      i, do_checksum;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
@@ -444,6 +436,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_bulk, rc);
 
         /* We're finishing using body->oa as an input variable */
+        do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
         body->oa.o_valid = 0;
 
         nob = 0;
@@ -507,10 +500,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
                 memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
-#if CHECKSUM_BULK
-                repbody->oa.o_cksum = ost_checksum_bulk(desc);
-                repbody->oa.o_valid |= OBD_MD_FLCKSUM;
-#endif
+                if (unlikely(do_checksum)) {
+                        repbody->oa.o_cksum = ost_checksum_bulk(desc);
+                        repbody->oa.o_valid |= OBD_MD_FLCKSUM;
+                        CDEBUG(D_PAGE, "checksum at read origin: %x\n",
+                               repbody->oa.o_cksum);
+                }
         }
 
  out_bulk:
@@ -568,7 +563,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int                      size[2] = { sizeof(*body) };
         int                      objcount, niocount, npages;
         int                      comms_error = 0;
-        int                      rc, swab, i, j;
+        int                      rc, swab, i, j, do_checksum;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
@@ -635,6 +630,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc == NULL)
                 GOTO(out_local, rc = -ENOMEM);
 
+        /* obd_preprw clobbers oa->valid, so save what we need */
+        do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
+
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
                         ioo, npages, pp_rnb, local_nb, oti);
         if (rc != 0)
@@ -674,28 +672,27 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
-#if CHECKSUM_BULK
-        if (rc == 0 && (body->oa.o_valid & OBD_MD_FLCKSUM) != 0) {
+        if (unlikely(do_checksum && rc == 0)) {
                 static int cksum_counter;
                 obd_count client_cksum = body->oa.o_cksum;
                 obd_count cksum = ost_checksum_bulk(desc);
 
+                cksum_counter++;
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x id %s\n",
-                               client_cksum, cksum,
-                               req->rq_peerstr);
-                        cksum_counter = 1;
+                               client_cksum, cksum, req->rq_peerstr);
+                        cksum_counter = 0;
                         repbody->oa.o_cksum = cksum;
+                        repbody->oa.o_valid |= OBD_MD_FLCKSUM;
+                } else if ((cksum_counter & (-cksum_counter)) ==
+                           cksum_counter) {
+                        CWARN("Checksum %u from %s: %x OK\n",
+                              cksum_counter, req->rq_peerstr, cksum);
                 } else {
-                        cksum_counter++;
-                        if ((cksum_counter & (-cksum_counter)) == cksum_counter)
-                                CWARN("Checksum %u from %s: %x OK\n",
-                                      cksum_counter,
-                                      req->rq_peerstr,
-                                      cksum);
+                        CDEBUG(D_PAGE, "checksum %x confirmed\n", cksum);
                 }
         }
-#endif
+
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
                            objcount, ioo, npages, local_nb, oti, rc);
