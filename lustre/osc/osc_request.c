@@ -718,13 +718,13 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
-static obd_count osc_checksum_bulk(int nob, obd_count page_count,
+static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
                                    struct brw_page *pga)
 {
         __u32 cksum = ~0;
 
-        LASSERT (page_count > 0);
-        while (nob > 0 && page_count > 0) {
+        LASSERT (pg_count > 0);
+        while (nob > 0 && pg_count > 0) {
                 char *ptr = kmap(pga->pg);
                 int off = pga->off & ~PAGE_MASK;
                 int count = pga->count > nob ? nob : pga->count;
@@ -735,7 +735,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count page_count,
                                off, cksum);
 
                 nob -= pga->count;
-                page_count--;
+                pg_count--;
                 pga++;
         }
 
