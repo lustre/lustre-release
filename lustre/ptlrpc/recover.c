@@ -287,7 +287,9 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                         ptlrpc_deactivate_import(imp);
                 }
 
-                rc = ptlrpc_connect_import(imp, NULL);
+                /* to control recovery via lctl {disable|enable}_recovery */
+                if (imp->imp_deactive == 0)
+                        rc = ptlrpc_connect_import(imp, NULL);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then
