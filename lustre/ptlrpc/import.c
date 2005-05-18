@@ -616,11 +616,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
                 LCONSOLE_ERROR("This client was evicted by %.*s; in progress "
-                               "operations using this service will %s.\n",
-                               target_len, target_start,
-                               imp->imp_replayable
-                               ? "be reattempted"
-                               : "fail");
+                               "operations using this service will fail.\n",
+                               target_len, target_start);
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
