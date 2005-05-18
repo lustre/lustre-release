@@ -204,26 +204,28 @@ static int smfs_do_lookup (struct inode * dir,
                 if (IS_ERR(rdentry)) {
                         rc = PTR_ERR(rdentry);
                         rdentry = NULL;
-                }
-                else {
+                } else {
                         tmp = rdentry;
-                        //copy fields if DCACHE_CROSS_REF
-                        smfs_update_dentry(dentry, tmp);
                 }
-        } else 
+        } else {
                 tmp = cache_dentry;
-        
+        }
+
         SMFS_POST_HOOK(dir, HOOK_LOOKUP, &msg, rc);
      
-        if (tmp && tmp->d_inode) {
-                *inode = smfs_get_inode(dir->i_sb, tmp->d_inode->i_ino, 
+        if (tmp) {
+                //copy fields if DCACHE_CROSS_REF
+                smfs_update_dentry(dentry, tmp);         
+                
+                if (tmp->d_inode) {
+                        *inode = smfs_get_inode(dir->i_sb, tmp->d_inode->i_ino, 
                                         dir, 0); 
-                if (!(*inode))
-                        rc = -ENOENT;
+                        if (!(*inode))
+                                rc = -ENOENT;
+                }
         }
         
         if (rdentry) {
-                LASSERT(atomic_read(&rdentry->d_count) > 0);
                 dput(rdentry);
         }
         
