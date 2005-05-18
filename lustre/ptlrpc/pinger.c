@@ -40,31 +40,6 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
-static int ptlrpc_ping_interpret(struct ptlrpc_request *req,
-                                    void *data, int rc)
-{
-        struct obd_import *imp = req->rq_import;
-        DEBUG_REQ(D_HA, req, "ping reply");
-        if (imp->imp_waiting_ping_reply == 0)
-                DEBUG_REQ(D_ERROR, req, "late ping reply?");
-        if (imp->imp_last_ping_xid != req->rq_xid)
-                DEBUG_REQ(D_ERROR, req, "uh, wrong ping reply on x%lx",
-                          imp->imp_last_ping_xid);
-        else
-                imp->imp_last_ping_xid = 0;
-
-        /* if ping reply is an error, don't drop "replied" flag
-         * on import, so pinger will invalidate it */
-        if (ptlrpc_client_replied(req) && req->rq_repmsg == NULL)
-                CWARN("replied (%d) w/o rep buffer?\n", req->rq_replied);
-        if (ptlrpc_client_replied(req) && req->rq_repmsg &&
-                        req->rq_repmsg->type == PTL_RPC_MSG_ERR)
-                return 0;
-        
-        imp->imp_waiting_ping_reply = 0;
-        return 0;
-}
-
 int ptlrpc_ping(struct obd_import *imp) 
 {
         struct ptlrpc_request *req;
@@ -78,10 +53,7 @@ int ptlrpc_ping(struct obd_import *imp)
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
                 req->rq_replen = lustre_msg_size(0, NULL);
-                req->rq_interpret_reply = ptlrpc_ping_interpret;
                 req->rq_timeout = obd_timeout / PINGER_RATE;
-                imp->imp_waiting_ping_reply = 1;
-                imp->imp_last_ping_xid = req->rq_xid;
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
@@ -172,15 +144,6 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
                        " or recovery disabled: %s)\n",
                        imp->imp_target_uuid.uuid,
                        ptlrpc_import_state_name(level));
-        } else if (level == LUSTRE_IMP_FULL && imp->imp_waiting_ping_reply &&
-                        imp->imp_next_ping >= this_ping && imp->imp_pingable) {
-                CDEBUG(D_HA, "%s: %s hasn't respond on ping x%lu\n",
-                       imp->imp_obd->obd_uuid.uuid,
-                       imp->imp_target_uuid.uuid, imp->imp_last_ping_xid);
-                CDEBUG(D_ERROR, "%s: %s hasn't respond on ping x%lu\n",
-                       imp->imp_obd->obd_uuid.uuid,
-                       imp->imp_target_uuid.uuid, imp->imp_last_ping_xid);
-                ptlrpc_fail_import(imp, 0);
         } else if (imp->imp_pingable || force) {
                 imp->imp_next_ping = ptlrpc_next_ping(imp);
                 ptlrpc_ping(imp);
