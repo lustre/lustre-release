@@ -35,8 +35,8 @@ Severity   : major
 Frequency  : rare
 Bugzilla   : 6200
 Description: A bug in MDS/OSS recovery could cause the OSS to fail an assertion
-Details    : There's little harm in just aborting MDS/OSS recovery and letting
- it try again next time, so I removed the LASSERT and return an error instead.
+Details    : There's little harm in aborting MDS/OSS recovery and letting it
+             try again, so I removed the LASSERT and return an error instead.
 
 Severity   : enhancement
 Bugzilla   : 5902
@@ -44,6 +44,13 @@ Description: New debugging infrastructure for tracking down data corruption
 Details    : The I/O checksum code was replaced to: (a) control it at runtime,
              (b) cover more of the client-side code path, and (c) try to narrow
              down where problems occurred
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 3819, 4364, 4397, 6313
+Description: Racing close and eviction MDS could cause assertion in mds_close
+Details    : It was possible to get multiple mfd references during close and
+             client eviction, leading to one thread referencing a freed mfd.
 
 ------------------------------------------------------------------------------
 
@@ -170,7 +177,7 @@ Details    : The I/O checksum code was replaced to: (a) control it at runtime,
 	- fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
 	- remove ancient LOV_MAGIC_V0 EA support (5047)
 	- add "disk I/Os in flight" and "I/O req time" stats in obdfilter
-	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundaries for performance
+	- align r/w RPCs to PTLRPC_MAX_BRW_SIZE boundary for performance (3451)
 	- allow readahead allocations to fail when low on memory (5383)
 	- mmap locking landed again, after considerable improvement (2828)
 	- add get_hostaddr() to lustreDB.py for LDAP support (5459)

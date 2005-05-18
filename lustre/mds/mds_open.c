@@ -68,6 +68,9 @@ static void mds_mfd_addref(void *mfdp)
                atomic_read(&mfd->mfd_refcount));
 }
 
+/* Create a new mds_file_data struct.
+ * One reference for handle+med_open_head list and dropped by mds_mfd_unlink(),
+ * one reference for the caller of this function. */
 struct mds_file_data *mds_mfd_new(void)
 {
         struct mds_file_data *mfd;
@@ -81,11 +84,14 @@ struct mds_file_data *mds_mfd_new(void)
         atomic_set(&mfd->mfd_refcount, 2);
 
         INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
+        INIT_LIST_HEAD(&mfd->mfd_list);
         class_handle_hash(&mfd->mfd_handle, mds_mfd_addref);
 
         return mfd;
 }
 
+/* Get a new reference on the mfd pointed to by handle, if handle is still
+ * valid.  Caller must drop reference with mds_mfd_put(). */
 static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
 {
         ENTRY;
@@ -93,6 +99,7 @@ static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
         RETURN(class_handle2object(handle->cookie));
 }
 
+/* Drop mfd reference, freeing struct if this is the last one. */
 static void mds_mfd_put(struct mds_file_data *mfd)
 {
         CDEBUG(D_INFO, "PUTting mfd %p : new refcount %d\n", mfd,
@@ -105,12 +112,15 @@ static void mds_mfd_put(struct mds_file_data *mfd)
         }
 }
 
-static void mds_mfd_destroy(struct mds_file_data *mfd)
+/* Remove the mfd handle so that it cannot be found by open/close again.
+ * Caller must hold med_open_lock for mfd_list manipulation. */
+void mds_mfd_unlink(struct mds_file_data *mfd, int decref)
 {
         class_handle_unhash(&mfd->mfd_handle);
-        mds_mfd_put(mfd);
+        list_del_init(&mfd->mfd_list);
+        if (decref)
+                mds_mfd_put(mfd);
 }
-
 
 /* Caller must hold mds->mds_epoch_sem */
 static int mds_alloc_filterdata(struct inode *inode)
@@ -278,7 +288,6 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         spin_lock(&med->med_open_lock);
         list_add(&mfd->mfd_list, &med->med_open_head);
         spin_unlock(&med->med_open_lock);
-        mds_mfd_put(mfd);
 
         body->handle.cookie = mfd->mfd_handle.h_cookie;
 
@@ -286,7 +295,7 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
 
 cleanup_mfd:
         mds_mfd_put(mfd);
-        mds_mfd_destroy(mfd);
+        mds_mfd_unlink(mfd, 1);
 cleanup_dentry:
         return ERR_PTR(error);
 }
@@ -586,12 +595,16 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 GOTO(out_dput, 0);
 
         mfd = NULL;
+        spin_lock(&med->med_open_lock);
         list_for_each(t, &med->med_open_head) {
                 mfd = list_entry(t, struct mds_file_data, mfd_list);
-                if (mfd->mfd_xid == req->rq_xid)
+                if (mfd->mfd_xid == req->rq_xid) {
+                        mds_mfd_addref(mfd);
                         break;
+                }
                 mfd = NULL;
         }
+        spin_unlock(&med->med_open_lock);
 
         /* #warning "XXX fixme" bug 2991 */
         /* Here it used to LASSERT(mfd) if exp_outstanding_reply != NULL.
@@ -612,6 +625,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 CDEBUG(D_INODE, "resend mfd %p, cookie "LPX64"\n", mfd,
                        mfd->mfd_handle.h_cookie);
         }
+
+        mds_mfd_put(mfd);
 
  out_dput:
         if (put_child)
@@ -701,12 +716,14 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
 
         CDEBUG(D_INODE, "mfd %p, cookie "LPX64"\n", mfd,
                mfd->mfd_handle.h_cookie);
+
         if (ids != NULL) {
                 mds_lov_update_objids(obd, ids);
                 OBD_FREE(ids, sizeof(*ids) * mds->mds_lov_desc.ld_tgt_count);
         }
-        //if (rc)
-        //        mds_mfd_destroy(mfd);
+        if (rc)
+                mds_mfd_unlink(mfd, 1);
+        mds_mfd_put(mfd);
         RETURN(rc);
 }
 
@@ -1289,7 +1306,7 @@ out:
         if (rc > 0)
                 rc = 0;
         l_dput(mfd->mfd_dentry);
-        mds_mfd_destroy(mfd);
+        mds_mfd_put(mfd);
 
  cleanup:
         if (req != NULL && reply_body != NULL) {
@@ -1343,13 +1360,19 @@ int mds_close(struct ptlrpc_request *req)
         if (body->flags & MDS_BFLAG_UNCOMMITTED_WRITES)
                 /* do some stuff */ ;
 
+        spin_lock(&med->med_open_lock);
         mfd = mds_handle2mfd(&body->handle);
         if (mfd == NULL) {
+                spin_unlock(&med->med_open_lock);
                 DEBUG_REQ(D_ERROR, req, "no handle for file close ino "LPD64
                           ": cookie "LPX64, body->fid1.id, body->handle.cookie);
                 req->rq_status = -ESTALE;
                 RETURN(-ESTALE);
         }
+        /* Remove mfd handle so it can't be found again.  We consume mfd_list
+         * reference here, but still have mds_handle2mfd ref until mfd_close. */
+        mds_mfd_unlink(mfd, 1);
+        spin_unlock(&med->med_open_lock);
 
         inode = mfd->mfd_dentry->d_inode;
         /* child orphan sem protects orphan_dec_test && is_orphan race */
@@ -1362,15 +1385,11 @@ int mds_close(struct ptlrpc_request *req)
                 mds_pack_inode2body(body, inode);
                 mds_pack_md(obd, req->rq_repmsg, 1,body,inode,MDS_PACK_MD_LOCK);
         }
-        spin_lock(&med->med_open_lock);
-        list_del(&mfd->mfd_list);
-        spin_unlock(&med->med_open_lock);
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         req->rq_status = mds_mfd_close(req, obd, mfd, 1);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-        mds_mfd_put(mfd);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");
                 req->rq_status = -ENOMEM;

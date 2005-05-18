@@ -162,6 +162,7 @@ int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
 int mds_pin(struct ptlrpc_request *req);
+void mds_mfd_unlink(struct mds_file_data *mfd, int decref);
 int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan);
 int mds_close(struct ptlrpc_request *req);

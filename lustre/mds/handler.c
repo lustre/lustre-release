@@ -339,20 +339,18 @@ static int mds_destroy_export(struct obd_export *export)
                 struct list_head *tmp = med->med_open_head.next;
                 struct mds_file_data *mfd =
                         list_entry(tmp, struct mds_file_data, mfd_list);
-                BDEVNAME_DECLARE_STORAGE(btmp);
-
-                /* bug 1579: fix force-closing for 2.5 */
                 struct dentry *dentry = mfd->mfd_dentry;
 
-                list_del(&mfd->mfd_list);
+                /* Remove mfd handle so it can't be found again.
+                 * We are consuming the mfd_list reference here. */
+                mds_mfd_unlink(mfd, 0);
                 spin_unlock(&med->med_open_lock);
 
                 /* If you change this message, be sure to update
                  * replay_single:test_46 */
-                CDEBUG(D_INODE|D_IOCTL, "force closing file handle for %.*s (%s:%lu)\n",
-                       dentry->d_name.len, dentry->d_name.name,
-                       ll_bdevname(dentry->d_inode->i_sb, btmp),
-                       dentry->d_inode->i_ino);
+                CDEBUG(D_INODE|D_IOCTL, "%s: force closing file handle for "
+                       "%.*s (ino %lu)\n", obd->obd_name, dentry->d_name.len,
+                       dentry->d_name.name, dentry->d_inode->i_ino);
                 /* child orphan sem protects orphan_dec_test and
                  * is_orphan race, mds_mfd_close drops it */
                 MDS_DOWN_WRITE_ORPHAN_SEM(dentry->d_inode);
