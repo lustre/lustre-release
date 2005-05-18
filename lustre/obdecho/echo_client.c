@@ -221,7 +221,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
         if (on_target) {
                 oa->o_gr = FILTER_GROUP_ECHO;
                 oa->o_valid |= OBD_MD_FLGROUP;
-                rc = obd_create(ec->ec_exp, oa, &lsm, oti);
+                rc = obd_create(ec->ec_exp, oa, NULL, 0, &lsm, oti);
                 if (rc != 0)
                         goto failed;
 

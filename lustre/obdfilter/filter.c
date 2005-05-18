@@ -2485,6 +2485,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 }
 
 static int filter_create(struct obd_export *exp, struct obdo *oa,
+                         void *acl, int acl_size,
                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = NULL;
@@ -2495,6 +2496,8 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         char str[PTL_NALFMT_SIZE];
         int group = oa->o_gr, rc = 0, diff, recreate_objs = 0;
         ENTRY;
+
+        LASSERT(acl == NULL && acl_size == 0);
 
         if (!(oa->o_valid & OBD_MD_FLGROUP) || group == 0) {
                 portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,

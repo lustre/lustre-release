@@ -238,6 +238,7 @@ int oscc_recovering(struct osc_creator *oscc)
 }
 
 int osc_create(struct obd_export *exp, struct obdo *oa,
+               void *acl, int acl_size,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_stripe_md *lsm;
@@ -248,6 +249,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(ea);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
         LASSERT(oa->o_gr > 0);
+        LASSERT(acl == NULL && acl_size == 0);
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             oa->o_flags == OBD_FL_RECREATE_OBJS) {

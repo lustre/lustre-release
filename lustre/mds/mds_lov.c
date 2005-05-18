@@ -146,7 +146,7 @@ int mds_dt_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
                 memcpy(&oa->o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mds->mds_dt_exp, oa, &empty_ea, &oti);
+        rc = obd_create(mds->mds_dt_exp, oa, NULL, 0, &empty_ea, &oti);
         obdo_free(oa);
         RETURN(rc);
 }

@@ -712,7 +712,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         CDEBUG(D_OTHER, "%s: create subdirs with mode %o, uid %u, gid %u\n",
                obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);
                         
-        rc = obd_create(mds->mds_md_exp, oa,
+        rc = obd_create(mds->mds_md_exp, oa, NULL, 0,
                         (struct lov_stripe_md **)mea, NULL);
         if (rc) {
                 CERROR("Can't create remote inode, rc = %d\n", rc);

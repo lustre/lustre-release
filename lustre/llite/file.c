@@ -1213,7 +1213,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
 
         oti.oti_objid = NULL;
         memcpy(lsm2, lsm, lsm_size);
-        rc = obd_create(exp, oa, &lsm2, &oti);
+        rc = obd_create(exp, oa, NULL, 0, &lsm2, &oti);
 
         OBD_FREE(lsm2, lsm_size);
         GOTO(out, rc);

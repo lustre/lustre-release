@@ -135,7 +135,7 @@ static int cmobd_create_reint(struct obd_device *obd, void *rec)
                         GOTO(out, rc = -EINVAL);
                 cmobd->master_group = oa->o_gr;
         }
-        rc = obd_create(exp, oa, &lsm, &oti);
+        rc = obd_create(exp, oa, NULL, 0, &lsm, &oti);
 
         cmobd_free_lsm(&lsm);
 out:

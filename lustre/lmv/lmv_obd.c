@@ -1646,6 +1646,7 @@ int lmv_init_ea_size(struct obd_export *exp, int easize,
 }
 
 int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
+                          void *acl, int acl_size,
                           struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1658,8 +1659,8 @@ int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
         LASSERT(ea == NULL);
         LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
 
-        rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp,
-                        oa, &obj_mdp, oti);
+        rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp, oa,
+                        acl, acl_size, &obj_mdp, oti);
 
         RETURN(rc);
 }
@@ -1679,6 +1680,7 @@ int lmv_getready(struct obd_export *exp)
  * values for "master" object, as it will be used.
  */
 int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
+                   void *acl, int acl_size,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1695,11 +1697,14 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa != NULL);
         
         if (ea == NULL) {
-                rc = lmv_obd_create_single(exp, oa, NULL, oti);
+                rc = lmv_obd_create_single(exp, oa, acl, acl_size, NULL, oti);
                 if (rc)
                         CERROR("Can't create object, rc = %d\n", rc);
                 RETURN(rc);
         }
+
+        /* acl is only suppied when mds create single remote obj */
+        LASSERT(acl == NULL && acl_size == 0);
 
         if (*ea == NULL) {
                 rc = obd_alloc_diskmd(exp, (struct lov_mds_md **)ea);
@@ -1753,7 +1758,8 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLID;
 
-                rc = obd_create(lmv->tgts[c].ltd_exp, oa, &obj_mdp, oti);
+                rc = obd_create(lmv->tgts[c].ltd_exp, oa, NULL, 0,
+                                &obj_mdp, oti);
                 if (rc) {
                         CERROR("obd_create() failed on MDT target %d, "
                                "error %d\n", c, rc);

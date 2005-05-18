@@ -1973,11 +1973,91 @@ static void reconstruct_create(struct ptlrpc_request *req)
         EXIT;
 }
 
+static int mds_inode_init_acl(struct obd_device *obd, void *handle,
+                              struct dentry *de, void *xattr, int xattr_size)
+{
+        struct inode *inode = de->d_inode;
+        struct posix_acl *acl;
+        mode_t mode;
+        int rc;
+
+        LASSERT(handle);
+        LASSERT(inode);
+        LASSERT(xattr);
+        LASSERT(xattr_size > 0);
+
+        if (!inode->i_op->getxattr || !inode->i_op->setxattr) {
+                CERROR("backend fs dosen't support xattr\n");
+                return -EOPNOTSUPP;
+        }
+
+        /* set default acl */
+        if (S_ISDIR(inode->i_mode)) {
+                rc = inode->i_op->setxattr(de, XATTR_NAME_ACL_DEFAULT,
+                                           xattr, xattr_size, 0);
+                if (rc) {
+                        CERROR("set default acl err: %d\n", rc);
+                        return rc;
+                }
+        }
+
+        /* set access acl */
+        acl = posix_acl_from_xattr(xattr, xattr_size);
+        if (acl == NULL || IS_ERR(acl)) {
+                CERROR("insane attr data\n");
+                return PTR_ERR(acl);
+        }
+
+        if (posix_acl_valid(acl)) {
+                CERROR("default acl not valid: %d\n", rc);
+                rc = -EFAULT;
+                goto out;
+        }
+
+        mode = inode->i_mode;
+        rc = posix_acl_create_masq(acl, &mode);
+        if (rc < 0) {
+                CERROR("create masq err %d\n", rc);
+                goto out;
+        }
+
+        if (inode->i_mode != mode) {
+                struct iattr iattr = { .ia_valid = ATTR_MODE,
+                                       .ia_mode = mode };
+                int rc2;
+
+                rc2 = fsfilt_setattr(obd, de, handle, &iattr, 0);
+                if (rc2) {
+                        CERROR("setattr mode err: %d\n", rc2);
+                        rc = rc2;
+                        goto out;
+                }
+        }
+
+        if (rc > 0) {
+                /* we didn't change acl except mode bits of some
+                 * entries, so should be fit into original size.
+                 */
+                rc = posix_acl_to_xattr(acl, xattr, xattr_size);
+                LASSERT(rc > 0);
+
+                rc = inode->i_op->setxattr(de, XATTR_NAME_ACL_ACCESS,
+                                           xattr, xattr_size, 0);
+                if (rc)
+                        CERROR("set access acl err: %d\n", rc);
+        }
+out:
+        posix_acl_release(acl);
+        return rc;
+}
+
 static int mdt_obj_create(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
         struct ost_body *body, *repbody;
+        void *acl = NULL;
+        int acl_size;
         char idname[LL_ID_NAMELEN];
         int size = sizeof(*repbody);
         struct inode *parent_inode;
@@ -2000,6 +2080,17 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                                   lustre_swab_ost_body);
         if (body == NULL)
                 RETURN(-EFAULT);
+
+        /* acl data is packed transparently, no swab here */
+        LASSERT(req->rq_reqmsg->bufcount >= 2);
+        acl_size = req->rq_reqmsg->buflens[1];
+        if (acl_size) {
+                acl = lustre_msg_buf(req->rq_reqmsg, 1, acl_size);
+                if (!acl) {
+                        CERROR("No default acl buf?\n");
+                        RETURN(-EFAULT);
+                }
+        }
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
@@ -2106,6 +2197,14 @@ repeat:
 
         rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         if (rc == 0) {
+                if (acl) {
+                        rc = mds_inode_init_acl(obd, handle, new,
+                                                acl, acl_size);
+                        if (rc) {
+                                up(&parent_inode->i_sem);
+                                GOTO(cleanup, rc);
+                        }
+                }
                 if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
                     lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         new->d_inode->i_generation = body->oa.o_generation;

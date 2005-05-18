@@ -155,7 +155,7 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf (req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         oti->oti_logcookies = obdo_logcookie(&repbody->oa);
-        req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
+        req->rq_status = obd_create(exp, &repbody->oa, NULL, 0, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
 }

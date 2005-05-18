@@ -919,6 +919,7 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
  * performance sensitive, it is accomplished by creating a file, checking the
  * id, and renaming it. */
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
+                   void *acl, int acl_size,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;

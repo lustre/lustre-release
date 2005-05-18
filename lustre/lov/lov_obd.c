@@ -698,7 +698,8 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
 
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
-                err = obd_create(lov->tgts[i].ltd_exp, tmp_oa, &obj_mdp, oti);
+                err = obd_create(lov->tgts[i].ltd_exp, tmp_oa, NULL, 0,
+                                 &obj_mdp, oti);
                 if (err)
                         /* This export will be disabled until it is recovered,
                            and then orphan recovery will be completed. */
@@ -713,6 +714,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
 }
 
 static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
+                        void *acl, int acl_size,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_stripe_md *obj_mdp, *lsm;
@@ -745,7 +747,8 @@ static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
         if (i == lsm->lsm_stripe_count)
                 GOTO(out, rc = -EINVAL);
 
-        rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa, &obj_mdp, oti);
+        rc = obd_create(lov->tgts[ost_idx].ltd_exp, src_oa, acl, acl_size,
+                        &obj_mdp, oti);
 out:
         OBD_FREE(obj_mdp, sizeof(*obj_mdp));
         RETURN(rc);
@@ -753,6 +756,7 @@ out:
 
 /* the LOV expects oa->o_id to be set to the LOV object id */
 static int lov_create(struct obd_export *exp, struct obdo *src_oa,
+                      void *acl, int acl_size,
                       struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_request_set *set = NULL;
@@ -778,7 +782,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         /* Recreate a specific object id at the given OST index */
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
-                 rc = lov_recreate(exp, src_oa, ea, oti);
+                 rc = lov_recreate(exp, src_oa, acl, acl_size, ea, oti);
                  RETURN(rc);
         }
 
@@ -791,8 +795,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                         list_entry(pos, struct lov_request, rq_link);
 
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
-                rc = obd_create(lov->tgts[req->rq_idx].ltd_exp, 
-                                req->rq_oa, &req->rq_md, oti);
+                rc = obd_create(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
+                                acl, acl_size, &req->rq_md, oti);
                 lov_update_create_set(set, req, rc);
         }
         rc = lov_fini_create_set(set, ea);
@@ -1091,7 +1095,7 @@ static int lov_revalidate_md(struct obd_export *exp, struct obdo *src_oa,
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
                 osc_exp = lov->tgts[ost_idx].ltd_exp;
-                rc = obd_create(osc_exp, tmp_oa, &obj_mdp, oti);
+                rc = obd_create(osc_exp, tmp_oa, NULL, 0, &obj_mdp, oti);
                 if (rc) {
                         CERROR("error creating new subobj at idx %d; "
                                "rc = %d\n", ost_idx, rc);

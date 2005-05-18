@@ -740,6 +740,7 @@ struct obd_ops {
         int (*o_preallocate)(struct lustre_handle *, obd_count *req,
                              obd_id *ids);
         int (*o_create)(struct obd_export *exp,  struct obdo *oa,
+                        void *acl, int acl_size,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);

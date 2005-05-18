@@ -43,6 +43,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_acl.h>
 #include <linux/lustre_lite.h>
 #include "mds_internal.h"
 
@@ -638,6 +639,39 @@ static void reconstruct_reint_create(struct mds_update_record *rec, int offset,
         EXIT;
 }
 
+static int mds_get_default_acl(struct inode *dir, void **pacl)
+{
+        struct dentry de = { .d_inode = dir };
+        int size, size2;
+
+        LASSERT(S_ISDIR(dir->i_mode));
+
+        if (!dir->i_op->getxattr)
+                return 0;
+
+        size = dir->i_op->getxattr(&de, XATTR_NAME_ACL_DEFAULT, NULL, 0);
+        if (size == 0 || size == -ENODATA || size == -EOPNOTSUPP)
+                return 0;
+        else if (size < 0)
+                return size;
+
+        OBD_ALLOC(*pacl, size);
+        if (!*pacl)
+                return -ENOMEM;
+
+        size2 = dir->i_op->getxattr(&de, XATTR_NAME_ACL_DEFAULT, *pacl, size);
+        if (size2 != size) {
+                /* since we already locked the dir, it should not change
+                 * between the 2 getxattr calls
+                 */
+                CERROR("2'nd getxattr got %d, expect %d\n", size2, size);
+                OBD_FREE(*pacl, size);
+                return -EIO;
+        }
+
+        return size;
+}
+
 static int mds_reint_create(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req,
                             struct lustre_handle *lh)
@@ -832,7 +866,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         /* inode will be created on another MDS */
                         struct obdo *oa = NULL;
                         struct mds_body *body;
-                        
+                        void *acl = NULL;
+                        int acl_size;
+
                         /* first, create that inode */
                         oa = obdo_alloc();
                         if (!oa)
@@ -877,11 +913,23 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 LASSERT(oa->o_fid != 0);
                         }
 
+                        /* obtain default ACL */
+                        acl_size = mds_get_default_acl(dir, &acl);
+                        if (acl_size < 0) {
+                                obdo_free(oa);
+                                GOTO(cleanup, rc = -ENOMEM);
+                        }
+
                         /* 
                          * before obd_create() is called, o_fid is not known if
                          * this is not recovery of cause.
                          */
-                        rc = obd_create(mds->mds_md_exp, oa, NULL, NULL);
+                        rc = obd_create(mds->mds_md_exp, oa, acl, acl_size,
+                                        NULL, NULL);
+
+                        if (acl)
+                                OBD_FREE(acl, acl_size);
+
                         if (rc) {
                                 CERROR("can't create remote inode: %d\n", rc);
                                 DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",

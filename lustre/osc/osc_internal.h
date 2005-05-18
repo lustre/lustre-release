@@ -56,6 +56,7 @@ struct osc_cache_waiter {
 #define OSCC_FLAG_EXITING            0x20
 
 int osc_create(struct obd_export *exp, struct obdo *oa,
+               void *acl, int acl_size,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);

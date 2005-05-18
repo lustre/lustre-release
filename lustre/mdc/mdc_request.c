@@ -1295,24 +1295,31 @@ out_req:
 }
 
 int mdc_obj_create(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
+                   void *acl, int acl_size,
+                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        int rc, size = sizeof(*body);
+        char *acl_buf;
+        int rc, size[2] = { sizeof(*body), acl_size };
         ENTRY;
 
         LASSERT(oa);
 
         request = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
-                                  OST_CREATE, 1, &size, NULL);
+                                  OST_CREATE, 2, size, NULL);
         if (!request)
                 GOTO(out_req, rc = -ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*body));
         memcpy(&body->oa, oa, sizeof(body->oa));
 
-        request->rq_replen = lustre_msg_size(1, &size);
+        if (acl_size) {
+                acl_buf = lustre_msg_buf(request->rq_reqmsg, 1, acl_size);
+                memcpy(acl_buf, acl, acl_size);
+        }
+
+        request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);

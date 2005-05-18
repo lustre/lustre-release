@@ -315,6 +315,7 @@ static int cobd_unpackmd(struct obd_export *exp,
 }
 
 static int cobd_create(struct obd_export *exp, struct obdo *obdo,
+                       void *acl, int acl_size,
                        struct lov_stripe_md **ea,
                        struct obd_trans_info *oti)
 {
@@ -327,7 +328,7 @@ static int cobd_create(struct obd_export *exp, struct obdo *obdo,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_create(cobd_exp, obdo, ea, oti); 
+        return obd_create(cobd_exp, obdo, acl, acl_size, ea, oti);
 }
 
 static int cobd_destroy(struct obd_export *exp, struct obdo *obdo,

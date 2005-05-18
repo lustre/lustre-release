@@ -671,7 +671,7 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                         oa->o_generation = lgh_id->lgl_ogen;
                         oa->o_gr = lgh_id->lgl_ogr;
                         oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
-                        rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
+                        rc = obd_create(ctxt->loc_exp, oa, NULL, 0, NULL, NULL);
                         if (rc) {
                                 CDEBUG(D_INODE, "err during create: %d\n", rc);
                                 GOTO(out_free_oa, rc);
@@ -706,7 +706,7 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
 
                 oa->o_gr = FILTER_GROUP_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
-                rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
+                rc = obd_create(ctxt->loc_exp, oa, NULL, 0, NULL, NULL);
                 if (rc)
                         GOTO(out_free_oa, rc);
 

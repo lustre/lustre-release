@@ -495,6 +495,7 @@ static inline int obd_revalidate_md(struct obd_export *exp, struct obdo *obdo,
 }
 
 static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
+                             void *acl, int acl_size,
                              struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)
 {
@@ -504,7 +505,7 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, create);
         OBD_COUNTER_INCREMENT(exp->exp_obd, create);
 
-        rc = OBP(exp->exp_obd, create)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, create)(exp, obdo, acl, acl_size, ea, oti);
         RETURN(rc);
 }
 

@@ -417,7 +417,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                                 GOTO(out_oa, rc);
                 } 
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
-                rc = obd_create(mds->mds_dt_exp, oa, &lsm, &oti);
+                rc = obd_create(mds->mds_dt_exp, oa, NULL, 0, &lsm, &oti);
                 if (rc) {
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
