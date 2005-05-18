@@ -1,7 +1,7 @@
-Index: linux-2.6.10/drivers/dump/dump_ia64.c
+Index: linux-2.6.10-base/drivers/dump/dump_ia64.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_ia64.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_ia64.c	2005-04-07 18:13:56.896754224 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_ia64.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_ia64.c	2005-05-17 18:52:39.928056424 +0800
 @@ -0,0 +1,458 @@
 +/*
 + * Architecture specific (ia64) functions for Linux crash dumps.
@@ -461,10 +461,10 @@ Index: linux-2.6.10/drivers/dump/dump_ia64.c
 +	return;
 +}
 +
-Index: linux-2.6.10/drivers/dump/dump_setup.c
+Index: linux-2.6.10-base/drivers/dump/dump_setup.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_setup.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_setup.c	2005-04-07 18:13:56.914751488 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_setup.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_setup.c	2005-05-17 18:52:39.930056120 +0800
 @@ -0,0 +1,923 @@
 +/*
 + * Standard kernel function entry points for Linux crash dumps.
@@ -1389,10 +1389,10 @@ Index: linux-2.6.10/drivers/dump/dump_setup.c
 +
 +module_init(dump_init);
 +module_exit(dump_cleanup);
-Index: linux-2.6.10/drivers/dump/dump_execute.c
+Index: linux-2.6.10-base/drivers/dump/dump_execute.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_execute.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_execute.c	2005-04-07 18:13:56.898753920 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_execute.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_execute.c	2005-05-17 18:52:39.930056120 +0800
 @@ -0,0 +1,144 @@
 +/*
 + * The file has the common/generic dump execution code 
@@ -1538,10 +1538,10 @@ Index: linux-2.6.10/drivers/dump/dump_execute.c
 +
 +	return ret;
 +}
-Index: linux-2.6.10/drivers/dump/dump_x8664.c
+Index: linux-2.6.10-base/drivers/dump/dump_x8664.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_x8664.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_x8664.c	2005-04-07 18:13:56.901753464 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_x8664.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_x8664.c	2005-05-18 15:26:17.477797232 +0800
 @@ -0,0 +1,362 @@
 +/*
 + * Architecture specific (x86-64) functions for Linux crash dumps.
@@ -1645,7 +1645,7 @@ Index: linux-2.6.10/drivers/dump/dump_x8664.c
 +extern void dump_send_ipi(void);
 +static int dump_expect_ipi[NR_CPUS];
 +static atomic_t waiting_for_dump_ipi;
-+static unsigned long saved_affinity[NR_IRQS];
++static cpumask_t saved_affinity[NR_IRQS];
 +
 +extern void stop_this_cpu(void *);
 +
@@ -1905,10 +1905,10 @@ Index: linux-2.6.10/drivers/dump/dump_x8664.c
 +{
 +    return;
 +}
-Index: linux-2.6.10/drivers/dump/dump_rle.c
+Index: linux-2.6.10-base/drivers/dump/dump_rle.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_rle.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_rle.c	2005-04-07 18:13:56.897754072 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_rle.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_rle.c	2005-05-17 18:52:39.931055968 +0800
 @@ -0,0 +1,176 @@
 +/*
 + * RLE Compression functions for kernel crash dumps.
@@ -2086,10 +2086,10 @@ Index: linux-2.6.10/drivers/dump/dump_rle.c
 +MODULE_LICENSE("GPL");
 +MODULE_AUTHOR("LKCD Development Team <lkcd-devel@lists.sourceforge.net>");
 +MODULE_DESCRIPTION("RLE compression module for crash dump driver");
-Index: linux-2.6.10/drivers/dump/dump_overlay.c
+Index: linux-2.6.10-base/drivers/dump/dump_overlay.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_overlay.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_overlay.c	2005-04-07 18:13:56.905752856 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_overlay.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_overlay.c	2005-05-17 18:52:39.932055816 +0800
 @@ -0,0 +1,890 @@
 +/*
 + * Two-stage soft-boot based dump scheme methods (memory overlay
@@ -2981,10 +2981,10 @@ Index: linux-2.6.10/drivers/dump/dump_overlay.c
 +	.dev		= NULL,
 +};		
 +
-Index: linux-2.6.10/drivers/dump/dump_fmt.c
+Index: linux-2.6.10-base/drivers/dump/dump_fmt.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_fmt.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_fmt.c	2005-04-07 18:13:56.911751944 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_fmt.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_fmt.c	2005-05-17 18:52:39.933055664 +0800
 @@ -0,0 +1,407 @@
 +/*
 + * Implements the routines which handle the format specific
@@ -3393,10 +3393,10 @@ Index: linux-2.6.10/drivers/dump/dump_fmt.c
 +	.ops	= &dump_fmt_lcrash_ops
 +};
 +
-Index: linux-2.6.10/drivers/dump/dump_netdev.c
+Index: linux-2.6.10-base/drivers/dump/dump_netdev.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_netdev.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_netdev.c	2005-04-07 18:13:56.900753616 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_netdev.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_netdev.c	2005-05-17 18:52:39.934055512 +0800
 @@ -0,0 +1,566 @@
 +/*
 + * Implements the dump driver interface for saving a dump via network
@@ -3964,10 +3964,10 @@ Index: linux-2.6.10/drivers/dump/dump_netdev.c
 +
 +module_init(dump_netdev_init);
 +module_exit(dump_netdev_cleanup);
-Index: linux-2.6.10/drivers/dump/dump_methods.h
+Index: linux-2.6.10-base/drivers/dump/dump_methods.h
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_methods.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_methods.h	2005-04-07 18:13:56.920750576 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_methods.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_methods.h	2005-05-17 18:52:39.934055512 +0800
 @@ -0,0 +1,357 @@
 +/*
 + * Generic interfaces for flexible system dump 
@@ -4326,10 +4326,10 @@ Index: linux-2.6.10/drivers/dump/dump_methods.h
 +
 +
 +#endif /*  _LINUX_DUMP_METHODS_H */
-Index: linux-2.6.10/drivers/dump/dump_gzip.c
+Index: linux-2.6.10-base/drivers/dump/dump_gzip.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_gzip.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_gzip.c	2005-04-07 18:13:56.917751032 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_gzip.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_gzip.c	2005-05-17 18:52:39.935055360 +0800
 @@ -0,0 +1,174 @@
 +/*
 + * GZIP Compression functions for kernel crash dumps.
@@ -4505,10 +4505,10 @@ Index: linux-2.6.10/drivers/dump/dump_gzip.c
 +MODULE_LICENSE("GPL");
 +MODULE_AUTHOR("LKCD Development Team <lkcd-devel@lists.sourceforge.net>");
 +MODULE_DESCRIPTION("Gzip compression module for crash dump driver");
-Index: linux-2.6.10/drivers/dump/dump_ppc64.c
+Index: linux-2.6.10-base/drivers/dump/dump_ppc64.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_ppc64.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_ppc64.c	2005-04-07 18:13:56.919750728 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_ppc64.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_ppc64.c	2005-05-17 18:52:39.935055360 +0800
 @@ -0,0 +1,410 @@
 +/*
 + * Architecture specific (ppc64) functions for Linux crash dumps.
@@ -4920,10 +4920,10 @@ Index: linux-2.6.10/drivers/dump/dump_ppc64.c
 +{
 +    return;
 +}
-Index: linux-2.6.10/drivers/dump/dump_i386.c
+Index: linux-2.6.10-base/drivers/dump/dump_i386.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_i386.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_i386.c	2005-04-07 18:13:56.895754376 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_i386.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_i386.c	2005-05-17 18:52:39.936055208 +0800
 @@ -0,0 +1,372 @@
 +/*
 + * Architecture specific (i386) functions for Linux crash dumps.
@@ -5297,10 +5297,10 @@ Index: linux-2.6.10/drivers/dump/dump_i386.c
 +{
 +    return;
 +}
-Index: linux-2.6.10/drivers/dump/dump_filters.c
+Index: linux-2.6.10-base/drivers/dump/dump_filters.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_filters.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_filters.c	2005-04-07 18:13:56.917751032 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_filters.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_filters.c	2005-05-17 18:52:39.936055208 +0800
 @@ -0,0 +1,143 @@
 +/*
 + * Default filters to select data to dump for various passes.
@@ -5445,10 +5445,10 @@ Index: linux-2.6.10/drivers/dump/dump_filters.c
 +	{ .name = "", .selector = NULL, .level_mask = 0}
 +};
 +
-Index: linux-2.6.10/drivers/dump/dump_memdev.c
+Index: linux-2.6.10-base/drivers/dump/dump_memdev.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_memdev.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_memdev.c	2005-04-07 18:13:56.907752552 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_memdev.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_memdev.c	2005-05-17 18:52:39.937055056 +0800
 @@ -0,0 +1,655 @@
 +/*
 + * Implements the dump driver interface for saving a dump in available
@@ -6105,10 +6105,10 @@ Index: linux-2.6.10/drivers/dump/dump_memdev.c
 +/* may be overwritten if a previous dump exists */
 +struct dump_memdev *dump_memdev = &default_dump_memdev;
 +
-Index: linux-2.6.10/drivers/dump/dump_blockdev.c
+Index: linux-2.6.10-base/drivers/dump/dump_blockdev.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_blockdev.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_blockdev.c	2005-04-07 18:13:56.909752248 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_blockdev.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_blockdev.c	2005-05-17 18:52:39.938054904 +0800
 @@ -0,0 +1,469 @@
 +/*
 + * Implements the dump driver interface for saving a dump to 
@@ -6579,10 +6579,10 @@ Index: linux-2.6.10/drivers/dump/dump_blockdev.c
 +
 +module_init(dump_blockdev_init);
 +module_exit(dump_blockdev_cleanup);
-Index: linux-2.6.10/drivers/dump/Makefile
+Index: linux-2.6.10-base/drivers/dump/Makefile
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/Makefile	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/Makefile	2005-04-07 18:13:56.921750424 +0800
+--- linux-2.6.10-base.orig/drivers/dump/Makefile	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/Makefile	2005-05-17 18:52:39.938054904 +0800
 @@ -0,0 +1,22 @@
 +#
 +# Makefile for the dump device drivers.
@@ -6606,10 +6606,10 @@ Index: linux-2.6.10/drivers/dump/Makefile
 +obj-$(CONFIG_CRASH_DUMP_NETDEV)	+= dump_netdev.o
 +obj-$(CONFIG_CRASH_DUMP_COMPRESS_RLE)	+= dump_rle.o
 +obj-$(CONFIG_CRASH_DUMP_COMPRESS_GZIP)	+= dump_gzip.o
-Index: linux-2.6.10/drivers/dump/dump_scheme.c
+Index: linux-2.6.10-base/drivers/dump/dump_scheme.c
 ===================================================================
---- linux-2.6.10.orig/drivers/dump/dump_scheme.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/drivers/dump/dump_scheme.c	2005-04-07 18:13:56.916751184 +0800
+--- linux-2.6.10-base.orig/drivers/dump/dump_scheme.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/drivers/dump/dump_scheme.c	2005-05-17 18:52:39.939054752 +0800
 @@ -0,0 +1,430 @@
 +/* 
 + * Default single stage dump scheme methods
@@ -7041,19 +7041,19 @@ Index: linux-2.6.10/drivers/dump/dump_scheme.c
 +	.dev		= NULL,
 +};		
 +
-Index: linux-2.6.10/drivers/Makefile
+Index: linux-2.6.10-base/drivers/Makefile
 ===================================================================
---- linux-2.6.10.orig/drivers/Makefile	2004-12-25 05:36:00.000000000 +0800
-+++ linux-2.6.10/drivers/Makefile	2005-04-07 18:13:56.936748144 +0800
+--- linux-2.6.10-base.orig/drivers/Makefile	2004-12-25 05:36:00.000000000 +0800
++++ linux-2.6.10-base/drivers/Makefile	2005-05-17 18:52:39.939054752 +0800
 @@ -60,3 +60,4 @@
  obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
  obj-$(CONFIG_MMC)		+= mmc/
  obj-y				+= firmware/
 +obj-$(CONFIG_CRASH_DUMP)	+= dump/
-Index: linux-2.6.10/drivers/block/ll_rw_blk.c
+Index: linux-2.6.10-base/drivers/block/ll_rw_blk.c
 ===================================================================
---- linux-2.6.10.orig/drivers/block/ll_rw_blk.c	2005-04-07 14:55:41.000000000 +0800
-+++ linux-2.6.10/drivers/block/ll_rw_blk.c	2005-04-07 18:17:16.782366992 +0800
+--- linux-2.6.10-base.orig/drivers/block/ll_rw_blk.c	2005-05-17 18:52:39.600106280 +0800
++++ linux-2.6.10-base/drivers/block/ll_rw_blk.c	2005-05-17 18:52:39.940054600 +0800
 @@ -28,6 +28,7 @@
  #include <linux/slab.h>
  #include <linux/swap.h>
@@ -7079,10 +7079,10 @@ Index: linux-2.6.10/drivers/block/ll_rw_blk.c
  	/* Test device or partition size, when known. */
  	maxsector = bio->bi_bdev->bd_inode->i_size >> 9;
  	if (maxsector) {
-Index: linux-2.6.10/mm/bootmem.c
+Index: linux-2.6.10-base/mm/bootmem.c
 ===================================================================
---- linux-2.6.10.orig/mm/bootmem.c	2004-12-25 05:34:30.000000000 +0800
-+++ linux-2.6.10/mm/bootmem.c	2005-04-07 18:13:56.780771856 +0800
+--- linux-2.6.10-base.orig/mm/bootmem.c	2004-12-25 05:34:30.000000000 +0800
++++ linux-2.6.10-base/mm/bootmem.c	2005-05-17 18:52:39.941054448 +0800
 @@ -26,6 +26,7 @@
   */
  unsigned long max_low_pfn;
@@ -7099,10 +7099,10 @@ Index: linux-2.6.10/mm/bootmem.c
  			}
  			__free_pages(page, ffs(BITS_PER_LONG)-1);
  			i += BITS_PER_LONG;
-Index: linux-2.6.10/mm/page_alloc.c
+Index: linux-2.6.10-base/mm/page_alloc.c
 ===================================================================
---- linux-2.6.10.orig/mm/page_alloc.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/mm/page_alloc.c	2005-04-07 18:13:56.794769728 +0800
+--- linux-2.6.10-base.orig/mm/page_alloc.c	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/mm/page_alloc.c	2005-05-17 18:52:39.942054296 +0800
 @@ -47,6 +47,11 @@
  EXPORT_SYMBOL(totalram_pages);
  EXPORT_SYMBOL(nr_swap_pages);
@@ -7195,10 +7195,10 @@ Index: linux-2.6.10/mm/page_alloc.c
  }
  
  /* 
-Index: linux-2.6.10/arch/ia64/Kconfig.debug
+Index: linux-2.6.10-base/arch/ia64/Kconfig.debug
 ===================================================================
---- linux-2.6.10.orig/arch/ia64/Kconfig.debug	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/ia64/Kconfig.debug	2005-04-07 18:13:56.459820648 +0800
+--- linux-2.6.10-base.orig/arch/ia64/Kconfig.debug	2004-12-25 05:34:32.000000000 +0800
++++ linux-2.6.10-base/arch/ia64/Kconfig.debug	2005-05-17 18:52:39.942054296 +0800
 @@ -2,6 +2,65 @@
  
  source "lib/Kconfig.debug"
@@ -7265,10 +7265,10 @@ Index: linux-2.6.10/arch/ia64/Kconfig.debug
  choice
  	prompt "Physical memory granularity"
  	default IA64_GRANULE_64MB
-Index: linux-2.6.10/arch/ia64/kernel/irq.c
+Index: linux-2.6.10-base/arch/ia64/kernel/irq.c
 ===================================================================
---- linux-2.6.10.orig/arch/ia64/kernel/irq.c	2004-12-25 05:35:27.000000000 +0800
-+++ linux-2.6.10/arch/ia64/kernel/irq.c	2005-04-07 18:13:56.501814264 +0800
+--- linux-2.6.10-base.orig/arch/ia64/kernel/irq.c	2004-12-25 05:35:27.000000000 +0800
++++ linux-2.6.10-base/arch/ia64/kernel/irq.c	2005-05-17 18:52:39.943054144 +0800
 @@ -933,7 +933,11 @@
  
  static struct proc_dir_entry * smp_affinity_entry [NR_IRQS];
@@ -7281,10 +7281,10 @@ Index: linux-2.6.10/arch/ia64/kernel/irq.c
  
  static char irq_redir [NR_IRQS]; // = { [0 ... NR_IRQS-1] = 1 };
  
-Index: linux-2.6.10/arch/ia64/kernel/smp.c
+Index: linux-2.6.10-base/arch/ia64/kernel/smp.c
 ===================================================================
---- linux-2.6.10.orig/arch/ia64/kernel/smp.c	2004-12-25 05:35:40.000000000 +0800
-+++ linux-2.6.10/arch/ia64/kernel/smp.c	2005-04-07 18:13:56.504813808 +0800
+--- linux-2.6.10-base.orig/arch/ia64/kernel/smp.c	2004-12-25 05:35:40.000000000 +0800
++++ linux-2.6.10-base/arch/ia64/kernel/smp.c	2005-05-17 18:52:39.943054144 +0800
 @@ -31,6 +31,10 @@
  #include <linux/efi.h>
  #include <linux/bitops.h>
@@ -7353,10 +7353,10 @@ Index: linux-2.6.10/arch/ia64/kernel/smp.c
 +        send_IPI_allbutself(IPI_DUMP_INTERRUPT);
 +}
 +#endif
-Index: linux-2.6.10/arch/ia64/kernel/traps.c
+Index: linux-2.6.10-base/arch/ia64/kernel/traps.c
 ===================================================================
---- linux-2.6.10.orig/arch/ia64/kernel/traps.c	2004-12-25 05:35:39.000000000 +0800
-+++ linux-2.6.10/arch/ia64/kernel/traps.c	2005-04-07 18:13:56.475818216 +0800
+--- linux-2.6.10-base.orig/arch/ia64/kernel/traps.c	2004-12-25 05:35:39.000000000 +0800
++++ linux-2.6.10-base/arch/ia64/kernel/traps.c	2005-05-17 18:52:39.944053992 +0800
 @@ -21,6 +21,8 @@
  #include <asm/intrinsics.h>
  #include <asm/processor.h>
@@ -7374,10 +7374,10 @@ Index: linux-2.6.10/arch/ia64/kernel/traps.c
    	} else
  		printk(KERN_ERR "Recursive die() failure, output suppressed\n");
  
-Index: linux-2.6.10/arch/ia64/kernel/ia64_ksyms.c
+Index: linux-2.6.10-base/arch/ia64/kernel/ia64_ksyms.c
 ===================================================================
---- linux-2.6.10.orig/arch/ia64/kernel/ia64_ksyms.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/arch/ia64/kernel/ia64_ksyms.c	2005-04-07 18:13:56.485816696 +0800
+--- linux-2.6.10-base.orig/arch/ia64/kernel/ia64_ksyms.c	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/arch/ia64/kernel/ia64_ksyms.c	2005-05-17 18:52:39.944053992 +0800
 @@ -7,7 +7,6 @@
  
  #include <linux/config.h>
@@ -7418,10 +7418,10 @@ Index: linux-2.6.10/arch/ia64/kernel/ia64_ksyms.c
 +#endif
 +#endif
 +
-Index: linux-2.6.10/arch/i386/mm/init.c
+Index: linux-2.6.10-base/arch/i386/mm/init.c
 ===================================================================
---- linux-2.6.10.orig/arch/i386/mm/init.c	2005-04-07 18:13:54.785075248 +0800
-+++ linux-2.6.10/arch/i386/mm/init.c	2005-04-07 18:13:56.405828856 +0800
+--- linux-2.6.10-base.orig/arch/i386/mm/init.c	2005-05-17 18:52:39.860066760 +0800
++++ linux-2.6.10-base/arch/i386/mm/init.c	2005-05-17 18:52:39.944053992 +0800
 @@ -244,6 +244,13 @@
     return 0;
  }
@@ -7436,10 +7436,10 @@ Index: linux-2.6.10/arch/i386/mm/init.c
  #ifdef CONFIG_HIGHMEM
  pte_t *kmap_pte;
  pgprot_t kmap_prot;
-Index: linux-2.6.10/arch/i386/Kconfig.debug
+Index: linux-2.6.10-base/arch/i386/Kconfig.debug
 ===================================================================
---- linux-2.6.10.orig/arch/i386/Kconfig.debug	2005-04-07 00:35:34.000000000 +0800
-+++ linux-2.6.10/arch/i386/Kconfig.debug	2005-04-07 18:13:56.403829160 +0800
+--- linux-2.6.10-base.orig/arch/i386/Kconfig.debug	2005-05-17 18:52:38.692244296 +0800
++++ linux-2.6.10-base/arch/i386/Kconfig.debug	2005-05-17 18:52:39.945053840 +0800
 @@ -2,6 +2,63 @@
  
  source "lib/Kconfig.debug"
@@ -7515,10 +7515,10 @@ Index: linux-2.6.10/arch/i386/Kconfig.debug
  	depends on DEBUG_KERNEL
  
  config KPROBES
-Index: linux-2.6.10/arch/i386/kernel/smp.c
+Index: linux-2.6.10-base/arch/i386/kernel/smp.c
 ===================================================================
---- linux-2.6.10.orig/arch/i386/kernel/smp.c	2005-04-07 18:13:54.752080264 +0800
-+++ linux-2.6.10/arch/i386/kernel/smp.c	2005-04-07 18:13:56.428825360 +0800
+--- linux-2.6.10-base.orig/arch/i386/kernel/smp.c	2005-05-17 18:52:39.858067064 +0800
++++ linux-2.6.10-base/arch/i386/kernel/smp.c	2005-05-17 18:52:39.945053840 +0800
 @@ -19,6 +19,7 @@
  #include <linux/mc146818rtc.h>
  #include <linux/cache.h>
@@ -7581,10 +7581,10 @@ Index: linux-2.6.10/arch/i386/kernel/smp.c
  	}
  }
 -
-Index: linux-2.6.10/arch/i386/kernel/traps.c
+Index: linux-2.6.10-base/arch/i386/kernel/traps.c
 ===================================================================
---- linux-2.6.10.orig/arch/i386/kernel/traps.c	2005-04-07 18:13:54.770077528 +0800
-+++ linux-2.6.10/arch/i386/kernel/traps.c	2005-04-07 18:13:56.406828704 +0800
+--- linux-2.6.10-base.orig/arch/i386/kernel/traps.c	2005-05-17 18:52:39.859066912 +0800
++++ linux-2.6.10-base/arch/i386/kernel/traps.c	2005-05-17 18:52:39.946053688 +0800
 @@ -27,6 +27,7 @@
  #include <linux/ptrace.h>
  #include <linux/utsname.h>
@@ -7609,10 +7609,10 @@ Index: linux-2.6.10/arch/i386/kernel/traps.c
  	printk("console shuts up ...\n");
  	console_silent();
  	spin_unlock(&nmi_print_lock);
-Index: linux-2.6.10/arch/i386/kernel/setup.c
+Index: linux-2.6.10-base/arch/i386/kernel/setup.c
 ===================================================================
---- linux-2.6.10.orig/arch/i386/kernel/setup.c	2004-12-25 05:34:45.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/setup.c	2005-04-07 18:13:56.427825512 +0800
+--- linux-2.6.10-base.orig/arch/i386/kernel/setup.c	2004-12-25 05:34:45.000000000 +0800
++++ linux-2.6.10-base/arch/i386/kernel/setup.c	2005-05-17 18:52:39.947053536 +0800
 @@ -662,6 +662,10 @@
   */
  #define LOWMEMSIZE()	(0x9f000)
@@ -7658,10 +7658,10 @@ Index: linux-2.6.10/arch/i386/kernel/setup.c
  	dmi_scan_machine();
  
  #ifdef CONFIG_X86_GENERICARCH
-Index: linux-2.6.10/arch/i386/kernel/i386_ksyms.c
+Index: linux-2.6.10-base/arch/i386/kernel/i386_ksyms.c
 ===================================================================
---- linux-2.6.10.orig/arch/i386/kernel/i386_ksyms.c	2004-12-25 05:35:40.000000000 +0800
-+++ linux-2.6.10/arch/i386/kernel/i386_ksyms.c	2005-04-07 18:13:56.429825208 +0800
+--- linux-2.6.10-base.orig/arch/i386/kernel/i386_ksyms.c	2004-12-25 05:35:40.000000000 +0800
++++ linux-2.6.10-base/arch/i386/kernel/i386_ksyms.c	2005-05-17 18:52:39.947053536 +0800
 @@ -16,6 +16,7 @@
  #include <linux/tty.h>
  #include <linux/highmem.h>
@@ -7699,10 +7699,10 @@ Index: linux-2.6.10/arch/i386/kernel/i386_ksyms.c
 +EXPORT_SYMBOL(touch_nmi_watchdog);
 +#endif
 +#endif
-Index: linux-2.6.10/arch/ppc64/Kconfig.debug
+Index: linux-2.6.10-base/arch/ppc64/Kconfig.debug
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/Kconfig.debug	2004-12-25 05:35:27.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/Kconfig.debug	2005-04-07 18:13:56.521811224 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/Kconfig.debug	2004-12-25 05:35:27.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/Kconfig.debug	2005-05-17 18:52:39.947053536 +0800
 @@ -2,6 +2,64 @@
  
  source "lib/Kconfig.debug"
@@ -7768,10 +7768,10 @@ Index: linux-2.6.10/arch/ppc64/Kconfig.debug
  config DEBUG_STACKOVERFLOW
  	bool "Check for stack overflows"
  	depends on DEBUG_KERNEL
-Index: linux-2.6.10/arch/ppc64/kernel/smp.c
+Index: linux-2.6.10-base/arch/ppc64/kernel/smp.c
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/kernel/smp.c	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/kernel/smp.c	2005-04-07 18:13:56.560805296 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/kernel/smp.c	2004-12-25 05:35:23.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/kernel/smp.c	2005-05-17 18:52:39.948053384 +0800
 @@ -30,6 +30,7 @@
  #include <linux/spinlock.h>
  #include <linux/cache.h>
@@ -7825,10 +7825,10 @@ Index: linux-2.6.10/arch/ppc64/kernel/smp.c
  {
  	local_irq_disable();
  	while (1)
-Index: linux-2.6.10/arch/ppc64/kernel/traps.c
+Index: linux-2.6.10-base/arch/ppc64/kernel/traps.c
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/kernel/traps.c	2004-12-25 05:34:47.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/kernel/traps.c	2005-04-07 18:13:56.534809248 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/kernel/traps.c	2004-12-25 05:34:47.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/kernel/traps.c	2005-05-17 18:52:39.948053384 +0800
 @@ -29,6 +29,7 @@
  #include <linux/interrupt.h>
  #include <linux/init.h>
@@ -7845,10 +7845,10 @@ Index: linux-2.6.10/arch/ppc64/kernel/traps.c
  	bust_spinlocks(0);
  	spin_unlock_irq(&die_lock);
  
-Index: linux-2.6.10/arch/ppc64/kernel/ppc_ksyms.c
+Index: linux-2.6.10-base/arch/ppc64/kernel/ppc_ksyms.c
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/kernel/ppc_ksyms.c	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/kernel/ppc_ksyms.c	2005-04-07 18:13:56.535809096 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/kernel/ppc_ksyms.c	2004-12-25 05:34:26.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/kernel/ppc_ksyms.c	2005-05-17 18:52:39.948053384 +0800
 @@ -159,6 +159,17 @@
  EXPORT_SYMBOL(get_wchan);
  EXPORT_SYMBOL(console_drivers);
@@ -7867,10 +7867,10 @@ Index: linux-2.6.10/arch/ppc64/kernel/ppc_ksyms.c
  EXPORT_SYMBOL(tb_ticks_per_usec);
  EXPORT_SYMBOL(paca);
  EXPORT_SYMBOL(cur_cpu_spec);
-Index: linux-2.6.10/arch/ppc64/kernel/lmb.c
+Index: linux-2.6.10-base/arch/ppc64/kernel/lmb.c
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/kernel/lmb.c	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/kernel/lmb.c	2005-04-07 18:13:56.546807424 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/kernel/lmb.c	2004-12-25 05:34:58.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/kernel/lmb.c	2005-05-17 18:52:39.949053232 +0800
 @@ -344,3 +344,31 @@
  
  	return pa;
@@ -7903,10 +7903,10 @@ Index: linux-2.6.10/arch/ppc64/kernel/lmb.c
 +	return 0;
 +}
 +
-Index: linux-2.6.10/arch/ppc64/kernel/xics.c
+Index: linux-2.6.10-base/arch/ppc64/kernel/xics.c
 ===================================================================
---- linux-2.6.10.orig/arch/ppc64/kernel/xics.c	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/arch/ppc64/kernel/xics.c	2005-04-07 18:13:56.553806360 +0800
+--- linux-2.6.10-base.orig/arch/ppc64/kernel/xics.c	2004-12-25 05:34:58.000000000 +0800
++++ linux-2.6.10-base/arch/ppc64/kernel/xics.c	2005-05-17 18:52:39.949053232 +0800
 @@ -421,7 +421,8 @@
  			smp_message_recv(PPC_MSG_MIGRATE_TASK, regs);
  		}
@@ -7917,10 +7917,10 @@ Index: linux-2.6.10/arch/ppc64/kernel/xics.c
  		if (test_and_clear_bit(PPC_MSG_DEBUGGER_BREAK,
  				       &xics_ipi_message[cpu].value)) {
  			mb();
-Index: linux-2.6.10/arch/s390/boot/install.sh
+Index: linux-2.6.10-base/arch/s390/boot/install.sh
 ===================================================================
---- linux-2.6.10.orig/arch/s390/boot/install.sh	2004-12-25 05:35:01.000000000 +0800
-+++ linux-2.6.10/arch/s390/boot/install.sh	2005-04-07 18:13:56.443823080 +0800
+--- linux-2.6.10-base.orig/arch/s390/boot/install.sh	2004-12-25 05:35:01.000000000 +0800
++++ linux-2.6.10-base/arch/s390/boot/install.sh	2005-05-17 18:52:39.949053232 +0800
 @@ -16,7 +16,8 @@
  #   $1 - kernel version
  #   $2 - kernel image file
@@ -7951,20 +7951,20 @@ Index: linux-2.6.10/arch/s390/boot/install.sh
 -cp $3 $4/System.map
 +cat $2 > $5/vmlinuz
 +cp $3 $5/System.map
-Index: linux-2.6.10/arch/s390/boot/Makefile
+Index: linux-2.6.10-base/arch/s390/boot/Makefile
 ===================================================================
---- linux-2.6.10.orig/arch/s390/boot/Makefile	2004-12-25 05:35:49.000000000 +0800
-+++ linux-2.6.10/arch/s390/boot/Makefile	2005-04-07 18:13:56.442823232 +0800
+--- linux-2.6.10-base.orig/arch/s390/boot/Makefile	2004-12-25 05:35:49.000000000 +0800
++++ linux-2.6.10-base/arch/s390/boot/Makefile	2005-05-17 18:52:39.950053080 +0800
 @@ -15,4 +15,4 @@
  
  install: $(CONFIGURE) $(obj)/image
  	sh -x  $(srctree)/$(obj)/install.sh $(KERNELRELEASE) $(obj)/image \
 -	      System.map Kerntypes "$(INSTALL_PATH)"
 +	      System.map init/Kerntypes "$(INSTALL_PATH)"
-Index: linux-2.6.10/arch/s390/Kconfig.debug
+Index: linux-2.6.10-base/arch/s390/Kconfig.debug
 ===================================================================
---- linux-2.6.10.orig/arch/s390/Kconfig.debug	2004-12-25 05:34:31.000000000 +0800
-+++ linux-2.6.10/arch/s390/Kconfig.debug	2005-04-07 18:13:56.436824144 +0800
+--- linux-2.6.10-base.orig/arch/s390/Kconfig.debug	2004-12-25 05:34:31.000000000 +0800
++++ linux-2.6.10-base/arch/s390/Kconfig.debug	2005-05-17 18:52:39.950053080 +0800
 @@ -2,4 +2,13 @@
  
  source "lib/Kconfig.debug"
@@ -7979,10 +7979,10 @@ Index: linux-2.6.10/arch/s390/Kconfig.debug
 +
 +
  endmenu
-Index: linux-2.6.10/arch/x86_64/mm/init.c
+Index: linux-2.6.10-base/arch/x86_64/mm/init.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/mm/init.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/mm/init.c	2005-04-07 18:13:56.582801952 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/mm/init.c	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/mm/init.c	2005-05-17 18:52:39.950053080 +0800
 @@ -378,7 +378,7 @@
  	__flush_tlb_all();
  } 
@@ -7992,10 +7992,10 @@ Index: linux-2.6.10/arch/x86_64/mm/init.c
  {
  	int i;
  
-Index: linux-2.6.10/arch/x86_64/Kconfig.debug
+Index: linux-2.6.10-base/arch/x86_64/Kconfig.debug
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/Kconfig.debug	2004-12-25 05:34:01.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/Kconfig.debug	2005-04-07 18:13:56.572803472 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/Kconfig.debug	2004-12-25 05:34:01.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/Kconfig.debug	2005-05-17 18:52:39.951052928 +0800
 @@ -2,6 +2,66 @@
  
  source "lib/Kconfig.debug"
@@ -8063,10 +8063,10 @@ Index: linux-2.6.10/arch/x86_64/Kconfig.debug
  # !SMP for now because the context switch early causes GPF in segment reloading
  # and the GS base checking does the wrong thing then, causing a hang.
  config CHECKING
-Index: linux-2.6.10/arch/x86_64/kernel/smp.c
+Index: linux-2.6.10-base/arch/x86_64/kernel/smp.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/kernel/smp.c	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/kernel/smp.c	2005-04-07 18:13:56.609797848 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/smp.c	2004-12-25 05:35:50.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/smp.c	2005-05-18 15:10:46.727292816 +0800
 @@ -20,6 +20,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/mc146818rtc.h>
@@ -8075,21 +8075,7 @@ Index: linux-2.6.10/arch/x86_64/kernel/smp.c
  
  #include <asm/mtrr.h>
  #include <asm/pgalloc.h>
-@@ -151,6 +152,13 @@
- 	if (!mm)
- 		BUG();
- 
-+	 if (vector == DUMP_VECTOR) {
-+ 		 /*
-+ 		  * Setup DUMP IPI to be delivered as an NMI
-+ 		  */
-+ 		 cfg = (cfg&~APIC_VECTOR_MASK)|APIC_DM_NMI;
-+	 }
-+
- 	/*
- 	 * I'm not happy about this global shared spinlock in the
- 	 * MM hot path, but we'll see how contended it is.
-@@ -253,6 +261,13 @@
+@@ -253,6 +254,13 @@
  	send_IPI_allbutself(KDB_VECTOR);
  }
  
@@ -8103,7 +8089,7 @@ Index: linux-2.6.10/arch/x86_64/kernel/smp.c
  /*
   * this function sends a 'reschedule' IPI to another CPU.
   * it goes straight through and wastes no time serializing
-@@ -340,6 +355,18 @@
+@@ -340,6 +348,18 @@
  	return 0;
  }
  
@@ -8122,10 +8108,10 @@ Index: linux-2.6.10/arch/x86_64/kernel/smp.c
  void smp_stop_cpu(void)
  {
  	/*
-Index: linux-2.6.10/arch/x86_64/kernel/traps.c
+Index: linux-2.6.10-base/arch/x86_64/kernel/traps.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/kernel/traps.c	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/kernel/traps.c	2005-04-07 18:13:56.595799976 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/traps.c	2004-12-25 05:33:49.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/traps.c	2005-05-17 18:52:39.952052776 +0800
 @@ -27,6 +27,7 @@
  #include <linux/spinlock.h>
  #include <linux/interrupt.h>
@@ -8142,10 +8128,10 @@ Index: linux-2.6.10/arch/x86_64/kernel/traps.c
  	/* Executive summary in case the oops scrolled away */
  	printk(KERN_ALERT "RIP ");
  	printk_address(regs->rip); 
-Index: linux-2.6.10/arch/x86_64/kernel/pci-gart.c
+Index: linux-2.6.10-base/arch/x86_64/kernel/pci-gart.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/kernel/pci-gart.c	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/kernel/pci-gart.c	2005-04-07 18:13:56.627795112 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/pci-gart.c	2004-12-25 05:34:32.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/pci-gart.c	2005-05-17 18:52:39.952052776 +0800
 @@ -34,7 +34,7 @@
  dma_addr_t bad_dma_address;
  
@@ -8155,10 +8141,10 @@ Index: linux-2.6.10/arch/x86_64/kernel/pci-gart.c
  static unsigned long iommu_pages;	/* .. and in pages */
  
  u32 *iommu_gatt_base; 		/* Remapping table */
-Index: linux-2.6.10/arch/x86_64/kernel/setup.c
+Index: linux-2.6.10-base/arch/x86_64/kernel/setup.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/kernel/setup.c	2004-12-25 05:33:50.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/kernel/setup.c	2005-04-07 18:13:56.608798000 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/setup.c	2004-12-25 05:33:50.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/setup.c	2005-05-17 18:52:39.953052624 +0800
 @@ -221,6 +221,8 @@
  	}
  }
@@ -8199,10 +8185,10 @@ Index: linux-2.6.10/arch/x86_64/kernel/setup.c
  
  		check_ioapic();
  #ifdef CONFIG_ACPI_BOOT
-Index: linux-2.6.10/arch/x86_64/kernel/x8664_ksyms.c
+Index: linux-2.6.10-base/arch/x86_64/kernel/x8664_ksyms.c
 ===================================================================
---- linux-2.6.10.orig/arch/x86_64/kernel/x8664_ksyms.c	2004-12-25 05:34:01.000000000 +0800
-+++ linux-2.6.10/arch/x86_64/kernel/x8664_ksyms.c	2005-04-07 18:13:56.625795416 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/x8664_ksyms.c	2004-12-25 05:34:01.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/x8664_ksyms.c	2005-05-17 18:52:39.953052624 +0800
 @@ -32,6 +32,7 @@
  #include <asm/unistd.h>
  #include <asm/delay.h>
@@ -8232,10 +8218,28 @@ Index: linux-2.6.10/arch/x86_64/kernel/x8664_ksyms.c
  #ifdef CONFIG_SMP
  EXPORT_SYMBOL(flush_tlb_page);
  EXPORT_SYMBOL_GPL(flush_tlb_all);
-Index: linux-2.6.10/scripts/mkcompile_h
+Index: linux-2.6.10-base/arch/x86_64/kernel/genapic_flat.c
 ===================================================================
---- linux-2.6.10.orig/scripts/mkcompile_h	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/scripts/mkcompile_h	2005-04-07 18:13:56.778772160 +0800
+--- linux-2.6.10-base.orig/arch/x86_64/kernel/genapic_flat.c	2004-12-25 05:34:48.000000000 +0800
++++ linux-2.6.10-base/arch/x86_64/kernel/genapic_flat.c	2005-05-18 15:07:54.943407936 +0800
+@@ -86,6 +86,13 @@
+ 	 */
+ 	cfg = __prepare_ICR(0, vector, APIC_DEST_LOGICAL);
+ 
++        if (vector == DUMP_VECTOR) {
++        	/*
++         	 * Setup DUMP IPI to be delivered as an NMI
++         	 */
++	         cfg = (cfg&~APIC_VECTOR_MASK)|APIC_DM_NMI;
++        }
++	
+ 	/*
+ 	 * Send the IPI. The write to APIC_ICR fires this off.
+ 	 */
+Index: linux-2.6.10-base/scripts/mkcompile_h
+===================================================================
+--- linux-2.6.10-base.orig/scripts/mkcompile_h	2004-12-25 05:35:50.000000000 +0800
++++ linux-2.6.10-base/scripts/mkcompile_h	2005-05-17 18:52:39.953052624 +0800
 @@ -33,7 +33,7 @@
  
  UTS_LEN=64
@@ -8254,10 +8258,10 @@ Index: linux-2.6.10/scripts/mkcompile_h
  ) > .tmpcompile
  
  # Only replace the real compile.h if the new one is different,
-Index: linux-2.6.10/init/main.c
+Index: linux-2.6.10-base/init/main.c
 ===================================================================
---- linux-2.6.10.orig/init/main.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/init/main.c	2005-04-07 18:13:56.635793896 +0800
+--- linux-2.6.10-base.orig/init/main.c	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/init/main.c	2005-05-17 18:52:39.954052472 +0800
 @@ -109,6 +109,16 @@
  EXPORT_SYMBOL(system_state);
  
@@ -8275,10 +8279,10 @@ Index: linux-2.6.10/init/main.c
   * Boot command-line arguments
   */
  #define MAX_INIT_ARGS 32
-Index: linux-2.6.10/init/kerntypes.c
+Index: linux-2.6.10-base/init/kerntypes.c
 ===================================================================
---- linux-2.6.10.orig/init/kerntypes.c	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/init/kerntypes.c	2005-04-07 18:13:56.634794048 +0800
+--- linux-2.6.10-base.orig/init/kerntypes.c	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/init/kerntypes.c	2005-05-17 18:52:39.954052472 +0800
 @@ -0,0 +1,40 @@
 +/*
 + * kerntypes.c
@@ -8320,10 +8324,10 @@ Index: linux-2.6.10/init/kerntypes.c
 +kerntypes_dummy(void)
 +{
 +}
-Index: linux-2.6.10/init/version.c
+Index: linux-2.6.10-base/init/version.c
 ===================================================================
---- linux-2.6.10.orig/init/version.c	2004-12-25 05:34:45.000000000 +0800
-+++ linux-2.6.10/init/version.c	2005-04-07 18:13:56.633794200 +0800
+--- linux-2.6.10-base.orig/init/version.c	2004-12-25 05:34:45.000000000 +0800
++++ linux-2.6.10-base/init/version.c	2005-05-17 18:52:39.954052472 +0800
 @@ -11,6 +11,7 @@
  #include <linux/uts.h>
  #include <linux/utsname.h>
@@ -8339,10 +8343,10 @@ Index: linux-2.6.10/init/version.c
 +
 +const char *LINUX_COMPILE_VERSION_ID = __stringify(LINUX_COMPILE_VERSION_ID);
 +LINUX_COMPILE_VERSION_ID_TYPE;
-Index: linux-2.6.10/init/Makefile
+Index: linux-2.6.10-base/init/Makefile
 ===================================================================
---- linux-2.6.10.orig/init/Makefile	2004-12-25 05:34:32.000000000 +0800
-+++ linux-2.6.10/init/Makefile	2005-04-07 18:13:56.636793744 +0800
+--- linux-2.6.10-base.orig/init/Makefile	2004-12-25 05:34:32.000000000 +0800
++++ linux-2.6.10-base/init/Makefile	2005-05-17 18:52:39.955052320 +0800
 @@ -9,12 +9,20 @@
  mounts-$(CONFIG_BLK_DEV_INITRD)	+= do_mounts_initrd.o
  mounts-$(CONFIG_BLK_DEV_MD)	+= do_mounts_md.o
@@ -8370,10 +8374,10 @@ Index: linux-2.6.10/init/Makefile
  	@echo '  CHK     $@'
  	@$(CONFIG_SHELL) $(srctree)/scripts/mkcompile_h $@ "$(UTS_MACHINE)" "$(CONFIG_SMP)" "$(CC) $(CFLAGS)"
 +
-Index: linux-2.6.10/net/Kconfig
+Index: linux-2.6.10-base/net/Kconfig
 ===================================================================
---- linux-2.6.10.orig/net/Kconfig	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/net/Kconfig	2005-04-07 18:13:56.760774896 +0800
+--- linux-2.6.10-base.orig/net/Kconfig	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/net/Kconfig	2005-05-17 18:52:39.955052320 +0800
 @@ -632,7 +632,7 @@
  endmenu
  
@@ -8383,10 +8387,10 @@ Index: linux-2.6.10/net/Kconfig
  
  config NETPOLL_RX
  	bool "Netpoll support for trapping incoming packets"
-Index: linux-2.6.10/kernel/sched.c
+Index: linux-2.6.10-base/kernel/sched.c
 ===================================================================
---- linux-2.6.10.orig/kernel/sched.c	2005-04-07 14:55:26.000000000 +0800
-+++ linux-2.6.10/kernel/sched.c	2005-04-07 18:13:56.850761216 +0800
+--- linux-2.6.10-base.orig/kernel/sched.c	2005-05-17 18:52:39.075186080 +0800
++++ linux-2.6.10-base/kernel/sched.c	2005-05-17 18:52:39.957052016 +0800
 @@ -54,6 +54,10 @@
  #define cpu_to_node_mask(cpu) (cpu_online_map)
  #endif
@@ -8541,10 +8545,10 @@ Index: linux-2.6.10/kernel/sched.c
  }
  
  EXPORT_SYMBOL(schedule);
-Index: linux-2.6.10/kernel/panic.c
+Index: linux-2.6.10-base/kernel/panic.c
 ===================================================================
---- linux-2.6.10.orig/kernel/panic.c	2004-12-25 05:35:29.000000000 +0800
-+++ linux-2.6.10/kernel/panic.c	2005-04-07 18:13:56.860759696 +0800
+--- linux-2.6.10-base.orig/kernel/panic.c	2004-12-25 05:35:29.000000000 +0800
++++ linux-2.6.10-base/kernel/panic.c	2005-05-17 18:52:39.957052016 +0800
 @@ -18,12 +18,17 @@
  #include <linux/sysrq.h>
  #include <linux/interrupt.h>
@@ -8596,10 +8600,10 @@ Index: linux-2.6.10/kernel/panic.c
  		for (i = 0; i < panic_timeout*1000; ) {
  			touch_nmi_watchdog();
  			i += panic_blink(i);
-Index: linux-2.6.10/include/linux/sysctl.h
+Index: linux-2.6.10-base/include/linux/sysctl.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/sysctl.h	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/include/linux/sysctl.h	2005-04-07 18:13:56.651791464 +0800
+--- linux-2.6.10-base.orig/include/linux/sysctl.h	2005-04-06 23:38:35.000000000 +0800
++++ linux-2.6.10-base/include/linux/sysctl.h	2005-05-17 18:52:39.958051864 +0800
 @@ -135,6 +135,7 @@
  	KERN_HZ_TIMER=65,	/* int: hz timer on or off */
  	KERN_UNKNOWN_NMI_PANIC=66, /* int: unknown nmi panic flag */
@@ -8608,10 +8612,10 @@ Index: linux-2.6.10/include/linux/sysctl.h
  };
  
  
-Index: linux-2.6.10/include/linux/dump_netdev.h
+Index: linux-2.6.10-base/include/linux/dump_netdev.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/dump_netdev.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/linux/dump_netdev.h	2005-04-07 18:13:56.663789640 +0800
+--- linux-2.6.10-base.orig/include/linux/dump_netdev.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/linux/dump_netdev.h	2005-05-17 18:52:39.958051864 +0800
 @@ -0,0 +1,80 @@
 +/*
 + *  linux/drivers/net/netconsole.h
@@ -8693,10 +8697,10 @@ Index: linux-2.6.10/include/linux/dump_netdev.h
 +#define HEADER_LEN (1 + sizeof(reply_t))
 +
 +
-Index: linux-2.6.10/include/linux/sched.h
+Index: linux-2.6.10-base/include/linux/sched.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/sched.h	2005-04-07 18:13:55.080030408 +0800
-+++ linux-2.6.10/include/linux/sched.h	2005-04-07 18:13:56.653791160 +0800
+--- linux-2.6.10-base.orig/include/linux/sched.h	2005-05-17 18:52:39.872064936 +0800
++++ linux-2.6.10-base/include/linux/sched.h	2005-05-17 18:52:39.959051712 +0800
 @@ -94,6 +94,7 @@
  extern int nr_threads;
  extern int last_pid;
@@ -8816,10 +8820,10 @@ Index: linux-2.6.10/include/linux/sched.h
   * The default (Linux) execution domain.
   */
  extern struct exec_domain	default_exec_domain;
-Index: linux-2.6.10/include/linux/dumpdev.h
+Index: linux-2.6.10-base/include/linux/dumpdev.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/dumpdev.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/linux/dumpdev.h	2005-04-07 18:13:56.663789640 +0800
+--- linux-2.6.10-base.orig/include/linux/dumpdev.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/linux/dumpdev.h	2005-05-17 18:52:39.960051560 +0800
 @@ -0,0 +1,163 @@
 +/*
 + * Generic dump device interfaces for flexible system dump 
@@ -8984,10 +8988,10 @@ Index: linux-2.6.10/include/linux/dumpdev.h
 +extern void dump_unregister_device(struct dump_dev *);
 +
 +#endif /*  _LINUX_DUMPDEV_H */
-Index: linux-2.6.10/include/linux/dump.h
+Index: linux-2.6.10-base/include/linux/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/linux/dump.h	2005-04-07 18:13:56.662789792 +0800
+--- linux-2.6.10-base.orig/include/linux/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/linux/dump.h	2005-05-17 18:52:39.960051560 +0800
 @@ -0,0 +1,406 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -9395,10 +9399,10 @@ Index: linux-2.6.10/include/linux/dump.h
 +#endif	/* !CONFIG_CRASH_DUMP */
 +
 +#endif /* _DUMP_H */
-Index: linux-2.6.10/include/linux/miscdevice.h
+Index: linux-2.6.10-base/include/linux/miscdevice.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/miscdevice.h	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/include/linux/miscdevice.h	2005-04-07 18:13:56.660790096 +0800
+--- linux-2.6.10-base.orig/include/linux/miscdevice.h	2004-12-25 05:34:58.000000000 +0800
++++ linux-2.6.10-base/include/linux/miscdevice.h	2005-05-17 18:52:39.961051408 +0800
 @@ -25,6 +25,7 @@
  #define MICROCODE_MINOR		184
  #define MWAVE_MINOR	219		/* ACP/Mwave Modem */
@@ -9407,10 +9411,10 @@ Index: linux-2.6.10/include/linux/miscdevice.h
  #define MISC_DYNAMIC_MINOR 255
  
  #define TUN_MINOR	     200
-Index: linux-2.6.10/include/asm-um/kerntypes.h
+Index: linux-2.6.10-base/include/asm-um/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-um/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-um/kerntypes.h	2005-04-07 18:13:56.636793744 +0800
+--- linux-2.6.10-base.orig/include/asm-um/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-um/kerntypes.h	2005-05-17 18:52:39.961051408 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-um/kerntypes.h
@@ -9433,10 +9437,10 @@ Index: linux-2.6.10/include/asm-um/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _UM_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-generic/kerntypes.h
+Index: linux-2.6.10-base/include/asm-generic/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-generic/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-generic/kerntypes.h	2005-04-07 18:13:56.716781584 +0800
+--- linux-2.6.10-base.orig/include/asm-generic/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-generic/kerntypes.h	2005-05-17 18:52:39.961051408 +0800
 @@ -0,0 +1,20 @@
 +/*
 + * asm-generic/kerntypes.h
@@ -9458,10 +9462,10 @@ Index: linux-2.6.10/include/asm-generic/kerntypes.h
 +#include <linux/pci.h>
 +
 +#endif /* _GENERIC_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-sparc/kerntypes.h
+Index: linux-2.6.10-base/include/asm-sparc/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-sparc/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-sparc/kerntypes.h	2005-04-07 18:13:56.739778088 +0800
+--- linux-2.6.10-base.orig/include/asm-sparc/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-sparc/kerntypes.h	2005-05-17 18:52:39.961051408 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-sparc/kerntypes.h
@@ -9484,10 +9488,10 @@ Index: linux-2.6.10/include/asm-sparc/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _SPARC_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-arm/kerntypes.h
+Index: linux-2.6.10-base/include/asm-arm/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-arm/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-arm/kerntypes.h	2005-04-07 18:13:56.739778088 +0800
+--- linux-2.6.10-base.orig/include/asm-arm/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-arm/kerntypes.h	2005-05-17 18:52:39.962051256 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-arm/kerntypes.h
@@ -9510,10 +9514,10 @@ Index: linux-2.6.10/include/asm-arm/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _ARM_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-sparc64/kerntypes.h
+Index: linux-2.6.10-base/include/asm-sparc64/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-sparc64/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-sparc64/kerntypes.h	2005-04-07 18:13:56.714781888 +0800
+--- linux-2.6.10-base.orig/include/asm-sparc64/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-sparc64/kerntypes.h	2005-05-17 18:52:39.962051256 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-sparc64/kerntypes.h
@@ -9536,10 +9540,10 @@ Index: linux-2.6.10/include/asm-sparc64/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _SPARC64_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-mips64/kerntypes.h
+Index: linux-2.6.10-base/include/asm-mips64/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-mips64/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-mips64/kerntypes.h	2005-04-07 18:13:56.740777936 +0800
+--- linux-2.6.10-base.orig/include/asm-mips64/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-mips64/kerntypes.h	2005-05-17 18:52:39.962051256 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-mips64/kerntypes.h
@@ -9562,10 +9566,10 @@ Index: linux-2.6.10/include/asm-mips64/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _MIPS64_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-v850/kerntypes.h
+Index: linux-2.6.10-base/include/asm-v850/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-v850/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-v850/kerntypes.h	2005-04-07 18:13:56.695784776 +0800
+--- linux-2.6.10-base.orig/include/asm-v850/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-v850/kerntypes.h	2005-05-17 18:52:39.962051256 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-v850/kerntypes.h
@@ -9588,10 +9592,10 @@ Index: linux-2.6.10/include/asm-v850/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _V850_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-sh/kerntypes.h
+Index: linux-2.6.10-base/include/asm-sh/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-sh/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-sh/kerntypes.h	2005-04-07 18:13:56.667789032 +0800
+--- linux-2.6.10-base.orig/include/asm-sh/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-sh/kerntypes.h	2005-05-17 18:52:39.963051104 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-sh/kerntypes.h
@@ -9614,10 +9618,10 @@ Index: linux-2.6.10/include/asm-sh/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _SH_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-alpha/kerntypes.h
+Index: linux-2.6.10-base/include/asm-alpha/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-alpha/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-alpha/kerntypes.h	2005-04-07 18:13:56.666789184 +0800
+--- linux-2.6.10-base.orig/include/asm-alpha/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-alpha/kerntypes.h	2005-05-17 18:52:39.963051104 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-alpha/kerntypes.h
@@ -9640,10 +9644,10 @@ Index: linux-2.6.10/include/asm-alpha/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _ALPHA_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-ppc/kerntypes.h
+Index: linux-2.6.10-base/include/asm-ppc/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ppc/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ppc/kerntypes.h	2005-04-07 18:13:56.665789336 +0800
+--- linux-2.6.10-base.orig/include/asm-ppc/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ppc/kerntypes.h	2005-05-17 18:52:39.963051104 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-ppc/kerntypes.h
@@ -9666,10 +9670,10 @@ Index: linux-2.6.10/include/asm-ppc/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _PPC_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-m68knommu/kerntypes.h
+Index: linux-2.6.10-base/include/asm-m68knommu/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-m68knommu/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-m68knommu/kerntypes.h	2005-04-07 18:13:56.694784928 +0800
+--- linux-2.6.10-base.orig/include/asm-m68knommu/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-m68knommu/kerntypes.h	2005-05-17 18:52:39.963051104 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-m68knommu/kerntypes.h
@@ -9692,10 +9696,10 @@ Index: linux-2.6.10/include/asm-m68knommu/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _M68KNOMMU_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-x86_64/hw_irq.h
+Index: linux-2.6.10-base/include/asm-x86_64/hw_irq.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-x86_64/hw_irq.h	2004-12-25 05:35:39.000000000 +0800
-+++ linux-2.6.10/include/asm-x86_64/hw_irq.h	2005-04-07 18:13:56.705783256 +0800
+--- linux-2.6.10-base.orig/include/asm-x86_64/hw_irq.h	2004-12-25 05:35:39.000000000 +0800
++++ linux-2.6.10-base/include/asm-x86_64/hw_irq.h	2005-05-17 18:52:39.964050952 +0800
 @@ -34,7 +34,6 @@
  
  #define IA32_SYSCALL_VECTOR	0x80
@@ -9712,10 +9716,10 @@ Index: linux-2.6.10/include/asm-x86_64/hw_irq.h
  
  #define THERMAL_APIC_VECTOR	0xf0
  
-Index: linux-2.6.10/include/asm-x86_64/kerntypes.h
+Index: linux-2.6.10-base/include/asm-x86_64/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-x86_64/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-x86_64/kerntypes.h	2005-04-07 18:13:56.696784624 +0800
+--- linux-2.6.10-base.orig/include/asm-x86_64/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-x86_64/kerntypes.h	2005-05-17 18:52:39.964050952 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-x86_64/kerntypes.h
@@ -9738,10 +9742,10 @@ Index: linux-2.6.10/include/asm-x86_64/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _X86_64_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-x86_64/dump.h
+Index: linux-2.6.10-base/include/asm-x86_64/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-x86_64/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-x86_64/dump.h	2005-04-07 18:13:56.696784624 +0800
+--- linux-2.6.10-base.orig/include/asm-x86_64/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-x86_64/dump.h	2005-05-17 18:52:39.964050952 +0800
 @@ -0,0 +1,93 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -9836,10 +9840,10 @@ Index: linux-2.6.10/include/asm-x86_64/dump.h
 +#endif /* __KERNEL__ */
 +
 +#endif /* _ASM_DUMP_H */
-Index: linux-2.6.10/include/asm-x86_64/kmap_types.h
+Index: linux-2.6.10-base/include/asm-x86_64/kmap_types.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-x86_64/kmap_types.h	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/include/asm-x86_64/kmap_types.h	2005-04-07 18:13:56.710782496 +0800
+--- linux-2.6.10-base.orig/include/asm-x86_64/kmap_types.h	2004-12-25 05:35:23.000000000 +0800
++++ linux-2.6.10-base/include/asm-x86_64/kmap_types.h	2005-05-17 18:52:39.965050800 +0800
 @@ -13,7 +13,8 @@
  	KM_IRQ1,
  	KM_SOFTIRQ0,
@@ -9850,10 +9854,10 @@ Index: linux-2.6.10/include/asm-x86_64/kmap_types.h
  };
  
  #endif
-Index: linux-2.6.10/include/asm-x86_64/smp.h
+Index: linux-2.6.10-base/include/asm-x86_64/smp.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-x86_64/smp.h	2004-12-25 05:33:48.000000000 +0800
-+++ linux-2.6.10/include/asm-x86_64/smp.h	2005-04-07 18:13:56.712782192 +0800
+--- linux-2.6.10-base.orig/include/asm-x86_64/smp.h	2004-12-25 05:33:48.000000000 +0800
++++ linux-2.6.10-base/include/asm-x86_64/smp.h	2005-05-17 18:52:39.965050800 +0800
 @@ -41,6 +41,7 @@
  extern int pic_mode;
  extern int smp_num_siblings;
@@ -9862,10 +9866,10 @@ Index: linux-2.6.10/include/asm-x86_64/smp.h
  extern void smp_message_irq(int cpl, void *dev_id, struct pt_regs *regs);
  extern void smp_send_reschedule(int cpu);
  extern void smp_invalidate_rcv(void);		/* Process an NMI */
-Index: linux-2.6.10/include/asm-h8300/kerntypes.h
+Index: linux-2.6.10-base/include/asm-h8300/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-h8300/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-h8300/kerntypes.h	2005-04-07 18:13:56.665789336 +0800
+--- linux-2.6.10-base.orig/include/asm-h8300/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-h8300/kerntypes.h	2005-05-17 18:52:39.965050800 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-h8300/kerntypes.h
@@ -9888,10 +9892,10 @@ Index: linux-2.6.10/include/asm-h8300/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _H8300_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-cris/kerntypes.h
+Index: linux-2.6.10-base/include/asm-cris/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-cris/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-cris/kerntypes.h	2005-04-07 18:13:56.694784928 +0800
+--- linux-2.6.10-base.orig/include/asm-cris/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-cris/kerntypes.h	2005-05-17 18:52:39.965050800 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-cris/kerntypes.h
@@ -9914,10 +9918,10 @@ Index: linux-2.6.10/include/asm-cris/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _CRIS_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-mips/kerntypes.h
+Index: linux-2.6.10-base/include/asm-mips/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-mips/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-mips/kerntypes.h	2005-04-07 18:13:56.714781888 +0800
+--- linux-2.6.10-base.orig/include/asm-mips/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-mips/kerntypes.h	2005-05-17 18:52:39.966050648 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-mips/kerntypes.h
@@ -9940,10 +9944,10 @@ Index: linux-2.6.10/include/asm-mips/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _MIPS_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-arm26/kerntypes.h
+Index: linux-2.6.10-base/include/asm-arm26/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-arm26/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-arm26/kerntypes.h	2005-04-07 18:13:56.666789184 +0800
+--- linux-2.6.10-base.orig/include/asm-arm26/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-arm26/kerntypes.h	2005-05-17 18:52:39.966050648 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-arm26/kerntypes.h
@@ -9966,10 +9970,10 @@ Index: linux-2.6.10/include/asm-arm26/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _ARM26_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-parisc/kerntypes.h
+Index: linux-2.6.10-base/include/asm-parisc/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-parisc/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-parisc/kerntypes.h	2005-04-07 18:13:56.664789488 +0800
+--- linux-2.6.10-base.orig/include/asm-parisc/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-parisc/kerntypes.h	2005-05-17 18:52:39.966050648 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-parisc/kerntypes.h
@@ -9992,10 +9996,10 @@ Index: linux-2.6.10/include/asm-parisc/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _PARISC_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-ia64/kerntypes.h
+Index: linux-2.6.10-base/include/asm-ia64/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ia64/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ia64/kerntypes.h	2005-04-07 18:13:56.681786904 +0800
+--- linux-2.6.10-base.orig/include/asm-ia64/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ia64/kerntypes.h	2005-05-17 18:52:39.966050648 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-ia64/kerntypes.h
@@ -10018,10 +10022,10 @@ Index: linux-2.6.10/include/asm-ia64/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _IA64_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-ia64/dump.h
+Index: linux-2.6.10-base/include/asm-ia64/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ia64/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ia64/dump.h	2005-04-07 18:13:56.680787056 +0800
+--- linux-2.6.10-base.orig/include/asm-ia64/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ia64/dump.h	2005-05-17 18:52:39.967050496 +0800
 @@ -0,0 +1,201 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -10224,10 +10228,10 @@ Index: linux-2.6.10/include/asm-ia64/dump.h
 +#endif /* __KERNEL__ */
 +
 +#endif /* _ASM_DUMP_H */
-Index: linux-2.6.10/include/asm-ia64/nmi.h
+Index: linux-2.6.10-base/include/asm-ia64/nmi.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ia64/nmi.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ia64/nmi.h	2005-04-07 18:13:56.679787208 +0800
+--- linux-2.6.10-base.orig/include/asm-ia64/nmi.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ia64/nmi.h	2005-05-17 18:52:39.967050496 +0800
 @@ -0,0 +1,28 @@
 +/*
 + *  linux/include/asm-ia64/nmi.h
@@ -10257,10 +10261,10 @@ Index: linux-2.6.10/include/asm-ia64/nmi.h
 +void unset_nmi_callback(void);
 + 
 +#endif /* ASM_NMI_H */
-Index: linux-2.6.10/include/asm-ppc64/kerntypes.h
+Index: linux-2.6.10-base/include/asm-ppc64/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ppc64/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ppc64/kerntypes.h	2005-04-07 18:13:56.682786752 +0800
+--- linux-2.6.10-base.orig/include/asm-ppc64/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ppc64/kerntypes.h	2005-05-17 18:52:39.967050496 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-ppc64/kerntypes.h
@@ -10283,10 +10287,10 @@ Index: linux-2.6.10/include/asm-ppc64/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _PPC64_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-ppc64/dump.h
+Index: linux-2.6.10-base/include/asm-ppc64/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ppc64/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-ppc64/dump.h	2005-04-07 18:13:56.681786904 +0800
+--- linux-2.6.10-base.orig/include/asm-ppc64/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-ppc64/dump.h	2005-05-17 18:52:39.968050344 +0800
 @@ -0,0 +1,115 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -10403,10 +10407,10 @@ Index: linux-2.6.10/include/asm-ppc64/dump.h
 +#endif /* __KERNEL__ */
 +
 +#endif /* _ASM_DUMP_H */
-Index: linux-2.6.10/include/asm-ppc64/kmap_types.h
+Index: linux-2.6.10-base/include/asm-ppc64/kmap_types.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ppc64/kmap_types.h	2004-12-25 05:34:45.000000000 +0800
-+++ linux-2.6.10/include/asm-ppc64/kmap_types.h	2005-04-07 18:13:56.692785232 +0800
+--- linux-2.6.10-base.orig/include/asm-ppc64/kmap_types.h	2004-12-25 05:34:45.000000000 +0800
++++ linux-2.6.10-base/include/asm-ppc64/kmap_types.h	2005-05-17 18:52:39.968050344 +0800
 @@ -16,7 +16,8 @@
  	KM_IRQ1,
  	KM_SOFTIRQ0,
@@ -10417,10 +10421,10 @@ Index: linux-2.6.10/include/asm-ppc64/kmap_types.h
  };
  
  #endif
-Index: linux-2.6.10/include/asm-ppc64/smp.h
+Index: linux-2.6.10-base/include/asm-ppc64/smp.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-ppc64/smp.h	2004-12-25 05:33:47.000000000 +0800
-+++ linux-2.6.10/include/asm-ppc64/smp.h	2005-04-07 18:13:56.693785080 +0800
+--- linux-2.6.10-base.orig/include/asm-ppc64/smp.h	2004-12-25 05:33:47.000000000 +0800
++++ linux-2.6.10-base/include/asm-ppc64/smp.h	2005-05-17 18:52:39.968050344 +0800
 @@ -36,7 +36,7 @@
  extern void smp_send_debugger_break(int cpu);
  struct pt_regs;
@@ -10430,10 +10434,10 @@ Index: linux-2.6.10/include/asm-ppc64/smp.h
  
  #define smp_processor_id() (get_paca()->paca_index)
  #define hard_smp_processor_id() (get_paca()->hw_cpu_id)
-Index: linux-2.6.10/include/asm-s390/kerntypes.h
+Index: linux-2.6.10-base/include/asm-s390/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-s390/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-s390/kerntypes.h	2005-04-07 18:13:56.713782040 +0800
+--- linux-2.6.10-base.orig/include/asm-s390/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-s390/kerntypes.h	2005-05-17 18:52:39.968050344 +0800
 @@ -0,0 +1,46 @@
 +/*
 + * asm-s390/kerntypes.h
@@ -10481,10 +10485,10 @@ Index: linux-2.6.10/include/asm-s390/kerntypes.h
 +#include "../../drivers/s390/scsi/zfcp_fsf.h"
 +
 +#endif /* _S390_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-s390/dump.h
+Index: linux-2.6.10-base/include/asm-s390/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-s390/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-s390/dump.h	2005-04-07 18:13:56.713782040 +0800
+--- linux-2.6.10-base.orig/include/asm-s390/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-s390/dump.h	2005-05-17 18:52:39.969050192 +0800
 @@ -0,0 +1,10 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -10496,10 +10500,10 @@ Index: linux-2.6.10/include/asm-s390/dump.h
 +
 +#endif
 +
-Index: linux-2.6.10/include/asm-i386/kerntypes.h
+Index: linux-2.6.10-base/include/asm-i386/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-i386/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-i386/kerntypes.h	2005-04-07 18:13:56.717781432 +0800
+--- linux-2.6.10-base.orig/include/asm-i386/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-i386/kerntypes.h	2005-05-17 18:52:39.969050192 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-i386/kerntypes.h
@@ -10522,10 +10526,10 @@ Index: linux-2.6.10/include/asm-i386/kerntypes.h
 +#include <asm-generic/kerntypes.h>
 +
 +#endif /* _I386_KERNTYPES_H */
-Index: linux-2.6.10/include/asm-i386/dump.h
+Index: linux-2.6.10-base/include/asm-i386/dump.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-i386/dump.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-i386/dump.h	2005-04-07 18:13:56.716781584 +0800
+--- linux-2.6.10-base.orig/include/asm-i386/dump.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-i386/dump.h	2005-05-17 18:52:39.969050192 +0800
 @@ -0,0 +1,90 @@
 +/*
 + * Kernel header file for Linux crash dumps.
@@ -10617,10 +10621,10 @@ Index: linux-2.6.10/include/asm-i386/dump.h
 +#endif /* __KERNEL__ */
 +
 +#endif /* _ASM_DUMP_H */
-Index: linux-2.6.10/include/asm-i386/kmap_types.h
+Index: linux-2.6.10-base/include/asm-i386/kmap_types.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-i386/kmap_types.h	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/kmap_types.h	2005-04-07 18:13:56.729779608 +0800
+--- linux-2.6.10-base.orig/include/asm-i386/kmap_types.h	2004-12-25 05:35:23.000000000 +0800
++++ linux-2.6.10-base/include/asm-i386/kmap_types.h	2005-05-17 18:52:39.969050192 +0800
 @@ -23,7 +23,8 @@
  D(10)	KM_IRQ1,
  D(11)	KM_SOFTIRQ0,
@@ -10631,10 +10635,10 @@ Index: linux-2.6.10/include/asm-i386/kmap_types.h
  };
  
  #undef D
-Index: linux-2.6.10/include/asm-i386/smp.h
+Index: linux-2.6.10-base/include/asm-i386/smp.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-i386/smp.h	2004-12-25 05:35:50.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/smp.h	2005-04-07 18:13:56.730779456 +0800
+--- linux-2.6.10-base.orig/include/asm-i386/smp.h	2004-12-25 05:35:50.000000000 +0800
++++ linux-2.6.10-base/include/asm-i386/smp.h	2005-05-17 18:52:39.970050040 +0800
 @@ -37,6 +37,7 @@
  extern cpumask_t cpu_sibling_map[];
  
@@ -10643,10 +10647,10 @@ Index: linux-2.6.10/include/asm-i386/smp.h
  extern void smp_message_irq(int cpl, void *dev_id, struct pt_regs *regs);
  extern void smp_invalidate_rcv(void);		/* Process an NMI */
  extern void (*mtrr_hook) (void);
-Index: linux-2.6.10/include/asm-i386/mach-default/irq_vectors.h
+Index: linux-2.6.10-base/include/asm-i386/mach-default/irq_vectors.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-i386/mach-default/irq_vectors.h	2004-12-25 05:34:26.000000000 +0800
-+++ linux-2.6.10/include/asm-i386/mach-default/irq_vectors.h	2005-04-07 18:13:56.738778240 +0800
+--- linux-2.6.10-base.orig/include/asm-i386/mach-default/irq_vectors.h	2004-12-25 05:34:26.000000000 +0800
++++ linux-2.6.10-base/include/asm-i386/mach-default/irq_vectors.h	2005-05-17 18:52:39.970050040 +0800
 @@ -48,6 +48,7 @@
  #define INVALIDATE_TLB_VECTOR	0xfd
  #define RESCHEDULE_VECTOR	0xfc
@@ -10655,10 +10659,10 @@ Index: linux-2.6.10/include/asm-i386/mach-default/irq_vectors.h
  
  #define THERMAL_APIC_VECTOR	0xf0
  /*
-Index: linux-2.6.10/include/asm-m68k/kerntypes.h
+Index: linux-2.6.10-base/include/asm-m68k/kerntypes.h
 ===================================================================
---- linux-2.6.10.orig/include/asm-m68k/kerntypes.h	2005-04-07 19:34:21.197950744 +0800
-+++ linux-2.6.10/include/asm-m68k/kerntypes.h	2005-04-07 18:13:56.715781736 +0800
+--- linux-2.6.10-base.orig/include/asm-m68k/kerntypes.h	2003-09-02 06:26:13.000000000 +0800
++++ linux-2.6.10-base/include/asm-m68k/kerntypes.h	2005-05-17 18:52:39.970050040 +0800
 @@ -0,0 +1,21 @@
 +/*
 + * asm-m68k/kerntypes.h
