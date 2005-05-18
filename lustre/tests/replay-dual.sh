@@ -471,17 +471,18 @@ test_20() {     # bug 3822 - evicting client with enqueued lock
 }
 run_test 20 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
-# $1 - number of mountpoint
+# $1 - fs num (1, 2, ...)
 # $2 - mds
 function find_dev_for_fs_and_mds()
 {
-	local fsuuid=`cat /proc/fs/lustre/llite/fs$1/uuid`
+	local fs=`ls /proc/fs/lustre/llite|head -n $1|tail -n1`
+	local fsuuid=`cat /proc/fs/lustre/llite/$fs/uuid`
 	$LCTL device_list | awk "/mdc.*$2.*$fsuuid/ {print \$4}"
 }
 
 test_21() {
-	mdc1dev=`find_dev_for_fs_and_mds 0 mds1`
-	mdc2dev=`find_dev_for_fs_and_mds 1 mds1`
+	mdc1dev=`find_dev_for_fs_and_mds 1 mds1`
+	mdc2dev=`find_dev_for_fs_and_mds 2 mds1`
 	multiop $MOUNT1/f21 O
 	cancel_lru_locks MDC
 	# generate IT_OPEN to be replayed against existing file
@@ -511,8 +512,10 @@ test_21() {
 run_test 21 "open vs. unlink out of order replay"
 
 test_22() {	# bug 6063 - AST during recovery
-	mdc1dev=`find_dev_for_fs_and_mds 0 mds1`
-	mdc2dev=`find_dev_for_fs_and_mds 1 mds1`
+	cancel_lru_locks MDC
+	cat /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count
+	mdc1dev=`find_dev_for_fs_and_mds 1 mds1`
+	mdc2dev=`find_dev_for_fs_and_mds 2 mds1`
 	$LCTL --device %$mdc1dev disable_recovery
 	$LCTL --device %$mdc2dev disable_recovery
 
@@ -525,7 +528,6 @@ test_22() {	# bug 6063 - AST during recovery
 	$LCTL --device %$mdc2dev enable_recovery
 	sleep $((TIMEOUT / 2))
 
-	$LCTL mark "first recovered?"
 	LOCKS=`grep -v '^0$' /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count`
 	if [ "$LOCKS" != "" ]; then
 		echo "The lock got replayed before mkdir is replayed: $LOCKS"
@@ -536,14 +538,8 @@ test_22() {	# bug 6063 - AST during recovery
 	# let's recover 1st connection with mkdir replay that needs the lock 
 	$LCTL --device %$mdc1dev enable_recovery
 	sleep $TIMEOUT
-	$LCTL mark "second recovered?"
 
-	LOCKS=`grep -v '^0$' /proc/fs/lustre/ldlm/namespaces/mds-*/lock_count`
-	if [ "$LOCKS" != "1" ]; then
-		echo "The lock hasn't replayed: $LOCKS"
-		return 2
-	fi
-
+	df $MOUNT || return 2
 	return 0
 }
 run_test 22 "AST during recovery"
