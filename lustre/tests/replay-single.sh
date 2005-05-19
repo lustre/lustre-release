@@ -1274,7 +1274,6 @@ test_55() {
     #drop_reply "cat $DIR/$tfile"
     fail $SINGLEMDS
     sleep 10
-    lctl dk /r/tmp/debug
 }
 run_test 55 "don't replay a symlink open request (3440)"
 
