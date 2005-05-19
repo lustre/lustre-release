@@ -108,13 +108,15 @@ if test -d $QSNET/drivers/net/qsnet ; then
 		fi
 	fi
 
-	LB_LINUX_CONFIG([QSNET],[],[
-		LB_LINUX_CONFIG([QSNET_MODULE],[],[
-			AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswnal.])
-			QSWNAL=""
-			QSWCPPFLAGS=""
+	if test x$QSNET = x$LINUX ; then
+		LB_LINUX_CONFIG([QSNET],[],[
+			LB_LINUX_CONFIG([QSNET_MODULE],[],[
+				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswnal.])
+				QSWNAL=""
+				QSWCPPFLAGS=""
+			])
 		])
-	])
+	fi
 else
 	AC_MSG_RESULT([no])
 	QSWNAL=""
