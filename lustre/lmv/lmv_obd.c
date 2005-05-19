@@ -552,27 +552,27 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("LMV setup requires a descriptor\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
                 CERROR("LMV setup requires an MDT UUID list\n");
                 RETURN(-EINVAL);
         }
 
-        desc = (struct lmv_desc *)lcfg->lcfg_inlbuf1;
-        if (sizeof(*desc) > lcfg->lcfg_inllen1) {
+        desc = (struct lmv_desc *)lustre_cfg_buf(lcfg, 1);
+        if (sizeof(*desc) > LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("descriptor size wrong: %d > %d\n",
-                       (int)sizeof(*desc), lcfg->lcfg_inllen1);
+                       (int)sizeof(*desc), LUSTRE_CFG_BUFLEN(lcfg, 1));
                 RETURN(-EINVAL);
         }
 
-        uuids = (struct obd_uuid *)lcfg->lcfg_inlbuf2;
-        if (sizeof(*uuids) * desc->ld_tgt_count != lcfg->lcfg_inllen2) {
+        uuids = (struct obd_uuid *)lustre_cfg_buf(lcfg, 2);
+        if (sizeof(*uuids) * desc->ld_tgt_count != LUSTRE_CFG_BUFLEN(lcfg, 2)) {
                 CERROR("UUID array size wrong: %u * %u != %u\n",
-                       sizeof(*uuids), desc->ld_tgt_count, lcfg->lcfg_inllen2);
+                       sizeof(*uuids), desc->ld_tgt_count, LUSTRE_CFG_BUFLEN(lcfg, 2));
                 RETURN(-EINVAL);
         }
 

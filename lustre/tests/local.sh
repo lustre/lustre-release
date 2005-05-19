@@ -20,11 +20,8 @@ NETTYPE=${NETTYPE:-tcp}
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
 
-MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-ext3}
-OST_BACKFSTYPE=${OST_BACKFSTYPE:-ext3}
-
-MDS_BACKDEV=${MDS_BACKDEV:-$TMP/mds1-`hostname`}
-OST_BACKDEV=${OST_BACKDEV:-$TMP/ost1-`hostname`}
+MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-$DEF_FSTYPE}
+OST_BACKFSTYPE=${OST_BACKFSTYPE:-$DEF_FSTYPE}
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
@@ -49,7 +46,7 @@ ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 # configure mds server
 ${LMC} --add mds --nspath /mnt/mds_ns --node localhost --mds mds1 \
 --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE --dev $MDSDEV \
---backdev $MDS_BACKDEV $MDS_MOUNT_OPTS --size $MDSSIZE $JARG $IARG || exit 20
+$MDS_MOUNT_OPTS --size $MDSSIZE $JARG $IARG || exit 20
 
 [ "x$OST_MOUNT_OPTS" != "x" ] &&
     OST_MOUNT_OPTS="--mountfsoptions $OST_MOUNT_OPTS"
@@ -60,7 +57,7 @@ ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 
 ${LMC} --add ost --ost ost1 --nspath /mnt/ost_ns --node localhost --lov lov1 \
 --fstype $OST_FSTYPE --backfstype $OST_BACKFSTYPE --dev $OSTDEV \
---backdev $OST_BACKDEV $OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
+$OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
 
 # create client config
 ${LMC} --add mtpt --node localhost --path $MOUNT --clientoptions async --mds mds1 --lov lov1 || exit 40

@@ -91,7 +91,8 @@ static void llu_fsop_gone(struct filesys *fs)
 {
         struct llu_sb_info *sbi = (struct llu_sb_info *)fs->fs_private;
         struct obd_device *obd = class_exp2obd(sbi->ll_md_exp);
-        struct lustre_cfg lcfg;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
         int next = 0;
         ENTRY;
 
@@ -102,15 +103,17 @@ static void llu_fsop_gone(struct filesys *fs)
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
         {
                 int err;
-
-                LCFG_INIT(lcfg, LCFG_CLEANUP, obd->obd_name);
+        
+                lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+                lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
                 err = class_process_config(&lcfg);
                 if (err) {
                         CERROR("cleanup failed: %s\n", obd->obd_name);
                 }
-
-                LCFG_INIT(lcfg, LCFG_DETACH, obd->obd_name);
+                
+                lcfg->lcfg_command = LCFG_DETACH; 
                 err = class_process_config(&lcfg);
+                lustre_cfg_free(lcfg);
                 if (err) {
                         CERROR("detach failed: %s\n", obd->obd_name);
                 }

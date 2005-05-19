@@ -120,20 +120,20 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         int valsize, rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 == 0 || lcfg->lcfg_inlbuf1 == NULL) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("%s: setup requires master device uuid\n", 
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 == 0 || lcfg->lcfg_inlbuf2 == NULL) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
                 CERROR("%s: setup requires cache device uuid\n",
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&master_uuid, lcfg->lcfg_inlbuf1);
-        obd_str2uuid(&cache_uuid, lcfg->lcfg_inlbuf2);
+        obd_str2uuid(&master_uuid, lustre_cfg_buf(lcfg, 1));
+        obd_str2uuid(&cache_uuid, lustre_cfg_buf(lcfg, 2));
 
         /* getting master obd */
         cmobd->master_obd = find_master_obd(obd, &master_uuid);

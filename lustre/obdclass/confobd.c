@@ -152,28 +152,31 @@ static int confobd_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1 || !lcfg->lcfg_inlbuf1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            lustre_cfg_buf(lcfg, 1) == NULL) { 
                 CERROR("CONFOBD setup requires device name\n");
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_inllen2 < 1 || !lcfg->lcfg_inlbuf2) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1 ||
+            lustre_cfg_buf(lcfg, 2) == NULL) { 
                 CERROR("CONFOBD setup requires fstype\n");
                 RETURN(-EINVAL);
         }
 
-        OBD_ALLOC(name, lcfg->lcfg_inllen1 + 1);
+        OBD_ALLOC(name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (!name) {
                 CERROR("No Memory\n");
                 GOTO(out, rc = -ENOMEM);
         }
-        memcpy(name, lcfg->lcfg_inlbuf1, lcfg->lcfg_inllen1);
+        memcpy(name, lustre_cfg_string(lcfg, 1), LUSTRE_CFG_BUFLEN(lcfg, 1));
 
-        OBD_ALLOC(fstype, lcfg->lcfg_inllen2 + 1);
+        OBD_ALLOC(fstype, LUSTRE_CFG_BUFLEN(lcfg, 2));
         if (!fstype) {
                 CERROR("No Memory\n");
                 GOTO(out, rc = -ENOMEM);
         }
-        memcpy(fstype, lcfg->lcfg_inlbuf2, lcfg->lcfg_inllen2);
+        memcpy(fstype, lustre_cfg_string(lcfg, 2), 
+               LUSTRE_CFG_BUFLEN(lcfg, 2));
 
         obd->obd_fsops = fsfilt_get_ops(fstype);
         if (IS_ERR(obd->obd_fsops)) {
@@ -181,13 +184,14 @@ static int confobd_setup(struct obd_device *obd, obd_count len, void *buf)
                GOTO(err_ops, rc = PTR_ERR(obd->obd_fsops));
         }
 
-        if (lcfg->lcfg_inllen3 >= 1 && lcfg->lcfg_inlbuf3) {
-                OBD_ALLOC(mountoption, lcfg->lcfg_inllen3 + 1);
+        if (LUSTRE_CFG_BUFLEN(lcfg, 3) >= 1 && lustre_cfg_buf(lcfg, 3)) {
+                OBD_ALLOC(mountoption, LUSTRE_CFG_BUFLEN(lcfg, 3));
                 if (!mountoption) {
                         CERROR("No Memory\n");
                         GOTO(err_ops, rc = -ENOMEM);
                 }
-                memcpy(mountoption, lcfg->lcfg_inlbuf3, lcfg->lcfg_inllen3); 
+                memcpy(mountoption, lustre_cfg_string(lcfg, 3), 
+                       LUSTRE_CFG_BUFLEN(lcfg, 3)); 
         }
         rc = lvfs_mount_fs(name, fstype, mountoption, 0, &lvfs_ctxt);
         if (rc)
@@ -210,11 +214,11 @@ out:
         if (rc && lvfs_ctxt)
                 lvfs_umount_fs(lvfs_ctxt);
         if (name)
-                OBD_FREE(name, lcfg->lcfg_inllen1 + 1);
+                OBD_FREE(name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (fstype)
-                OBD_FREE(fstype, lcfg->lcfg_inllen2 + 1);
+                OBD_FREE(fstype, LUSTRE_CFG_BUFLEN(lcfg, 2));
         if (mountoption)
-                OBD_FREE(mountoption, lcfg->lcfg_inllen3 + 1);
+                OBD_FREE(mountoption, LUSTRE_CFG_BUFLEN(lcfg, 3));
 
         return rc;
 err_ops:

@@ -871,43 +871,6 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
                 return 0;
         return -1;
 }
-
-void lustre_swab_llogd_body (struct llogd_body *d)
-{
-        __swab64s (&d->lgd_logid.lgl_oid);
-        __swab64s (&d->lgd_logid.lgl_ogr);
-        __swab32s (&d->lgd_logid.lgl_ogen);
-        __swab32s (&d->lgd_ctxt_idx);
-        __swab32s (&d->lgd_llh_flags);
-        __swab32s (&d->lgd_index);
-        __swab32s (&d->lgd_saved_index);
-        __swab32s (&d->lgd_len);
-        __swab64s (&d->lgd_cur_offset);
-}
-
-void lustre_swab_llog_hdr (struct llog_log_hdr *h)
-{
-        __swab32s (&h->llh_hdr.lrh_index);
-        __swab32s (&h->llh_hdr.lrh_len);
-        __swab32s (&h->llh_hdr.lrh_type);
-        __swab64s (&h->llh_timestamp);
-        __swab32s (&h->llh_count);
-        __swab32s (&h->llh_bitmap_offset);
-        __swab32s (&h->llh_flags);
-        __swab32s (&h->llh_tail.lrt_index);
-        __swab32s (&h->llh_tail.lrt_len);
-}
-
-void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
-{
-        __swab64s (&d->lgdc_gen.mnt_cnt);
-        __swab64s (&d->lgdc_gen.conn_cnt);
-        __swab64s (&d->lgdc_logid.lgl_oid);
-        __swab64s (&d->lgdc_logid.lgl_ogr);
-        __swab32s (&d->lgdc_logid.lgl_ogen);
-        __swab32s (&d->lgdc_ctxt_idx);
-}
-
 void lustre_assert_wire_constants(void)
 {
 }

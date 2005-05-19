@@ -435,15 +435,15 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         int count;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("LOV setup requires a descriptor\n");
                 RETURN(-EINVAL);
         }
 
-        desc = (struct lov_desc *)lcfg->lcfg_inlbuf1;
-        if (sizeof(*desc) > lcfg->lcfg_inllen1) {
+        desc = (struct lov_desc *)lustre_cfg_string(lcfg, 1);
+        if (sizeof(*desc) > LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("descriptor size wrong: %d > %d\n",
-                       (int)sizeof(*desc), lcfg->lcfg_inllen1);
+                       (int)sizeof(*desc), LUSTRE_CFG_BUFLEN(lcfg, 1));
                 RETURN(-EINVAL);
         }
  
@@ -626,14 +626,14 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
         switch(cmd = lcfg->lcfg_command) {
         case LCFG_LOV_ADD_OBD:
         case LCFG_LOV_DEL_OBD: {
-                if (lcfg->lcfg_inllen1 > sizeof(obd_uuid.uuid))
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(obd_uuid.uuid))
                         GOTO(out, rc = -EINVAL);
 
-                obd_str2uuid(&obd_uuid, lcfg->lcfg_inlbuf1);
+                obd_str2uuid(&obd_uuid, lustre_cfg_string(lcfg, 1));
 
-                if (sscanf(lcfg->lcfg_inlbuf2, "%d", &index) != 1)
+                if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
                         GOTO(out, rc = -EINVAL);
-                if (sscanf(lcfg->lcfg_inlbuf3, "%d", &gen) != 1)
+                if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", &gen) != 1)
                         GOTO(out, rc = -EINVAL);
                 if (cmd == LCFG_LOV_ADD_OBD)
                         rc = lov_add_obd(obd, &obd_uuid, index, gen);

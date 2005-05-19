@@ -3185,11 +3185,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-
-        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+        if (lcfg->lcfg_bufcount < 3)
                 RETURN(rc = -EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lcfg->lcfg_inlbuf2);
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) == 0 || LUSTRE_CFG_BUFLEN(lcfg, 2) == 0)
+                RETURN(rc = -EINVAL);
+
+        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(rc = PTR_ERR(obd->obd_fsops));
 
@@ -3207,9 +3209,10 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
          * and the rest of options are passed by mount options. Probably this
          * should be moved to somewhere else like startup scripts or lconf. */
         sprintf(options, "iopen_nopriv");
-        if (lcfg->lcfg_inllen4 > 0 && lcfg->lcfg_inlbuf4)
+        
+        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4))
                 sprintf(options + strlen(options), ",%s",
-                        lcfg->lcfg_inlbuf4);
+                        lustre_cfg_string(lcfg, 4));
 
         /* we have to know mdsnum before touching underlying fs -bzzz */
         atomic_set(&mds->mds_open_count, 0);
@@ -3217,42 +3220,46 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_md_connected = 0;
         mds->mds_md_name = NULL;
         
-        if (lcfg->lcfg_inllen5 > 0 && lcfg->lcfg_inlbuf5 && 
-            strncmp(lcfg->lcfg_inlbuf5, "dumb", lcfg->lcfg_inllen5)) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 5) > 0 && lustre_cfg_buf(lcfg, 5) &&
+            strncmp(lustre_cfg_string(lcfg, 5), "dumb", LUSTRE_CFG_BUFLEN(lcfg, 5))) {
                 class_uuid_t uuid;
 
                 CDEBUG(D_OTHER, "MDS: %s is master for %s\n",
-                       obd->obd_name, lcfg->lcfg_inlbuf5);
+                       obd->obd_name, lustre_cfg_buf);
 
                 generate_random_uuid(uuid);
                 class_uuid_unparse(uuid, &mds->mds_md_uuid);
 
-                OBD_ALLOC(mds->mds_md_name, lcfg->lcfg_inllen5);
+                OBD_ALLOC(mds->mds_md_name, LUSTRE_CFG_BUFLEN(lcfg, 5));
                 if (mds->mds_md_name == NULL) 
                         RETURN(rc = -ENOMEM);
 
-                memcpy(mds->mds_md_name, lcfg->lcfg_inlbuf5,
-                       lcfg->lcfg_inllen5);
+                memcpy(mds->mds_md_name, lustre_cfg_buf(lcfg, 5),
+                       LUSTRE_CFG_BUFLEN(lcfg, 5));
                 
                 rc = mds_md_connect(obd, mds->mds_md_name);
                 if (rc) {
-                        OBD_FREE(mds->mds_md_name, lcfg->lcfg_inllen5);
+                        OBD_FREE(mds->mds_md_name, LUSTRE_CFG_BUFLEN(lcfg, 5));
                         GOTO(err_ops, rc);
                 }
         }
         
         mds->mds_obd_type = MDS_MASTER_OBD;
 
-        if (lcfg->lcfg_inllen6 > 0 && lcfg->lcfg_inlbuf6 &&
-            strncmp(lcfg->lcfg_inlbuf6, "dumb", lcfg->lcfg_inllen6)) {
-                if (!memcmp(lcfg->lcfg_inlbuf6, "master", strlen("master"))) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 6) > 0 && lustre_cfg_buf(lcfg, 6) &&
+            strncmp(lustre_cfg_string(lcfg, 6), "dumb", 
+                    LUSTRE_CFG_BUFLEN(lcfg, 6))) {
+                if (!memcmp(lustre_cfg_string(lcfg, 6), "master", 
+                            strlen("master"))) {
                         mds->mds_obd_type = MDS_MASTER_OBD;
-                } else if (!memcmp(lcfg->lcfg_inlbuf6, "cache", strlen("cache"))) {
+                } else if (!memcmp(lustre_cfg_string(lcfg, 6), "cache", 
+                                   strlen("cache"))) {
                         mds->mds_obd_type = MDS_CACHE_OBD;
                 }     
         }
 
-        rc = lvfs_mount_fs(lcfg->lcfg_inlbuf1, lcfg->lcfg_inlbuf2, 
+        rc = lvfs_mount_fs(lustre_cfg_string(lcfg, 1), 
+                           lustre_cfg_string(lcfg, 2),
                            options, 0, &lvfs_ctxt);
 
         free_page(page);
@@ -3266,7 +3273,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         mds->mds_lvfs_ctxt = lvfs_ctxt;
         ll_clear_rdonly(ll_sbdev(mnt->mnt_sb));
 
-        CDEBUG(D_SUPER, "%s: mnt = %p\n", lcfg->lcfg_inlbuf1, mnt);
+        CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
         sema_init(&mds->mds_epoch_sem, 1);
         atomic_set(&mds->mds_real_clients, 0);
@@ -3293,30 +3300,34 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         
         rc = llog_start_commit_thread();
         if (rc < 0)
+
                 GOTO(err_fs, rc);
 
-        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
-            strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)) {
+
+        if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0 && lustre_cfg_buf(lcfg, 3) &&
+            strncmp(lustre_cfg_string(lcfg, 3), "dumb", 
+                    LUSTRE_CFG_BUFLEN(lcfg, 3))) {
                 class_uuid_t uuid;
 
                 generate_random_uuid(uuid);
                 class_uuid_unparse(uuid, &mds->mds_dt_uuid);
 
-                OBD_ALLOC(mds->mds_profile, lcfg->lcfg_inllen3);
+                OBD_ALLOC(mds->mds_profile, LUSTRE_CFG_BUFLEN(lcfg, 3));
                 if (mds->mds_profile == NULL)
                         GOTO(err_fs, rc = -ENOMEM);
 
-                memcpy(mds->mds_profile, lcfg->lcfg_inlbuf3,
-                       lcfg->lcfg_inllen3);
+                strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
+                        LUSTRE_CFG_BUFLEN(lcfg, 3));
         }
 
         /* 
          * setup root dir and files ID dir if lmv already connected, or there is
          * not lmv at all.
          */
-        if (mds->mds_md_exp || (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
-                                strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)))
-        {
+        if (mds->mds_md_exp || (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0 && 
+                                lustre_cfg_buf(lcfg, 3) &&
+                                strncmp(lustre_cfg_string(lcfg, 3), "dumb", 
+                                        LUSTRE_CFG_BUFLEN(lcfg, 3)))) {
                 rc = mds_fs_setup_rootid(obd);
                 if (rc)
                         GOTO(err_fs, rc);
@@ -3604,14 +3615,14 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         switch(lcfg->lcfg_command) {
         case LCFG_SET_SECURITY: {
-                if (!lcfg->lcfg_inllen1 || !lcfg->lcfg_inllen2)
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) || LUSTRE_CFG_BUFLEN(lcfg, 2))
                         GOTO(out, rc = -EINVAL);
 
-                if (!strcmp(lcfg->lcfg_inlbuf1, "mds_mds_sec"))
-                        rc = set_security(lcfg->lcfg_inlbuf2,
+                if (!strcmp(lustre_cfg_string(lcfg, 1), "mds_mds_sec"))
+                        rc = set_security(lustre_cfg_string(lcfg, 2),
                                           &mds->mds_mds_sec);
-                else if (!strcmp(lcfg->lcfg_inlbuf1, "mds_ost_sec"))
-                        rc = set_security(lcfg->lcfg_inlbuf2,
+                else if (!strcmp(lustre_cfg_string(lcfg, 2), "mds_ost_sec"))
+                        rc = set_security(lustre_cfg_string(lcfg, 2),
                                           &mds->mds_ost_sec);
                 else {
                         CERROR("Unrecognized key\n");

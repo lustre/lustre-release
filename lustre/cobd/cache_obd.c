@@ -55,43 +55,45 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 == 0 || lcfg->lcfg_inlbuf1 == NULL) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            lustre_cfg_buf(lcfg, 1) == NULL) {
                 CERROR("%s: setup requires master device name\n", 
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen2 == 0 || lcfg->lcfg_inlbuf2 == NULL) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1 ||
+            lustre_cfg_buf(lcfg, 2) == NULL) {
                 CERROR("%s: setup requires cache device name\n",
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
 
-        master = class_name2obd(lcfg->lcfg_inlbuf1);
+        master = class_name2obd(lustre_cfg_string(lcfg, 1));
         if (!master) {
                 CERROR("%s: unable to find master: %s\n",
-                       obd->obd_name, lcfg->lcfg_inlbuf1);
+                       obd->obd_name, lustre_cfg_string(lcfg, 1));
                 RETURN(-EINVAL);
         }
 
         sema_init(&cobd->sem, 1);
 
-        OBD_ALLOC(cobd->master_name, lcfg->lcfg_inllen1);
+        OBD_ALLOC(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (!cobd->master_name) 
                 RETURN(-ENOMEM);
-        memcpy(cobd->master_name, lcfg->lcfg_inlbuf1, 
-               lcfg->lcfg_inllen1);
+        memcpy(cobd->master_name, lustre_cfg_string(lcfg, 1), 
+               LUSTRE_CFG_BUFLEN(lcfg, 1));
         
-        OBD_ALLOC(cobd->cache_name, lcfg->lcfg_inllen2);
+        OBD_ALLOC(cobd->cache_name, LUSTRE_CFG_BUFLEN(lcfg, 2));
         if (!cobd->cache_name) 
                 GOTO(put_names, rc = -ENOMEM);
-        memcpy(cobd->cache_name, lcfg->lcfg_inlbuf2, 
-               lcfg->lcfg_inllen2);
+        memcpy(cobd->cache_name, lustre_cfg_string(lcfg, 2), 
+               LUSTRE_CFG_BUFLEN(lcfg, 2));
 
         EXIT;
 put_names:
         if (rc) {
-                OBD_FREE(cobd->master_name, lcfg->lcfg_inllen1);
+                OBD_FREE(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
                 cobd->master_name = NULL;
         }
         return rc;

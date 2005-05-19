@@ -1331,15 +1331,15 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("requires a TARGET OBD name\n");
                 RETURN(-EINVAL);
         }
 
-        tgt = class_name2obd(lcfg->lcfg_inlbuf1);
+        tgt = class_name2obd(lustre_cfg_string(lcfg, 1));
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("device not attached or not set up (%s)\n",
-                       lcfg->lcfg_inlbuf1);
+                       lustre_cfg_string(lcfg, 1));
                 RETURN(-EINVAL);
         }
 
@@ -1349,7 +1349,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         rc = obd_connect(&conn, tgt, &echo_uuid, NULL, FILTER_GROUP_ECHO);
         if (rc) {
-                CERROR("fail to connect to device %s\n", lcfg->lcfg_inlbuf1);
+                CERROR("fail to connect to device %s\n", lustre_cfg_string(lcfg, 1));
                 return (rc);
         }
         ec->ec_exp = class_conn2export(&conn);

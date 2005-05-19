@@ -194,24 +194,28 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
         switch (cmd) {
         case OBD_IOC_PROCESS_CFG: {
-                char *buf;
                 struct lustre_cfg *lcfg;
 
                 if (!data->ioc_plen1 || !data->ioc_pbuf1) {
                         CERROR("No config buffer passed!\n");
                         GOTO(out, err = -EINVAL);
                 }
-                err = lustre_cfg_getdata(&buf, data->ioc_plen1,
-                                         data->ioc_pbuf1, 0);
+
+                err = lustre_cfg_sanity_check(data->ioc_pbuf1,
+                                              data->ioc_plen1);
                 if (err)
                         GOTO(out, err);
-                lcfg = (struct lustre_cfg* ) buf;
+
+                OBD_ALLOC(lcfg, data->ioc_plen1);
+                err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
+                if (err)
+                        GOTO(out, err);
 
                 err = class_process_config(lcfg);
-                lustre_cfg_freedata(buf, data->ioc_plen1);
+                OBD_FREE(lcfg, data->ioc_plen1);
                 GOTO(out, err);
         }
-
+        
         case OBD_GET_VERSION:
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");

@@ -87,7 +87,9 @@ static int lllib_init(void)
 
 int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
 {
-        struct lustre_cfg lcfg;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+
         char  *peer = "MDS_PEER_UUID";
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
@@ -117,30 +119,31 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 CERROR("Can't parse NAL %s\n", nal_name);
                 RETURN(-EINVAL);
         }
-        LCFG_INIT(lcfg, LCFG_ADD_UUID, name);
-        lcfg.lcfg_nid = nid;
-        lcfg.lcfg_inllen1 = strlen(peer) + 1;
-        lcfg.lcfg_inlbuf1 = peer;
-        lcfg.lcfg_nal = nal;
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lustre_cfg_bufs_set_string(&bufs, 1, peer);
+        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
+        lcfg->lcfg_nid = nid;
+        lcfg->lcfg_nal = nal;
         err = class_process_config(&lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
-        LCFG_INIT(lcfg, LCFG_ATTACH, name);
-        lcfg.lcfg_inlbuf1 = "mdc";
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = mdc_uuid.uuid;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         err = class_process_config(&lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_del_uuid, err);
 
-        LCFG_INIT(lcfg, LCFG_SETUP, name);
-        lcfg.lcfg_inlbuf1 = g_zconf_mdsname;
-        lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = peer;
-        lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, g_zconf_mdsname);
+        lustre_cfg_bufs_set_string(&bufs, 2, peer);
+        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
         err = class_process_config(&lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
 
@@ -170,23 +173,27 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         err = obd_disconnect(exp, 0);
 
 out_cleanup:
-        LCFG_INIT(lcfg, LCFG_CLEANUP, name);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(&lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
 out_detach:
-        LCFG_INIT(lcfg, LCFG_DETACH, name);
+        lustre_cfg_bufs_reset(&bufs, name);
+        lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
         err = class_process_config(&lcfg);
+        lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
 out_del_uuid:
-        LCFG_INIT(lcfg, LCFG_DEL_UUID, name);
-        lcfg.lcfg_inllen1 = strlen(peer) + 1;
-        lcfg.lcfg_inlbuf1 = peer;
-        err = class_process_config(&lcfg);
-
+        lustre_cfg_bufs_reset(&bufs, name);
+        lustre_cfg_bufs_set_string(&bufs, 1, peer);
+        lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
 out:
         if (rc == 0)
                 rc = err;

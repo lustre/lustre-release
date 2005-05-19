@@ -1160,6 +1160,9 @@ extern void lustre_swab_llogd_body (struct llogd_body *d);
 extern void lustre_swab_llog_hdr (struct llog_log_hdr *h);
 extern void lustre_swab_llogd_conn_body (struct llogd_conn_body *d);
 
+struct lustre_cfg;
+extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
+
 static inline struct lustre_id *obdo_id(struct obdo *oa)
 {
         void *raw_id = oa->o_inline + sizeof(struct lustre_handle) +

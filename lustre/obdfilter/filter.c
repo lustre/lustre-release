@@ -1433,23 +1433,25 @@ static int filter_post_fs_setup(struct obd_device *obd)
 int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                         char *option)
 {
-        struct lustre_cfg* lcfg = buf;
+        struct lustre_cfg *lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct lvfs_obd_ctxt *lvfs_ctxt = NULL;
         struct vfsmount *mnt;
+        char *str;
         char ns_name[48];
         int rc = 0, i;
         ENTRY;
 
-
-        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+        if ((LUSTRE_CFG_BUFLEN(lcfg, 1)) < 1 || 
+            (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)) 
                 RETURN(-EINVAL);
 
-        obd->obd_fsops = fsfilt_get_ops(lcfg->lcfg_inlbuf2);
+        obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
 
-        rc = lvfs_mount_fs(lcfg->lcfg_inlbuf1, lcfg->lcfg_inlbuf2, 
+        rc = lvfs_mount_fs(lustre_cfg_string(lcfg, 1), 
+                           lustre_cfg_string(lcfg, 2), 
                            option, MS_NOATIME | MS_NODIRATIME, &lvfs_ctxt);
         if (rc) {
                 CERROR("lvfs_mount_fs failed: rc = %d\n", rc);
@@ -1460,15 +1462,16 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         mnt = lvfs_ctxt->loc_mnt;
         filter->fo_lvfs_ctxt = lvfs_ctxt;
 
-        if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
-                if (*lcfg->lcfg_inlbuf3 == 'f') {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0 && lustre_cfg_buf(lcfg, 3)) {
+                str = lustre_cfg_string(lcfg, 3);
+                if (*str == 'f') {
                         obd->obd_replayable = 1;
                         obd_sync_filter = 1;
                         CWARN("%s: recovery enabled\n", obd->obd_name);
                 } else {
-                        if (*lcfg->lcfg_inlbuf3 != 'n') {
+                        if (*str != 'n') {
                                 CERROR("unrecognised flag '%c'\n",
-                                       *lcfg->lcfg_inlbuf3);
+                                       *str);
                         }
                         // XXX Robert? Why do we get errors here
                         // GOTO(err_mntput, rc = -EINVAL);
@@ -1585,7 +1588,7 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         /* all mount options including errors=remount-ro and asyncdel are passed
          * using 4th lcfg param. And it is good, finally we have got rid of
          * hardcoded fs types in the code. */
-        rc = filter_common_setup(obd, len, buf, lcfg->lcfg_inlbuf4);
+        rc = filter_common_setup(obd, len, buf, lustre_cfg_buf(lcfg, 4));
         if (rc)
                 RETURN(rc);
         rc = filter_post_fs_setup(obd);

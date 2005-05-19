@@ -55,17 +55,17 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
         if (ptlbd->bd_import != NULL)
                 RETURN(-EALREADY);
 
-        if (lcfg->lcfg_inllen1 < 1) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("requires a PTLBD server UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (lcfg->lcfg_inllen1 > 37) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) > 37) {
                 CERROR("PTLBD server UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&ptlbd->bd_server_uuid, lcfg->lcfg_inlbuf1);
+        obd_str2uuid(&ptlbd->bd_server_uuid, lustre_cfg_string(lcfg, 1));
 
         /*
          * from client_obd_connect.. *shrug*
@@ -83,8 +83,8 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
                         "ptlbd", &ptlbd->bd_client);
         imp->imp_client = &ptlbd->bd_client;
         imp->imp_obd = obd;
-        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1,
-               lcfg->lcfg_inllen1);
+        memcpy(imp->imp_target_uuid.uuid, lustre_cfg_string(lcfg, 1),
+               LUSTRE_CFG_BUFLEN(lcfg, 1));
         ptlbd_blk_register(ptlbd);
 
         RETURN(0);

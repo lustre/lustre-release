@@ -50,39 +50,26 @@ static int class_attach(struct lustre_cfg *lcfg)
         char *typename, *name, *uuid;
         int rc, len, cleanup_phase = 0;
 
-        if (!lcfg->lcfg_inllen1 || !lcfg->lcfg_inlbuf1) {
+        if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
                 CERROR("No type passed!\n");
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_inlbuf1[lcfg->lcfg_inllen1 - 1] != 0) {
-                CERROR("Type not nul terminated!\n");
-                RETURN(-EINVAL);
-        }
-        typename = lcfg->lcfg_inlbuf1;
+        typename = lustre_cfg_string(lcfg, 1);
 
-        if (!lcfg->lcfg_dev_namelen || !lcfg->lcfg_dev_name) {
+        if (!LUSTRE_CFG_BUFLEN(lcfg, 0)) {
                 CERROR("No name passed!\n");
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_dev_name[lcfg->lcfg_dev_namelen - 1] != 0) {
-                CERROR("Name not nul terminated!\n");
-                RETURN(-EINVAL);
-        }
-        name = lcfg->lcfg_dev_name;
+        name = lustre_cfg_string(lcfg, 0);
 
-        if (!lcfg->lcfg_inllen2 || !lcfg->lcfg_inlbuf2) {
+        if (!LUSTRE_CFG_BUFLEN(lcfg, 2)) {
                 CERROR("No UUID passed!\n");
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_inlbuf2[lcfg->lcfg_inllen2 - 1] != 0) {
-                CERROR("UUID not nul terminated!\n");
-                RETURN(-EINVAL);
-        }
-        uuid = lcfg->lcfg_inlbuf2;
+        uuid = lustre_cfg_string(lcfg, 2);
 
         CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
-               MKSTR(lcfg->lcfg_inlbuf1), MKSTR(lcfg->lcfg_dev_name),
-               MKSTR(lcfg->lcfg_inlbuf2));
+               MKSTR(typename), MKSTR(name), MKSTR(uuid));
 
         /* find the type */
         type = class_get_type(typename);
@@ -274,9 +261,8 @@ static int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("Device %d not setup\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
-
-        if (lcfg->lcfg_inlbuf1) {
-                for (flag = lcfg->lcfg_inlbuf1; *flag != 0; flag++)
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) > 0) {
+                 for (flag = lustre_cfg_string(lcfg, 1); *flag != 0; flag++)
                         switch (*flag) {
                         case 'F':
                                 flags |= OBD_OPT_FORCE;
@@ -308,6 +294,7 @@ static int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         CERROR("OBD device %d (%p,%s) has refcount %d\n",
                                obd->obd_minor, obd, obd->obd_name,
                                atomic_read(&obd->obd_refcount));
+                        portals_debug_dumplog();
                         dump_exports(obd);
                         GOTO(out, err = -EBUSY);
                 }
@@ -359,15 +346,16 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct obd_import *imp;
         struct obd_uuid uuid;
-        int priority, rc;
+        int rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 <= 0 ||
-            lcfg->lcfg_inllen1 > sizeof(struct obd_uuid)) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(struct obd_uuid)) {
                 CERROR("invalid conn_uuid\n");
                 RETURN(-EINVAL);
         }
-        if (lcfg->lcfg_inllen2 != sizeof(int)) {
+
+        if (LUSTRE_CFG_BUFLEN(lcfg, 2) != sizeof(int)) {
                 CERROR("invalid priority\n");
                 RETURN(-EINVAL);
         }
@@ -383,9 +371,8 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&uuid, lcfg->lcfg_inlbuf1);
-        priority = *((int*) lcfg->lcfg_inlbuf2);
-        rc = obd_add_conn(imp, &uuid, priority);
+        obd_str2uuid(&uuid, lustre_cfg_string(lcfg, 1));
+        rc = obd_add_conn(imp, &uuid, lcfg->lcfg_num);
 
         RETURN(rc);
 }
@@ -396,11 +383,12 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         int rc;
         ENTRY;
 
-        if (lcfg->lcfg_inllen1 <= 0 ||
-            lcfg->lcfg_inllen1 > sizeof(struct obd_uuid)) {
+        if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
+            LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(struct obd_uuid)) {
                 CERROR("invalid conn_uuid\n");
                 RETURN(-EINVAL);
         }
+
         if (strcmp(obd->obd_type->typ_name, "mdc") &&
             strcmp(obd->obd_type->typ_name, "osc")) {
                 CERROR("can't add connection on non-client dev\n");
@@ -413,7 +401,7 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&uuid, lcfg->lcfg_inlbuf1);
+        obd_str2uuid(&uuid, lustre_cfg_string(lcfg, 1));
         rc = obd_del_conn(imp, &uuid);
 
         RETURN(rc);
@@ -505,38 +493,43 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_ADD_UUID: {
                 CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
-                       " (%s), nal %x\n", lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
+                       " (%s), nal %x\n", lustre_cfg_string(lcfg, 1), lcfg->lcfg_nid,
                        portals_nid2str(lcfg->lcfg_nal, lcfg->lcfg_nid, str),
                        lcfg->lcfg_nal);
 
-                err = class_add_uuid(lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
-                                     lcfg->lcfg_nal);
-                GOTO(out, err);
+               err = class_add_uuid(lustre_cfg_string(lcfg, 1), lcfg->lcfg_nid,
+                                    lcfg->lcfg_nal);
+               GOTO(out, err);
         }
         case LCFG_DEL_UUID: {
                 CDEBUG(D_IOCTL, "removing mappings for uuid %s\n",
-                       lcfg->lcfg_inlbuf1 == NULL ? "<all uuids>" :
-                       lcfg->lcfg_inlbuf1);
+                       (lcfg->lcfg_bufcount < 2 || LUSTRE_CFG_BUFLEN(lcfg, 1) == 0)
+                       ? "<all uuids>" : lustre_cfg_string(lcfg, 1));
 
-                err = class_del_uuid(lcfg->lcfg_inlbuf1);
+                err = class_del_uuid(lustre_cfg_string(lcfg, 1));
                 GOTO(out, err);
         }
         case LCFG_MOUNTOPT: {
                 CDEBUG(D_IOCTL, "mountopt: profile %s osc %s mdc %s\n",
-                       lcfg->lcfg_inlbuf1, lcfg->lcfg_inlbuf2,
-                       lcfg->lcfg_inlbuf3);
+                       lustre_cfg_string(lcfg, 1),
+                       lustre_cfg_string(lcfg, 2),
+                       lustre_cfg_string(lcfg, 3));
                 /* set these mount options somewhere, so ll_fill_super
                  * can find them. */
-                err = class_add_profile(lcfg->lcfg_inllen1, lcfg->lcfg_inlbuf1,
-                                        lcfg->lcfg_inllen2, lcfg->lcfg_inlbuf2,
-                                        lcfg->lcfg_inllen3, lcfg->lcfg_inlbuf3);
+                err = class_add_profile(LUSTRE_CFG_BUFLEN(lcfg, 1),
+                                        lustre_cfg_string(lcfg, 1),
+                                        LUSTRE_CFG_BUFLEN(lcfg, 2),
+                                        lustre_cfg_string(lcfg, 2),
+                                        LUSTRE_CFG_BUFLEN(lcfg, 3),
+                                        lustre_cfg_string(lcfg, 3));
                 GOTO(out, err);
         }
         case LCFG_DEL_MOUNTOPT: {
-                CDEBUG(D_IOCTL, "mountopt: profile %s\n", lcfg->lcfg_inlbuf1);
+                CDEBUG(D_IOCTL, "mountopt: profile %s\n",
+                       lustre_cfg_string(lcfg, 1));
                 /* set these mount options somewhere, so ll_fill_super
                  * can find them. */
-                class_del_profile(lcfg->lcfg_inlbuf1);
+                class_del_profile(lustre_cfg_string(lcfg, 1));
                 GOTO(out, err = 0);
         }
         case LCFG_SET_TIMEOUT: {
@@ -548,22 +541,24 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_SET_UPCALL: {
                 CDEBUG(D_IOCTL, "setting lustre ucpall to: %s\n",
-                       lcfg->lcfg_inlbuf1);
-                if (lcfg->lcfg_inllen1 > sizeof obd_lustre_upcall)
+                       lustre_cfg_string(lcfg, 1));
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof obd_lustre_upcall)
                         GOTO(out, err = -EINVAL);
-                memcpy(obd_lustre_upcall, lcfg->lcfg_inlbuf1,
-                       lcfg->lcfg_inllen1);
+                strncpy(obd_lustre_upcall, lustre_cfg_string(lcfg, 1),
+                        sizeof (obd_lustre_upcall));
                 GOTO(out, err = 0);
         }
         }
-
+        
         /* Commands that require a device */
-        obd = class_name2obd(lcfg->lcfg_dev_name);
+        obd = class_name2obd(lustre_cfg_string(lcfg, 0));
         if (obd == NULL) {
-                if (lcfg->lcfg_dev_name == NULL)
-                        CERROR("this lcfg command requires a device name\n");
+                if (!LUSTRE_CFG_BUFLEN(lcfg, 0))
+                        CERROR("this lcfg command %d requires a device name\n", 
+                               lcfg->lcfg_command);
                 else
-                        CERROR("no device for: %s\n", lcfg->lcfg_dev_name);
+                        CERROR("no device for: %s\n",
+                               lustre_cfg_string(lcfg, 0));
 
                 GOTO(out, err = -EINVAL);
         }
@@ -609,56 +604,51 @@ static int class_config_parse_handler(struct llog_handle * handle,
         ENTRY;
 
         if (rec->lrh_type == OBD_CFG_REC) {
-                char *buf;
-                struct lustre_cfg *lcfg;
-                char *old_name = NULL;
-                int old_len = 0;
-                char *old_uuid = NULL;
-                int old_uuid_len = 0;
+                struct lustre_cfg *lcfg, *lcfg_new;
+                struct lustre_cfg_bufs bufs;
+
                 char *inst_name = NULL;
                 int inst_len = 0;
+                int inst = 0;
 
-                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
+                lcfg = (struct lustre_cfg *)cfg_buf;
+                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
+                        lustre_swab_lustre_cfg(lcfg);
+
+                rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
                 if (rc)
                         GOTO(out, rc);
-                lcfg = (struct lustre_cfg* ) buf;
 
-                if (cfg && cfg->cfg_instance && lcfg->lcfg_dev_name) {
-                        inst_len = strlen(lcfg->lcfg_dev_name) +
-                                strlen(cfg->cfg_instance) + 2;
+                lustre_cfg_bufs_init(&bufs, lcfg);
+
+                if (cfg && cfg->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
+                        inst = 1;
+                        inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
+                                strlen(cfg->cfg_instance) + 1;
                         OBD_ALLOC(inst_name, inst_len);
                         if (inst_name == NULL)
                                 GOTO(out, rc = -ENOMEM);
-                        sprintf(inst_name, "%s-%s", lcfg->lcfg_dev_name,
+                        sprintf(inst_name, "%s-%s",
+                                lustre_cfg_string(lcfg, 0),
                                 cfg->cfg_instance);
-                        old_name = lcfg->lcfg_dev_name;
-                        old_len = lcfg->lcfg_dev_namelen;
-                        lcfg->lcfg_dev_name = inst_name;
-                        lcfg->lcfg_dev_namelen = strlen(inst_name) + 1;
-                }
+                        lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
 
+                }
                 if (cfg && lcfg->lcfg_command == LCFG_ATTACH) {
-                        old_uuid = lcfg->lcfg_inlbuf2;
-                        old_uuid_len = lcfg->lcfg_inllen2;
-
-                        lcfg->lcfg_inlbuf2 = (char*)&cfg->cfg_uuid.uuid;
-                        lcfg->lcfg_inllen2 = sizeof(cfg->cfg_uuid);
+                        lustre_cfg_bufs_set_string(&bufs, 2, cfg->cfg_uuid.uuid);
                 }
+                lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
 
-                rc = class_process_config(lcfg);
+                lcfg_new->lcfg_num   = lcfg->lcfg_num;
+                lcfg_new->lcfg_flags = lcfg->lcfg_flags;
+                lcfg_new->lcfg_nid   = lcfg->lcfg_nid;
+                lcfg_new->lcfg_nal   = lcfg->lcfg_nal;
 
-                if (old_name) {
-                        lcfg->lcfg_dev_name = old_name;
-                        lcfg->lcfg_dev_namelen = old_len;
+                rc = class_process_config(lcfg_new);
+                lustre_cfg_free(lcfg_new);
+
+                if (inst)
                         OBD_FREE(inst_name, inst_len);
-                }
-
-                if (old_uuid) {
-                        lcfg->lcfg_inlbuf2 = old_uuid;
-                        lcfg->lcfg_inllen2 = old_uuid_len;
-                }
-
-                lustre_cfg_freedata(buf, cfg_len);
         } else if (rec->lrh_type == PTL_CFG_REC) {
                 struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
                 if (pcfg->pcfg_command == NAL_CMD_REGISTER_MYNID &&
@@ -703,22 +693,21 @@ int class_config_dump_handler(struct llog_handle * handle,
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
         ENTRY;
-
         if (rec->lrh_type == OBD_CFG_REC) {
-                char *buf;
                 struct lustre_cfg *lcfg;
+                int i;
 
-                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
+                rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
                 if (rc)
                         GOTO(out, rc);
-                lcfg = (struct lustre_cfg* ) buf;
+                lcfg = (struct lustre_cfg *)cfg_buf;
 
-                CDEBUG(D_INFO, "lcfg command: 0x%x\n", lcfg->lcfg_command);
-                if (lcfg->lcfg_dev_name)
+                CDEBUG(D_INFO, "lcfg command: %x\n", lcfg->lcfg_command);
+                if (LUSTRE_CFG_BUFLEN(lcfg, 0) > 0)
                         CDEBUG(D_INFO, "     devname: %s\n",
-                               lcfg->lcfg_dev_name);
+                               lustre_cfg_string(lcfg, 0));
                 if (lcfg->lcfg_flags)
-                        CDEBUG(D_INFO, "       flags: 0x%x\n", lcfg->lcfg_flags);
+                        CDEBUG(D_INFO, "       flags: %x\n", lcfg->lcfg_flags);
                 if (lcfg->lcfg_nid)
                         CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                lcfg->lcfg_nid);
@@ -726,24 +715,13 @@ int class_config_dump_handler(struct llog_handle * handle,
                         CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_nal);
                 if (lcfg->lcfg_num)
                         CDEBUG(D_INFO, "         nal: %x\n", lcfg->lcfg_num);
-                if (lcfg->lcfg_inlbuf1)
-                        CDEBUG(D_INFO, "     inlbuf1: %s\n",lcfg->lcfg_inlbuf1);
-                if (lcfg->lcfg_inlbuf2)
-                        CDEBUG(D_INFO, "     inlbuf2: %s\n",lcfg->lcfg_inlbuf2);
-                if (lcfg->lcfg_inlbuf3)
-                        CDEBUG(D_INFO, "     inlbuf3: %s\n",lcfg->lcfg_inlbuf3);
-                if (lcfg->lcfg_inlbuf4)
-                        CDEBUG(D_INFO, "     inlbuf4: %s\n",lcfg->lcfg_inlbuf4);
-                if (lcfg->lcfg_inlbuf5)
-                        CDEBUG(D_INFO, "     inlbuf5: %s\n",lcfg->lcfg_inlbuf5);
-                if (lcfg->lcfg_inlbuf6)
-                        CDEBUG(D_INFO, "     inlbuf6: %s\n",lcfg->lcfg_inlbuf6);
-
-                lustre_cfg_freedata(buf, cfg_len);
+                for (i = 1; i < lcfg->lcfg_bufcount; i++)
+                        if (LUSTRE_CFG_BUFLEN(lcfg, i) > 0)
+                                CDEBUG(D_INFO, "     inlbuf%d: %s\n", i,
+                                       lustre_cfg_string(lcfg, i));
         } else if (rec->lrh_type == PTL_CFG_REC) {
                 struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
-
-                CDEBUG(D_INFO, "pcfg command: 0x%x\n", pcfg->pcfg_command);
+                CDEBUG(D_INFO, "pcfg command: %d\n", pcfg->pcfg_command);
                 if (pcfg->pcfg_nal)
                         CDEBUG(D_INFO, "         nal: %x\n",
                                pcfg->pcfg_nal);
@@ -754,19 +732,19 @@ int class_config_dump_handler(struct llog_handle * handle,
                         CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                pcfg->pcfg_nid);
                 if (pcfg->pcfg_nid2)
-                        CDEBUG(D_INFO, "        nid2: "LPX64"\n",
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                pcfg->pcfg_nid2);
                 if (pcfg->pcfg_nid3)
-                        CDEBUG(D_INFO, "        nid3: "LPX64"\n",
+                        CDEBUG(D_INFO, "         nid: "LPX64"\n",
                                pcfg->pcfg_nid3);
                 if (pcfg->pcfg_misc)
-                        CDEBUG(D_INFO, "        misc: %d\n",
+                        CDEBUG(D_INFO, "         nid: %d\n",
                                pcfg->pcfg_misc);
                 if (pcfg->pcfg_id)
-                        CDEBUG(D_INFO, "          id: 0x%x\n",
+                        CDEBUG(D_INFO, "          id: %x\n",
                                pcfg->pcfg_id);
                 if (pcfg->pcfg_flags)
-                        CDEBUG(D_INFO, "       flags: 0x%x\n",
+                        CDEBUG(D_INFO, "       flags: %x\n",
                                pcfg->pcfg_flags);
         } else {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);

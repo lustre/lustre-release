@@ -29,7 +29,7 @@ OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
 FSTYPE=${FSTYPE:-smfs}
-BACK_FSTYPE=${BACK_FSTYPE:-ext3}
+BACK_FSTYPE=${BACK_FSTYPE:-ldiskfs}
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
@@ -55,7 +55,7 @@ h2tcp () {
 ${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` --nettype $NETTYPE || exit 1
 
 ${LMC} -m $config --format --add mds --node $MDSNODE --mds $CACHE_MDS --fstype $FSTYPE \
---backfstype $BACK_FSTYPE --dev $FSTYPE --backdev $MDS_CACHE_DEV --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE ||exit 10
+--backfstype $BACK_FSTYPE --dev $MDS_CACHE_DEV --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE ||exit 10
 
 ${LMC} -m $config --format --add mds --node $MDSNODE --mds $MASTER_MDS --fstype $BACK_FSTYPE \
 --dev $MDS_MASTER_DEV --size $MDSSIZE || exit 10
@@ -67,8 +67,8 @@ ${LMC} -m $config --add lov --lov $MASTER_LOV --mds $MASTER_MDS \
 --stripe_sz 65536 --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
 
 ${LMC} -m $config --add ost --node $NODE --lov $CACHE_LOV \
---fstype $FSTYPE --dev $FSTYPE --backfstype $BACK_FSTYPE \
---backdev $OST_CACHE_DEV --mountfsoptions $OST_MOUNT_OPTS --size $OSTSIZE  || exit 21
+--fstype $FSTYPE --dev $OST_CACHE_DEV --backfstype $BACK_FSTYPE \
+--mountfsoptions $OST_MOUNT_OPTS --size $OSTSIZE  || exit 21
 
 ${LMC} -m $config --add ost --node $NODE --lov $MASTER_LOV \
 --fstype $BACK_FSTYPE --dev $OST_MASTER_DEV --size $OSTSIZE  || exit 21
