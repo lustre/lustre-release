@@ -1170,6 +1170,7 @@ class kmod:
 
     def load_module(self):
         """Load all the modules in the list in the order they appear."""
+        run('/sbin/modprobe portals')
         for src_dir, dev_dir, mod in self.kmodule_list:
             if mod_loaded(mod) and not config.noexec:
                 continue
@@ -1194,21 +1195,6 @@ class kmod:
         for src_dir, dev_dir, mod in rev:
             if not mod_loaded(mod) and not config.noexec:
                 continue
-            if mod == 'portals':
-                if not config.noexec:
-                    # handle modules loaded automatically, but not in config
-                    if mod_loaded("ksocknal"):
-                        log('try unloading module: ksocknal')
-                        (rc, out) = run('/sbin/rmmod ksocknal')
-                    if mod_loaded("kqswnal"):
-                        log('try unloading module: kqswnal')
-                        (rc, out) = run('/sbin/rmmod kqswnal')
-                    if mod_loaded("kptlrouter"):
-                        log('try unloading module: kptlrouter')
-                        (rc, out) = run('/sbin/rmmod kptlrouter')
-                if config.dump:
-                    # debug hack
-                    lctl.dump(config.dump)
             log('unloading module:', mod)
             (rc, out) = run('/sbin/rmmod', mod)
             if rc:
@@ -1217,6 +1203,20 @@ class kmod:
             if mod == 'ptlrpc' and not config.noexec:
                 # remove any self-ref portals created
                 lctl.unconfigure_network()
+                if config.dump:
+                    # debug hack
+                    lctl.dump(config.dump)
+                log('unloading the NALs + portals')
+                lctl.unconfigure_network()
+                run('/sbin/rmmod ksocknal')
+                run('/sbin/rmmod kqswnal')
+                run('/sbin/rmmod kgmnal')
+                run('/sbin/rmmod kopenibnal')
+                run('/sbin/rmmod kiibnal')
+                run('/sbin/rmmod kvibnal')
+                run('/sbin/rmmod kranal')
+                run('/sbin/rmmod portals')
+        run('/sbin/rmmod libcfs')
 
 # ============================================================
 # Classes to prepare and cleanup the various objects
@@ -1299,26 +1299,26 @@ class Network(Module):
                 panic("unable to set hostaddr for", self.net_type, self.hostaddr[0], self.cluster_id)
             debug("hostaddr:", self.hostaddr[0])
 
-        self.add_portals_module("libcfs", 'libcfs')
-        self.add_portals_module("portals", 'portals')
-        if node_needs_router():
-            self.add_portals_module("router", 'kptlrouter')
-        if self.net_type == 'tcp':
-            self.add_portals_module("knals/socknal", 'ksocknal')
-        if self.net_type == 'elan':
-            self.add_portals_module("knals/qswnal", 'kqswnal')
-        if self.net_type == 'gm':
-            self.add_portals_module("knals/gmnal", 'kgmnal')
-        if self.net_type == 'openib':
-            self.add_portals_module("knals/openibnal", 'kopenibnal')
-        if self.net_type == 'iib':
-            self.add_portals_module("knals/iibnal", 'kiibnal')
-        if self.net_type == 'vib':
-            self.add_portals_module("knals/vibnal", 'kvibnal')
-        if self.net_type == 'lo':
-            self.add_portals_module("knals/lonal", 'klonal')
-        if self.net_type == 'ra':
-            self.add_portals_module("knals/ranal", 'kranal')
+#        self.add_portals_module("libcfs", 'libcfs')
+#        self.add_portals_module("portals", 'portals')
+#        if node_needs_router():
+#            self.add_portals_module("router", 'kptlrouter')
+#        if self.net_type == 'tcp':
+#            self.add_portals_module("knals/socknal", 'ksocknal')
+#        if self.net_type == 'elan':
+#            self.add_portals_module("knals/qswnal", 'kqswnal')
+#        if self.net_type == 'gm':
+#            self.add_portals_module("knals/gmnal", 'kgmnal')
+#        if self.net_type == 'openib':
+#            self.add_portals_module("knals/openibnal", 'kopenibnal')
+#        if self.net_type == 'iib':
+#            self.add_portals_module("knals/iibnal", 'kiibnal')
+#        if self.net_type == 'vib':
+#            self.add_portals_module("knals/vibnal", 'kvibnal')
+#        if self.net_type == 'lo':
+#            self.add_portals_module("knals/lonal", 'klonal')
+#        if self.net_type == 'ra':
+#            self.add_portals_module("knals/ranal", 'kranal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)

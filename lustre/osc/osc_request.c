@@ -1061,27 +1061,30 @@ static void sort_brw_pages(struct brw_page *array, int num)
         } while (stride > 1);
 }
 
-/* make sure we the regions we're passing to elan don't violate its '4
- * fragments' constraint.  portal headers are a fragment, all full
- * PAGE_SIZE long pages count as 1 fragment, and each partial page
- * counts as a fragment.  I think.  see bug 934. */
-static obd_count check_elan_limit(struct brw_page *pg, obd_count pages)
+static obd_count 
+max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 {
-        int frags_left = 3;
-        int saw_whole_frag = 0;
-        int i;
+        int count = 1;
+        int offset;
 
-        for (i = 0 ; frags_left && i < pages ; pg++, i++) {
-                if (pg->count == PAGE_SIZE) {
-                        if (!saw_whole_frag) {
-                                saw_whole_frag = 1;
-                                frags_left--;
-                        }
-                } else {
-                        frags_left--;
-                }
-        }
-        return i;
+	LASSERT (pages > 0);
+        offset = pg->off & (PAGE_SIZE - 1);
+        
+	for (;;) {
+		pages--;
+		if (pages == 0)                 /* that's all */
+                        return count;
+                
+                if (offset + pg->count < PAGE_SIZE) /* doesn't end on page boundary */
+			return count;
+		
+		pg++;
+                offset = pg->off & (PAGE_SIZE - 1);
+		if (offset != 0)                /* doesn't start on page boundary */
+			return count;
+		
+		count++;
+	}
 }
 
 static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -1110,7 +1113,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                         pages_per_brw = page_count;
 
                 sort_brw_pages(pga, pages_per_brw);
-                pages_per_brw = check_elan_limit(pga, pages_per_brw);
+                pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
@@ -1150,7 +1153,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                         pages_per_brw = page_count;
 
                 sort_brw_pages(pga, pages_per_brw);
-                pages_per_brw = check_elan_limit(pga, pages_per_brw);
+                pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
                 rc = async_internal(cmd, exp, oa, md, pages_per_brw, pga, set);
 
