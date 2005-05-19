@@ -149,6 +149,7 @@ if [ $1 = 0 -a -f /etc/init.d/lustre ] ; then
 	/sbin/chkconfig --del lustre
 	/sbin/chkconfig --del lustrefs
 fi
+rm -f %{_libdir}/lustre/python/Lustre/*.pyc
 
 %post modules
 if [ ! -e /dev/obd ]; then
