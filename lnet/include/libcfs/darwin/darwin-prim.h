@@ -514,7 +514,7 @@ struct __dummy_ ## name ## _struct {}
 #define MODULE_PARM_DESC(a, b)
 
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE (2*200+5*10+0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
 #define NR_IRQS				512
 #define in_interrupt()			(0)

@@ -236,19 +236,32 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif /* !1 */
 #else /* !__KERNEL__ */
-#define CDEBUG(mask, format, a...)      do { } while (0)
-#define LCONSOLE(mask, format, a...)    fprintf(stderr, format, ## a)
-#define CWARN(format, a...)             fprintf(stderr, format, ## a)
-#define CERROR(format, a...)            fprintf(stderr, format, ## a)
-#define CEMERG(format, a...)            fprintf(stderr, format, ## a)
-#define LCONSOLE_INFO(format, a...)     fprintf(stderr, format, ## a)
-#define LCONSOLE_WARN(format, a...)     fprintf(stderr, format, ## a)
-#define LCONSOLE_ERROR(format, a...)    fprintf(stderr, format, ## a)
-#define LCONSOLE_EMERG(format, a...)    fprintf(stderr, format, ## a)
+
+#define CDEBUG(mask, format, a...)                                      \
+do {                                                                    \
+        if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||   \
+            (portal_debug & (mask) &&                                   \
+             portal_subsystem_debug & DEBUG_SUBSYSTEM))                 \
+                fprintf(stderr, "(%s:%d:%s()) " format,                 \
+                                  __FILE__, __LINE__, __FUNCTION__,     \
+                                 ## a);                                 \
+} while (0)
+
+#define CWARN(format, a...)             CDEBUG(D_WARNING, format, ## a)
+#define CERROR(format, a...)            CDEBUG(D_ERROR, format, ## a)
+#define CEMERG(format, a...)            CDEBUG(D_EMERG, format, ## a)
+
+#define LCONSOLE(mask, format, a...)    CDEBUG(D_CONSOLE | (mask), format, ## a)
+#define LCONSOLE_INFO(format, a...)     CDEBUG(D_CONSOLE, format, ## a)
+#define LCONSOLE_WARN(format, a...)     CDEBUG(D_CONSOLE | D_WARNING, format, ## a)
+#define LCONSOLE_ERROR(format, a...)    CDEBUG(D_CONSOLE | D_ERROR, format, ## a)
+#define LCONSOLE_EMERG(format, a...)    CDEBUG(D_CONSOLE | D_EMERG, format, ## a)
+
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)
 #define EXIT                            do { } while (0)
+
 #endif /* !__KERNEL__ */
 
 #define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
