@@ -164,6 +164,13 @@ libcfs_ip_addr2str(__u32 addr, char *str)
                  (addr >> 8) & 0xff, addr & 0xff);
 }
 
+/* CAVEAT EMPTOR XscanfX
+ * I use "%n" at the end of a sscanf format to detect trailing junk.  However
+ * sscanf may return immediately if it sees the terminating '0' in a string, so
+ * I initialise the %n variable to the expected length.  If sscanf sets it;
+ * fine, if it doesn't, then the scan ended at the end of the string, which is
+ * fine too :) */
+
 int
 libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
 {
@@ -171,7 +178,7 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
         int   b;
         int   c;
         int   d;
-        int   n;
+        int   n = nob;                          /* XscanfX */
 
         /* numeric IP? */
         if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) >= 4 &&
@@ -221,7 +228,7 @@ int
 libcfs_num_str2addr(char *str, int nob, __u32 *addr)
 {
         __u32   a;
-        int     n;
+        int     n = nob;
         
         if (sscanf(str, "%u%n", &a, &n) < 1 ||
             n != nob)
@@ -349,9 +356,9 @@ static struct nalstrfns *
 libcfs_str2net_internal(char *str, __u32 *net)
 {
         struct nalstrfns *nf;
-        int             nob;
-        int             netnum;
-        int             i;
+        int               nob;
+        int               netnum;
+        unsigned int      i;
 
         for (i = 0; i < libcfs_nnalstrfns; i++) {
                 nf = &libcfs_nalstrfns[i];
@@ -359,19 +366,26 @@ libcfs_str2net_internal(char *str, __u32 *net)
                 if (!strncmp(str, nf->nf_name, strlen(nf->nf_name)))
                         break;
         }
-        if (i == libcfs_nnalstrfns)
+        if (i == libcfs_nnalstrfns) {
+                CWARN("No base: %s\n", str);
                 return NULL;
-
+        }
+        
         nob = strlen(nf->nf_name);
 
-        if (strlen(str) == nob)
+        if (strlen(str) == nob) {
                 netnum = 0;
-        else if (nf->nf_nal == LONAL || /* net number not allowed */
-                 sscanf(str + nob, "%u%n", &netnum, &i) < 1 ||
-                 i != strlen(str + nob) ||
-                 (netnum & ~0xffff) != 0)
-                return NULL;
-
+        } else {
+                if (nf->nf_nal == LONAL) /* net number not allowed */
+                        return NULL;
+          
+                str += nob;
+                i = strlen(str);
+                if (sscanf(str, "%u%n", &netnum, &i) < 1 ||
+                    i != strlen(str))
+                        return NULL;
+        }
+        
         *net = PTL_MKNET(nf->nf_nal, netnum);
         return nf;
 }
@@ -462,14 +476,10 @@ libcfs_str2nid(char *str)
 {
         long long nid;
         long long mask;
-        int       n;
+        int       n = strlen(str);
         
         if (sscanf(str,"%llx%n", &nid, &n) >= 1 &&
             n == strlen(str))
-                goto out;
-        
-        if (sscanf(str,"%llu%n", &nid, &n) >= 1 &&
-            n = strlen(str))
                 goto out;
         
         return PTL_NID_ANY;
