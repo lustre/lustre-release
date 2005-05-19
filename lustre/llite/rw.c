@@ -40,7 +40,6 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
-#include <linux/crc32.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

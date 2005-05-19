@@ -36,7 +36,6 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <linux/module.h>
-#include <linux/crc32.h>
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>

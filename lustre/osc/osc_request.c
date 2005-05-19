@@ -44,7 +44,6 @@
 # else
 #  include <linux/locks.h>
 # endif
-# include <linux/crc32.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
 #endif

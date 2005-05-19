@@ -206,6 +206,38 @@ do {                                                                         \
        }                                                                     \
 } while(0)
 
+/* Prefer the kernel's version, if it exports it, because it might be
+ * optimized for this CPU. */
+#if defined(__KERNEL__) && (defined(CONFIG_CRC32) || defined(CONFIG_CRC32_MODULE))
+# include <linux/crc32.h>
+#else
+/* crc32_le lifted from the Linux kernel, which had the following to say:
+ *
+ * This code is in the public domain; copyright abandoned.
+ * Liability for non-performance of this code is limited to the amount
+ * you paid for it.  Since it is distributed for free, your refund will
+ * be very very small.  If it breaks, you get to keep both pieces.
+ */
+#define CRCPOLY_LE 0xedb88320
+/**
+ * crc32_le() - Calculate bitwise little-endian Ethernet AUTODIN II CRC32
+ * @crc - seed value for computation.  ~0 for Ethernet, sometimes 0 for
+ *        other uses, or the previous crc32 value if computing incrementally.
+ * @p   - pointer to buffer over which CRC is run
+ * @len - length of buffer @p
+ */
+static inline __u32 crc32_le(__u32 crc, unsigned char const *p, size_t len)
+{
+        int i;
+        while (len--) {
+                crc ^= *p++;
+                for (i = 0; i < 8; i++)
+                        crc = (crc >> 1) ^ ((crc & 1) ? CRCPOLY_LE : 0);
+        }
+        return crc;
+}
+#endif
+
 #ifdef __KERNEL__
 /* The idea here is to synchronise two threads to force a race. The
  * first thread that calls this with a matching fail_loc is put to
