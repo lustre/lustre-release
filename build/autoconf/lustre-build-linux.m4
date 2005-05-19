@@ -327,7 +327,7 @@ if test "x$ARCH_UM" = "x" ; then
 fi
 ])
 
-LB_LINUX_CONFIG_BIG_STACK
+#LB_LINUX_CONFIG_BIG_STACK
 
 # Portals tests
 LP_PROG_LINUX
