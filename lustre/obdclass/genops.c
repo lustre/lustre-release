@@ -1001,7 +1001,7 @@ void ping_evictor_fail_export(struct obd_export *exp)
 {
         int rc, already_failed;
         unsigned long flags;
-
+        
         spin_lock_irqsave(&exp->exp_lock, flags);
         already_failed = exp->exp_failed;
         exp->exp_failed = 1;
@@ -1073,13 +1073,29 @@ static int ping_evictor_main(void *arg)
                         spin_unlock(&obd->obd_dev_lock);
 
                         if (expire_time > exp->exp_last_request_time) {
+                                char ipbuf[PTL_NALFMT_SIZE];
+                                struct ptlrpc_peer *peer;
+                                
+                                peer = exp->exp_connection 
+                                        ? &exp->exp_connection->c_peer
+                                        : NULL;
+                                
+                                if (peer && peer->peer_ni) {
+                                        portals_nid2str(peer->peer_ni->pni_number,
+                                                        peer->peer_id.nid,
+                                                        ipbuf);
+                                }
+                                
                                 LCONSOLE_WARN("%s hasn't heard from %s in %ld "
                                               "seconds.  I think it's dead, "
                                               "and I am evicting it.\n",
                                               obd->obd_name,
-                                              exp->exp_client_uuid.uuid,
+                                              (peer && peer->peer_ni)
+                                              ? ipbuf
+                                              : (char *)exp->exp_client_uuid.uuid,
                                               (long)(CURRENT_SECONDS - 
-                                              exp->exp_last_request_time));
+                                                     exp->exp_last_request_time));
+                                
                                 ping_evictor_fail_export(exp);
                         } else {
                                 /* List is sorted, so everyone below is ok */
