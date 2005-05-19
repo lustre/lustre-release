@@ -380,6 +380,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 spin_lock_init(&med->med_open_lock);
 
                 mcd = NULL;
+                exp->exp_connected = 0;
                 exp->exp_req_replay_needed = 1;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;

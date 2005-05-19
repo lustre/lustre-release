@@ -298,12 +298,27 @@ static int import_select_connection(struct obd_import *imp)
         RETURN(0);
 }
 
-
+/*
+ * must be called under imp_lock
+ */
+int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
+{
+        struct ptlrpc_request *req;
+        struct list_head *tmp;
+        
+        if (list_empty(&imp->imp_replay_list))
+                return 0;
+        tmp = imp->imp_replay_list.next;
+        req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
+        *transno = req->rq_transno;
+        return 1;
+}
 
 int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
+        int set_transno = 0;
         int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
@@ -350,6 +365,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 imp->imp_conn_cnt++;
         }
 
+        set_transno = ptlrpc_first_transno(imp, &imp->imp_connect_data.transno);
 
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
@@ -399,6 +415,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                                         MSG_CONNECT_INITIAL);
                 imp->imp_replayable = 1; 
         }
+        if (set_transno)
+                lustre_msg_add_op_flags(request->rq_reqmsg, 
+                                        MSG_CONNECT_TRANSNO);
         
         imp->imp_reqs_replayed = imp->imp_locks_replayed = 0;
 

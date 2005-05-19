@@ -86,6 +86,7 @@ struct obd_export {
         int                       exp_failed:1,
                                   exp_req_replay_needed:1,
                                   exp_lock_replay_needed:1,
+                                  exp_connected:1,
                                   exp_libclient:1, /* liblustre client? */
                                   exp_sync:1;
         union {

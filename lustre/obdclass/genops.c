@@ -499,6 +499,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
         export->exp_obd->obd_num_exports++;
         spin_unlock(&obd->obd_dev_lock);
+        export->exp_connected = 1;
         obd_init_export(export);
         return export;
 }

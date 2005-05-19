@@ -225,6 +225,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
 #define MSG_CONNECT_ASYNC       0x40
+#define MSG_CONNECT_TRANSNO     0X80    /* report transno */
 
 /* Connect flags */
 
@@ -243,7 +244,8 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 struct obd_connect_data {
         __u64 ocd_connect_flags;
         __u32 ocd_nllu[2];
-        __u64 padding[6];
+        __u64 transno;          /* first transno from client to be replayed */
+        __u64 padding[5];
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
