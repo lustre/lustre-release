@@ -250,7 +250,7 @@ int mds_md_disconnect(struct obd_device *obd, int flags);
 int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
                          int, int);
 int mds_md_get_attr(struct obd_device *, struct inode *, struct mea **, int *);
-int mds_choose_mdsnum(struct obd_device *, const char *, int, int);
+int mds_choose_mdsnum(struct obd_device *, const char *, int, int, struct ptlrpc_peer *, struct inode *);
 int mds_md_postsetup(struct obd_device *);
 int mds_splitting_expected(struct obd_device *, struct dentry *);
 int mds_lock_slave_objs(struct obd_device *, struct dentry *,

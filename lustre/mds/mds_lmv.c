@@ -41,6 +41,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_lite.h>
+#include <asm/div64.h>
 
 #include "mds_internal.h"
 
@@ -915,14 +916,28 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int flags)
+int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int flags,
+                        struct ptlrpc_peer *peer, struct inode *parent)
 {
-        struct lmv_obd *lmv;
         struct mds_obd *mds = &obd->u.mds;
+        struct lmv_obd *lmv;
         int i = mds->mds_num;
-
+        char peer_str[PTL_NALFMT_SIZE];
         if (flags & REC_REINT_CREATE) { 
                 i = mds->mds_num;
+        } else if (mds->mds_md_exp != NULL && peer != NULL) {
+                LASSERT(parent != NULL);
+                /* distribute only at root level */
+                lmv = &mds->mds_md_exp->exp_obd->u.lmv;
+                if (parent->i_ino != id_ino(&mds->mds_rootid)) {
+                        i = mds->mds_num;
+                } else {
+                        __u64 nid = peer->peer_id.nid;
+                        __u64 count = lmv->desc.ld_tgt_count;
+                        i = do_div(nid, count);
+                        CWARN("client from %s creates top dir %*s on mds #%d\n",
+                              ptlrpc_peernid2str(peer, peer_str), len, name, i);
+                }
         } else if (mds->mds_md_exp) {
                 lmv = &mds->mds_md_exp->exp_obd->u.lmv;
                 i = raw_name2idx(MEA_MAGIC_LAST_CHAR, lmv->desc.ld_tgt_count, name, len);

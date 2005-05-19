@@ -800,7 +800,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                  * new directory's inode in.
                  */
                 i = mds_choose_mdsnum(obd, rec->ur_name, rec->ur_namelen - 1, 
-                                      rec->ur_flags);
+                                      rec->ur_flags, &req->rq_peer, dir);
                 if (i == mds->mds_num) {
                         /* inode will be created locally */
                         handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
