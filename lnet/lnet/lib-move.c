@@ -30,6 +30,10 @@ static int allow_destination_aliases = 0;
 CFS_MODULE_PARM(allow_destination_aliases, "i", int, 0644,
                 "Boolean: don't require strict destination NIDs");
 
+static int implicit_loopback = 1;
+CFS_MODULE_PARM(implicit_loopback, "i", int, 0644,
+                "Boolean: allow destination aliases when sending to yourself");
+
 /* forward ref */
 static void ptl_commit_md (ptl_libmd_t *md, ptl_msg_t *msg);
 
@@ -587,16 +591,15 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                 return PTL_FAIL;
         }
 
-        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL) {
-                if (target.nid != ni->ni_nid) {
-                        /* will gateway have to forward? */
-                        routing = (gw_nid != ni->ni_nid);
-                } else if (allow_destination_aliases) {
-                        /* it's for me (force lonal) */
+        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL) {
+                if (gw_nid != ni->ni_nid) {         /* it's not for me */
+                        routing = gw_nid != target.nid; /* will gateway have to forward? */
+                } else if (allow_destination_aliases || /* force lonal? */
+                           implicit_loopback) {
                         ptl_ni_addref(ptl_loni);
                         ptl_ni_decref(ni);
                         ni = ptl_loni;
-                } else {
+                } else {                        /* barf */
                         ptl_ni_decref(ni);
                         CERROR("Attempt to send to self via %s, not LONAL\n",
                                libcfs_nid2str(target.nid));
@@ -615,8 +618,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
                 msg->msg_ev.initiator.nid = ni->ni_nid;
                 
-        if (routing)
-                target.nid = gw_nid;
+        target.nid = gw_nid;
         
         if (len == 0)
                 rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, 
@@ -1045,8 +1047,8 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
         dest_nid = le64_to_cpu(hdr->dest_nid);
         if (dest_nid != ni->ni_nid) {
 
-                if (!ptl_islocalnid(dest_nid))
-                        return PTL_IFACE_DUP;
+                if (!ptl_islocalnid(dest_nid))  /* tell NAL to use the router */
+                        return PTL_IFACE_DUP;   /* to forward */
 
                 /* dest_nid is one of my NIs */
                 

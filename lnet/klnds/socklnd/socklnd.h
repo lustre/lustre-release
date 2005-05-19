@@ -518,7 +518,7 @@ extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
 extern int ksocknal_close_matching_conns (ptl_nid_t nid, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
-extern void ksocknal_tx_done (ksock_tx_t *tx, int asynch);
+extern void ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch);
 extern void ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
 extern void ksocknal_fmb_callback (ptl_ni_t *ni, void *arg, int error);
 extern void ksocknal_notify (ptl_ni_t *ni, ptl_nid_t gw_nid, int alive);

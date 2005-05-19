@@ -360,7 +360,7 @@ ksocknal_zc_callback (zccd_t *zcd)
 #endif
 
 void
-ksocknal_tx_done (ksock_tx_t *tx, int asynch)
+ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 {
         ksock_ltx_t   *ltx;
         ENTRY;
@@ -378,7 +378,7 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         }
 
         if (tx->tx_isfwd) {             /* was a forwarded packet? */
-                kpr_fwd_done (tx->tx_conn->ksnc_peer->ksnp_ni,
+                kpr_fwd_done (peer->ksnp_ni,
                               KSOCK_TX_2_KPR_FWD_DESC (tx), 
                               (tx->tx_resid == 0) ? 0 : -ECONNABORTED);
                 EXIT;
@@ -388,7 +388,7 @@ ksocknal_tx_done (ksock_tx_t *tx, int asynch)
         /* local send */
         ltx = KSOCK_TX_2_KSOCK_LTX (tx);
 
-        ptl_finalize (tx->tx_conn->ksnc_peer->ksnp_ni, 
+        ptl_finalize (peer->ksnp_ni, 
                       ltx->ltx_private, ltx->ltx_cookie,
                       (tx->tx_resid == 0) ? PTL_OK : PTL_FAIL);
 
@@ -415,7 +415,7 @@ ksocknal_tx_launched (ksock_tx_t *tx)
 #endif
         /* Any zero-copy-ness (if any) has completed; I can complete the
          * transmit now, avoiding an extra schedule */
-        ksocknal_tx_done (tx, 0);
+        ksocknal_tx_done (tx->tx_conn->ksnc_peer, tx, 0);
 }
 
 int
@@ -682,7 +682,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
 }
 
 int
-ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid, int routing)
+ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
 {
         unsigned long     flags;
         ksock_peer_t     *peer;
@@ -798,7 +798,6 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
                  ptl_hdr_t       *hdr, 
                  int              type, 
                  ptl_process_id_t target,
-                 int              routing,
                  unsigned int     payload_niov, 
                  struct iovec    *payload_iov, 
                  ptl_kiov_t      *payload_kiov,
@@ -880,7 +879,7 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
                                          payload_offset, payload_nob);
         }
 
-        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target.nid, routing);
+        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target.nid);
         if (rc == 0)
                 return (PTL_OK);
         
@@ -895,7 +894,7 @@ ksocknal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, tgt, routing,
+                                 hdr, type, tgt,
                                  payload_niov, payload_iov, NULL,
                                  payload_offset, payload_len));
 }
@@ -907,7 +906,7 @@ ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                      size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, tgt, routing,
+                                 hdr, type, tgt,
                                  payload_niov, NULL, payload_kiov,
                                  payload_offset, payload_len));
 }
@@ -917,16 +916,11 @@ ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
 {
         ptl_nid_t     nid = fwd->kprfd_gateway_nid;
         ksock_ftx_t  *ftx = (ksock_ftx_t *)&fwd->kprfd_scratch;
-        int           routing;
         int           rc;
         
         CDEBUG (D_NET, "Forwarding [%p] -> %s (%s))\n", fwd,
                 libcfs_nid2str(fwd->kprfd_gateway_nid), 
                 libcfs_nid2str(fwd->kprfd_target_nid));
-
-        routing = (nid != ni->ni_nid);
-        if (!routing)
-                nid = fwd->kprfd_target_nid;
 
         /* setup iov for hdr */
         ftx->ftx_iov.iov_base = fwd->kprfd_hdr;
@@ -939,7 +933,7 @@ ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         ftx->ftx_tx.tx_nkiov = fwd->kprfd_niov;
         ftx->ftx_tx.tx_kiov  = fwd->kprfd_kiov;
 
-        rc = ksocknal_launch_packet (ni, &ftx->ftx_tx, nid, routing);
+        rc = ksocknal_launch_packet (ni, &ftx->ftx_tx, nid);
         if (rc != 0)
                 kpr_fwd_done (ni, fwd, rc);
 }
@@ -1593,7 +1587,7 @@ int ksocknal_scheduler (void *arg)
                         list_del (&tx->tx_list);
                         spin_unlock_irqrestore (&sched->kss_lock, flags);
 
-                        ksocknal_tx_done (tx, 1);
+                        ksocknal_tx_done (tx->tx_conn->ksnc_peer, tx, 1);
 
                         spin_lock_irqsave (&sched->kss_lock, flags);
                 }
@@ -2055,7 +2049,7 @@ ksocknal_connect (ksock_route_t *route)
 
                 list_del (&tx->tx_list);
                 /* complete now */
-                ksocknal_tx_done (tx, 0);
+                ksocknal_tx_done (peer, tx, 0);
         }
 }
 

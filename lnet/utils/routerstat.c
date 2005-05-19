@@ -75,7 +75,7 @@ do_stat (int fd)
       else
 	  errors = new_errors - old_errors;
       
-      printf ("%9llu bytes (%7.2fMb/s), %7llu packets (sz %5lld, %5lld/s), %llu errors (%lld/s)", 
+      printf ("%9llu bytes (%7.2fMb/s), %7llu packets (sz %5lld, %5.0f/s), %llu errors (%0.0f/s)", 
 	      bytes, ((double)bytes)/((1<<20) * t),
 	      packets, (packets == 0) ? 0LL : bytes/packets, packets/t,
 	      errors, errors/t);
@@ -103,7 +103,7 @@ int main (int argc, char **argv)
    if (argc > 1)
       interval = atoi (argv[1]);
 
-   fd = open ("/proc/sys/portals/router", O_RDONLY);
+   fd = open ("/proc/sys/portals/router_stats", O_RDONLY);
    if (fd < 0)
    {
       fprintf (stderr, "Can't open stat: %s\n", strerror (errno));

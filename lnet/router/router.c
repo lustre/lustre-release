@@ -238,8 +238,9 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
         ptl_ni_t            *gwni = NULL;
         ptl_ni_t            *tmpni = NULL;
         kpr_gateway_entry_t *ge = NULL;
-	int                  rc = -ENOENT;
         __u32                target_net = PTL_NIDNET(target_nid);
+
+        /* Return the NID I must send to, to reach 'target_nid' */
         
         CDEBUG (D_NET, "lookup "LPX64" from %s\n", target_nid, 
                 (ni == NULL) ? "<>" : libcfs_nid2str(ni->ni_nid));
@@ -248,15 +249,15 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
                 gwni = ptl_net2ni(target_net);  /* is it a local network? */
                 if (gwni != NULL) {
                         *nip = gwni;
-                        return gwni->ni_nid;
+                        return target_nid;
                 }
-        } else if (target_net == PTL_NIDNET(ni->ni_nid)) {
-                /* Caller wants to know if 'target_nid' can be reached via a
-                 * gateway ON HER OWN NETWORK */
-                ptl_ni_addref(ni); /* extra ref so caller can drop blindly */
-                return ni->ni_nid;
+        } else {                                /* ni already determined */
+                if (target_net == PTL_NIDNET(ni->ni_nid)) {
+                        ptl_ni_addref(ni);      /* extra ref so caller can drop blindly */
+                        return target_nid;
+                }
         }
-
+        
         CDEBUG(D_NET, "%s from %s\n", libcfs_nid2str(target_nid),
                (ni == NULL) ? "<none>" : libcfs_nid2str(ni->ni_nid));
 
@@ -347,7 +348,7 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
 
         LASSERT ((gwni == NULL) != (ni == NULL));
 
-        if (gwni == NULL)
+        if (ni != NULL)
                 ptl_ni_addref(ni);              /* extra ref so caller can drop blindly */
         else
                 *nip = gwni;                    /* already got a ref */
@@ -401,7 +402,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 if (dst_ni->ni_nal->nal_fwd == NULL)
                         goto failed;
 
-                fwd->kprfd_gateway_nid = dst_ni->ni_nid;
+                fwd->kprfd_gateway_nid = target_nid;
                 atomic_inc (&kpr_state.kpr_queue_depth);
 
                 read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);

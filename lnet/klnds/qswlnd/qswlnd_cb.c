@@ -1312,9 +1312,6 @@ kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         if (ktx == NULL)        /* can't get txd right now */
                 return;         /* fwd will be scheduled when tx desc freed */
 
-        if (nid == ni->ni_nid)                  /* gateway is me */
-                nid = fwd->kprfd_target_nid;    /* target is final dest */
-
         /* copy hdr into pre-mapped buffer */
         memcpy(ktx->ktx_buffer, fwd->kprfd_hdr, sizeof(ptl_hdr_t));
 
