@@ -2491,7 +2491,7 @@ log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
 	rm -rf $DIR/[Rdfs][1-9]*
 	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error
+		sh llmountcleanup.sh || error "llmountcleanup failed"
 	fi
 fi
 
