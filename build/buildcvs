@@ -1,7 +1,7 @@
 # This file is sourced by lustre/lustrecvs
 
 portalstag="HEAD"
-libsysiotag="LIBSYSIO_HEAD_20040809"
+libsysiotag="HEAD"
 
 export LC_COLLATE=C
 
@@ -24,10 +24,6 @@ case "$lustretag" in
 
     b_cmd*)
     	portalstag="$lustretag"
-	;;
-
-    b_cray*)
-	libsysiotag="LIBSYSIO_HEAD_20041101"
 	;;
 
     b1_4_newconfig)	
