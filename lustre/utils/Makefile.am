@@ -3,7 +3,7 @@
 SUBDIRS = Lustre
 
 AM_CFLAGS=$(LLCFLAGS)
-AM_CPPFLAGS=$(LLCPPFLAGS)
+AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 
 LIBPTLCTL := $(top_builddir)/portals/utils/libptlctl.a
 
