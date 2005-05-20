@@ -80,12 +80,16 @@ PREPEND(__, SYSIO_INTERFACE_NAME(xmknod))(int __ver,
 	}
 
 	/*
-	 * Support only character-special and fifos right now.
+	 * Support only regular, character-special and fifos right now.
+	 * (mode & S_IFMT) == 0 is the same as S_IFREG.
 	 */
-	if (!(S_ISCHR(mode) || S_ISFIFO(mode))) {
+	if ((mode & S_IFMT) &&
+	    !(S_ISREG(mode) || S_ISCHR(mode) || S_ISFIFO(mode))) {
 		err = -EINVAL;
 		goto out;
 	}
+
+	mode &= ~(_sysio_umask & 0777);	/* apply umask */
 
 	INTENT_INIT(&intent, INT_CREAT, &mode, NULL);
 	err = _sysio_namei(_sysio_cwd, path, ND_NEGOK, &intent, &pno);

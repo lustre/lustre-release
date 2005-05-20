@@ -76,6 +76,8 @@ SYSIO_INTERFACE_NAME(mkdir)(const char *path, mode_t mode)
 		err = -EROFS;
 		goto error;
 	}
+	mode |= S_IFDIR;
+	mode &= ~(_sysio_umask & 0777); /* apply umask */
 	err = (*pno->p_parent->p_base->pb_ino->i_ops.inop_mkdir)(pno, mode);
 error:
 	P_RELE(pno);
