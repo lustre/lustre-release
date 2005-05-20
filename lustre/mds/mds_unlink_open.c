@@ -100,6 +100,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         ENTRY;
 
         LASSERT(mds->mds_dt_obd != NULL);
+        LASSERT(obd->obd_recovering == 0);
 
         /* We don't need to do any of these other things for orhpan dirs,
          * especially not mds_get_md (may get a default LOV EA, bug 4554) */
@@ -174,6 +175,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         int rc = 0, item = 0, namlen;
         ENTRY;
 
+        LASSERT(obd->obd_recovering == 0);
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = dget(mds->mds_pending_dir);
         if (IS_ERR(dentry))
