@@ -50,7 +50,7 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
         }
 
         S2SMI(sb)->smsi_logs_dir = dentry;
-        SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
+        //SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
         
         dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
@@ -61,7 +61,7 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
         }
 
         S2SMI(sb)->smsi_objects_dir = dentry;
-        SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
+        //SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
 
         /* write log will not write to KML, cleanup kml flags */
         //SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_objects_dir->d_inode);

@@ -41,61 +41,63 @@
 
 static void smfs_init_inode_info(struct inode *inode, void *opaque)
 {
-        if (!I2SMI(inode)) {
-                struct inode *cache_inode = NULL;
-                struct smfs_iget_args *sargs = opaque;
-                unsigned long ino;
+        
+        struct inode *cache_inode = NULL;
+        struct smfs_iget_args *sargs = opaque;
+        unsigned long ino;
 
-                /* getting backing fs inode. */
-                LASSERT(sargs);
-                ino = inode->i_ino;
-                cache_inode = iget(S2CSB(inode->i_sb), ino); 
-                
-                OBD_ALLOC(inode->u.generic_ip,
-                          sizeof(struct smfs_inode_info));
+        LASSERTF((!I2SMI(inode)), "Inode %lu already has smfs_inode_info %p \n",
+                 inode->i_ino, I2SMI(inode));
+        /* getting backing fs inode. */
+        LASSERT(sargs);
+        ino = inode->i_ino;
+        cache_inode = iget(S2CSB(inode->i_sb), ino); 
         
-                LASSERT(inode->u.generic_ip);
-                      
-                I2CI(inode) = cache_inode;
-        
-                CDEBUG(D_INODE, "cache_inode %lu i_count %d\n",
-                       cache_inode->i_ino, atomic_read(&cache_inode->i_count));
-        
-                post_smfs_inode(inode, cache_inode);
-                sm_set_inode_ops(cache_inode, inode);
-                //iopen stuff
-                if (ino == SMFS_IOPEN_INO) {
-                        inode->i_op = &smfs_iopen_iops;
-                        inode->i_fop = &smfs_iopen_fops;
-                }
-                //inherit parent inode flags
-                if (sargs->s_inode) 
-                        I2SMI(inode)->smi_flags = I2SMI(sargs->s_inode)->smi_flags;
-                
-        } else
-                LBUG();
+        OBD_ALLOC(inode->u.generic_ip,
+                  sizeof(struct smfs_inode_info));
+
+        LASSERT(inode->u.generic_ip);
+              
+        I2CI(inode) = cache_inode;
+
+        CDEBUG(D_INODE, "cache_inode %lu i_count %d\n",
+               cache_inode->i_ino, atomic_read(&cache_inode->i_count));
+
+        post_smfs_inode(inode, cache_inode);
+        sm_set_inode_ops(cache_inode, inode);
+        //iopen stuff
+        if (ino == SMFS_IOPEN_INO) {
+                inode->i_op = &smfs_iopen_iops;
+                inode->i_fop = &smfs_iopen_fops;
+        }
+        //inherit parent inode flags
+        if (sargs->s_inode) { 
+                I2SMI(inode)->smi_flags = I2SMI(sargs->s_inode)->smi_flags;
+                CDEBUG(D_INODE, "set inode %lu flags %d\n", inode->i_ino,
+                      I2SMI(inode)->smi_flags);
+        } 
 }
 
 static void smfs_clear_inode_info(struct inode *inode)
 {
-        if (I2SMI(inode)) {
-                struct inode *cache_inode = I2CI(inode);
+        
+        struct inode *cache_inode = I2CI(inode);
+        
+        LASSERTF(I2SMI(inode), "Inode %lu smfs_inode_info\n",
+                 inode->i_ino);
 
-                CDEBUG(D_INODE, "Clear_info: inode %p\n",
-                       cache_inode);
+        CDEBUG(D_INODE, "Clear_info: inode %p\n", cache_inode);
 
-                LASSERTF(((atomic_read(&cache_inode->i_count) == 1) || 
-                          cache_inode == cache_inode->i_sb->s_root->d_inode),
-                         "inode %p cache inode %p #%lu i_count %d != 1 \n", 
-                         inode, cache_inode, cache_inode->i_ino, 
-                         atomic_read(&cache_inode->i_count));
+        LASSERTF(((atomic_read(&cache_inode->i_count) == 1) || 
+                   cache_inode == cache_inode->i_sb->s_root->d_inode),
+                   "inode %p cache inode %p #%lu i_count %d != 1 \n", 
+                   inode, cache_inode, cache_inode->i_ino, 
+                   atomic_read(&cache_inode->i_count));
                 
-                iput(cache_inode);
+        iput(cache_inode);
                 
-                OBD_FREE(inode->u.generic_ip, sizeof(struct smfs_inode_info));
-                inode->u.generic_ip = NULL;
-        } else
-                LBUG();
+        OBD_FREE(inode->u.generic_ip, sizeof(struct smfs_inode_info));
+                 inode->u.generic_ip = NULL;
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

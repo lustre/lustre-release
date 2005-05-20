@@ -132,8 +132,8 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&master_uuid, lustre_cfg_buf(lcfg, 1));
-        obd_str2uuid(&cache_uuid, lustre_cfg_buf(lcfg, 2));
+        obd_str2uuid(&master_uuid, lustre_cfg_string(lcfg, 1));
+        obd_str2uuid(&cache_uuid, lustre_cfg_string(lcfg, 2));
 
         /* getting master obd */
         cmobd->master_obd = find_master_obd(obd, &master_uuid);

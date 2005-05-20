@@ -289,8 +289,10 @@ struct obd_device *class_find_client_obd(struct obd_uuid *tgt_uuid,
                         struct obd_import *imp = cli->cl_import;
                         if (tgt_uuid == NULL) {
                                 LASSERT(grp_uuid);
-                                if (obd_uuid_equals(grp_uuid, &obd->obd_uuid))
+                                if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
+                                        spin_unlock(&obd_dev_lock);
                                         return obd;
+                                }
                                 continue;
                         }
                         if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&

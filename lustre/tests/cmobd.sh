@@ -37,7 +37,7 @@ OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
 FSTYPE=${FSTYPE:-smfs}
-BACK_FSTYPE=${BACK_FSTYPE:-ext3}
+BACK_FSTYPE=${BACK_FSTYPE:-ldiskfs}
 
 NETTYPE=${NETTYPE:-tcp}
 NIDTYPE=${NIDTYPE:-$NETTYPE}
@@ -60,13 +60,13 @@ ${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` \
 --nettype $NETTYPE || exit 1
 
 ${LMC} -m $config --add mds --node $NODE --mds $CACHE_MDS1 --fstype $FSTYPE \
---backfstype $BACK_FSTYPE --backdev $MDS1_CACHE_DEV --dev $FSTYPE \
+--backfstype $BACK_FSTYPE --dev $MDS1_CACHE_DEV  \
 --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
 
 if test "x$CLIENTS" = "x2"; then
         ${LMC} -m $config --add mds --node $NODE --mds $CACHE_MDS2 \
-        --fstype $FSTYPE --backfstype $BACK_FSTYPE --backdev $MDS2_CACHE_DEV \
-        --dev $FSTYPE --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
+        --fstype $FSTYPE --backfstype $BACK_FSTYPE --dev $MDS2_CACHE_DEV \
+        --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
 fi
 
 if test "x$MODE" = "xmds"; then
