@@ -66,7 +66,15 @@ int ptlrpc_ping(struct obd_import *imp)
 
 static inline void ptlrpc_update_next_ping(struct obd_import *imp)
 {
-        imp->imp_next_ping = jiffies + PING_INTERVAL * HZ;
+        imp->imp_next_ping = jiffies + HZ *
+                (imp->imp_state == LUSTRE_IMP_DISCON
+                 ? 10 
+                 : PING_INTERVAL);
+}
+
+void ptlrpc_ping_import_soon(struct obd_import *imp)
+{
+        imp->imp_next_ping = jiffies;
 }
 
 #ifdef __KERNEL__

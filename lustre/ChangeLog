@@ -52,6 +52,14 @@ Description: Racing close and eviction MDS could cause assertion in mds_close
 Details    : It was possible to get multiple mfd references during close and
              client eviction, leading to one thread referencing a freed mfd.
 
+Severity:  : enhancement
+Bugzilla   : 3262, 6359
+Description: Attempts to reconnect to servers are now more aggressive.
+Details    : This builds on the enhanced upcall-less recovery that was added
+             in 1.4.2.  When trying to reconnect to servers,  clients will 
+             now try each server in the failover group every 10 seconds.  By
+             default, clients would previously try one server every 25 seconds.
+
 ------------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>

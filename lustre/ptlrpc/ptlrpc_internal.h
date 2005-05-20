@@ -117,5 +117,6 @@ int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
+void ptlrpc_ping_import_soon(struct obd_import *imp);
 
 #endif /* PTLRPC_INTERNAL_H */
