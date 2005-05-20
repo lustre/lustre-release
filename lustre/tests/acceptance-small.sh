@@ -112,7 +112,7 @@ for NAME in $CONFIGS; do
 	if [ "$FSX" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		./fsx -c 50 -p 1000 -P $TMP -l $SIZE * 100 \
+		./fsx -c 50 -p 1000 -P $TMP -l $(($SIZE * 100)) \
 			-N $(($COUNT * 100)) $MOUNT/fsxfile
 		$DEBUG_ON
 		sh llmountcleanup.sh
