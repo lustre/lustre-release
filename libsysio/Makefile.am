@@ -49,7 +49,7 @@ endif
 
 if WITH_LUSTRE_HACK
 # it would be better that let configure script check this
-OPTIONAL_LUSTRE_CFLAGS = -fPIC
+OPTIONAL_LUSTRE_CFLAGS = -fPIC -O0
 endif
 
 AM_CFLAGS = $(OPTIONAL_LUSTRE_CFLAGS)
