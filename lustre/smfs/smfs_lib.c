@@ -533,20 +533,18 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
 {
         struct smfs_super_info *smb = S2SMI(sb);    
         struct list_head *hlist = &smb->smsi_plg_list;
-        struct smfs_plugin *plg;
+        struct smfs_plugin *plg, *plg_tmp;
         int rc = 0;
         
         ENTRY;
         LASSERT(op < PLG_HELPER_MAX);
         //call hook operations
-        list_for_each_entry(plg, hlist, plg_list) {
+        list_for_each_entry_safe(plg, plg_tmp, hlist, plg_list) {
                if (plg->plg_helper)
                        rc += plg->plg_helper(op, sb, msg, plg->plg_private);
         }
 
-        EXIT;
-        
-        return rc;
+        RETURN(rc);
 }
 
 
