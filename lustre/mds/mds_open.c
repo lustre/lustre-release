@@ -1030,7 +1030,7 @@ got_child:
                 if (parent_lockh[1].cookie != 0)
                         ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
-                ldlm_lock_decref(parent_lockh, parent_mode);
+                ldlm_lock_decref(parent_lockh, LCK_PR);
 
                 if (dchild->d_inode || !(dchild->d_flags & DCACHE_CROSS_REF)) {
                         CDEBUG(D_OTHER, "race: name changed (%p)\n",
