@@ -50,6 +50,7 @@ ll_gns_wait_for_mount(struct dentry *dentry,
 {
         struct l_wait_info lwi;
         struct ll_sb_info *sbi;
+	int rc = 0;
         ENTRY;
 
         LASSERT(dentry != NULL);
@@ -57,16 +58,21 @@ ll_gns_wait_for_mount(struct dentry *dentry,
         sbi = ll_s2sbi(dentry->d_sb);
         
         lwi = LWI_TIMEOUT(timeout * HZ, NULL, NULL);
-        for (; !d_mountpoint(dentry) && tries > 0; tries--)
+        for (; !d_mountpoint(dentry) && tries > 0; tries--) {
                 l_wait_event(sbi->ll_gns_waitq, d_mountpoint(dentry), &lwi);
+		if (signal_pending(current))
+			GOTO(out, rc = -EINTR);
+	}
 
-        if (d_mountpoint(dentry)) {
-                spin_lock(&sbi->ll_gns_lock);
-                sbi->ll_gns_state = LL_GNS_FINISHED;
-                spin_unlock(&sbi->ll_gns_lock);
-                RETURN(0);
-        }
-        RETURN(-ETIME);
+        if (!d_mountpoint(dentry))
+    		rc = -ETIME;
+	
+	EXIT;
+out:	
+        spin_lock(&sbi->ll_gns_lock);
+        sbi->ll_gns_state = LL_GNS_FINISHED;
+        spin_unlock(&sbi->ll_gns_lock);
+        return rc;
 }
 
 /*
@@ -284,12 +290,13 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
          * second.
          */
         rc = ll_gns_wait_for_mount(dentry, 1, GNS_WAIT_ATTEMPTS);
-        if (rc == 0) {
+        LASSERT(sbi->ll_gns_state == LL_GNS_FINISHED);
+	
+	/* checking for mount point anyway to not loss mounts */
+        if (d_mountpoint(dentry)) {
                 struct dentry *rdentry;
                 struct vfsmount *rmnt;
                
-                LASSERT(sbi->ll_gns_state == LL_GNS_FINISHED);
-
                 rmnt = mntget(mnt);
                 rdentry = dget(dentry);
                 
@@ -310,6 +317,8 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
                         mntput(mnt);
                         dput(dentry);
                 }
+		
+		rc = 0;
         } else {
                 CERROR("usermode upcall %s failed to mount %s, err %d\n",
                        sbi->ll_gns_upcall, path, rc);
