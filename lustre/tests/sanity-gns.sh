@@ -1265,11 +1265,9 @@ run_test 3a " removing mnt by chmod u-s ================================="
 test_3b() {
     local LOOP_FILE1="$TMP/gns_loop_3b1"
     local LOOP_FILE2="$TMP/gns_loop_3b2"
-    local LOOP_FILE3="$TMP/gns_loop_3b3"
     local OBJECT=".mntinfo"
     local LOOP_DEV1=""
     local LOOP_DEV2=""
-    local LOOP_DEV3=""
     local TIMOUT=5
     local TICK=1
 
@@ -1279,11 +1277,8 @@ test_3b() {
     test "x$LOOP_DEV1" != "x" && test -b $LOOP_DEV1 ||
 	error "can't find free loop device"
 
-    echo "preparing loop device $LOOP_DEV1 <-> $LOOP_FILE1..."
-    cleanup_loop $LOOP_DEV1 $LOOP_FILE1
     setup_loop $LOOP_DEV1 $LOOP_FILE1 || error
 
-    echo "preparing mount object at $DIR/gns_test_3b1/$OBJECT..."
     setup_object $DIR/gns_test_3b1 $OBJECT "-t ext2 $LOOP_DEV1" || {
         cleanup_loop $LOOP_DEV1 $LOOP_FILE1
 	error
@@ -1309,7 +1304,6 @@ test_3b() {
 	error "can't umount $TMP/mnt"
     }
 
-    echo "setting up GNS timeouts and mount object..."
     setup_gns $OBJECT $TIMOUT $TICK || {
         cleanup_object $DIR/gns_test_3b1
         cleanup_loop $LOOP_DEV1 $LOOP_FILE1
@@ -1319,7 +1313,7 @@ test_3b() {
     enable_gns
 
     echo ""
-    echo "testing GNS with GENERIC upcall in CONCUR2 mode"
+    echo "testing GNS with GENERIC upcall in GENERIC mode"
     
     check_gns $DIR/gns_test_3b1/gns_test_3b2 $DIR/gns_test_3b1/gns_test_3b2 \
 $TIMOUT $TICK GENERIC LIST 0 || {
