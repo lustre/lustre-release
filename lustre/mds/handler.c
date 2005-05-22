@@ -3224,9 +3224,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
             strncmp(lustre_cfg_string(lcfg, 5), "dumb", LUSTRE_CFG_BUFLEN(lcfg, 5))) {
                 class_uuid_t uuid;
 
-                CDEBUG(D_OTHER, "MDS: %s is master for %s\n",
-                       obd->obd_name, lustre_cfg_buf);
-
                 generate_random_uuid(uuid);
                 class_uuid_unparse(uuid, &mds->mds_md_uuid);
 
@@ -3237,6 +3234,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 memcpy(mds->mds_md_name, lustre_cfg_buf(lcfg, 5),
                        LUSTRE_CFG_BUFLEN(lcfg, 5));
                 
+                CDEBUG(D_OTHER, "MDS: %s is master for %s\n",
+                       obd->obd_name, mds->mds_md_name);
+
                 rc = mds_md_connect(obd, mds->mds_md_name);
                 if (rc) {
                         OBD_FREE(mds->mds_md_name, LUSTRE_CFG_BUFLEN(lcfg, 5));
