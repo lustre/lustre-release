@@ -118,6 +118,8 @@ static struct smfs_super_info *smfs_init_smb(struct super_block *sb)
                 RETURN(NULL);        
         
         S2FSI(sb) = smb;
+        INIT_LIST_HEAD(&smb->smsi_plg_list);
+        
         RETURN(smb);        
 }
 
@@ -162,10 +164,41 @@ void smfs_cleanup_fsfilt_ops(struct smfs_super_info *smb)
                 fsfilt_put_ops(smb->sm_fsfilt);
 }
 
-int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt)
+static void smfs_filter_flags(struct filter_obd * filt, struct inode * o_dir)
+{
+        struct dentry * dentry = NULL;
+        int i,j;
+        
+        CDEBUG(D_SUPER,"OST OBD post_setup\n");
+        /* enable plugins for all in O */
+        SMFS_SET(I2SMI(o_dir)->smi_flags, SMFS_PLG_ALL);
+        /* enable plugins for all already created d<n> dirs */
+        for (j = 1; j < filt->fo_group_count; j++) {
+                for (i = 0; i < filt->fo_subdir_count; i++) {
+                        dentry = (filt->fo_subdirs + j)->dentry[i];
+                        SMFS_SET(I2SMI(dentry->d_inode)->smi_flags,
+                                         SMFS_PLG_ALL);
+                }
+        }
+}
+
+static void smfs_mds_flags(struct mds_obd * mds, struct inode * root)
+{
+        struct inode * pend = mds->mds_pending_dir->d_inode;
+        
+        CDEBUG(D_SUPER,"MDS OBD post_setup\n");
+        /* enable plugins for all in ROOT */        
+        SMFS_SET(I2SMI(root)->smi_flags, SMFS_PLG_ALL);
+        /* the same for PENDING */
+        SMFS_SET(I2SMI(pend)->smi_flags, SMFS_PLG_ALL);
+}
+                        
+
+int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
+                    struct dentry * root_dentry)
 {
         struct lvfs_run_ctxt saved, *current_ctxt = NULL;
-        struct smfs_super_info *smb = S2SMI(sb);
+        struct smfs_super_info *smb = S2SMI(mnt->mnt_sb);
         int rc = 0;
         
         ENTRY;
@@ -183,12 +216,36 @@ int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt)
         
         push_ctxt(&saved, smb->smsi_ctxt, NULL);
 
-        rc = smfs_llog_setup(sb, mnt);
+        rc = smfs_llog_setup(smb);
         if (!rc) {
-                rc = SMFS_PLG_HELP(sb, PLG_START, NULL);
+                rc = SMFS_PLG_HELP(mnt->mnt_sb, PLG_START, NULL);
         }
 
         pop_ctxt(&saved, smb->smsi_ctxt, NULL);
+
+        /* connect KML ctxt to obd */
+        if (obd && smb->smsi_kml_log) {
+                smb->smsi_kml_log->loc_idx = LLOG_REINT_ORIG_CTXT;
+                smb->smsi_kml_log->loc_obd = obd;
+                obd->obd_llog_ctxt[LLOG_REINT_ORIG_CTXT] = smb->smsi_kml_log;
+        }
+        
+        /* enable plugins for directories on MDS or OST */
+        if (obd && obd->obd_type && obd->obd_type->typ_name) {
+                if (!strcmp(obd->obd_type->typ_name, "obdfilter")) {
+                        struct filter_obd *filt = &obd->u.filter;
+ 
+                        smfs_filter_flags(filt, root_dentry->d_inode);
+                }
+                else if (!strcmp(obd->obd_type->typ_name, "mds")) {
+                        struct mds_obd * mds = &obd->u.mds;
+                        
+                        smfs_mds_flags(mds, root_dentry->d_inode);
+                }
+                else
+                        CDEBUG(D_SUPER,"Unknown OBD (%s) post_setup\n",
+                               obd->obd_type->typ_name);
+        }
 
         if (rc)
                 OBD_FREE(current_ctxt, sizeof(*current_ctxt));
@@ -202,7 +259,7 @@ void smfs_post_cleanup(struct super_block *sb)
         
         ENTRY;
         
-        smfs_llog_cleanup(sb);
+        smfs_llog_cleanup(smb);
         SMFS_PLG_HELP(sb, PLG_STOP, NULL);
         
         if (smb->smsi_ctxt)
@@ -375,6 +432,9 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
                 goto out_err;
         }
         
+        /* all entries created until post_setup() should not be logged */
+        SMFS_CLEAR((I2SMI(root_inode))->smi_flags, SMFS_PLG_ALL);
+   
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
                (ulong)sb, (ulong)&sb->u.generic_sbp);
@@ -402,14 +462,8 @@ void *smfs_trans_start(struct inode *inode, int op, void *desc_private)
 {
         struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
 
-        CDEBUG(D_INFO, "trans start %p\n", fsfilt->fs_start);
-
-        SMFS_TRANS_OP(inode, op);
-        
-        /* There are some problem here. fs_start in fsfilt is used by lustre
-         * the journal blocks of write rec are not counted in FIXME later */
         if (fsfilt->fs_start)
-                return fsfilt->fs_start(inode, op, desc_private, 0);
+                return fsfilt->fs_start(inode, op, NULL, 0);
         return NULL;
 }
 
@@ -417,12 +471,7 @@ void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
 {
         struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
 
-        if (!handle)
-                return;
-
-        CDEBUG(D_INFO, "trans commit %p\n", fsfilt->fs_commit);
-
-        if (fsfilt->fs_commit)
+        if (handle && fsfilt->fs_commit)
                 fsfilt->fs_commit(inode->i_sb, inode, handle, force_sync);
 }
 /* Plugin API */
@@ -494,7 +543,7 @@ void smfs_pre_hook (struct inode * inode, int op, void * msg)
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type))
                         continue;
-                //check that inode is not exclusion
+                //check that inode is allowed
                 if (!SMFS_IS(smi->smi_flags, plg->plg_type))
                         continue;
                 
@@ -518,7 +567,7 @@ void smfs_post_hook (struct inode * inode, int op, void * msg, int ret)
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type))
                         continue;
-                //check that inode is not exclusion
+                //check that inode is allowed
                 if (!SMFS_IS(smi->smi_flags, plg->plg_type))
                         continue;
                 
@@ -533,18 +582,24 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
 {
         struct smfs_super_info *smb = S2SMI(sb);    
         struct list_head *hlist = &smb->smsi_plg_list;
-        struct smfs_plugin *plg, *plg_tmp;
+        struct smfs_plugin *plg, *tmp;
         int rc = 0;
         
-        ENTRY;
+        //ENTRY;
         LASSERT(op < PLG_HELPER_MAX);
         //call hook operations
-        list_for_each_entry_safe(plg, plg_tmp, hlist, plg_list) {
-               if (plg->plg_helper)
+        list_for_each_entry_safe(plg, tmp, hlist, plg_list) {
+                //check that plugin is active
+                if(!SMFS_IS(smb->plg_flags, plg->plg_type) && (op != PLG_START))
+                        continue;
+               
+                if (plg->plg_helper)
                        rc += plg->plg_helper(op, sb, msg, plg->plg_private);
         }
 
-        RETURN(rc);
+        //EXIT;
+        
+        return rc;
 }
 
 

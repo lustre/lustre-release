@@ -2,6 +2,7 @@
 #define SMFS_PLG_KML    0x0001L
 #define SMFS_PLG_LRU    0x0004L
 #define SMFS_PLG_COW    0x0020L
+#define SMFS_PLG_UNDO   0x0100L
 #define SMFS_PLG_DUMMY  0x1000L
 #define SMFS_PLG_ALL    (~0L)
 
@@ -24,6 +25,19 @@ struct smfs_plugin {
         void *           plg_private;
 };
 
+#define KML_LOG_NAME    "smfs_kml"
+
+struct kml_priv {
+        /* llog pack function */
+        int (* pack_fn)(int, char *, struct dentry*,
+                        struct inode *, void *, void *);
+};
+
+#define UNDO_LOG_NAME   "smfs_undo"
+struct undo_priv {
+        struct llog_ctxt *undo_ctxt;
+};
+
 #define HOOK_CREATE       1
 #define HOOK_LOOKUP       2
 #define HOOK_LINK         3
@@ -37,10 +51,13 @@ struct smfs_plugin {
 #define HOOK_WRITE        11
 #define HOOK_READDIR      12
 #define HOOK_F_SETATTR    13
-#define HOOK_MAX          14
+#define HOOK_SETXATTR     14
+#define HOOK_F_SETXATTR   15
+#define HOOK_MAX          16
 
 struct hook_msg {
         struct dentry * dentry;
+
 };
 
 struct hook_link_msg {
@@ -86,34 +103,8 @@ void smfs_pre_hook (struct inode*, int, void*);
 void smfs_post_hook(struct inode*,int, void*, int);
 
 #define SMFS_PRE_HOOK(inode, op, msg) smfs_pre_hook (inode, op, msg)
-/*\
-do {                                                         \
-        struct smfs_super_info *smb = S2SMI(inode->i_sb);    \
-        struct list_head *hlist = &smb->smsi_plg_list;       \
-        struct smfs_plugin *plg;                             \
-                                                             \
-        list_for_each_entry(plg, hlist, plg_list) {          \
-                if (plg->plg_pre_op)                         \
-                        plg->plg_pre_op(op, inode, msg, 0,   \
-                                        plg->plg_private);   \
-        }                                                    \
-} while(0)
-*/
-
 #define SMFS_POST_HOOK(inode, op, msg, rc) smfs_post_hook(inode, op, msg, rc)
-/*\
-do {                                                         \
-        struct smfs_super_info *smb = S2SMI(inode->i_sb);    \
-        struct list_head *hlist = &smb->smsi_plg_list;       \
-        struct smfs_plugin *plg;                             \
-                                                             \
-        list_for_each_entry(plg, hlist, plg_list) {          \
-                if (plg->plg_post_op)                        \
-                        plg->plg_post_op(op, inode, msg, rc, \
-                                         plg->plg_private);  \
-        }                                                    \
-} while(0)
-*/
+
 #define PLG_EXIT        0
 #define PLG_TRANS_SIZE  1
 #define PLG_TEST_INODE  2

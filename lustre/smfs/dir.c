@@ -383,7 +383,7 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         //int    mode = 0;
         struct hook_unlink_msg msg = {
                 .dentry = dentry,
-                .mode = 0
+                .mode = dentry->d_inode->i_mode
         };
 
         ENTRY;

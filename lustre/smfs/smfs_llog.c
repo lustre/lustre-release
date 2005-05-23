@@ -30,15 +30,13 @@
 #include <linux/lvfs.h>
 
 #include "smfs_internal.h"
-int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
+int smfs_llog_setup(struct smfs_super_info *smb)
 {
         struct dentry *dentry = NULL;
         int rc = 0;
 
         /* create OBJECTS and LOGS for writing logs */
         ENTRY;
-
-        LASSERT(mnt);
 
         //push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777, 1);
@@ -49,9 +47,8 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
                 goto exit;
         }
 
-        S2SMI(sb)->smsi_logs_dir = dentry;
-        //SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
-        
+        smb->smsi_logs_dir = dentry;
+                
         dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -60,29 +57,13 @@ int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt)
                 goto exit;
         }
 
-        S2SMI(sb)->smsi_objects_dir = dentry;
-        //SMFS_SET(I2SMI(dentry->d_inode)->smi_flags, SMFS_PLG_ALL);
-
-        /* write log will not write to KML, cleanup kml flags */
-        //SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_objects_dir->d_inode);
-        //SMFS_CLEAN_INODE_REC(S2SMI(sb)->smsi_logs_dir->d_inode);
-
-        /* log create does not call cache hooks, cleanup hook flags */
-        //SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_objects_dir->d_inode);
-        //SMFS_CLEAN_INODE_CACHE_HOOK(S2SMI(sb)->smsi_logs_dir->d_inode);
-
+        smb->smsi_objects_dir = dentry;
         
-        /*if (SMFS_CACHE_HOOK(S2SMI(sb))) {
-                rc2 = cache_space_hook_setup(sb);
-                if (!rc && rc2)
-                        rc = rc2;
-        }*/
 exit:
-        //pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
         RETURN(rc);
 }
 
-int smfs_llog_cleanup(struct super_block *sb)
+int smfs_llog_cleanup(struct smfs_super_info *smb)
 {
         ENTRY;
 
@@ -97,26 +78,27 @@ int smfs_llog_cleanup(struct super_block *sb)
                         rc = rc2;
         }
         */
-        if (S2SMI(sb)->smsi_logs_dir) {
-                l_dput(S2SMI(sb)->smsi_logs_dir);
-                S2SMI(sb)->smsi_logs_dir = NULL;
+        if (smb->smsi_logs_dir) {
+                l_dput(smb->smsi_logs_dir);
+                smb->smsi_logs_dir = NULL;
         }
-        if (S2SMI(sb)->smsi_objects_dir) {
-                l_dput(S2SMI(sb)->smsi_objects_dir);
-                S2SMI(sb)->smsi_objects_dir = NULL;
+        if (smb->smsi_objects_dir) {
+                l_dput(smb->smsi_objects_dir);
+                smb->smsi_objects_dir = NULL;
         }
         RETURN(0);
 }
 
-int smfs_llog_add_rec(struct smfs_super_info *sinfo, void *data, int data_size)
+int smfs_llog_add_rec(struct smfs_super_info *smb, void *data, int data_size)
 {
         struct llog_rec_hdr rec;
         int rc = 0;
-
+        
+        ENTRY;
         rec.lrh_len = size_round(data_size);
         rec.lrh_type = SMFS_UPDATE_REC;
 
-        rc = llog_add(sinfo->smsi_kml_log, &rec, data, NULL, 0, NULL, NULL, NULL);
+        rc = llog_catalog_add(smb->smsi_kml_log, &rec, data, NULL, 0, NULL, NULL, NULL);
         if (rc != 1) {
                 CERROR("error adding kml rec: %d\n", rc);
                 RETURN(-EINVAL);

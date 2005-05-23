@@ -49,6 +49,7 @@ static int smfs_ost_get_id(obd_id *id, char *data, int size)
                 *id = simple_strtoull(data, &endp, 10);
         else
                 return -EINVAL;
+        CDEBUG(D_DENTRY,"name = %s\n", data);
         return 0;
 }
 
@@ -66,14 +67,16 @@ static int smfs_ost_get_group(struct dentry *dentry, struct obdo *oa)
         if (dparent_group == NULL || dparent_group == dparent_subdir)
                 return -EINVAL;
 
+        CDEBUG(D_DENTRY,"try to find group for dentry %p\n", dparent_group);
         for (i = 1; i < filter->fo_group_count; i++) {
+                CDEBUG(D_DENTRY, "group[%i] = %p\n", i, filter->fo_groups[i]);
                 if (filter->fo_groups[i] == dparent_group) {
                         oa->o_gr = i;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         return 0;
                 }
         }
-        return -EINVAL;
+        return -ENOENT;
 }
 
 static int ost_rec_create_pack(char *buffer, struct dentry *dentry,

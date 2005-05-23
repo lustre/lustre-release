@@ -59,10 +59,7 @@ struct smfs_control_device {
 #define SYMLINK_OPS_CHECK        0x20
 #define DIR_OPS_CHECK            0x40
 
-#define KML_LOG_NAME "kml_rec"
-
 #define MYPATHLEN(buffer, path) ((buffer) + PAGE_SIZE - (path))
-
 
 #define PACK_KML_REC_INIT(buffer, op_code)          \
 do{                                                 \
@@ -115,20 +112,10 @@ static inline struct journal_operations *journal_ops(struct smfs_super_info *smb
         return &smb->sm_ops->sm_journal_ops;
 }
 
-struct smfs_hook_ops *smfs_alloc_hook_ops(char *name, 
-                                          smfs_hook_func pre_hook, 
-                                          smfs_hook_func post_hook);
-
-void smfs_free_hook_ops(struct smfs_hook_ops *hops);
-int smfs_register_hook_ops(struct smfs_super_info *smb, 
-                           struct smfs_hook_ops *smh_ops);
-
-struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb, 
-                                               char *name);
 /*smfs_lib.c*/
 void smfs_put_super(struct super_block *sb);
 int smfs_fill_super(struct super_block *sb, void *data, int silent);
-int smfs_post_setup(struct super_block *, struct vfsmount *);
+int smfs_post_setup(struct obd_device *, struct vfsmount *, struct dentry *);
 void smfs_post_cleanup(struct super_block *);
 /*sysctl.c*/
 extern int sm_debug_level;
@@ -170,7 +157,7 @@ struct smfs_iget_args {
 /*symlink.c*/
 extern struct inode_operations smfs_sym_iops;
 extern struct file_operations smfs_sym_fops;
-/*journal.c */
+
 void *smfs_trans_start(struct inode *inode, int op, void *desc_private);
 void smfs_trans_commit(struct inode *inode, void *handle, int force_sync);
 
@@ -196,10 +183,9 @@ int mds_rec_pack_init(struct smfs_super_info *smb);
 int ost_rec_pack_init(struct smfs_super_info *smb);
 
 /*smfs_llog.c*/
-extern int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt);
-extern int smfs_llog_cleanup(struct super_block *sb);
-extern int smfs_llog_add_rec(struct smfs_super_info * sinfo, void *data,
-                             int data_size);
+extern int smfs_llog_setup(struct smfs_super_info *);
+extern int smfs_llog_cleanup(struct smfs_super_info *);
+extern int smfs_llog_add_rec(struct smfs_super_info *, void *, int);
 /*ioctl.c*/
 extern int init_smfs_psdev(void);
 extern void smfs_cleanup_psdev(void);

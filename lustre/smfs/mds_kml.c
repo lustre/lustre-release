@@ -136,6 +136,8 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
         int rc = 0, tgt_len = 0;
         void *tmp = NULL;
 
+        ENTRY;
+        
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 return -ENOMEM;
@@ -252,8 +254,7 @@ static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
         return rc;
 }
 
-typedef int (*mds_pack_rec_func)(char *buffer, struct dentry *dentry,
-                                 struct inode *dir, void *data1, void *data2);
+typedef int (*mds_pack_rec_func)(char *, struct dentry*, struct inode *, void *, void*);
 
 static mds_pack_rec_func mds_kml_pack[REINT_MAX + 1] = {
         [REINT_LINK]    mds_rec_link_pack,
@@ -263,16 +264,10 @@ static mds_pack_rec_func mds_kml_pack[REINT_MAX + 1] = {
         [REINT_RENAME]  mds_rec_rename_pack,
 };
 
-int mds_rec_pack(char *buffer, struct dentry *dentry, struct inode *dir,
-                 void *data1, void *data2, int op)
+int mds_rec_pack(int op, char *buffer, struct dentry *dentry, 
+                 struct inode *dir, void * arg, void * arg2)
 {
-        return mds_kml_pack[op](buffer, dentry, dir, data1, data2);
+        return mds_kml_pack[op](buffer, dentry, dir, arg, arg2);
 }
 
-int mds_rec_pack_init(struct smfs_super_info *smsi)
-{
-        
-        smsi->smsi_pack_rec[PACK_MDS] = mds_rec_pack;
-        return 0;
-}
 

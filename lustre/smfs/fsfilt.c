@@ -47,16 +47,22 @@ static void *fsfilt_smfs_start(struct inode *inode, int op,
         void *handle;
         struct inode *cache_inode = I2CI(inode);
         struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-
+        int extra = 0;
+        int opcode = op;
+        
         if (cache_fsfilt == NULL)
                 return NULL;
 
-        //SMFS_TRANS_OP(inode, op);
-
         if (!cache_fsfilt->fs_start)
                 return ERR_PTR(-ENOSYS);
+        
+        //opcode can be changed here. 
+        //For example, unlink is rename in nature for undo plugin 
+        extra = SMFS_PLG_HELP(inode->i_sb, PLG_TRANS_SIZE, &opcode);
 
-        handle = cache_fsfilt->fs_start(cache_inode, op, desc_private, logs);
+        handle = cache_fsfilt->fs_start(cache_inode, op, desc_private,
+                                        logs + extra);
+
         return handle;
 }
 
@@ -161,41 +167,6 @@ static int fsfilt_smfs_commit_wait(struct inode *inode, void *h)
         RETURN(rc);
 }
 
-static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
-                               struct iattr *iattr, int do_trunc)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(dentry->d_inode);
-        struct dentry *cache_dentry = NULL;
-        struct inode *cache_inode = I2CI(dentry->d_inode);
-        struct hook_setattr_msg msg = {
-                .dentry = dentry,
-                .attr = iattr
-        };
-        int    rc = -EIO;
-
-        if (!cache_fsfilt)
-                RETURN(rc);
-
-        if (!cache_fsfilt->fs_setattr)
-                RETURN(-ENOSYS);
-
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
-        if (!cache_dentry)
-                RETURN(-ENOMEM);
-
-        pre_smfs_inode(dentry->d_inode, cache_inode);
-
-        SMFS_PRE_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg);
-        
-        rc = cache_fsfilt->fs_setattr(cache_dentry, handle, iattr, do_trunc);
-
-        SMFS_POST_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg, rc);
-        post_smfs_inode(dentry->d_inode, cache_inode);
-
-        post_smfs_dentry(cache_dentry);
-        RETURN(rc);
-}
-
 static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg)
 {
@@ -223,60 +194,6 @@ static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
         pre_smfs_inode(inode, cache_inode);
         
         rc = cache_fsfilt->fs_iocontrol(cache_inode, cache_file, cmd, arg);
-
-#if 0
-        /* FIXME-UMKA: Should this be in duplicate_inode()? */
-        if (rc == 0 && cmd == EXT3_IOC_SETFLAGS)
-                inode->i_flags = cache_inode->i_flags;
-#endif
-        post_smfs_inode(inode, cache_inode);
-
-        RETURN(rc);
-}
-
-static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size, enum ea_type type)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        struct inode *cache_inode = I2CI(inode);
-        int    rc = -EIO;
-      
-        if (!cache_fsfilt)
-                RETURN(-EINVAL);
-
-        if (!cache_inode)
-                RETURN(-ENOENT);
-        /*TODO: HOOK is needed here */
-        pre_smfs_inode(inode, cache_inode);
-
-        down(&cache_inode->i_sem);
-        rc = cache_fsfilt->fs_set_md(cache_inode, handle, lmm,
-                                     lmm_size, type);
-        up(&cache_inode->i_sem);
-
-        post_smfs_inode(inode, cache_inode);
-               
-        RETURN(rc);
-}
-
-static int fsfilt_smfs_get_md(struct inode *inode, void *lmm,
-                              int lmm_size, enum ea_type type)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        struct inode *cache_inode = I2CI(inode);
-        int    rc = -EIO;
-
-        if (!cache_fsfilt)
-                RETURN(-EINVAL);
-
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-        pre_smfs_inode(inode, cache_inode);
-
-        down(&cache_inode->i_sem);
-        rc = cache_fsfilt->fs_get_md(cache_inode, lmm, lmm_size, type);
-        up(&cache_inode->i_sem);
 
         post_smfs_inode(inode, cache_inode);
 
@@ -614,17 +531,13 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
                 
                 if (obd)
                         S2SMI(sb)->smsi_exp = obd->obd_self_export;
-                
-                rc = smfs_post_setup(sb, mnt);
-                if (!rc) {
-                        if (obd)
-                                obd->obd_llog_ctxt[LLOG_REINT_ORIG_CTXT] =
-                                                S2SMI(sb)->smsi_kml_log;
+               
+                rc = smfs_post_setup(obd, mnt, root_dentry);
+                if (rc) {
+                        CERROR("post_setup fails in obd %p rc=%d", obd, rc);
                 }
-                else {
-                        CERROR("can not do post setup in obd %p rc=%d",
-                               obd, rc);
-                }
+
+              
         }
         
         RETURN(rc);
@@ -650,13 +563,16 @@ static int fsfilt_smfs_set_fs_flags(struct inode *inode, int flags)
         int rc = 0;
         ENTRY;
 
-        if (flags & SM_DO_REC)
-                SMFS_SET(I2SMI(inode)->smi_flags, SMFS_PLG_KML);
+        if (flags & SM_ALL_PLG) /* enable all plugins */
+                SMFS_SET(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
+        if (flags & SM_PRECREATE) /* disable logs for precreated objs */
+                SMFS_CLEAR(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
 
-        //if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
-        //        SMFS_SET_INODE_REC(inode);
+
+#if 0
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
                 SMFS_SET_INODE_COW(inode);
+#endif
         RETURN(rc);
 }
 
@@ -664,11 +580,17 @@ static int fsfilt_smfs_clear_fs_flags(struct inode *inode, int flags)
 {
         int rc = 0;
         ENTRY;
-        
+        /*
         if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
                 SMFS_CLEAN_INODE_REC(inode);
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
                 SMFS_CLEAN_INODE_COW(inode);
+        */
+        if(flags & SM_ALL_PLG) /* disable all plugins */
+                SMFS_CLEAR(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
+        if (flags & SM_PRECREATE) /* enable log again */
+                SMFS_SET(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
+
         RETURN(rc);
 }
 
@@ -679,28 +601,23 @@ static int fsfilt_smfs_get_fs_flags(struct dentry *de)
         ENTRY;
 
         LASSERT(inode);
-
-        if (SMFS_DO_REC(S2SMI(inode->i_sb)) && SMFS_DO_INODE_REC(inode))
-                flags |= SM_DO_REC;
-        if (SMFS_DO_COW(S2SMI(inode->i_sb)) && SMFS_DO_INODE_COW(inode))
-                flags |= SM_DO_COW;
+        
+        flags = I2SMI(inode)->smi_flags & S2SMI(inode->i_sb)->plg_flags;
        
         RETURN(flags); 
 }
+
 static int fsfilt_smfs_set_ost_flags(struct super_block *sb)
 {
-        int rc = 0;
-        SET_REC_PACK_TYPE_INDEX(S2SMI(sb)->smsi_flags, PACK_OST);
-        RETURN(rc);
+        return 0;
 }
 
 static int fsfilt_smfs_set_mds_flags(struct super_block *sb)
 {
-        int rc = 0;
-        SET_REC_PACK_TYPE_INDEX(S2SMI(sb)->smsi_flags, PACK_MDS);
-        RETURN(rc);
+        return 0;
 }
 
+#if 0
 static int fsfilt_smfs_get_reint_log_ctxt(struct super_block *sb,
                                           struct llog_ctxt **ctxt)
 {
@@ -710,6 +627,7 @@ static int fsfilt_smfs_get_reint_log_ctxt(struct super_block *sb,
         *ctxt = smfs_info->smsi_kml_log;
         RETURN(rc);
 }
+#endif
 
 static int fsfilt_smfs_setup(struct obd_device *obd, struct super_block *sb)
 {
@@ -733,6 +651,41 @@ static int fsfilt_smfs_setup(struct obd_device *obd, struct super_block *sb)
         
         duplicate_sb(sb, csb);
         
+        RETURN(rc);
+}
+
+static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
+                               struct iattr *iattr, int do_trunc)
+{
+        struct fsfilt_operations *cache_fsfilt = I2FOPS(dentry->d_inode);
+        struct dentry *cache_dentry = NULL;
+        struct inode *cache_inode = I2CI(dentry->d_inode);
+        struct hook_setattr_msg msg = {
+                .dentry = dentry,
+                .attr = iattr
+        };
+        int    rc = -EIO;
+
+        if (!cache_fsfilt)
+                RETURN(rc);
+
+        if (!cache_fsfilt->fs_setattr)
+                RETURN(-ENOSYS);
+
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        if (!cache_dentry)
+                RETURN(-ENOMEM);
+
+        pre_smfs_inode(dentry->d_inode, cache_inode);
+
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg);
+        
+        rc = cache_fsfilt->fs_setattr(cache_dentry, handle, iattr, do_trunc);
+
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg, rc);
+        post_smfs_inode(dentry->d_inode, cache_inode);
+
+        post_smfs_dentry(cache_dentry);
         RETURN(rc);
 }
 
@@ -784,6 +737,77 @@ static int fsfilt_smfs_get_xattr(struct inode *inode, char *name,
         post_smfs_inode(inode, cache_inode);
 
         RETURN(rc);
+}
+
+#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
+#define XATTR_LUSTRE_MDS_MID_EA         "mid"
+#define XATTR_LUSTRE_MDS_SID_EA         "sid"
+
+static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
+                              void *lmm, int lmm_size, enum ea_type type)
+{
+        int rc;
+        
+        switch(type) {
+        case EA_LOV:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_LOV_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MEA:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_MEA_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_SID:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_SID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MID:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        default:
+                rc = -EINVAL;
+        }
+
+        return rc;
+}
+
+static int fsfilt_smfs_get_md(struct inode *inode, void *lmm,
+                              int lmm_size, enum ea_type type)
+{
+        int rc;
+        
+        switch (type) {
+        case EA_LOV:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_LOV_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MEA:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_MEA_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_SID:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_SID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_MID:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        default:
+                rc = -EINVAL;
+        }
+        
+        return rc;
 }
 
 static int fsfilt_smfs_insert_extents_ea(struct inode *inode,
@@ -866,21 +890,36 @@ static int fsfilt_smfs_write_extents(struct dentry *dentry,
                                      unsigned long from, unsigned long num)
 {
         int rc = 0;
-        ENTRY;
-        if (SMFS_DO_REC(S2SMI(dentry->d_inode->i_sb)))
-                rc = smfs_write_extents(dentry->d_inode, dentry, from, num);
+        struct inode * cache_inode = I2CI(dentry->d_inode);
+        struct hook_write_msg msg = {
+                .dentry = dentry,
+                .count = num,
+                .pos = from
+        };
 
-        return rc;
+        ENTRY;
+        
+        /*TODO: fix this later
+        pre_smfs_inode(dentry->d_inode, cache_inode);
+ 
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_WRITE, &msg);
+        
+        rc = smfs_write_extents(dentry->d_inode, dentry, from, num);
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_WRITE, &msg, rc);
+        post_smfs_inode(dentry->d_inode, cache_inode);
+        */
+        
+        RETURN(rc);
 }
 
 static int fsfilt_smfs_precreate_rec(struct dentry *dentry, int *count, 
                                      struct obdo *oa)
 {
         int rc = 0;
-
+        /* Why to log precreate?? MDS will do this in any case
         if (SMFS_DO_REC(S2SMI(dentry->d_inode->i_sb)))
                 rc = smfs_rec_precreate(dentry, count, oa);
-
+        */
         return rc;
 }
 
@@ -1146,7 +1185,7 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
         .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
-        .fs_get_reint_log_ctxt  = fsfilt_smfs_get_reint_log_ctxt,
+        .fs_get_reint_log_ctxt  = NULL, /*fsfilt_smfs_get_reint_log_ctxt,*/
         .fs_set_snap_item       = fsfilt_smfs_set_snap_item,
         .fs_do_write_cow        = fsfilt_smfs_do_write_cow,
  };

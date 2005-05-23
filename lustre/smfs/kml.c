@@ -53,7 +53,6 @@ do {                                            \
         pbuf = buffer + length;                 \
 } while (0)
 
-
 static int smfs_llog_process_rec_cb(struct llog_handle *handle,
                                     struct llog_rec_hdr *rec, void *data)
 {
@@ -127,6 +126,7 @@ copy_inode_attr(struct iattr *iattr, struct inode *inode)
         iattr->ia_size = inode->i_size;
 }
 
+#if 0
 static inline int unpack_rec_data(char **p_buffer, int *size,
                                   char *in_data, char *args_data)
 {
@@ -156,65 +156,30 @@ static inline int unpack_rec_data(char **p_buffer, int *size,
 
         RETURN(rc);
 }
+#endif
 
 int smfs_rec_unpack(struct smfs_proc_args *args, char *record, 
                     char **pbuf, int *opcode)
 {
-        int offset = *(int *)(record);
-        char *tmp = record + offset + sizeof(int);
+        //int offset = *(int *)(record);
+        //char *tmp = record + offset + sizeof(int);
 
-        *opcode = *(int *)tmp;
-        *pbuf = tmp + sizeof(*opcode);
+        *opcode = *(int *)record;
+        *pbuf = record + sizeof(*opcode);
         return 0;
 }
-EXPORT_SYMBOL(smfs_rec_unpack);
+EXPORT_SYMBOL(smfs_rec_unpack); /* cmobd/cm_reint.c */
 
 int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                        unsigned long from, unsigned long num)
 {
-        return smfs_post_rec_write(dir, dentry, &from, &num);
+        return 0;//smfs_post_rec_write(dir, dentry, &from, &num);
 }
-EXPORT_SYMBOL(smfs_write_extents);
-
-int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
-                     struct iattr *attr)
-{
-        return smfs_post_rec_setattr(dir, dentry, attr, NULL);
-}
-EXPORT_SYMBOL(smfs_rec_setattr);
-
-int smfs_rec_md(struct inode *inode, void *lmm, int lmm_size)
-{
-        char *set_lmm = NULL;
-        int  rc = 0;
-        ENTRY;
-
-        if (!SMFS_DO_REC(S2SMI(inode->i_sb)))
-                RETURN(0);
-
-        if (lmm) {
-                OBD_ALLOC(set_lmm, lmm_size + sizeof(lmm_size));
-                if (!set_lmm)
-                        RETURN(-ENOMEM);
-                memcpy(set_lmm, &lmm_size, sizeof(lmm_size));
-                memcpy(set_lmm + sizeof(lmm_size), lmm, lmm_size);
-                rc = smfs_post_rec_setattr(inode, NULL, NULL, set_lmm);
-                if (rc) {
-                        CERROR("Error: Record md for inode %lu rc=%d\n",
-                                inode->i_ino, rc);
-                }
-        }
-        if (set_lmm)
-                OBD_FREE(set_lmm, lmm_size + sizeof(lmm_size));
-        RETURN(rc);
-}
-EXPORT_SYMBOL(smfs_rec_md);
-
+#if 0
 int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa)
 {
        return smfs_post_rec_create(dentry->d_inode, dentry, num, oa);
 }
-EXPORT_SYMBOL(smfs_rec_precreate);
 
 int smfs_process_rec(struct super_block *sb,
                      int count, char *dir, int flags)
@@ -272,7 +237,9 @@ int smfs_process_rec(struct super_block *sb,
         }
         RETURN(rc);
 }
+#endif
 
+#if 0
 /*smfs_path is gotten from intermezzo*/
 static char* smfs_path(struct dentry *dentry, struct dentry *root, char *buffer,
                        int buflen)
@@ -334,13 +301,6 @@ static int smfs_log_path(struct super_block *sb,
         RETURN(namelen);
 }
 
-static inline int log_it(char *buffer, void *data, int length)
-{
-        memcpy(buffer, &length, sizeof(int));
-        memcpy(buffer + sizeof(int), data, length);
-        return (sizeof(int) + length);                 
-}
-
 static int smfs_pack_rec (char *buffer, struct dentry *dentry, 
                           struct inode *dir, void *data1, 
                           void *data2, int op)
@@ -351,173 +311,6 @@ static int smfs_pack_rec (char *buffer, struct dentry *dentry,
         if (!pack_func)
                 return 0;
         return pack_func(buffer, dentry, dir, data1, data2, op);
-}
-
-int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
-                         void *data1, void *data2)
-{
-        struct smfs_super_info *sinfo;
-        char   *buffer = NULL, *pbuf;
-        int rc = 0, length = 0, buf_len = 0;
-        ENTRY;
-        
-        sinfo = S2SMI(dentry->d_inode->i_sb);
-        if (!sinfo)
-                RETURN(-EINVAL);
-        
-        OBD_ALLOC(buffer, PAGE_SIZE);
-        if (!buffer)
-                GOTO(exit, rc = -ENOMEM);        
-
-        buf_len = PAGE_SIZE;
-        KML_BUF_REC_INIT(buffer, pbuf, buf_len);
-        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
-        if (rc < 0)
-                GOTO(exit, rc);
-        length = rc;
-        KML_BUF_REC_END(buffer, length, pbuf);   
-       
-        rc = smfs_pack_rec(pbuf, dentry, dir, 
-                           data1, data2, REINT_CREATE);
-        if (rc <= 0)
-                GOTO(exit, rc);
-        else
-                length += rc;
-        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
-exit:
-        if (buffer)
-                OBD_FREE(buffer, PAGE_SIZE);        
-        
-        RETURN(rc);
-}
-
-static int smfs_post_rec_link(struct inode *dir, struct dentry *dentry, 
-                              void *data1, void *data2)
-{
-        struct dentry *new_dentry = (struct dentry *)data1;
-        int rc = 0, length = 0, buf_len = 0;
-        char *buffer = NULL, *pbuf = NULL;
-        struct smfs_super_info *sinfo;
-        ENTRY;
-        
-        sinfo = S2SMI(dir->i_sb);
-        if (!sinfo)
-                RETURN(-EINVAL);
-        OBD_ALLOC(buffer, PAGE_SIZE);
-        if (!buffer)
-                GOTO(exit, rc = -ENOMEM);
-        
-        buf_len = PAGE_SIZE;
-        KML_BUF_REC_INIT(buffer, pbuf, buf_len);
-        
-        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
-        if (rc < 0)
-                GOTO(exit, rc);
-        
-        length = rc;
-        KML_BUF_REC_END(buffer, length, pbuf);  
-        
-        rc = smfs_pack_rec(pbuf, dentry, dir, dentry, 
-                           new_dentry, REINT_LINK);
-        if (rc <= 0)
-                GOTO(exit, rc);
-        
-        length += rc;
-        rc = smfs_llog_add_rec(sinfo, (void *)buffer, length); 
-exit:
-        if (buffer)
-                OBD_FREE(buffer, PAGE_SIZE);        
-        
-        RETURN(rc);
-}
-
-static int smfs_post_rec_unlink(struct inode *dir, struct dentry *dentry,
-                                void *data1, void *data2)
-{
-        struct smfs_super_info *sinfo;
-        int mode = *((int*)data1);
-        char   *buffer = NULL, *pbuf = NULL;
-        int  length = 0, rc = 0, buf_len = 0;
-        ENTRY;
-         
-        sinfo = S2SMI(dentry->d_inode->i_sb);
-        if (!sinfo)
-                RETURN(-EINVAL);
-        
-        OBD_ALLOC(buffer, PAGE_SIZE);
-        if (!buffer)
-                GOTO(exit, rc = -ENOMEM);        
-      
-        buf_len = PAGE_SIZE;
-        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
-        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
-        if (rc < 0)
-                GOTO(exit, rc);
-
-        length = rc;
-        KML_BUF_REC_END(buffer, length, pbuf);
-        rc = smfs_pack_rec(pbuf, dentry, dir, 
-                           &mode, NULL, REINT_UNLINK);
-        if (rc <= 0)
-                GOTO(exit, rc);
-        else
-                length += rc;         
-        
-        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
-exit:
-        if (buffer)
-                OBD_FREE(buffer, PAGE_SIZE);        
-        
-        RETURN(rc);
-}
-
-static int smfs_post_rec_rename(struct inode *dir, struct dentry *dentry, 
-                                void *data1, void *data2)
-{
-        struct smfs_super_info *sinfo;
-        struct inode *new_dir = (struct inode *)data1;
-        struct dentry *new_dentry = (struct dentry *)data2;
-        char *buffer = NULL, *pbuf = NULL;
-        int rc = 0, length = 0, buf_len = 0;
-        ENTRY;
-        
-        sinfo = S2SMI(dir->i_sb);
-        if (!sinfo)
-                RETURN(-EINVAL);
-
-        OBD_ALLOC(buffer, PAGE_SIZE);
-        if (!buffer)
-                GOTO(exit, rc = -ENOMEM);
-        
-        buf_len = PAGE_SIZE;
-        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
-        rc = smfs_log_path(dir->i_sb, dentry, pbuf, buf_len);
-        if (rc < 0)
-                GOTO(exit, rc);
-
-        pbuf += rc; 
-        length += rc;
-        buf_len -= rc;
-        
-        /* record new_dentry path. */
-        rc = smfs_log_path(dir->i_sb, new_dentry, pbuf, buf_len);
-        if (rc < 0)
-                GOTO(exit, rc);
-
-        length += rc;
-        KML_BUF_REC_END(buffer, length, pbuf);
-               
-        rc = smfs_pack_rec(pbuf, dentry, dir, 
-                           new_dir, new_dentry, REINT_RENAME);
-        if (rc <= 0) 
-                GOTO(exit, rc);
-        length += rc;
-        
-        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
-exit:
-        if (buffer)
-                OBD_FREE(buffer, PAGE_SIZE);
-        RETURN(rc);
 }
 
 static int smfs_insert_extents_ea(struct inode *inode, size_t from, loff_t num)
@@ -575,7 +368,7 @@ static int smfs_set_dirty_flags(struct inode *inode, int flags)
         if (SMFS_INODE_OVER_WRITE(inode))
                 RETURN(rc);
         /*FIXME later, the blocks needed in journal here will be recalculated*/
-         handle = smfs_trans_start(inode, FSFILT_OP_SETATTR, NULL);
+         handle = smfs_trans_start(inode, FSFILT_OP_SETATTR);
         if (IS_ERR(handle)) {
                 CERROR("smfs_set_dirty_flag:no space for transaction\n");
                 RETURN(-ENOSPC);
@@ -596,40 +389,193 @@ out:
         RETURN(rc);
 }
 
-int smfs_post_rec_setattr(struct inode *inode, struct dentry *dentry, 
-                          void  *data1, void  *data2)
-{        
-        struct smfs_super_info *sinfo;
-        struct iattr *attr = (struct iattr *)data1;
-        char   *buffer = NULL, *pbuf;
-        int rc = 0, length = 0, buf_len = 0;
+static int all_blocks_present_ea(struct inode *inode)
+{
+        int rc = 0;
         ENTRY;
+        RETURN(rc);        
+}
+#endif
 
-        sinfo = S2SMI(inode->i_sb);
-        if (!sinfo)
-                RETURN(-EINVAL);
+/* new plugin API */
+#if 0
+static int kml_pack_path (char **buf, struct dentry * dentry)
+{
+        char *pbuf;
+        int length = 0, rc = 0;
+        
+        OBD_ALLOC(*buf, PAGE_SIZE);
+        if (*buf == NULL)
+                return -ENOMEM;        
+
+        length = PAGE_SIZE;
+        KML_BUF_REC_INIT(*buf, pbuf, length);
+        rc = smfs_log_path(dentry->d_sb, dentry, pbuf, length);
+        if (rc < 0) {
+                return rc;
+        }
+        
+        length = rc;
+        KML_BUF_REC_END(*buf, length, pbuf);  
+        
+        return length;
+}
+#endif
+static int kml_create(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_msg * msg = arg;
+        //return smfs_post_rec_create(inode, msg->dentry, NULL, NULL);
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        char   *buffer = NULL;
+        int rc = 0, length = 0;
+        ENTRY;
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (buffer == NULL)
+                return -ENOMEM;    
+        
+        /*
+        rc = kml_pack_path(&buffer, msg->dentry);
+        if (rc < 0)
+                goto exit;
+        
+        length = rc;
+        pbuf = buffer + length;
+        */        
+        rc = priv->pack_fn(REINT_CREATE, buffer, msg->dentry, inode,
+                           NULL, NULL);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        
+        length += rc;
+        rc = smfs_llog_add_rec(smb, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int kml_link(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_link_msg * msg = arg;
+        int rc = 0, length = 0, buf_len = 0;
+        char *buffer = NULL, *pbuf = NULL;
+        struct smfs_super_info *smb;
+        ENTRY;
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);
+        
+        rc = priv->pack_fn(REINT_LINK, buffer, msg->dentry, inode, 
+                           msg->dentry, msg->new_dentry);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        
+        length += rc;
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void *)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int kml_unlink(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_unlink_msg * msg = arg;
+        char   *buffer = NULL;
+        int  length = 0, rc = 0;
+        ENTRY;
+         
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+      
+        rc = priv->pack_fn(REINT_UNLINK, buffer, msg->dentry, inode, 
+                           &msg->mode, NULL);
+        if (rc <= 0)
+                GOTO(exit, rc);
+        
+        length += rc;         
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        
+        RETURN(rc);
+}
+
+static int kml_symlink(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_symlink_msg * msg = arg;
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0;
+        ENTRY;
         
         OBD_ALLOC(buffer, PAGE_SIZE);
         if (!buffer)
                 GOTO(exit, rc = -ENOMEM);        
 
-        buf_len = PAGE_SIZE;
-        KML_BUF_REC_INIT(buffer, pbuf, buf_len);        
-        rc = smfs_log_path(inode->i_sb, dentry, pbuf, buf_len);
-        if (rc < 0)
+        rc = priv->pack_fn(REINT_CREATE, buffer, msg->dentry, inode,
+                           msg->symname, &msg->tgt_len);
+        if (rc <= 0)
                 GOTO(exit, rc);
         
-        length = rc;
-        KML_BUF_REC_END(buffer, length, pbuf);
+        length += rc;
+        rc = smfs_llog_add_rec(smb, (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
         
-        rc = smfs_pack_rec(pbuf, dentry, inode, 
-                           data1, data2, REINT_SETATTR);
+        RETURN(rc);
+}
+
+static int kml_rename(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_rename_msg * msg = arg;
+        char *buffer = NULL, *pbuf = NULL;
+        int rc = 0, length = 0, buf_len = 0;
+        ENTRY;
+        
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);
+        
+        rc = priv->pack_fn(REINT_RENAME, buffer, msg->dentry, inode, 
+                           msg->new_dir, msg->new_dentry);
         if (rc <= 0) 
                 GOTO(exit, rc);
-        else
-                length += rc;
+        length += rc;
+        
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);
+        RETURN(rc);
+}
 
-        rc = smfs_llog_add_rec(sinfo, (void*)buffer, length); 
+static int kml_setattr(struct inode * inode, void *arg, struct kml_priv * priv) 
+{
+        struct hook_setattr_msg * msg = arg;
+        char   *buffer = NULL, *pbuf;
+        int rc = 0, length = 0, buf_len = 0;
+        ENTRY;
+
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+
+        rc = priv->pack_fn(REINT_SETATTR, buffer, msg->dentry, inode, 
+                           msg->attr, NULL);
+        if (rc <= 0) 
+                GOTO(exit, rc);
+        
+        length += rc;
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+        /*
         if (!rc) {
                 if (attr && attr->ia_valid & ATTR_SIZE) {
                         smfs_remove_extents_ea(inode, attr->ia_size,
@@ -640,22 +586,17 @@ int smfs_post_rec_setattr(struct inode *inode, struct dentry *dentry,
                                 smfs_set_dirty_flags(inode, SMFS_DIRTY_WRITE);
                 }
         }
+        */
 exit:
         if (buffer)
                 OBD_FREE(buffer, PAGE_SIZE);        
         RETURN(rc);
 }
- 
-static int all_blocks_present_ea(struct inode *inode)
+/*
+static int kml_write(struct inode * inode, void *arg, struct kml_priv * priv) 
 {
-        int rc = 0;
-        ENTRY;
-        RETURN(rc);        
-}
-
-int smfs_post_rec_write(struct inode *dir, struct dentry *dentry, void *data1, 
-                        void *data2)
-{
+        struct hook_write_msg * msg = arg;
+        //return smfs_post_rec_write(inode, msg->dentry, &msg->count, &msg->pos);
         struct smfs_super_info *sinfo;
         char   *buffer = NULL, *pbuf;
         int rc = 0, length = 0, buf_len = 0;
@@ -698,7 +639,7 @@ int smfs_post_rec_write(struct inode *dir, struct dentry *dentry, void *data1,
         if (dentry->d_inode->i_size == 0) {
                 smfs_set_dirty_flags(dentry->d_inode, SMFS_OVER_WRITE);        
         } else {
-                /*insert extent EA*/
+                //insert extent EA
                 loff_t off = *((loff_t*)data1);        
                 size_t count = *((size_t*)data2);
                 
@@ -717,57 +658,9 @@ exit:
                 OBD_FREE(buffer, PAGE_SIZE);
         RETURN(rc);
 }
+*/
 
-/* new plugin API */
-struct kml_priv {
-        struct dentry * kml_llog_dir;
-};
-
-static int kml_create(struct inode * inode, void *arg) 
-{
-        struct hook_msg * msg = arg;
-        return smfs_post_rec_create(inode, msg->dentry, NULL, NULL);
-}
-
-static int kml_link(struct inode * inode, void *arg) 
-{
-        struct hook_link_msg * msg = arg;
-        return smfs_post_rec_link(inode, msg->dentry, msg->new_dentry, NULL);
-}
-
-static int kml_unlink(struct inode * inode, void *arg) 
-{
-        struct hook_unlink_msg * msg = arg;
-        return smfs_post_rec_unlink(inode, msg->dentry, &msg->mode, NULL);
-}
-
-static int kml_symlink(struct inode * inode, void *arg) 
-{
-        struct hook_symlink_msg * msg = arg;
-        return smfs_post_rec_create(inode, msg->dentry, &msg->tgt_len,
-                                    msg->symname);
-}
-
-static int kml_rename(struct inode * inode, void *arg) 
-{
-        struct hook_rename_msg * msg = arg;
-        return smfs_post_rec_rename(inode, msg->dentry, msg->new_dir,
-                                    msg->new_dentry);
-}
-
-static int kml_setattr(struct inode * inode, void *arg) 
-{
-        struct hook_setattr_msg * msg = arg;
-        return smfs_post_rec_setattr(inode, msg->dentry, msg->attr, NULL);
-}
-
-static int kml_write(struct inode * inode, void *arg) 
-{
-        struct hook_write_msg * msg = arg;
-        return smfs_post_rec_write(inode, msg->dentry, &msg->count, &msg->pos);
-}
-
-typedef int (*post_kml_op)(struct inode * inode, void *msg);
+typedef int (*post_kml_op)(struct inode * inode, void *msg, struct kml_priv * priv);
 static post_kml_op smfs_kml_post[HOOK_MAX] = {
         [HOOK_CREATE]  kml_create,
         [HOOK_LOOKUP]  NULL,
@@ -779,7 +672,7 @@ static post_kml_op smfs_kml_post[HOOK_MAX] = {
         [HOOK_MKNOD]   kml_create,
         [HOOK_RENAME]  kml_rename,
         [HOOK_SETATTR] kml_setattr,
-        [HOOK_WRITE]   kml_write,
+        [HOOK_WRITE]   NULL,
         [HOOK_READDIR] NULL,
 };
 
@@ -789,13 +682,14 @@ static int smfs_kml_post_op(int code, struct inode * inode,
         int rc = 0;
         
         ENTRY;
-        CDEBUG(D_INODE,"KML: inode %lu, code: %u\n", inode->i_ino, code);
+                
         //KML don't handle failed ops
         if (ret)
                 RETURN(0);
         
         if (smfs_kml_post[code]) {
-                rc = smfs_kml_post[code](inode, msg);
+                CDEBUG(D_INODE,"KML: inode %lu, code: %u\n", inode->i_ino, code);
+                rc = smfs_kml_post[code](inode, msg, priv);
         }
                 
         RETURN(rc);
@@ -807,7 +701,8 @@ static int smfs_exit_kml(struct super_block *sb, void * arg, struct kml_priv * p
         ENTRY;
 
         smfs_deregister_plugin(sb, SMFS_PLG_KML);
-                
+        OBD_FREE(priv, sizeof(*priv));
+        
         EXIT;
         return 0;
 }
@@ -817,12 +712,14 @@ static int smfs_trans_kml (struct super_block *sb, void *arg,
 {
         int size;
         
-        ENTRY;
+        //TODO: pass fs opcode and see if kml can participate or not
+        //one record in log per operation
+        size = 1;
         
-        size = 20;//LDISKFS_INDEX_EXTRA_TRANS_BLOCKS+LDISKFS_DATA_TRANS_BLOCKS;
-        
-        RETURN(size);
+        return size;
 }
+
+extern int mds_rec_pack(int, char*, struct dentry*, struct inode*, void*, void*);
 
 static int smfs_start_kml(struct super_block *sb, void *arg,
                           struct kml_priv * kml_p)
@@ -830,11 +727,19 @@ static int smfs_start_kml(struct super_block *sb, void *arg,
         int rc = 0;
         struct smfs_super_info * smb = S2SMI(sb);
         struct llog_ctxt **ctxt = &smb->smsi_kml_log;
+        struct obd_device *obd = arg;
 
         ENTRY;
         //is plugin already activated
         if (SMFS_IS(smb->plg_flags, SMFS_PLG_KML))
                 RETURN(0);
+        
+        if (obd && obd->obd_type && obd->obd_type->typ_name) {
+                if (strcmp(obd->obd_type->typ_name, "mds"))
+                        RETURN(0);                
+        }
+        
+        kml_p->pack_fn = mds_rec_pack;
         
         //this will do OBD_ALLOC() for ctxt
         rc = llog_catalog_setup(ctxt, KML_LOG_NAME, smb->smsi_exp,
@@ -886,16 +791,16 @@ static int smfs_kml_help_op(int code, struct super_block * sb,
                             void * arg, void * priv)
 {
         int rc = 0;
-        ENTRY;
+        
         if (smfs_kml_helpers[code])
                 rc = smfs_kml_helpers[code](sb, arg, (struct kml_priv *) priv);
-        RETURN(rc);
+        return rc;
 }
 
 int smfs_init_kml(struct super_block *sb)
 {
         int rc = 0;
-        struct smfs_super_info *smb = S2SMI(sb);
+        struct kml_priv * priv = NULL;
         struct smfs_plugin plg = {
                 .plg_type = SMFS_PLG_KML,
                 .plg_pre_op = NULL,
@@ -906,6 +811,13 @@ int smfs_init_kml(struct super_block *sb)
         
         ENTRY;
 
+        OBD_ALLOC(priv, sizeof(*priv));
+        if (!priv) {
+                RETURN(-ENOMEM);
+        }
+
+        plg.plg_private = priv;
+        /*
         rc = ost_rec_pack_init(smb);
         if (rc)
                 return rc;
@@ -913,7 +825,7 @@ int smfs_init_kml(struct super_block *sb)
         rc = mds_rec_pack_init(smb);
         if (rc)
                 return rc;
-
+        */
         rc = smfs_register_plugin(sb, &plg);
         
         RETURN(rc);
