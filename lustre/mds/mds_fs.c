@@ -444,20 +444,7 @@ static int mds_fs_post_setup(struct obd_device *obd)
         }
         
         rc = fsfilt_post_setup(obd, dentry);
-        if (rc)
-                goto out_dentry;
 
-        LASSERT(dentry->d_inode != NULL);
-        
-        fsfilt_set_fs_flags(obd, dentry->d_inode, 
-                            SM_DO_REC | SM_DO_COW);
-        
-        fsfilt_set_fs_flags(obd, mds->mds_pending_dir->d_inode, 
-                            SM_DO_REC | SM_DO_COW);
-        
-        fsfilt_set_mds_flags(obd, mds->mds_sb);
-
-out_dentry:
         l_dput(dentry);
         RETURN(rc); 
 }

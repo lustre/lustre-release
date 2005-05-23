@@ -76,14 +76,6 @@ struct mds_kml_pack_info {
         int mpi_size[4];
         int mpi_total_size;
 };
-typedef int (*smfs_hook_func)(struct inode *inode, void *dentry,
-                             void *data1, void *data2, int op, void *handle);
-struct smfs_hook_ops {
-        struct list_head smh_list;
-        char *           smh_name;
-        smfs_hook_func   smh_post_op;
-        smfs_hook_func   smh_pre_op;
-};
 
 struct smfs_super_info {
         struct super_block       *smsi_sb;
@@ -166,6 +158,10 @@ struct fs_extent{
 #define F2CF(file) (((struct smfs_file_info *) ((file->private_data)))->c_file)
 #define SIZE2BLKS(size, inode) ((size + (I2CI(inode)->i_blksize)) >> (I2CI(inode)->i_blkbits))
 #define OFF2BLKS(off, inode) (off >> (I2CI(inode)->i_blkbits))
+
+/* SMFS external flags and methods */
+#define SM_ALL_PLG      0x80L
+#define SM_PRECREATE    0x100L
 
 #define SM_DO_REC               0x1
 #define SM_INIT_REC             0x2
@@ -472,29 +468,6 @@ static inline void post_smfs_dentry(struct dentry *cache_dentry)
         
 }
 
-/*FIXME there should be more conditions in this check*/
-static inline int smfs_do_rec(struct inode *inode)
-{
-        struct super_block *sb = inode->i_sb;
-        struct smfs_super_info *smfs_info = S2SMI(sb);
-
-        if (SMFS_DO_REC(smfs_info) && SMFS_INIT_REC(smfs_info) &&
-            SMFS_DO_INODE_REC(inode))
-                return 1;
-        return 0;
-}
-
-static inline int smfs_cache_hook(struct inode *inode)
-{
-        struct smfs_super_info  *smfs_info = I2CSB(inode);
-
-        if (SMFS_CACHE_HOOK(smfs_info) && SMFS_INIT_REC(smfs_info) &&
-            SMFS_INODE_CACHE_HOOK(inode))
-                return 1;
-        else
-                return 0;
-}
-
 static inline int smfs_do_cow(struct inode *inode)
 {
         struct super_block *sb = inode->i_sb;
@@ -506,23 +479,9 @@ static inline int smfs_do_cow(struct inode *inode)
 }
 
 
-/* XXX BUG 3188 -- must return to one set of opcodes */
-#define SMFS_TRANS_OP(inode, op)                \
-{                                               \
-        if (smfs_do_rec(inode))                 \
-                op = op | 0x10;                 \
-        if (smfs_cache_hook(inode))             \
-                op = op | 0x20;                 \
-}
-
-extern int smfs_start_rec(struct super_block *sb, struct vfsmount *mnt);
-extern int smfs_stop_rec(struct super_block *sb);
 extern int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                               unsigned long from, unsigned long num);
-extern int smfs_rec_setattr(struct inode *dir, struct dentry *dentry,
-                            struct iattr *attr);
 extern int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa);
-extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size);
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 #endif /* _LUSTRE_SMFS_H */

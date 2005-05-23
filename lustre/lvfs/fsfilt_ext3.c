@@ -100,26 +100,17 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 goto journal_start;
         }
 
-        /* XXX BUG 3188 -- must return to one set of opcodes */
-        /* FIXME - cache hook */
-        if (op & 0x20) {
-                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
-                op = op & ~0x20;
-        }
-
-        /* FIXME - kml */
-        if (op & 0x10) {
-                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
-                op = op & ~0x10;
-        }
-
+	if (logs)
+		nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                
         switch(op) {
         case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
                 /* delete one file + create/update logs for each stripe */
                 nblocks += EXT3_DELETE_TRANS_BLOCKS;
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                /*nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;*/
                 break;
         case FSFILT_OP_RENAME:
                 /* modify additional directory */
@@ -131,8 +122,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* no break */
         case FSFILT_OP_CREATE:
                 /* create/update logs for each stripe */
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
+                /*nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
+                            EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;*/
                 /* no break */
         case FSFILT_OP_MKDIR:
         case FSFILT_OP_MKNOD:

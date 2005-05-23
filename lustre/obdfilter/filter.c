@@ -1383,7 +1383,7 @@ static int filter_post_fs_cleanup(struct obd_device *obd)
 
         RETURN(rc);
 }
-
+#if 0
 static int filter_group_set_fs_flags(struct obd_device *obd, int group)
 {
         struct filter_obd *filter = &obd->u.filter;
@@ -1403,29 +1403,14 @@ static int filter_group_set_fs_flags(struct obd_device *obd, int group)
         }
         RETURN(rc);
 }
+#endif
 static int filter_post_fs_setup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
-        int rc = 0, j = 0;
-        struct llog_ctxt *ctxt = NULL;
-
-        rc = fsfilt_post_setup(obd, filter->fo_dentry_O);
-        if (rc)
-                RETURN(rc);
+        int rc = 0;
         
-        for (j = 0; j < filter->fo_group_count; j++) {
-                rc = filter_group_set_fs_flags(obd, j);
-                if (rc)
-                        return rc;
-        } 
+        rc = fsfilt_post_setup(obd, filter->fo_dentry_O);
 
-        fsfilt_get_reint_log_ctxt(obd, filter->fo_sb, &ctxt);
-        if (ctxt) {
-                ctxt->loc_obd = obd;
-                ctxt->loc_idx = LLOG_REINT_ORIG_CTXT;
-                obd->obd_llog_ctxt[LLOG_REINT_ORIG_CTXT] = ctxt;
-        }
-        fsfilt_set_ost_flags(obd, filter->fo_sb);
         return rc;
 }
 
@@ -1741,12 +1726,13 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                 CERROR("can't read group %u\n", group);
                 GOTO(cleanup, rc);
         }
+#if 0
         rc = filter_group_set_fs_flags(obd, group);
         if (rc != 0) {
                 CERROR("can't set kml flags %u\n", group);
                 GOTO(cleanup, rc);
         }
-
+#endif
 cleanup:
         if (rc) {
                 if (fcd)
@@ -2394,8 +2380,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         GOTO(cleanup, rc = PTR_ERR(dparent));
                 cleanup_phase = 1;
 
-                /*only do precreate rec record. so clean kml flags here*/
-                fsfilt_clear_fs_flags(obd, dparent->d_inode, SM_DO_REC);
+                /* precreate objects are not logged */
+                fsfilt_set_fs_flags(obd, dparent->d_inode, SM_PRECREATE);
 
                 dchild = filter_id2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
