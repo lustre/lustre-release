@@ -474,7 +474,11 @@ class LCTLInterface:
 
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
-        cmds = "\n  add_uuid %s %s" %(uuid, nid)
+        if nid.find('@') < 0:
+            nidstr = nid + "@" + net_type
+        else:
+            nidstr = nid
+        cmds = "\n  add_uuid %s %s" %(uuid, nidstr)
         self.run(cmds)
 
     def add_peer(self, net_type, nid, hostaddr, port):
