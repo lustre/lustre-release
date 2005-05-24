@@ -164,7 +164,7 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         res_id.name[0] = fid->id;
         res_id.name[1] = fid->generation;
 
-        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
+        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it,
                            data);
 
         EXIT;
@@ -631,7 +631,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                sizeof(lockh));
                 }
         }
-        CDEBUG(D_DENTRY, "D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
+        CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
                len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
                it->d.lustre.it_disposition, rc);
 

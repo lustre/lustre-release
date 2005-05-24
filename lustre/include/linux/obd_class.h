@@ -301,8 +301,8 @@ static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
         ENTRY;
-        
-        OBD_CHECK_DEV(obd);                                     
+
+        OBD_CHECK_DEV(obd);
         OBD_CHECK_OP(obd, cleanup, 0);
         OBD_COUNTER_INCREMENT(obd, cleanup);
 

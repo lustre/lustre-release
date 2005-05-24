@@ -91,7 +91,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
                 return;
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
-        
+
         argv[0] = obd_lustre_upcall;
         argv[1] = "FAILED_IMPORT";
         argv[2] = imp->imp_target_uuid.uuid;
@@ -108,8 +108,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
         if (rc < 0) {
                 CERROR("Error invoking recovery upcall %s %s %s %s %s %s: %d; "
                        "check /proc/sys/lustre/lustre_upcall\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], rc);
-
+                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5],rc);
         } else {
                 CWARN("Invoked upcall %s %s %s %s %s %s\n",
                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
@@ -130,17 +129,15 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         ENTRY;
 
         LASSERT (obd_lustre_upcall != NULL);
-        
+
         if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
                 CDEBUG(D_HA, "%s: starting recovery without upcall\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_connect_import(imp, NULL);
-        } 
-        else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
+        } else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
                 CDEBUG(D_HA, "%s: recovery disabled\n",
                         imp->imp_target_uuid.uuid);
-        } 
-        else {
+        } else {
                 CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_run_failed_import_upcall(imp);
@@ -271,7 +268,6 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        int rc;
         struct obd_import *imp= failed_req->rq_import;
         unsigned long flags;
         ENTRY;
@@ -290,8 +286,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
                 }
-
-                rc = ptlrpc_connect_import(imp, NULL);
+                ptlrpc_connect_import(imp, NULL);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then

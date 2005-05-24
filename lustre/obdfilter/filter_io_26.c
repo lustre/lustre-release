@@ -123,11 +123,11 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 CERROR("***** bio->bi_private is NULL!  This should never "
                        "happen.  Normally, I would crash here, but instead I "
                        "will dump the bio contents to the console.  Please "
-                       "report this to CFS, along with any interesting messages "
-                       "leading up to this point (like SCSI errors, perhaps).  "
-                       "Because bi_private is NULL, I can't wake up the thread "
-                       "that initiated this I/O -- so you will probably have to "
-                       "reboot this node.");
+                       "report this to CFS, along with any interesting "
+                       "messages leading up to this point (like SCSI errors, "
+                       "perhaps).  Because bi_private is NULL, I can't wake up "
+                       "the thread that initiated this I/O -- so you will "
+                       "probably have to reboot this node.\n");
                 CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
                        "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
                        "bi_private: %p\n", bio->bi_next, bio->bi_flags,
@@ -343,7 +343,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                         record_finish_io(dreq, rw, rc);
                 }
         }
-                        
+
  out:
         wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
 
@@ -426,7 +426,7 @@ static int filter_quota_enforcement(struct obd_device *obd,
                 cap_raise(uc->ouc_cap, CAP_SYS_RESOURCE);
         else
                 cap_lower(uc->ouc_cap, CAP_SYS_RESOURCE);
-        
+
         RETURN(0);
 }
 
@@ -496,7 +496,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                 cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
                 dreq->dr_flag &= ~OBD_BRW_FROM_GRANT;
         }
-        
+
 remap:
         rc = fsfilt_map_inode_pages(obd, inode,
                                     dreq->dr_pages, dreq->dr_npages,
@@ -505,18 +505,18 @@ remap:
                                     rw == OBD_BRW_WRITE, NULL);
 
         if (rc == -EDQUOT) {
-                LASSERT(rw == OBD_BRW_WRITE && 
+                LASSERT(rw == OBD_BRW_WRITE &&
                         !cap_raised(current->cap_effective, CAP_SYS_RESOURCE));
 
-                /* Unfortunately, if quota master is too busy to handle the 
-                 * pre-dqacq in time or this user has exceeded quota limit, we 
-                 * have to wait for the completion of in flight dqacq/dqrel, 
+                /* Unfortunately, if quota master is too busy to handle the
+                 * pre-dqacq in time or this user has exceeded quota limit, we
+                 * have to wait for the completion of in flight dqacq/dqrel,
                  * then try again */
-                if (qctxt_wait_on_dqacq(obd, qctxt, inode->i_uid, 
+                if (qctxt_wait_on_dqacq(obd, qctxt, inode->i_uid,
                                         inode->i_gid, 1) == -EAGAIN)
                         goto remap;
         }
-        
+
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
                         filter_tally_write(&obd->u.filter,

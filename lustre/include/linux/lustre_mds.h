@@ -131,13 +131,13 @@ struct mds_client_data {
 struct mds_file_data {
         struct portals_handle mfd_handle; /* must be first */
         atomic_t              mfd_refcount;
-        struct list_head      mfd_list;
+        struct list_head      mfd_list; /* protected by med_open_lock */
         __u64                 mfd_xid;
         int                   mfd_mode;
         struct dentry        *mfd_dentry;
 };
 
-/* mds/mds_reint.c  */
+/* mds/mds_reint.c */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
 
