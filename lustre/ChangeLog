@@ -60,6 +60,15 @@ Details    : This builds on the enhanced upcall-less recovery that was added
              now try each server in the failover group every 10 seconds.  By
              default, clients would previously try one server every 25 seconds.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 6371
+Description: After recovery, certain operations trigger a failed
+             assertion on a client.
+Details    : Failing over an mds, using lconf -d --failover, while a
+             client was doing a readdir() call would cause the client to 
+             LBUG after recovery completed and the readdir() was resent.
+
 ------------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>

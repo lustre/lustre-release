@@ -1396,8 +1396,18 @@ restart:
         if (req->rq_resend) {
                 lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
-                if (req->rq_bulk != NULL)
+                if (req->rq_bulk != NULL) {
                         ptlrpc_unregister_bulk (req);
+
+                        /* bulk requests are supposed to be
+                         * idempotent, so we are free to bump the xid
+                         * here, which we need to do before
+                         * registering the bulk again (bug 6371).
+                         * print the old xid first for sanity.
+                         */
+                        DEBUG_REQ(D_HA, req, "bumping xid for bulk: ");
+                        req->rq_xid = ptlrpc_next_xid();
+                }
 
                 DEBUG_REQ(D_HA, req, "resending: ");
         }
