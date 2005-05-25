@@ -4,9 +4,7 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if SMFS
 modulefs_DATA = smfs$(KMODEXT)
-endif
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
