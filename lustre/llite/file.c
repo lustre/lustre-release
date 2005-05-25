@@ -376,7 +376,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         CDEBUG(D_INODE|D_PAGE, "walking page indices start: %lu j: %lu "
                "count: %lu skip: %lu end: %lu%s\n", start, start % count,
                count, skip, end, discard ? " (DISCARDING)" : "");
-        
+
         /* walk through the vmas on the inode and tear down mmaped pages that
          * intersect with the lock.  this stops immediately if there are no
          * mmap()ed regions of the file.  This is not efficient at all and
@@ -386,7 +386,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 j = min(count - (i % count), end - i + 1);
                 LASSERT(j > 0);
                 LASSERT(inode->i_mapping);
-                if (ll_teardown_mmaps(inode->i_mapping, 
+                if (ll_teardown_mmaps(inode->i_mapping,
                                       (__u64)i << PAGE_CACHE_SHIFT,
                                       ((__u64)(i+j) << PAGE_CACHE_SHIFT) - 1) )
                         break;
@@ -764,8 +764,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         __u64 kms;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld=%#Lx\n",
+               inode->i_ino, inode->i_generation,inode,(long)count,*ppos,*ppos);
 
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
@@ -800,11 +800,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                         RETURN(-EFAULT);
                 RETURN(count);
         }
-        
-        node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
-                                  LCK_PR);
+
+        node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
         tree.lt_fd = filp->private_data;
-        rc = ll_tree_lock(&tree, node, buf, count, 
+        rc = ll_tree_lock(&tree, node, buf, count,
                           filp->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
                 RETURN(rc);
@@ -853,8 +852,8 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         ssize_t retval;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
-               inode->i_ino, inode->i_generation, inode, count, *ppos);
+        CDEBUG(D_VFSTRACE,"VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld=%#Lx\n",
+               inode->i_ino, inode->i_generation,inode,(long)count,*ppos,*ppos);
 
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
 
@@ -867,18 +866,18 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (file->f_flags & O_LOV_DELAY_CREATE && lsm == NULL)
                 RETURN(-EBADF);
 
-        LASSERT(lsm);
-        
+        LASSERT(lsm != NULL);
+
         if (file->f_flags & O_APPEND)
                 node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
         else
-                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
+                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1,
                                           LCK_PW);
         if (IS_ERR(node))
                 RETURN(PTR_ERR(node));
 
         tree.lt_fd = file->private_data;
-        rc = ll_tree_lock(&tree, node, buf, count, 
+        rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
                 RETURN(rc);
@@ -1096,7 +1095,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%x\n", inode->i_ino,
                inode->i_generation, inode, cmd);
 
-        if (_IOC_TYPE(cmd) == 'T') /* tty ioctls */
+        /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
+        if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
                 RETURN(-ENOTTY);
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
@@ -1152,10 +1152,10 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         struct lustre_handle lockh = {0};
         loff_t retval;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%llu(%s)\n",
-               inode->i_ino, inode->i_generation, inode,
-               offset + ((origin == 2) ? inode->i_size :
-                         (origin == 1) ? file->f_pos : 0),
+        retval = offset + ((origin == 2) ? inode->i_size :
+                           (origin == 1) ? file->f_pos : 0);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%Lu=%#Lx(%s)\n",
+               inode->i_ino, inode->i_generation, inode, retval, retval,
                origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
