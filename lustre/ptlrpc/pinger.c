@@ -132,14 +132,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
                 imp->imp_force_verify = 0;
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        if (imp->imp_next_ping > this_ping &&
-                        (imp->imp_next_ping - this_ping > obd_timeout * HZ)) {
-                CWARN("wrong ping time %lu (current %lu)\n",
-                      imp->imp_next_ping, this_ping);
-                imp->imp_next_ping = ptlrpc_next_reconnect(imp);
-        }
-
-        if (imp->imp_next_ping > this_ping && force == 0)
+        if (time_after_eq(imp->imp_next_ping, this_ping) && force == 0)
                 return;
 
         if (level == LUSTRE_IMP_DISCON && !imp->imp_deactive) {
