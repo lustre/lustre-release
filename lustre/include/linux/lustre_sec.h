@@ -120,26 +120,29 @@ struct vfs_cred {
 };
 
 struct ptlrpc_credops {
+        int     (*match)  (struct ptlrpc_cred *cred, struct vfs_cred *vcred);
         int     (*refresh)(struct ptlrpc_cred *cred);
-        int     (*match)  (struct ptlrpc_cred *cred,
-                           struct ptlrpc_request *req,
-                           struct vfs_cred *vcred);
-        int     (*sign)   (struct ptlrpc_cred *cred, struct ptlrpc_request *req);
-        int     (*verify) (struct ptlrpc_cred *cred, struct ptlrpc_request *req);
-        int     (*seal)   (struct ptlrpc_cred *cred, struct ptlrpc_request *req);
-        int     (*unseal) (struct ptlrpc_cred *cred, struct ptlrpc_request *req);
         void    (*destroy)(struct ptlrpc_cred *cred);
+        int     (*sign)   (struct ptlrpc_cred *cred,
+                           struct ptlrpc_request *req);
+        int     (*verify) (struct ptlrpc_cred *cred,
+                           struct ptlrpc_request *req);
+        int     (*seal)   (struct ptlrpc_cred *cred,
+                           struct ptlrpc_request *req);
+        int     (*unseal) (struct ptlrpc_cred *cred,
+                           struct ptlrpc_request *req);
 };
 
-#define PTLRPC_CRED_UPTODATE    0x00000001
-#define PTLRPC_CRED_DEAD        0x00000002
+#define PTLRPC_CRED_UPTODATE    0x00000001 /* uptodate */
+#define PTLRPC_CRED_DEAD        0x00000002 /* mark expired gracefully */
+#define PTLRPC_CRED_ERROR       0x00000004 /* fatal error (refresh, etc.) */
+#define PTLRPC_CRED_FLAGS_MASK  0x00000007
 
 struct ptlrpc_cred {
         struct list_head        pc_hash;   /* linked into hash table */
         atomic_t                pc_refcount;
         struct ptlrpc_sec      *pc_sec;
         struct ptlrpc_credops  *pc_ops;
-        struct ptlrpc_request  *pc_req;
         unsigned long           pc_expire;
         int                     pc_flags;
         /* XXX maybe should not be here */
@@ -153,7 +156,6 @@ struct ptlrpc_secops {
                                                 void *pipe_data);
         void                  (*destroy_sec)   (struct ptlrpc_sec *sec);
         struct ptlrpc_cred *  (*create_cred)   (struct ptlrpc_sec *sec,
-                                                struct ptlrpc_request *req,
                                                 struct vfs_cred *vcred);
         /* buffer manipulation */
         int                   (*alloc_reqbuf)  (struct ptlrpc_sec *sec,
@@ -224,7 +226,8 @@ static inline int ptlrpcs_cred_is_uptodate(struct ptlrpc_cred *cred)
 {
         LASSERT(cred);
         LASSERT(atomic_read(&cred->pc_refcount));
-        return (cred->pc_flags & PTLRPC_CRED_UPTODATE);
+        return ((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
+                PTLRPC_CRED_UPTODATE);
 }
 static inline int ptlrpcs_cred_refresh(struct ptlrpc_cred *cred)
 {

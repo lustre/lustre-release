@@ -209,12 +209,13 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                 GOTO(out_free, rc);
         }
 
-        /* just a try on refresh, but we proceed even if it failed */
-        rc = ptlrpcs_cred_refresh(request->rq_cred);
-        if (!ptlrpcs_cred_is_uptodate(request->rq_cred)) {
-                CERROR("req %p: failed to refresh cred %p, rc %d, continue\n",
-                       request, request->rq_cred, rc);
-        }
+        /* try to refresh the cred. we do this here in order to let fewer
+         * refresh be performed in ptlrpcd context (which might block ptlrpcd).
+         * fail out only if a fatal ptlrpcs error occured.
+         */
+        ptlrpcs_req_refresh_cred(request);
+        if (request->rq_ptlrpcs_err)
+                GOTO(out_cred, rc = -EPERM);
 
         rc = lustre_pack_request(request, count, lengths, bufs);
         if (rc) {
@@ -666,10 +667,10 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 if (req->rq_net_err && !req->rq_timedout)
                         ptlrpc_expire_one_request(req); 
 
-                if (req->rq_err) {
+                if (req->rq_err || req->rq_ptlrpcs_err) {
                         ptlrpc_unregister_reply(req);
                         if (req->rq_status == 0)
-                                req->rq_status = -EIO;
+                                req->rq_status = req->rq_err ? -EIO : -EPERM;
                         req->rq_phase = RQ_PHASE_INTERPRET;
 
                         spin_lock_irqsave(&imp->imp_lock, flags);
@@ -1494,6 +1495,9 @@ repeat:
 
         if (req->rq_err)
                 GOTO(out, rc = -EIO);
+
+        if (req->rq_ptlrpcs_err)
+                GOTO(out, rc = -EPERM);
 
         /* Resend if we need to, unless we were interrupted. */
         if (req->rq_resend && !req->rq_intr) {

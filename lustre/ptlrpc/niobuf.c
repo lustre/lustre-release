@@ -450,8 +450,9 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_timedout = 0;
         request->rq_net_err = 0;
         request->rq_resend = 0;
-        request->rq_ptlrpcs_restart = 0;
         request->rq_restart = 0;
+        request->rq_ptlrpcs_restart = 0;
+        request->rq_ptlrpcs_err = 0;
         spin_unlock_irqrestore (&request->rq_lock, flags);
 
         reply_md.start     = request->rq_repbuf;
@@ -693,10 +694,13 @@ int ptlrpc_do_rawrpc(struct obd_import *imp,
         if (request.rq_err || request.rq_resend || request.rq_intr ||
             request.rq_timedout || !request.rq_replied) {
                 CERROR("secinit rpc error: err %d, resend %d, "
-                       "intr %d, timeout %d, replied %d\n",
+                       "intr %d, timedout %d, replied %d\n",
                         request.rq_err, request.rq_resend, request.rq_intr,
                         request.rq_timedout, request.rq_replied);
-                rc = -EINVAL;
+                if (request.rq_timedout)
+                        rc = -ETIMEDOUT;
+                else
+                        rc = -EINVAL;
         } else {
                 *replenp = request.rq_nob_received;
                 rc = 0;

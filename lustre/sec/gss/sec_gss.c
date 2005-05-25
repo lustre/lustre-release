@@ -305,7 +305,8 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
 
         if (!reqbuf || !repbuf) {
                 CERROR("Can't alloc buffer: %p/%p\n", reqbuf, repbuf);
-                GOTO(out_free, rc = -ENOMEM);
+                param.status = -ENOMEM;
+                goto out_copy;
         }
 
         /* get token */
@@ -313,34 +314,42 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
                                          param.uid, param.gid,
                                          param.send_token_size,
                                          param.send_token);
-        if (reqlen < 0)
-                GOTO(out_free, rc = reqlen);
+        if (reqlen < 0) {
+                param.status = reqlen;
+                goto out_copy;
+        }
 
         replen = repbuf_size;
         rc = ptlrpc_do_rawrpc(imp, reqbuf, reqlen,
                               repbuf, &replen, SECINIT_RPC_TIMEOUT);
-        if (rc)
-                GOTO(out_free, rc);
+        if (rc) {
+                param.status = rc;
+                goto out_copy;
+        }
 
         if (replen > param.reply_buf_size) {
                 CERROR("output buffer size %ld too small, need %d\n",
                         param.reply_buf_size, replen);
-                GOTO(out_free, rc = -EINVAL);
+                param.status = -EINVAL;
+                goto out_copy;
         }
 
         lsize = secinit_parse_reply(repbuf, replen,
                                     param.reply_buf, param.reply_buf_size);
-        if (lsize < 0)
-                GOTO(out_free, rc = (int)lsize);
+        if (lsize < 0) {
+                param.status = (int) lsize;
+                goto out_copy;
+        }
 
         param.status = 0;
         param.reply_length = lsize;
 
+out_copy:
         if (copy_to_user(buffer, &param, sizeof(param)))
                 rc = -EFAULT;
         else
                 rc = 0;
-out_free:
+
         class_import_put(imp);
         if (repbuf)
                 OBD_FREE(repbuf, repbuf_size);
@@ -620,10 +629,11 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
         struct gss_cl_ctx *ctx;
         rawobj_t tmp_buf;
         unsigned int timeout;
-        int err = -EIO;
+        int err = -EPERM;
         ENTRY;
 
         *gc = NULL;
+        *gss_err = 0;
 
         OBD_ALLOC(ctx, sizeof(*ctx));
         if (!ctx)
@@ -635,45 +645,56 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
         atomic_set(&ctx->gc_refcount,1);
 
         if (simple_get_bytes(&p, &len, &gmd->gum_uid, sizeof(gmd->gum_uid)))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_svc, sizeof(gmd->gum_svc)))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_nal, sizeof(gmd->gum_nal)))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_netid, sizeof(gmd->gum_netid)))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_nid, sizeof(gmd->gum_nid)))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         /* FIXME: discarded timeout for now */
         if (simple_get_bytes(&p, &len, &timeout, sizeof(timeout)))
-                GOTO(err_free_ctx, err);
-        *gss_err = 0;
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &ctx->gc_win, sizeof(ctx->gc_win)))
-                GOTO(err_free_ctx, err);
-        /* gssd signals an error by passing ctx->gc_win = 0: */
+                goto err_free_ctx;
+
+        /* lgssd signals an error by passing ctx->gc_win = 0: */
         if (!ctx->gc_win) {
-                /* in which case the next int is an error code: */
-                if (simple_get_bytes(&p, &len, gss_err, sizeof(*gss_err)))
-                        GOTO(err_free_ctx, err);
-                if (*gss_err == 0) {
-                        CERROR("error downcall pass no gss error\n");
-                        GOTO(err_free_ctx, err);
+                /* in which case the next 2 int are:
+                 * - rpc error
+                 * - gss error
+                 */
+                if (simple_get_bytes(&p, &len, &err, sizeof(err))) {
+                        err = -EPERM;
+                        goto err_free_ctx;
                 }
-                GOTO(err_free_ctx, err = 0);
+                if (simple_get_bytes(&p, &len, gss_err, sizeof(*gss_err))) {
+                        err = -EPERM;
+                        goto err_free_ctx;
+                }
+                if (err == 0 && *gss_err == 0) {
+                        CERROR("no error passed from downcall\n");
+                        err = -EPERM;
+                }
+                goto err_free_ctx;
         }
+
         if (rawobj_extract_local(&tmp_buf, (__u32 **) ((void *)&p), &len))
-                GOTO(err_free_ctx, err);
+                goto err_free_ctx;
         if (rawobj_dup(&ctx->gc_wire_ctx, &tmp_buf)) {
-                GOTO(err_free_ctx, err = -ENOMEM);
+                err = -ENOMEM;
+                goto err_free_ctx;
         }
         if (rawobj_extract_local(&tmp_buf, (__u32 **) ((void *)&p), &len))
-                GOTO(err_free_wire_ctx, err);
+                goto err_free_wire_ctx;
         if (len) {
                 CERROR("unexpected trailing %u bytes\n", len);
-                GOTO(err_free_wire_ctx, err);
+                goto err_free_wire_ctx;
         }
         if (kgss_import_sec_context(&tmp_buf, gm, &ctx->gc_gss_ctx))
-                GOTO(err_free_wire_ctx, err);
+                goto err_free_wire_ctx;
 
         *gc = ctx;
         RETURN(0);
@@ -747,16 +768,18 @@ again:
         spin_lock(&gsec->gs_lock);
         gss_msg = gss_find_upcall(gsec, obdname, &gmd);
         if (gss_msg) {
-                spin_unlock(&gsec->gs_lock);
+                if (gss_new) {
+                        OBD_FREE(gss_new, sizeof(*gss_new));
+                        gss_new = NULL;
+                }
                 GOTO(waiting, res);
         }
+
         if (!gss_new) {
                 spin_unlock(&gsec->gs_lock);
                 OBD_ALLOC(gss_new, sizeof(*gss_new));
-                if (!gss_new) {
-                        CERROR("fail to alloc memory\n");
+                if (!gss_new)
                         RETURN(-ENOMEM);
-                }
                 goto again;
         }
         /* so far we'v created gss_new */
@@ -781,30 +804,45 @@ again:
                 CERROR("rpc_queue_upcall failed: %d\n", res);
                 gss_unhash_msg(gss_new);
                 gss_release_msg(gss_new);
+                cred->pc_flags |= PTLRPC_CRED_ERROR;
                 RETURN(res);
         }
         gss_msg = gss_new;
+        spin_lock(&gsec->gs_lock);
 
 waiting:
+        /* upcall might finish quickly */
+        if (list_empty(&gss_msg->gum_list)) {
+                spin_unlock(&gsec->gs_lock);
+                res = 0;
+                goto out;
+        }
+
         init_waitqueue_entry(&wait, current);
-        spin_lock(&gsec->gs_lock);
-        add_wait_queue(&gss_msg->gum_waitq, &wait);
         set_current_state(TASK_INTERRUPTIBLE);
+        add_wait_queue(&gss_msg->gum_waitq, &wait);
         spin_unlock(&gsec->gs_lock);
 
         res = schedule_timeout(CRED_REFRESH_UPCALL_TIMEOUT * HZ);
-
         remove_wait_queue(&gss_msg->gum_waitq, &wait);
+
         if (signal_pending(current)) {
-                CERROR("interrupted gss upcall: cred %p\n", cred);
+                CERROR("cred %p: interrupted upcall\n", cred);
+                if (gss_new)
+                        cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 res = -EINTR;
         } else if (res == 0) {
-                CERROR("gss upcall timeout: cred %p\n", cred);
+                CERROR("cred %p: upcall timedout\n", cred);
+                cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 res = -ETIMEDOUT;
         } else
                 res = 0;
 
+out:
+        spin_lock(&gsec->gs_lock);
         gss_release_msg(gss_msg);
+        spin_unlock(&gsec->gs_lock);
+
         RETURN(res);
 }
 #else /* !__KERNEL__ */
@@ -861,14 +899,12 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         LASSERT(mech);
         rc = gss_parse_init_downcall(mech, &obj, &ctx, &vcred, &dest_ip,
                                      &gss_err);
-        if (rc) {
-                CERROR("parse init downcall error %d\n", rc);
-                goto err_out;
-        }
-
-        if (gss_err) {
-                CERROR("cred fresh got gss error %x\n", gss_err);
-                rc = -EINVAL;
+        if (rc || gss_err) {
+                CERROR("parse init downcall: rpc %d, gss 0x%x\n", rc, gss_err);
+                if (rc != -ERESTART || gss_err != 0)
+                        cred->pc_flags |= PTLRPC_CRED_ERROR;
+                if (rc == 0)
+                        rc = -EPERM;
                 goto err_out;
         }
 
@@ -884,7 +920,6 @@ err_out:
 #endif
 
 static int gss_cred_match(struct ptlrpc_cred *cred,
-                          struct ptlrpc_request *req,
                           struct vfs_cred *vcred)
 {
         RETURN(cred->pc_pag == vcred->vc_pag);
@@ -1451,12 +1486,16 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         cred = ptlrpcs_cred_lookup(sec, &vcred);
         if (!cred) {
                 CWARN("didn't find cred for uid %u\n", vcred.vc_uid);
-                GOTO(err, err);
+                GOTO(err, err = -EINVAL);
         }
+
         if (err || gss_err) {
-                CERROR("got err %d, gss err %d, set cred %p dead\n",
-                        err, gss_err, cred);
                 cred->pc_flags |= PTLRPC_CRED_DEAD;
+                if (err != -ERESTART || gss_err != 0)
+                        cred->pc_flags |= PTLRPC_CRED_ERROR;
+                CERROR("cred %p: rpc err %d, gss err 0x%x, fatal %d\n",
+                        cred, err, gss_err,
+                        ((cred->pc_flags & PTLRPC_CRED_ERROR) != 0));
         } else {
                 CDEBUG(D_SEC, "get initial ctx:\n");
                 gss_cred_set_ctx(cred, ctx);
@@ -1676,7 +1715,6 @@ void gss_destroy_sec(struct ptlrpc_sec *sec)
 
 static
 struct ptlrpc_cred * gss_create_cred(struct ptlrpc_sec *sec,
-                                     struct ptlrpc_request *req,
                                      struct vfs_cred *vcred)
 {
         struct gss_cred *gcred;
@@ -1692,7 +1730,6 @@ struct ptlrpc_cred * gss_create_cred(struct ptlrpc_sec *sec,
         atomic_set(&cred->pc_refcount, 0);
         cred->pc_sec = sec;
         cred->pc_ops = &gss_credops;
-        cred->pc_req = req;
         cred->pc_expire = get_seconds() + GSS_CRED_EXPIRE;
         cred->pc_flags = 0;
         cred->pc_pag = vcred->vc_pag;

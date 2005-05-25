@@ -923,7 +923,13 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         rsci = gss_svc_searchbyctx(&rsip->out_handle);
         if (!rsci) {
                 CERROR("rsci still not mature yet?\n");
-                GOTO(out_rsip, rc = SVC_DROP);
+
+                if (gss_pack_err_notify(req, GSS_S_FAILURE, 0))
+                        rc = SVC_DROP;
+                else
+                        rc = SVC_COMPLETE;
+
+                GOTO(out_rsip, rc);
         }
         CWARN("svcsec create gss context %p(%u@%s)\n",
                rsci, rsci->cred.vc_uid,

@@ -238,7 +238,6 @@ int ptlrpcs_cred_get_hash(__u64 pag)
 static
 struct ptlrpc_cred * cred_cache_lookup(struct ptlrpc_sec *sec,
                                        struct vfs_cred *vcred,
-                                       struct ptlrpc_request *req,
                                        int create)
 {
         struct ptlrpc_cred *cred, *new = NULL, *n;
@@ -259,7 +258,7 @@ retry:
                         continue;
                 if (ptlrpcs_cred_unlink_expired(cred, &freelist))
                         continue;
-                if (cred->pc_ops->match(cred, req, vcred)) {
+                if (cred->pc_ops->match(cred, vcred)) {
                         found = 1;
                         break;
                 }
@@ -277,7 +276,7 @@ retry:
                         cred = new;
                 } else if (create) {
                         spin_unlock(&sec->ps_lock);
-                        new = sec->ps_type->pst_ops->create_cred(sec, req, vcred);
+                        new = sec->ps_type->pst_ops->create_cred(sec, vcred);
                         if (new) {
                                 atomic_inc(&sec->ps_credcount);
                                 goto retry;
@@ -302,7 +301,7 @@ struct ptlrpc_cred * ptlrpcs_cred_lookup(struct ptlrpc_sec *sec,
         struct ptlrpc_cred *cred;
         ENTRY;
 
-        cred = cred_cache_lookup(sec, vcred, NULL, 0);
+        cred = cred_cache_lookup(sec, vcred, 0);
         RETURN(cred);
 }
 
@@ -322,7 +321,7 @@ int ptlrpcs_req_get_cred(struct ptlrpc_request *req)
         vcred.vc_pag = (__u64) current->uid;
         vcred.vc_uid = current->uid;
 
-        req->rq_cred = cred_cache_lookup(imp->imp_sec, &vcred, req, 1);
+        req->rq_cred = cred_cache_lookup(imp->imp_sec, &vcred, 1);
 
         if (!req->rq_cred) {
                 CERROR("req %p: fail to get cred from cache\n", req);
@@ -407,21 +406,27 @@ int ptlrpcs_req_replace_dead_cred(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+/*
+ * since there's no lock on the cred, its status could be changed
+ * by other threads at any time, we allow this race.
+ */
 int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
 {
         struct ptlrpc_cred *cred = req->rq_cred;
-        int rc;
         ENTRY;
 
         LASSERT(cred);
 
-        if ((cred->pc_flags & (PTLRPC_CRED_UPTODATE | PTLRPC_CRED_DEAD)) ==
-            PTLRPC_CRED_UPTODATE)
+        if (ptlrpcs_cred_is_uptodate(cred))
                 RETURN(0);
 
+        if (cred->pc_flags & PTLRPC_CRED_ERROR) {
+                req->rq_ptlrpcs_err = 1;
+                RETURN(-EPERM);
+        }
+
         if (cred->pc_flags & PTLRPC_CRED_DEAD) {
-                rc = ptlrpcs_req_replace_dead_cred(req);
-                if (!rc) {
+                if (ptlrpcs_req_replace_dead_cred(req) == 0) {
                         LASSERT(cred != req->rq_cred);
                         CWARN("req %p: replace cred %p => %p\n",
                                req, cred, req->rq_cred);
@@ -434,14 +439,16 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
                 }
         }
 
-        rc = ptlrpcs_cred_refresh(cred);
-        if (!(cred->pc_flags & PTLRPC_CRED_UPTODATE)) {
-                CERROR("req %p: failed to refresh cred %p, rc %d\n",
-                        req, cred, rc);
-                if (!rc)
-                        rc = -EACCES;
-        }
-        RETURN(rc);
+        ptlrpcs_cred_refresh(cred);
+        if (!ptlrpcs_cred_is_uptodate(cred)) {
+                if (cred->pc_flags & PTLRPC_CRED_ERROR)
+                        req->rq_ptlrpcs_err = 1;
+
+                CERROR("req %p: failed to refresh cred %p, fatal %d\n",
+                        req, cred, req->rq_ptlrpcs_err);
+                RETURN(-EPERM);
+        } else
+                RETURN(0);
 }
 
 int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req)

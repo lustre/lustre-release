@@ -44,7 +44,6 @@ static int null_cred_refresh(struct ptlrpc_cred *cred)
 }
 
 static int null_cred_match(struct ptlrpc_cred *cred,
-                           struct ptlrpc_request *req,
                            struct vfs_cred *vcred)
 {
         ENTRY;
@@ -133,7 +132,6 @@ void null_destroy_sec(struct ptlrpc_sec *sec)
 
 static
 struct ptlrpc_cred* null_create_cred(struct ptlrpc_sec *sec,
-                                     struct ptlrpc_request *req,
                                      struct vfs_cred *vcred)
 {
         struct ptlrpc_cred *cred;
@@ -147,7 +145,6 @@ struct ptlrpc_cred* null_create_cred(struct ptlrpc_sec *sec,
         atomic_set(&cred->pc_refcount, 0);
         cred->pc_sec = sec;
         cred->pc_ops = &null_credops;
-        cred->pc_req = req;
         cred->pc_expire = (-1UL >> 1); /* never expire */
         cred->pc_flags = PTLRPC_CRED_UPTODATE;
         cred->pc_pag = vcred->vc_pag;

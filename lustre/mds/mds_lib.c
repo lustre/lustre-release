@@ -890,6 +890,15 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
         LASSERT(rsd);
         LASSERT(rsd->rsd_ngroups <= LUSTRE_MAX_GROUPS);
 
+        /* XXX We'v no dedicated bits indicating whether GSS is used,
+         * and authenticated/mapped uid is valid. currently we suppose
+         * gss must initialize rq_sec_svcdata.
+         */
+        if (req->rq_sec_svcdata && req->rq_auth_uid == -1) {
+                CWARN("user not authenticated, deny access\n");
+                RETURN(-EPERM);
+        }
+
         strong_sec = (req->rq_auth_uid != -1);
         LASSERT(!(req->rq_remote_realm && !strong_sec));
 
