@@ -474,8 +474,8 @@ int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req)
         case PTLRPC_SEC_TYPE_NONE:
         case PTLRPC_SEC_TYPE_AUTH:
                 if (req->rq_req_wrapped) {
-                        CWARN("req %p(o%u,x"LPU64",t"LPU64") "
-                              "already signed, resend?\n", req,
+                        CDEBUG(D_SEC, "req %p(o%u,x"LPU64",t"LPU64") "
+                               "already signed, resend?\n", req,
                                req->rq_reqmsg ? req->rq_reqmsg->opc : -1,
                                req->rq_xid, req->rq_transno);
                         req->rq_req_wrapped = 0;
@@ -491,8 +491,8 @@ int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req)
                 break;
         case PTLRPC_SEC_TYPE_PRIV:
                 if (req->rq_req_wrapped) {
-                        CWARN("req %p(o%u,x"LPU64",t"LPU64") "
-                              "already encrypted, resend?\n", req,
+                        CDEBUG(D_SEC, "req %p(o%u,x"LPU64",t"LPU64") "
+                               "already encrypted, resend?\n", req,
                                req->rq_reqmsg ? req->rq_reqmsg->opc : -1,
                                req->rq_xid, req->rq_transno);
                         req->rq_req_wrapped = 0;

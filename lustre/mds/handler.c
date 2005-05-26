@@ -438,7 +438,7 @@ static int mds_init_export_data(struct ptlrpc_request *req,
         LASSERT(data && reply);
 
         if (med->med_initialized) {
-                CWARN("med already initialized, reconnect?\n");
+                CDEBUG(D_SEC, "med already initialized, reconnect?\n");
                 goto reply;
         }
 
@@ -1979,7 +1979,7 @@ static int mds_inode_init_acl(struct obd_device *obd, void *handle,
         struct inode *inode = de->d_inode;
         struct posix_acl *acl;
         mode_t mode;
-        int rc;
+        int rc = 0;
 
         LASSERT(handle);
         LASSERT(inode);
