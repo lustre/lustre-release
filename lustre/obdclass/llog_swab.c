@@ -113,12 +113,12 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
 
         case MDS_SETATTR_REC: {
                 struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
-                                                                                                                             
+
                 __swab64s(&lsr->lsr_oid);
                 __swab32s(&lsr->lsr_ogen);
                 __swab32s(&lsr->lsr_uid);
                 __swab32s(&lsr->lsr_gid);
-                                                                                                                             
+
                 break;
         }
 
@@ -153,6 +153,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 break;
         }
 
+        case LLOG_PAD_MAGIC:
         /* ignore old pad records of type 0 */
         case 0:
                 break;
