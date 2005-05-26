@@ -56,6 +56,20 @@ prepare_krb5_cache() {
         return 0
     fi
 
+    #
+    # check installed service keytab for root
+    #
+    if [ $UID -eq 0 ]; then
+        output=`$KRB5DIR/bin/klist -5 -k`
+        if [ $? == 0 ]; then
+            item=`echo $output | egrep "lustre_mds/.*@"`
+            if [ "x$item" != "x" ]; then
+                echo "Using service keytab"
+                return 0
+            fi
+        fi
+    fi
+
     echo "***** refresh Kerberos V5 TGT for uid $UID *****"
     $KRB5DIR/bin/kinit
     ret=$?
