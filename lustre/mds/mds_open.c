@@ -1580,7 +1580,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         }
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                DEBUG_REQ(D_HA, req, "close replay\n");
+                DEBUG_REQ(D_HA, req, "close replay");
                 memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
                        lustre_msg_buf(req->rq_reqmsg, offset + 1, 0),
                        req->rq_repmsg->buflens[2]);
