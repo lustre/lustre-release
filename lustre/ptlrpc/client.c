@@ -1612,7 +1612,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
                 req->rq_replay_cb(req);
 
         if (req->rq_replied && req->rq_repmsg->status != aa->praa_old_status) {
-                DEBUG_REQ(D_ERROR, req, "status %d, old was %d",
+                DEBUG_REQ(D_HA, req, "status %d, old was %d",
                           req->rq_repmsg->status, aa->praa_old_status);
         } else {
                 /* Put it back for re-replay. */
