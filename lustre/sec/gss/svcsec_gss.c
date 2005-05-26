@@ -944,6 +944,7 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to pack reply, rc = %d\n", rc);
+                set_bit(CACHE_NEGATIVE, &rsci->h.flags);
                 GOTO(out, rc = SVC_DROP);
         }
 

@@ -431,6 +431,7 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
                 return;
         }
         LASSERT(list_empty(&gmsg->gum_list));
+        LASSERT(list_empty(&gmsg->gum_base.list));
         OBD_FREE(gmsg, sizeof(*gmsg));
         EXIT;
 }
@@ -443,11 +444,6 @@ gss_unhash_msg_nolock(struct gss_upcall_msg *gmsg)
                 EXIT;
                 return;
         }
-        /* FIXME should not do this. when we in upper upcall queue,
-         * downcall will call unhash_msg, thus later put_msg might
-         * free msg buffer while it's not dequeued XXX */
-        list_del_init(&gmsg->gum_base.list);
-        /* FIXME */
 
         list_del_init(&gmsg->gum_list);
         wake_up(&gmsg->gum_waitq);
@@ -513,7 +509,7 @@ static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
 #endif /* __KERNEL__ */
 
 /********************************************
- * gss cred manupulation helpers            *
+ * gss cred manipulation helpers            *
  ********************************************/
 static
 int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
@@ -839,9 +835,7 @@ waiting:
                 res = 0;
 
 out:
-        spin_lock(&gsec->gs_lock);
         gss_release_msg(gss_msg);
-        spin_unlock(&gsec->gs_lock);
 
         RETURN(res);
 }
