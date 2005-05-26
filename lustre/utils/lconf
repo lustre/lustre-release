@@ -497,8 +497,41 @@ class LCTLInterface:
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
         if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
-            if srv.hostaddr[0]:
-                hostaddr = string.split(srv.hostaddr[0], '/')[0]
+            host = socket.gethostname()
+            node_list = []
+            if config.node:
+                node_list.append(config.node)
+            else:
+                if len(host) > 0:
+                    node_list.append(host)
+                node_list.append('localhost')
+
+            node_db = None
+            for h in node_list: # we are quite sure we can find the node_db
+                node_db = toplustreDB.lookup_name(h, 'node')
+                if node_db:
+                    break
+
+            hostaddr = None
+            for netuuid in node_db.get_networks():
+                localnet = toplustreDB.lookup(netuuid)
+                localnet = Network(localnet)
+                if localnet.net_type != 'tcp':
+                    continue	# only tcp understands multiple hostaddrs
+
+                # always true for tcp network
+                if localnet.hostaddr[0] and srv.hostaddr[0]:
+                    for lnet in localnet.hostaddr:
+                        for pnet in srv.hostaddr:
+                            if srv.netmatch(lnet, pnet):
+                                hostaddr = string.split(pnet, '/')[0]
+                                #find one is enough, should break the top-most loop
+                                break
+                        if hostaddr: break
+                    else:	# can't find a match
+                        hostaddr = string.split(srv.hostaddr[0], '/')[0]
+                    break
+
             self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
 
     # Recover a device
@@ -1376,6 +1409,65 @@ class Network(Module):
             for hostaddr in self.db.get_hostaddr():
                 ip = string.split(hostaddr, '/')[0]
                 lctl.del_interface(self.net_type, ip)
+
+    def my_inet_aton(self, net):
+        split = net.split('.')
+        if len(split) != 4:
+            raise ValueError, "Invalid IPv4 address %s" % net
+
+        naddr = 0
+        i = 0
+        for n in split:
+            try:
+                naddr += int(n) * (256 ** (3-i))
+            except:
+                raise ValueError, "Invalid IPv4 address %s" % net
+            i += 1
+        return naddr
+
+    def tointAddr(self, net):
+        """convert a net address/mask into (numeric-address, bitmap-mask)"""
+        try:
+            addr, mask = string.split(net, '/')
+        except:
+            addr = net
+            mask = 24 #eeb told me that kernel uses this value by default
+
+        try:
+            mask = int(mask)
+            assert(mask >= 1 and mask <= 32)
+            mask = bitmap_32(mask)
+        except:
+            try:
+                mask = self.my_inet_aton(mask)
+            except:
+                raise ValueError("Invalid netmask %s" % str(mask))
+
+        try:
+            addr = socket.gethostbyname(addr)
+            naddr = self.my_inet_aton(addr)
+        except:
+            raise ValueError("Invalid host %s" % addr)
+
+        return (naddr, mask)
+
+    def netmatch(self, net1, net2):
+        # XXX this is only valid for IPv4 address
+        try:
+            addr1, mask1 = self.tointAddr(net1)
+            addr2, mask2 = self.tointAddr(net2)
+        except:
+            return False
+
+        if addr1 & mask1 == addr2 & mask2:
+            return True
+        return False
+
+def bitmap_32(n):
+    """n should be in [1, 32]"""
+    if n < 0 or n > 32:
+        raise ValueError("A number between 1 and 32 is expected. (not %d)" % n)
+    return (-1) << (32-n)
 
 class RouteTable(Module):
     def __init__(self,db):
