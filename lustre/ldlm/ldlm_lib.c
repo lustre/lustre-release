@@ -1401,7 +1401,7 @@ int target_start_recovery_thread(struct obd_device *obd, svc_handler_t handler)
         init_completion(&trd->trd_finishing);
         trd->trd_recovery_handler = handler;
 
-        if (kernel_thread(target_recovery_thread, obd, 0) == 0) 
+        if (kernel_thread(target_recovery_thread, obd, 0) > 0) 
                 wait_for_completion(&trd->trd_starting);
         else
                 rc = -ECHILD;
