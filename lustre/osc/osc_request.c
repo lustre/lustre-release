@@ -730,8 +730,10 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 
                 cksum = crc32_le(cksum, ptr + off, count);
                 kunmap(pga->pg);
+#ifdef __KERNEL__
                 LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
                                off, cksum);
+#endif
 
                 nob -= pga->count;
                 pg_count--;
@@ -2258,9 +2260,8 @@ out:
         RETURN(rc);
 }
 
-#ifdef __KERNEL__
 /* Note: caller will lock/unlock, and set uptodate on the pages */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
                            struct lov_stripe_md *lsm, obd_count page_count,
                            struct brw_page *pga)
@@ -2532,7 +2533,6 @@ static int sanosc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         }
         RETURN(0);
 }
-#endif
 #endif
 
 static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,

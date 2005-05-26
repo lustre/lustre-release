@@ -726,6 +726,7 @@ liblustre_check_services (void *arg)
 
         RETURN(did_something);
 }
+#define ptlrpc_stop_all_threads(s) do {} while (0)
 
 #else /* __KERNEL__ */
 

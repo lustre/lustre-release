@@ -4,7 +4,9 @@
 #ifndef _LUSTRE_QUOTA_H
 #define _LUSTRE_QUOTA_H
 
-#include <linux/version.h>
+#ifdef __KERNEL__
+# include <linux/version.h>
+#endif
 #include <linux/quota.h>
 #include <linux/lustre_idl.h>
 

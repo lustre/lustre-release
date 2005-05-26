@@ -590,6 +590,7 @@ static int signal_completed_replay(struct obd_import *imp)
         RETURN(0);
 }
 
+#ifdef __KERNEL__
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
@@ -618,6 +619,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         RETURN(0);
 }
+#endif
 
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
@@ -636,11 +638,17 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
 
+#ifdef __KERNEL__
                 rc = kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                    CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
                 RETURN(rc);
+#else
+                ptlrpc_invalidate_import(imp);
+
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+#endif
         }
 
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {

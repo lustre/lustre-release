@@ -25,6 +25,10 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
+
 #include <linux/lustre_log.h>
 
 static void print_llogd_body(struct llogd_body *d)

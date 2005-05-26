@@ -36,6 +36,8 @@
 #else
 #include <liblustre.h>
 #include <linux/obd_class.h>
+#include <linux/lustre_mds.h>
+#include <linux/obd_ost.h>
 #include <linux/obd.h>
 #endif
 #include <linux/lprocfs_status.h>

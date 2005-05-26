@@ -2,6 +2,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
 
+Severity   : enhancement
+Bugzilla   : 2563
+Description: Liblustre support for 1.4.x
+Details    : Liblustre is now back. It compiles and works.
+
 Severity   : minor
 Frequency  : rare (extremely heavy IO load with hundreds of clients)
 Bugzilla   : 6172

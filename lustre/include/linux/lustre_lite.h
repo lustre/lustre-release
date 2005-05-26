@@ -69,6 +69,11 @@ enum {
 #include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
 
+#define LLAP_FROM_COOKIE(c)                                                    \
+        (LASSERT(((struct ll_async_page *)(c))->llap_magic == LLAP_MAGIC),     \
+         (struct ll_async_page *)(c))
+#define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
+
 #include <lustre/lustre_user.h>
 
 #endif

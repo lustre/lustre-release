@@ -256,7 +256,7 @@ do {                                                            \
 } while(0)
 #else
 /* sigh.  an expedient fix until OBD_RACE is fixed up */
-#define OBD_RACE(foo) LBUG()
+#define OBD_RACE(foo) do {} while(0)
 #endif
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
@@ -317,6 +317,20 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 
 extern atomic_t portal_kmemory;
 
+#if defined(LUSTRE_UTILS) /* this version is for utils only */
+#define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
+do {                                                                          \
+        (ptr) = kmalloc(size, (gfp_mask));                                    \
+        if ((ptr) == NULL) {                                                  \
+                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
+                       (int)(size), __FILE__, __LINE__);                      \
+        } else {                                                              \
+                memset(ptr, 0, size);                                         \
+                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",          \
+                       (int)(size), ptr);                                     \
+        }                                                                     \
+} while (0)
+#else /* this version is for the kernel and liblustre */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
         (ptr) = kmalloc(size, (gfp_mask));                                    \
@@ -334,17 +348,13 @@ do {                                                                          \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
 } while (0)
+#endif
 
 #ifndef OBD_GFP_MASK
 # define OBD_GFP_MASK GFP_NOFS
 #endif
 
-#ifdef __KERNEL__
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
-#else
-#define OBD_ALLOC(ptr, size) (ptr = malloc(size))
-#endif
-
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
 
 #ifdef __arch_um__

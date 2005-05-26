@@ -26,7 +26,6 @@
 
 #ifdef __KERNEL__
 # include <linux/module.h>
-# include <linux/obd.h>
 # include <linux/obd_ost.h>
 # include <linux/lustre_net.h>
 # include <linux/lustre_dlm.h>
@@ -38,8 +37,11 @@
 # else
 #  include <linux/locks.h>
 # endif
+#else
+# include <liblustre.h>
 #endif
 
+#include <linux/obd.h>
 #include "osc_internal.h"
 
 struct osc_quota_info {

@@ -76,6 +76,10 @@ typedef unsigned short umode_t;
 
 #endif
 
+#ifndef CURRENT_SECONDS
+# define CURRENT_SECONDS time(0)
+#endif
+
 /* This is because lprocfs_status.h gets included here indirectly.  It would
  * be much better to just avoid lprocfs being included into liblustre entirely
  * but that requires more header surgery than I can handle right now.
@@ -314,14 +318,7 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
 /* random */
 
-static inline void get_random_bytes(void *ptr, int size)
-{
-        int *p = (int *)ptr;
-        int i, count = size/sizeof(int);
-
-        for (i = 0; i< count; i++)
-                *p++ = rand();
-}
+void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
@@ -376,6 +373,10 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_MASK  PAGE_MASK
 
 /* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
+
+/* 2.4 defines */
+#define PAGE_LIST_ENTRY list
+#define PAGE_LIST(page) ((page)->list)
 
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
@@ -566,12 +567,23 @@ struct task_struct {
         int pid;
         int fsuid;
         int fsgid;
+        int max_groups;
+        int ngroups;
+        gid_t *groups;
         __u32 cap_effective;
+        
+        struct fs_struct __fs;
 };
 
 extern struct task_struct *current;
-
-#define in_group_p(a) 0 /* FIXME */
+int in_group_p(gid_t gid);
+static inline int capable(int cap)
+{
+        if (current->cap_effective & (1 << cap))
+                return 1;
+        else
+                return 0;
+}
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -611,6 +623,7 @@ static inline int schedule_timeout(signed long t)
 }
 
 #define lock_kernel() do {} while (0)
+#define unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
@@ -684,6 +697,33 @@ typedef struct { volatile int counter; } atomic_t;
 #define unlikely(exp) (exp)
 #endif
 
+/* FIXME sys/capability will finally included linux/fs.h thus
+ * cause numerous trouble on x86-64. as temporary solution for
+ * build broken at cary, we copy definition we need from capability.h
+ * FIXME
+ */
+struct _cap_struct;
+typedef struct _cap_struct *cap_t;
+typedef int cap_value_t;
+typedef enum {
+    CAP_EFFECTIVE=0,
+    CAP_PERMITTED=1,
+    CAP_INHERITABLE=2
+} cap_flag_t;
+typedef enum {
+    CAP_CLEAR=0,
+    CAP_SET=1
+} cap_flag_value_t;
+
+#define CAP_DAC_OVERRIDE        1
+#define CAP_DAC_READ_SEARCH     2
+#define CAP_FOWNER              3
+#define CAP_FSETID              4
+#define CAP_SYS_ADMIN          21
+
+cap_t   cap_get_proc(void);
+int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
+
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
@@ -727,6 +767,10 @@ struct liblustre_wait_callback {
 void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
+
+/* quota */
+#define QUOTA_OK 0
+#define NO_QUOTA 1
 
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>

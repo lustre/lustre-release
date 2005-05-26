@@ -6,11 +6,13 @@
 AUTOMAKE_OPTIONS = foreign
 
 ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
-	liblustre doc utils tests conf scripts autoconf
+	doc utils tests conf scripts autoconf
 
 SERVER_SUBDIRS := ldiskfs obdfilter ost mds
 
 CLIENT_SUBDIRS := mdc llite
+
+LIBLUSTRE_SUBDIRS := liblustre
 
 SUBDIRS := $(ALWAYS_SUBDIRS)
 
@@ -20,6 +22,14 @@ endif
 
 if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
+endif
+
+# this needs to be after the client subdirs
+if LIBLUSTRE
+if !CLIENT
+SUBDIRS += $(CLIENT_SUBDIRS)
+endif
+SUBDIRS += $(LIBLUSTRE_SUBDIRS)
 endif
 
 DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)
