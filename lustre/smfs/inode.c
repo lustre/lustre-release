@@ -48,21 +48,20 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
 
         LASSERTF((!I2SMI(inode)), "Inode %lu already has smfs_inode_info %p \n",
                  inode->i_ino, I2SMI(inode));
+        
         /* getting backing fs inode. */
         LASSERT(sargs);
         ino = inode->i_ino;
         cache_inode = iget(S2CSB(inode->i_sb), ino); 
         
-        OBD_ALLOC(inode->u.generic_ip,
-                  sizeof(struct smfs_inode_info));
+        OBD_ALLOC(inode->u.generic_ip, sizeof(struct smfs_inode_info));
 
         LASSERT(inode->u.generic_ip);
               
         I2CI(inode) = cache_inode;
-
-        CDEBUG(D_INODE, "cache_inode %lu i_count %d\n",
-               cache_inode->i_ino, atomic_read(&cache_inode->i_count));
-
+        CDEBUG(D_INODE,"Init inode info #%lu (%p) icount %u\n", inode->i_ino, inode, 
+                        atomic_read(&cache_inode->i_count));
+        
         post_smfs_inode(inode, cache_inode);
         sm_set_inode_ops(cache_inode, inode);
         //iopen stuff
@@ -73,31 +72,21 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
         //inherit parent inode flags
         if (sargs->s_inode) { 
                 I2SMI(inode)->smi_flags = I2SMI(sargs->s_inode)->smi_flags;
-                CDEBUG(D_INODE, "set inode %lu flags %d\n", inode->i_ino,
+                CDEBUG(D_INODE, "set inode %lu flags 0x%.8x\n", inode->i_ino,
                       I2SMI(inode)->smi_flags);
         } 
 }
 
 static void smfs_clear_inode_info(struct inode *inode)
 {
-        
         struct inode *cache_inode = I2CI(inode);
+        struct smfs_inode_info * info = I2SMI(inode);
         
-        LASSERTF(I2SMI(inode), "Inode %lu smfs_inode_info\n",
-                 inode->i_ino);
+        CDEBUG(D_INODE, "Clear_info: inode %lu (%p)\n", inode->i_ino, inode);
 
-        CDEBUG(D_INODE, "Clear_info: inode %p\n", cache_inode);
-
-        LASSERTF(((atomic_read(&cache_inode->i_count) == 1) || 
-                   cache_inode == cache_inode->i_sb->s_root->d_inode),
-                   "inode %p cache inode %p #%lu i_count %d != 1 \n", 
-                   inode, cache_inode, cache_inode->i_ino, 
-                   atomic_read(&cache_inode->i_count));
-                
+        inode->u.generic_ip = NULL;      
         iput(cache_inode);
-                
-        OBD_FREE(inode->u.generic_ip, sizeof(struct smfs_inode_info));
-                 inode->u.generic_ip = NULL;
+        OBD_FREE(info, sizeof(*info));
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -110,7 +99,6 @@ static void smfs_read_inode2(struct inode *inode, void *opaque)
                 return;
         }
         
-        CDEBUG(D_INODE, "read_inode ino %lu\n", inode->i_ino);
         smfs_init_inode_info(inode, opaque);
         CDEBUG(D_INODE, "read_inode ino %lu icount %d \n",
                inode->i_ino, atomic_read(&inode->i_count));
@@ -133,7 +121,7 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
             !smfs_snap_test_inode(inode, opaque))
                 return 0;  
 #endif
-        
+                
         return 1;
 }
 
@@ -251,16 +239,29 @@ static void smfs_dirty_inode(struct inode *inode)
 
 static void smfs_delete_inode(struct inode *inode)
 {
-        ENTRY;
+        struct inode * cache_inode = I2CI(inode);
+        /* 
+         * smfs hold backfs inode, but delete_inode has to be invoked for it. 
+         * smfs_clear_inode() is called here to do last iput() for backfs
+         * inode with subsequent deleting backfs inode also.
+         * This prevents backfs inode from being used once more
+         */
+        LASSERTF((atomic_read(&cache_inode->i_count) == 1),
+                   "inode %p cache inode %p #%lu i_count %d != 1 \n", 
+                   inode, cache_inode, cache_inode->i_ino, 
+                   atomic_read(&cache_inode->i_count));
+
+
+        smfs_clear_inode_info(inode);
         clear_inode(inode);
-        EXIT;
 }
 
 static void smfs_clear_inode(struct inode *inode)
 {
-        ENTRY;
-        smfs_clear_inode_info(inode);
-        EXIT;
+        //if there is inode_info then clear it
+        //This can be called from many places, not only from delete_inode()
+        if (I2SMI(inode))
+                smfs_clear_inode_info(inode);
 }
 
 static void smfs_write_super(struct super_block *sb)
