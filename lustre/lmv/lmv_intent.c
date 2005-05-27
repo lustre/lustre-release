@@ -57,69 +57,71 @@ static inline void lmv_drop_intent_lock(struct lookup_intent *it)
                                  LUSTRE_IT(it)->it_lock_mode);
 }
 
-int lmv_handle_remote_inode(struct obd_export *exp, void *lmm,
-                            int lmmsize, struct lookup_intent *it,
-                            int flags, struct ptlrpc_request **reqp,
-                            ldlm_blocking_callback cb_blocking)
+int lmv_intent_remote(struct obd_export *exp, void *lmm,
+                      int lmmsize, struct lookup_intent *it,
+                      int flags, struct ptlrpc_request **reqp,
+                      ldlm_blocking_callback cb_blocking)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct ptlrpc_request *req = NULL;
         struct mds_body *body = NULL;
-        int rc = 0;
+        struct lustre_handle plock;
+        struct lustre_id nid;
+        int pmode, rc = 0;
         ENTRY;
 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
 
-        if (body->valid & OBD_MD_MDS) {
+        if (!(body->valid & OBD_MD_MDS))
+                RETURN(0);
+
+        /*
+         * oh, MDS reports that this is remote inode case i.e. we have to ask
+         * for real attrs on another MDS.
+         */
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_CHDIR) {
                 /*
-                 * oh, MDS reports that this is remote inode case i.e. we have
-                 * to ask for real attrs on another MDS.
+                 * unfortunately, we have to lie to MDC/MDS to retrieve
+                 * attributes llite needs.
                  */
-                struct ptlrpc_request *req = NULL;
-                struct lustre_handle plock;
-                struct lustre_id nid;
-                int pmode;
-
-                if (it->it_op == IT_LOOKUP || it->it_op == IT_CHDIR) {
-                        /*
-                         * unfortunately, we have to lie to MDC/MDS to retrieve
-                         * attributes llite needs.
-                         */
-                        it->it_op = IT_GETATTR;
-                }
-
-                /* we got LOOKUP lock, but we really need attrs */
-                pmode = LUSTRE_IT(it)->it_lock_mode;
-                if (pmode) {
-                        memcpy(&plock, &LUSTRE_IT(it)->it_lock_handle,
-                               sizeof(plock));
-                        LUSTRE_IT(it)->it_lock_mode = 0;
-                }
-
-                LASSERT((body->valid & OBD_MD_FID) != 0);
-                
-                nid = body->id1;
-                LUSTRE_IT(it)->it_disposition &= ~DISP_ENQ_COMPLETE;
-                rc = md_intent_lock(lmv->tgts[id_group(&nid)].ltd_exp, &nid, NULL,
-                                    0, lmm, lmmsize, NULL, it, flags, &req, cb_blocking);
-
-                /*
-                 * llite needs LOOKUP lock to track dentry revocation in order
-                 * to maintain dcache consistency. Thus drop UPDATE lock here
-                 * and put LOOKUP in request.
-                 */
-                if (rc == 0) {
-                        lmv_drop_intent_lock(it);
-                        memcpy(&LUSTRE_IT(it)->it_lock_handle, &plock,
-                               sizeof(plock));
-                        LUSTRE_IT(it)->it_lock_mode = pmode;
-                } else if (pmode)
-                        ldlm_lock_decref(&plock, pmode);
-
-                ptlrpc_req_finished(*reqp);
-                *reqp = req;
+                it->it_op = IT_GETATTR;
         }
+
+        /* we got LOOKUP lock, but we really need attrs */
+        pmode = LUSTRE_IT(it)->it_lock_mode;
+        if (pmode) {
+                memcpy(&plock, &LUSTRE_IT(it)->it_lock_handle,
+                       sizeof(plock));
+                LUSTRE_IT(it)->it_lock_mode = 0;
+                LUSTRE_IT(it)->it_data = 0;
+        }
+
+        LASSERT((body->valid & OBD_MD_FID) != 0);
+                
+        nid = body->id1;
+        LUSTRE_IT(it)->it_disposition &= ~DISP_ENQ_COMPLETE;
+        rc = md_intent_lock(lmv->tgts[id_group(&nid)].ltd_exp, &nid,
+                            NULL, 0, lmm, lmmsize, NULL, it, flags,
+                            &req, cb_blocking);
+
+        /*
+         * llite needs LOOKUP lock to track dentry revocation in order to
+         * maintain dcache consistency. Thus drop UPDATE lock here and put
+         * LOOKUP in request.
+         */
+        if (rc == 0) {
+                lmv_drop_intent_lock(it);
+                memcpy(&LUSTRE_IT(it)->it_lock_handle, &plock,
+                       sizeof(plock));
+                LUSTRE_IT(it)->it_lock_mode = pmode;
+        } else if (pmode) {
+                ldlm_lock_decref(&plock, pmode);
+        }
+
+        ptlrpc_req_finished(*reqp);
+        *reqp = req;
         RETURN(rc);
 }
 
@@ -174,14 +176,13 @@ repeat:
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode */
-        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
-                                     flags, reqp, cb_blocking);
+        rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp, cb_blocking);
         if (rc != 0) {
                 LASSERT(rc < 0);
 
                 /* 
                  * this is possible, that some userspace application will try to
-                 * open file as directory and we will have error -20 here. As
+                 * open file as directory and we will have -ENOTDIR here. As
                  * this is "usual" situation, we should not print error here,
                  * only debug info.
                  */
@@ -195,14 +196,19 @@ repeat:
          * nothing is found, do not access body->id1 as it is zero and thus
          * pointless.
          */
-        if (LUSTRE_IT(it)->it_disposition & DISP_LOOKUP_NEG)
+        if ((LUSTRE_IT(it)->it_disposition & DISP_LOOKUP_NEG) &&
+            !(LUSTRE_IT(it)->it_disposition & DISP_OPEN_CREATE) &&
+            !(LUSTRE_IT(it)->it_disposition & DISP_OPEN_OPEN))
                 RETURN(0);
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
          * to update them for splitted dir */
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT((body->valid & OBD_MD_FID) != 0);
+
+        /* could not find object, FID is not present in response. */
+        if (!(body->valid & OBD_MD_FID))
+                RETURN(0);
         
         cid = &body->id1;
         obj = lmv_grab_obj(obd, cid);
@@ -309,8 +315,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
  
         /* okay, MDS has returned success. probably name has been
          * resolved in remote inode */
-        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
-                                     flags, reqp, cb_blocking);
+        rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags,
+                               reqp, cb_blocking);
         if (rc < 0)
                 RETURN(rc);
 
@@ -323,7 +329,10 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT((body->valid & OBD_MD_FID) != 0);
+
+        /* could not find object, FID is not present in response. */
+        if (!(body->valid & OBD_MD_FID))
+                RETURN(0);
 
         cid = &body->id1;
         obj2 = lmv_grab_obj(obd, cid);
@@ -560,8 +569,7 @@ repeat:
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode. */
-        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
-                                     flags, reqp, cb_blocking);
+        rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp, cb_blocking);
 
         if (rc == 0 && (mea = lmv_splitted_dir_body(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */

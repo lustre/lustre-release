@@ -500,6 +500,56 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         RETURN(rc);
 }
 
+int
+mds_destroy_objects(struct obd_device *obd,
+                    struct inode *inode, int async)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_mds_md *lmm = NULL;
+        int rc, lmm_size;
+        ENTRY;
+
+        LASSERT(inode != NULL);
+
+        if (inode->i_nlink != 0) {
+                CWARN("attempt to destroy OSS object when "
+                      "i_nlink == %d\n", (int)inode->i_nlink);
+                RETURN(0);
+        }
+        
+        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+        if (lmm == NULL)
+                RETURN(-ENOMEM);
+
+        lmm_size = mds->mds_max_mdsize;
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, 1, 0);
+        if (rc < 0) {
+                CERROR("no stripe info for %lu/%lu inode\n",
+                       (unsigned long)inode->i_ino,
+                       (unsigned long)inode->i_generation);
+                GOTO(out_free_lmm, rc);
+        }
+
+        if (rc > 0) {
+                /* asynchronously unlink objecect on OSS */
+                rc = mds_unlink_object(mds, inode, lmm, lmm_size,
+                                       NULL, 0, async);
+                if (rc) {
+                        CERROR("error unlinking object on OSS, "
+                               "err %d\n", rc);
+                        GOTO(out_free_lmm, rc);
+                }
+        } else {
+                CDEBUG(D_INODE, "no stripping info found for inode "
+		      "%lu/%lu\n", (unsigned long)inode->i_ino, 
+		      (unsigned long)inode->i_generation);
+        }
+        EXIT;
+out_free_lmm:
+        OBD_FREE(lmm, mds->mds_max_mdsize);
+        return rc;
+}
+
 static void reconstruct_open(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req,
                              struct lustre_handle *child_lockh)
@@ -1463,6 +1513,13 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                                       req->rq_repmsg->buflens[2], &lcl) > 0) {
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
+		
+		rc = mds_destroy_objects(obd, inode, 1);
+		if (rc) {
+			CERROR("cannot destroy OSS object on close, err %d\n",
+			       rc);
+			rc = 0;
+		}
 
                 goto out; /* Don't bother updating attrs on unlinked inode */
         }

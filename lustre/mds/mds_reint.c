@@ -108,7 +108,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         if (req->rq_export->exp_failed) {
                 CERROR("committing transaction for disconnected client\n");
                 if (handle)
-                        GOTO(out_commit, rc);
+                        GOTO(out_commit, rc = -EIO);
                 RETURN(rc);
         }
 
@@ -1676,11 +1676,11 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
         mds_req_from_mcd(req, med->med_mcd);
 }
 
-/* If we are unlinking an open file/dir (i.e. creating an orphan) then
- * we instead link the inode into the PENDING directory until it is
- * finally released.  We can't simply call mds_reint_rename() or some
- * part thereof, because we don't have the inode to check for link
- * count/open status until after it is locked.
+/* If we are unlinking an open file/dir (i.e. creating an orphan) then we
+ * instead link the inode into the PENDING directory until it is finally
+ * released. We can't simply call mds_reint_rename() or some part thereof,
+ * because we don't have the inode to check for link count/open status until
+ * after it is locked.
  *
  * For lock ordering, caller must get child->i_sem first, then pending->i_sem
  * before starting journal transaction.
@@ -1728,8 +1728,10 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                 GOTO(out_dput, rc = 0);
         }
 
-        /* link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG
-         * for linking and return real mode back then -bzzz */
+        /*
+         * link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG for
+         * linking and return real mode back then -bzzz
+         */
         mode = inode->i_mode;
         inode->i_mode = S_IFREG;
         rc = vfs_link(dentry, pending_dir, pending_child);
@@ -1751,7 +1753,7 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                 mark_inode_dirty(pending_dir);
         }
 
-        EXIT;
+        GOTO(out_dput, rc = 1);
 out_dput:
         l_dput(pending_child);
         return rc;
@@ -2228,12 +2230,18 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
                 } else if (mds_log_op_unlink(obd, child_inode,
-                                lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
-                                        req->rq_repmsg->buflens[offset + 1],
-                                lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
-                                        req->rq_repmsg->buflens[offset+2], 
-                                &lcl) > 0){
+                                             lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
+                                             req->rq_repmsg->buflens[offset + 1],
+                                             lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
+                                             req->rq_repmsg->buflens[offset + 2], 
+                                             &lcl) > 0){
                         body->valid |= OBD_MD_FLCOOKIE;
+                }
+                
+                rc = mds_destroy_objects(obd, child_inode, 1);
+                if (rc) {
+                        CERROR("can't remove OST object, err %d\n",
+                               rc);
                 }
         }
 
@@ -3484,6 +3492,12 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                                              req->rq_repmsg->buflens[2], 
                                              &lcl) > 0) {
                         body->valid |= OBD_MD_FLCOOKIE;
+                }
+                
+                rc = mds_destroy_objects(obd, old_inode, 1);
+                if (rc) {
+                        CERROR("can't remove OST object, err %d\n",
+                               rc);
                 }
         }
 

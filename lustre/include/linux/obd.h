@@ -550,6 +550,7 @@ struct obd_trans_info {
         struct llog_cookie       oti_onecookie;
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
+        int                      oti_async;
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)

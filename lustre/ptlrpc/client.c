@@ -540,7 +540,6 @@ static int after_reply(struct ptlrpc_request *req)
         /* Store transno in reqmsg for replay. */
         req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
 
-
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 if (req->rq_transno != 0)

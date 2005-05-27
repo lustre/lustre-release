@@ -40,12 +40,15 @@
 
 #include "mds_internal.h"
 
-static int mds_osc_destroy_orphan(struct mds_obd *mds,
-                                  struct inode *inode,
-                                  struct lov_mds_md *lmm,
-                                  int lmm_size,
-                                  struct llog_cookie *logcookies,
-                                  int log_unlink)
+/*
+ * used when destroying orphanes and from mds_reint_unlink() when MDS wants to
+ * destroy objects on OSS.
+ */
+int
+mds_unlink_object(struct mds_obd *mds, struct inode *inode,
+                  struct lov_mds_md *lmm, int lmm_size,
+                  struct llog_cookie *logcookies,
+                  int log_unlink, int async)
 {
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
@@ -78,11 +81,12 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 oti.oti_logcookies = logcookies;
         }
 
+        CDEBUG(D_INODE, "destroy OSS object %d/%d\n",
+               (int)oa->o_id, (int)oa->o_gr);
+        
+        oti.oti_async = async;
         rc = obd_destroy(mds->mds_dt_exp, oa, lsm, &oti);
         obdo_free(oa);
-        if (rc)
-                CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
-                       "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
         obd_free_memmd(mds->mds_dt_exp, &lsm);
         RETURN(rc);
@@ -148,8 +152,8 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 if (!rc)
                         rc = err;
         } else if (!rc) {
-                rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
-                                            logcookies, log_unlink);
+                rc = mds_unlink_object(mds, inode, lmm, lmm_size,
+                                       logcookies, log_unlink, 0);
         }
 
         if (logcookies != NULL)

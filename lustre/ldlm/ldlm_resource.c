@@ -150,7 +150,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                 ns->ns_max_unused = 0;
                 ldlm_cancel_lru(ns, LDLM_SYNC);
                 ns->ns_max_unused = tmp;
-                return count;
+	        return count;
         }
 
         tmp = simple_strtoul(dummy, &end, 0);
@@ -161,10 +161,9 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
 
         CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
                ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
+
         ns->ns_max_unused = (unsigned int)tmp;
-
         ldlm_cancel_lru(ns, LDLM_ASYNC);
-
         return count;
 }
 

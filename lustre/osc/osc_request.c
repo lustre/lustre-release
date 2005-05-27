@@ -492,26 +492,33 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         memcpy(&body->oa, oa, sizeof(*oa));
         request->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(request);
-        
-        if (rc == -ENOENT)
+        if (oti != NULL && oti->oti_async) {
+                /* asynchrounous destroy */
+                ptlrpcd_add_req(request);
                 rc = 0;
-        if (rc)
-                GOTO(out, rc);
+        } else {
+                rc = ptlrpc_queue_wait(request);
+        
+                if (rc == -ENOENT)
+                        rc = 0;
 
-        body = lustre_swab_repbuf(request, 0, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL) {
-                CERROR ("Can't unpack body\n");
-                GOTO (out, rc = -EPROTO);
+                if (rc) {
+                        ptlrpc_req_finished(request);
+                        RETURN(rc);
+                }
+
+                body = lustre_swab_repbuf(request, 0, sizeof(*body),
+                                          lustre_swab_ost_body);
+                if (body == NULL) {
+                        CERROR ("Can't unpack body\n");
+                        ptlrpc_req_finished(request);
+                        RETURN(-EPROTO);
+                }
+
+                memcpy(oa, &body->oa, sizeof(*oa));
+                ptlrpc_req_finished(request);
         }
-
-        memcpy(oa, &body->oa, sizeof(*oa));
-
-        EXIT;
- out:
-        ptlrpc_req_finished(request);
-        return rc;
+        RETURN(rc);
 }
 
 static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,

@@ -702,13 +702,15 @@ test_32() {
     pid1=$!
     multiop $DIR/$tfile O_c &
     pid2=$!
-    # give multiop a chance to open
-    sleep 1
+    # give multiop a chance to open.
+    # 1 second is not enough, I increased it to 5, however in ideal word
+    # I should have to wait for open finish in more smart manner. --umka
+    sleep 5
     mds_evict_client
     df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
-    sleep 1
+    sleep 5
     return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"

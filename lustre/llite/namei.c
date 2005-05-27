@@ -780,89 +780,6 @@ static int ll_rmdir_raw(struct nameidata *nd)
         RETURN(rc);
 }
 
-int ll_objects_destroy(struct ptlrpc_request *request,
-                       struct inode *dir, int offset)
-{
-        struct mds_body *body;
-        struct lov_mds_md *eadata;
-        struct lov_stripe_md *lsm = NULL;
-        struct obd_trans_info oti = { 0 };
-        struct obdo *oa;
-        int rc;
-        ENTRY;
-
-        /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-
-        if (!(body->valid & OBD_MD_FLEASIZE))
-                RETURN(0);
-
-        if (body->eadatasize == 0) {
-                CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
-        /*
-         * the MDS sent back the EA because we unlinked the last reference to
-         * this file. Use this EA to unlink the objects on the OST. It's opaque
-         * so we don't swab here; we leave it to obd_unpackmd() to check it is
-         * complete and sensible.
-         */
-        eadata = lustre_swab_repbuf(request, 1, body->eadatasize, NULL);
-        LASSERT(eadata != NULL);
-        if (eadata == NULL) {
-                CERROR("Can't unpack MDS EA data\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
-        rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->eadatasize);
-        if (rc < 0) {
-                CERROR("obd_unpackmd: %d\n", rc);
-                GOTO(out, rc);
-        }
-        LASSERT(rc >= sizeof(*lsm));
-
-        oa = obdo_alloc();
-        if (oa == NULL)
-                GOTO(out_free_memmd, rc = -ENOMEM);
-
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_gr = lsm->lsm_object_gr;
-        oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
-
-        if (body->valid & OBD_MD_FLCOOKIE) {
-                int length = sizeof(struct llog_cookie) *
-                                lsm->lsm_stripe_count;
-                oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, 2, length);
-                if (oti.oti_logcookies == NULL) {
-                        oa->o_valid &= ~OBD_MD_FLCOOKIE;
-                        body->valid &= ~OBD_MD_FLCOOKIE;
-                } else {
-                        /* copy llog cookies to request to replay unlink
-                         * so that the same llog file and records as those created
-                         * during fail can be re-created while doing replay 
-                         */
-                        if (offset >= 0)
-                                memcpy(lustre_msg_buf(request->rq_reqmsg, offset, 0),
-                                       oti.oti_logcookies, length);
-                }
-        }
-
-        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti);
-        obdo_free(oa);
-        if (rc)
-                CERROR("obd destroy objid "LPX64" error %d\n",
-                       lsm->lsm_object_id, rc);
-        EXIT;
- out_free_memmd:
-        obd_free_memmd(ll_i2dtexp(dir), &lsm);
- out:
-        return rc;
-}
-
 static int ll_unlink_raw(struct nameidata *nd)
 {
         struct inode *dir = nd->dentry->d_inode;
@@ -882,8 +799,6 @@ static int ll_unlink_raw(struct nameidata *nd)
         if (rc)
                 GOTO(out, rc);
         ll_update_times(request, 0, dir);
-        
-        rc = ll_objects_destroy(request, dir, 2);
         EXIT;
 out:
         ptlrpc_req_finished(request);
@@ -919,7 +834,6 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         if (!err) {
                 ll_update_times(request, 0, src);
                 ll_update_times(request, 0, tgt);
-                err = ll_objects_destroy(request, src, 3);
         }
 
         ptlrpc_req_finished(request);

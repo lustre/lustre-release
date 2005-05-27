@@ -118,6 +118,11 @@ void mds_exit_ucred(struct lvfs_ucred *ucred);
 /* mds/mds_unlink_open.c */
 int mds_cleanup_orphans(struct obd_device *obd);
 
+int mds_unlink_object(struct mds_obd *mds, struct inode *inode,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies,
+                      int log_unlink, int async);
+        
 
 /* mds/mds_log.c */
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
@@ -149,6 +154,8 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                           struct lustre_msg *msg, int offset);
 
 /* mds/mds_open.c */
+int mds_destroy_objects(struct obd_device *obd,
+                        struct inode *inode, int async);
 int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);

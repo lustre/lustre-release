@@ -260,6 +260,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         INIT_LIST_HEAD(&lock->l_lru);
         INIT_LIST_HEAD(&lock->l_export_chain);
         INIT_LIST_HEAD(&lock->l_pending_chain);
+        INIT_LIST_HEAD(&lock->l_tmp);
         init_waitqueue_head(&lock->l_waitq);
 
         spin_lock(&resource->lr_namespace->ns_counter_lock);

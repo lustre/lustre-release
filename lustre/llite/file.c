@@ -92,15 +92,6 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                        (unsigned long)inode->i_ino, rc);
         }
 
-        /* objects are destroed on OST only if metadata close was
-         * successful.*/
-        if (rc == 0) {
-                rc = ll_objects_destroy(req, inode, 1);
-                if (rc)
-                        CERROR("inode %lu ll_objects destroy: rc = %d\n",
-                               inode->i_ino, rc);
-        }
-
         ptlrpc_req_finished(req);
         EXIT;
 out:

@@ -255,6 +255,8 @@ struct ldlm_lock {
         unsigned long         l_callback_timeout;
 
         __u32                 l_pid;            /* pid which created this lock */
+
+        struct list_head      l_tmp;
 };
 
 #define LDLM_PLAIN       10
