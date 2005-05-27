@@ -89,7 +89,6 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
 
-        LASSERT(nid != 0);
         LASSERT(nal != 0);
 
         if (nob > PAGE_SIZE)
