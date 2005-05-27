@@ -396,17 +396,18 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
         if (atomic_read(&ns->ns_refcount) > 0) {
                 struct l_wait_info lwi = LWI_INTR(NULL, NULL);
                 int rc;
-                CDEBUG(D_DLMTRACE, 
-                       "dlm namespace %s free waiting on refcount %d\n", 
+                CDEBUG(D_DLMTRACE,
+                       "dlm namespace %s free waiting on refcount %d\n",
                        ns->ns_name, atomic_read(&ns->ns_refcount));
                 rc = l_wait_event(ns->ns_refcount_waitq,
                                   atomic_read(&ns->ns_refcount) == 0, &lwi);
                 if (atomic_read(&ns->ns_refcount)) {
-                        CERROR("Lock manager: waiting for the %s namespace "
-                               "was aborted with %d resources in use. (%d)\n"
-                               "I'm going to try to clean up anyway, but I "
-                               "might require a reboot of this node.\n",
-                               ns->ns_name, atomic_read(&ns->ns_refcount), rc);
+                        LCONSOLE_ERROR("Lock manager: wait for %s namespace "
+                                       "cleanup aborted with %d resources in "
+                                       "use. (%d)\nI'm going to try to clean "
+                                       "up anyway, but I might need a reboot "
+                                       "of this node.\n", ns->ns_name,
+                                       atomic_read(&ns->ns_refcount), rc);
                 }
                 CDEBUG(D_DLMTRACE, 
                        "dlm namespace %s free done waiting\n", ns->ns_name);
@@ -545,8 +546,8 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 rc = ns->ns_lvbo->lvbo_init(res);
                 up(&res->lr_lvb_sem);
                 if (rc)
-                        CERROR("lvbo_init failed for resource "LPU64": rc %d\n",
-                               name.name[0], rc);
+                        CERROR("lvbo_init failed for resource "LPU64"/"LPU64
+                               ": rc %d\n", name.name[0], name.name[1], rc);
         } else {
 out:
                 l_unlock(&ns->ns_lock);
