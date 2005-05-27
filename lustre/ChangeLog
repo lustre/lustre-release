@@ -75,6 +75,11 @@ Description: Default groups are now added by lconf
 Details    : You can now run lconf --group <servicename> without having to 
              manually add groups with lmc.
 
+Severity   : major
+Frequency  : occasional
+Bugzilla   : 6412
+Description: Nodes with an elan id of 0 trigger a failed assertion
+
 ------------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
