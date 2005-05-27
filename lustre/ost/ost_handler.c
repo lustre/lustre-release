@@ -399,6 +399,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 
         niocount = ioo->ioo_bufcnt;
+        if (niocount > PTLRPC_MAX_BRW_PAGES) {
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                          niocount);
+                GOTO(out, rc = -EFAULT);
+        }
+
         remote_nb = lustre_swab_reqbuf(req, 2, niocount * sizeof(*remote_nb),
                                        lustre_swab_niobuf_remote);
         if (remote_nb == NULL) {
@@ -585,6 +591,11 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short ioobj\n");
                 GOTO(out, rc = -EFAULT);
         }
+        if (objcount > 1) {
+                CERROR("too many ioobjs (%d)\n", objcount);
+                GOTO(out, rc = -EFAULT);
+        }
+
         ioo = lustre_msg_buf (req->rq_reqmsg, 1, objcount * sizeof(*ioo));
         LASSERT (ioo != NULL);
         for (niocount = i = 0; i < objcount; i++) {
@@ -595,6 +606,12 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         GOTO(out, rc = -EFAULT);
                 }
                 niocount += ioo[i].ioo_bufcnt;
+        }
+
+        if (niocount > PTLRPC_MAX_BRW_PAGES) {
+                DEBUG_REQ(D_ERROR, req, "bulk has too many pages (%d)\n",
+                          niocount);
+                GOTO(out, rc = -EFAULT);
         }
 
         remote_nb = lustre_swab_reqbuf(req, 2, niocount * sizeof(*remote_nb),
