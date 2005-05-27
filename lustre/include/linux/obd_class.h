@@ -80,6 +80,9 @@ void oig_complete_one(struct obd_io_group *oig,
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
 
+/* buf should be len PTL_NALFMT_SIZE */
+char *obd_export_nid2str(struct obd_export *exp, char *buf);
+
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_attach(struct lustre_cfg *lcfg);

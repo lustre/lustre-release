@@ -266,6 +266,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 static void dump_exports(struct obd_device *obd)
 {
         struct obd_export *exp, *n;
+        char ipbuf[PTL_NALFMT_SIZE];
 
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
                 struct ptlrpc_reply_state *rs;
@@ -279,8 +280,9 @@ static void dump_exports(struct obd_device *obd)
                         nreplies++;
                 }
 
-                CDEBUG(D_IOCTL, "%s: %p %s %d %d %d: %p %s\n",
+                CDEBUG(D_IOCTL, "%s: %p %s %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
+                       obd_export_nid2str(exp, ipbuf),
                        atomic_read(&exp->exp_refcount),
                        exp->exp_failed, nreplies, first_reply,
                        nreplies > 3 ? "..." : "");

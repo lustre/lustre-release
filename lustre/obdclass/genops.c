@@ -1076,27 +1076,15 @@ static int ping_evictor_main(void *arg)
 
                         if (expire_time > exp->exp_last_request_time) {
                                 char ipbuf[PTL_NALFMT_SIZE];
-                                struct ptlrpc_peer *peer;
-
-                                peer = exp->exp_connection ?
-                                        &exp->exp_connection->c_peer : NULL;
-
-                                if (peer && peer->peer_ni) {
-                                        portals_nid2str(peer->peer_ni->pni_number,
-                                                        peer->peer_id.nid,
-                                                        ipbuf);
-                                }
 
                                 LCONSOLE_WARN("%s hasn't heard from %s in %ld "
                                               "seconds.  I think it's dead, "
                                               "and I am evicting it.\n",
                                               obd->obd_name,
-                                              (peer && peer->peer_ni) ?
-                                              ipbuf :
-                                              (char *)exp->exp_client_uuid.uuid,
-                                              (long)(CURRENT_SECONDS -
-                                                   exp->exp_last_request_time));
-
+                                              obd_export_nid2str(exp, ipbuf),
+                                              (long)(CURRENT_SECONDS - 
+                                                     exp->exp_last_request_time));
+                                
                                 ping_evictor_fail_export(exp);
                         } else {
                                 /* List is sorted, so everyone below is ok */
@@ -1155,6 +1143,9 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 {
         struct obd_export *oldest_exp;
         time_t oldest_time;
+
+        ENTRY;
+
         LASSERT(exp);
 
         /* Compensate for slow machines, etc, by faking our request time
@@ -1177,6 +1168,7 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
         if (list_empty(&exp->exp_obd_chain_timed)) {
                 /* this one is not timed */
                 spin_unlock(&exp->exp_obd->obd_dev_lock);
+                EXIT;
                 return;
         }
 
@@ -1187,9 +1179,11 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
         oldest_time = oldest_exp->exp_last_request_time;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
-        if (exp->exp_obd->obd_recoverable_clients > 0)
+        if (exp->exp_obd->obd_recovering) {
                 /* be nice to everyone during recovery */
+                EXIT;
                 return;
+        }
 
         /* Note - racing to start/reset the obd_eviction timer is safe */
         if (exp->exp_obd->obd_eviction_timer == 0) {
@@ -1216,5 +1210,25 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                                 exp->exp_obd->obd_eviction_timer = 0;
                 }
         }
+
+        EXIT;
 }
 
+char *obd_export_nid2str(struct obd_export *exp, char *ipbuf)
+{
+        struct ptlrpc_peer *peer;
+        
+        peer = exp->exp_connection 
+                ? &exp->exp_connection->c_peer
+                : NULL;
+        
+        if (peer && peer->peer_ni) {
+                portals_nid2str(peer->peer_ni->pni_number,
+                                peer->peer_id.nid,
+                                ipbuf);
+        } else {
+                snprintf(ipbuf, PTL_NALFMT_SIZE, "(no nid)");
+        }
+
+        return ipbuf;
+}

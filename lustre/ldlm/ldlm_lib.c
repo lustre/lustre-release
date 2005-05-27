@@ -886,6 +886,7 @@ void target_abort_recovery(void *data)
                 return;
         }
         obd->obd_recovering = obd->obd_abort_recovery = 0;
+        obd->obd_recoverable_clients = 0;
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
