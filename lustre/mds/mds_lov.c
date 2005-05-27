@@ -142,18 +142,6 @@ int mds_lov_set_nextid(struct obd_device *obd)
         RETURN(rc);
 }
 
-/* tell the LOV-OSC by how much to pre-create */
-int mds_lov_set_growth(struct mds_obd *mds, int count)
-{
-        int rc;
-        ENTRY;
-
-        rc = obd_set_info(mds->mds_osc_exp, strlen("growth_count"),
-                          "growth_count", sizeof(count), &count);
-
-        RETURN(rc);
-}
-
 int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;

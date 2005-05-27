@@ -3085,13 +3085,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (KEY_IS("growth_count")) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-                obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
-                RETURN(0);
-        }
-
         if (KEY_IS("unlinked")) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
