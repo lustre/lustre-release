@@ -1216,7 +1216,21 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 }
 
                 if (req->rq_replay) {
-                        DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY)");
+#warning "REMOVE THIS CRAP ONCE 6403 SOLVED -bzzz"
+                        struct mdc_open_data {
+                                struct obd_client_handle *mod_och;
+                                struct ptlrpc_request    *mod_open_req;
+                                struct ptlrpc_request    *mod_close_req;
+                        };
+                        struct mdc_open_data *mod = req->rq_cb_data;
+                        if (mod == NULL || mod->mod_close_req == NULL) {
+                                DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY)");
+                                continue;
+                        }
+                        DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY), "
+                                  "closed by x"LPD64"/t"LPD64,
+                                  mod->mod_close_req->rq_xid,
+                                  mod->mod_close_req->rq_repmsg->transno);
                         continue;
                 }
 
