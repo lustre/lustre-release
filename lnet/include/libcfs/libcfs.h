@@ -140,9 +140,9 @@ do {                                                                          \
                                   cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
-                                          __FILE__, __FUNCTION__, __LINE__,   \
-                                          0, "skipped %d similar messages\n", \
-                                          cdebug_count);                      \
+                                          __FILE__, __FUNCTION__, __LINE__,0, \
+                                          "previously skipped %d similar "    \
+                                          "messages\n", cdebug_count);        \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (cfs_time_after(cfs_time_current(),                        \
@@ -157,7 +157,8 @@ do {                                                                          \
                 cdebug_next = cfs_time_current() + cdebug_delay;              \
         } else {                                                              \
                 portals_debug_msg(DEBUG_SUBSYSTEM,                            \
-                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  portal_debug &                              \
+                                  ~(D_EMERG|D_ERROR|D_WARNING|D_CONSOLE),     \
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, cdebug_format, ## a);         \
                 cdebug_count++;                                               \
@@ -188,9 +189,9 @@ do {                                                                    \
 
 #endif /* !__KERNEL__ */
 
-#define CWARN(format, a...)             CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...)            CDEBUG(D_ERROR, format, ## a)
-#define CEMERG(format, a...)            CDEBUG(D_EMERG, format, ## a)
+#define CWARN(format, a...)          CDEBUG_LIMIT(D_WARNING, format, ## a)
+#define CERROR(format, a...)         CDEBUG_LIMIT(D_ERROR, format, ## a)
+#define CEMERG(format, a...)         CDEBUG_LIMIT(D_EMERG, format, ## a)
 
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
 #define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
