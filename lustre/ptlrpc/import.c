@@ -280,7 +280,7 @@ static int import_select_connection(struct obd_import *imp)
         class_export_put(dlmexp);
 
         imp->imp_conn_current = imp_conn;
-        CDEBUG(D_NET, "%s: import %p using connection %s\n",
+        CDEBUG(D_HA, "%s: import %p using connection %s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
         spin_unlock(&imp->imp_lock);
 
@@ -643,6 +643,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                                    CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
+                else
+                        rc = 0;
                 RETURN(rc);
 #else
                 ptlrpc_invalidate_import(imp);
