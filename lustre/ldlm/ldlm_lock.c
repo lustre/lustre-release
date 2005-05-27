@@ -248,6 +248,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
 
         atomic_set(&lock->l_refc, 2);
         INIT_LIST_HEAD(&lock->l_children);
+        INIT_LIST_HEAD(&lock->l_childof);
         INIT_LIST_HEAD(&lock->l_res_link);
         INIT_LIST_HEAD(&lock->l_lru);
         INIT_LIST_HEAD(&lock->l_export_chain);
