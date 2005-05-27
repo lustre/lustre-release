@@ -1229,7 +1229,8 @@ void ptlrpc_free_committed(struct obd_import *imp)
                         DEBUG_REQ(D_HA, req, "keeping (FL_REPLAY), "
                                   "closed by x"LPD64"/t"LPD64,
                                   mod->mod_close_req->rq_xid,
-                                  mod->mod_close_req->rq_repmsg->transno);
+                                  mod->mod_close_req->rq_repmsg ?
+                                  mod->mod_close_req->rq_repmsg->transno : 0);
                         continue;
                 }
 
