@@ -58,7 +58,7 @@ class LustreDB:
         if self.caching_enabled and self.lookup_class_cache.has_key(tag):
             v = self.lookup_val_cache[tag]
         else:
-            v =  self._get_val(tag)
+            v = self._get_val(tag)
             if self.caching_enabled:
                 self.lookup_val_cache[tag] = v
         if v:
@@ -196,11 +196,11 @@ class LustreDB:
             ret = []
             devs = self.lookup_class('mds')
             for tgt in devs:
-                if tgt.get_val('group', "") == group:
+                if tgt.get_val('group', tgt.get_value('name')) == group:
                     ret.append(tgt.getUUID())
             devs = self.lookup_class('ost')
             for tgt in devs:
-                if tgt.get_val('group', "") == group:
+                if tgt.get_val('group', tgt.get_value('name')) == group:
                     ret.append(tgt.getUUID())
             if self.caching_enabled:
                 self.lookup_group_cache[group] = ret

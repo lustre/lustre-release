@@ -69,6 +69,12 @@ Details    : Failing over an mds, using lconf -d --failover, while a
              client was doing a readdir() call would cause the client to 
              LBUG after recovery completed and the readdir() was resent.
 
+Severity   : enhancement
+Bugzilla   : 6296
+Description: Default groups are now added by lconf
+Details    : You can now run lconf --group <servicename> without having to 
+             manually add groups with lmc.
+
 ------------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
