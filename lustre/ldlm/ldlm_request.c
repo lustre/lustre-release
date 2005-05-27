@@ -636,18 +636,24 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
                 /* We can't re-add to l_lru as it confuses the refcounting in
                  * ldlm_lock_remove_from_lru() if an AST arrives after we drop
-                 * ns_lock below.  Use l_pending_chain as that is unused on
-                 * client, and lru is client-only.  bug 5666 */
-                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))
-                        list_add(&lock->l_pending_chain, &cblist);
+                 * ns_lock below.  Use l_export_chain as that is unused on
+                 * client, and lru is client-only (l_pending_chain is used by
+                 * ldlm_chain_lock_for_replay() on client).  bug 5666 */
+                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock)) {
+                        LASSERTF(list_empty(&lock->l_export_chain),
+                                 "lock %p next %p prev %p\n",
+                                 lock, &lock->l_export_chain.next,
+                                 &lock->l_export_chain.prev);
+                        list_add(&lock->l_export_chain, &cblist);
+                }
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
 
-        list_for_each_entry_safe(lock, next, &cblist, l_pending_chain) {
-                list_del_init(&lock->l_pending_chain);
+        list_for_each_entry_safe(lock, next, &cblist, l_export_chain) {
+                list_del_init(&lock->l_export_chain);
                 ldlm_handle_bl_callback(ns, NULL, lock);
         }
         RETURN(rc);
@@ -935,6 +941,8 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         struct list_head *list = closure;
 
         /* we use l_pending_chain here, because it's unused on clients. */
+        LASSERTF(list_empty(&lock->l_pending_chain),"lock %p next %p prev %p\n",
+                 lock, &lock->l_pending_chain.next,&lock->l_pending_chain.prev);
         list_add(&lock->l_pending_chain, list);
         return LDLM_ITER_CONTINUE;
 }
@@ -1036,8 +1044,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 int ldlm_replay_locks(struct obd_import *imp)
 {
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        struct list_head list, *pos, *next;
-        struct ldlm_lock *lock;
+        struct list_head list;
+        struct ldlm_lock *lock, *next;
         int rc = 0;
 
         ENTRY;
@@ -1051,11 +1059,11 @@ int ldlm_replay_locks(struct obd_import *imp)
         l_lock(&ns->ns_lock);
         (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
 
-        list_for_each_safe(pos, next, &list) {
-                lock = list_entry(pos, struct ldlm_lock, l_pending_chain);
-                rc = replay_one_lock(imp, lock);
+        list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
+                list_del_init(&lock->l_pending_chain);
                 if (rc)
-                        break; /* or try to do the rest? */
+                        continue; /* or try to do the rest? */
+                rc = replay_one_lock(imp, lock);
         }
         l_unlock(&ns->ns_lock);
 
