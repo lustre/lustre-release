@@ -1123,11 +1123,10 @@ static int check_for_next_transno(struct obd_device *obd)
                 wake_up = 1;
         } else if (queue_len + completed == max) {
                 LASSERT(req->rq_reqmsg->transno >= next_transno);
-                if (req_transno > obd->obd_last_committed)
-                        CDEBUG(D_ERROR, "waking for skipped transno (skip: "
-                               LPD64", ql: %d, comp: %d, conn: %d, next: "
-                               LPD64")\n", next_transno, queue_len, completed,
-                               max, req_transno);
+                CDEBUG(req_transno > obd->obd_last_committed ? D_ERROR : D_HA,
+                       "waking for skipped transno (skip: "LPD64
+                       ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
+                       next_transno, queue_len, completed, max, req_transno);
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
         } else if (queue_len == atomic_read(&obd->obd_req_replay_clients)) {

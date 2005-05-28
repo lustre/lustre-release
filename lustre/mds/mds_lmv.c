@@ -936,7 +936,7 @@ int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int fla
                         __u64 count = lmv->desc.ld_tgt_count;
                         i = do_div(nid, count);
                         CWARN("client from %s creates top dir %*s on mds #%d\n",
-                              ptlrpc_peernid2str(peer, peer_str), len, name, i);
+                              ptlrpc_peernid2str(peer,peer_str), len, name, i+1);
                 }
         } else if (mds->mds_md_exp) {
                 lmv = &mds->mds_md_exp->exp_obd->u.lmv;
