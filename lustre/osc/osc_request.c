@@ -730,10 +730,8 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 
                 cksum = crc32_le(cksum, ptr + off, count);
                 kunmap(pga->pg);
-#ifdef __KERNEL__
                 LL_CDEBUG_PAGE(D_PAGE, pga->pg, "off %d checksum %x\n",
                                off, cksum);
-#endif
 
                 nob -= pga->count;
                 pg_count--;
