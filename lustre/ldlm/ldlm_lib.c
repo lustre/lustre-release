@@ -1438,10 +1438,9 @@ int target_process_req_flags(struct obd_device *obd, struct ptlrpc_request *req)
                         exp->exp_req_replay_needed = 0;
                         atomic_dec(&obd->obd_req_replay_clients);
                         obd->obd_recoverable_clients--;
-                        if (atomic_read(&obd->obd_req_replay_clients) == 0) {
+                        if (atomic_read(&obd->obd_req_replay_clients) == 0)
                                 CDEBUG(D_HA, "all clients have replayed reqs\n");
-                                wake_up(&obd->obd_next_transno_waitq);
-                        }
+                        wake_up(&obd->obd_next_transno_waitq);
                 }
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
@@ -1453,10 +1452,9 @@ int target_process_req_flags(struct obd_device *obd, struct ptlrpc_request *req)
                         LASSERT(atomic_read(&obd->obd_lock_replay_clients) > 0);
                         exp->exp_lock_replay_needed = 0;
                         atomic_dec(&obd->obd_lock_replay_clients);
-                        if (atomic_read(&obd->obd_lock_replay_clients) == 0) {
+                        if (atomic_read(&obd->obd_lock_replay_clients) == 0)
                                 CDEBUG(D_HA, "all clients have replayed locks\n");
-                                wake_up(&obd->obd_next_transno_waitq);
-                        }
+                        wake_up(&obd->obd_next_transno_waitq);
                 }
                 spin_unlock_bh(&obd->obd_processing_task_lock);
         }
