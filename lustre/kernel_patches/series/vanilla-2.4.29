@@ -39,3 +39,4 @@ export-show_task-2.4-vanilla.patch
 export-zap-page-range.patch
 remove-suid-2.4-rhel.patch
 kallsyms-2.4.29.patch
+fsprivate-2.4.patch

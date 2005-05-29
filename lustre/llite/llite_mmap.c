@@ -362,7 +362,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 #endif
 {
         struct file *filp = vma->vm_file;
-        struct ll_file_data *fd = filp->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
         struct inode *inode = filp->f_dentry->d_inode;
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;

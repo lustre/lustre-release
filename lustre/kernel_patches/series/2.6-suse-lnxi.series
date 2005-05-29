@@ -11,3 +11,4 @@ remove-suid-2.6-suse.patch
 link_notlast-susefix.patch
 uml-exprt-clearuser.patch
 qsnet-suse-2.6.patch 
+fsprivate-2.6.patch

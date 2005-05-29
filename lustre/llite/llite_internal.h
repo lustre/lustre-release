@@ -6,6 +6,7 @@
 #define LLITE_INTERNAL_H
 
 #include <linux/lustre_debug.h>
+#include <linux/lustre_version.h>
 
 /*
 struct lustre_intent_data {
@@ -16,6 +17,13 @@ struct lustre_intent_data {
         }; */
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+
+#if (LUSTRE_KERNEL_VERSION < 46)
+#define LUSTRE_FPRIVATE(file) ((file)->private_data)
+#else
+#define LUSTRE_FPRIVATE(file) ((file)->fs_private)
+#endif
+
 
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {

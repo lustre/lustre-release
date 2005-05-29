@@ -1960,6 +1960,15 @@ test_54d() {
 }
 run_test 54d "fifo device works in lustre ======================"
 
+test_54e() {
+	check_kernel_version 46 || return 0
+	f="$DIR/f54e"
+	string="aaaaaa"
+	mknod $f c 4 0
+	echo $string > $f || error
+}
+run_test 54e "console/tty device works in lustre ======================"
+
 check_fstype() {
 	grep -q $FSTYPE /proc/filesystems && return 1
 	modprobe $FSTYPE

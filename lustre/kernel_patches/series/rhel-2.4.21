@@ -47,3 +47,4 @@ compile-fixes-2.4.21-rhel.patch
 grab_cache_page_nowait_gfp-rh-2.4.patch 
 remove-suid-2.4-rhel.patch
 qsnet-rhel-2.4.patch
+fsprivate-2.4.patch

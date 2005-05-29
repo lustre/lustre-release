@@ -1242,7 +1242,7 @@ out:
  */
 int ll_readpage(struct file *filp, struct page *page)
 {
-        struct ll_file_data *fd = filp->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
         struct inode *inode = page->mapping->host;
         struct obd_export *exp;
         struct ll_async_page *llap;

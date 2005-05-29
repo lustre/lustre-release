@@ -18,3 +18,4 @@ jbd-2.6.10-jcberr.patch
 hostfs_readdir_large.patch
 ext3-patch-fuzz-fixup-fc3.patch
 uml-exprt-clearuser.patch
+fsprivate-2.6.patch

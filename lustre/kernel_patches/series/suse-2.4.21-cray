@@ -32,3 +32,4 @@ ext3-truncate-buffer-head.patch
 loop-sync-2.4.21-suse.patch
 ext3-extents-2.4.21-suse2.patch 
 ext3-extents-asyncdel-2.4.24.patch
+fsprivate-2.4-suse.patch

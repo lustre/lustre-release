@@ -35,7 +35,7 @@
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                         struct file *file)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct obdo obdo;
@@ -72,7 +72,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         mdc_clear_open_replay_data(och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
-        file->private_data = NULL;
+        LUSTRE_FPRIVATE(file) = NULL;
         OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
 
         RETURN(rc);
@@ -102,7 +102,7 @@ int ll_file_release(struct inode *inode, struct file *file)
                 RETURN(0);
 
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
-        fd = (struct ll_file_data *)file->private_data;
+        fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
 
         if (lsm)
@@ -149,7 +149,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
         LASSERT (body != NULL);                 /* reply already checked out */
         LASSERT_REPSWABBED (req, 1);            /* and swabbed down */
 
-        LASSERT(!file->private_data);
+        LASSERT(!LUSTRE_FPRIVATE(file));
 
         OBD_SLAB_ALLOC(fd, ll_file_data_slab, SLAB_KERNEL, sizeof *fd);
         /* We can't handle this well without reorganizing ll_file_open and
@@ -158,7 +158,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
-        file->private_data = fd;
+        LUSTRE_FPRIVATE(file) = fd;
         ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
 
         lli->lli_io_epoch = body->io_epoch;
@@ -802,7 +802,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         }
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
-        tree.lt_fd = filp->private_data;
+        tree.lt_fd = LUSTRE_FPRIVATE(filp);
         rc = ll_tree_lock(&tree, node, buf, count,
                           filp->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
@@ -876,7 +876,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (IS_ERR(node))
                 RETURN(PTR_ERR(node));
 
-        tree.lt_fd = file->private_data;
+        tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
@@ -1088,7 +1088,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         int flags;
         ENTRY;
 
@@ -1147,7 +1147,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
         struct inode *inode = file->f_dentry->d_inode;
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct lustre_handle lockh = {0};
         loff_t retval;
