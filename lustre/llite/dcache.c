@@ -686,7 +686,7 @@ struct dentry_operations ll_d_ops = {
         .d_revalidate_it = ll_revalidate_it,
 #endif
         .d_release = ll_release,
-        .d_iput = ll_dentry_iput,
+        /*.d_iput = ll_dentry_iput,*/
         .d_delete = ll_ddelete,
         .d_compare = ll_dcompare,
 #if 0
