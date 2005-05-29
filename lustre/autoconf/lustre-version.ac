@@ -1,1 +1,1 @@
-m4_define([LUSTRE_VERSION],[1.4.2.2bgl])
+m4_define([LUSTRE_VERSION],[1.4.2.4])
