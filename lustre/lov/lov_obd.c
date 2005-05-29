@@ -337,7 +337,7 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 
                 CDEBUG(D_INFO, "lov idx %d is %s conn "LPX64"\n",
                        i, tgt->uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
-                if (strncmp(uuid->uuid, tgt->uuid.uuid, sizeof uuid->uuid) == 0)
+                if (!strncmp((char *)uuid->uuid, (char *)tgt->uuid.uuid, sizeof(uuid->uuid)))
                         break;
         }
 
@@ -581,7 +581,7 @@ lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 RETURN(-EINVAL);
         }
 
-        if (strncmp(uuidp->uuid, tgt->uuid.uuid, sizeof uuidp->uuid) != 0) {
+        if (strncmp((char *)uuidp->uuid, (char *)tgt->uuid.uuid, sizeof(uuidp->uuid))) {
                 CERROR("LOV target UUID %s at index %d doesn't match %s.\n",
                        tgt->uuid.uuid, index, uuidp->uuid);
                 RETURN(-EINVAL);
@@ -1932,7 +1932,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 tgtdesc = lov->tgts;
                 /* the uuid will be empty for deleted OSTs */
                 for (i = 0; i < count; i++, uuidp++, genp++, tgtdesc++) {
-                        obd_str2uuid(uuidp, tgtdesc->uuid.uuid);
+                        obd_str2uuid(uuidp, (char *)tgtdesc->uuid.uuid);
                         *genp = tgtdesc->ltd_gen;
                 }
 
@@ -2046,8 +2046,10 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                                 data->stripe_number);
                 RETURN(0);
         } else if (keylen >= strlen("last_id") && strcmp(key, "last_id") == 0) {
+                __u32 size = sizeof(obd_id);
                 obd_id *ids = val;
-                int rc, size = sizeof(obd_id);
+                int rc = 0;
+
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->tgts[i].active)
                                 continue;

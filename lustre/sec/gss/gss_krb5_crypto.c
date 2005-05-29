@@ -184,7 +184,7 @@ make_checksum(__s32 cksumtype,
         buf_to_sg(sg, header, hdrlen);
         crypto_digest_update(tfm, sg, 1);
         if (body->len) {
-                buf_to_sg(sg, body->data, body->len);
+                buf_to_sg(sg, (char *)body->data, body->len);
                 crypto_digest_update(tfm, sg, 1);
         }
 

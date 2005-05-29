@@ -117,7 +117,8 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         struct cm_obd *cmobd = &obd->u.cm;
         struct lustre_cfg* lcfg = buf;
         struct lustre_id mid, lid;
-        int valsize, rc;
+        __u32 valsize;
+        int rc;
         ENTRY;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {

@@ -634,9 +634,9 @@ static int class_config_parse_handler(struct llog_handle * handle,
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
 
                 }
-                if (cfg && lcfg->lcfg_command == LCFG_ATTACH) {
-                        lustre_cfg_bufs_set_string(&bufs, 2, cfg->cfg_uuid.uuid);
-                }
+                if (cfg && lcfg->lcfg_command == LCFG_ATTACH)
+                        lustre_cfg_bufs_set_string(&bufs, 2,
+                                                   (char *)cfg->cfg_uuid.uuid);
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
 
                 lcfg_new->lcfg_num   = lcfg->lcfg_num;

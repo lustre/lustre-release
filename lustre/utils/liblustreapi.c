@@ -292,7 +292,7 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 
         if (param->obduuid) {
                 for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
-                        if (strncmp(param->obduuid->uuid, uuidp->uuid,
+                        if (strncmp((char *)param->obduuid->uuid, (char *)uuidp->uuid,
                                     sizeof(*uuidp)) == 0) {
                                 param->obdindex = i;
                                 break;

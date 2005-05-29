@@ -99,7 +99,7 @@ static int secinit_compose_request(struct obd_import *imp,
         struct ptlrpcs_wire_hdr *hdr;
         struct lustre_msg       *lmsg;
         struct mds_req_sec_desc *secdesc;
-        __u32                    size = sizeof(*secdesc);
+        int                      size = sizeof(*secdesc);
         __u32                    lmsg_size, *p;
         int                      rc;
 
@@ -620,11 +620,11 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
                             struct gss_cl_ctx **gc,
                             struct gss_upcall_msg_data *gmd, int *gss_err)
 {
-        char *p = buf->data;
-        __u32 len = buf->len;
+        char *p = (char *)buf->data;
         struct gss_cl_ctx *ctx;
-        rawobj_t tmp_buf;
+        __u32 len = buf->len;
         unsigned int timeout;
+        rawobj_t tmp_buf;
         int err = -EPERM;
         ENTRY;
 
@@ -976,7 +976,7 @@ static int gss_cred_sign(struct ptlrpc_cred *cred,
         vlen -= 4;
 
         mic.len = vlen;
-        mic.data = (char *) vp;
+        mic.data = (unsigned char *)vp;
 
         CDEBUG(D_SEC, "reqbuf at %p, lmsg at %p, len %d, mic at %p, len %d\n",
                req->rq_reqbuf, lmsg.data, lmsg.len, mic.data, mic.len);
@@ -1048,7 +1048,7 @@ static int gss_cred_verify(struct ptlrpc_cred *cred,
                         CERROR("vlen %d, mic.len %d\n", vlen, mic.len);
                         RETURN(-EINVAL);
                 }
-                mic.data = (char *) vp;
+                mic.data = (unsigned char *)vp;
 
                 gcred = container_of(cred, struct gss_cred, gc_base);
                 ctx = gss_cred_get_ctx(cred);
@@ -1458,7 +1458,7 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         if (left)
                 GOTO(err_free, err = -EFAULT);
 
-        obj.data = buf;
+        obj.data = (unsigned char *)buf;
         obj.len = mlen;
 
         LASSERT(rpci->private);

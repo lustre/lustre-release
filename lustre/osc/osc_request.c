@@ -642,7 +642,7 @@ static int check_write_rcs(struct ptlrpc_request *request,
                            int requested_nob, int niocount,
                            obd_count page_count, struct brw_page *pga)
 {
-        int    *remote_rcs, i;
+        int *remote_rcs, i;
 
         /* return error if any niobuf was in error */
         remote_rcs = lustre_swab_repbuf(request, 1,
@@ -653,7 +653,7 @@ static int check_write_rcs(struct ptlrpc_request *request,
         }
         if (lustre_msg_swabbed(request->rq_repmsg))
                 for (i = 0; i < niocount; i++)
-                        __swab32s(&remote_rcs[i]);
+                        __swab32s((__u32 *)&remote_rcs[i]);
 
         for (i = 0; i < niocount; i++) {
                 if (remote_rcs[i] < 0)
@@ -2822,11 +2822,11 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 char *bufs[1] = {key};
                 int rc;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
-                                      OST_GET_INFO, 1, &keylen, bufs);
+                                      OST_GET_INFO, 1, (int *)&keylen, bufs);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
-                req->rq_replen = lustre_msg_size(1, vallen);
+                req->rq_replen = lustre_msg_size(1, (int *)vallen);
                 rc = ptlrpc_queue_wait(req);
                 if (rc)
                         GOTO(out, rc);

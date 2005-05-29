@@ -356,7 +356,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
         ptl_nid_t           peer_nid;
         int                 i;
         char                str[PTL_NALFMT_SIZE];
-        int                 rc = lustre_uuid_to_peer(uuid->uuid, 
+        int                 rc = lustre_uuid_to_peer((char *)uuid->uuid, 
                                                      &peer_nal, &peer_nid);
         if (rc != 0)
                 RETURN (rc);

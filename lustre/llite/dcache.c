@@ -427,7 +427,7 @@ do_lock:
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it != NULL);
 
-        rc = md_intent_lock(exp, &pid, de->d_name.name, de->d_name.len,
+        rc = md_intent_lock(exp, &pid, (char *)de->d_name.name, de->d_name.len,
                             NULL, 0, &cid, it, flags, &req, ll_mdc_blocking_ast);
         /* If req is NULL, then md_intent_lock() only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
@@ -529,15 +529,13 @@ do_lookup:
                         LBUG();
         }
         
-        // We did that already, right?  ll_inode2id(&pid, de->d_parent->d_inode);
-        rc = md_intent_lock(exp, &pid, de->d_name.name,
-                            de->d_name.len, NULL, 0, NULL,
-                            it, 0, &req, ll_mdc_blocking_ast);
+        rc = md_intent_lock(exp, &pid, (char *)de->d_name.name, de->d_name.len,
+                            NULL, 0, NULL, it, 0, &req, ll_mdc_blocking_ast);
         if (rc >= 0) {
                 struct mds_body *mds_body = lustre_msg_buf(req->rq_repmsg, 1,
                                                            sizeof(*mds_body));
 
-                /* See if we got same inode, if not - return error */
+                /* see if we got same inode, if not - return error */
                 if (id_equal_stc(&cid, &mds_body->id1))
                         goto revalidate_finish;
         }

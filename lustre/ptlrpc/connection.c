@@ -93,7 +93,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
                 GOTO(out, c);
 
         if (uuid && uuid->uuid)                         /* XXX ???? */
-                obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
+                obd_str2uuid(&c->c_remote_uuid, (char *)uuid->uuid);
         atomic_set(&c->c_refcount, 0);
         memcpy(&c->c_peer, peer, sizeof(c->c_peer));
 

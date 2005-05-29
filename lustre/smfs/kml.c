@@ -105,6 +105,8 @@ exit:
         RETURN(rc);
 }
 
+#if 0
+/* not used curently */
 static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
 {
         int idx = 0;
@@ -113,6 +115,7 @@ static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
         idx = GET_REC_PACK_TYPE_INDEX(smsi->smsi_flags);
         return smsi->smsi_pack_rec[idx];
 }
+#endif
 
 static inline void
 copy_inode_attr(struct iattr *iattr, struct inode *inode)
@@ -456,12 +459,11 @@ exit:
         RETURN(rc);
 }
 
-static int kml_link(struct inode * inode, void *arg, struct kml_priv * priv) 
+static int kml_link(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_link_msg * msg = arg;
-        int rc = 0, length = 0, buf_len = 0;
-        char *buffer = NULL, *pbuf = NULL;
-        struct smfs_super_info *smb;
+        struct hook_link_msg *msg = arg;
+        int rc = 0, length = 0;
+        char *buffer = NULL;
         ENTRY;
         
         OBD_ALLOC(buffer, PAGE_SIZE);
@@ -507,12 +509,12 @@ exit:
         RETURN(rc);
 }
 
-static int kml_symlink(struct inode * inode, void *arg, struct kml_priv * priv) 
+static int kml_symlink(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_symlink_msg * msg = arg;
         struct smfs_super_info *smb = S2SMI(inode->i_sb);
-        char   *buffer = NULL, *pbuf;
+        struct hook_symlink_msg *msg = arg;
         int rc = 0, length = 0;
+        char *buffer = NULL;
         ENTRY;
         
         OBD_ALLOC(buffer, PAGE_SIZE);
@@ -533,11 +535,11 @@ exit:
         RETURN(rc);
 }
 
-static int kml_rename(struct inode * inode, void *arg, struct kml_priv * priv) 
+static int kml_rename(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_rename_msg * msg = arg;
-        char *buffer = NULL, *pbuf = NULL;
-        int rc = 0, length = 0, buf_len = 0;
+        struct hook_rename_msg *msg = arg;
+        int rc = 0, length = 0;
+        char *buffer = NULL;
         ENTRY;
         
         OBD_ALLOC(buffer, PAGE_SIZE);
@@ -557,11 +559,11 @@ exit:
         RETURN(rc);
 }
 
-static int kml_setattr(struct inode * inode, void *arg, struct kml_priv * priv) 
+static int kml_setattr(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_setattr_msg * msg = arg;
-        char   *buffer = NULL, *pbuf;
-        int rc = 0, length = 0, buf_len = 0;
+        struct hook_setattr_msg *msg = arg;
+        int rc = 0, length = 0;
+        char *buffer = NULL;
         ENTRY;
 
         OBD_ALLOC(buffer, PAGE_SIZE);

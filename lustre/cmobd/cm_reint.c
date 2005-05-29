@@ -98,7 +98,8 @@ int cmobd_reintegrate(struct obd_device *obd)
         struct cm_obd *cmobd = &obd->u.cm;
         struct llog_ctxt *ctxt = NULL;
         struct llog_handle *llh;
-        int val_size, rc = 0;
+        __u32 val_size;
+        int rc = 0;
         ENTRY;
 
         /* XXX just fetch the reintegration log context from

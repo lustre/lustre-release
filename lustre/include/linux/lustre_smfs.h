@@ -373,7 +373,7 @@ static inline void duplicate_sb(struct super_block *dst_sb,
 }
 
 static inline int smfs_get_dentry_name_index(struct dentry *dentry,
-                                             struct qstr  *str,
+                                             struct qstr *str,
                                              int *index)
 {
         char *name = (char *)dentry->d_name.name;
@@ -396,11 +396,9 @@ static inline int smfs_get_dentry_name_index(struct dentry *dentry,
         str->hash = end_name_hash(hash);
         OBD_ALLOC(str_name, len + 1);
         memcpy(str_name, dentry->d_name.name, len);
-        str->len = len; 
-        str->name = str_name;
-        if (index && c == ':') {
+        qstr_assign(str, str_name, len);
+        if (index && c == ':')
                 *index = simple_strtoul(name, 0, 0);         
-        }
         return 0;
 }
 

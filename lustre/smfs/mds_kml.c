@@ -53,7 +53,8 @@ static int mds_rec_link_pack(char *buffer, struct dentry *dentry,
                 return -ENOMEM;
         
         mdc_prepare_mdc_data(op_data, src->d_inode, dir,
-                             tgt->d_name.name, tgt->d_name.len, 0);
+                             (char *)tgt->d_name.name,
+                             tgt->d_name.len, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
         mkpi = (struct mds_kml_pack_info *)buffer;
@@ -141,8 +142,10 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 return -ENOMEM;
+        
         mdc_prepare_mdc_data(op_data, dir, dentry->d_inode,
-                             dentry->d_name.name, dentry->d_name.len, 0);
+                             (char *)dentry->d_name.name,
+                             dentry->d_name.len, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
         mkpi = (struct mds_kml_pack_info *)buffer;
@@ -190,8 +193,9 @@ static int mds_rec_unlink_pack(char *buffer, struct dentry *dentry,
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 return -ENOMEM;
+        
         mdc_prepare_mdc_data(op_data, dir, NULL,
-                             dentry->d_name.name,
+                             (char *)dentry->d_name.name,
                              dentry->d_name.len, mode);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
@@ -244,8 +248,8 @@ static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_rename_pack(msg, 0, op_data, dentry->d_name.name,
-                              dentry->d_name.len, new_dentry->d_name.name,
+        tmp = mdc_rename_pack(msg, 0, op_data, (char *)dentry->d_name.name,
+                              dentry->d_name.len, (char *)new_dentry->d_name.name,
                               new_dentry->d_name.len);
 
         mkpi->mpi_total_size = tmp - (void*)msg;

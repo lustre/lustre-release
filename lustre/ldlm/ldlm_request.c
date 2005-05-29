@@ -530,7 +530,8 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
         if (req->rq_status)
                 GOTO(out, rc = req->rq_status);
 
-        res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
+        res = ldlm_lock_convert(lock, new_mode,
+                                (int *)&reply->lock_flags);
         if (res != NULL) {
                 ldlm_reprocess_all(res);
                 /* Go to sleep until the lock is granted. */

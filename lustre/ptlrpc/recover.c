@@ -54,7 +54,7 @@ void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
 
         argv[0] = obd_lustre_upcall;
         argv[1] = "RECOVERY_OVER";
-        argv[2] = obd->obd_uuid.uuid;
+        argv[2] = (char *)obd->obd_uuid.uuid;
         argv[3] = NULL;
         
         envp[0] = "HOME=/";
@@ -92,10 +92,10 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
         
         argv[0] = obd_lustre_upcall;
         argv[1] = "FAILED_IMPORT";
-        argv[2] = imp->imp_target_uuid.uuid;
+        argv[2] = (char *)imp->imp_target_uuid.uuid;
         argv[3] = imp->imp_obd->obd_name;
-        argv[4] = imp->imp_connection->c_remote_uuid.uuid;
-        argv[5] = imp->imp_obd->obd_uuid.uuid;
+        argv[4] = (char *)imp->imp_connection->c_remote_uuid.uuid;
+        argv[5] = (char *)imp->imp_obd->obd_uuid.uuid;
         argv[6] = NULL;
 
         envp[0] = "HOME=/";

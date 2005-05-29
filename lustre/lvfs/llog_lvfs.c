@@ -887,7 +887,7 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
         fdentry = loghandle->lgh_file->f_dentry;
         parent_inode = fdentry->d_parent->d_inode;
         
-        if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
+        if (!strcmp((char *)fdentry->d_parent->d_name.name, "LOGS")) {
                 LASSERT(parent_inode == ctxt->loc_logs_dir->d_inode);
                 
                 id_len = ll_id2str(id_name, fdentry->d_inode->i_ino,
@@ -933,7 +933,7 @@ out_err:
                 GOTO(out, rc);
         }
         if (ctxt->loc_alone) {
-                if (!strcmp(fdentry->d_parent->d_name.name, "OBJECTS")) {
+                if (!strcmp((char *)fdentry->d_parent->d_name.name, "OBJECTS")) {
                         LASSERT(parent_inode == ctxt->loc_objects_dir->d_inode);
                         
                         dget(fdentry);

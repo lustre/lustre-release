@@ -1375,6 +1375,8 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
         list_add_tail(&req->rq_replay_list, &imp->imp_replay_list);
 }
 
+int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
+
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
         char str[PTL_NALFMT_SIZE];

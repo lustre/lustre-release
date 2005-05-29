@@ -889,6 +889,8 @@ static int fsfilt_smfs_free_extents(struct super_block *sb, ino_t ino,
 static int fsfilt_smfs_write_extents(struct dentry *dentry,
                                      unsigned long from, unsigned long num)
 {
+        /* TODO: fix this later */
+#if 0
         int rc = 0;
         struct inode * cache_inode = I2CI(dentry->d_inode);
         struct hook_write_msg msg = {
@@ -899,7 +901,6 @@ static int fsfilt_smfs_write_extents(struct dentry *dentry,
 
         ENTRY;
         
-        /*TODO: fix this later
         pre_smfs_inode(dentry->d_inode, cache_inode);
  
         SMFS_PRE_HOOK(dentry->d_inode, HOOK_WRITE, &msg);
@@ -907,9 +908,11 @@ static int fsfilt_smfs_write_extents(struct dentry *dentry,
         rc = smfs_write_extents(dentry->d_inode, dentry, from, num);
         SMFS_POST_HOOK(dentry->d_inode, HOOK_WRITE, &msg, rc);
         post_smfs_inode(dentry->d_inode, cache_inode);
-        */
         
         RETURN(rc);
+#endif
+        ENTRY;
+        RETURN(0);
 }
 
 static int fsfilt_smfs_precreate_rec(struct dentry *dentry, int *count, 

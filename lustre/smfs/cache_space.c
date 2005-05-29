@@ -54,8 +54,8 @@ static int cache_leaf_node(struct dentry *dentry, __u64 *active_entry)
         if (S_ISDIR(inode->i_mode)) {
                 if (inode->i_nlink != 2)
                         return 0;
-                if (!strncmp(dentry->d_name.name, "lost+found",
-                             dentry->d_name.len))
+                if (!strncmp((char *)dentry->d_name.name,
+                             "lost+found", dentry->d_name.len))
                         return 0;
                 LASSERT(active_entry != NULL);
                 get_active_entry(inode, active_entry);
@@ -63,8 +63,8 @@ static int cache_leaf_node(struct dentry *dentry, __u64 *active_entry)
         } else {
                 if (inode->i_nlink != 1)
                         return 0;
-                if (!strncmp(dentry->d_name.name, KML_LOG_NAME, dentry->d_name.len) ||
-                    !strncmp(dentry->d_name.name, CACHE_LRU_LOG, dentry->d_name.len))
+                if (!strncmp((char *)dentry->d_name.name, KML_LOG_NAME, dentry->d_name.len) ||
+                    !strncmp((char *)dentry->d_name.name, CACHE_LRU_LOG, dentry->d_name.len))
                         return 0;
                 return 1;
         }
@@ -74,8 +74,8 @@ static int cache_pre_leaf_node(struct dentry *dentry, __u64 *active_entry, int o
 {
         if (((op == 0 && dentry->d_inode->i_nlink == 0) ||
             (op == 1 && dentry->d_inode->i_nlink == 2)) &&
-            strncmp(dentry->d_name.name, KML_LOG_NAME, dentry->d_name.len) &&
-            strncmp(dentry->d_name.name, CACHE_LRU_LOG, dentry->d_name.len))
+            strncmp((char *)dentry->d_name.name, KML_LOG_NAME, dentry->d_name.len) &&
+            strncmp((char *)dentry->d_name.name, CACHE_LRU_LOG, dentry->d_name.len))
                 return 1;
         else if ((op == 2 && dentry->d_inode->i_nlink == 0) ||
                  (op == 3 && dentry->d_inode->i_nlink == 3)) {

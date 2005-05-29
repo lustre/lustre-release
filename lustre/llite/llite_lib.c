@@ -115,7 +115,8 @@ void lustre_free_sbi(struct super_block *sb)
 
 int lustre_init_dt_desc(struct ll_sb_info *sbi)
 {
-        int valsize, rc;
+        __u32 valsize;
+        int rc = 0;
         ENTRY;
         
         valsize = sizeof(sbi->ll_dt_desc);
@@ -212,8 +213,8 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
        
-        devno = get_uuid2int(sbi->ll_md_exp->exp_obd->obd_uuid.uuid, 
-                             strlen(sbi->ll_md_exp->exp_obd->obd_uuid.uuid));
+        devno = get_uuid2int((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid, 
+                             strlen((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid));
 
         sb->s_dev = devno;
 
@@ -575,7 +576,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
-        lustre_cfg_bufs_set_string(&bufs, 2, lmv_uuid.uuid);
+        lustre_cfg_bufs_set_string(&bufs, 2, (char *)lmv_uuid.uuid);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         err = class_process_config(lcfg);
@@ -880,10 +881,10 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
 {
         struct obd_export *md_exp = sbi->ll_md_exp;
         struct lustre_mount_data *lmd = sbi->ll_lmd;
-        struct llog_ctxt *ctxt;
-        struct config_llog_instance cfg;
         char *profile = lmd->lmd_profile, *name = NULL;
+        struct config_llog_instance cfg;
         int rc, namelen =  0, version;
+        struct llog_ctxt *ctxt;
         ENTRY;
 
         if (profile == NULL)
@@ -932,7 +933,9 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
 
         if (rc == 0 && clean == 0) {
                 struct lov_desc desc;
-                int rc, valsize;
+                __u32 valsize;
+                int rc = 0;
+                
                 valsize = sizeof(desc);
                 rc = obd_get_info(sbi->ll_dt_exp, strlen("lovdesc") + 1,
                                   "lovdesc", &valsize, &desc);

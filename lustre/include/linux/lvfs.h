@@ -128,6 +128,19 @@ void *lock_dir(struct inode *dir, struct qstr *name);
 void unlock_dir(struct inode *dir, void *lock);
 #endif
 
+/*
+ * typeof here is to suppress gcc warnings (gcc4, maybe others too) about wrong
+ * type in assignment. As kernel type may be chnaged we doing it this way.
+ * --umka
+ */
+#define qstr_assign(qstr, n, l)                 \
+do {                                            \
+    typeof(l) _len = (l);                       \
+    typeof(n) _name = (n);                      \
+    (qstr)->name = (typeof((qstr)->name))_name; \
+    (qstr)->len = (typeof((qstr)->len))_len;    \
+} while (0)
+
 /* We need to hold the inode semaphore over the dcache lookup itself, or we run
  * the risk of entering the filesystem lookup path concurrently on SMP systems,
  * and instantiating two inodes for the same entry.  We still protect against
@@ -136,11 +149,12 @@ static inline struct dentry *
 ll_lookup_one_len(const char *name, struct dentry *dparent, int namelen)
 {
         struct dentry *dchild;
+        
 #ifdef S_PDIROPS
         struct qstr qstr;
         void *lock;
-        qstr.name = name;
-        qstr.len = namelen;
+
+        qstr_assign(&qstr, name, namelen);
         lock = lock_dir(dparent->d_inode, &qstr);
 #else
         down(&dparent->d_inode->i_sem);

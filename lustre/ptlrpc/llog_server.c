@@ -210,9 +210,9 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                 GOTO(out_close, rc);
 
         memset(buf, 0, LLOG_CHUNK_SIZE);
-        rc = llog_next_block(loghandle, &body->lgd_saved_index,
-                             body->lgd_index,
-                             &body->lgd_cur_offset, buf, LLOG_CHUNK_SIZE);
+        rc = llog_next_block(loghandle, (int *)&body->lgd_saved_index,
+                             body->lgd_index, &body->lgd_cur_offset,
+                             buf, LLOG_CHUNK_SIZE);
         if (rc)
                 GOTO(out_close, rc);
 

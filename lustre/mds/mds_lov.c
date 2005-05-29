@@ -182,12 +182,14 @@ int mds_dt_set_growth(struct mds_obd *mds, int count)
 static int mds_dt_update_desc(struct obd_device *obd, struct obd_export *lov)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int valsize = sizeof(mds->mds_dt_desc), rc, i;
-        int old_count = mds->mds_dt_desc.ld_tgt_count;
+        __u32 valsize = sizeof(mds->mds_dt_desc);
+        int old_count, rc = 0, i;
         ENTRY;
 
-        rc = obd_get_info(lov, strlen("lovdesc") + 1, "lovdesc", &valsize,
-                          &mds->mds_dt_desc);
+        old_count = mds->mds_dt_desc.ld_tgt_count;
+        
+        rc = obd_get_info(lov, strlen("lovdesc") + 1, "lovdesc",
+                          &valsize, &mds->mds_dt_desc);
         if (rc)
                 RETURN(rc);
 
@@ -221,7 +223,7 @@ static int mds_dt_update_desc(struct obd_device *obd, struct obd_export *lov)
         RETURN(0);
 }
 
-int mds_dt_connect(struct obd_device *obd, char * lov_name)
+int mds_dt_connect(struct obd_device *obd, char *lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
@@ -291,7 +293,7 @@ int mds_dt_connect(struct obd_device *obd, char * lov_name)
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
         if (!mds->mds_dt_objids_valid) {
-                int size = sizeof(obd_id) * mds->mds_dt_desc.ld_tgt_count;
+                __u32 size = sizeof(obd_id) * mds->mds_dt_desc.ld_tgt_count;
                 rc = obd_get_info(mds->mds_dt_exp, strlen("last_id"),
                                   "last_id", &size, mds->mds_dt_objids);
                 if (!rc) {

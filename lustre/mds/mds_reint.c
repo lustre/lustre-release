@@ -1565,7 +1565,8 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 RETURN(-ENOLCK);
                 }
 
-                parent_res_id.name[2] = full_name_hash(name, namelen - 1);
+                parent_res_id.name[2] = full_name_hash((unsigned char *)name,
+                                                       namelen - 1);
                 
                 CDEBUG(D_INFO, "take lock on %lu:%lu:"LPX64"\n",
                        (unsigned long)id_fid(id), (unsigned long)id_group(id),
@@ -2583,7 +2584,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc = -ENOLCK);
                 }
 
-                tgt_dir_res_id.name[2] = full_name_hash(rec->ur_name,
+                tgt_dir_res_id.name[2] = full_name_hash((unsigned char *)rec->ur_name,
                                                         rec->ur_namelen - 1);
                 CDEBUG(D_INFO, "take lock on %lu:%lu:"LPX64"\n",
                        (unsigned long)id_fid(rec->ur_id2),
@@ -2763,8 +2764,10 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc);
                 
-                p1_res_id.name[2] = full_name_hash(old_name, old_len - 1);
-                p2_res_id.name[2] = full_name_hash(new_name, new_len - 1);
+                p1_res_id.name[2] = full_name_hash((unsigned char *)old_name,
+                                                   old_len - 1);
+                p2_res_id.name[2] = full_name_hash((unsigned char *)new_name,
+                                                   new_len - 1);
 
                 CDEBUG(D_INFO, "take locks on "
                        LPX64":"LPX64":"LPX64", "LPX64":"LPX64":"LPX64"\n",

@@ -165,7 +165,8 @@ gss_wrap_kerberos(struct gss_ctx    *ctx,
         data_desc.data = msgbuf->buf + msgbuf->dataoff - blocksize;
         data_desc.len = msgbuf->datalen + blocksize;
 
-        if (make_checksum(checksum_type, krb5_hdr, 8, &data_desc, &md5cksum)) {
+        if (make_checksum(checksum_type, (char *)krb5_hdr,
+                          8, &data_desc, &md5cksum)) {
                 CERROR("checksum error\n");
                 RETURN(GSS_S_FAILURE);
         }
@@ -317,8 +318,8 @@ gss_unwrap_kerberos(struct gss_ctx  *ctx,
         switch (signalg) {
         case SGN_ALG_DES_MAC_MD5:
                 checksum_type = CKSUMTYPE_RSA_MD5;
-                major = make_checksum(checksum_type, krb5_hdr, 8,
-                                      &plain_out, &md5cksum);
+                major = make_checksum(checksum_type, (char *)krb5_hdr,
+                                      8, &plain_out, &md5cksum);
                 if (major) {
                         CERROR("make checksum err: 0x%x\n", major);
                         GOTO(out_free, major);

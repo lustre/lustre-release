@@ -127,8 +127,9 @@ static int mmap_wait(char *str, int timeout)
                 int fromlen =sizeof(from);
                 
 		memset(buffer, 0, sizeof(buffer));
-		rc = recvfrom(sockfd, buffer, sizeof(buffer), 0, 
-                              (struct sockaddr *)&from, &fromlen);
+		rc = recvfrom(sockfd, buffer, sizeof(buffer),
+                              0, (struct sockaddr *)&from,
+                              (socklen_t *)&fromlen);
                 if (rc <= 0) {
                         perror("recvfrom()");
                         rc = errno;

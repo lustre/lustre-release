@@ -288,22 +288,24 @@ out_lock:
 static int cmobd_write_reint(struct obd_device *obd, void *rec)
 {
         struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_device *cache = cmobd->cache_exp->exp_obd;
         struct obdo *oa = (struct obdo *)rec;
         struct ldlm_extent *extent = NULL; 
+        char *extents_buf = NULL;
+        struct obd_device *cache;
+        int rc = 0, ext_num = 0;
         unsigned long csb, ino;
-        char   *extents_buf = NULL;
-        int    size = 0, rc = 0, ext_num = 0; 
+        __u32 size = 0;
         ENTRY;
 
         size = sizeof(csb);
-
         obd_get_info(cmobd->cache_exp, strlen("cache_sb") + 1,
                      "cache_sb", &size, &csb); 
  
         ino = *(int*)(&oa->o_inline[0]);
-        rc = fsfilt_get_ino_write_extents(cache, (struct super_block *)csb, ino,
-                                          &extents_buf, &ext_num);
+        
+        cache = cmobd->cache_exp->exp_obd;
+        rc = fsfilt_get_ino_write_extents(cache, (struct super_block *)csb,
+                                          ino, &extents_buf, &ext_num);
         if (rc)
                 GOTO(out, rc);   
         extent = (struct ldlm_extent *)extents_buf;

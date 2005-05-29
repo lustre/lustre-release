@@ -162,8 +162,8 @@ krb5_read_token(struct krb5_ctx *ctx,
 
         switch (signalg) {
         case SGN_ALG_DES_MAC_MD5:
-                ret = make_checksum(checksum_type, ptr - 2, 8,
-                                    message_buffer, &md5cksum);
+                ret = make_checksum(checksum_type, (char *)(ptr - 2),
+                                    8, message_buffer, &md5cksum);
                 if (ret)
                         goto out;
 

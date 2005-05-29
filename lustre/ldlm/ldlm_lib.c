@@ -591,18 +591,18 @@ int target_handle_connect(struct ptlrpc_request *req)
         switch (sizeof(ptl_nid_t)) {
                 /* NB the casts only avoid compiler warnings */
         case 8:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                snprintf((char *)remote_uuid.uuid, sizeof(remote_uuid),
                          "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_id.nid);
                 break;
         case 4:
-                snprintf(remote_uuid.uuid, sizeof remote_uuid,
+                snprintf((char *)remote_uuid.uuid, sizeof(remote_uuid),
                          "NET_%x_UUID", (__u32)req->rq_peer.peer_id.nid);
                 break;
         default:
                 LBUG();
         }
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, sizeof conn);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, sizeof(conn));
         if (tmp == NULL)
                 GOTO(out, rc = -EPROTO);
 

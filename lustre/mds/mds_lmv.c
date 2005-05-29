@@ -53,7 +53,8 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0};
-        int rc, valsize, value;
+        int rc, value;
+        __u32 valsize;
         ENTRY;
 
         if (IS_ERR(mds->mds_md_obd))

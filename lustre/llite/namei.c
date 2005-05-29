@@ -381,9 +381,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
         ll_inode2id(&pid, parent);
 
-        rc = md_intent_lock(ll_i2mdexp(parent), &pid,
-                            dentry->d_name.name, dentry->d_name.len, NULL, 0,
-                            NULL, it, flags, &req, ll_mdc_blocking_ast);
+        rc = md_intent_lock(ll_i2mdexp(parent), &pid, (char *)dentry->d_name.name,
+                            dentry->d_name.len, NULL, 0, NULL, it, flags, &req,
+                            ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
@@ -533,8 +533,8 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                 RETURN(rc);
 
         mdc_store_inode_generation(md_exp, request, MDS_REQ_INTENT_REC_OFF, 1);
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, 0, it);
+        inode = ll_create_node(dir, (char *)dentry->d_name.name,
+                               dentry->d_name.len, NULL, 0, mode, 0, it);
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
@@ -577,7 +577,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               nd->last.len, nd->last.name, dir->i_ino,
+               dir->i_generation, dir);
 
         mode &= ~current->fs->umask;
 
@@ -592,8 +593,10 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
                 OBD_ALLOC(op_data, sizeof(*op_data));
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                ll_prepare_mdc_data(op_data, dir, NULL, nd->last.name, 
+                ll_prepare_mdc_data(op_data, dir, NULL,
+                                    (char *)nd->last.name, 
 				    nd->last.len, 0);
+                
                 err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev,
                                 &request);
@@ -638,8 +641,11 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild,
                 OBD_ALLOC(op_data, sizeof(*op_data));
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                ll_prepare_mdc_data(op_data, dir, NULL, dchild->d_name.name, 
+
+                ll_prepare_mdc_data(op_data, dir, NULL,
+                                    (char *)dchild->d_name.name, 
 				    dchild->d_name.len, 0);
+                
                 err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev,
                                 &request);
@@ -669,10 +675,10 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild,
 
 static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
 {
+        const char *name = (char *)nd->last.name;
         struct inode *dir = nd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        const char *name = nd->last.name;
         struct mdc_op_data *op_data;
         int len = nd->last.len;
         int err = -EMLINK;
@@ -706,9 +712,9 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         struct inode *src = srcnd->dentry->d_inode;
         struct inode *dir = tgtnd->dentry->d_inode;
         struct ptlrpc_request *request = NULL;
+        struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data *op_data;
         int err;
-        struct ll_sb_info *sbi = ll_i2sbi(dir);
         ENTRY;
 
         CDEBUG(D_VFSTRACE,
@@ -719,8 +725,11 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        ll_prepare_mdc_data(op_data, src, dir, tgtnd->last.name, 
+
+        ll_prepare_mdc_data(op_data, src, dir,
+                            (char *)tgtnd->last.name, 
                             tgtnd->last.len, 0);
+        
         err = md_link(sbi->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
@@ -745,8 +754,11 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        ll_prepare_mdc_data(op_data, dir, NULL, nd->last.name, 
+
+        ll_prepare_mdc_data(op_data, dir, NULL,
+                            (char *)nd->last.name, 
                             nd->last.len, 0);
+        
         err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, 0, &request);
         OBD_FREE(op_data, sizeof(*op_data));
@@ -765,13 +777,17 @@ static int ll_rmdir_raw(struct nameidata *nd)
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               nd->last.len, nd->last.name, dir->i_ino,
+               dir->i_generation, dir);
 
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        ll_prepare_mdc_data(op_data, dir, NULL, nd->last.name, 
+
+        ll_prepare_mdc_data(op_data, dir, NULL,
+                            (char *)nd->last.name, 
                             nd->last.len, S_IFDIR);
+        
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc == 0)
@@ -788,12 +804,14 @@ static int ll_unlink_raw(struct nameidata *nd)
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+               nd->last.len, nd->last.name, dir->i_ino,
+               dir->i_generation, dir);
 
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        ll_prepare_mdc_data(op_data, dir, NULL, nd->last.name, nd->last.len, 0);
+        ll_prepare_mdc_data(op_data, dir, NULL,
+                            (char *)nd->last.name, nd->last.len, 0);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
@@ -827,9 +845,9 @@ static int ll_rename_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, src, tgt, NULL, 0, 0);
-        err = md_rename(sbi->ll_md_exp, op_data, srcnd->last.name, 
-                        srcnd->last.len, tgtnd->last.name, tgtnd->last.len, 
-                        &request);
+        err = md_rename(sbi->ll_md_exp, op_data, (char *)srcnd->last.name, 
+                        srcnd->last.len, (char *)tgtnd->last.name,
+                        tgtnd->last.len, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (!err) {
                 ll_update_times(request, 0, src);

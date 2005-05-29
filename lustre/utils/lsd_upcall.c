@@ -377,14 +377,16 @@ int main (int argc, char **argv)
 
         /* read user/group database */
         ioc_data.err = get_groups_local(ioc_data.uid, &ioc_data.gid,
-                                        &ioc_data.ngroups, &ioc_data.groups);
+                                        (int *)&ioc_data.ngroups,
+                                        &ioc_data.groups);
         if (ioc_data.err)
                 goto do_downcall;
 
         /* read lsd config database */
         conf_fp = fopen(conf_name, "r");
         if (conf_fp) {
-                get_perms(conf_fp, ioc_data.uid, &ioc_data.nperms,
+                get_perms(conf_fp, ioc_data.uid,
+                          (int *)&ioc_data.nperms,
                           &ioc_data.perms);
                 fclose(conf_fp);
         }

@@ -51,7 +51,8 @@ static int ldlm_refcount;
 
 static struct ldlm_state *ldlm_state;
 
-inline unsigned long round_timeout(unsigned long timeout)
+static inline unsigned long
+round_timeout(unsigned long timeout)
 {
         return ((timeout / HZ) + 1) * HZ;
 }
@@ -697,11 +698,12 @@ existing_lock:
                 memcpy(&lock->l_req_extent, &lock->l_policy_data.l_extent,
                        sizeof(lock->l_req_extent));
 
-        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, &flags);
+        err = ldlm_lock_enqueue(obddev->obd_namespace, &lock,
+                                cookie, (int *)&flags);
         if (err)
                 GOTO(out, err);
 
-        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*dlm_rep));
+        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*dlm_rep));
         dlm_rep->lock_flags = flags;
 
         ldlm_lock2desc(lock, &dlm_rep->lock_desc);
@@ -796,7 +798,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
-                                        &dlm_rep->lock_flags);
+                                        (int *)&dlm_rep->lock_flags);
                 if (res) {
                         l_lock(&lock->l_resource->lr_namespace->ns_lock);
                         if (ldlm_del_waiting_lock(lock))

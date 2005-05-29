@@ -72,7 +72,7 @@
 #include "gss_krb5.h"
 
 rawobj_t gss_mech_krb5_oid =
-   {9, "\052\206\110\206\367\022\001\002\002"};
+{9, (__u8 *)"\052\206\110\206\367\022\001\002\002"};
 
 static inline int
 get_bytes(char **ptr, const char *end, void *res, int len)
@@ -146,8 +146,8 @@ static __u32
 gss_import_sec_context_kerberos(rawobj_t *inbuf,
                                 struct gss_ctx *ctx_id)
 {
-        char            *p = inbuf->data;
-        char            *end = inbuf->data + inbuf->len;
+        char            *p = (char *)inbuf->data;
+        char            *end = (char *)(inbuf->data + inbuf->len);
         struct krb5_ctx *ctx;
 
         OBD_ALLOC(ctx, sizeof(*ctx));

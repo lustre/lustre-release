@@ -160,7 +160,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
         LASSERT(bitmap != NULL);
 
         /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp((char *)fed->fed_fcd->fcd_uuid, (char *)obd->obd_uuid.uuid))
                 RETURN(0);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -251,7 +251,7 @@ static int filter_client_free(struct obd_export *exp, int flags)
                 GOTO(free, 0);
 
         /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (strcmp(fed->fed_fcd->fcd_uuid, obd->obd_uuid.uuid ) == 0)
+        if (!strcmp((char *)fed->fed_fcd->fcd_uuid, (char *)obd->obd_uuid.uuid))
                 GOTO(free, 0);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
@@ -401,7 +401,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                                LAST_RCVD, rc);
                         GOTO(err_fsd, rc);
                 }
-                if (strcmp(fsd->fsd_uuid, obd->obd_uuid.uuid) != 0) {
+                if (strcmp((char *)fsd->fsd_uuid, (char *)obd->obd_uuid.uuid)) {
                         CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
                                obd->obd_uuid.uuid, fsd->fsd_uuid);
                         GOTO(err_fsd, rc = -EINVAL);
@@ -1089,14 +1089,17 @@ static int filter_blocking_ast(struct ldlm_lock *lock,
 extern void *lock_dir(struct inode *dir, struct qstr *name);
 extern void unlock_dir(struct inode *dir, void *lock);
 
-static void * filter_lock_dentry(struct obd_device *obd,
-                                 struct dentry *dparent, obd_id id)
+static void *filter_lock_dentry(struct obd_device *obd,
+                                struct dentry *dparent,
+                                obd_id id)
 {
 #ifdef S_PDIROPS
         struct qstr qstr;
         char name[32];
-        qstr.name = name;
-        qstr.len = sprintf(name, LPU64, id);
+        int len;
+
+        len = sprintf(name, LPU64, id);
+        qstr_assign(&qstr, (char *)name, len);
         return lock_dir(dparent->d_inode, &qstr);
 #else
         down(&dparent->d_inode->i_sem);

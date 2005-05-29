@@ -143,7 +143,7 @@ krb5_make_token(struct krb5_ctx *ctx,
         *(__u16 *)(krb5_hdr + 2) = cpu_to_be16(ctx->signalg);
         memset(krb5_hdr + 4, 0xff, 4);
 
-        if (make_checksum(checksum_type, krb5_hdr, 8, text, &md5cksum))
+        if (make_checksum(checksum_type, (char *)krb5_hdr, 8, text, &md5cksum))
                 goto out_err;
 
         switch (ctx->signalg) {

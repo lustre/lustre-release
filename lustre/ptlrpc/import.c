@@ -329,8 +329,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                       sizeof(imp->imp_connect_flags),
                       sizeof(imp->imp_connect_data)};
         char *tmp[] = {NULL,
-                       imp->imp_target_uuid.uuid,
-                       obd->obd_uuid.uuid,
+                       (char *)imp->imp_target_uuid.uuid,
+                       (char *)obd->obd_uuid.uuid,
                        (char *)&imp->imp_dlm_handle,
                        (char *)&imp->imp_connect_flags, /* XXX: make this portable! */
                        (char*) &imp->imp_connect_data};

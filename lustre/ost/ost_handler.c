@@ -908,7 +908,7 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*reply));
-        rc = obd_get_info(exp, keylen, key, &size, reply);
+        rc = obd_get_info(exp, keylen, key, (__u32 *)&size, reply);
         req->rq_repmsg->status = 0;
         RETURN(rc);
 }

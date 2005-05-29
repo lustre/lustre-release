@@ -96,7 +96,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                 CDEBUG(D_INFO, "lmv idx %d is %s conn "LPX64"\n",
                        i, tgt->uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
 
-                if (strncmp(uuid->uuid, tgt->uuid.uuid, sizeof uuid->uuid) == 0)
+                if (!strncmp((char *)uuid->uuid, (char *)tgt->uuid.uuid, sizeof(uuid->uuid)))
                         break;
         }
 

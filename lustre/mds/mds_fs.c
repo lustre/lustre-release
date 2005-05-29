@@ -67,7 +67,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         LASSERT(bitmap != NULL);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp((char *)med->med_mcd->mcd_uuid, (char *)obd->obd_uuid.uuid))
                 RETURN(0);
 
         /* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -134,7 +134,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
                 RETURN(0);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
-        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+        if (!strcmp((char *)med->med_mcd->mcd_uuid, (char *)obd->obd_uuid.uuid))
                 GOTO(free_and_out, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
@@ -278,7 +278,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                                file->f_dentry->d_name.name, rc);
                         GOTO(err_msd, rc);
                 }
-                if (strcmp(msd->msd_uuid, obd->obd_uuid.uuid) != 0) {
+                if (strcmp((char *)msd->msd_uuid, (char *)obd->obd_uuid.uuid)) {
                         CERROR("OBD UUID %s does not match last_rcvd UUID %s\n",
                                obd->obd_uuid.uuid, msd->msd_uuid);
                         GOTO(err_msd, rc = -EINVAL);

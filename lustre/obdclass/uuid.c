@@ -134,7 +134,7 @@ void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 	struct uuid uuid;
 
 	uuid_unpack(uu, &uuid);
-	sprintf(out->uuid,
+	sprintf((char *)out->uuid,
 		"%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
 		uuid.time_low, uuid.time_mid, uuid.time_hi_and_version,
 		uuid.clock_seq >> 8, uuid.clock_seq & 0xFF,
@@ -156,7 +156,7 @@ struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid)
                              sizeof LUSTRE_MDC_NAME) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
                         struct obd_import *imp = cli->cl_import;
-                        if (strncmp(tgtuuid->uuid, imp->imp_target_uuid.uuid,
+                        if (strncmp((char *)tgtuuid->uuid, (char *)imp->imp_target_uuid.uuid,
                                     sizeof(imp->imp_target_uuid)) == 0)
                                 return obd;
                 }

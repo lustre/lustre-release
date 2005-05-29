@@ -1258,11 +1258,11 @@ static int mdc_get_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EPROTO);
                 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
-                              OST_GET_INFO, 1, &keylen, bufs);
+                              OST_GET_INFO, 1, (int *)&keylen, bufs);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req->rq_replen = lustre_msg_size(1, valsize);
+        req->rq_replen = lustre_msg_size(1, (int *)valsize);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);

@@ -235,8 +235,8 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                                int lmmsize, struct lookup_intent *itp)
 {
         struct ll_sb_info *sbi = ll_i2sbi(file->f_dentry->d_inode);
+        const char *name = (char *)file->f_dentry->d_name.name;
         struct dentry *parent = file->f_dentry->d_parent;
-        const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
         struct lustre_handle lockh;
         struct mdc_op_data *op_data;

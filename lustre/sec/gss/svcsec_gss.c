@@ -135,8 +135,8 @@ static void rsi_put(struct cache_head *item, struct cache_detail *cd)
 
 static inline int rsi_hash(struct rsi *item)
 {
-        return hash_mem(item->in_handle.data, item->in_handle.len, RSI_HASHBITS)
-              ^ hash_mem(item->in_token.data, item->in_token.len, RSI_HASHBITS);
+        return hash_mem((char *)item->in_handle.data, item->in_handle.len, RSI_HASHBITS)
+                ^ hash_mem((char *)item->in_token.data, item->in_token.len, RSI_HASHBITS);
 }
 
 static inline int rsi_match(struct rsi *item, struct rsi *tmp)
@@ -151,11 +151,11 @@ static void rsi_request(struct cache_detail *cd,
 {
         struct rsi *rsii = container_of(h, struct rsi, h);
 
-        qword_addhex(bpp, blen, (char *) &rsii->naltype, sizeof(rsii->naltype));
-        qword_addhex(bpp, blen, (char *) &rsii->netid, sizeof(rsii->netid));
-        qword_addhex(bpp, blen, (char *) &rsii->nid, sizeof(rsii->nid));
-        qword_addhex(bpp, blen, rsii->in_handle.data, rsii->in_handle.len);
-        qword_addhex(bpp, blen, rsii->in_token.data, rsii->in_token.len);
+        qword_addhex(bpp, blen, (char *)&rsii->naltype, sizeof(rsii->naltype));
+        qword_addhex(bpp, blen, (char *)&rsii->netid, sizeof(rsii->netid));
+        qword_addhex(bpp, blen, (char *)&rsii->nid, sizeof(rsii->nid));
+        qword_addhex(bpp, blen, (char *)rsii->in_handle.data, rsii->in_handle.len);
+        qword_addhex(bpp, blen, (char *)rsii->in_token.data, rsii->in_token.len);
         (*bpp)[-1] = '\n';
 }
 
@@ -418,7 +418,8 @@ static void rsc_put(struct cache_head *item, struct cache_detail *cd)
 static inline int
 rsc_hash(struct rsc *rsci)
 {
-        return hash_mem(rsci->handle.data, rsci->handle.len, RSC_HASHBITS);
+        return hash_mem((char *)rsci->handle.data,
+                        rsci->handle.len, RSC_HASHBITS);
 }
 
 static inline int
@@ -472,7 +473,8 @@ out_noset:
 static int rsc_parse(struct cache_detail *cd,
                      char *mesg, int mlen)
 {
-        /* contexthandle expiry [ uid gid N <n gids> mechname ...mechdata... ] */
+        /* contexthandle expiry [ uid gid N <n gids> mechname
+         * ...mechdata... ] */
         char *buf = mesg;
         int len, rv;
         struct rsc *rsci, *res = NULL;
@@ -500,21 +502,21 @@ static int rsc_parse(struct cache_detail *cd,
                 goto out;
 
         /* remote flag */
-        rv = get_int(&mesg, &rsci->remote_realm);
+        rv = get_int(&mesg, (int *)&rsci->remote_realm);
         if (rv) {
                 CERROR("fail to get remote flag\n");
                 goto out;
         }
 
         /* mapped uid */
-        rv = get_int(&mesg, &rsci->mapped_uid);
+        rv = get_int(&mesg, (int *)&rsci->mapped_uid);
         if (rv) {
                 CERROR("fail to get mapped uid\n");
                 goto out;
         }
 
         /* uid, or NEGATIVE */
-        rv = get_int(&mesg, &rsci->cred.vc_uid);
+        rv = get_int(&mesg, (int *)&rsci->cred.vc_uid);
         if (rv == -EINVAL)
                 goto out;
         if (rv == -ENOENT) {
@@ -526,7 +528,7 @@ static int rsc_parse(struct cache_detail *cd,
                 __u64 ctx_expiry;
 
                 /* gid */
-                if (get_int(&mesg, &rsci->cred.vc_gid))
+                if (get_int(&mesg, (int *)&rsci->cred.vc_gid))
                         goto out;
 
                 /* mech name */
@@ -546,7 +548,7 @@ static int rsc_parse(struct cache_detail *cd,
                         goto out;
                 }
                 tmp_buf.len = len;
-                tmp_buf.data = buf;
+                tmp_buf.data = (unsigned char *)buf;
                 if (kgss_import_sec_context(&tmp_buf, gm, &rsci->mechctx)) {
                         kgss_mech_put(gm);
                         goto out;
@@ -718,7 +720,7 @@ gss_svc_verify_request(struct ptlrpc_request *req,
         msg.data = (__u8 *)req->rq_reqmsg;
 
         mic.len = le32_to_cpu(*vp++);
-        mic.data = (char *) vp;
+        mic.data = (unsigned char *)vp;
         vlen -= 4;
 
         if (mic.len > vlen) {
@@ -1287,7 +1289,7 @@ gss_svcsec_authorize(struct ptlrpc_request *req)
                 vlen -= 7 * 4;
 
                 mic.len = vlen;
-                mic.data = (char *) vp;
+                mic.data = (unsigned char *)vp;
 
                 major = kgss_get_mic(rscp->mechctx, 0, &lmsg, &mic);
                 if (major) {

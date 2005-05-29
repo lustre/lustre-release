@@ -272,7 +272,7 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
                 }
                 flags = 0;
 
-                res_id.name[2] = full_name_hash(name, namelen);
+                res_id.name[2] = full_name_hash((unsigned char *)name, namelen);
 
                 CDEBUG(D_INFO, "take lock on "DLID4":"LPX64"\n",
                        OLID4(id), res_id.name[2]);
@@ -2370,9 +2370,9 @@ static int mdt_get_info(struct ptlrpc_request *req)
 
         if (keylen >= strlen("rootid") && !strcmp(key, "rootid")) {
                 struct lustre_id *reply;
-                int size = sizeof(*reply);
+                __u32 size = sizeof(*reply);
                 
-                rc = lustre_pack_reply(req, 1, &size, NULL);
+                rc = lustre_pack_reply(req, 1, (int *)&size, NULL);
                 if (rc)
                         RETURN(rc);
 
@@ -2380,9 +2380,9 @@ static int mdt_get_info(struct ptlrpc_request *req)
                 rc = obd_get_info(exp, keylen, key, &size, reply);
         } else {
                 obd_id *reply;
-                int size = sizeof(*reply);
+                __u32 size = sizeof(*reply);
                 
-                rc = lustre_pack_reply(req, 1, &size, NULL);
+                rc = lustre_pack_reply(req, 1, (int *)&size, NULL);
                 if (rc)
                         RETURN(rc);
 
