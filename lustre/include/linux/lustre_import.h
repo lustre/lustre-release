@@ -102,7 +102,8 @@ struct obd_import {
                                   imp_initial_recov:1, imp_force_verify:1,
                                   imp_pingable:1, imp_resend_replay:1,
                                   imp_deactive:1,
-                                  imp_waiting_ping_reply:1;
+                                  imp_waiting_ping_reply:1,
+                                  imp_debug_open_replays:1;
         __u32                     imp_connect_op;
         __u32                     imp_connect_flags;
         struct obd_connect_data   imp_connect_data;

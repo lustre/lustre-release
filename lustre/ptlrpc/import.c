@@ -551,6 +551,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         }
 
 finish:
+        imp->imp_debug_open_replays = 1;
         rc = ptlrpc_import_recovery_state_machine(imp);
         if (rc != 0) {
                 if (rc == -ENOTCONN) {
