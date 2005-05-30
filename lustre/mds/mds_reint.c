@@ -3318,7 +3318,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                DEBUG_REQ(D_HA, req, "rename replay\n");
+                DEBUG_REQ(D_HA, req, "rename replay");
                 memcpy(lustre_msg_buf(req->rq_repmsg, 2, 0),
                        lustre_msg_buf(req->rq_reqmsg, offset + 3, 0),
                        req->rq_repmsg->buflens[2]);
