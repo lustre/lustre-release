@@ -239,7 +239,7 @@ cobd_disconnect(struct obd_export *exp, unsigned long flags)
         RETURN(rc);
 }
 
-static int cobd_get_info(struct obd_export *exp, obd_count keylen,
+static int cobd_get_info(struct obd_export *exp, __u32 keylen,
                          void *key, __u32 *vallen, void *val)
 {
         struct obd_device *obd = class_exp2obd(exp);

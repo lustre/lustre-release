@@ -870,6 +870,7 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
+int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
 
 /* ptlrpc/ptlrpcd.c */
 void ptlrpcd_wake(struct ptlrpc_request *req);

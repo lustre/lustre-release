@@ -2803,7 +2803,7 @@ out:
         return err;
 }
 
-static int osc_get_info(struct obd_export *exp, obd_count keylen,
+static int osc_get_info(struct obd_export *exp, __u32 keylen,
                         void *key, __u32 *vallen, void *val)
 {
         ENTRY;

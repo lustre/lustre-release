@@ -337,7 +337,8 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 
                 CDEBUG(D_INFO, "lov idx %d is %s conn "LPX64"\n",
                        i, tgt->uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
-                if (!strncmp((char *)uuid->uuid, (char *)tgt->uuid.uuid, sizeof(uuid->uuid)))
+                
+                if (obd_uuid_equals(uuid, &tgt->uuid))
                         break;
         }
 
@@ -581,7 +582,7 @@ lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 RETURN(-EINVAL);
         }
 
-        if (strncmp((char *)uuidp->uuid, (char *)tgt->uuid.uuid, sizeof(uuidp->uuid))) {
+        if (!obd_uuid_equals(uuidp, &tgt->uuid)) {
                 CERROR("LOV target UUID %s at index %d doesn't match %s.\n",
                        tgt->uuid.uuid, index, uuidp->uuid);
                 RETURN(-EINVAL);

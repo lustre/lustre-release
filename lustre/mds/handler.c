@@ -2370,24 +2370,24 @@ static int mdt_get_info(struct ptlrpc_request *req)
 
         if (keylen >= strlen("rootid") && !strcmp(key, "rootid")) {
                 struct lustre_id *reply;
-                __u32 size = sizeof(*reply);
+                int size = sizeof(*reply);
                 
-                rc = lustre_pack_reply(req, 1, (int *)&size, NULL);
+                rc = lustre_pack_reply(req, 1, &size, NULL);
                 if (rc)
                         RETURN(rc);
 
                 reply = lustre_msg_buf(req->rq_repmsg, 0, size);
-                rc = obd_get_info(exp, keylen, key, &size, reply);
+                rc = obd_get_info(exp, keylen, key, (__u32 *)&size, reply);
         } else {
                 obd_id *reply;
-                __u32 size = sizeof(*reply);
+                int size = sizeof(*reply);
                 
-                rc = lustre_pack_reply(req, 1, (int *)&size, NULL);
+                rc = lustre_pack_reply(req, 1, &size, NULL);
                 if (rc)
                         RETURN(rc);
 
                 reply = lustre_msg_buf(req->rq_repmsg, 0, size);
-                rc = obd_get_info(exp, keylen, key, &size, reply);
+                rc = obd_get_info(exp, keylen, key, (__u32 *)&size, reply);
         }
 
         req->rq_repmsg->status = 0;

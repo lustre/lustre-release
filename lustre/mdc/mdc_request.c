@@ -1214,7 +1214,7 @@ static struct obd_device *mdc_get_real_obd(struct obd_export *exp,
        RETURN(exp->exp_obd);
 }
 
-static int mdc_get_info(struct obd_export *exp, obd_count keylen,
+static int mdc_get_info(struct obd_export *exp, __u32 keylen,
                         void *key, __u32 *valsize, void *val)
 {
         struct ptlrpc_request *req;
