@@ -28,7 +28,7 @@ dir=${3:-.}
 module=$(basename $(<$dir/CVS/Repository))
 
 if [ "$module" = "lustre" ] ; then
-    echo >&2 "${progname}: You probably want to branch lustre or portals, not the whole tree."
+    echo >&2 "${progname}: You probably want to merge lustre or portals, not the whole tree."
     echo >&2 "${progname}: Try using ${0} $parent $child lustre"
     exit 1
 fi
