@@ -745,6 +745,7 @@ int class_disconnect_stale_exports(struct obd_device *obd,
                                    int (*test_export)(struct obd_export *),
                                    unsigned long flags)
 {
+        char str[PTL_NALFMT_SIZE];
         struct list_head work_list;
         struct list_head *pos, *n;
         struct obd_export *exp;
@@ -759,8 +760,9 @@ int class_disconnect_stale_exports(struct obd_device *obd,
                         list_del(&exp->exp_obd_chain);
                         list_add(&exp->exp_obd_chain, &work_list);
                         cnt++;
-                        CDEBUG(D_ERROR, "%s: disconnect stale client %s\n",
-                               obd->obd_name, exp->exp_client_uuid.uuid);
+                        ptlrpc_peernid2str(&exp->exp_connection->c_peer, str);
+                        CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid, str);
                 }
         }
         spin_unlock(&obd->obd_dev_lock);
