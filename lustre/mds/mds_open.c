@@ -1449,12 +1449,6 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 int stripe_count = 0;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
-                if (obd->obd_recovering) {
-                        CDEBUG(D_HA, "not remove orphan %s until recovery"
-                               " is over\n", idname);
-                        GOTO(out, rc);
-                }
-
                 CDEBUG(D_HA, "destroying orphan object %s\n", idname);
                 
                 if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
