@@ -307,6 +307,24 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         RETURN(rdentry);
 }
 
+static int smfs_lookup_raw(struct inode *dir, const char *name,
+                           int len, ino_t *data)
+{
+        struct inode *cache_dir = I2CI(dir);
+        int rc = 0;
+
+        if (!cache_dir)
+                RETURN(-ENOENT);
+        
+        if (cache_dir->i_op->lookup_raw) {
+                rc = cache_dir->i_op->lookup_raw(cache_dir, name, len, data);
+        } else {
+                CWARN("do not have raw lookup ops in bottom fs\n");
+        }
+
+        RETURN(rc);
+}
+
 static int smfs_link(struct dentry *old_dentry,
                      struct inode *dir, struct dentry *dentry)
 {
@@ -751,6 +769,7 @@ exit:
 struct inode_operations smfs_dir_iops = {
         create:         smfs_create,
         lookup:         smfs_lookup,
+        lookup_raw:     smfs_lookup_raw,
         link:           smfs_link,              /* BKL held */
         unlink:         smfs_unlink,            /* BKL held */
         symlink:        smfs_symlink,           /* BKL held */

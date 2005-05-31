@@ -317,6 +317,20 @@ case $BACKINGFS in
 esac # $BACKINGFS
 ])
 
+# check lookup_raw
+AC_DEFUN([LC_CONFIG_LOOKUP_RAW],
+[AC_MSG_CHECKING([whether to have raw lookup patch])
+HAVE_LOOKUP_RAW="`grep -c -s 'raw-lookup' $LUSTRE/kernel_patches/series/ldiskfs-$LDISKFS_SERIES`"
+
+if test x$HAVE_LOOKUP_RAW = "x1" ; then
+        AC_DEFINE(HAVE_LOOKUP_RAW, 1,
+                [kernel have lookup raw patch])
+        AC_MSG_RESULT(yes)
+else
+        AC_MSG_RESULT(no)
+fi
+])
+
 #
 # LC_CONFIG_PINGER
 #
@@ -407,6 +421,7 @@ AC_MSG_RESULT([$enable_smfs])
 AC_DEFUN([LC_PROG_LINUX],
 [if test x$enable_server = xyes ; then
 	LC_CONFIG_BACKINGFS
+	LC_CONFIG_LOOKUP_RAW
 fi
 LC_CONFIG_PINGER
 LC_CONFIG_GSS

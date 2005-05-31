@@ -1,7 +1,7 @@
 Index: linux-2.6.10/fs/namei.c
 ===================================================================
---- linux-2.6.10.orig/fs/namei.c	2005-03-31 17:43:42.417809208 +0800
-+++ linux-2.6.10/fs/namei.c	2005-03-31 17:47:14.292599344 +0800
+--- linux-2.6.10.orig/fs/namei.c	2005-05-18 11:50:10.000000000 +0800
++++ linux-2.6.10/fs/namei.c	2005-05-18 11:50:11.000000000 +0800
 @@ -474,6 +474,7 @@
   	intent_init(&nd->intent.open, it.op);
   	nd->intent.open.flags = it.flags;
@@ -186,9 +186,17 @@ Index: linux-2.6.10/fs/namei.c
  	if (newnd.last_type != LAST_NORM)
 Index: linux-2.6.10/include/linux/fs.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/fs.h	2005-03-31 17:03:37.000000000 +0800
-+++ linux-2.6.10/include/linux/fs.h	2005-03-31 17:46:35.715463960 +0800
-@@ -956,6 +956,7 @@
+--- linux-2.6.10.orig/include/linux/fs.h	2005-05-18 11:50:10.000000000 +0800
++++ linux-2.6.10/include/linux/fs.h	2005-05-31 22:22:38.000000000 +0800
+@@ -943,6 +943,7 @@
+ 	int (*mkdir) (struct inode *,struct dentry *,int);
+ 	int (*rmdir) (struct inode *,struct dentry *);
+ 	int (*mknod) (struct inode *,struct dentry *,int,dev_t);
++	int (*lookup_raw) (struct inode *, const char *, int, ino_t *);
+ 	int (*rename) (struct inode *, struct dentry *,
+ 			struct inode *, struct dentry *);
+ 	int (*readlink) (struct dentry *, char __user *,int);
+@@ -956,6 +957,7 @@
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
  	int (*removexattr) (struct dentry *, const char *);
@@ -198,8 +206,8 @@ Index: linux-2.6.10/include/linux/fs.h
  struct seq_file;
 Index: linux-2.6.10/include/linux/namei.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/namei.h	2005-03-31 17:43:42.472800848 +0800
-+++ linux-2.6.10/include/linux/namei.h	2005-03-31 17:50:12.533502608 +0800
+--- linux-2.6.10.orig/include/linux/namei.h	2005-05-18 11:50:10.000000000 +0800
++++ linux-2.6.10/include/linux/namei.h	2005-05-18 11:50:11.000000000 +0800
 @@ -15,8 +15,19 @@
  #define IT_UNLINK	(1<<5)
  #define IT_TRUNC	(1<<6)

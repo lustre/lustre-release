@@ -1354,7 +1354,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
                 resent_req = 1;
         }
-#if 0        
 #if HAVE_LOOKUP_RAW
         if (body->valid == OBD_MD_FLID) {
                 struct mds_body *mds_reply;
@@ -1367,7 +1366,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         rc = PTR_ERR(dparent);
                         GOTO(cleanup, rc);
                 }
-
                 /*
                  * the user requested ONLY the inode number, so do a raw lookup.
                  */
@@ -1388,7 +1386,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 mds_reply->valid = OBD_MD_FLID;
                 GOTO(cleanup, rc);
         }
-#endif
 #endif
         if (resent_req == 0) {
                 LASSERT(id_fid(&body->id1) != 0);
