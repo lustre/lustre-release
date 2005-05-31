@@ -296,7 +296,7 @@ kranal_setup_rdma_buffer (kra_tx_t *tx, int niov,
         return kranal_setup_virt_buffer(tx, niov, iov, offset, nob);
 }
 
-void
+int
 kranal_map_buffer (kra_tx_t *tx)
 {
         kra_conn_t     *conn = tx->tx_conn;
@@ -313,23 +313,45 @@ kranal_map_buffer (kra_tx_t *tx)
         case RANAL_BUF_IMMEDIATE:
         case RANAL_BUF_PHYS_MAPPED:
         case RANAL_BUF_VIRT_MAPPED:
-                break;
+                return 0;
 
         case RANAL_BUF_PHYS_UNMAPPED:
                 rrc = RapkRegisterPhys(dev->rad_handle,
                                        tx->tx_phys, tx->tx_phys_npages,
                                        &tx->tx_map_key);
-                LASSERT (rrc == RAP_SUCCESS);
+                if (rrc != RAP_SUCCESS) {
+                        CERROR ("Can't map %d pages: dev %d "
+                                "phys %u pp %u, virt %u nob %lu\n",
+                                tx->tx_phys_npages, dev->rad_id, 
+                                dev->rad_nphysmap, dev->rad_nppphysmap,
+                                dev->rad_nvirtmap, dev->rad_nobvirtmap);
+                        return -ENOMEM; /* assume insufficient resources */
+                }
+
+                dev->rad_nphysmap++;
+                dev->rad_nppphysmap += tx->tx_phys_npages;
+
                 tx->tx_buftype = RANAL_BUF_PHYS_MAPPED;
-                break;
+                return 0;
 
         case RANAL_BUF_VIRT_UNMAPPED:
                 rrc = RapkRegisterMemory(dev->rad_handle,
                                          tx->tx_buffer, tx->tx_nob,
                                          &tx->tx_map_key);
-                LASSERT (rrc == RAP_SUCCESS);
+                if (rrc != RAP_SUCCESS) {
+                        CERROR ("Can't map %d bytes: dev %d "
+                                "phys %u pp %u, virt %u nob %lu\n",
+                                tx->tx_nob, dev->rad_id, 
+                                dev->rad_nphysmap, dev->rad_nppphysmap,
+                                dev->rad_nvirtmap, dev->rad_nobvirtmap);
+                        return -ENOMEM; /* assume insufficient resources */
+                }
+
+                dev->rad_nvirtmap++;
+                dev->rad_nobvirtmap += tx->tx_nob;
+
                 tx->tx_buftype = RANAL_BUF_VIRT_MAPPED;
-                break;
+                return 0;
         }
 }
 
@@ -356,6 +378,10 @@ kranal_unmap_buffer (kra_tx_t *tx)
                 rrc = RapkDeregisterMemory(dev->rad_handle, NULL,
                                            &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
+
+                dev->rad_nphysmap--;
+                dev->rad_nppphysmap -= tx->tx_phys_npages;
+
                 tx->tx_buftype = RANAL_BUF_PHYS_UNMAPPED;
                 break;
 
@@ -366,6 +392,10 @@ kranal_unmap_buffer (kra_tx_t *tx)
                 rrc = RapkDeregisterMemory(dev->rad_handle, tx->tx_buffer,
                                            &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
+
+                dev->rad_nvirtmap--;
+                dev->rad_nobvirtmap -= tx->tx_nob;
+
                 tx->tx_buftype = RANAL_BUF_VIRT_UNMAPPED;
                 break;
         }
@@ -650,7 +680,12 @@ kranal_do_send (lib_nal_t    *nal,
                 tx->tx_conn = conn;
                 tx->tx_libmsg[0] = libmsg;
 
-                kranal_map_buffer(tx);
+                rc = kranal_map_buffer(tx);
+                if (rc != 0) {
+                        kranal_tx_done(tx, rc);
+                        return PTL_FAIL;
+                }
+
                 kranal_rdma(tx, RANAL_MSG_GET_DONE,
                             &conn->rac_rxmsg->ram_u.get.ragm_desc, nob,
                             conn->rac_rxmsg->ram_u.get.ragm_cookie);
@@ -843,7 +878,11 @@ kranal_do_recv (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                 }
 
                 tx->tx_conn = conn;
-                kranal_map_buffer(tx);
+                rc = kranal_map_buffer(tx);
+                if (rc != 0) {
+                        kranal_tx_done(tx, rc);
+                        return PTL_FAIL;
+                }
 
                 tx->tx_msg.ram_u.putack.rapam_src_cookie =
                         conn->rac_rxmsg->ram_u.putreq.raprm_cookie;
@@ -1415,7 +1454,7 @@ kranal_process_fmaq (kra_conn_t *conn)
         int           expect_reply;
 
         /* NB 1. kranal_sendmsg() may fail if I'm out of credits right now.
-         *       However I will be rescheduled some by an FMA completion event
+         *       However I will be rescheduled by an FMA completion event
          *       when I eventually get some.
          * NB 2. Sampling rac_state here races with setting it elsewhere.
          *       But it doesn't matter if I try to send a "real" message just
@@ -1495,7 +1534,6 @@ kranal_process_fmaq (kra_conn_t *conn)
         case RANAL_MSG_IMMEDIATE:
                 rc = kranal_sendmsg(conn, &tx->tx_msg,
                                     tx->tx_buffer, tx->tx_nob);
-                expect_reply = 0;
                 break;
 
         case RANAL_MSG_PUT_NAK:
@@ -1503,13 +1541,16 @@ kranal_process_fmaq (kra_conn_t *conn)
         case RANAL_MSG_GET_NAK:
         case RANAL_MSG_GET_DONE:
                 rc = kranal_sendmsg(conn, &tx->tx_msg, NULL, 0);
-                expect_reply = 0;
                 break;
 
         case RANAL_MSG_PUT_REQ:
+                rc = kranal_map_buffer(tx);
+                LASSERT (rc != -EAGAIN);
+                if (rc != 0)
+                        break;
+
                 tx->tx_msg.ram_u.putreq.raprm_cookie = tx->tx_cookie;
                 rc = kranal_sendmsg(conn, &tx->tx_msg, NULL, 0);
-                kranal_map_buffer(tx);
                 expect_reply = 1;
                 break;
 
@@ -1519,7 +1560,11 @@ kranal_process_fmaq (kra_conn_t *conn)
                 break;
 
         case RANAL_MSG_GET_REQ:
-                kranal_map_buffer(tx);
+                rc = kranal_map_buffer(tx);
+                LASSERT (rc != -EAGAIN);
+                if (rc != 0)
+                        break;
+
                 tx->tx_msg.ram_u.get.ragm_cookie = tx->tx_cookie;
                 tx->tx_msg.ram_u.get.ragm_desc.rard_key = tx->tx_map_key;
                 tx->tx_msg.ram_u.get.ragm_desc.rard_addr.AddressBits =
@@ -1540,10 +1585,8 @@ kranal_process_fmaq (kra_conn_t *conn)
                 return;
         }
 
-        LASSERT (rc == 0);
-
-        if (!expect_reply) {
-                kranal_tx_done(tx, 0);
+        if (!expect_reply || rc != 0) {
+                kranal_tx_done(tx, rc);
         } else {
                 /* LASSERT(current) above ensures this doesn't race with reply
                  * processing */

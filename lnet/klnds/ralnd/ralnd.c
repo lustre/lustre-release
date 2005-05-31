@@ -1865,7 +1865,11 @@ kranal_api_shutdown (nal_t *nal)
 
                 LASSERT (list_empty(&dev->rad_ready_conns));
                 LASSERT (list_empty(&dev->rad_new_conns));
-
+                LASSERT (dev->rad_nphysmap == 0);
+                LASSERT (dev->rad_nppphysmap == 0);
+                LASSERT (dev->rad_nvirtmap == 0);
+                LASSERT (dev->rad_nobvirtmap == 0);
+                
                 spin_lock_irqsave(&dev->rad_lock, flags);
                 wake_up(&dev->rad_waitq);
                 spin_unlock_irqrestore(&dev->rad_lock, flags);
