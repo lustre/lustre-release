@@ -53,15 +53,28 @@
 #endif
 
 #ifndef LPU64
-/* x86_64 has 64bit longs and defines u64 as long long */
-#if BITS_PER_LONG > 32 && !defined(__x86_64__)
-#define LPU64 "%lu"
-#define LPD64 "%ld"
-#define LPX64 "%#lx"
-#else
-#define LPU64 "%Lu"
-#define LPD64 "%Ld"
-#define LPX64 "%#Lx"
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
+#if defined(__x86_64__) && defined(__KERNEL__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%u"
+# define LPSSZ "%d"
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+# define LPU64 "%lu"
+# define LPD64 "%ld"
+# define LPX64 "%#lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#endif
+#ifndef LPU64
+# error "No word size defined"
 #endif
 #endif
 

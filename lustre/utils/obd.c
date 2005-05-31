@@ -83,7 +83,7 @@ static int max = sizeof(rawbuf);
 static int thread;
 static int nthreads;
 
-static uint32_t cur_device = MAX_OBD_DEVICES;
+static int cur_device = MAX_OBD_DEVICES;
 
 union lsm_buffer {
         char                 space [4096];

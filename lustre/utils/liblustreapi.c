@@ -40,8 +40,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <linux/types.h>
-#include <linux/unistd.h>
 
 #include <portals/ptlctl.h>
 
