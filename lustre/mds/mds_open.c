@@ -1434,8 +1434,6 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
         last_orphan = mds_orphan_open_dec_test(inode) &&
                 mds_inode_is_orphan(inode);
-        if (last_orphan && unlink_orphan)
-                mds_inode_unset_orphan(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
         /* this is half of the actual "close" */
@@ -1475,7 +1473,10 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                                                idlen);
                 if (IS_ERR(pending_child))
                         GOTO(cleanup, rc = PTR_ERR(pending_child));
-                LASSERT(pending_child->d_inode != NULL);
+                if (pending_child->d_inode == NULL) {
+                        CERROR("orphan %s has been removed\n", idname);
+                        GOTO(cleanup, rc = 0);
+                }
 
                 cleanup_phase = 2; /* dput(pending_child) when finished */
                 if (S_ISDIR(pending_child->d_inode->i_mode)) {

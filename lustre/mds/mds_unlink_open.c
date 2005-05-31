@@ -241,12 +241,6 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         CWARN("orphan %s re-opened during recovery\n", d_name);
                         GOTO(next, rc = 0);
                 }
-                if (!mds_inode_is_orphan(child_inode)) {
-                        UP_READ_I_ALLOC_SEM(child_inode);
-                        CWARN("orphan %s has been removed by CLOSE\n", d_name);
-                        GOTO(next, rc = 0);
-                }
-                mds_inode_unset_orphan(child_inode);
                 UP_READ_I_ALLOC_SEM(child_inode);
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc == 0) {
