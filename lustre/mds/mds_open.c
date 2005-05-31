@@ -1434,8 +1434,6 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
         last_orphan = mds_orphan_open_dec_test(inode) &&
                 mds_inode_is_orphan(inode);
-        if (last_orphan && unlink_orphan)
-                mds_inode_unset_orphan(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
         /* this is half of the actual "close" */
