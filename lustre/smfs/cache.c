@@ -103,6 +103,10 @@ static void setup_iops(struct inode *cache_inode,
                         iops->listxattr = cache_iops->listxattr;
                 if (cache_inode->i_op->removexattr)
                         iops->removexattr = cache_iops->removexattr;
+#if HAVE_LOOKUP_RAW
+                if (cache_inode->i_op->lookup_raw)
+                        iops->lookup_raw = cache_iops->lookup_raw;
+#endif
         }
 }
 

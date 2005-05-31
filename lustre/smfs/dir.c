@@ -307,6 +307,7 @@ static struct dentry *smfs_lookup(struct inode *dir, struct dentry *dentry,
         RETURN(rdentry);
 }
 
+#if HAVE_LOOKUP_RAW
 static int smfs_lookup_raw(struct inode *dir, const char *name,
                            int len, ino_t *data)
 {
@@ -324,6 +325,7 @@ static int smfs_lookup_raw(struct inode *dir, const char *name,
 
         RETURN(rc);
 }
+#endif
 
 static int smfs_link(struct dentry *old_dentry,
                      struct inode *dir, struct dentry *dentry)
@@ -769,7 +771,9 @@ exit:
 struct inode_operations smfs_dir_iops = {
         create:         smfs_create,
         lookup:         smfs_lookup,
+#if HAVE_LOOKUP_RAW
         lookup_raw:     smfs_lookup_raw,
+#endif
         link:           smfs_link,              /* BKL held */
         unlink:         smfs_unlink,            /* BKL held */
         symlink:        smfs_symlink,           /* BKL held */
