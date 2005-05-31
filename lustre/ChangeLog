@@ -3,14 +3,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * bug fixes
 
 Severity   : minor
-Frequency  : always when accessing e.g. tty/console device nodes
-Bugzilla   : 3790
-Description: tty and some other devices nodes cannot be used on lustre
-Details    : file's private_data field is used by device data and lustre
-	     values in there got lost. New field was added to struct file to
-	     store fs-specific private data.
-
-Severity   : minor
 Frequency  : rare (extremely heavy IO load with hundreds of clients)
 Bugzilla   : 6172
 Description: Client is evicted, gets IO error writing to file
@@ -87,6 +79,14 @@ Severity   : major
 Frequency  : occasional
 Bugzilla   : 6412
 Description: Nodes with an elan id of 0 trigger a failed assertion
+
+Severity   : minor
+Frequency  : always when accessing e.g. tty/console device nodes
+Bugzilla   : 3790
+Description: tty and some other devices nodes cannot be used on lustre
+Details    : file's private_data field is used by device data and lustre
+	     values in there got lost. New field was added to struct file to
+	     store fs-specific private data.
 
 ------------------------------------------------------------------------------
 
