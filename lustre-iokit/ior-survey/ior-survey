@@ -1,19 +1,19 @@
 #!/bin/bash
 
 # cluster name (all node names are this followed by the node number)
-cluster=mdev
+cluster=nid000
 
 # client node numbers (individual numbers or inclusive ranges)
-clients=(7-8)
+clients=(1-64)
 
 # numbers of clients to survey
 clients_lo=1
-clients_hi=2
-clients_iterator="+=1"
+clients_hi=64
+clients_iterator="*=2"
 
 # numbers of tasks per client to survey
 tasks_per_client_lo=1
-tasks_per_client_hi=8
+tasks_per_client_hi=1
 tasks_per_client_iterator="*=2"
 
 # record sizes to survey
@@ -21,38 +21,48 @@ rsize_lo=1M
 rsize_hi=1M
 rsize_iterator="*=2"
 
-## which tests to run (first must be write)
-# remount)   not really a test; just remount to uncache everything
-# *write*)   write
-# *)         read
-#tests=(write rewrite read reread rewrite_again)
-tests=(write rewrite remount read reread)
+# This line contains all of the possible tests.
+# IMPORTANT:::if you want to remount, put it in your tests array
+# in the order you want to remount to clear the cache.  For ex:
+# tests=(write rewrite remount read reread rewrite_again) has a
+# remount between the rewrite and remount tests
+tests=(write read)
 
 # total # bytes written/read by any client node
-min_per_client_size=4G
-min_total_size=8G
+min_per_client_size=1G
+min_total_size=1G
 
 # should each task do I/O to its own file?
 file_per_task=1
 
 # the binaries
-IOR="/home/ericb/ior/src/C/IOR"
-llmount=/home/ericb/lustre/utils/llmount
-pdsh=pdsh
+IOR="/spin/home/henken/IOR-2.8.4/src/C/IOR"
+llmount=llmount
+
+#Command to run IOR (pdsh,mpirun,yod)
+runior="yod"
+#Path to binary for program specified in runior
+pathtobin="$(which yod)"
+#location of machines file for mpirun, this file
+#will be built from the cluster and client ranges
+#above
+machines=machines
 
 # the result file prefix (date/time + hostname makes unique)
-#rslt=/home/ericb/ior_survey_`date +%F@%R`_`uname -n`
-rslt=/home/ericb/ior_survey
+rslt=/spin/home/henken/ior_survey/ior_survey_`date +%F@%R`_`uname -n`
+#rslt=/home/larry/ior_survey
 
 # where lustre is mounted on the clients
-lustre=/mnt/lustre
+lustre=/lustre/fs1/nic/
 
 # basename of the test file(s)
 testfile=${lustre}/ior_survey_testfile
 
+
 # how to unmount and remount the F/S on a client (to clear the cache)
 # change this depending on lustre config (network type, MDS etc)
-remount="umount $lustre && $llmount -o nettype=elan mdev6:/ll_mds/client $lustre"
+unmount="umount $lustre"
+remount="llmount pegasus:/mds1/client $lustre"
 
 # pdsh args required to instantiate all instances of IOR in parallel
 # the chosen module must support '-n <procs-per-node>'
@@ -170,6 +180,37 @@ print_summary () {
     echo $minusn "$*"
 }
 
+mpi_client_file() {
+	echo -n > $machines
+	local base=`base_range $1`
+	echo $base
+	local chunk=`count_range $1`
+	echo $chunk
+	local high=$((base+chunk-1))
+	echo $high
+	for ((nmpi=$base; nmpi<=$high; nmpi++)); do
+		echo $cluster$nmpi >> $machines
+	done
+}
+
+parse_cmdline() {
+    case $runior in
+		'mpirun') 
+		#echo "this"
+		$pathtobin -np $((ntask*nclnt)) -machinefile $machines >> $tmpf 2>1 \
+			"${cmdline[@]}";;
+		'pdsh')
+		$pathtobin -S -b $pdsh_mpiargs -w "$test_clients" -n $ntask \
+			>> $tmpf 2>&1 "${cmdline[@]}";;
+		'yod')
+			$pathtobin -np $((ntask*nclnt)) >> $tmpf 2>&1 "${cmdline[@]}";;
+	esac	
+}
+
+if [ $runior = "mpirun" ]; then
+	mpi_client_file ${clients[@]}
+fi
+
 # convert params to actual numbers
 min_per_client_size=`parse_number $min_per_client_size`
 min_total_size=`parse_number $min_total_size`
@@ -186,7 +227,7 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 
     for ((nclnt=clients_lo; nclnt<=clients_hi; nclnt$clients_iterator)); do
 	test_clients="${cluster}`n2noderange $nclnt ${clients[@]}`"
-
+	 
 	per_client_size=$((min_total_size/nclnt))
 	if ((per_client_size < min_per_client_size)); then
 	    per_client_size=$min_per_client_size
@@ -213,8 +254,15 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 
 		if [ "$test" = "remount" ]; then
 		    echo "=> $remount" >> $tmpf
-		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
-			"$remount"
+		    if [ "$runior" = "pdsh" ]; then
+				$pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
+					"$unmount"
+				$pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
+					"$remount"
+		    else
+				$unmount
+				$remount
+		    fi
 		    status=$?
 		    echo "Completion Status: $status" >> $tmpf
 
@@ -227,8 +275,10 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
 		    # check lustre is mounted everywhere it's needed
 		    cmd="(mount -t lustre; mount -t lustre_lite) | grep $lustre"
 		    echo "=> Mount Check: $cmd" >> $tmpf
-		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
-			"$cmd"
+		    if [ "$runior" = "pdsh" ]; then
+				$pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
+					"$cmd"
+		    fi
 		    status=$?
 		    echo "Completion Status: $status" >> $tmpf
 		    if ((status)); then
@@ -266,9 +316,8 @@ for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
                     esac
 
 		    echo "=> ${cmdline[@]}" >> $tmpf
-	
-		    $pdsh -S -b $pdsh_mpiargs -w "$test_clients" -n $ntask >> $tmpf 2>&1 \
-			"${cmdline[@]}"
+
+		    parse_cmdline 	
 		    status=$?
 
 		    echo "Completion Status: $status" >> $tmpf
