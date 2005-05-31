@@ -590,7 +590,8 @@ void gss_cred_set_ctx(struct ptlrpc_cred *cred, struct gss_cl_ctx *ctx)
         if (old)
                 gss_put_ctx(old);
 
-        CWARN("client refreshed gss cred %p(uid %u)\n", cred, cred->pc_uid);
+        CDEBUG(D_SEC, "client refreshed gss cred %p(uid %u)\n",
+               cred, cred->pc_uid);
         EXIT;
 }
 
@@ -756,7 +757,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         gss_new = NULL;
         res = 0;
 
-        CWARN("Initiate gss context %p(%u@%s)\n",
+        CDEBUG(D_SEC, "Initiate gss context %p(%u@%s)\n",
                container_of(cred, struct gss_cred, gc_base),
                uid, import->imp_target_uuid.uuid);
 
@@ -1303,14 +1304,14 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         LASSERT(imp);
 
         if (!(cred->pc_flags & PTLRPC_CRED_UPTODATE)) {
-                CWARN("Destroy a dead gss cred %p(%u@%s), don't send rpc\n",
+                CDEBUG(D_SEC, "Destroy a dead gss cred %p(%u@%s)\n",
                        gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
                 atomic_dec(&cred->pc_refcount);
                 EXIT;
                 return;
         }
 
-        CWARN("client destroy gss cred %p(%u@%s)\n",
+        CDEBUG(D_SEC, "client destroy gss cred %p(%u@%s)\n",
                gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
 
         lmsg_size = lustre_msg_size(0, NULL);

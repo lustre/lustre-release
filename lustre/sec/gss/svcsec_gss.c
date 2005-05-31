@@ -601,7 +601,7 @@ static void rsc_flush(uid_t uid)
                                 cache_get(&rscp->h);
                                 set_bit(CACHE_NEGATIVE, &rscp->h.flags);
                                 clear_bit(CACHE_HASHED, &rscp->h.flags);
-                                CWARN("flush rsc %p for uid %u\n",
+                                CDEBUG(D_SEC, "flush rsc %p for uid %u\n",
                                        rscp, rscp->cred.vc_uid);
                                 rsc_put(&rscp->h, &rsc_cache);
                                 rsc_cache.entries--;
@@ -854,7 +854,8 @@ gss_pack_err_notify(struct ptlrpc_request *req,
         *reslenp = cpu_to_le32(secdata_len);
 
         req->rq_reply_state->rs_repdata_len += (secdata_len);
-        CWARN("prepare gss error notify(0x%x/0x%x) to %s\n", major, minor,
+        CDEBUG(D_SEC, "prepare gss error notify(0x%x/0x%x) to %s\n",
+               major, minor,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));
         RETURN(0);
@@ -877,7 +878,7 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
 
         LASSERT(svcdata);
 
-        CWARN("processing gss init(%d) request from %s\n", gc->gc_proc,
+        CDEBUG(D_SEC, "processing gss init(%d) request from %s\n", gc->gc_proc,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));
 
@@ -933,7 +934,7 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
 
                 GOTO(out_rsip, rc);
         }
-        CWARN("svcsec create gss context %p(%u@%s)\n",
+        CDEBUG(D_SEC, "svcsec create gss context %p(%u@%s)\n",
                rsci, rsci->cred.vc_uid,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));
@@ -1114,7 +1115,7 @@ gss_svcsec_handle_destroy(struct ptlrpc_request *req,
         if (lustre_pack_reply(req, 0, NULL, NULL))
                 GOTO(out, rc = SVC_DROP);
 
-        CWARN("svcsec destroy gss context %p(%u@%s)\n",
+        CDEBUG(D_SEC, "svcsec destroy gss context %p(%u@%s)\n",
                rsci, rsci->cred.vc_uid,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));

@@ -63,7 +63,6 @@ int add_padding(rawobj_buf_t *msgbuf, int blocksize)
         if (padding == 0)
                 return 0;
 
-        CWARN("add padding %d\n", padding);
         if (msgbuf->dataoff + msgbuf->datalen + padding > msgbuf->buflen) {
                 CERROR("bufsize %u too small: off %u, len %u, padding %u\n",
                         msgbuf->buflen, msgbuf->dataoff, msgbuf->datalen,
