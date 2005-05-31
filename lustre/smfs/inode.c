@@ -240,28 +240,14 @@ static void smfs_dirty_inode(struct inode *inode)
 static void smfs_delete_inode(struct inode *inode)
 {
         struct inode * cache_inode = I2CI(inode);
-        /* 
-         * smfs hold backfs inode, but delete_inode has to be invoked for it. 
-         * smfs_clear_inode() is called here to do last iput() for backfs
-         * inode with subsequent deleting backfs inode also.
-         * This prevents backfs inode from being used once more
-         */
-        LASSERTF((atomic_read(&cache_inode->i_count) == 1),
-                   "inode %p cache inode %p #%lu i_count %d != 1 \n", 
-                   inode, cache_inode, cache_inode->i_ino, 
-                   atomic_read(&cache_inode->i_count));
 
-
-        smfs_clear_inode_info(inode);
+        //smfs_clear_inode_info(inode);
         clear_inode(inode);
 }
 
 static void smfs_clear_inode(struct inode *inode)
 {
-        //if there is inode_info then clear it
-        //This can be called from many places, not only from delete_inode()
-        if (I2SMI(inode))
-                smfs_clear_inode_info(inode);
+        smfs_clear_inode_info(inode);
 }
 
 static void smfs_write_super(struct super_block *sb)
