@@ -296,7 +296,8 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) && defined(__KERNEL__)
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
