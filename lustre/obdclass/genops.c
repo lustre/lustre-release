@@ -756,14 +756,15 @@ int class_disconnect_stale_exports(struct obd_device *obd,
         spin_lock(&obd->obd_dev_lock);
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
-                if (!test_export(exp)) {
-                        list_del(&exp->exp_obd_chain);
-                        list_add(&exp->exp_obd_chain, &work_list);
-                        cnt++;
-                        ptlrpc_peernid2str(&exp->exp_connection->c_peer, str);
-                        CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
-                               obd->obd_name, exp->exp_client_uuid.uuid, str);
-                }
+                if (test_export(exp))
+                        continue;
+                list_del(&exp->exp_obd_chain);
+                list_add(&exp->exp_obd_chain, &work_list);
+                cnt++;
+                CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
+                       obd->obd_name, exp->exp_client_uuid.uuid,
+                       exp->exp_connection == NULL ? "<unknown>" :
+                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
         }
         spin_unlock(&obd->obd_dev_lock);
 
