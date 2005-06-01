@@ -88,6 +88,13 @@ Details    : file's private_data field is used by device data and lustre
 	     values in there got lost. New field was added to struct file to
 	     store fs-specific private data.
 
+Severity   : minor
+Frequency  : when exporting Lustre via NFS
+Bugzilla   : 5275
+Description: NFSD failed occasionally when looking up a path component
+Details    : NFSD is looking up ".." which was broken in ext3 directories
+	     that had grown large enough to become hashed.
+
 ------------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>

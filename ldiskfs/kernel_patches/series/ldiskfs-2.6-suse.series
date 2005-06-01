@@ -10,3 +10,4 @@ ext3-extents-2.6.5.patch
 ext3-mballoc2-2.6-suse.patch
 ext3-nlinks-2.6.7.patch
 ext3-rename-reserve-2.6-suse.patch
+ext3-htree-dot-2.6.5-suse.patch
