@@ -38,7 +38,7 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
-int ptlrpc_ping(struct obd_import *imp) 
+int ptlrpc_ping(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
         int rc = 0;
@@ -51,13 +51,12 @@ int ptlrpc_ping(struct obd_import *imp)
                           imp->imp_obd->obd_uuid.uuid,
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
-                req->rq_replen = lustre_msg_size(0, 
-                                                 NULL);
+                req->rq_replen = lustre_msg_size(0, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
-                          imp->imp_obd->obd_uuid.uuid,
-                          imp->imp_target_uuid.uuid);
+                       imp->imp_obd->obd_uuid.uuid,
+                       imp->imp_target_uuid.uuid);
                 rc = -ENOMEM;
         }
 
@@ -140,7 +139,8 @@ static int ptlrpc_pinger_main(void *arg)
                                                 obd_timeout * HZ;
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
-                                         imp->imp_obd->obd_no_recov) {
+                                         imp->imp_obd->obd_no_recov ||
+                                         imp->imp_deactive) {
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
@@ -151,7 +151,6 @@ static int ptlrpc_pinger_main(void *arg)
                                 } else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
-
                         } else {
                                 if (!imp->imp_pingable)
                                         continue;
@@ -356,6 +355,8 @@ static int pinger_check_rpcs(void *arg)
 
         pd->pd_this_ping = curtime;
         pd->pd_set = ptlrpc_prep_set();
+        if (pd->pd_set == NULL)
+                goto out;
         set = pd->pd_set;
 
         /* add rpcs into set */
@@ -450,6 +451,7 @@ do_check_set:
         ptlrpc_set_destroy(set);
         pd->pd_set = NULL;
 
+out:
         pd->pd_next_ping = pd->pd_this_ping + PING_INTERVAL * HZ;
         pd->pd_this_ping = 0; /* XXX for debug */
 
