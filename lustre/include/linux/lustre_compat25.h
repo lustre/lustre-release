@@ -110,8 +110,8 @@ static inline int cleanup_group_info(void)
 #define __clear_page_ll_data(page) \
         do {       \
                 ClearPagePrivate(page); \
-                page_cache_release(page); \
                 page->private = 0; \
+                page_cache_release(page); \
         } while(0)
 
 #define kiobuf bio

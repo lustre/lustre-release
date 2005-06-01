@@ -87,7 +87,7 @@ int class_add_uuid(char *uuid, __u64 nid)
         int rc;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
 
-        LASSERT(nid != 0);
+        LASSERT(nid != 0);  /* valid newconfig NID is never zero */
 
         if (nob > PAGE_SIZE)
                 return -EINVAL;

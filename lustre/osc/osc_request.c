@@ -1973,7 +1973,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (cmd == OBD_BRW_WRITE){
                 struct obd_async_page_ops *ops;
                 struct obdo *oa = NULL;
-                                                                                                                             
+
                 oa = obdo_alloc();
                 if (oa == NULL)
                         RETURN(-ENOMEM);
