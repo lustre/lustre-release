@@ -349,6 +349,7 @@ int jt_ptl_network(int argc, char **argv)
                         
                         if (net == PTL_NIDNET(data.ioc_nid)) {
                                 g_net_set = 1;
+                                g_net = net;
                                 return 0;
                         }
                         continue;
@@ -373,8 +374,8 @@ int jt_ptl_network(int argc, char **argv)
                 return -1;
         }
         
-        fprintf(stderr,"%s not a local network (%s on its own to list)\n",
-                argv[1]);
+        fprintf(stderr,"%s not a local network (%s on its own to list them all)\n",
+                argv[1], argv[0]);
         return -1;
 #endif
 }
@@ -527,21 +528,22 @@ jt_ptl_print_peers (int argc, char **argv)
                         break;
 
                 if (g_net_is_compatible(NULL, SOCKNAL, 0))
-                        printf (LPX64"[%d]%s@%s:%d #%d\n",
-                                data.ioc_nid, 
+                        printf ("%-20s [%d]%s->%s:%d #%d\n",
+                                libcfs_nid2str(data.ioc_nid), 
                                 data.ioc_count, /* persistence */
                                 ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* my ip */
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
                                 data.ioc_u32[1], /* peer port */
                                 data.ioc_u32[3]); /* conn_count */
                 else if (g_net_is_compatible(NULL, RANAL, OPENIBNAL, VIBNAL, 0))
-                        printf (LPX64"[%d]@%s:%d\n",
-                                data.ioc_nid, data.ioc_count,
+                        printf ("%-20s [%d]@%s:%d\n",
+                                libcfs_nid2str(data.ioc_nid), 
+                                data.ioc_count,
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
                                 data.ioc_u32[1]); /* peer port */
                 else
-                        printf (LPX64"[%d]\n",
-                                data.ioc_nid, data.ioc_count);
+                        printf ("%-20s [%d]\n",
+                                libcfs_nid2str(data.ioc_nid), data.ioc_count);
         }
 
         if (index == 0) {
@@ -689,32 +691,31 @@ jt_ptl_print_connections (int argc, char **argv)
                 PORTAL_IOC_INIT(data);
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
-                
+
                 rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_CONN, &data);
                 if (rc != 0)
                         break;
 
                 if (g_net_is_compatible (NULL, SOCKNAL, 0))
-                        printf ("[%d]%s:"LPX64"@%s:%d:%s %d/%d %s\n",
-                                data.ioc_u32[4], /* scheduler */
-                                ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* local IP addr */
-                                data.ioc_nid, 
-                                ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* remote IP addr */
-                                data.ioc_u32[1],         /* remote port */
+                        printf ("%-20s %s[%d]%s->%s:%d %d/%d %s\n",
+                                libcfs_nid2str(data.ioc_nid),
                                 (data.ioc_u32[3] == SOCKNAL_CONN_ANY) ? "A" :
                                 (data.ioc_u32[3] == SOCKNAL_CONN_CONTROL) ? "C" :
                                 (data.ioc_u32[3] == SOCKNAL_CONN_BULK_IN) ? "I" :
                                 (data.ioc_u32[3] == SOCKNAL_CONN_BULK_OUT) ? "O" : "?",
+                                data.ioc_u32[4], /* scheduler */
+                                ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* local IP addr */
+                                ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* remote IP addr */
+                                data.ioc_u32[1],         /* remote port */
                                 data.ioc_count, /* tx buffer size */
                                 data.ioc_u32[5], /* rx buffer size */
                                 data.ioc_flags ? "nagle" : "nonagle");
                 else if (g_net_is_compatible (NULL, RANAL, 0))
-                        printf ("[%d]"LPX64"@%s:%d\n",
-                                data.ioc_u32[0], /* device id */
-                                data.ioc_nid);
+                        printf ("%-20s [%d]\n",
+                                libcfs_nid2str(data.ioc_nid),
+                                data.ioc_u32[0] /* device id */);
                 else
-                        printf (LPX64"\n",
-                                data.ioc_nid);
+                        printf ("%s\n", libcfs_nid2str(data.ioc_nid));
         }
 
         if (index == 0) {

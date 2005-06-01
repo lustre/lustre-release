@@ -487,84 +487,6 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_sock_write (struct socket *sock, void *buffer, int nob)
-{
-        int           rc;
-        mm_segment_t  oldmm = get_fs();
-
-        while (nob > 0) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
-
-                set_fs (KERNEL_DS);
-                rc = sock_sendmsg (sock, &msg, iov.iov_len);
-                set_fs (oldmm);
-
-                if (rc < 0)
-                        return (rc);
-
-                if (rc == 0) {
-                        CERROR ("Unexpected zero rc\n");
-                        return (-ECONNABORTED);
-                }
-
-                buffer = ((char *)buffer) + rc;
-                nob -= rc;
-        }
-
-        return (0);
-}
-
-int
-ksocknal_lib_sock_read (struct socket *sock, void *buffer, int nob)
-{
-        int           rc;
-        mm_segment_t  oldmm = get_fs();
-
-        while (nob > 0) {
-                struct iovec  iov = {
-                        .iov_base = buffer,
-                        .iov_len  = nob
-                };
-                struct msghdr msg = {
-                        .msg_name       = NULL,
-                        .msg_namelen    = 0,
-                        .msg_iov        = &iov,
-                        .msg_iovlen     = 1,
-                        .msg_control    = NULL,
-                        .msg_controllen = 0,
-                        .msg_flags      = 0
-                };
-
-                set_fs (KERNEL_DS);
-                rc = sock_recvmsg (sock, &msg, iov.iov_len, 0);
-                set_fs (oldmm);
-
-                if (rc < 0)
-                        return (rc);
-
-                if (rc == 0)
-                        return (-ECONNABORTED);
-
-                buffer = ((char *)buffer) + rc;
-                nob -= rc;
-        }
-
-        return (0);
-}
-
-int
 ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int *nagle)
 {
         mm_segment_t   oldmm = get_fs ();
@@ -579,23 +501,15 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 return (-ESHUTDOWN);
         }
 
-        set_fs (KERNEL_DS);
-
-        len = sizeof(*txmem);
-        rc = sock_getsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-                             (char *)txmem, &len);
-        if (rc == 0) {
-                len = sizeof(*rxmem);
-                rc = sock_getsockopt(sock, SOL_SOCKET, SO_RCVBUF,
-                                     (char *)rxmem, &len);
-        }
+	rc = libcfs_sock_getbuf(sock, txmem, rxmem);
         if (rc == 0) {
                 len = sizeof(*nagle);
+		set_fs(KERNEL_DS);
                 rc = sock->ops->getsockopt(sock, SOL_TCP, TCP_NODELAY,
                                            (char *)nagle, &len);
+		set_fs(oldmm);
         }
 
-        set_fs (oldmm);
         ksocknal_connsock_decref(conn);
 
         if (rc == 0)
@@ -604,6 +518,20 @@ ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int 
                 *txmem = *rxmem = *nagle = 0;
 
         return (rc);
+}
+
+int
+ksocknal_lib_buffersize (int current_sz, int tunable_sz)
+{
+	/* ensure >= SOCKNAL_MIN_BUFFER */
+	if (current_sz < SOCKNAL_MIN_BUFFER)
+		return MAX(SOCKNAL_MIN_BUFFER, tunable_sz);
+
+	if (tunable_sz > SOCKNAL_MIN_BUFFER)
+		return tunable_sz;
+	
+	/* leave alone */
+	return 0;
 }
 
 int
@@ -616,6 +544,8 @@ ksocknal_lib_setup_sock (struct socket *sock)
         int             keep_intvl;
         int             keep_count;
         int             do_keepalive;
+	int             sndbuf;
+	int             rcvbuf;
         struct linger   linger;
 
         sock->sk->sk_allocation = GFP_NOFS;
@@ -658,29 +588,23 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 }
         }
 
-        if (ksocknal_tunables.ksnd_buffer_size > 0) {
-                option = *ksocknal_tunables.ksnd_buffer_size;
+	rc = libcfs_sock_getbuf(sock, &sndbuf, &rcvbuf);
+	if (rc != 0) {
+		CERROR("Can't get buffer sizes: %d\n", rc);
+		return rc;
+	}
 
-                set_fs (KERNEL_DS);
-                rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDBUF,
-                                      (char *)&option, sizeof (option));
-                set_fs (oldmm);
-                if (rc != 0) {
-                        CERROR ("Can't set send buffer %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
+	sndbuf = ksocknal_lib_buffersize(sndbuf,
+					 *ksocknal_tunables.ksnd_buffer_size);
+	rcvbuf = ksocknal_lib_buffersize(rcvbuf,
+					 *ksocknal_tunables.ksnd_buffer_size);
 
-                set_fs (KERNEL_DS);
-                rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVBUF,
-                                      (char *)&option, sizeof (option));
-                set_fs (oldmm);
-                if (rc != 0) {
-                        CERROR ("Can't set receive buffer %d: %d\n",
-                                option, rc);
-                        return (rc);
-                }
-        }
+	rc = libcfs_sock_setbuf(sock, sndbuf, rcvbuf);
+	if (rc != 0) {
+		CERROR ("Can't set buffer tx %d, rx %d buffers: %d\n",
+			sndbuf, rcvbuf, rc);
+		return (rc);
+	}
 
         /* snapshot tunables */
         keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
@@ -730,409 +654,6 @@ ksocknal_lib_setup_sock (struct socket *sock)
         }
 
         return (0);
-}
-
-int
-ksocknal_lib_set_sock_timeout (struct socket *sock, int timeout)
-{
-	struct timeval tv;
-	int            rc;
-        mm_segment_t   oldmm = get_fs();
-
-        /* Set the socket timeouts, so our connection handshake completes in
-         * finite time */
-        tv.tv_sec = timeout;
-        tv.tv_usec = 0;
-
-        set_fs (KERNEL_DS);
-        rc = sock_setsockopt (sock, SOL_SOCKET, SO_SNDTIMEO,
-                              (char *)&tv, sizeof (tv));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR ("Can't set send timeout %d: %d\n", timeout, rc);
-		return rc;
-        }
-
-        set_fs (KERNEL_DS);
-        rc = sock_setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO,
-                              (char *)&tv, sizeof (tv));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR ("Can't set receive timeout %d: %d\n", timeout, rc);
-		return rc;
-        }
-
-	return 0;
-}
-
-void
-ksocknal_lib_release_sock(struct socket *sock)
-{
-	sock_release(sock);
-}
-
-int
-ksocknal_lib_create_sock(struct socket **sockp, int *fatal,
-			 int timeout, __u32 local_ip, int local_port)
-{
-        struct sockaddr_in  locaddr;
-        struct socket      *sock;
-        int                 rc;
-        int                 option;
-        mm_segment_t        oldmm = get_fs();
-
-	*fatal = 1;				/* assume errors are fatal */
-
-        memset(&locaddr, 0, sizeof(locaddr));
-        locaddr.sin_family = AF_INET;
-        locaddr.sin_port = htons(local_port);
-        locaddr.sin_addr.s_addr = (local_ip == 0) ? 
-				  INADDR_ANY : htonl(local_ip);
-
-        rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
-        *sockp = sock;
-        if (rc != 0) {
-                CERROR ("Can't create socket: %d\n", rc);
-                return (rc);
-        }
-
-	rc = ksocknal_lib_set_sock_timeout(sock, timeout);
-	if (rc != 0)
-		goto failed;
-
-        set_fs (KERNEL_DS);
-        option = 1;
-        rc = sock_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-                             (char *)&option, sizeof (option));
-        set_fs (oldmm);
-        if (rc != 0) {
-                CERROR("Can't set SO_REUSEADDR for socket: %d\n", rc);
-                goto failed;
-        }
-
-        rc = sock->ops->bind(sock,
-                             (struct sockaddr *)&locaddr, sizeof(locaddr));
-        if (rc == -EADDRINUSE) {
-                CDEBUG(D_WARNING, "Port %d already in use\n", local_port);
-                *fatal = 0;
-                goto failed;
-        }
-        if (rc != 0) {
-                CERROR("Error trying to bind to reserved port %d: %d\n",
-                       local_port, rc);
-                goto failed;
-        }
-
-	return 0;
-
- failed:
-        sock_release(sock);
-        return rc;
-}
-
-int
-ksocknal_lib_listen(struct socket **sockp, int port, int backlog)
-{
-	int      fatal;
-	int      rc;
-
-	rc = ksocknal_lib_create_sock(sockp, &fatal, 1, 0, port);
-	if (rc != 0)
-		return rc;
-
-	rc = (*sockp)->ops->listen(*sockp, backlog);
-	if (rc == 0)
-		return 0;
-	
-	CERROR("Can't set listen backlog %d: %d\n", backlog, rc);
-	sock_release(*sockp);
-	return rc;
-}
-
-int
-ksocknal_lib_accept(struct socket *sock, ksock_connreq_t **crp)
-{
-	wait_queue_t   wait;
-	struct socket *newsock;
-	int            rc;
-
-	init_waitqueue_entry(&wait, current);
-
-	newsock = sock_alloc();
-	if (newsock == NULL) {
-		CERROR("Can't allocate socket\n");
-		return -ENOMEM;
-	}
-
-	/* XXX this should add a ref to sock->ops->owner, if
-	 * TCP could be a module */
-	newsock->type = sock->type;
-	newsock->ops = sock->ops;
-
-	set_current_state(TASK_INTERRUPTIBLE);
-	add_wait_queue(sock->sk->sk_sleep, &wait);
-	
-	rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
-	if (rc == -EAGAIN) {
-		/* Nothing ready, so wait for activity */
-		schedule();
-		rc = sock->ops->accept(sock, newsock, O_NONBLOCK);
-	}
-	
-	remove_wait_queue(sock->sk->sk_sleep, &wait);
-	set_current_state(TASK_RUNNING);
-
-	if (rc != 0)
-		goto failed;
-	
-	rc = ksocknal_lib_set_sock_timeout(newsock, 
-					   *ksocknal_tunables.ksnd_listen_timeout);
-	if (rc != 0)
-		goto failed;
-	
-	rc = -ENOMEM;
-	PORTAL_ALLOC(*crp, sizeof(**crp));
-	if (*crp == NULL)
-		goto failed;
-
-	(*crp)->ksncr_sock = newsock;
-	return 0;
-
- failed:
-	sock_release(newsock);
-	return rc;
-}
-
-void
-ksocknal_lib_abort_accept(struct socket *sock)
-{
-	wake_up_all(sock->sk->sk_sleep);
-}
-
-int
-ksocknal_lib_connect_sock(struct socket **sockp, int *fatal,
-			  ksock_route_t *route, int local_port)
-{
-        struct sockaddr_in  srvaddr;
-        int                 rc;
-
-        memset (&srvaddr, 0, sizeof (srvaddr));
-        srvaddr.sin_family = AF_INET;
-        srvaddr.sin_port = htons (route->ksnr_port);
-        srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
-
-	rc = ksocknal_lib_create_sock(sockp, fatal,
-				      *ksocknal_tunables.ksnd_timeout,
-				      route->ksnr_myipaddr, local_port);
-	if (rc != 0)
-		return rc;
-
-        rc = (*sockp)->ops->connect(*sockp,
-				    (struct sockaddr *)&srvaddr, sizeof(srvaddr),
-				    0);
-        if (rc == 0)
-                return 0;
-
-        /* EADDRNOTAVAIL probably means we're already connected to the same
-         * peer/port on the same local port on a differently typed
-         * connection.  Let our caller retry with a different local
-         * port... */
-        *fatal = !(rc == -EADDRNOTAVAIL);
-
-        CDEBUG(*fatal ? D_ERROR : D_NET,
-               "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
-               HIPQUAD(route->ksnr_myipaddr), local_port,
-               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-
-	sock_release(*sockp);
-        return rc;
-}
-
-int
-ksocknal_lib_getifaddr(struct socket *sock, char *name, __u32 *ip, __u32 *mask)
-{
-	mm_segment_t   oldmm = get_fs();
-	struct ifreq   ifr;
-	int            rc;
-	__u32          val;
-
-	LASSERT (strnlen(name, IFNAMSIZ) < IFNAMSIZ);
-	
-	strcpy(ifr.ifr_name, name);
-	ifr.ifr_addr.sa_family = AF_INET;
-	set_fs(KERNEL_DS);
-	rc = sock->ops->ioctl(sock, SIOCGIFADDR, (unsigned long)&ifr);
-	set_fs(oldmm);
-
-	if (rc != 0)
-		return rc;
-
-	val = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
-	*ip = ntohl(val);
-
-	strcpy(ifr.ifr_name, name);
-	ifr.ifr_addr.sa_family = AF_INET;
-	set_fs(KERNEL_DS);
-	rc = sock->ops->ioctl(sock, SIOCGIFNETMASK, (unsigned long)&ifr);
-	set_fs(oldmm);
-	
-	if (rc != 0)
-		return rc;
-	
-	val = ((struct sockaddr_in *)&ifr.ifr_netmask)->sin_addr.s_addr;
-	*mask = ntohl(val);
-	return 0;
-}
-
-int
-ksocknal_lib_init_if (ksock_interface_t *iface, char *name)
-{
-	struct socket  *sock;
-	int             rc;
-	int             nob;
-
-	rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
-	if (rc != 0) {
-		CERROR ("Can't create socket: %d\n", rc);
-		return rc;
-	}
-	
-	nob = strnlen(name, IFNAMSIZ);
-	if (nob == IFNAMSIZ) {
-		CERROR("Interface name %s too long\n", name);
-		rc -EINVAL;
-	} else {
-		CLASSERT (sizeof(iface->ksni_name) >= IFNAMSIZ);
-		strcpy(iface->ksni_name, name);
-
-		rc = ksocknal_lib_getifaddr(sock, name,
-					    &iface->ksni_ipaddr,
-					    &iface->ksni_netmask);
-		if (rc != 0)
-			CERROR("Can't get IP address for interface %s\n", name);
-	}
-
-	sock_release(sock);
-	return rc;
-}
-
-int
-ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs)
-{
-	int             nalloc = PTL_MAX_INTERFACES;
-	char            name[IFNAMSIZ];
-	int             nfound;
-	int             nused;
-	struct socket  *sock;
-	struct ifconf   ifc;
-	struct ifreq   *ifr;
-	mm_segment_t    oldmm = get_fs();
-	__u32           ipaddr;
-	__u32           netmask;
-	int             rc;
-	int             i;
-
-	rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
-	if (rc != 0) {
-		CERROR ("Can't create socket: %d\n", rc);
-		return rc;
-	}
-
-	for (;;) {
-		PORTAL_ALLOC(ifr, nalloc * sizeof(*ifr));
-		if (ifr == NULL) {
-			CERROR ("ENOMEM enumerating up to %d interfaces\n", nalloc);
-			rc = -ENOMEM;
-			goto out0;
-		}
-		
-		ifc.ifc_buf = (char *)ifr;
-		ifc.ifc_len = nalloc * sizeof(*ifr);
-		
-		set_fs(KERNEL_DS);
-		rc = sock->ops->ioctl(sock, SIOCGIFCONF, (unsigned long)&ifc);
-		set_fs(oldmm);
-
-		if (rc < 0) {
-			CERROR ("Error %d enumerating interfaces\n", rc);
-			goto out1;
-		}
-		
-		LASSERT (rc == 0);
-
-		nfound = ifc.ifc_len/sizeof(*ifr);
-		LASSERT (nfound <= nalloc);
-		
-		if (nfound <= nalloc)
-			break;
-		
-		/* Assume there are more interfaces */
-		if (nalloc >= 16 * PTL_MAX_INTERFACES) {
-			CWARN("Too many interfaces: "
-			      "only trying the first %d\n", nfound);
-			break;
-		}
-
-		nalloc *= 2;
-	}
-
-	for (i = nused = 0; i < nfound; i++) {
-		strncpy(name, ifr[i].ifr_name, IFNAMSIZ); /* ensure terminated name */
-		name[IFNAMSIZ-1] = 0;
-		
-		if (!strncmp(name, "lo", 2)) {
-			CDEBUG(D_WARNING, "ignoring %s\n", name);
-			continue;
-		}
-		
-		strcpy(ifr[i].ifr_name, name);
-		set_fs(KERNEL_DS);
-		rc = sock->ops->ioctl(sock, SIOCGIFFLAGS, 
-				      (unsigned long)&ifr[i]);
-		set_fs(oldmm);
-
-		if (rc != 0) {
-			CDEBUG(D_WARNING, "Can't get flags for %s\n", name);
-			continue;
-		}
-
-		if ((ifr[i].ifr_flags & IFF_UP) == 0) {
-			CDEBUG(D_WARNING, "Interface %s down\n", name);
-			continue;
-		}
-
-		rc = ksocknal_lib_getifaddr(sock, name, &ipaddr, &netmask);
-		if (rc != 0) {
-			CDEBUG(D_WARNING, 
-			       "Can't get IP address or netmask for %s\n",
-			       name);
-			continue;
-		}
-
-		if (nused >= nifs) {
-			CWARN("Too many available interfaces: "
-			      "only using the first %d\n", nused);
-			break;
-		}
-		
-		memset(&ifs[nused], 0, sizeof(ifs[nused]));
-		
-		CLASSERT(sizeof(ifs[nused].ksni_name) >= IFNAMSIZ);
-		strcpy(ifs[nused].ksni_name, name);
-		ifs[nused].ksni_ipaddr = ipaddr;
-		ifs[nused].ksni_netmask = netmask;
-		nused++;
-
-	        CDEBUG(D_WARNING, "Added interface %s: %u.%u.%u.%u\n", 
-		       name, HIPQUAD(ipaddr));
-	}
-
-	rc = nused;
- out1:
-	PORTAL_FREE(ifr, nalloc * sizeof(*ifr));
- out0:
-	sock_release(sock);
-	return rc;
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

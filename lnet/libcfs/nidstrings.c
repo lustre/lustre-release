@@ -310,7 +310,7 @@ libcfs_net2str(__u32 net)
 	char           *str = libcfs_next_nidstring();
 
         if (nf == NULL) 
-                snprintf(str, PTL_NALFMT_SIZE, "t<%u>%u", nal, num);
+                snprintf(str, PTL_NALFMT_SIZE, "<%u:%u>", nal, num);
         else if (num == 0)
                 snprintf(str, PTL_NALFMT_SIZE, "%s", nf->nf_name);
         else
@@ -337,7 +337,7 @@ libcfs_nid2str(ptl_nid_t nid)
 	str = libcfs_next_nidstring();
 
         if (nf == NULL)
-                snprintf(str, PTL_NALFMT_SIZE, "%x@t<%u>%u", addr, nal, nnum);
+                snprintf(str, PTL_NALFMT_SIZE, "%x@<%u:%u>", addr, nal, nnum);
         else {
                 nf->nf_addr2str(addr, str);
                 nob = strlen(str);
@@ -366,10 +366,9 @@ libcfs_str2net_internal(char *str, __u32 *net)
                 if (!strncmp(str, nf->nf_name, strlen(nf->nf_name)))
                         break;
         }
-        if (i == libcfs_nnalstrfns) {
-                CWARN("No base: %s\n", str);
+
+        if (i == libcfs_nnalstrfns)
                 return NULL;
-        }
         
         nob = strlen(nf->nf_name);
 

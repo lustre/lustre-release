@@ -89,6 +89,10 @@
 # define SOCKNAL_RISK_KMAP_DEADLOCK  1
 #endif
 
+/* minimum socket buffer required for connection handshake */
+#define SOCKNAL_MIN_BUFFER   (2*(sizeof(ptl_hdr_t) +                    \
+                                 PTL_MAX_INTERFACES * sizeof(__u32)))
+
 typedef struct                                  /* pool of forwarding buffers */
 {
         spinlock_t        fmp_lock;             /* serialise */
@@ -158,7 +162,9 @@ typedef struct
 typedef struct
 {
         __u64             ksnn_incarnation;     /* my epoch */
-        atomic_t          ksnn_npeers;          /* # peers */
+        spinlock_t        ksnn_lock;            /* serialise */
+        int               ksnn_npeers;          /* # peers */
+        int               ksnn_shutdown;        /* shutting down? */
         int               ksnn_ninterfaces;     /* IP interfaces */
         ksock_interface_t ksnn_interfaces[PTL_MAX_INTERFACES];
 } ksock_net_t;
@@ -434,15 +440,13 @@ ksocknal_connsock_addref (ksock_conn_t *conn)
         return (rc);
 }
 
-extern void ksocknal_lib_release_sock(struct socket *sock);
-
 static inline void
 ksocknal_connsock_decref (ksock_conn_t *conn)
 {
         LASSERT (atomic_read(&conn->ksnc_sock_refcount) > 0);
         if (atomic_dec_and_test(&conn->ksnc_sock_refcount)) {
                 LASSERT (conn->ksnc_closing);
-                ksocknal_lib_release_sock(conn->ksnc_sock);
+                libcfs_sock_release(conn->ksnc_sock);
                 conn->ksnc_sock = NULL;
         }
 }
@@ -531,7 +535,8 @@ extern int ksocknal_reaper (void *arg);
 extern int ksocknal_send_hello (ksock_conn_t *conn, ptl_nid_t nid,
                                 __u64 incarnation, __u32 *ipaddrs, int nipaddrs);
 extern int ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid, 
-                                __u64 *incarnation, __u32 *ipaddrs);
+                                __u64 *incarnation, __u32 *ipaddrs,
+                                int timeout);
 
 extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);
@@ -547,21 +552,8 @@ extern int ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx);
 extern void ksocknal_lib_eager_ack (ksock_conn_t *conn);
 extern int ksocknal_lib_recv_iov (ksock_conn_t *conn);
 extern int ksocknal_lib_recv_kiov (ksock_conn_t *conn);
-extern int ksocknal_lib_sock_write (struct socket *sock, 
-                                    void *buffer, int nob);
-extern int ksocknal_lib_sock_read (struct socket *sock, 
-                                   void *buffer, int nob);
 extern int ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, 
                                            int *rxmem, int *nagle);
-extern int ksocknal_lib_connect_sock(struct socket **sockp, int *fatal,
-                                     ksock_route_t *route, int local_port);
-extern int ksocknal_lib_listen(struct socket **sockp, int port, int backlog);
-extern int ksocknal_lib_accept(struct socket *sock, ksock_connreq_t **crp);
-extern void ksocknal_lib_abort_accept(struct socket *sock);
 
 extern int ksocknal_lib_tunables_init(void);
 extern void ksocknal_lib_tunables_fini(void);
-
-extern int ksocknal_lib_init_if (ksock_interface_t *iface, char *name);
-extern int ksocknal_lib_enumerate_ifs (ksock_interface_t *ifs, int nifs);
-

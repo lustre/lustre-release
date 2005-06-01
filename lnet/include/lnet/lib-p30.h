@@ -460,6 +460,7 @@ extern void ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd);
 #ifdef __KERNEL__
 extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
+extern ptl_err_t ptl_set_ip_niaddr (ptl_ni_t *ni);
 #endif
 
 extern ptl_err_t ptl_parse_routes (char *route_str);

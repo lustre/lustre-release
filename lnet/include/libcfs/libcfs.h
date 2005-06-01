@@ -273,6 +273,25 @@ struct libcfs_ioctl_handler {
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
+/* libcfs tcpip */
+int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
+int libcfs_ipif_enumerate(char ***names);
+void libcfs_ipif_free_enumeration(char **names, int n);
+int libcfs_sock_listen(struct socket **sockp, __u32 ip, int port, int backlog);
+int libcfs_sock_accept(struct socket **newsockp, struct socket *sock,
+                       int bufsize);
+void libcfs_sock_abort_accept(struct socket *sock);
+int libcfs_sock_connect(struct socket **sockp, int *fatal, int bufsize,
+                        __u32 local_ip, int local_port,
+                        __u32 peer_ip, int peer_port);
+int libcfs_sock_setbuf(struct socket *socket, int txbufsize, int rxbufsize);
+int libcfs_sock_getbuf(struct socket *socket, int *txbufsize, int *rxbufsize);
+int libcfs_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
+int libcfs_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
+void libcfs_sock_release(struct socket *sock);
+
+void libcfs_pause(cfs_duration_t ticks);
+
 /* libcfs watchdogs */
 struct lc_watchdog;
 

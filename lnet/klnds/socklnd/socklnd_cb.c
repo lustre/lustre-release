@@ -689,7 +689,7 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
         ksock_conn_t     *conn;
         ksock_route_t    *route;
         rwlock_t         *g_lock;
-        int               create_peer = 0;
+        int               retry;
         int               rc;
         
         /* Ensure the frags we've been given EXACTLY match the number of
@@ -713,8 +713,40 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
 
         g_lock = &ksocknal_data.ksnd_global_lock;
         
- again:
-        if (create_peer) {
+        for (retry = 0;; retry) {
+#if !SOCKNAL_ROUND_ROBIN
+                read_lock (g_lock);
+                peer = ksocknal_find_peer_locked(ni, nid);
+                if (peer != NULL) {
+                        if (ksocknal_find_connectable_route_locked(peer) == NULL) {
+                                conn = ksocknal_find_conn_locked (tx, peer);
+                                if (conn != NULL) {
+                                        /* I've got no routes that need to be
+                                         * connecting and I do have an actual
+                                         * connection... */
+                                        ksocknal_queue_tx_locked (tx, conn);
+                                        read_unlock (g_lock);
+                                        return (0);
+                                }
+                        }
+                }
+ 
+                /* I'll need a write lock... */
+                read_unlock (g_lock);
+#endif
+                write_lock_irqsave(g_lock, flags);
+
+                peer = ksocknal_find_peer_locked(ni, nid);
+                if (peer != NULL) 
+                        break;
+                
+                write_unlock_irqrestore(g_lock, flags);
+
+                if (retry) {
+                        CERROR("Can't find peer %s\n", libcfs_nid2str(nid));
+                        return -EHOSTUNREACH;
+                }
+                
                 rc = ksocknal_add_peer(ni, nid, PTL_NIDADDR(nid),
                                        *ksocknal_tunables.ksnd_port);
                 if (rc != 0) {
@@ -722,41 +754,6 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
                                libcfs_nid2str(nid), rc);
                         return rc;
                 }
-        }
-        
-#if !SOCKNAL_ROUND_ROBIN
-        read_lock (g_lock);
-        peer = ksocknal_find_peer_locked(ni, nid);
-        if (peer != NULL) {
-                if (ksocknal_find_connectable_route_locked(peer) == NULL) {
-                        conn = ksocknal_find_conn_locked (tx, peer);
-                        if (conn != NULL) {
-                                /* I've got no routes that need to be
-                                 * connecting and I do have an actual
-                                 * connection... */
-                                ksocknal_queue_tx_locked (tx, conn);
-                                read_unlock (g_lock);
-                                return (0);
-                        }
-                }
-        }
- 
-        /* I'll need a write lock... */
-        read_unlock (g_lock);
-#endif
-        write_lock_irqsave(g_lock, flags);
-
-        peer = ksocknal_find_peer_locked(ni, nid);
-        if (peer == NULL) {
-                write_unlock_irqrestore(g_lock, flags);
-
-                if (create_peer) {
-                        CERROR("Can't find peer %s\n", libcfs_nid2str(nid));
-                        return -ENOENT;
-                }
-                
-                create_peer = 1;
-                goto again;
         }
 
         for (;;) {
@@ -1710,8 +1707,9 @@ ksocknal_send_hello (ksock_conn_t *conn,
                 ipaddrs[i] = __cpu_to_le32 (ipaddrs[i]);
         }
 
-        /* Receiver should be eager */
-        rc = ksocknal_lib_sock_write (sock, &hdr, sizeof(hdr));
+        /* socket buffer should have been set large enough not to block
+         * (timeout == 0) */
+        rc = libcfs_sock_write(sock, &hdr, sizeof(hdr), 0);
         if (rc != 0) {
                 CERROR ("Error %d sending HELLO hdr to %u.%u.%u.%u/%d\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
@@ -1721,7 +1719,7 @@ ksocknal_send_hello (ksock_conn_t *conn,
         if (nipaddrs == 0)
                 return (0);
         
-        rc = ksocknal_lib_sock_write (sock, ipaddrs, nipaddrs * sizeof(*ipaddrs));
+        rc = libcfs_sock_write(sock, ipaddrs, nipaddrs * sizeof(*ipaddrs), 0);
         if (rc != 0)
                 CERROR ("Error %d sending HELLO payload (%d)"
                         " to %u.%u.%u.%u/%d\n", rc, nipaddrs, 
@@ -1748,7 +1746,8 @@ ksocknal_invert_type(int type)
 
 int
 ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
-                     __u64 *incarnation, __u32 *ipaddrs)
+                     __u64 *incarnation, __u32 *ipaddrs,
+                     int timeout)
 {
         struct socket      *sock = conn->ksnc_sock;
         int                 rc;
@@ -1761,7 +1760,7 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         hmv = (ptl_magicversion_t *)&hdr.dest_nid;
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
-        rc = ksocknal_lib_sock_read (sock, hmv, sizeof (*hmv));
+        rc = libcfs_sock_read(sock, hmv, sizeof (*hmv), timeout);
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
@@ -1794,7 +1793,8 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
          * header, followed by payload full of interface IP addresses.
          * Read the rest of it in now... */
 
-        rc = ksocknal_lib_sock_read (sock, hmv + 1, sizeof (hdr) - sizeof (*hmv));
+        rc = libcfs_sock_read(sock, hmv + 1, sizeof (hdr) - sizeof (*hmv), 
+                              timeout);
         if (rc != 0) {
                 CERROR ("Error %d reading rest of HELLO hdr from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
@@ -1867,7 +1867,7 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         if (nips == 0)
                 return (0);
         
-        rc = ksocknal_lib_sock_read (sock, ipaddrs, nips * sizeof(*ipaddrs));
+        rc = libcfs_sock_read(sock, ipaddrs, nips * sizeof(*ipaddrs), timeout);
         if (rc != 0) {
                 CERROR ("Error %d reading IPs from %s ip %u.%u.%u.%u\n",
                         rc, libcfs_nid2str(*nid), HIPQUAD(conn->ksnc_ipaddr));
@@ -1895,15 +1895,12 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         int                 port;
         int                 fatal;
         
-        /* Iterate through reserved ports.  When typed connections are
-         * used, we will need to bind to multiple ports, but we only know
-         * this at connect time.  But, by that time we've already called
-         * bind() so we need a new socket. */
-
         for (port = 1023; port > 512; --port) {
+                /* Iterate through reserved ports. */
 
-                rc = ksocknal_lib_connect_sock(&sock, &fatal, route, port);
-
+                rc = libcfs_sock_connect(&sock, &fatal, 0,
+                                         route->ksnr_myipaddr, port,
+                                         route->ksnr_ipaddr, route->ksnr_port);
                 if (rc == 0) {
                         rc = ksocknal_create_conn(route, sock, type);
                         return rc;

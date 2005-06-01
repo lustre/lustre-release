@@ -59,46 +59,55 @@
 
 #include <rapl.h>
 
-#define RANAL_MAXDEVS       2                   /* max # devices RapidArray supports */
+/* default vals for modparams/tunables */
+#define RANAL_N_CONND             4             /* # connection daemons */
 
-#define RANAL_N_CONND       4                   /* # connection daemons */
-
-#define RANAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry (seconds)... */
+#define RANAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
 #define RANAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
 
-#define RANAL_FMA_MAX_PREFIX      232           /* max size of FMA "Prefix" */
-#define RANAL_FMA_MAX_DATA        ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
+#define RANAL_NTX                 64            /* # tx descs */
+#define RANAL_NTX_NBLK            256           /* # reserved tx descs */
 
-#define RANAL_PEER_HASH_SIZE  101               /* # peer lists */
-#define RANAL_CONN_HASH_SIZE  101               /* # conn lists */
-
-#define RANAL_NTX             64                /* # tx descs */
-#define RANAL_NTX_NBLK        256               /* # reserved tx descs */
-
-#define RANAL_FMA_CQ_SIZE     8192              /* # entries in receive CQ
+#define RANAL_FMA_CQ_SIZE         8192          /* # entries in receive CQ
                                                  * (overflow is a performance hit) */
+#define RANAL_TIMEOUT             30            /* comms timeout (seconds) */
+#define RANAL_LISTENER_TIMEOUT    5             /* listener timeout (seconds) */
+#define RANAL_BACKLOG             127           /* listener's backlog */
+#define RANAL_PORT                987           /* listener's port */
+#define RANAL_MAX_IMMEDIATE      (2<<10)        /* immediate payload breakpoint */
 
-#define RANAL_RESCHED         100               /* # scheduler loops before reschedule */
+/* tunables determined at compile time */
+#define RANAL_RESCHED             100           /* # scheduler loops before reschedule */
 
-#define RANAL_MIN_TIMEOUT     5                 /* minimum timeout interval (seconds) */
+#define RANAL_PEER_HASH_SIZE      101           /* # peer lists */
+#define RANAL_CONN_HASH_SIZE      101           /* # conn lists */
+
+#define RANAL_MIN_TIMEOUT         5             /* minimum timeout interval (seconds) */
 #define RANAL_TIMEOUT2KEEPALIVE(t) (((t)+1)/2)  /* timeout -> keepalive interval */
 
-/* default vals for runtime tunables */
-#define RANAL_TIMEOUT           30              /* comms timeout (seconds) */
-#define RANAL_LISTENER_TIMEOUT   5              /* listener timeout (seconds) */
-#define RANAL_BACKLOG          127              /* listener's backlog */
-#define RANAL_PORT             988              /* listener's port */
-#define RANAL_MAX_IMMEDIATE    (2<<10)          /* immediate payload breakpoint */
+/* fixed constants */
+#define RANAL_MAXDEVS             2             /* max # devices RapidArray supports */
+#define RANAL_FMA_MAX_PREFIX      232           /* max bytes in FMA "Prefix" we can use */
+#define RANAL_FMA_MAX_DATA        ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
+
 
 typedef struct
 {
-        int               kra_timeout;          /* comms timeout (seconds) */
-        int               kra_listener_timeout; /* max time the listener can block */
-        int               kra_backlog;          /* listener's backlog */
-        int               kra_port;             /* listener's TCP/IP port */
-        int               kra_max_immediate;    /* immediate payload breakpoint */
+        int              *kra_n_connd;          /* # connection daemons */
+        int              *kra_min_reconnect_interval; /* first failed connection retry... */
+        int              *kra_max_reconnect_interval; /* ...exponentially increasing to this */
+        int              *kra_ntx;              /* # tx descs */
+        int              *kra_ntx_nblk;         /* # reserved tx descs */
+        int              *kra_fma_cq_size;      /* # entries in receive CQ */
+        int              *kra_timeout;          /* comms timeout (seconds) */
+        int              *kra_listener_timeout; /* max time the listener can block */
+        int              *kra_backlog;          /* listener's backlog */
+        int              *kra_port;             /* listener's TCP/IP port */
+        int              *kra_max_immediate;    /* immediate payload breakpoint */
 
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         struct ctl_table_header *kra_sysctl;    /* sysctl interface */
+#endif
 } kra_tunables_t;
 
 typedef struct
@@ -114,6 +123,10 @@ typedef struct
         wait_queue_head_t       rad_waitq;      /* scheduler waits here */
         spinlock_t              rad_lock;       /* serialise */
         void                   *rad_scheduler;  /* scheduling thread */
+        unsigned int            rad_nphysmap;   /* # phys mappings */
+        unsigned int            rad_nppphysmap; /* # phys pages mapped */
+        unsigned int            rad_nvirtmap;   /* # virt mappings */
+        unsigned long           rad_nobvirtmap; /* # virt bytes mapped */
 } kra_device_t;
 
 typedef struct
@@ -123,7 +136,6 @@ typedef struct
         atomic_t          kra_nthreads;         /* # live threads */
         ptl_ni_t         *kra_ni;               /* _the_ nal instance */
         
-        struct semaphore  kra_nid_mutex;        /* serialise NID/listener ops */
         struct semaphore  kra_listener_signal;  /* block for listener startup/shutdown */
         struct socket    *kra_listener_sock;    /* listener's socket */
         int               kra_listener_shutdown; /* ask listener to close */
@@ -135,7 +147,7 @@ typedef struct
 
         struct list_head *kra_peers;            /* hash table of all my known peers */
         int               kra_peer_hash_size;   /* size of kra_peers */
-        atomic_t          kra_npeers;           /* # peers extant */
+        int               kra_npeers;           /* # peers extant */
 
         struct list_head *kra_conns;            /* conns hashed by cqid */
         int               kra_conn_hash_size;   /* size of kra_conns */
@@ -475,7 +487,8 @@ extern void kranal_update_reaper_timeout (long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
 extern void kranal_unlink_peer_locked (kra_peer_t *peer);
 extern void kranal_schedule_conn (kra_conn_t *conn);
-extern kra_peer_t *kranal_create_peer (ptl_nid_t nid);
+extern int kranal_create_peer (kra_peer_t **peerp, ptl_nid_t nid);
+extern int kranal_add_persistent_peer (ptl_nid_t nid, __u32 ip, int port);
 extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
 extern int kranal_del_peer (ptl_nid_t nid);
@@ -488,4 +501,5 @@ extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
 extern void kranal_terminate_conn_locked (kra_conn_t *conn);
 extern void kranal_connect (kra_peer_t *peer);
 extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);
-extern void kranal_pause(int ticks);
+extern int kranal_tunables_init(void);
+extern void kranal_tunables_fini(void);

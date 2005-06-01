@@ -726,3 +726,77 @@ ptl_parse_routes (char *routes)
 	LASSERT (ptl_tbnob == 0);
 	return rc;
 }
+
+#ifdef __KERNEL__
+ptl_err_t
+ptl_set_ip_niaddr (ptl_ni_t *ni) 
+{
+        __u32  net = PTL_NIDNET(ni->ni_nid);
+        char **names;
+        int    n;
+        __u32  ip;
+        __u32  netmask;
+        int    up;
+        int    i;
+        int    rc;
+
+        /* Convenience for NALs that use the IP address of a local interface as
+         * the local address part of their NID */
+
+        if (ni->ni_interfaces[0] != NULL) {
+
+                CLASSERT (PTL_MAX_INTERFACES > 1);
+
+                if (ni->ni_interfaces[1] != NULL) {
+                        CERROR("Net %s doesn't support multiple interfaces\n",
+                               libcfs_net2str(net));
+                        return PTL_FAIL;
+                }
+                
+                rc = libcfs_ipif_query(ni->ni_interfaces[0],
+                                       &up, &ip, &netmask);
+                if (rc != 0) {
+                        CERROR("Net %s can't qeury interface %s: %d\n",
+                               libcfs_net2str(net), ni->ni_interfaces[0], rc);
+                        return PTL_FAIL;
+                }
+                
+                ni->ni_nid = PTL_MKNID(net, ip);
+                return PTL_OK;
+        }
+
+        n = libcfs_ipif_enumerate(&names);
+        if (n <= 0) {
+                CERROR("Net %s can't enumerate interfaces: %d\n", 
+                       libcfs_net2str(net), n);
+                return 0;
+        }
+
+        for (i = 0; i < n; i++) {
+                rc = libcfs_ipif_query(names[i], &up, &ip, &netmask);
+                
+                if (rc != 0) {
+                        CWARN("Net %s can't query interface %s: %d\n",
+                              libcfs_net2str(net), names[i], rc);
+                        continue;
+                }
+                        
+                if (!up) {
+                        CWARN("Net %s ignoring interface %s (down)\n",
+                              libcfs_net2str(net), names[i]);
+                        continue;
+                }
+
+                libcfs_ipif_free_enumeration(names, n);
+                ni->ni_nid = PTL_MKNID(net, ip);
+                return PTL_OK;
+        }
+
+        CERROR("Net %s can't find any interfaces\n", libcfs_net2str(net));
+        libcfs_ipif_free_enumeration(names, n);
+        return PTL_FAIL;
+}
+
+EXPORT_SYMBOL(ptl_set_ip_niaddr);
+
+#endif
