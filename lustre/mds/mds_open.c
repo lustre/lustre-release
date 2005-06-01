@@ -474,7 +474,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (IS_ERR(*handle)) {
                 rc = PTR_ERR(*handle);
                 *handle = NULL;
-                GOTO(out_ids, rc);
+                GOTO(out_oa, rc);
         }
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm,
