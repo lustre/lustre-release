@@ -51,7 +51,8 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
         struct cache_obd  *cobd = &obd->u.cobd;
-        struct obd_device *master;
+        struct obd_device *master_obd, *cache_obd;
+        struct lustre_handle conn = { 0 };
         int rc = 0;
         ENTRY;
 
@@ -68,16 +69,9 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
-
-        master = class_name2obd(lustre_cfg_string(lcfg, 1));
-        if (!master) {
-                CERROR("%s: unable to find master: %s\n",
-                       obd->obd_name, lustre_cfg_string(lcfg, 1));
-                RETURN(-EINVAL);
-        }
-
         sema_init(&cobd->sem, 1);
 
+        /*get the cache obd name and master name */
         OBD_ALLOC(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (!cobd->master_name) 
                 RETURN(-ENOMEM);
@@ -85,18 +79,60 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                LUSTRE_CFG_BUFLEN(lcfg, 1));
         
         OBD_ALLOC(cobd->cache_name, LUSTRE_CFG_BUFLEN(lcfg, 2));
-        if (!cobd->cache_name) 
-                GOTO(put_names, rc = -ENOMEM);
+        if (!cobd->cache_name) {
+                OBD_FREE(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
+                RETURN(-ENOMEM);
+        }
         memcpy(cobd->cache_name, lustre_cfg_string(lcfg, 2), 
                LUSTRE_CFG_BUFLEN(lcfg, 2));
 
+        /* getting master obd */
+        master_obd = class_name2obd(cobd->master_name);
+        if (!master_obd) {
+                CERROR("can't find master obd by name %s\n",
+                       cobd->master_name);
+                GOTO(put_names, rc = -EINVAL);
+        }
+
+        /* connecting master */
+        memset(&conn, 0, sizeof(conn));
+        rc = obd_connect(&conn, master_obd, &obd->obd_uuid, NULL, 0);
+        if (rc)
+               GOTO(put_names, rc);
+        
+        cobd->master_exp = class_conn2export(&conn);
+
+        /* getting master obd */
+        cache_obd = class_name2obd(cobd->cache_name);
+        if (!cache_obd) {
+                obd_disconnect(cobd->master_exp, 0);
+                CERROR("can't find cache obd by name %s\n",
+                       cobd->cache_name);
+                GOTO(put_names, rc);
+        }
+
+        /* connecting master */
+        memset(&conn, 0, sizeof(conn));
+        rc = obd_connect(&conn, cache_obd, &obd->obd_uuid, NULL, 0);
+        if (rc) {
+                obd_disconnect(cobd->master_exp, 0);
+                GOTO(put_names, rc);
+        }
+        cobd->cache_exp = class_conn2export(&conn);
         EXIT;
 put_names:
         if (rc) {
-                OBD_FREE(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
-                cobd->master_name = NULL;
+                if (cobd->master_name) {
+                        OBD_FREE(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
+                        cobd->master_name = NULL;
+                } 
+                if (cobd->cache_name) {
+                        OBD_FREE(cobd->cache_name, LUSTRE_CFG_BUFLEN(lcfg, 2));
+                        cobd->cache_name = NULL;
+                }
+        
         }
-        return rc;
+        RETURN(rc);
 }
 
 static int cobd_cleanup(struct obd_device *obd, int flags)
@@ -113,7 +149,7 @@ static int cobd_cleanup(struct obd_device *obd, int flags)
         if (cobd->master_name)
                 OBD_FREE(cobd->master_name, 
                          strlen(cobd->master_name) + 1);
-        
+ 
         RETURN(0);
 }
 
@@ -178,40 +214,19 @@ cobd_connect(struct lustre_handle *conn, struct obd_device *obd,
              struct obd_uuid *cluuid, struct obd_connect_data *data,
              unsigned long flags)
 {
-        struct lustre_handle cache_conn = { 0 };
-        struct cache_obd *cobd = &obd->u.cobd;
-        struct obd_export *exp;
-        int rc = 0;
-        ENTRY;
+        struct obd_export *cobd_exp;
 
-        /* connecting class */
-        rc = class_connect(conn, obd, cluuid);
-        if (rc)
-                RETURN(rc);
-        exp = class_conn2export(conn);
-
-        /* connecting cache */
-        rc = client_obd_connect(obd, cobd->cache_name,
-                                &cache_conn, data, flags);
-        if (rc)
-                GOTO(err_discon, rc);
-        cobd->cache_exp = class_conn2export(&cache_conn);
-        cobd->cache_on = 1;
-
-        EXIT;
-err_discon:
-        if (rc)
-                class_disconnect(exp, 0);
-        else
-                class_export_put(exp);
-        return rc;
+        cobd_exp = cobd_get_exp(obd);
+        
+        return obd_connect(conn, class_exp2obd(cobd_exp), cluuid, 
+                           data, flags); 
 }
 
 static int
 cobd_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd;
-        struct cache_obd *cobd;
+        struct obd_export *cobd_exp;
         int rc = 0;
         ENTRY;
         
@@ -222,20 +237,12 @@ cobd_disconnect(struct obd_export *exp, unsigned long flags)
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
-
-        cobd = &obd->u.cobd;
+        cobd_exp = cobd_get_exp(obd);
         
-        if (cobd->cache_on) {
-                rc = client_obd_disconnect(obd, cobd->cache_exp,
-                                           flags);
-                cobd->cache_exp = NULL;
-        } else {
-                rc = client_obd_disconnect(obd, cobd->master_exp,
-                                           flags);
-                cobd->master_exp = NULL;
-        }
-
-        rc = class_disconnect(exp, flags);
+        rc = obd_disconnect(cobd_exp, flags);
+      
+        class_disconnect(exp, flags);
+        
         RETURN(rc);
 }
 

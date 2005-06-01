@@ -2086,7 +2086,8 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         RETURN(-EINVAL);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         /* initialize all OSCs, even inactive ones */
-           
+                        if (obd_uuid_empty(&lov->tgts[i].uuid))
+                                continue;
                         err = obd_set_info(lov->tgts[i].ltd_exp,
                                           keylen, key, sizeof(obd_id),
                                           ((obd_id*)val) + i);

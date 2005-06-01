@@ -1251,8 +1251,8 @@ def add_cobd(gen, lustre, options):
                     gen.addElement(osd_node, 'obdtype', 'cache')
 
     if not master_uuid or not cache_uuid:
-        master_uuid = name2uuid(lustre,master_name, tag='mds')
-        cache_uuid = name2uuid(lustre,cache_name, tag='mds')
+        master_uuid = name2uuid(lustre,master_name, tag='lmv')
+        cache_uuid = name2uuid(lustre,cache_name, tag='lmv')
         if master_uuid:
             mds_node = lookup(lustre, master_uuid)
             ret = mds_node.getElementsByTagName('active_ref')
