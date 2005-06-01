@@ -28,3 +28,4 @@ listman-2.4.20.patch
 ext3-truncate-buffer-head.patch
 lookup-stack-symbols-2.4.21-suse-171.patch 
 fsprivate-2.4-suse.patch
+nfsd_iallocsem.patch
