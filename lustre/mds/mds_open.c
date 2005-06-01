@@ -367,6 +367,9 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(0);
         }
 
+        LASSERT(ret_logcookies);
+        LASSERT(setattr_async_flag);
+
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 
@@ -481,6 +484,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 if (logcookies == NULL)
                         GOTO(out_oa, rc = -ENOMEM);
                 *ret_logcookies = logcookies;
+
                 if (mds_log_op_setattr(obd, inode, lmm, lmm_size, logcookies,
                                        mds->mds_max_cookiesize) <= 0) {
                         OBD_FREE(logcookies, mds->mds_max_cookiesize);
@@ -731,16 +735,11 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
                            struct mds_body *body, int flags,
                            struct mds_update_record *rec,struct ldlm_reply *rep)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
         struct dentry *dchild;
         char fidname[LL_FID_NAMELEN];
         int fidlen = 0, rc;
         void *handle = NULL;
-        struct llog_cookie *logcookies = NULL;
-        struct lov_mds_md *lmm = NULL;
-        int lmm_size = 0;
-        int setattr_async_flag = 0;
         ENTRY;
 
         fidlen = ll_fid2str(fidname, fid->id, fid->generation);
@@ -776,16 +775,9 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
 
  open:
         rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep,
-                             &logcookies, &setattr_async_flag);
+                             NULL, NULL);
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-        /* do mds to ost setattr for new created objects */
-        if (rc == 0 && setattr_async_flag) {
-                lmm = lustre_msg_buf(req->rq_repmsg, 2, 0);
-                lmm_size = req->rq_repmsg->buflens[2];
-                rc = mds_osc_setattr_async(obd, dchild->d_inode, lmm, lmm_size,
-                                           logcookies);
-        }
         /* XXX what do we do here if mds_finish_transno itself failed? */
 
         l_dput(dchild);
@@ -1103,6 +1095,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 mds_osc_setattr_async(obd, dchild->d_inode, lmm, lmm_size,
                                       logcookies);
         }
+        if (logcookies)
+                OBD_FREE(logcookies, mds->mds_max_cookiesize);
 
  cleanup_no_trans:
         switch (cleanup_phase) {
@@ -1132,7 +1126,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 else
                         ptlrpc_save_lock (req, &parent_lockh, parent_mode);
         }
-        
+ 
         /* trigger dqacq on the owner of child and parent */
         mds_adjust_qunit(obd, current->fsuid, current->fsgid, 
                          parent_uid, parent_gid, rc);

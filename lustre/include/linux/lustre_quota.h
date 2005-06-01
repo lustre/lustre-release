@@ -10,9 +10,6 @@
 #include <linux/quota.h>
 #include <linux/lustre_idl.h>
 
-/* XXX disable amdin quotafile delete dquot temporarily */
-#define QFMT_NO_DELETE	1
-
 #define QUSG(count, isblk)      (isblk ? toqb(count) : count)
 
 /* If the (quota limit < qunit * slave count), the slave which can't

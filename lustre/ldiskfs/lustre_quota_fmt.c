@@ -536,7 +536,8 @@ static int remove_tree(struct lustre_dquot *dquot, uint *blk, int depth)
 		int i;
 		ref[GETIDINDEX(dquot->dq_id, depth)] = cpu_to_le32(0);
 		for (i = 0; i < LUSTRE_DQBLKSIZE && !buf[i]; i++);	/* Block got empty? */
-		if (i == LUSTRE_DQBLKSIZE) {
+		/* don't put the root block into free blk list! */
+		if (i == LUSTRE_DQBLKSIZE && *blk != LUSTRE_DQTREEOFF) {
 			put_free_dqblk(filp, info, buf, *blk);
 			*blk = 0;
 		}
@@ -692,16 +693,10 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
 	/* The block/inode usage in admin quotafile isn't the real usage
 	 * over all cluster, so keep the fake dquot entry on disk is
 	 * meaningless, just remove it */
-#ifndef	QFMT_NO_DELETE
 	if (test_bit(DQ_FAKE_B, &dquot->dq_flags))
 		rc = lustre_delete_dquot(dquot);
-	}
-	else {
+	else
 		rc = lustre_write_dquot(dquot);
-	}
-#else
-	rc = lustre_write_dquot(dquot);
-#endif
 	if (rc < 0)
 		return rc;
 

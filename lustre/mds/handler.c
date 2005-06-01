@@ -1047,16 +1047,16 @@ static int mds_quotacheck_thread(void *data)
         struct obd_quotactl *oqctl;
         struct obd_run_ctxt saved;
         int rc;
-                                                                                                                 
+
         lock_kernel();
         ptlrpc_daemonize();
-                                                                                                                 
+
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", "quotacheck");
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "quotacheck");
         unlock_kernel();
 
         complete(&qchki->qi_starting);
@@ -1730,6 +1730,15 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
+        /* initialize quota master and quota context */
+        sema_init(&mds->mds_quota_info.qi_sem, 1);
+        rc = qctxt_init(&mds->mds_quota_ctxt, mds->mds_sb, dqacq_handler);
+        if (rc) {
+                CERROR("initialize quota context failed! (rc:%d)\n", rc);
+                qctxt_cleanup(&mds->mds_quota_ctxt, 0);
+                GOTO(err_fs, rc);
+        }
+
         rc = mds_postsetup(obd);
         if (rc)
                 GOTO(err_fs, rc);
@@ -1760,15 +1769,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         ping_evictor_start();
-
-        sema_init(&mds->mds_quota_info.qi_sem, 1);
-        rc = qctxt_init(&mds->mds_quota_ctxt, mds->mds_sb, dqacq_handler);
-        if (rc) {
-                CERROR("initialize quota context failed! (rc:%d)\n", rc);
-                qctxt_cleanup(&mds->mds_quota_ctxt, 0);
-                GOTO(err_fs, rc);
-        }
-
 
         RETURN(0);
 

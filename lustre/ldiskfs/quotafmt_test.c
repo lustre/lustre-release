@@ -260,9 +260,6 @@ static int quotfmt_test_3(struct lustre_quota_info *lqi)
 	int i = 0, rc = 0;
 	ENTRY;
 
-#ifdef	QFMT_NO_DELETE
-	RETURN(0);
-#endif
 	dquot = get_rand_dquot(lqi);
 	if (dquot == NULL)
 		RETURN(-ENOMEM);
@@ -283,6 +280,7 @@ repeat:
 		CERROR("read dquot failed! (rc:%d)\n", rc);
 		GOTO(out, rc);
 	}
+
 	if (!dquot->dq_off || test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
 		CERROR("the dquot isn't committed\n");
 		GOTO(out, rc = -EINVAL);
@@ -315,8 +313,6 @@ repeat:
 	if (++i < 2)
 		goto repeat;
 
-	print_quota_info(lqi);
-			
 out:
 	put_rand_dquot(dquot);
 	RETURN(rc);

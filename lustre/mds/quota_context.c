@@ -442,8 +442,10 @@ schedule_dqacq(struct obd_device *obd,
                 /* build dqacq/dqrel request */
                 LASSERT(qctxt->lqc_import);
                 req = ptlrpc_prep_req(qctxt->lqc_import, opc, 1, &size, NULL);
-                if (!req)
+                if (!req) {
+                        dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                         RETURN(-ENOMEM);
+                }
 
                 reqdata = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*reqdata));
                 memcpy(reqdata, qdata, sizeof(*reqdata));
@@ -470,7 +472,7 @@ wait_completion:
                 if (qw.qw_rc == 0)
                         rc = -EAGAIN;
 
-                QDATA_DEBUG(p, "wait dqacq done. (rc:%d)\n", qw.qw_rc);
+                CDEBUG(D_QUOTA, "wait dqacq done. (rc:%d)\n", qw.qw_rc);
         }
         RETURN(rc);
 }

@@ -376,11 +376,11 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa = NULL;
-        int  cleanup_phase = 0, rc = 0;
+        int rc;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OST_SETATTR))
-                GOTO(cleanup, rc);
+                RETURN(0);
 
         /* first get memory EA */
         oa = obdo_alloc();
@@ -389,14 +389,12 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         LASSERT(lmm);
 
-        cleanup_phase = 1;
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
-                GOTO(cleanup, rc);
+                GOTO(out, rc);
         }
 
-        cleanup_phase = 2;
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
         oa->o_uid = inode->i_uid;
@@ -410,19 +408,12 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         /* do setattr from mds to ost asynchronously */
         rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
         if (rc)
-                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64" on ost error "
-                       "%d\n", lsm->lsm_object_id, rc);
-cleanup:
-        switch(cleanup_phase) {
-        case 2:
-                obd_free_memmd(mds->mds_osc_exp, &lsm);
-        case 1:
-                obdo_free(oa);
-        case 0:
-                if (logcookies)
-                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
-        }
+                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
+                       " on ost error %d\n", lsm->lsm_object_id, rc);
 
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+  out:
+        obdo_free(oa);
         RETURN(rc);
 }
 
@@ -529,6 +520,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
+
                         if (mds_log_op_setattr(obd, inode, lmm, lmm_size,
                                                logcookies,
                                                mds->mds_max_cookiesize) <= 0) {
@@ -613,6 +605,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         switch (cleanup_phase) {
         case 2:
                 OBD_FREE(lmm, mds->mds_max_mdsize);
+                if (logcookies)
+                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
         case 1:
                 if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)

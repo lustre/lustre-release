@@ -229,9 +229,14 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         struct lustre_quota_info *info = &mds->mds_quota_info;
         struct lustre_dquot *dquot = NULL;
         __u64 *usage = NULL;
-        __u32 *limit = NULL;
+        __u32 hlimit = 0, slimit = 0;
+        time_t *time = NULL;
+        unsigned int grace = 0;
         int rc = 0;
         ENTRY;
+
+        /* slaves never acquires qunit for user root */
+        LASSERT(qdata->qd_id || qdata->qd_type == GRPQUOTA);
 
         dquot = lustre_dqget(obd, info, qdata->qd_id, qdata->qd_type);
         if (IS_ERR(dquot))
@@ -244,27 +249,48 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         down(&dquot->dq_sem);
 
         if (qdata->qd_isblk) {
+                grace = info->qi_info[qdata->qd_type].dqi_bgrace;
                 usage = &dquot->dq_dqb.dqb_curspace;
-                limit = &dquot->dq_dqb.dqb_bhardlimit;
+                hlimit = dquot->dq_dqb.dqb_bhardlimit;
+                slimit = dquot->dq_dqb.dqb_bsoftlimit;
+                time = &dquot->dq_dqb.dqb_btime;
         } else {
+                grace = info->qi_info[qdata->qd_type].dqi_igrace;
                 usage = (__u64 *) & dquot->dq_dqb.dqb_curinodes;
-                limit = &dquot->dq_dqb.dqb_ihardlimit;
-        }
+                hlimit = dquot->dq_dqb.dqb_ihardlimit;
+                slimit = dquot->dq_dqb.dqb_isoftlimit;
+                time = &dquot->dq_dqb.dqb_itime;
+        } 
 
         /* if the quota limit in admin quotafile is zero, we just inform
          * slave to clear quota limit with zero qd_count */
-        if (*limit == 0) {
+        if (hlimit == 0 && slimit == 0) {
                 qdata->qd_count = 0;
                 GOTO(out, rc);
         }
+        
         if (opc == QUOTA_DQACQ) {
-                if (QUSG(*usage + qdata->qd_count, qdata->qd_isblk) > *limit)
+                if (hlimit && 
+                    QUSG(*usage + qdata->qd_count, qdata->qd_isblk) > hlimit)
                         GOTO(out, rc = -EDQUOT);
-                else
-                        *usage += qdata->qd_count;
+
+                if (slimit &&
+                    QUSG(*usage + qdata->qd_count, qdata->qd_isblk) > slimit) {
+                        if (*time && CURRENT_SECONDS >= *time)
+                                GOTO(out, rc = -EDQUOT);
+                        else if (!*time)
+                                *time = CURRENT_SECONDS + grace;
+                }
+
+                *usage += qdata->qd_count;
+                
         } else if (opc == QUOTA_DQREL) {
                 LASSERT(*usage - qdata->qd_count >= 0);
                 *usage -= qdata->qd_count;
+
+                /* (usage <= soft limit) but not (usage < soft limit) */
+                if (!slimit || QUSG(*usage, qdata->qd_isblk) <= slimit)
+                        *time = 0;
         } else {
                 LBUG();
         }
@@ -517,7 +543,7 @@ static int mds_init_slave_ilimits(struct obd_device *obd,
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
-        if (!oqctl->qc_dqblk.dqb_ihardlimit)
+        if (!oqctl->qc_dqblk.dqb_ihardlimit && !oqctl->qc_dqblk.dqb_isoftlimit)
                 RETURN(0);
 
         OBD_ALLOC(ioqc, sizeof(*ioqc));
@@ -562,7 +588,7 @@ static int mds_init_slave_blimits(struct obd_device *obd,
         ENTRY;
 
         /* if we are going to set zero limit, needn't init slaves */
-        if (!oqctl->qc_dqblk.dqb_bhardlimit)
+        if (!oqctl->qc_dqblk.dqb_bhardlimit && !oqctl->qc_dqblk.dqb_bsoftlimit)
                 RETURN(0);
 
         OBD_ALLOC(ioqc, sizeof(*ioqc));
@@ -634,7 +660,8 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                 dquot->dq_dqb.dqb_bhardlimit = dqblk->dqb_bhardlimit;
                 dquot->dq_dqb.dqb_bsoftlimit = dqblk->dqb_bsoftlimit;
                 /* clear usage (limit pool) */
-                if (dquot->dq_dqb.dqb_bhardlimit == 0)
+                if (!dquot->dq_dqb.dqb_bhardlimit && 
+                    !dquot->dq_dqb.dqb_bsoftlimit)
                         dquot->dq_dqb.dqb_curspace = 0;
         }
 
@@ -642,7 +669,8 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                 dquot->dq_dqb.dqb_ihardlimit = dqblk->dqb_ihardlimit;
                 dquot->dq_dqb.dqb_isoftlimit = dqblk->dqb_isoftlimit;
                 /* clear usage (limit pool) */
-                if (dquot->dq_dqb.dqb_ihardlimit == 0)
+                if (!dquot->dq_dqb.dqb_ihardlimit &&
+                    !dquot->dq_dqb.dqb_isoftlimit)
                         dquot->dq_dqb.dqb_curinodes = 0;
         }
 
@@ -660,7 +688,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         if (rc)
                 GOTO(out, rc);
 
-        if (dqblk->dqb_valid & QIF_ILIMITS && !ihardlimit) {
+        if (dqblk->dqb_valid & QIF_ILIMITS && !(ihardlimit || isoftlimit)) {
                 rc = mds_init_slave_ilimits(obd, oqctl);
                 if (rc) {
                         CERROR("init slave ilimits failed! (rc:%d)\n", rc);
@@ -668,7 +696,7 @@ int mds_set_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
                 }
         }
 
-        if (dqblk->dqb_valid & QIF_BLIMITS && !bhardlimit) {
+        if (dqblk->dqb_valid & QIF_BLIMITS && !(bhardlimit || bsoftlimit)) {
                 rc = mds_init_slave_blimits(obd, oqctl);
                 if (rc) {
                         CERROR("init slave blimits failed! (rc:%d)\n", rc);
