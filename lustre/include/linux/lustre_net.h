@@ -279,6 +279,14 @@ struct ptlrpc_reply_state {
         struct lustre_msg     rs_msg;
 };
 
+enum rq_phase {
+        RQ_PHASE_NEW         = 0xebc0de00,
+        RQ_PHASE_RPC         = 0xebc0de01,
+        RQ_PHASE_BULK        = 0xebc0de02,
+        RQ_PHASE_INTERPRET   = 0xebc0de03,
+        RQ_PHASE_COMPLETE    = 0xebc0de04,
+};
+
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -291,7 +299,7 @@ struct ptlrpc_request {
                 rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1;
-        int rq_phase; /* one of RQ_PHASE_* */
+        enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         atomic_t rq_refcount;   /* client-side refcount for SENT race */
 
         int rq_request_portal;  /* XXX FIXME bug 249 */
@@ -351,13 +359,6 @@ struct ptlrpc_request {
         void *rq_ptlrpcd_data;
 };
 
-
-#define RQ_PHASE_NEW           0xebc0de00
-#define RQ_PHASE_RPC           0xebc0de01
-#define RQ_PHASE_BULK          0xebc0de02
-#define RQ_PHASE_INTERPRET     0xebc0de03
-#define RQ_PHASE_COMPLETE      0xebc0de04
-
 static inline const char *
 ptlrpc_rqphase2str(struct ptlrpc_request *req)
 {
@@ -391,9 +392,8 @@ ptlrpc_rqphase2str(struct ptlrpc_request *req)
 
 #define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s"
 
-#define DEBUG_REQ(level, req, fmt, args...)                                    \
-do {                                                                           \
-CDEBUG(level, "@@@ " fmt                                                       \
+#define __DEBUG_REQ(CDEB_TYPE, level, req, fmt, args...)                       \
+CDEB_TYPE(level, "@@@ " fmt                                                    \
        " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "         \
        REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
        req->rq_transno,                                                        \
@@ -408,7 +408,15 @@ CDEBUG(level, "@@@ " fmt                                                       \
        DEBUG_REQ_FLAGS(req),                                                   \
        req->rq_reqmsg ? req->rq_reqmsg->flags : 0,                             \
        req->rq_repmsg ? req->rq_repmsg->flags : 0,                             \
-       req->rq_status, req->rq_repmsg ? req->rq_repmsg->status : 0);           \
+       req->rq_status, req->rq_repmsg ? req->rq_repmsg->status : 0)
+
+/* for most callers (level is a constant) this is resolved at compile time */
+#define DEBUG_REQ(level, req, fmt, args...)                                    \
+do {                                                                           \
+        if ((level) & (D_ERROR | D_WARNING))                                   \
+            __DEBUG_REQ(CDEBUG_LIMIT, level, req, fmt, ## args);               \
+        else                                                                   \
+            __DEBUG_REQ(CDEBUG, level, req, fmt, ## args);                     \
 } while (0)
 
 struct ptlrpc_bulk_page {
