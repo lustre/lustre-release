@@ -356,7 +356,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 if (IS_ERR(*handle)) {
                         rc = PTR_ERR(*handle);
                         *handle = NULL;
-                        GOTO(out_oa, rc);
+                        GOTO(out_ids, rc);
                 }
 
                 mds_objids_from_lmm(*ids, lmm, &mds->mds_dt_desc);
