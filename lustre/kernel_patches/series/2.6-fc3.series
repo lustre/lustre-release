@@ -1,4 +1,5 @@
 linux-2.6.10-CITI_NFS4_ALL-1.patch
+linux-2.6.10-fc3-sunrpc_cacheput.patch
 uml-2.6.10-fc3.patch 
 kgdb-ga.patch
 lustre_version.patch
