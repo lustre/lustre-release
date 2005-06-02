@@ -71,6 +71,7 @@ enum {
         PSDEV_DEBUG_DUMP_PATH,    /* crashdump tracelog location */
         PSDEV_PORTALS_UPCALL,     /* User mode upcall script  */
         PSDEV_PORTALS_MEMUSED,    /* bytes currently PORTAL_ALLOCated */
+        PSDEV_PORTALS_CATASTROPHE,/* if we have LBUGged or panic'd */
 };
 
 static struct ctl_table portals_table[] = {
@@ -86,7 +87,9 @@ static struct ctl_table portals_table[] = {
          sizeof(portals_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
         {PSDEV_PORTALS_MEMUSED, "memused", (int *)&portal_kmemory.counter,
-         sizeof(int), 0644, NULL, &proc_dointvec},
+         sizeof(int), 0444, NULL, &proc_dointvec},
+        {PSDEV_PORTALS_CATASTROPHE, "catastrophe", &portals_catastrophe,
+         sizeof(int), 0444, NULL, &proc_dointvec},
         {0}
 };
 

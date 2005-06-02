@@ -36,6 +36,7 @@ extern unsigned int portal_debug;
 extern char debug_file_path[1024];
 extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_printk;
+extern unsigned int portals_catastrophe;
 extern atomic_t portal_kmemory;
 
 extern long max_debug_mb;
@@ -68,6 +69,7 @@ SYSCTL_PROC(_portals,		        OID_AUTO,	trace_daemon,
 SYSCTL_PROC(_portals,		        OID_AUTO,	debug_mb,
 	     CTLTYPE_INT | CTLFLAG_RW,		        &max_debug_mb,
 	     0,		&cfs_debug_mb,		        "L",	"max debug size");
+#warning "add 'catastrophe' entry for LBUG detection"
 
 
 static cfs_sysctl_table_t	top_table[] = {
