@@ -1391,7 +1391,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;
-                unsigned long valid = 0;
+                unsigned long valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
 
                 if (S_ISREG(inode->i_mode)) {

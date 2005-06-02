@@ -429,7 +429,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
                 struct ll_fid fid;
-                unsigned long valid = 0;
+                unsigned long valid = OBD_MD_FLGETATTR;
                 int rc, ealen = 0;
 
                 /* Why don't we update all valid MDS fields here, if we're
@@ -1748,7 +1748,7 @@ llu_fsswop_mount(const char *source,
 
         /* fetch attr of root inode */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);

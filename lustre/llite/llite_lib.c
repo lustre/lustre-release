@@ -230,7 +230,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
-                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
+                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_osc, err);
@@ -1391,11 +1391,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
                 struct ll_fid fid;
-                unsigned long valid = OBD_MD_FLFLAGS;
                 struct mds_body *body;
 
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, 0, &req);
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLFLAGS,0,&req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

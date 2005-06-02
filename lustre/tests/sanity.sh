@@ -55,14 +55,12 @@ SAVE_PWD=$PWD
 clean() {
 	echo -n "cln.."
 	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
-	I_MOUNTED=no
 }
 CLEAN=${CLEAN:-:}
 
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
-	I_MOUNTED=yes
 	echo "done"
 }
 START=${START:-:}
@@ -2266,6 +2264,20 @@ test_65h() {
 }
 run_test 65h "directory stripe info inherit ======"
  
+test_65i() { # bug6367
+        $LSTRIPE $MOUNT 65536 -1 -1
+}
+run_test 65i "set default striping on root directory (bug 6367)="
+
+test_65j() { # bug6367
+	# if we aren't already remounting for each test, do so for this test
+	if [ "$CLEAN" = ":" ]; then
+		clean || error "failed to unmount"
+		start || error "failed to remount"
+	fi
+}
+run_test 65j "get default striping on root directory (bug 6367)="
+
 # bug 2543 - update blocks count on client
 test_66() {
 	COUNT=${COUNT:-8}

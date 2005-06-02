@@ -421,7 +421,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 char *buf = NULL;
                 char *filename;
                 int namelen, rc, len = 0;
-                unsigned long valid;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -436,10 +435,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                valid = OBD_MD_FLID;
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid,
-                                      filename, namelen, valid, 0, &request);
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename, namelen,
+                                      OBD_MD_FLID, 0, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
@@ -498,13 +496,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_mds_md *lmm;
                 struct ll_fid fid;
                 struct mds_body *body;
-                unsigned long valid = 0;
                 int rc, lmmsize;
 
-                valid |= OBD_MD_FLDIREA;
-
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid,
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLDIREA,
                                  obd_size_diskmd(sbi->ll_osc_exp, NULL),
                                  &request);
                 if (rc < 0) {

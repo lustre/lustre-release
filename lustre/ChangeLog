@@ -1,4 +1,16 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.4
+       * bug fixes
+
+Severity   : major
+Frequency  : Only if a default stripe is set on the filesystem root.
+Bugzilla   : 6367
+Description: Setting a default stripe on the filesystem root prevented the
+             filesystem from being remounted.
+Details    : The client was sending extra request flags in the root getattr
+             request and did not allocate a reply buffer for the dir EA.
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
 
