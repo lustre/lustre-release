@@ -266,7 +266,7 @@ tarflags()
 	'')
 	    fatal 1 "tarflags(): File name argument missing."
 	    ;;
-	*.tar.gz)
+	*.tar.gz | *.tgz)
 	    echo 'zxf'
 	    ;;
 	*.tar.bz2)
