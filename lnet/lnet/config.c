@@ -756,8 +756,14 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
                 rc = libcfs_ipif_query(ni->ni_interfaces[0],
                                        &up, &ip, &netmask);
                 if (rc != 0) {
-                        CERROR("Net %s can't qeury interface %s: %d\n",
+                        CERROR("Net %s can't query interface %s: %d\n",
                                libcfs_net2str(net), ni->ni_interfaces[0], rc);
+                        return PTL_FAIL;
+                }
+
+                if (!up) {
+                        CERROR("Net %s can't use interface %s: it's down\n",
+                               libcfs_net2str(net), ni->ni_interfaces[0]);
                         return PTL_FAIL;
                 }
                 

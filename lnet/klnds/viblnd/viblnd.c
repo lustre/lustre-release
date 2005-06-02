@@ -1575,6 +1575,10 @@ kibnal_shutdown (ptl_ni_t *ni)
 ptl_err_t
 kibnal_startup (ptl_ni_t *ni)
 {
+        char                     *ifname = "ipoib0"; /* default IF name */
+        __u32                     ip;
+        __u32                     netmask;
+        int                       up;
         struct timeval            tv;
         int                       pkmem = atomic_read(&portal_kmemory);
         int                       rc;
@@ -1590,12 +1594,28 @@ kibnal_startup (ptl_ni_t *ni)
                 return PTL_FAIL;
         }
 
+        CLASSERT (PTL_MAX_INTERFACES > 1);
+        
         if (ni->ni_interfaces[0] != NULL) {
-                CERROR("Explicit interface config not supported\n");
+                if (ni->ni_interfaces[1] != NULL) {
+                        CERROR("Multiple interfaces not supported\n");
+                        return PTL_FAIL;
+                }
+                ifname = ni->ni_interfaces[0];
+        }
+        
+        rc = libcfs_ipif_query(ifname, &up, &ip, &netmask);
+        if (rc != 0) {
+                CERROR("Can't queue interface %s: %d\n", ifname, rc);
                 return PTL_FAIL;
         }
-
-#warning discover IPoIB IP address here
+        
+        if (!up) {
+                CERROR("Can't use interface %s: it's down\n", ifname);
+                return PTL_FAIL;
+        }
+        
+        ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), ip);
         
         PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
