@@ -87,8 +87,8 @@ struct rpc_clnt;
  * gss security init/fini helper              *
  **********************************************/
 
-#define SECINIT_RPC_TIMEOUT     (10)
-#define SECFINI_RPC_TIMEOUT     (10)
+#define SECINIT_RPC_TIMEOUT     (30)
+#define SECFINI_RPC_TIMEOUT     (30)
 
 static int secinit_compose_request(struct obd_import *imp,
                                    char *buf, int bufsize,
@@ -518,7 +518,9 @@ int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
         int res = 0;
 
         read_lock(&gss_ctx_lock);
-        if ((cred->pc_flags & PTLRPC_CRED_UPTODATE) && gcred->gc_ctx)
+        if (((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
+             PTLRPC_CRED_UPTODATE) &&
+            gcred->gc_ctx)
                 res = 1;
         read_unlock(&gss_ctx_lock);
         return res;
@@ -709,7 +711,7 @@ err_free_ctx:
  * cred APIs                           *
  ***************************************/
 #ifdef __KERNEL__
-#define CRED_REFRESH_UPCALL_TIMEOUT     (20)
+#define CRED_REFRESH_UPCALL_TIMEOUT     (50)
 static int gss_cred_refresh(struct ptlrpc_cred *cred)
 {
         struct obd_import          *import;
@@ -723,7 +725,8 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         int                         res;
         ENTRY;
 
-        if (ptlrpcs_cred_is_uptodate(cred))
+        /* any flags means it has been handled, do nothing */
+        if (cred->pc_flags & PTLRPC_CRED_FLAGS_MASK)
                 RETURN(0);
 
         LASSERT(cred->pc_sec);
@@ -801,7 +804,7 @@ again:
                 CERROR("rpc_queue_upcall failed: %d\n", res);
                 gss_unhash_msg(gss_new);
                 gss_release_msg(gss_new);
-                cred->pc_flags |= PTLRPC_CRED_ERROR;
+                cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 RETURN(res);
         }
         gss_msg = gss_new;
@@ -820,17 +823,30 @@ waiting:
         add_wait_queue(&gss_msg->gum_waitq, &wait);
         spin_unlock(&gsec->gs_lock);
 
-        res = schedule_timeout(CRED_REFRESH_UPCALL_TIMEOUT * HZ);
+        if (gss_new)
+                res = schedule_timeout(CRED_REFRESH_UPCALL_TIMEOUT * HZ);
+        else {
+                schedule();
+                res = 0;
+        }
+
         remove_wait_queue(&gss_msg->gum_waitq, &wait);
+
+        /* - the one who refresh the cred for us should also be responsible
+         *   to set the status of cred, we can simply return.
+         * - if cred flags has been set, we also don't need to do that again,
+         *   no matter signal pending or timeout etc.
+         */
+        if (!gss_new || cred->pc_flags & PTLRPC_CRED_FLAGS_MASK)
+                goto out;
 
         if (signal_pending(current)) {
                 CERROR("cred %p: interrupted upcall\n", cred);
-                if (gss_new)
-                        cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
+                cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 res = -EINTR;
         } else if (res == 0) {
                 CERROR("cred %p: upcall timedout\n", cred);
-                cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
+                cred->pc_flags |= PTLRPC_CRED_DEAD;
                 res = -ETIMEDOUT;
         } else
                 res = 0;
