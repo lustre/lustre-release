@@ -1132,9 +1132,10 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
 
         rc = ksocknal_close_stale_conns_locked(peer, incarnation);
         if (rc != 0)
-                CERROR ("Closed %d stale conns to nid "LPX64" ip %d.%d.%d.%d\n",
-                        rc, conn->ksnc_peer->ksnp_nid,
-                        HIPQUAD(conn->ksnc_ipaddr));
+                CDEBUG(D_HA,
+                       "Closed %d stale conns to nid "LPX64" ip %d.%d.%d.%d\n",
+                       rc, conn->ksnc_peer->ksnp_nid,
+                       HIPQUAD(conn->ksnc_ipaddr));
 
         write_unlock_irqrestore (global_lock, flags);
 
@@ -1146,11 +1147,11 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_putconnsock(conn);
         }
 
-        CWARN("New conn nid:"LPX64" %u.%u.%u.%u -> %u.%u.%u.%u/%d"
-              " incarnation:"LPX64" sched[%d]/%d\n",
-              nid, HIPQUAD(conn->ksnc_myipaddr),
-              HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
-              (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
+        CDEBUG(D_HA, "New conn nid:"LPX64" %u.%u.%u.%u -> %u.%u.%u.%u/%d "
+               "incarnation:"LPX64" sched[%d]/%d\n",
+               nid, HIPQUAD(conn->ksnc_myipaddr),
+               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
+               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers),irq);
 
         ksocknal_put_conn (conn);
         return (0);
