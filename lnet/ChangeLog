@@ -10,6 +10,11 @@ Description: too many error messages on console obscure actual problem and
 Details    : the rate-limiting of console error messages was enabled, and
 	     some messages that were console errors now go to the kernel log
 
+Severity   : enhancement
+Bugzilla   : 1693
+Description: add /proc/sys/portals/catastrophe entry which will report if
+             that node has previously LBUGged
+
 2005-04-06  Cluster File Systems, Inc. <info@clusterfs.com>
        * bugs
 	- update gmnal to use PTL_MTU, fix module refcounting (b=5786)
