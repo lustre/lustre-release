@@ -87,6 +87,28 @@
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
 
+#define IBNAL_WHOLE_MEM  1
+#if !IBNAL_WHOLE_MEM
+# error "incompatible with voltaire adaptor-tavor (REGISTER_RAM_IN_ONE_PHY_MR)"
+#endif
+
+/* defaults for modparams/tunables */
+#define IBNAL_SERVICE_NUMBER         0x11b9a2   /* Fixed service number */
+#define IBNAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
+#define IBNAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
+#define IBNAL_CONCURRENT_PEERS       1024       /* # nodes all talking at once to me */
+#define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
+#define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
+#define IBNAL_NTX                    64         /* # tx descs */
+#define IBNAL_NTX_NBLK               128        /* # reserved tx descs */
+
+/* tunables fixed at compile time */
+#define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
+#define IBNAL_RESCHED                100        /* # scheduler loops before reschedule */
+#define IBNAL_MSG_QUEUE_SIZE         8          /* # messages/RDMAs in-flight */
+#define IBNAL_CREDIT_HIGHWATER       7          /* when to eagerly return credits */
+#define IBNAL_MSG_SIZE              (4<<10)     /* max size of queued messages (inc hdr) */
+
 /* sdp-connection.c */
 #define IBNAL_QKEY               0
 #define IBNAL_PKEY               0xffff
@@ -115,62 +137,42 @@
 #define IBNAL_ARB_INITIATOR_DEPTH 0
 #define IBNAL_ARB_RESP_RES        0
 #define IBNAL_FAILOVER_ACCEPTED   0
-#define IBNAL_SERVICE_NUMBER      0x11b9a2      /* Fixed service number */
-
-#define IBNAL_MIN_RECONNECT_INTERVAL HZ         /* first failed connection retry... */
-#define IBNAL_MAX_RECONNECT_INTERVAL (60*HZ)    /* ...exponentially increasing to this */
-
-#define IBNAL_MSG_SIZE           (4<<10)        /* max size of queued messages (inc hdr) */
-
-#define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
-#define IBNAL_CREDIT_HIGHWATER    7             /* when to eagerly return credits */
-
-#define IBNAL_NTX                 64            /* # tx descs */
-#define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
-/* reduced from 256 to ensure we register < 255 pages per region.  
- * this can change if we register all memory. */
-
-#define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
-
-#define IBNAL_RESCHED             100           /* # scheduler loops before reschedule */
-
-#define IBNAL_CONCURRENT_PEERS    1000          /* # nodes all talking at once to me */
-
-#define IBNAL_RDMA_BASE  0x0eeb0000
-#define IBNAL_CKSUM      0
-#define IBNAL_WHOLE_MEM  1
-#if !IBNAL_WHOLE_MEM
-# error "incompatible with voltaire adaptor-tavor (REGISTER_RAM_IN_ONE_PHY_MR)"
-#endif
-
-/* default vals for runtime tunables */
-#define IBNAL_IO_TIMEOUT          50            /* default comms timeout (seconds) */
 
 /************************/
 /* derived constants... */
 
 /* TX messages (shared by all connections) */
-#define IBNAL_TX_MSGS       (IBNAL_NTX + IBNAL_NTX_NBLK)
-#define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
-#define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
+#define IBNAL_TX_MSGS()       (*kibnal_tunables.kib_ntx +       \
+                               *kibnal_tunables.kib_ntx_nblk)
+#define IBNAL_TX_MSG_BYTES()  (IBNAL_TX_MSGS() * IBNAL_MSG_SIZE)
+#define IBNAL_TX_MSG_PAGES()  ((IBNAL_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
 #if IBNAL_WHOLE_MEM
 # define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
 #else
+# define IBNAL_RDMA_BASE      0x0eeb0000
 # define IBNAL_MAX_RDMA_FRAGS 1
 #endif
 
 /* RX messages (per connection) */
-#define IBNAL_RX_MSGS       IBNAL_MSG_QUEUE_SIZE
-#define IBNAL_RX_MSG_BYTES  (IBNAL_RX_MSGS * IBNAL_MSG_SIZE)
-#define IBNAL_RX_MSG_PAGES  ((IBNAL_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
+#define IBNAL_RX_MSGS         IBNAL_MSG_QUEUE_SIZE
+#define IBNAL_RX_MSG_BYTES    (IBNAL_RX_MSGS * IBNAL_MSG_SIZE)
+#define IBNAL_RX_MSG_PAGES    ((IBNAL_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#define IBNAL_CQ_ENTRIES  (IBNAL_TX_MSGS * (1 + IBNAL_MAX_RDMA_FRAGS) + \
-                           IBNAL_RX_MSGS * IBNAL_CONCURRENT_PEERS)
+#define IBNAL_CQ_ENTRIES()    (IBNAL_TX_MSGS() * (1 + IBNAL_MAX_RDMA_FRAGS) +           \
+                               IBNAL_RX_MSGS * *kibnal_tunables.kib_concurrent_peers)
 
 typedef struct
 {
-        int               kib_io_timeout;       /* comms timeout (seconds) */
+        unsigned int     *kib_service_number;   /* IB service number */
+        int              *kib_min_reconnect_interval; /* first failed connection retry... */
+        int              *kib_max_reconnect_interval; /* ...exponentially increasing to this */
+        int              *kib_concurrent_peers; /* max # nodes all talking to me */
+        int              *kib_cksum;            /* checksum kib_msg_t? */
+        int              *kib_timeout;          /* comms timeout (seconds) */
+        int              *kib_ntx;              /* # tx descs */
+        int              *kib_ntx_nblk;         /* # reserved tx descs */
+
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;
 
@@ -201,11 +203,9 @@ typedef struct
         atomic_t          kib_nthreads;         /* # live threads */
         ptl_ni_t         *kib_ni;               /* _the_ nal instance */
 
-        __u64             kib_svc_id;           /* service number I listen on */
         vv_gid_t          kib_port_gid;         /* device/port GID */
         vv_p_key_t        kib_port_pkey;        /* device/port pkey */
         
-        struct semaphore  kib_nid_mutex;        /* serialise NID ops */
         cm_cep_handle_t   kib_listen_handle;    /* IB listen handle */
 
         rwlock_t          kib_global_lock;      /* stabilize peer/conn ops */
@@ -215,7 +215,7 @@ typedef struct
         
         struct list_head *kib_peers;            /* hash table of all my known peers */
         int               kib_peer_hash_size;   /* size of kib_peers */
-        atomic_t          kib_npeers;           /* # peers extant */
+        int               kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
         void             *kib_connd;            /* the connd task (serialisation assertions) */
@@ -434,10 +434,11 @@ ptl_err_t kibnal_recv_pages(ptl_ni_t *ni, void *private,
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
 extern void kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid,
                             __u64 dststamp, __u64 seq);
-extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
-extern kib_peer_t *kibnal_create_peer(ptl_nid_t nid);
+extern int  kibnal_unpack_msg(kib_msg_t *msg, int nob);
+extern int  kibnal_create_peer(kib_peer_t **peerp, ptl_nid_t nid);
 extern void kibnal_destroy_peer(kib_peer_t *peer);
-extern int kibnal_del_peer(ptl_nid_t nid);
+extern int  kibnal_add_persistent_peer (ptl_nid_t nid, __u32 ip);
+extern int  kibnal_del_peer(ptl_nid_t nid);
 extern kib_peer_t *kibnal_find_peer_locked(ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked(kib_peer_t *peer);
 extern int  kibnal_close_stale_conns_locked(kib_peer_t *peer,
@@ -445,7 +446,7 @@ extern int  kibnal_close_stale_conns_locked(kib_peer_t *peer,
 extern kib_conn_t *kibnal_create_conn(cm_cep_handle_t cep);
 extern void kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg);
 
-extern int kibnal_alloc_pages(kib_pages_t **pp, int npages, int access);
+extern int  kibnal_alloc_pages(kib_pages_t **pp, int npages, int access);
 extern void kibnal_free_pages(kib_pages_t *p);
 
 extern void kibnal_check_sends(kib_conn_t *conn);
@@ -460,10 +461,11 @@ extern int  kibnal_set_qp_state(kib_conn_t *conn, vv_qp_state_t new_state);
 extern void kibnal_async_callback(vv_event_record_t ev);
 extern void kibnal_cq_callback(unsigned long context);
 extern void kibnal_passive_connreq(kib_pcreq_t *pcr, int reject);
-extern void kibnal_pause(int ticks);
 extern void kibnal_queue_tx(kib_tx_t *tx, kib_conn_t *conn);
 extern int  kibnal_init_rdma(kib_tx_t *tx, int type, int nob,
                              kib_rdma_desc_t *dstrd, __u64 dstcookie);
+extern int  kibnal_tunables_init(void);
+extern void kibnal_tunables_fini(void);
 
 static inline int
 wrq_signals_completion (vv_wr_t *wrq)
@@ -545,7 +547,7 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                 LASSERT (tx->tx_msg->ibm_type == IBNAL_MSG_PUT_DONE);
         }
         tx->tx_queued = 1;
-        tx->tx_deadline = jiffies + kibnal_tunables.kib_io_timeout * HZ;
+        tx->tx_deadline = jiffies + (*kibnal_tunables.kib_timeout * HZ);
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 

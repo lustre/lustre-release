@@ -1,5 +1,5 @@
 MODULES := kvibnal
-kvibnal-objs := vibnal.o vibnal_cb.o
+kvibnal-objs := vibnal.o vibnal_cb.o vibnal_modparams.o
 
 EXTRA_POST_CFLAGS := @VIBCPPFLAGS@
 

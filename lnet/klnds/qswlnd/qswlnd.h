@@ -92,9 +92,6 @@ typedef unsigned long kqsw_csum_t;
  * Performance Tuning defines
  * NB no mention of PAGE_SIZE for interoperability
  */
-#define KQSW_MAXPAYLOAD                 PTL_MTU
-#define KQSW_SMALLPAYLOAD               ((4<<10) - KQSW_HDR_SIZE) /* small/large ep receiver breakpoint */
-
 #define KQSW_TX_MAXCONTIG               (1<<10) /* largest payload that gets made contiguous on transmit */
 
 #define KQSW_NTXMSGS                    8       /* # normal transmit messages */
@@ -106,10 +103,13 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_NRXMSGS_SMALL              256     /* # small receive buffers */
 #define KQSW_EP_ENVELOPES_SMALL         2048    /* # small ep envelopes */
 
-#define KQSW_RESCHED                    100     /* # busy loops that forces scheduler to yield */
-
 #define KQSW_OPTIMIZED_GETS             1       /* optimize gets >= this size */
 #define KQSW_OPTIMIZED_PUTS            (32<<10) /* optimize puts >= this size */
+
+/* fixed constants */
+#define KQSW_MAXPAYLOAD                 PTL_MTU
+#define KQSW_SMALLPAYLOAD               ((4<<10) - KQSW_HDR_SIZE) /* small/large ep receiver breakpoint */
+#define KQSW_RESCHED                    100     /* # busy loops that forces scheduler to yield */
 
 /*
  * derived constants
