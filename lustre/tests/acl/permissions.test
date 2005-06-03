@@ -1,0 +1,279 @@
+This script tests if file permissions are properly checked with and
+without ACLs. The script must be run as root to allow switching users.
+The following users are required. They must be a member in the groups
+listed in parentheses.
+
+	bin (bin)
+	daemon (bin, daemon)
+
+
+Cry immediately if we are not running as root.
+
+	$ id -u
+	> 0
+
+
+First, set up a temporary directory and create a regular file with
+defined permissions.
+
+	$ mkdir d
+	$ cd d
+	$ umask 027
+	$ touch f
+	$ ls -l f | awk -- '{ print $1, $3, $4 }'
+	> -rw-r----- root root
+
+
+Make sure root has access to the file.  Verify that user daemon does not
+have access to the file owned by root.
+
+	$ echo root > f
+
+	$ su daemon
+	$ echo daemon >> f
+	> f: Permission denied
+
+	$ su
+
+
+Now, change the ownership of the file to bin:bin and verify that this
+gives user bin write access.
+
+	$ chown bin:bin f
+	$ ls -l f | awk -- '{ print $1, $3, $4 }'
+	> -rw-r----- bin bin
+	$ su bin
+	$ echo bin >> f
+
+
+User daemon is a member in the owning group, which has only read access.
+Verify this.
+
+	$ su daemon
+	$ cat f
+	> root
+	> bin
+
+	$ echo daemon >> f
+	> f: Permission denied
+
+
+Now, add an ACL entry for user daemon that grants him rw- access. File
+owners and users capable of CAP_FOWNER are allowed to change ACLs.
+
+	$ su bin
+	$ setfacl -m u:daemon:rw f
+	$ getfacl --omit-header f
+	> user::rw-
+	> user:daemon:rw-
+	> group::r--
+	> mask::rw-
+	> other::---
+	>
+
+
+Verify that the additional ACL entry grants user daemon write access.
+
+	$ su daemon
+	$ echo daemon >> f
+	$ cat f
+	> root
+	> bin
+	> daemon
+
+
+Remove write access from the group class permission bits, and
+verify that this masks daemon's write permission.
+
+	$ su bin
+	$ chmod g-w f
+	$ getfacl --omit-header f
+	> user::rw-
+	> user:daemon:rw-	#effective:r--
+	> group::r--
+	> mask::r--
+	> other::---
+	>
+
+	$ su daemon
+	$ echo daemon >> f
+	> f: Permission denied
+
+
+Add an entry for group daemon with rw- access, and change the
+permissions for user daemon to r--. Also change the others permissions t
+rw-. The user entry should take precedence, so daemon should be denied
+access.
+
+	$ su bin
+	$ setfacl -m u:daemon:r,g:daemon:rw-,o::rw- f
+
+	$ su daemon
+	$ echo daemon >> f
+	> f: Permission denied
+
+
+Remove the entry for user daemon. The group daemon permissions should
+now give user daemon rw- access.
+
+	$ su bin
+	$ setfacl -x u:daemon f
+
+	$ su daemon
+	$ echo daemon2 >> f
+	$ cat f
+	> root
+	> bin
+	> daemon
+	> daemon2
+
+
+Set the group daemon permissions to r-- and verify that after than, user
+daemon does not have write access anymore.
+
+	$ su bin
+	$ setfacl -m g:daemon:r f
+
+	$ su daemon
+	$ echo daemon3 >> f
+	> f: Permission denied
+
+
+Now, remove the group daemon entry. Because user daemon is a member in
+the owning group, he should still have no write access.
+
+	$ su bin
+	$ setfacl -x g:daemon f
+
+	$ su daemon
+	$ echo daemon4 >> f
+	> f: Permission denied
+
+
+Change the owning group. The other permissions should now grant user
+daemon write access.
+
+	$ su
+	$ chgrp root f
+
+	$ su daemon
+	$ echo daemon5 >> f
+	$ cat f
+	> root
+	> bin
+	> daemon
+	> daemon2
+	> daemon5
+
+
+Verify that permissions in separate matching ACL entries do not
+accumulate.
+
+	$ su
+	$ setfacl -m g:bin:r,g:daemon:w f
+
+	$ su daemon
+	$ : < f	 # open for reading
+	$ : > f  # open for writing
+	$ : <> f  # open for read-write
+	> f: Permission denied
+
+
+Test if directories can have ACLs.  We assume that only one access check
+algorithm is used for all file types the file system, so these tests
+only need to verify that ACL permissions make a difference.
+
+	$ su
+	$ mkdir -m 750 e
+	$ touch e/h
+
+	$ su bin
+	$ shopt -s nullglob ; echo e/*
+	>
+
+	$ echo i > e/i
+	> e/i: Permission denied
+
+	$ su
+	$ setfacl -m u:bin:rx e
+
+	$ su bin
+	$ echo e/*
+	> e/h
+	$ echo i > e/i
+	> e/i: Permission denied
+
+	$ su
+	$ setfacl -m u:bin:rwx e
+
+	$ su bin
+	$ echo i > e/i
+
+
+Test if symlinks are properly followed.
+
+	$ su
+	$ touch g
+	$ ln -s g l
+	$ setfacl -m u:bin:rw l
+	$ ls -l g | awk -- '{ print $1, $3, $4 }'
+	> -rw-rw----+ root root
+
+
+Test if ACLs are effective for block and character special files, fifos,
+sockets. This is done by creating special files locally. The devices do
+not need to exist: The access check is earlier in the code path than the
+test if the device exists.
+
+
+	$ mknod -m 0660 hdt b 91 64	# /dev/hdt
+	$ mknod -m 0660 null c 1 3	# /dev/null
+	$ mkfifo -m 0660 fifo
+
+	$ su bin
+	$ : < hdt
+	> hdt: Permission denied
+	$ : < null
+	> null: Permission denied
+	$ : < fifo
+	> fifo: Permission denied
+
+	$ su
+	$ setfacl -m u:bin:rw hdt null fifo
+
+	$ su bin
+	$ : < hdt
+	> hdt: No such device or address
+	$ : < null
+	$ ( echo blah > fifo & ) ; cat fifo
+	> blah
+
+
+Test if CAP_FOWNER is properly honored for directories. This addresses a
+specific bug in XFS 1.2, which does not grant root access to files in
+directories if the file has an ACL and only CAP_FOWNER would grant them.
+
+	$ su
+	$ mkdir -m 600 x
+	$ chown daemon:daemon x
+	$ echo j > x/j
+	$ ls -l x/j | awk -- '{ print $1, $3, $4 }'
+	> -rw-r----- root root
+
+	$ setfacl -m u:daemon:r x
+
+	$ ls -l x/j | awk -- '{ print $1, $3, $4 }'
+	> -rw-r----- root root
+	(With the bug this gives: `ls: x/j: Permission denied'.)
+
+	$ echo k > x/k
+	(With the bug this gives: `x/k: Permission denied'.)
+
+	$ chmod 750 x
+
+
+Clean up.
+
+	$ su
+	$ cd ..
+	$ rm -rf d

@@ -300,6 +300,12 @@ test_2() {
 }
 run_test 2 "set/get xattr test (trusted xattr only) ============"
 
+run_acl_subtest()
+{
+    sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" \
+        $SAVE_PWD/acl/$1.test | $SAVE_PWD/acl/run || error "$? $1.test failed"
+}
+
 test_3 () {
         SAVE_UMASK=`umask`
         umask 022
@@ -308,21 +314,15 @@ test_3 () {
         GROUP1=nobody
         GROUP2=users
 
-        chmod +x runacltest
-        chmod +x acl_mode
         cd $DIR
 
-       #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/setfacl.test | runacltest ||
-#error "$? setfacl tests failed"
+        run_acl_subtest cp
+        run_acl_subtest getfacl-noacl
+        run_acl_subtest misc
+        run_acl_subtest permissions
+        run_acl_subtest setfacl
 
-        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_asroot.test | runacltest || error "$? acl_asroot tests failed"
-
-        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_perm.test | runacltest || error "$? acl_perm tests failed"
-
-        #sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_misc.test | runacltest || error "$? acl_misc tests failed"
-
-        sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" $SAVE_PWD/acl_fileutil.test | runacltest || error "$? acl_fileutil tests failed"
-
+        cd $SAVED_PWD
         umask $SAVE_UMASK
 }
 run_test 3 "==============acl test ============="
