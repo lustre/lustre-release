@@ -62,7 +62,9 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
+#ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
+#endif
         int rc;
         ENTRY;
 
@@ -115,6 +117,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         tgt->active = 1;
         lov->desc.ld_active_tgt_count++;
 
+#ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 struct obd_device *osc_obd = class_conn2obd(&conn);
@@ -138,6 +141,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                         lov_proc_dir = NULL;
                 }
         }
+#endif
 
         RETURN(0);
 }
