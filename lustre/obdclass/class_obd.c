@@ -234,7 +234,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                                               data->ioc_plen1);
                 if (err)
                         GOTO(out, err);
-                
+
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
                 if (err)
@@ -399,10 +399,6 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_dev);
-EXPORT_SYMBOL(obdo_cachep);
-EXPORT_SYMBOL(qunit_cachep);
-EXPORT_SYMBOL(qunit_hash_lock);
-EXPORT_SYMBOL(qunit_hash);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(ll_set_rdonly);
 EXPORT_SYMBOL(ll_clear_rdonly);
@@ -428,32 +424,12 @@ EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
 EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
-EXPORT_SYMBOL(__class_export_put);
-EXPORT_SYMBOL(class_new_export);
-EXPORT_SYMBOL(class_unlink_export);
-EXPORT_SYMBOL(class_import_get);
-EXPORT_SYMBOL(class_import_put);
-EXPORT_SYMBOL(class_new_import);
-EXPORT_SYMBOL(class_destroy_import);
-EXPORT_SYMBOL(class_connect);
 EXPORT_SYMBOL(class_conn2export);
 EXPORT_SYMBOL(class_exp2obd);
 EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
-EXPORT_SYMBOL(class_disconnect_exports);
-EXPORT_SYMBOL(class_disconnect_stale_exports);
-EXPORT_SYMBOL(class_update_export_timer);
-
-EXPORT_SYMBOL(oig_init);
-EXPORT_SYMBOL(oig_release);
-EXPORT_SYMBOL(oig_add_one);
-EXPORT_SYMBOL(oig_wait);
-EXPORT_SYMBOL(oig_complete_one);
-
-EXPORT_SYMBOL(ping_evictor_start);
-EXPORT_SYMBOL(ping_evictor_stop);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);

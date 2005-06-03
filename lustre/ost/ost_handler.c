@@ -542,7 +542,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
                                req->rq_peerstr);
-                        ptlrpc_fail_export(req->rq_export);
+                        class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",
@@ -759,7 +759,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                req->rq_export->exp_client_uuid.uuid,
                                req->rq_export->exp_connection->c_remote_uuid.uuid,
                                req->rq_peerstr);
-                        ptlrpc_fail_export(req->rq_export);
+                        class_fail_export(req->rq_export);
                 } else {
                         CERROR("ignoring bulk IO comms error: "
                                "client reconnected %s@%s id %s\n",

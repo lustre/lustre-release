@@ -167,7 +167,7 @@ static int expired_lock_main(void *arg)
                         export = class_export_get(lock->l_export);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
-                        ptlrpc_fail_export(export);
+                        class_fail_export(export);
                         class_export_put(export);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
@@ -372,7 +372,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         if (obd_dump_on_timeout)
                 portals_debug_dumplog();
-        ptlrpc_fail_export(lock->l_export);
+        class_fail_export(lock->l_export);
 }
 
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,

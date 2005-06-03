@@ -141,7 +141,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                   req->rq_export->exp_client_uuid.uuid,
                   req->rq_export->exp_connection->c_remote_uuid.uuid);
 
-        ptlrpc_fail_export(req->rq_export);
+        class_fail_export(req->rq_export);
 
         EXIT;
  abort_bulk:

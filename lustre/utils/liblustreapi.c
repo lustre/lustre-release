@@ -207,7 +207,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         __u32 *obdgens;
 
         max_ost_count = (OBD_MAX_IOCTL_BUFFER - size_round(sizeof(data)) -
-                         size_round(sizeof(desc))) / 
+                         size_round(sizeof(desc))) /
                         (sizeof(*uuidp) + sizeof(*obdgens));
         if (max_ost_count > *ost_count)
                 max_ost_count = *ost_count;
@@ -260,23 +260,23 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         char buf[1024];
         FILE *fp;
         int rc = 0, index;
-        
+
         param->got_uuids = 1;
 
         /* Get the lov name */
         rc = ioctl(dirfd(dir), OBD_IOC_GETNAME, (void *)uuid);
         if (rc) {
-                fprintf(stderr, "error: can't get lov name: %s\n", 
+                fprintf(stderr, "error: can't get lov name: %s\n",
                         strerror(rc = errno));
                 return rc;
         }
 
         /* Now get the ost uuids from /proc */
-        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd", 
+        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
                  uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
-                fprintf(stderr, "error: %s opening %s\n", 
+                fprintf(stderr, "error: %s opening %s\n",
                         strerror(rc = errno), buf);
                 return rc;
         }
@@ -287,7 +287,7 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         while (fgets(buf, sizeof(buf), fp) != NULL) {
                 if (sscanf(buf, "%d: %s", &index, uuid) < 2)
                         break;
-                
+
                 if (param->obduuid) {
                         if (strncmp(param->obduuid->uuid, uuid,
                                     sizeof(uuid)) == 0) {
@@ -301,14 +301,14 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         }
 
         fclose(fp);
-        
+
         if (param->obduuid && (param->obdindex == OBD_NOT_FOUND)) {
                 printf("unknown obduuid: %s\n", param->obduuid->uuid);
                 rc =  EINVAL;
         }
-        
+
         return (rc);
-}                
+}
 
 void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
                           int obdindex, int quiet, int header, int body)

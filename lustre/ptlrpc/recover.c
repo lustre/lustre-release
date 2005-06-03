@@ -390,34 +390,3 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
 
         RETURN(rc);
 }
-
-void ptlrpc_fail_export(struct obd_export *exp)
-{
-        int rc, already_failed;
-        unsigned long flags;
-
-        spin_lock_irqsave(&exp->exp_lock, flags);
-        already_failed = exp->exp_failed;
-        exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
-
-        if (already_failed) {
-                CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",
-                       exp, exp->exp_client_uuid.uuid);
-                return;
-        }
-
-        CDEBUG(D_HA, "disconnecting export %p/%s\n",
-               exp, exp->exp_client_uuid.uuid);
-
-        if (obd_dump_on_timeout)
-                portals_debug_dumplog();
-
-        /* Most callers into obd_disconnect are removing their own reference
-         * (request, for example) in addition to the one from the hash table.
-         * We don't have such a reference here, so make one. */
-        class_export_get(exp);
-        rc = obd_disconnect(exp);
-        if (rc)
-                CERROR("disconnecting export %p failed: %d\n", exp, rc);
-}

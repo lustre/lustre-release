@@ -204,11 +204,11 @@ int lprocfs_rd_atomic(char *page, char **start, off_t off,
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
-        struct obd_device *dev = (struct obd_device*)data;
+        struct obd_device *obd = (struct obd_device*)data;
 
-        LASSERT(dev != NULL);
+        LASSERT(obd != NULL);
         *eof = 1;
-        return snprintf(page, count, "%s\n", dev->obd_uuid.uuid);
+        return snprintf(page, count, "%s\n", obd->obd_uuid.uuid);
 }
 
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,

@@ -68,7 +68,6 @@ struct ll_lock_tree_node {
         struct inode           *lt_inode;
 };
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count);
 

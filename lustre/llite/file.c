@@ -639,10 +639,6 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
-__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
-__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
-
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
 int ll_glimpse_size(struct inode *inode)

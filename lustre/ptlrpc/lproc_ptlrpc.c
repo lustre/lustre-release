@@ -485,7 +485,7 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                 CERROR("can't disconnect %s: no export found\n", doomed.uuid);
         } else {
                 CERROR("evicting %s at adminstrative request\n", doomed.uuid);
-                ptlrpc_fail_export(doomed_exp);
+                class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
         }
         return count;

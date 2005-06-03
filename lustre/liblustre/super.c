@@ -196,8 +196,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, 
+                CDEBUG(D_INODE,"valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
+                       src->o_valid,
                        LTIME_S(st->st_mtime), LTIME_S(st->st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
@@ -1415,8 +1415,6 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
         long flags;
-        struct flock *flock;
-        long err;
 
         switch (cmd) {
         case F_GETFL:
@@ -1436,17 +1434,21 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 *rtn = 0;
                 return 0;
 #if 0
-        case F_GETLK:
-                flock = va_arg(ap, struct flock *);
-                err = llu_fcntl_getlk(ino, flock);
-                *rtn = err? -1: 0;
+        case F_GETLK: {
+                struct flock *flock = va_arg(ap, struct flock *);
+                int err = llu_fcntl_getlk(ino, flock);
+                *rtn = err ? -1: 0;
+
                 return err;
+        }
         case F_SETLK:
-        case F_SETLKW:
-                flock = va_arg(ap, struct flock *);
-                err = llu_fcntl_setlk(ino, cmd, flock);
-                *rtn = err? -1: 0;
+        case F_SETLKW: {
+                struct flock *flock = va_arg(ap, struct flock *);
+                int err = llu_fcntl_setlk(ino, cmd, flock);
+                *rtn = err ? -1: 0;
+
                 return err;
+        }
 #endif
         }
 
@@ -1518,12 +1520,12 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
-        unsigned long arg;
 
         liblustre_wait_event(0);
 
         switch (request) {
 #if 0
+        unsigned long arg;
         case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
                 return llu_get_grouplock(ino, arg);
@@ -1566,7 +1568,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         if ((md->body->valid &
              (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) !=
             (OBD_MD_FLGENER | OBD_MD_FLID | OBD_MD_FLTYPE)) {
-                CERROR("bad md body valid mask 0x%x\n", md->body->valid);
+                CERROR("bad md body valid mask "LPX64"\n", md->body->valid);
                 LBUG();
                 return ERR_PTR(-EPERM);
         }
