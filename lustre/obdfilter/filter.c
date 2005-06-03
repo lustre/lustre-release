@@ -62,9 +62,6 @@
 
 static struct lvfs_callback_ops filter_lvfs_ops;
 
-static int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                          struct lov_stripe_md *ea, struct obd_trans_info *);
-
 static void filter_commit_cb(struct obd_device *obd, __u64 transno,
                              void *cb_data, int error)
 {
@@ -1300,6 +1297,13 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 GOTO(err_post, rc);
         }
 
+        rc = qctxt_init(&filter->fo_quota_ctxt, filter->fo_sb, NULL);
+        if (rc) {
+                CERROR("initialize quota context failed! (rc:%d)\n", rc);
+                qctxt_cleanup(&filter->fo_quota_ctxt, 0);
+                GOTO(err_post, rc);
+        }
+
         if (obd->obd_recovering) {
                 LCONSOLE_WARN("OST %s now serving %s, but will be in recovery "
                               "until %d %s reconnect, or if no clients "
@@ -1320,13 +1324,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                               obd->obd_name,
                               lustre_cfg_string(lcfg, 1),
                               obd->obd_replayable ? "enabled" : "disabled");
-        }
-
-        rc = qctxt_init(&filter->fo_quota_ctxt, filter->fo_sb, NULL);
-        if (rc) {
-                CERROR("initialize quota context failed! (rc:%d)\n", rc);
-                qctxt_cleanup(&filter->fo_quota_ctxt, 0);
-                GOTO(err_post, rc);
         }
 
         RETURN(0);
@@ -1373,17 +1370,69 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         return rc;
 }
 
+static struct llog_operations filter_mds_ost_repl_logops /* initialized below*/;
+static struct llog_operations filter_size_orig_logops = {
+        lop_setup: llog_obd_origin_setup,
+        lop_cleanup: llog_obd_origin_cleanup,
+        lop_add: llog_obd_origin_add
+};
+
+static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                            int count, struct llog_catid *catid)
+{
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        filter_mds_ost_repl_logops = llog_client_ops;
+        filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
+        filter_mds_ost_repl_logops.lop_connect = llog_repl_connect;
+        filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
+
+        rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
+                        &filter_mds_ost_repl_logops);
+        if (rc)
+                RETURN(rc);
+
+        /* FIXME - assign unlink_cb for filter's recovery */
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
+
+        rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
+                        &filter_size_orig_logops);
+        RETURN(rc);
+}
+
+static int filter_llog_finish(struct obd_device *obd, int count)
+{
+        struct llog_ctxt *ctxt;
+        int rc = 0, rc2 = 0;
+        ENTRY;
+
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
+        ctxt = llog_get_context(obd, LLOG_SIZE_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
+
+        RETURN(rc);
+}
+
 static int filter_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
         ENTRY;
 
         switch(stage) {
-        case 1:                                                         
+        case 1:
                 target_cleanup_recovery(obd);
                 break;
-        case 2:                                 
-                rc = obd_llog_finish(obd, 0);
+        case 2:
+                rc = filter_llog_finish(obd, 0);
         }
         RETURN(rc);
 }
@@ -1727,8 +1776,8 @@ static int filter_getattr(struct obd_export *exp, struct obdo *oa,
 }
 
 /* this is called from filter_truncate() until we have filter_punch() */
-static int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                          struct lov_stripe_md *md, struct obd_trans_info *oti)
+int filter_setattr(struct obd_export *exp, struct obdo *oa,
+                   struct lov_stripe_md *md, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct obd_run_ctxt saved;
@@ -2231,8 +2280,8 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                          struct lov_stripe_md *ea, struct obd_trans_info *oti)
+int filter_destroy(struct obd_export *exp, struct obdo *oa,
+                   struct lov_stripe_md *md, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct filter_obd *filter;
@@ -2621,58 +2670,6 @@ static int filter_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
                        obd->obd_name, oqctl->qc_cmd);
                 LBUG();
         }
-
-        RETURN(rc);
-}
-
-static struct llog_operations filter_mds_ost_repl_logops;
-static struct llog_operations filter_size_orig_logops = {
-        lop_setup: llog_obd_origin_setup,
-        lop_cleanup: llog_obd_origin_cleanup,
-        lop_add: llog_obd_origin_add
-};
-
-static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_catid *catid)
-{
-        struct llog_ctxt *ctxt;
-        int rc;
-        ENTRY;
-
-        filter_mds_ost_repl_logops = llog_client_ops;
-        filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
-        filter_mds_ost_repl_logops.lop_connect = llog_repl_connect;
-        filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
-
-        rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
-                        &filter_mds_ost_repl_logops);
-        if (rc)
-                RETURN(rc);
-
-        /* FIXME - assign unlink_cb for filter's recovery */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-        ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
-
-        rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
-                        &filter_size_orig_logops);
-        RETURN(rc);
-}
-
-static int filter_llog_finish(struct obd_device *obd, int count)
-{
-        struct llog_ctxt *ctxt;
-        int rc = 0, rc2 = 0;
-        ENTRY;
-
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
-
-        ctxt = llog_get_context(obd, LLOG_SIZE_ORIG_CTXT);
-        if (ctxt)
-                rc2 = llog_cleanup(ctxt);
-        if (!rc)
-                rc = rc2;
 
         RETURN(rc);
 }

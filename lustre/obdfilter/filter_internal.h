@@ -111,6 +111,10 @@ int filter_update_server_data(struct obd_device *, struct file *,
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
+int filter_destroy(struct obd_export *exp, struct obdo *oa,
+                   struct lov_stripe_md *md, struct obd_trans_info *);
+int filter_setattr(struct obd_export *exp, struct obdo *oa,
+                   struct lov_stripe_md *md, struct obd_trans_info *oti);
 
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
