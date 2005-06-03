@@ -120,7 +120,6 @@ for NAME in $CONFIGS; do
 	fi	
 	if [ "$SANITYN" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
-		$DEBUG_OFF
 
 		mkdir -p $MOUNT2
 		case $NAME in
@@ -141,7 +140,6 @@ for NAME in $CONFIGS; do
 			echo "can't mount2 for '$NAME', skipping sanityN.sh"
 		fi
 
-		$DEBUG_ON
 		sh llmountcleanup.sh
 		#sh llrmount.sh
 	fi
