@@ -55,6 +55,10 @@ static int ntx_nblk = IBNAL_NTX_NBLK;
 CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
 		"# of 'reserved' message descriptors");
 
+static int arp_retries = IBNAL_ARP_RETRIES;
+CFS_MODULE_PARM(arp_retries, "i", int, 0644,
+		"# of times to retry ARP");
+
 kib_tunables_t kibnal_tunables = {
         .kib_service_number         = &service_number,
         .kib_min_reconnect_interval = &min_reconnect_interval,
@@ -64,6 +68,7 @@ kib_tunables_t kibnal_tunables = {
         .kib_timeout                = &timeout,
         .kib_ntx                    = &ntx,
         .kib_ntx_nblk               = &ntx_nblk,
+        .kib_arp_retries            = &arp_retries,
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -84,6 +89,8 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{8, "ntx_nblk", &ntx_nblk, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
+	{9, "arp_retries", &arp_retries, 
+	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };
 

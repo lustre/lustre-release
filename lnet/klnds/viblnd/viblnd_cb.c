@@ -1223,6 +1223,24 @@ kibnal_queue_tx (kib_tx_t *tx, kib_conn_t *conn)
 }
 
 void
+kibnal_schedule_peer_arp (kib_peer_t *peer)
+{
+        unsigned long flags;
+
+        LASSERT (peer->ibp_connecting != 0);
+        LASSERT (peer->ibp_arp_count > 0);
+
+        kibnal_peer_addref(peer); /* extra ref for connd */
+
+        spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
+
+        list_add_tail (&peer->ibp_connd_list, &kibnal_data.kib_connd_peers);
+        wake_up (&kibnal_data.kib_connd_waitq);
+
+        spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+}
+
+void
 kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
 {
         kib_peer_t      *peer;
@@ -1306,15 +1324,8 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                 }
         
                 peer->ibp_connecting = 1;
-                kibnal_peer_addref(peer); /* extra ref for connd */
-        
-                spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
-        
-                list_add_tail (&peer->ibp_connd_list,
-                               &kibnal_data.kib_connd_peers);
-                wake_up (&kibnal_data.kib_connd_waitq);
-        
-                spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+                peer->ibp_arp_count = 1 + *kibnal_tunables.kib_arp_retries;
+                kibnal_schedule_peer_arp(peer);
         }
         
         /* A connection is being established; queue the message... */
@@ -1717,6 +1728,21 @@ kibnal_thread_fini (void)
 }
 
 void
+kibnal_schedule_conn (kib_conn_t *conn)
+{
+        unsigned long flags;
+
+        kibnal_conn_addref(conn);               /* ++ref for connd */
+        
+        spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
+
+        list_add_tail (&conn->ibc_list, &kibnal_data.kib_connd_conns);
+        wake_up (&kibnal_data.kib_connd_waitq);
+                
+        spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+}
+
+void
 kibnal_close_conn_locked (kib_conn_t *conn, int error)
 {
         /* This just does the immmediate housekeeping.  'error' is zero for a
@@ -1735,9 +1761,10 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
 
         if (conn->ibc_state != IBNAL_CONN_ESTABLISHED)
                 return; /* already being handled  */
-
-        spin_lock(&conn->ibc_lock);
         
+        /* NB Can't take ibc_lock here (could be in IRQ context), without
+         * risking deadlock, so access to ibc_{tx_queue,active_txs} is racey */
+
         if (error == 0 &&
             list_empty(&conn->ibc_tx_queue) &&
             list_empty(&conn->ibc_active_txs)) {
@@ -1752,6 +1779,8 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
                        conn->ibc_txseq, conn->ibc_rxseq);
 
+#if 0
+                /* can't skip down the queue without holding ibc_lock (see above) */
                 list_for_each(tmp, &conn->ibc_tx_queue) {
                         kib_tx_t *tx = list_entry(tmp, kib_tx_t, tx_list);
                         
@@ -1771,11 +1800,9 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
                                tx->tx_sending, tx->tx_waiting,
                                (long)(tx->tx_deadline - jiffies), HZ);
                 }
+#endif
         }
 
-        spin_unlock(&conn->ibc_lock);
-
-        /* connd takes ibc_list's ref */
         list_del (&conn->ibc_list);
         
         if (list_empty (&peer->ibp_conns) &&    /* no more conns */
@@ -1786,12 +1813,8 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
 
         kibnal_set_conn_state(conn, IBNAL_CONN_DISCONNECT1);
 
-        spin_lock(&kibnal_data.kib_connd_lock);
-
-        list_add_tail (&conn->ibc_list, &kibnal_data.kib_connd_conns);
-        wake_up (&kibnal_data.kib_connd_waitq);
-                
-        spin_unlock(&kibnal_data.kib_connd_lock);
+        kibnal_schedule_conn(conn);
+        kibnal_conn_decref(conn);               /* lose ibc_list's ref */
 }
 
 void
@@ -1991,6 +2014,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
                 switch (conn->ibc_state) {
                 default:
                         LBUG();
+
                 case IBNAL_CONN_ACTIVE_CHECK_REPLY:
                         /* got a connection reply but failed checks */
                         LASSERT (active);
@@ -2132,33 +2156,27 @@ kibnal_cm_callback(cm_cep_handle_t cep, cm_conn_data_t *cmdata, void *arg)
                 case IBNAL_CONN_ACTIVE_RTU:
                         /* kibnal_connreq_done is getting there; It'll see
                          * ibc_disconnect set... */
-                        kibnal_conn_decref(conn); /* lose my ref */
                         break;
 
                 case IBNAL_CONN_ESTABLISHED:
                         /* kibnal_connreq_done got there already; get
                          * disconnect going... */
                         kibnal_close_conn_locked(conn, 0);
-                        kibnal_conn_decref(conn); /* lose my ref */
                         break;
 
                 case IBNAL_CONN_DISCONNECT1:
                         /* kibnal_terminate_conn is getting there; It'll see
                          * ibc_disconnect set... */
-                        kibnal_conn_decref(conn); /* lose my ref */
                         break;
 
                 case IBNAL_CONN_DISCONNECT2:
                         /* kibnal_terminate_conn got there already; complete
-                         * the disconnect.  NB kib_connd_conns takes my ref */
-                        spin_lock(&kibnal_data.kib_connd_lock);
-                        list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_conns);
-                        wake_up(&kibnal_data.kib_connd_waitq);
-                        spin_unlock(&kibnal_data.kib_connd_lock);
+                         * the disconnect. */
+                        kibnal_schedule_conn(conn);
                         break;
                 }
                 write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
-                return;
+                break;
                 
         case cm_event_disconn_timeout:
         case cm_event_disconn_reply:
@@ -2167,12 +2185,8 @@ kibnal_cm_callback(cm_cep_handle_t cep, cm_conn_data_t *cmdata, void *arg)
                 LASSERT (!conn->ibc_disconnect);
                 conn->ibc_disconnect = 1;
 
-                /* kibnal_terminate_conn sent the disconnect request.  
-                 * NB kib_connd_conns takes my ref */
-                spin_lock(&kibnal_data.kib_connd_lock);
-                list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_conns);
-                wake_up(&kibnal_data.kib_connd_waitq);
-                spin_unlock(&kibnal_data.kib_connd_lock);
+                /* kibnal_terminate_conn sent the disconnect request. */
+                kibnal_schedule_conn(conn);
 
                 write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
                 break;
@@ -2182,13 +2196,12 @@ kibnal_cm_callback(cm_cep_handle_t cep, cm_conn_data_t *cmdata, void *arg)
         case cm_event_conn_reject:
                 LASSERT (conn->ibc_state == IBNAL_CONN_PASSIVE_WAIT);
                 conn->ibc_connvars->cv_conndata = *cmdata;
-                
-                spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
-                list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_conns);
-                wake_up(&kibnal_data.kib_connd_waitq);
-                spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+
+                kibnal_schedule_conn(conn);
                 break;
         }
+
+        kibnal_conn_decref(conn); /* lose my ref */
 }
 
 void
@@ -2439,11 +2452,8 @@ kibnal_active_connect_callback (cm_cep_handle_t cep, cm_conn_data_t *cd,
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_CONNECT);
         cv->cv_conndata = *cd;
 
-        spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
-        /* connd takes my ref */
-        list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_conns);
-        wake_up(&kibnal_data.kib_connd_waitq);
-        spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+        kibnal_schedule_conn(conn);
+        kibnal_conn_decref(conn);
 }
 
 void
@@ -2672,7 +2682,7 @@ kibnal_check_connreply (kib_conn_t *conn)
 }
 
 void
-kibnal_send_connreq (kib_conn_t *conn)
+kibnal_arp_done (kib_conn_t *conn)
 {
         kib_peer_t           *peer = conn->ibc_peer;
         kib_connvars_t       *cv = conn->ibc_connvars;
@@ -2680,15 +2690,39 @@ kibnal_send_connreq (kib_conn_t *conn)
         ib_path_record_v2_t  *path = &cv->cv_path;
         vv_return_t           vvrc;
         int                   rc;
+        unsigned long         flags;
 
-        /* Only called by connd => statics OK */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_ARP);
+        LASSERT (peer->ibp_arp_count > 0);
         
         if (cv->cv_arprc != ibat_stat_ok) {
                 CERROR("Can't Arp "LPX64"@%u.%u.%u.%u: %d\n", peer->ibp_nid,
                        HIPQUAD(peer->ibp_ip), cv->cv_arprc);
+
+                write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+                peer->ibp_arp_count--;
+                if (peer->ibp_arp_count == 0) {
+                        /* final ARP attempt failed */
+                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                                flags);
+                        CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n", 
+                               peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
+                               cv->cv_arprc);
+                } else {
+                        /* Retry ARP: ibp_connecting++ so terminating conn
+                         * doesn't end peer's connection attempt */
+                        peer->ibp_connecting++;
+                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                                flags);
+                        CWARN("Arp "LPX64"@%u.%u.%u.%u failed: %d "
+                              "(%d attempts left)\n", 
+                              peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
+                              cv->cv_arprc, peer->ibp_arp_count);
+
+                        kibnal_schedule_peer_arp(peer);
+                }
                 kibnal_connreq_done(conn, 1, -ENETUNREACH);
                 return;
         }
@@ -2778,13 +2812,8 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         if (arprc == ibat_stat_ok)
                 conn->ibc_connvars->cv_arp = *arp_data;
         
-        /* connd takes over my ref on conn */
-        spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
-        
-        list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_conns);
-        wake_up(&kibnal_data.kib_connd_waitq);
-        
-        spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+        kibnal_schedule_conn(conn);
+        kibnal_conn_decref(conn);
 }
 
 void
@@ -2797,6 +2826,7 @@ kibnal_arp_peer (kib_peer_t *peer)
         /* Only the connd does this (i.e. single threaded) */
         LASSERT (current == kibnal_data.kib_connd);
         LASSERT (peer->ibp_connecting != 0);
+        LASSERT (peer->ibp_arp_count > 0);
 
         cep = cm_create_cep(cm_cep_transp_rc);
         if (cep == NULL) {
@@ -2834,18 +2864,13 @@ kibnal_arp_peer (kib_peer_t *peer)
                 break;
                 
         case ibat_stat_ok:
-                /* Immediate return (ARP cache hit) == no callback. */
-                conn->ibc_connvars->cv_arprc = ibat_stat_ok;
-                kibnal_send_connreq(conn);
-                kibnal_conn_decref(conn);
-                break;
-
         case ibat_stat_error:
         case ibat_stat_timeout:
         case ibat_stat_not_found:
-                CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n", peer->ibp_nid,
-                       HIPQUAD(peer->ibp_ip), ibatrc);
-                kibnal_connreq_done(conn, 1, -ENETUNREACH);
+                /* Immediate return (ARP cache hit or failure) == no callback. 
+                 * Do the next stage directly... */
+                conn->ibc_connvars->cv_arprc = ibatrc;
+                kibnal_arp_done(conn);
                 kibnal_conn_decref(conn);
                 break;
         }
@@ -3068,7 +3093,7 @@ kibnal_connd (void *arg)
                                 LBUG();
                                 
                         case IBNAL_CONN_ACTIVE_ARP:
-                                kibnal_send_connreq(conn);
+                                kibnal_arp_done(conn);
                                 break;
 
                         case IBNAL_CONN_ACTIVE_CONNECT:

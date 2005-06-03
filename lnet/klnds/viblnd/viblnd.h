@@ -101,6 +101,7 @@
 #define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
 #define IBNAL_NTX                    64         /* # tx descs */
 #define IBNAL_NTX_NBLK               128        /* # reserved tx descs */
+#define IBNAL_ARP_RETRIES            3          /* # times to retry ARP */
 
 /* tunables fixed at compile time */
 #define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
@@ -172,6 +173,7 @@ typedef struct
         int              *kib_timeout;          /* comms timeout (seconds) */
         int              *kib_ntx;              /* # tx descs */
         int              *kib_ntx_nblk;         /* # reserved tx descs */
+        int              *kib_arp_retries;      /* # times to retry ARP */
 
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;
@@ -401,6 +403,7 @@ typedef struct kib_peer
         struct list_head    ibp_conns;          /* all active connections */
         struct list_head    ibp_tx_queue;       /* msgs waiting for a conn */
         int                 ibp_connecting;     /* connecting+accepting */
+        int                 ibp_arp_count;      /* # arp attempts */
         unsigned long       ibp_reconnect_time; /* when reconnect may be attempted */
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
