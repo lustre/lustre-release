@@ -126,6 +126,8 @@
 #define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
 #define IBNAL_CREDIT_HIGHWATER    7             /* when to eagerly return credits */
 
+#define IBNAL_ARP_RETRIES         3             /* How many times to retry ARP */
+
 #define IBNAL_NTX                 64            /* # tx descs */
 #define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
 /* reduced from 256 to ensure we register < 255 pages per region.  
@@ -401,6 +403,7 @@ typedef struct kib_peer
         struct list_head    ibp_conns;          /* all active connections */
         struct list_head    ibp_tx_queue;       /* msgs waiting for a conn */
         int                 ibp_connecting;     /* connecting+accepting */
+        int                 ibp_arp_count;      /* # arp attempts */
         unsigned long       ibp_reconnect_time; /* when reconnect may be attempted */
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
