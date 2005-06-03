@@ -406,7 +406,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct mds_body *body;
-        struct dentry *de;
+        struct dentry *de = NULL;
         struct inode *inode = NULL;
         struct lustre_handle lockh[2] = {{0}, {0}};
         int parent_mode;
@@ -809,7 +809,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
                         rc = vfs_mkdir(dir, dchild, rec->ur_mode);
                         if (rc) {
-                                CERROR("Can't create dir \"%s\", rc = %d\n",
+                                CDEBUG(D_OTHER,
+                                       "Can't create dir \"%s\", rc = %d\n",
                                        dchild->d_name.name, rc);
                                 GOTO(cleanup, rc);
                         }
