@@ -59,6 +59,14 @@ static int arp_retries = IBNAL_ARP_RETRIES;
 CFS_MODULE_PARM(arp_retries, "i", int, 0644,
 		"# of times to retry ARP");
 
+static char *hca_basename = IBNAL_HCA_BASENAME;
+CFS_MODULE_PARM(hca_basename, "s", charp, 0444,
+                "HCA base name");
+
+static char *ipif_basename = IBNAL_IPIF_BASENAME;
+CFS_MODULE_PARM(ipif_basename, "s", charp, 0444,
+                "IPoIB interface base name");
+
 kib_tunables_t kibnal_tunables = {
         .kib_service_number         = &service_number,
         .kib_min_reconnect_interval = &min_reconnect_interval,
@@ -69,9 +77,15 @@ kib_tunables_t kibnal_tunables = {
         .kib_ntx                    = &ntx,
         .kib_ntx_nblk               = &ntx_nblk,
         .kib_arp_retries            = &arp_retries,
+        .kib_hca_basename           = &hca_basename,
+        .kib_ipif_basename          = &ipif_basename,
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+
+static char hca_basename_space[32];
+static char ipif_basename_space[32];
+
 static ctl_table kibnal_ctl_table[] = {
 	{1, "service_number", &service_number, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
@@ -91,6 +105,10 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{9, "arp_retries", &arp_retries, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
+	{10, "hca_basename", hca_basename_space, 
+	 sizeof(hca_basename_space), 0444, NULL, &proc_dostring},
+	{11, "ipif_basename", ipif_basename_space, 
+	 sizeof(ipif_basename_space), 0444, NULL, &proc_dostring},
 	{0}
 };
 
@@ -99,9 +117,21 @@ static ctl_table kibnal_top_ctl_table[] = {
 	{0}
 };
 
+void
+kibnal_initstrtunable(char *space, char *str, int size)
+{
+        strncpy(space, str, size);
+        space[size-1] = 0;
+}
+
 int
 kibnal_tunables_init ()
 {
+        kibnal_initstrtunable(hca_basename_space, hca_basename,
+                              sizeof(hca_basename_space));
+        kibnal_initstrtunable(ipif_basename_space, ipif_basename,
+                              sizeof(ipif_basename_space));
+
 	kibnal_tunables.kib_sysctl =
 		register_sysctl_table(kibnal_top_ctl_table, 0);
 	

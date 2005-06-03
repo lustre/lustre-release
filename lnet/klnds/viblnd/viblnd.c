@@ -969,7 +969,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         }
 
         /* Mark QP created */
-        conn->ibc_state = IBNAL_CONN_INIT;
+        conn->ibc_state = IBNAL_CONN_INIT_QP;
         conn->ibc_connvars->cv_local_qpn = rspattr.create_return.qp_num;
 
         if (rspattr.create_return.receive_max_outstand_wr < 
@@ -983,6 +983,9 @@ kibnal_create_conn (cm_cep_handle_t cep)
                        rspattr.create_return.send_max_outstand_wr);
                 goto failed;
         }
+
+        /* Mark init complete */
+        conn->ibc_state = IBNAL_CONN_INIT;
 
         /* 1 ref for caller */
         atomic_set (&conn->ibc_refcount, 1);
@@ -1021,6 +1024,11 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 /* fall through */
 
         case IBNAL_CONN_INIT:
+                vvrc = cm_destroy_cep(conn->ibc_cep);
+                LASSERT (vvrc == vv_return_ok);
+                /* fall through */
+
+        case IBNAL_CONN_INIT_QP:
                 kibnal_set_qp_state(conn, vv_qp_state_reset);
                 vvrc = vv_qp_destroy(kibnal_data.kib_hca, conn->ibc_qp);
                 if (vvrc != vv_return_ok)
@@ -1043,9 +1051,6 @@ kibnal_destroy_conn (kib_conn_t *conn)
 
         if (conn->ibc_peer != NULL)
                 kibnal_peer_decref(conn->ibc_peer);
-
-        vvrc = cm_destroy_cep(conn->ibc_cep);
-        LASSERT (vvrc == vv_return_ok);
 
         PORTAL_FREE(conn, sizeof (*conn));
 
@@ -1575,10 +1580,14 @@ kibnal_shutdown (ptl_ni_t *ni)
 ptl_err_t
 kibnal_startup (ptl_ni_t *ni)
 {
-        char                     *ifname = "ipoib0"; /* default IF name */
+        char                      scratch[32];
+        char                      ipif_name[32];
+        char                     *hca_name;
         __u32                     ip;
         __u32                     netmask;
         int                       up;
+        int                       nob;
+        int                       devno;
         struct timeval            tv;
         int                       pkmem = atomic_read(&portal_kmemory);
         int                       rc;
@@ -1597,21 +1606,52 @@ kibnal_startup (ptl_ni_t *ni)
         CLASSERT (PTL_MAX_INTERFACES > 1);
         
         if (ni->ni_interfaces[0] != NULL) {
+                /* Use the HCA specified in 'networks=' */
+
                 if (ni->ni_interfaces[1] != NULL) {
                         CERROR("Multiple interfaces not supported\n");
                         return PTL_FAIL;
                 }
-                ifname = ni->ni_interfaces[0];
+
+                /* Parse <hca base name><number> */
+                hca_name = ni->ni_interfaces[0];
+                nob = strlen(*kibnal_tunables.kib_hca_basename);
+                
+                if (strncmp(hca_name, *kibnal_tunables.kib_hca_basename, nob) ||
+                    sscanf(hca_name + nob, "%d%n", &devno, &nob) < 1) {
+                        CERROR("Unrecognised HCA %s\n", hca_name);
+                        return PTL_FAIL;
+                }
+
+        } else {
+                /* Use <hca base name>0 */
+                devno = 0;
+
+                hca_name = scratch;
+                snprintf(hca_name, sizeof(scratch), "%s%d",
+                         *kibnal_tunables.kib_hca_basename, devno);
+                if (strlen(hca_name) == sizeof(scratch) - 1) {
+                        CERROR("HCA name %s truncated\n", hca_name);
+                        return PTL_FAIL;
+                }
+        }
+
+        /* Find IP address from <ipif base name><hca number> */
+        snprintf(ipif_name, sizeof(ipif_name), "%s%d",
+                 *kibnal_tunables.kib_ipif_basename, devno);
+        if (strlen(ipif_name) == sizeof(ipif_name - 1)) {
+                CERROR("IPoIB interface name %s truncated\n", ipif_name);
+                return PTL_FAIL;
         }
         
-        rc = libcfs_ipif_query(ifname, &up, &ip, &netmask);
+        rc = libcfs_ipif_query(ipif_name, &up, &ip, &netmask);
         if (rc != 0) {
-                CERROR("Can't queue interface %s: %d\n", ifname, rc);
+                CERROR("Can't query IPoIB interface %s: %d\n", ipif_name, rc);
                 return PTL_FAIL;
         }
         
         if (!up) {
-                CERROR("Can't use interface %s: it's down\n", ifname);
+                CERROR("Can't query IPoIB interface %s: it's down\n", ipif_name);
                 return PTL_FAIL;
         }
         
@@ -1679,10 +1719,9 @@ kibnal_startup (ptl_ni_t *ni)
                 goto failed;
         }
 
-        /* TODO: apparently only one adapter is supported */
-        vvrc = vv_hca_open("ANY_HCA", NULL, &kibnal_data.kib_hca);
+        vvrc = vv_hca_open(hca_name, NULL, &kibnal_data.kib_hca);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't open CA: %d\n", vvrc);
+                CERROR ("Can't open HCA %s: %d\n", hca_name, vvrc);
                 goto failed;
         }
 
@@ -1694,7 +1733,7 @@ kibnal_startup (ptl_ni_t *ni)
         vvrc = vv_set_async_event_cb (kibnal_data.kib_hca, req_er,
                                      kibnal_async_callback);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't open CA: %d\n", vvrc);
+                CERROR ("Can't set HCA %s callback: %d\n", hca_name, vvrc);
                 goto failed; 
         }
 
@@ -1704,7 +1743,7 @@ kibnal_startup (ptl_ni_t *ni)
 
         vvrc = vv_hca_query(kibnal_data.kib_hca, &kibnal_data.kib_hca_attrs);
         if (vvrc != vv_return_ok) {
-                CERROR ("Can't size port attrs: %d\n", vvrc);
+                CERROR ("Can't size port attrs for %s: %d\n", hca_name, vvrc);
                 goto failed;
         }
 
@@ -1718,8 +1757,8 @@ kibnal_startup (ptl_ni_t *ni)
 
                 vvrc = vv_port_query(kibnal_data.kib_hca, port_num, pattr);
                 if (vvrc != vv_return_ok) {
-                        CERROR("vv_port_query failed for port %d: %d\n",
-                               port_num, vvrc);
+                        CERROR("vv_port_query failed for %s port %d: %d\n",
+                               hca_name, port_num, vvrc);
                         continue;
                 }
 
@@ -1745,7 +1784,8 @@ kibnal_startup (ptl_ni_t *ni)
                                                    &kibnal_data.kib_port_gid);
                         if (vvrc != vv_return_ok) {
                                 CERROR("vv_get_port_gid_tbl failed "
-                                       "for port %d: %d\n", port_num, vvrc);
+                                       "for %s port %d: %d\n", 
+                                       hca_name, port_num, vvrc);
                                 continue;
                         }
 
@@ -1755,27 +1795,28 @@ kibnal_startup (ptl_ni_t *ni)
                                                         &kibnal_data.kib_port_pkey);
                         if (vvrc != vv_return_ok) {
                                 CERROR("vv_get_port_partition_tbl failed "
-                                       "for port %d: %d\n", port_num, vvrc);
+                                       "for %s port %d: %d\n",
+                                       hca_name, port_num, vvrc);
                                 continue;
                         }
 
                         break;
                 case vv_state_linkActDefer: /* TODO: correct? */
                 case vv_state_linkNoChange:
-                        CERROR("Unexpected port[%d] state %d\n",
-                               i, pattr->port_state);
+                        CERROR("Unexpected %s port[%d] state %d\n",
+                               hca_name, i, pattr->port_state);
                         continue;
                 }
                 break;
         }
 
         if (kibnal_data.kib_port == -1) {
-                CERROR ("Can't find an active port\n");
+                CERROR ("Can't find an active port on %s\n", hca_name);
                 goto failed;
         }
 
-        CDEBUG(D_NET, "Using port %d - GID="LPX64":"LPX64"\n",
-               kibnal_data.kib_port, 
+        CDEBUG(D_NET, "Using %s port %d - GID="LPX64":"LPX64"\n",
+               hca_name, kibnal_data.kib_port, 
                kibnal_data.kib_port_gid.scope.g.subnet, 
                kibnal_data.kib_port_gid.scope.g.eui64);
         
