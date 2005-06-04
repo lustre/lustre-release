@@ -328,6 +328,8 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
+                        } else if (!strcmp(opt, "sec")) {
+                                /* do nothing */
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'\n",
                                         progname, opt);
