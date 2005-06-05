@@ -49,8 +49,10 @@ int rawobj_alloc(rawobj_t *obj, char *buf, int len)
         obj->len = len;
         if (len) {
                 OBD_ALLOC(obj->data, len);
-                if (!obj->data)
+                if (!obj->data) {
+                        obj->len = 0;
                         RETURN(-ENOMEM);
+                }
                 memcpy(obj->data, buf, len);
         } else
                 obj->data = NULL;
@@ -75,7 +77,7 @@ int rawobj_equal(rawobj_t *a, rawobj_t *b)
         LASSERT(a && b);
 
         return (a->len == b->len &&
-                !memcmp(a->data, b->data, a->len));
+                (!a->len || !memcmp(a->data, b->data, a->len)));
 }
 
 int rawobj_dup(rawobj_t *dest, rawobj_t *src)
@@ -85,8 +87,10 @@ int rawobj_dup(rawobj_t *dest, rawobj_t *src)
         dest->len = src->len;
         if (dest->len) {
                 OBD_ALLOC(dest->data, dest->len);
-                if (!dest->data)
+                if (!dest->data) {
+                        dest->len = 0;
                         return -ENOMEM;
+                }
                 memcpy(dest->data, src->data, dest->len);
         } else
                 dest->data = NULL;

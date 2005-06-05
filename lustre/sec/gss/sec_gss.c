@@ -511,6 +511,7 @@ static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
 /********************************************
  * gss cred manipulation helpers            *
  ********************************************/
+#if 0
 static
 int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
 {
@@ -525,6 +526,7 @@ int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
         read_unlock(&gss_ctx_lock);
         return res;
 }
+#endif
 
 static inline
 struct gss_cl_ctx * gss_get_ctx(struct gss_cl_ctx *ctx)
@@ -785,12 +787,14 @@ again:
         /* so far we'v created gss_new */
         gss_init_upcall_msg(gss_new, gsec, obdname, &gmd);
 
-        if (gss_cred_is_uptodate_ctx(cred)) {
-                /* someone else had done it for us, simply cancel
-                 * our own upcall */
-                CDEBUG(D_SEC, "cred("LPU64"/%u) has been refreshed by someone "
-                       "else, simply drop our request\n",
-                       cred->pc_pag, cred->pc_uid);
+        /* we'v created upcall msg, nobody else should touch the
+         * flag of this cred, unless be set as dead/expire by
+         * administrator via lctl etc.
+         */
+        if (cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) {
+                CWARN("cred %p("LPU64"/%u) was set flags %x unexpectedly\n",
+                      cred, cred->pc_pag, cred->pc_uid, cred->pc_flags);
+                cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 gss_unhash_msg_nolock(gss_new);
                 spin_unlock(&gsec->gs_lock);
                 gss_release_msg(gss_new);
@@ -1117,8 +1121,8 @@ proc_data_out:
                         else
                                 CERROR("replace dead cred failed %d\n", rc);
                 } else {
-                        CERROR("Unrecognized gss error (%x/%x)\n",
-                                major, minor);
+                        CERROR("req %p: unrecognized gss error (%x/%x)\n",
+                                req, major, minor);
                         rc = -EACCES;
                 }
                 break;

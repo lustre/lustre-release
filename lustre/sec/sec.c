@@ -428,7 +428,7 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
         if (cred->pc_flags & PTLRPC_CRED_DEAD) {
                 if (ptlrpcs_req_replace_dead_cred(req) == 0) {
                         LASSERT(cred != req->rq_cred);
-                        CWARN("req %p: replace cred %p => %p\n",
+                        CDEBUG(D_SEC, "req %p: replace cred %p => %p\n",
                                req, cred, req->rq_cred);
                         cred = req->rq_cred;
                 } else {

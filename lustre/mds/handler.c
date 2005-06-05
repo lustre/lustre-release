@@ -2587,18 +2587,18 @@ int mds_handle(struct ptlrpc_request *req)
         /* Security opc should NOT trigger any recovery events */
         if (req->rq_reqmsg->opc == SEC_INIT ||
             req->rq_reqmsg->opc == SEC_INIT_CONTINUE) {
-                if (!req->rq_export)
-                        GOTO(out, rc = 0);
-
-                mds_req_add_idmapping(req, &req->rq_export->exp_mds_data);
-                mds_revoke_export_locks(req->rq_export);
+                if (req->rq_export) {
+                        mds_req_add_idmapping(req,
+                                              &req->rq_export->exp_mds_data);
+                        mds_revoke_export_locks(req->rq_export);
+                }
                 GOTO(out, rc = 0);
         } else if (req->rq_reqmsg->opc == SEC_FINI) {
-                if (!req->rq_export)
-                        GOTO(out, rc = 0);
-
-                mds_req_del_idmapping(req, &req->rq_export->exp_mds_data);
-                mds_revoke_export_locks(req->rq_export);
+                if (req->rq_export) {
+                        mds_req_del_idmapping(req,
+                                              &req->rq_export->exp_mds_data);
+                        mds_revoke_export_locks(req->rq_export);
+                }
                 GOTO(out, rc = 0);
         }
 

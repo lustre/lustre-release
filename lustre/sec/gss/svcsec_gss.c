@@ -127,6 +127,7 @@ static void rsi_free(struct rsi *rsii)
 static void rsi_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsi *rsii = container_of(item, struct rsi, h);
+        LASSERT(atomic_read(&item->refcnt) > 0);
         if (cache_put(item, cd)) {
                 rsi_free(rsii);
                 OBD_FREE(rsii, sizeof(*rsii));
@@ -177,6 +178,7 @@ gssd_reply(struct rsi *item)
                         tmp->h.next = NULL;
                         rsi_cache.entries--;
                         if (test_bit(CACHE_VALID, &tmp->h.flags)) {
+                                CERROR("rsi is valid\n");
                                 write_unlock(&rsi_cache.hash_lock);
                                 rsi_put(&tmp->h, &rsi_cache);
                                 RETURN(-EINVAL);
@@ -229,18 +231,19 @@ gssd_upcall(struct rsi *item, struct cache_req *chandle)
                         return tmp;
                 }
         }
-        // cache_get(&item->h);
-        set_bit(CACHE_HASHED, &item->h.flags);
+        cache_get(&item->h);
+        //set_bit(CACHE_HASHED, &item->h.flags);
         item->h.next = *head;
         *head = &item->h;
         rsi_cache.entries++;
         read_unlock(&rsi_cache.hash_lock);
-        cache_get(&item->h);
+        //cache_get(&item->h);
 
         cache_check(&rsi_cache, &item->h, chandle);
         starttime = get_seconds();
         do {
-                yield();
+                set_current_state(TASK_UNINTERRUPTIBLE);
+                schedule_timeout(HZ/2);
                 read_lock(&rsi_cache.hash_lock);
                 for (hp = head; *hp != NULL; hp = &tmp->h.next) {
                         tmp = container_of(*hp, struct rsi, h);
@@ -261,8 +264,8 @@ gssd_upcall(struct rsi *item, struct cache_req *chandle)
                         }
                 }
                 read_unlock(&rsi_cache.hash_lock);
-        } while ((get_seconds() - starttime) <= 5);
-        CERROR("5s timeout while waiting cache refill\n");
+        } while ((get_seconds() - starttime) <= 15);
+        CERROR("15s timeout while waiting cache refill\n");
         return NULL;
 }
 
@@ -409,6 +412,7 @@ static void rsc_put(struct cache_head *item, struct cache_detail *cd)
 {
         struct rsc *rsci = container_of(item, struct rsc, h);
 
+        LASSERT(atomic_read(&item->refcnt) > 0);
         if (cache_put(item, cd)) {
                 rsc_free(rsci);
                 OBD_FREE(rsci, sizeof(*rsci));
@@ -455,7 +459,7 @@ static struct rsc *rsc_lookup(struct rsc *item, int set)
         }
         /* Didn't find anything */
         if (!set)
-                goto out_noset;
+                goto out_nada;
         rsc_cache.entries++;
 out_set:
         set_bit(CACHE_HASHED, &item->h.flags);
@@ -465,6 +469,8 @@ out_set:
         cache_fresh(&rsc_cache, &item->h, item->h.expiry_time);
         cache_get(&item->h);
         RETURN(item);
+out_nada:
+        tmp = NULL;
 out_noset:
         read_unlock(&rsc_cache.hash_lock);
         RETURN(tmp);
@@ -741,8 +747,9 @@ gss_svc_verify_request(struct ptlrpc_request *req,
         }
 
         if (gss_check_seq_num(&rsci->seqdata, gc->gc_seq)) {
-                CERROR("discard request %p with old seq_num %u\n",
-                        req, gc->gc_seq);
+                CERROR("discard replayed request %p(o%u,x"LPU64",t"LPU64")\n",
+                        req, req->rq_reqmsg->opc, req->rq_xid,
+                        req->rq_reqmsg->transno);
                 RETURN(GSS_S_DUPLICATE_TOKEN);
         }
 
@@ -787,8 +794,9 @@ gss_svc_unseal_request(struct ptlrpc_request *req,
         }
 
         if (gss_check_seq_num(&rsci->seqdata, gc->gc_seq)) {
-                CERROR("discard request %p with old seq_num %u\n",
-                        req, gc->gc_seq);
+                CERROR("discard replayed request %p(o%u,x"LPU64",t"LPU64")\n",
+                        req, req->rq_reqmsg->opc, req->rq_xid,
+                        req->rq_reqmsg->transno);
                 RETURN(GSS_S_DUPLICATE_TOKEN);
         }
 
@@ -861,6 +869,23 @@ gss_pack_err_notify(struct ptlrpc_request *req,
         RETURN(0);
 }
 
+static void dump_cache_head(struct cache_head *h)
+{
+        CWARN("ref %d, fl %lx, n %p, t %ld, %ld\n",
+              atomic_read(&h->refcnt), h->flags, h->next,
+              h->expiry_time, h->last_refresh);
+}
+static void dump_rsi(struct rsi *rsi)
+{
+        CWARN("dump rsi %p\n", rsi);
+        dump_cache_head(&rsi->h);
+        CWARN("%x,%x,%llx\n", rsi->naltype, rsi->netid, rsi->nid);
+        CWARN("len %d, d %p\n", rsi->in_handle.len, rsi->in_handle.data);
+        CWARN("len %d, d %p\n", rsi->in_token.len, rsi->in_token.data);
+        CWARN("len %d, d %p\n", rsi->out_handle.len, rsi->out_handle.data);
+        CWARN("len %d, d %p\n", rsi->out_token.len, rsi->out_token.data);
+}
+
 static int
 gss_svcsec_handle_init(struct ptlrpc_request *req,
                        struct rpc_gss_wire_cred *gc,
@@ -920,17 +945,21 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         rsip = gssd_upcall(rsikey, &my_chandle);
         if (!rsip) {
                 CERROR("error in gssd_upcall.\n");
-                GOTO(out_rsikey, rc = SVC_DROP);
+
+                rc = SVC_COMPLETE;
+                if (gss_pack_err_notify(req, GSS_S_FAILURE, 0))
+                        rc = SVC_DROP;
+
+                GOTO(out_rsikey, rc);
         }
 
         rsci = gss_svc_searchbyctx(&rsip->out_handle);
         if (!rsci) {
                 CERROR("rsci still not mature yet?\n");
 
+                rc = SVC_COMPLETE;
                 if (gss_pack_err_notify(req, GSS_S_FAILURE, 0))
                         rc = SVC_DROP;
-                else
-                        rc = SVC_COMPLETE;
 
                 GOTO(out_rsip, rc);
         }
@@ -970,11 +999,17 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         *resp++ = cpu_to_le32(GSS_SEQ_WIN);
         reslen -= (4 * 4);
         if (rawobj_serialize(&rsip->out_handle,
-                             &resp, &reslen))
+                             &resp, &reslen)) {
+                dump_rsi(rsip);
+                dump_rsi(rsikey);
                 LBUG();
+        }
         if (rawobj_serialize(&rsip->out_token,
-                             &resp, &reslen))
+                             &resp, &reslen)) {
+                dump_rsi(rsip);
+                dump_rsi(rsikey);
                 LBUG();
+        }
         /* the actual sec data length */
         *reslenp = cpu_to_le32(svcdata->reserve_len - reslen);
 
