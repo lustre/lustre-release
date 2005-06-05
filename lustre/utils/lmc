@@ -496,9 +496,10 @@ class GenConfig:
         lov.setAttribute("stripepattern", str(pattern))
         return lov
 
-    def lov_tgt(self, obd_uuid, index, generation):
+    def lov_tgt(self, obd_uuid, lov_uuid, index, generation):
         tgt = self.doc.createElement('lov_tgt')
         tgt.setAttribute("uuidref", obd_uuid)
+        tgt.setAttribute("lov_uuid", lov_uuid)
         tgt.setAttribute("index", index)
         tgt.setAttribute("generation", generation)
         tgt.setAttribute("active", '1')
@@ -730,6 +731,7 @@ def lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options):
 
 def lov_add_obd(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
+    lov_uuid = getUUID(lov)
     if options.index:
         lov_index = get_option_int(options, 'index')
         for tgt in lustre.getElementsByTagName('lov_tgt'):
@@ -745,16 +747,18 @@ def lov_add_obd(gen, lustre, lov, osc_uuid, options):
          for tgt in lustre.getElementsByTagName('lov_tgt'):
              uuidref = tgt.getAttribute('uuidref')
              tmp = int(tgt.getAttribute('index'))
+             own_lov_uuid = tgt.getAttribute('lov_uuid')
              if tmp != lov_index:
                  error('malformed xml: LOV targets are not ordered; found index '+str(tmp)+', expected '+str(lov_index)+'.')
              uuidref = tgt.getAttribute('uuidref')
              if uuidref == '':
                  lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options)
                  return
-             lov_index = lov_index + 1
+	     if own_lov_uuid == lov_uuid:  
+             	lov_index = lov_index + 1
 
-    lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
-    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index), '1'))
+    lov.appendChild(gen.lov_tgt(osc_uuid, lov_uuid, str(lov_index), '1'))
+    addUpdate(gen, lustre, gen.add(getUUID(lov), lov_uuid, str(lov_index), '1'))
 
 def lov_del_obd(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
