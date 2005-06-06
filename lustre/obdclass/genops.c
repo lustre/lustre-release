@@ -985,6 +985,41 @@ int oig_wait(struct obd_io_group *oig)
 }
 EXPORT_SYMBOL(oig_wait);
 
+void class_fail_export(struct obd_export *exp)
+{
+        int rc, already_failed;
+        unsigned long flags;
+
+        spin_lock_irqsave(&exp->exp_lock, flags);
+        already_failed = exp->exp_failed;
+        exp->exp_failed = 1;
+        spin_unlock_irqrestore(&exp->exp_lock, flags);
+
+        if (already_failed) {
+                CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",
+                       exp, exp->exp_client_uuid.uuid);
+                return;
+        }
+
+        CDEBUG(D_HA, "disconnecting export %p/%s\n",
+               exp, exp->exp_client_uuid.uuid);
+
+        if (obd_dump_on_timeout)
+                portals_debug_dumplog();
+
+        /* Most callers into obd_disconnect are removing their own reference
+         * (request, for example) in addition to the one from the hash table.
+         * We don't have such a reference here, so make one. */
+        class_export_get(exp);
+        rc = obd_disconnect(exp);
+        if (rc)
+                CERROR("disconnecting export %p failed: %d\n", exp, rc);
+        else
+                CDEBUG(D_HA, "disconnected export %p/%s\n",
+                       exp, exp->exp_client_uuid.uuid);
+}
+EXPORT_SYMBOL(class_fail_export);
+
 /* Ping evictor thread */
 #define D_PET D_HA
 
@@ -1017,41 +1052,6 @@ static int ping_evictor_wake(struct obd_export *exp)
         wake_up(&pet_waitq);
         return 0;
 }
-
-void class_fail_export(struct obd_export *exp)
-{
-        int rc, already_failed;
-        unsigned long flags;
-
-        spin_lock_irqsave(&exp->exp_lock, flags);
-        already_failed = exp->exp_failed;
-        exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
-
-        if (already_failed) {
-                CDEBUG(D_PET, "disconnecting dead export %p/%s; skipping\n",
-                       exp, exp->exp_client_uuid.uuid);
-                return;
-        }
-
-        CDEBUG(D_HA, "disconnecting export %p/%s\n",
-               exp, exp->exp_client_uuid.uuid);
-
-        if (obd_dump_on_timeout)
-                portals_debug_dumplog();
-
-        /* Most callers into obd_disconnect are removing their own reference
-         * (request, for example) in addition to the one from the hash table.
-         * We don't have such a reference here, so make one. */
-        class_export_get(exp);
-        rc = obd_disconnect(exp);
-        if (rc)
-                CERROR("disconnecting export %p failed: %d\n", exp, rc);
-        else
-                CDEBUG(D_HA, "disconnected export %p/%s\n",
-                       exp, exp->exp_client_uuid.uuid);
-}
-EXPORT_SYMBOL(class_fail_export);
 
 static int ping_evictor_main(void *arg)
 {
