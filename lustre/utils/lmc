@@ -258,6 +258,8 @@ lmc_options = [
     ('master_obd', "Specify the real device for the cache obd system.", PARAM),
     ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
     ('cobd', "Specify COBD name", PARAM),
+    ('cachelmv', "Specify cache lmv name", PARAM, ""),
+    ('masterlmv', "Specify master lmv name", PARAM, ""),
 
     # cmobd
     ('master_obd', "Specify the master device for the cmobd system.", PARAM),
@@ -1301,13 +1303,15 @@ def add_lov(gen, lustre, options):
     """ create a lov """
 
     lmv_name = get_option(options, 'lmv')
+    cache_lmv_name = get_option(options, 'cachelmv')
+    master_lmv_name = get_option(options, 'masterlmv')
     lov_orig = get_option(options, 'lov')
     name = new_name(lov_orig)
     if name != lov_orig:
         warning("name:", lov_orig, "already used. using:", name)
 
     mds_name = get_option(options, 'mds')
-    if not mds_name and not lmv_name:
+    if not mds_name and not lmv_name and not cache_lmv_name and not master_lmv_name:
         error("LOV: MDS or LMV must be specified.");
 
     stripe_sz = get_option_int(options, 'stripe_sz')
@@ -1337,6 +1341,17 @@ def add_lov(gen, lustre, options):
 
     if lmv_name:
         lmv = findByName(lustre, lmv_name, "lmv")
+        lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
+        lmv.appendChild(gen.ref("client", uuid))
+	
+
+    if cache_lmv_name:
+        lmv = findByName(lustre, cache_lmv_name, "lmv")
+        lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
+        lmv.appendChild(gen.ref("client", uuid))
+    
+    if master_lmv_name:
+        lmv = findByName(lustre, master_lmv_name, "lmv")
         lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
         lmv.appendChild(gen.ref("client", uuid))
 

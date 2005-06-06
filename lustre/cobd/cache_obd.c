@@ -783,7 +783,7 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                         rc = client_obd_disconnect(obd, cobd->master_real_exp, 0);
                         rc = client_obd_connect(obd, cobd->cache_exp, &conn,
-                                                NULL, 0);
+                                                NULL, OBD_OPT_REAL_CLIENT);
                         if (rc)
                                 GOTO(out, rc);
                         cobd->cache_real_exp = class_conn2export(&conn);
@@ -803,7 +803,7 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                         
                         rc = client_obd_disconnect(obd, cobd->cache_real_exp, 0);
                         rc = client_obd_connect(obd, cobd->master_exp, &conn,
-                                                NULL, 0);
+                                                NULL, OBD_OPT_REAL_CLIENT);
                         if (rc)
                                 GOTO(out, rc);
                         cobd->master_real_exp = class_conn2export(&conn);

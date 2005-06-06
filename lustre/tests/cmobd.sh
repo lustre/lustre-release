@@ -9,7 +9,6 @@ TMP=${TMP:-/tmp}
 COBD_MDS=${COBD_MDS:-"cobd_mds"}
 COBD_OST=${COBD_OST:-"cobd_ost"}
 CMOBD_MDS=${CMOBD_MDS:-"cmobd-mds"}
-CMOBD_MDS2=${CMOBD_MDS2:-"cmobd-mds2"}
 
 MASTER_LMV=${MASTER_LMV1:-master-lmv1}
 CACHE_LMV=${MASTER_LMV1:-cache-lmv1}
@@ -86,14 +85,8 @@ ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS2 \
 --fstype $BACK_FSTYPE --dev $MDS2_MASTER_DEV --size $MDSSIZE \
 --lmv $MASTER_LMV --format || exit 10
 
-${LMC} -m $config --add lov --lov $MASTER_LOV --lmv $CACHE_LMV \
+${LMC} -m $config --add lov --lov $CACHE_LOV  --cachelmv $CACHE_LMV --masterlmv $MASTER_LMV \
 --stripe_sz $STRIPE_SIZE --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
-
-${LMC} -m $config --add lov --lov $CACHE_LOV --lmv $MASTER_LMV \
---stripe_sz $STRIPE_SIZE --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
-
-${LMC} -m $config --add ost --ost $MASTER_OST --node $NODE --lov $MASTER_LOV \
---fstype $BACK_FSTYPE --dev $OST_MASTER_DEV --size $OSTSIZE  || exit 21
 
 ${LMC} -m $config --add ost --ost $CACHE_OST --node $NODE --lov $CACHE_LOV \
 --fstype $BACK_FSTYPE --dev $OST_CACHE_DEV --size $OSTSIZE  || exit 21
@@ -101,8 +94,9 @@ ${LMC} -m $config --add ost --ost $CACHE_OST --node $NODE --lov $CACHE_LOV \
 ${LMC} -m $config --add cobd --node $NODE --cobd $COBD_MDS \
 --master_obd $MASTER_LMV --cache_obd $CACHE_LMV || exit 22
 
-${LMC} -m $config --add cobd --node $NODE --cobd $COBD_OST \
---master_obd $MASTER_LOV --cache_obd $CACHE_LOV || exit 22
-
 ${LMC} -m $config --add mtpt --node $NODE --path /mnt/lustre \
---lmv $COBD_MDS --lov $COBD_OST || exit 30
+--lmv $COBD_MDS --lov $CACHE_LOV || exit 30
+
+${LMC} -m $config --add cmobd --node $NODE --cmobd $CMOBD_MDS \
+--master_obd $MASTER_LMV --cache_obd $CACHE_MDS1 || exit 23
+
