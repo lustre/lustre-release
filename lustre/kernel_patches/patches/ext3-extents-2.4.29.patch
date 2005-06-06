@@ -2513,9 +2513,9 @@ Index: linux-2.4.29/include/linux/ext3_fs.h
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
-+#define EXT3_IOC_GET_EXTENTS		_IOR('f', 5, long)
-+#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 6, long)
-+#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_EXTENTS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 8, long)
++#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 9, long)
  
  /*
   * Structure of an inode on the disk
@@ -2528,7 +2528,7 @@ Index: linux-2.4.29/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -506,11 +512,14 @@
+@@ -506,11 +512,13 @@
  #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
  #define EXT3_FEATURE_INCOMPAT_META_BG		0x0010
@@ -2539,7 +2539,6 @@ Index: linux-2.4.29/include/linux/ext3_fs.h
  					 EXT3_FEATURE_INCOMPAT_RECOVER| \
 -					 EXT3_FEATURE_INCOMPAT_META_BG)
 +					 EXT3_FEATURE_INCOMPAT_META_BG| \
-+					 EXT3_FEATURE_INCOMPAT_RECOVER| \
 +					 EXT3_FEATURE_INCOMPAT_EXTENTS)
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
