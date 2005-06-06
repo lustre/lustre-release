@@ -925,6 +925,8 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         unsigned long    flags;
         kib_peer_t      *peer;
         kib_conn_t      *conn;
+        int              retry;
+        int              rc;
         rwlock_t        *g_lock = &kibnal_data.kib_global_lock;
 
         /* If I get here, I've committed to send, so I complete the tx with
@@ -933,38 +935,50 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         LASSERT (tx->tx_conn == NULL);          /* only set when assigned a conn */
         LASSERT (tx->tx_nsp > 0);               /* work items have been set up */
 
-        read_lock_irqsave(g_lock, flags);
+        for (retry = 0; ; retry = 1) {
+                read_lock_irqsave(g_lock, flags);
         
-        peer = kibnal_find_peer_locked (nid);
-        if (peer == NULL) {
-                read_unlock_irqrestore(g_lock, flags);
-                tx->tx_status = -EHOSTUNREACH;
-                kibnal_tx_done (tx);
-                return;
-        }
-
-        conn = kibnal_find_conn_locked (peer);
-        if (conn != NULL) {
-                CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
-                       conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
-                       atomic_read (&conn->ibc_refcount));
-                atomic_inc (&conn->ibc_refcount); /* 1 ref for the tx */
-                read_unlock_irqrestore(g_lock, flags);
+                peer = kibnal_find_peer_locked (nid);
+                if (peer != NULL) {
+                        conn = kibnal_find_conn_locked (peer);
+                        if (conn != NULL) {
+                                CDEBUG(D_NET, "++conn[%p] state %d -> %s (%d)\n",
+                                       conn, conn->ibc_state, libcfs_nid2str(nid),
+                                       atomic_read (&conn->ibc_refcount));
+                                atomic_inc (&conn->ibc_refcount); /* 1 ref for the tx */
+                                read_unlock_irqrestore(g_lock, flags);
                 
-                kibnal_queue_tx (tx, conn);
-                return;
-        }
-        
-        /* Making one or more connections; I'll need a write lock... */
-        read_unlock(g_lock);
-        write_lock(g_lock);
+                                kibnal_queue_tx (tx, conn);
+                                return;
+                        }
+                }
+                
+                /* Making one or more connections; I'll need a write lock... */
+                read_unlock(g_lock);
+                write_lock(g_lock);
 
-        peer = kibnal_find_peer_locked (nid);
-        if (peer == NULL) {
+                peer = kibnal_find_peer_locked (nid);
+                if (peer != NULL)
+                        break;
+                
                 write_unlock_irqrestore (g_lock, flags);
-                tx->tx_status = -EHOSTUNREACH;
-                kibnal_tx_done (tx);
-                return;
+
+                if (retry) {
+                        CERROR("Can't find per %s\n", libcfs_nid2str(nid));
+                        tx->tx_status = -EHOSTUNREACH;
+                        kibnal_tx_done (tx);
+                        return;
+                }
+
+                rc = kibnal_add_persistent_peer(nid, PTL_NIDADDR(nid),
+                                                *kibnal_tunables.kib_port);
+                if (rc != 0) {
+                        CERROR("Can't add peer %s: %d\n",
+                               libcfs_nid2str(nid), rc);
+                        tx->tx_status = rc;
+                        kibnal_tx_done(tx);
+                        return;
+                }
         }
 
         conn = kibnal_find_conn_locked (peer);
@@ -1519,7 +1533,8 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int rc)
         unsigned long     flags;
 
         LASSERT (rc != 0);
-        LASSERT (peer->ibp_reconnect_interval >= IBNAL_MIN_RECONNECT_INTERVAL);
+        LASSERT (peer->ibp_reconnect_interval >= 
+                 *kibnal_tunables.kib_min_reconnect_interval);
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
@@ -1636,7 +1651,8 @@ kibnal_connreq_done (kib_conn_t *conn, int status)
                 list_add (&conn->ibc_list, &peer->ibp_conns);
                 
                 /* reset reconnect interval for next attempt */
-                peer->ibp_reconnect_interval = IBNAL_MIN_RECONNECT_INTERVAL;
+                peer->ibp_reconnect_interval =
+                        *kibnal_tunables.kib_min_reconnect_interval;
 
                 /* post blocked sends to the new connection */
                 spin_lock (&conn->ibc_lock);
@@ -1733,8 +1749,8 @@ kibnal_accept (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
                 return (-ENOMEM);
 
         /* assume 'nid' is a new peer */
-        peer = kibnal_create_peer (msg->ibm_srcnid);
-        if (peer == NULL) {
+        rc = kibnal_create_peer(&peer, msg->ibm_srcnid);
+        if (rc != 0) {
                 CDEBUG(D_NET, "--conn[%p] state %d -> "LPX64" (%d)\n",
                        conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
                        atomic_read (&conn->ibc_refcount));
@@ -2087,7 +2103,7 @@ kibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
                 .initiator_depth      = IBNAL_RESPONDER_RESOURCES,
                 .retry_count          = IBNAL_RETRY,
                 .rnr_retry_count      = IBNAL_RNR_RETRY,
-                .cm_response_timeout  = kibnal_tunables.kib_io_timeout,
+                .cm_response_timeout  = *kibnal_tunables.kib_timeout,
                 .max_cm_retries       = IBNAL_CM_RETRY,
                 .flow_control         = IBNAL_FLOW_CONTROL,
         };
@@ -2164,7 +2180,7 @@ kibnal_connect_peer (kib_peer_t *peer)
                                     conn->ibc_connreq->cr_svcrsp.ibsr_svc_gid,
                                     conn->ibc_connreq->cr_svcrsp.ibsr_svc_pkey,
                                     0,
-                                    kibnal_tunables.kib_io_timeout * HZ,
+                                    *kibnal_tunables.kib_timeout * HZ,
                                     0,
                                     kibnal_pathreq_callback, conn, 
                                     &conn->ibc_connreq->cr_tid);
@@ -2354,9 +2370,9 @@ kibnal_reaper (void *arg)
                          * connection within (n+1)/n times the timeout
                          * interval. */
 
-                        if (kibnal_tunables.kib_io_timeout > n * p)
+                        if (*kibnal_tunables.kib_timeout > n * p)
                                 chunk = (chunk * n * p) / 
-                                        kibnal_tunables.kib_io_timeout;
+                                        *kibnal_tunables.kib_timeout;
                         if (chunk == 0)
                                 chunk = 1;
 
@@ -2418,8 +2434,7 @@ kibnal_connd (void *arg)
                         spin_unlock_irqrestore (&kibnal_data.kib_connd_lock, flags);
 
                         kibnal_handle_svcqry(as->ibas_sock);
-                        sock_release(as->ibas_sock);
-                        PORTAL_FREE(as, sizeof(*as));
+                        kibnal_free_acceptsock(as);
                         
                         spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
                         did_something = 1;

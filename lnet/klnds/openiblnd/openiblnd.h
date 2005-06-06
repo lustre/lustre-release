@@ -66,66 +66,73 @@
 #else
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
-#define IBNAL_N_CONND       4                   /* # connection daemons */
 
-#define IBNAL_MIN_RECONNECT_INTERVAL HZ         /* first failed connection retry... */
-#define IBNAL_MAX_RECONNECT_INTERVAL (60*HZ)    /* ...exponentially increasing to this */
+#define IBNAL_FMR                    1
+//#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_PROCESS
+#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_INTERRUPT
 
-#define IBNAL_MSG_SIZE           (4<<10)        /* max size of queued messages (inc hdr) */
 
-#define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
-#define IBNAL_CREDIT_HIGHWATER    6             /* when to eagerly return credits */
-#define IBNAL_RETRY               7             /* # times to retry */
-#define IBNAL_RNR_RETRY           7             /*  */
-#define IBNAL_CM_RETRY            7             /* # times to retry connection */
-#define IBNAL_FLOW_CONTROL        1
-#define IBNAL_RESPONDER_RESOURCES 8
+/* defaults for modparams/tunables */
+#define IBNAL_N_CONND                4          /* # connection daemons */
+#define IBNAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
+#define IBNAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this (seconds) */
+#define IBNAL_CONCURRENT_PEERS       1024       /* # nodes all talking at once to me */
+#define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
+#define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
+#define IBNAL_LISTENER_TIMEOUT       5          /* default listener timeout (seconds) */
+#define IBNAL_BACKLOG                127        /* default listener backlog */
+#define IBNAL_PORT                   986        /* default listener port */
+#define IBNAL_NTX                    64         /* # tx descs */
+#define IBNAL_NTX_NBLK               256        /* # reserved tx descs */
 
-#define IBNAL_NTX                 64            /* # tx descs */
-#define IBNAL_NTX_NBLK            256           /* # reserved tx descs */
+/* tunables fixed at compile time */
+#define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
+#define IBNAL_RESCHED                100        /* # scheduler loops before reschedule */
+#define IBNAL_MSG_QUEUE_SIZE         8          /* # messages/RDMAs in-flight */
+#define IBNAL_CREDIT_HIGHWATER       6          /* when to eagerly return credits */
+#define IBNAL_MSG_SIZE              (4<<10)     /* max size of queued messages (inc hdr) */
+#define IBNAL_RDMA_BASE              0x0eeb0000
 
-#define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
-
-#define IBNAL_RESCHED             100           /* # scheduler loops before reschedule */
-
-#define IBNAL_CONCURRENT_PEERS    1000          /* # nodes all talking at once to me */
-
-/* default vals for runtime tunables */
-#define IBNAL_IO_TIMEOUT          50            /* default comms timeout (seconds) */
-#define IBNAL_LISTENER_TIMEOUT    5             /* default listener timeout (seconds) */
-#define IBNAL_BACKLOG             127           /* default listener backlog */
-#define IBNAL_PORT                988           /* default listener port */
+/* QP tunables */
+#define IBNAL_RETRY                  7          /* # times to retry */
+#define IBNAL_RNR_RETRY              7          /*  */
+#define IBNAL_CM_RETRY               7          /* # times to retry connection */
+#define IBNAL_FLOW_CONTROL           1
+#define IBNAL_RESPONDER_RESOURCES    8
 
 /************************/
 /* derived constants... */
 
 /* TX messages (shared by all connections) */
-#define IBNAL_TX_MSGS       (IBNAL_NTX + IBNAL_NTX_NBLK)
-#define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
-#define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
+#define IBNAL_TX_MSGS()       (*kibnal_tunables.kib_ntx + \
+                               *kibnal_tunables.kib_ntx_nblk)
+#define IBNAL_TX_MSG_BYTES()  (IBNAL_TX_MSGS() * IBNAL_MSG_SIZE)
+#define IBNAL_TX_MSG_PAGES()  ((IBNAL_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
 /* RX messages (per connection) */
-#define IBNAL_RX_MSGS       IBNAL_MSG_QUEUE_SIZE
-#define IBNAL_RX_MSG_BYTES  (IBNAL_RX_MSGS * IBNAL_MSG_SIZE)
-#define IBNAL_RX_MSG_PAGES  ((IBNAL_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
+#define IBNAL_RX_MSGS         IBNAL_MSG_QUEUE_SIZE
+#define IBNAL_RX_MSG_BYTES    (IBNAL_RX_MSGS * IBNAL_MSG_SIZE)
+#define IBNAL_RX_MSG_PAGES    ((IBNAL_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
 /* we may have up to 2 completions per transmit +
    1 completion per receive, per connection */
-#define IBNAL_CQ_ENTRIES  ((2*IBNAL_TX_MSGS) +                          \
-                           (IBNAL_RX_MSGS * IBNAL_CONCURRENT_PEERS))
-
-#define IBNAL_RDMA_BASE  0x0eeb0000
-#define IBNAL_FMR        1
-#define IBNAL_CKSUM      1
-//#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_PROCESS
-#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_INTERRUPT
+#define IBNAL_CQ_ENTRIES()  ((2*IBNAL_TX_MSGS()) +                                      \
+                             (IBNAL_RX_MSGS * *kibnal_tunables.kib_concurrent_peers))
 
 typedef struct
 {
-        int               kib_io_timeout;       /* comms timeout (seconds) */
-        int               kib_listener_timeout; /* listener's timeout */
-        int               kib_backlog;          /* listenter's accept backlog */
-        int               kib_port;             /* where the listener listens */
+        int      *kib_n_connd;                  /* # connection daemons */
+        int      *kib_min_reconnect_interval;   /* min connect retry seconds... */
+        int      *kib_max_reconnect_interval;   /* max connect retry seconds */
+        int      *kib_concurrent_peers;         /* max # peers */
+        int      *kib_cksum;                    /* checksum kib_msg_t? */
+        int      *kib_timeout;                  /* comms timeout (seconds) */
+        int      *kib_listener_timeout;         /* listener's timeout */
+        int      *kib_backlog;                  /* listenter's accept backlog */
+        int      *kib_port;                     /* where the listener listens */
+        int      *kib_ntx;                      /* # tx descs */
+        int      *kib_ntx_nblk;                 /* # reserved tx descs */
+
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;
 
@@ -162,7 +169,7 @@ typedef struct
 
         struct list_head *kib_peers;            /* hash table of all my known peers */
         int               kib_peer_hash_size;   /* size of kib_peers */
-        atomic_t          kib_npeers;           /* # peers extant */
+        int               kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
         struct list_head  kib_reaper_conns;     /* connections to reap */
@@ -207,7 +214,9 @@ typedef struct
 #define IBNAL_INIT_PD              3
 #define IBNAL_INIT_FMR             4
 #define IBNAL_INIT_TXD             5
-#define IBNAL_INIT_ALL             6
+#define IBNAL_INIT_CQ              6
+#define IBNAL_INIT_IB              7
+#define IBNAL_INIT_ALL             8
 
 typedef struct kib_acceptsock                   /* accepted socket queued for connd */
 {
@@ -432,7 +441,7 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         LASSERT (tx->tx_conn == NULL);          /* only set here */
 
         tx->tx_conn = conn;
-        tx->tx_deadline = jiffies + kibnal_tunables.kib_io_timeout * HZ;
+        tx->tx_deadline = jiffies + *kibnal_tunables.kib_timeout * HZ;
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 
@@ -536,8 +545,9 @@ extern void kibnal_free_acceptsock (kib_acceptsock_t *as);
 extern int kibnal_listener_procint(ctl_table *table, int write, 
                                    struct file *filp, void *buffer, 
                                    size_t *lenp);
-extern kib_peer_t *kibnal_create_peer (ptl_nid_t nid);
+extern int kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid);
 extern void kibnal_put_peer (kib_peer_t *peer);
+extern int kibnal_add_persistent_peer(ptl_nid_t nid, __u32 ip, int port);
 extern int kibnal_del_peer (ptl_nid_t nid);
 extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
@@ -575,3 +585,6 @@ extern void kibnal_start_active_rdma (int type, int status,
                                       unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       int offset, int nob);
+
+extern int  kibnal_tunables_init(void);
+extern void kibnal_tunables_fini(void);
