@@ -37,22 +37,20 @@
 #include <linux/lustre_smfs.h>
 #include "smfs_internal.h"
 
-#define SMFS_IOPEN_INO  1
-
 static void smfs_init_inode_info(struct inode *inode, void *opaque)
 {
         
         struct inode *cache_inode = NULL;
         struct smfs_iget_args *sargs = opaque;
-        unsigned long ino;
-
+        
         LASSERTF((!I2SMI(inode)), "Inode %lu already has smfs_inode_info %p \n",
                  inode->i_ino, I2SMI(inode));
         
         /* getting backing fs inode. */
         LASSERT(sargs);
-        ino = inode->i_ino;
-        cache_inode = iget(S2CSB(inode->i_sb), ino); 
+        
+        cache_inode = igrab(sargs->s_inode); 
+        LASSERT(cache_inode);
         
         OBD_ALLOC(inode->u.generic_ip, sizeof(struct smfs_inode_info));
 
@@ -63,15 +61,11 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
                         atomic_read(&cache_inode->i_count));
         
         post_smfs_inode(inode, cache_inode);
-        sm_set_inode_ops(cache_inode, inode);
-        //iopen stuff
-        if (ino == SMFS_IOPEN_INO) {
-                inode->i_op = &smfs_iopen_iops;
-                inode->i_fop = &smfs_iopen_fops;
-        }
+        sm_set_inode_ops(inode);
+
         //inherit parent inode flags
-        if (sargs->s_inode) { 
-                I2SMI(inode)->smi_flags = I2SMI(sargs->s_inode)->smi_flags;
+        if (sargs->s_info) { 
+                I2SMI(inode)->smi_flags = sargs->s_info->smi_flags;
                 CDEBUG(D_INODE, "set inode %lu flags 0x%.8x\n", inode->i_ino,
                       I2SMI(inode)->smi_flags);
         } 
@@ -113,7 +107,7 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
 {
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
 
-        if (!sargs || (inode->i_ino != sargs->s_ino))
+        if (!sargs || (inode->i_ino != sargs->s_inode->i_ino))
                 return 0;
         
 #ifdef CONFIG_SNAPFS
@@ -130,7 +124,7 @@ int smfs_set_inode(struct inode *inode, void *opaque)
 {
         struct smfs_iget_args *sargs = opaque;
         
-        inode->i_ino = sargs->s_ino;
+        inode->i_ino = sargs->s_inode->i_ino;
         
         return 0;
 }
@@ -149,9 +143,9 @@ static struct inode *smfs_iget(struct super_block *sb, ino_t hash,
                         unlock_new_inode(inode);
                 }
                 
-                CDEBUG(D_INODE, "inode: %lu/%u(%p) index %d "
-                       "ino %d\n", inode->i_ino, inode->i_generation,
-                       inode, sargs->s_index, sargs->s_ino);
+                CDEBUG(D_INODE, "inode: %lu/%u(%p) index %d\n",
+                                inode->i_ino, inode->i_generation,
+                                inode, sargs->s_index);
                 
         }
         return inode;
@@ -174,19 +168,19 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
 }
 #endif
 
-struct inode *smfs_get_inode(struct super_block *sb, ino_t hash,
-                             struct inode *dir, int index)
+struct inode *smfs_get_inode(struct super_block *sb, struct inode * cache_inode,
+                             struct smfs_inode_info * dir_info, int index)
 {
         struct smfs_iget_args sargs;
         struct inode *inode;
         ENTRY;
        
-        sargs.s_ino = hash; 
-        sargs.s_inode = dir; 
+        sargs.s_inode = cache_inode; 
+        sargs.s_info = dir_info; 
         sargs.s_index = index;
         
-        inode = smfs_iget(sb, hash, &sargs);
-
+        inode = smfs_iget(sb, cache_inode->i_ino, &sargs);
+        LASSERT(inode);
         RETURN(inode);
 }
 #ifdef FC3_KERNEL 
@@ -239,7 +233,7 @@ static void smfs_dirty_inode(struct inode *inode)
 
 static void smfs_delete_inode(struct inode *inode)
 {
-        struct inode * cache_inode = I2CI(inode);
+        //struct inode * cache_inode = I2CI(inode);
 
         //smfs_clear_inode_info(inode);
         clear_inode(inode);

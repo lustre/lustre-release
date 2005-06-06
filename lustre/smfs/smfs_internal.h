@@ -71,46 +71,13 @@ do{                                                 \
 
 extern int init_smfs_proc_sys(void);
 /*cache.c*/
-extern void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode);
+extern void sm_set_inode_ops(struct inode *);
 extern void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb);
-extern void init_smfs_cache(void);
-extern void cleanup_smfs_cache(void);
-extern void sm_set_journal_ops(struct super_block *sb, char *cache_type);
+//extern void init_smfs_cache(void);
+//extern void cleanup_smfs_cache(void);
+//extern void sm_set_journal_ops(struct super_block *sb, char *cache_type);
 extern int smfs_init_sm_ops(struct smfs_super_info *smb);
 extern void smfs_cleanup_sm_ops(struct smfs_super_info *smb);
-
-static inline struct inode_operations *cache_diops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_dir_iops;
-}
-static inline struct inode_operations *cache_fiops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_file_iops;
-}
-static inline struct inode_operations *cache_siops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_sym_iops;
-}
-static inline struct file_operations *cache_dfops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_dir_fops;
-}
-static inline struct file_operations *cache_ffops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_file_fops;
-}
-static inline struct file_operations *cache_sfops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_sym_fops;
-}
-static inline struct dentry_operations *cache_dops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_dentry_ops;
-}
-static inline struct journal_operations *journal_ops(struct smfs_super_info *smb)
-{
-        return &smb->sm_ops->sm_journal_ops;
-}
 
 /*smfs_lib.c*/
 void smfs_put_super(struct super_block *sb);
@@ -144,16 +111,17 @@ extern int smfs_removexattr(struct dentry *dentry, const char *name);
 extern int smfs_open(struct inode * inode, struct file * filp);
 extern int smfs_release(struct inode * inode, struct file * filp);
 /*inode.c*/
-struct inode *smfs_get_inode(struct super_block *sb, ino_t hash, 
-                             struct inode *dir, int index);
+struct inode *smfs_get_inode(struct super_block *, struct inode*,  
+                             struct smfs_inode_info *, int);
 
 extern struct super_operations smfs_super_ops;
 
 struct smfs_iget_args {
-        struct inode *s_inode;
-        int           s_index;
-        int           s_ino;
+        struct inode            *s_inode;
+        struct smfs_inode_info  *s_info;
+        int                      s_index;
 };
+
 /*symlink.c*/
 extern struct inode_operations smfs_sym_iops;
 extern struct file_operations smfs_sym_fops;

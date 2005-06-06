@@ -367,13 +367,13 @@ void smfs_put_super(struct super_block *sb)
 int smfs_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct inode *root_inode = NULL;
+	struct inode *back_root_inode = NULL;
         struct smfs_super_info *smb = NULL;
         char *devstr = NULL, *typestr = NULL; 
         char *opts = NULL;
         int err = 0;
         int flags = 0;
-        ino_t root_ino;
-
+        
         ENTRY;
         
         if (!data) {
@@ -420,11 +420,11 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         sm_set_sb_ops(smb->smsi_sb, sb);
 
         /* init the root_inode of smfs. */ 
-        root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
-        root_inode = smfs_get_inode(sb, root_ino, NULL, 0);
+        back_root_inode = S2CSB(sb)->s_root->d_inode;
+        root_inode = smfs_get_inode(sb, back_root_inode, NULL, 0);
 
         CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
-               sb->s_op->read_inode, root_ino, root_inode);
+               sb->s_op->read_inode, root_inode->i_ino, root_inode);
 
         sb->s_root = d_alloc_root(root_inode);
         if (!sb->s_root) {

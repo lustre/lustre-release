@@ -56,204 +56,173 @@ void smfs_cleanup_sm_ops(struct smfs_super_info *smb)
 }
 
 static void setup_iops(struct inode *cache_inode,
-                       struct inode_operations *iops,
-                       struct inode_operations *cache_iops)
+                       struct inode_operations *smfs_iops,
+                       struct inode_operations *iops)
 {
 
-        if (cache_inode->i_op && cache_iops && iops) {
-                if (cache_inode->i_op->create)
-                        iops->create = cache_iops->create;
-                if (cache_inode->i_op->lookup)
-                        iops->lookup = cache_iops->lookup;
-                if (cache_inode->i_op->link)
-                        iops->link = cache_iops->link;
-                if (cache_inode->i_op->unlink)
-                        iops->unlink = cache_iops->unlink;
-                if (cache_inode->i_op->symlink)
-                        iops->symlink = cache_iops->symlink;
-                if (cache_inode->i_op->mkdir)
-                        iops->mkdir = cache_iops->mkdir;
-                if (cache_inode->i_op->rmdir)
-                        iops->rmdir = cache_iops->rmdir;
-                if (cache_inode->i_op->mknod)
-                        iops->mknod = cache_iops->mknod;
-                if (cache_inode->i_op->rename)
-                        iops->rename = cache_iops->rename;
-                if (cache_inode->i_op->readlink)
-                        iops->readlink = cache_iops->readlink;
-                if (cache_inode->i_op->follow_link)
-                        iops->follow_link = cache_iops->follow_link;
-                if (cache_inode->i_op->truncate)
-                        iops->truncate = cache_iops->truncate;
-                if (cache_inode->i_op->permission)
-                        iops->permission = cache_iops->permission;
+        LASSERT(cache_inode->i_op && smfs_iops && iops);
+        
+        if (cache_inode->i_op->create)
+                iops->create = smfs_iops->create;
+        if (cache_inode->i_op->lookup)
+                iops->lookup = smfs_iops->lookup;
+        if (cache_inode->i_op->link)
+                iops->link = smfs_iops->link;
+        if (cache_inode->i_op->unlink)
+                iops->unlink = smfs_iops->unlink;
+        if (cache_inode->i_op->symlink)
+                iops->symlink = smfs_iops->symlink;
+        if (cache_inode->i_op->mkdir)
+                iops->mkdir = smfs_iops->mkdir;
+        if (cache_inode->i_op->rmdir)
+                iops->rmdir = smfs_iops->rmdir;
+        if (cache_inode->i_op->mknod)
+                iops->mknod = smfs_iops->mknod;
+        if (cache_inode->i_op->rename)
+                iops->rename = smfs_iops->rename;
+        if (cache_inode->i_op->readlink)
+                iops->readlink = smfs_iops->readlink;
+        if (cache_inode->i_op->follow_link)
+                iops->follow_link = smfs_iops->follow_link;
+        if (cache_inode->i_op->truncate)
+                iops->truncate = smfs_iops->truncate;
+        if (cache_inode->i_op->permission)
+                iops->permission = smfs_iops->permission;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                if (cache_inode->i_op->revalidate)
-                        iops->revalidate = cache_iops->revalidate;
+        if (cache_inode->i_op->revalidate)
+                iops->revalidate = smfs_iops->revalidate;
 #endif
-                if (cache_inode->i_op->setattr)
-                        iops->setattr = cache_iops->setattr;
-                if (cache_inode->i_op->getattr)
-                        iops->getattr = cache_iops->getattr;
-                if (cache_inode->i_op->setxattr)
-                        iops->setxattr = cache_iops->setxattr;
-                if (cache_inode->i_op->getxattr)
-                        iops->getxattr = cache_iops->getxattr;
-                if (cache_inode->i_op->listxattr)
-                        iops->listxattr = cache_iops->listxattr;
-                if (cache_inode->i_op->removexattr)
-                        iops->removexattr = cache_iops->removexattr;
+        if (cache_inode->i_op->setattr)
+                iops->setattr = smfs_iops->setattr;
+        if (cache_inode->i_op->getattr)
+                iops->getattr = smfs_iops->getattr;
+        if (cache_inode->i_op->setxattr)
+                iops->setxattr = smfs_iops->setxattr;
+        if (cache_inode->i_op->getxattr)
+                iops->getxattr = smfs_iops->getxattr;
+        if (cache_inode->i_op->listxattr)
+                iops->listxattr = smfs_iops->listxattr;
+        if (cache_inode->i_op->removexattr)
+                iops->removexattr = smfs_iops->removexattr;
 #if HAVE_LOOKUP_RAW
-                if (cache_inode->i_op->lookup_raw)
-                        iops->lookup_raw = cache_iops->lookup_raw;
+        if (cache_inode->i_op->lookup_raw)
+                iops->lookup_raw = smfs_iops->lookup_raw;
 #endif
-        }
+
 }
 
 static void setup_fops(struct inode *cache_inode,
-                       struct file_operations *fops,
-                       struct file_operations *cache_fops)
+                       struct file_operations *smfs_fops,
+                       struct file_operations *fops)
 {
-        if (cache_inode->i_fop && cache_fops && fops) {
-                if (cache_inode->i_fop->llseek)
-                        fops->llseek = cache_fops->llseek;
-                if (cache_inode->i_fop->read)
-                        fops->read = cache_fops->read;
-                if (cache_inode->i_fop->write)
-                        fops->write = cache_fops->write;
-                if (cache_inode->i_fop->readdir)
-                        fops->readdir = cache_fops->readdir;
-                if (cache_inode->i_fop->poll)
-                        fops->poll = cache_fops->poll;
-                if (cache_inode->i_fop->ioctl)
-                        fops->ioctl = cache_fops->ioctl;
-                if (cache_inode->i_fop->mmap)
-                        fops->mmap = cache_fops->mmap;
-                if (cache_inode->i_fop->flush)
-                        fops->flush = cache_fops->flush;
-                if (cache_inode->i_fop->fsync)
-                        fops->fsync = cache_fops->fsync;
-                if (cache_inode->i_fop->fasync)
-                        fops->fasync = cache_fops->fasync;
-                if (cache_inode->i_fop->lock)
-                        fops->lock = cache_fops->lock;
-                if (cache_inode->i_fop->readv)
-                        fops->readv = cache_fops->readv;
-                if (cache_inode->i_fop->writev)
-                        fops->writev = cache_fops->writev;
-                if (cache_inode->i_fop->sendpage)
-                        fops->sendpage = cache_fops->sendpage;
-                if (cache_inode->i_fop->get_unmapped_area)
-                        fops->get_unmapped_area = cache_fops->get_unmapped_area;
-
-                /* for dir file we also need replace the open and release method,
-                 * because we need initialize the cache file structs. */
-                fops->open = cache_fops->open;
-                fops->release = cache_fops->release;
-        }
+        LASSERT(cache_inode->i_fop && smfs_fops && fops);
+        
+        if (cache_inode->i_fop->llseek)
+                fops->llseek = smfs_fops->llseek;
+        if (cache_inode->i_fop->read)
+                fops->read = smfs_fops->read;
+        if (cache_inode->i_fop->write)
+                fops->write = smfs_fops->write;
+        if (cache_inode->i_fop->readdir)
+                fops->readdir = smfs_fops->readdir;
+        if (cache_inode->i_fop->poll)
+                fops->poll = smfs_fops->poll;
+        if (cache_inode->i_fop->ioctl)
+                fops->ioctl = smfs_fops->ioctl;
+        if (cache_inode->i_fop->mmap)
+                fops->mmap = smfs_fops->mmap;
+        if (cache_inode->i_fop->flush)
+                fops->flush = smfs_fops->flush;
+        if (cache_inode->i_fop->fsync)
+                fops->fsync = smfs_fops->fsync;
+        if (cache_inode->i_fop->fasync)
+                fops->fasync = smfs_fops->fasync;
+        if (cache_inode->i_fop->lock)
+                fops->lock = smfs_fops->lock;
+        if (cache_inode->i_fop->readv)
+                fops->readv = smfs_fops->readv;
+        if (cache_inode->i_fop->writev)
+                fops->writev = smfs_fops->writev;
+        if (cache_inode->i_fop->sendpage)
+                fops->sendpage = smfs_fops->sendpage;
+        if (cache_inode->i_fop->get_unmapped_area)
+                fops->get_unmapped_area = smfs_fops->get_unmapped_area;
+                
+        /* for dir file we also need replace the open and release method,
+         * because we need initialize the cache file structs. */
+        fops->open = smfs_fops->open;
+        fops->release = smfs_fops->release;
 }
 
-static void setup_sm_file_ops(struct inode *cache_inode, struct inode *inode,
-                              struct inode_operations *cache_iops,
-                              struct file_operations *cache_fops)
+static void setup_sm_file_ops(struct inode *inode)
 {
-        struct smfs_super_info *smb;
-        struct inode_operations *iops;
-        struct file_operations *fops;
-
-        smb = S2SMI(inode->i_sb);
-
-        if (smb->smsi_ops_check & FILE_OPS_CHECK)
-                return;
-
-        iops = cache_fiops(smb);
-        fops = cache_ffops(smb);
-
-        setup_iops(cache_inode, iops, cache_iops);
-        setup_fops(cache_inode, fops, cache_fops);
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        struct inode *cache_inode = I2CI(inode);
+        
+        setup_iops(cache_inode, &smfs_file_iops, &smb->sm_ops->sm_file_iops);
+        setup_fops(cache_inode, &smfs_file_fops, &smb->sm_ops->sm_file_fops);
 
         lock_kernel();
         smb->smsi_ops_check |= FILE_OPS_CHECK;
         unlock_kernel();
 }
 
-static void setup_sm_dir_ops(struct inode *cache_inode, struct inode *inode,
-                             struct inode_operations *cache_dir_iops,
-                             struct file_operations *cache_dir_fops)
+static void setup_sm_dir_ops(struct inode *inode)
 {
-        struct smfs_super_info *smb;
-        struct inode_operations *iops;
-        struct file_operations *fops;
-
-        smb = S2SMI(inode->i_sb);
-
-        if (smb->smsi_ops_check & DIR_OPS_CHECK)
-                return;
-
-        iops = cache_diops(smb);
-        fops = cache_dfops(smb);
-
-        setup_iops(cache_inode, iops, cache_dir_iops);
-        setup_fops(cache_inode, fops, cache_dir_fops);
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        struct inode *cache_inode = I2CI(inode);
+        
+        setup_iops(cache_inode, &smfs_dir_iops, &smb->sm_ops->sm_dir_iops);
+        setup_fops(cache_inode, &smfs_dir_fops, &smb->sm_ops->sm_dir_fops);
 
         lock_kernel();
         smb->smsi_ops_check |= DIR_OPS_CHECK;
         unlock_kernel();
 }
 
-static void setup_sm_symlink_ops(struct inode *cache_inode, struct inode *inode,
-                                 struct inode_operations *cache_sym_iops,
-                                 struct file_operations *cache_sym_fops)
+static void setup_sm_symlink_ops(struct inode *inode)
 {
-        struct smfs_super_info *smb;
-        struct inode_operations *iops;
-        struct file_operations *fops;
-
-        smb = S2SMI(inode->i_sb);
-
-        if (smb->smsi_ops_check & SYMLINK_OPS_CHECK)
-                return;
-
-        iops = cache_siops(smb);
-        fops = cache_sfops(smb);
-
-        setup_iops(cache_inode, iops, cache_sym_iops);
-        setup_fops(cache_inode, fops, cache_sym_fops);
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        struct inode *cache_inode = I2CI(inode);
+        
+        setup_iops(cache_inode, &smfs_sym_iops, &smb->sm_ops->sm_sym_iops);
+        setup_fops(cache_inode, &smfs_sym_fops, &smb->sm_ops->sm_sym_fops);
 
         lock_kernel();
         smb->smsi_ops_check |= SYMLINK_OPS_CHECK;
         unlock_kernel();
 }
 
+#define SMFS_IOPEN_INO  1
 
-void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
+void sm_set_inode_ops(struct inode *inode)
 {
         struct smfs_super_info *smb = S2SMI(inode->i_sb);
 
-        /* XXX now set the correct sm_{file,dir,sym}_iops */
+        //iopen stuff
+        if (inode->i_ino == SMFS_IOPEN_INO) {
+                inode->i_op = &smfs_iopen_iops;
+                inode->i_fop = &smfs_iopen_fops;
+                return;
+        }
+
+        /* set the correct sm_{file,dir,sym}_iops */
         if (S_ISDIR(inode->i_mode)) {
-                setup_sm_dir_ops(cache_inode, inode,
-                                 &smfs_dir_iops,
-                                 &smfs_dir_fops);
-                inode->i_op = cache_diops(smb);
-                inode->i_fop = cache_dfops(smb);
+                if (!(smb->smsi_ops_check & DIR_OPS_CHECK))
+                        setup_sm_dir_ops(inode);
+                inode->i_op = &smb->sm_ops->sm_dir_iops;
+                inode->i_fop = &smb->sm_ops->sm_dir_fops;   
         } else if (S_ISREG(inode->i_mode)) {
-                setup_sm_file_ops(cache_inode, inode,
-                                  &smfs_file_iops,
-                                  &smfs_file_fops);
-                CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
-                       inode->i_ino, inode->i_op);
-                inode->i_fop = cache_ffops(smb);
-                inode->i_op = cache_fiops(smb);
+                if (!(smb->smsi_ops_check & FILE_OPS_CHECK))
+                        setup_sm_file_ops(inode);
+                inode->i_fop = &smb->sm_ops->sm_file_fops;
+                inode->i_op = &smb->sm_ops->sm_file_iops;
 
         } else if (S_ISLNK(inode->i_mode)) {
-                setup_sm_symlink_ops(cache_inode, inode,
-                                     &smfs_sym_iops,
-                                     &smfs_sym_fops);
-                inode->i_op = cache_siops(smb);
-                inode->i_fop = cache_sfops(smb);
-                CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
-                       inode->i_ino, inode->i_op);
+                if (!(smb->smsi_ops_check & SYMLINK_OPS_CHECK))
+                        setup_sm_symlink_ops(inode);
+                inode->i_op = &smb->sm_ops->sm_sym_iops;
+                inode->i_fop =  &smb->sm_ops->sm_sym_fops;
         }
 }
 
