@@ -92,7 +92,9 @@ EXPORT_SYMBOL(ptlrpc_reply);
 EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
-EXPORT_SYMBOL(ptlrpc_do_rawrpc);
+EXPORT_SYMBOL(ptl_do_rawrpc);
+EXPORT_SYMBOL(ptl_do_rawrpc_simple);
+EXPORT_SYMBOL(rawrpc_req_finished);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);

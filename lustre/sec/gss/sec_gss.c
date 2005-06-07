@@ -258,6 +258,7 @@ struct lgssd_ioctl_param {
 static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
 {
         struct obd_import        *imp;
+        struct ptlrpc_request    *request = NULL;
         struct lgssd_ioctl_param  param;
         const int                 reqbuf_size = 1024;
         const int                 repbuf_size = 1024;
@@ -319,10 +320,10 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
                 goto out_copy;
         }
 
-        replen = repbuf_size;
-        rc = ptlrpc_do_rawrpc(imp, reqbuf, reqlen,
-                              repbuf, &replen, SECINIT_RPC_TIMEOUT);
-        if (rc) {
+        request = ptl_do_rawrpc(imp, reqbuf, reqbuf_size, reqlen,
+                                repbuf, repbuf_size, &replen,
+                                SECINIT_RPC_TIMEOUT, &rc);
+        if (request == NULL || rc) {
                 param.status = rc;
                 goto out_copy;
         }
@@ -351,32 +352,15 @@ out_copy:
                 rc = 0;
 
         class_import_put(imp);
-        if (repbuf)
-                OBD_FREE(repbuf, repbuf_size);
-        if (reqbuf)
-                OBD_FREE(reqbuf, reqbuf_size);
-        RETURN(rc);
-}
-
-static int gss_send_secfini_rpc(struct obd_import *imp,
-                                char *reqbuf, int reqlen)
-{
-        const int repbuf_size = 1024;
-        char *repbuf;
-        int replen = repbuf_size;
-        int rc;
-
-        OBD_ALLOC(repbuf, repbuf_size);
-        if (!repbuf) {
-                CERROR("Out of memory\n");
-                return -ENOMEM;
+        if (request == NULL) {
+                if (repbuf)
+                        OBD_FREE(repbuf, repbuf_size);
+                if (reqbuf)
+                        OBD_FREE(reqbuf, reqbuf_size);
+        } else {
+                rawrpc_req_finished(request);
         }
-
-        rc = ptlrpc_do_rawrpc(imp, reqbuf, reqlen, repbuf, &replen,
-                              SECFINI_RPC_TIMEOUT);
-
-        OBD_FREE(repbuf, repbuf_size);
-        return rc;
+        RETURN(rc);
 }
 
 /**********************************************
@@ -1313,6 +1297,10 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         struct ptlrpc_request    req;
         struct obd_import       *imp;
         __u32                   *vp, lmsg_size;
+        struct ptlrpc_request   *raw_req = NULL;
+        const int                repbuf_len = 256;
+        char                    *repbuf;
+        int                      replen, rc;
         ENTRY;
 
         /* cred's refcount is 0, steal one */
@@ -1379,10 +1367,21 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         }
         atomic_dec(&cred->pc_refcount);
 
-        /* send out */
-        gss_send_secfini_rpc(imp, req.rq_reqbuf, req.rq_reqdata_len);
+        OBD_ALLOC(repbuf, repbuf_len);
+        if (!repbuf)
+                goto exit;
+
+        raw_req = ptl_do_rawrpc(imp, req.rq_reqbuf, req.rq_reqbuf_len,
+                                req.rq_reqdata_len, repbuf, repbuf_len, &replen,
+                                SECFINI_RPC_TIMEOUT, &rc);
+        if (!raw_req)
+                OBD_FREE(repbuf, repbuf_len);
+
 exit:
-        OBD_FREE(req.rq_reqbuf, req.rq_reqbuf_len);
+        if (raw_req == NULL)
+                OBD_FREE(req.rq_reqbuf, req.rq_reqbuf_len);
+        else
+                rawrpc_req_finished(raw_req);
         EXIT;
 }
 

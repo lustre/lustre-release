@@ -557,6 +557,11 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         return (-ENOMEM);
 }
 
+
+/********************************************
+ * rawrpc stuff, currently only used by gss *
+ ********************************************/
+
 static int rawrpc_timedout(void *data)
 {
         struct ptlrpc_request *req = (struct ptlrpc_request *) data;
@@ -568,6 +573,11 @@ static int rawrpc_timedout(void *data)
         spin_unlock_irqrestore(&req->rq_lock, flags);
 
         return 1;
+}
+
+static int rawrpc_timedout_wait(void *data)
+{
+        return 0;
 }
 
 /* to make things as simple as possible */
@@ -583,17 +593,50 @@ static int rawrpc_check_reply(struct ptlrpc_request *req)
         return rc;
 }
 
+void rawrpc_req_finished(struct ptlrpc_request *req)
+{
+        struct obd_import *imp;
+        unsigned long irq_flags;
+
+        if (!req)
+                return;
+
+        if (!atomic_dec_and_test(&req->rq_refcount))
+                return;
+
+        LASSERT(req->rq_import);
+        imp = req->rq_import;
+
+        spin_lock_irqsave(&imp->imp_lock, irq_flags);
+        list_del_init(&req->rq_list);
+        spin_unlock_irqrestore(&imp->imp_lock, irq_flags);
+
+        class_import_put(imp);
+
+        if (req->rq_reqbuf) {
+                LASSERT(req->rq_reqbuf_len);
+                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+        }
+        if (req->rq_repbuf) {
+                LASSERT(req->rq_repbuf_len);
+                OBD_FREE(req->rq_repbuf, req->rq_repbuf_len);
+        }
+        OBD_FREE(req, sizeof(*req));
+}
+
 /*
- * Construct a fake ptlrpc_request to do the work, in order to
- * user the existing callback/wakeup facilities
+ * if returned non-NULL, reqbuf and repbuf will be take over by the
+ * request: the caller can't release them directly, instead should
+ * call rawrpc_req_finished().
  */
-int ptlrpc_do_rawrpc(struct obd_import *imp,
-                     char *reqbuf, int reqlen,
-                     char *repbuf, int *replenp,
-                     int timeout)
+struct ptlrpc_request *
+ptl_do_rawrpc(struct obd_import *imp,
+              char *reqbuf, int reqbuf_len, int reqlen,
+              char *repbuf, int repbuf_len, int *replenp,
+              int timeout, int *res)
 {
         struct ptlrpc_connection *conn;
-        struct ptlrpc_request request; /* just a fake one */
+        struct ptlrpc_request *request;
         ptl_handle_me_t reply_me_h;
         ptl_md_t reply_md, req_md;
         struct l_wait_info lwi;
@@ -602,120 +645,157 @@ int ptlrpc_do_rawrpc(struct obd_import *imp,
         ENTRY;
 
         LASSERT(imp);
-        class_import_get(imp);
+        LASSERT(reqbuf && reqbuf_len);
+        LASSERT(repbuf && repbuf_len);
+        LASSERT(reqlen && reqlen <= reqbuf_len);
+
+        OBD_ALLOC(request, sizeof(*request));
+        if (!request) {
+                *res = -ENOMEM;
+                RETURN(NULL);
+        }
+
+        imp = request->rq_import = class_import_get(imp);
+        conn = imp->imp_connection;
+
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                CDEBUG(D_SEC, "raw rpc on closed imp(=>%s)? send anyway\n",
+                CDEBUG(D_SEC, "raw rpc on closed imp(=>%s)\n",
                        imp->imp_target_uuid.uuid);
         }
 
-        conn = imp->imp_connection;
-
         /* initialize request */
-        memset(&request, 0, sizeof(request));
-        request.rq_req_cbid.cbid_fn = request_out_callback;
-        request.rq_req_cbid.cbid_arg = &request;
-        request.rq_reply_cbid.cbid_fn  = reply_in_callback;
-        request.rq_reply_cbid.cbid_arg = &request;
-        request.rq_reqbuf = reqbuf;
-        request.rq_reqbuf_len = reqlen;
-        request.rq_repbuf = repbuf;
-        request.rq_repbuf_len = *replenp;
-        request.rq_set = NULL;
-        spin_lock_init(&request.rq_lock);
-        init_waitqueue_head(&request.rq_reply_waitq);
-        atomic_set(&request.rq_refcount, 1000000); /* never be droped */
-        request.rq_xid = ptlrpc_next_xid();
+        request->rq_req_cbid.cbid_fn = rawrpc_request_out_callback;
+        request->rq_req_cbid.cbid_arg = request;
+        request->rq_reply_cbid.cbid_fn  = reply_in_callback;
+        request->rq_reply_cbid.cbid_arg = request;
+        request->rq_reqbuf = reqbuf;
+        request->rq_reqbuf_len = reqbuf_len;
+        request->rq_repbuf = repbuf;
+        request->rq_repbuf_len = repbuf_len;
+        request->rq_set = NULL;
+        spin_lock_init(&request->rq_lock);
+        init_waitqueue_head(&request->rq_reply_waitq);
+        atomic_set(&request->rq_refcount, 1);
+        request->rq_xid = ptlrpc_next_xid();
 
         /* add into sending list */
         spin_lock_irqsave(&imp->imp_lock, irq_flags);
-        list_add_tail(&request.rq_list, &imp->imp_rawrpc_list);
+        list_add_tail(&request->rq_list, &imp->imp_rawrpc_list);
         spin_unlock_irqrestore(&imp->imp_lock, irq_flags);
 
         /* prepare reply buffer */
         rc = PtlMEAttach(conn->c_peer.peer_ni->pni_ni_h,
                          imp->imp_client->cli_reply_portal,
-                         conn->c_peer.peer_id, request.rq_xid, 0, PTL_UNLINK,
+                         conn->c_peer.peer_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NO_SPACE);
-                GOTO(cleanup_imp, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         }
 
-        spin_lock_irqsave(&request.rq_lock, irq_flags);
-        request.rq_receiving_reply = 1;
-        spin_unlock_irqrestore(&request.rq_lock, irq_flags);
+        spin_lock_irqsave(&request->rq_lock, irq_flags);
+        request->rq_receiving_reply = 1;
+        spin_unlock_irqrestore(&request->rq_lock, irq_flags);
 
         reply_md.start          = repbuf;
-        reply_md.length         = *replenp;
+        reply_md.length         = repbuf_len;
         reply_md.threshold      = 1;
         reply_md.options        = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT;
-        reply_md.user_ptr       = &request.rq_reply_cbid;
+        reply_md.user_ptr       = &request->rq_reply_cbid;
         reply_md.eq_handle      = conn->c_peer.peer_ni->pni_eq_h;
 
         rc = PtlMDAttach(reply_me_h, reply_md, PTL_UNLINK,
-                         &request.rq_reply_md_h);
+                          &request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NO_SPACE);
                 GOTO(cleanup_me, rc = -ENOMEM);
         }
 
+        /*
+         * the extra 2 refcount will be balanced by out_callback
+         */
+        atomic_set(&request->rq_refcount, 3);
+
         /* prepare request buffer */
         req_md.start            = reqbuf;
         req_md.length           = reqlen;
         req_md.threshold        = 1;
         req_md.options          = PTLRPC_MD_OPTIONS;
-        req_md.user_ptr         = &request.rq_req_cbid;
+        req_md.user_ptr         = &request->rq_req_cbid;
         req_md.eq_handle        = conn->c_peer.peer_ni->pni_eq_h;
 
         rc = PtlMDBind(conn->c_peer.peer_ni->pni_ni_h,
-                       req_md, PTL_UNLINK, &request.rq_req_md_h);
+                       req_md, PTL_UNLINK, &request->rq_req_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDBind failed %d\n", rc);
                 LASSERT (rc == PTL_NO_SPACE);
+                atomic_set(&request->rq_refcount, 1);
                 GOTO(cleanup_me, rc = -ENOMEM);
         }
 
-        rc = PtlPut(request.rq_req_md_h, PTL_NOACK_REQ, conn->c_peer.peer_id,
-                    imp->imp_client->cli_request_portal,
-                    0, request.rq_xid, 0, 0);
+        rc = PtlPut(request->rq_req_md_h, PTL_NOACK_REQ, conn->c_peer.peer_id,
+                    imp->imp_client->cli_request_portal, 0,
+                    request->rq_xid, 0, 0);
         if (rc != PTL_OK) {
                 CERROR("PtlPut failed %d\n", rc);
                 GOTO(cleanup_md, rc);
         }
 
-        lwi = LWI_TIMEOUT(timeout * HZ, rawrpc_timedout, &request);
-        l_wait_event(request.rq_reply_waitq,
-                     rawrpc_check_reply(&request), &lwi);
+        if (timeout)
+                lwi = LWI_TIMEOUT(timeout * HZ, rawrpc_timedout, request);
+        else
+                lwi = LWI_TIMEOUT(100 * HZ, rawrpc_timedout_wait, request);
 
-        ptlrpc_unregister_reply(&request);
+        l_wait_event(request->rq_reply_waitq,
+                     rawrpc_check_reply(request), &lwi);
 
-        if (request.rq_err || request.rq_resend || request.rq_intr ||
-            request.rq_timedout || !request.rq_replied) {
-                CERROR("secinit rpc error: err %d, resend %d, "
-                       "intr %d, timedout %d, replied %d\n",
-                        request.rq_err, request.rq_resend, request.rq_intr,
-                        request.rq_timedout, request.rq_replied);
-                if (request.rq_timedout)
-                        rc = -ETIMEDOUT;
-                else
-                        rc = -EINVAL;
-        } else {
-                *replenp = request.rq_nob_received;
+        ptlrpc_unregister_reply(request);
+
+        if (request->rq_replied) {
+                *replenp = request->rq_nob_received;
                 rc = 0;
+        } else {
+                CERROR("rawrpc error: err %d, neterr %d, int %d, timedout %d\n",
+                        request->rq_err, request->rq_net_err,
+                        request->rq_intr, request->rq_timedout);
+
+                /* give timedout higher priority */
+                rc = request->rq_timedout ? -ETIMEDOUT : -EIO;
         }
-        GOTO(cleanup_imp, rc);
+
+out:
+        *res = rc;
+        RETURN(request);
 
 cleanup_md:
-        PtlMDUnlink(request.rq_req_md_h);
+        PtlMDUnlink(request->rq_req_md_h);
 cleanup_me:
         PtlMEUnlink(reply_me_h);
-cleanup_imp:
-        spin_lock_irqsave(&imp->imp_lock, irq_flags);
-        list_del_init(&request.rq_list);
-        spin_unlock_irqrestore(&imp->imp_lock, irq_flags);
+        goto out;
+}
 
-        class_import_put(imp);
-        RETURN(rc);
+/*
+ * caller will take care the reqbuf & repbuf, and only return
+ * when the rpc really finished on wire.
+ */
+int ptl_do_rawrpc_simple(struct obd_import *imp,
+                         char *reqbuf, int reqlen,
+                         char *repbuf, int *replenp)
+{
+        struct ptlrpc_request *req;
+        int res;
+
+        req = ptl_do_rawrpc(imp, reqbuf, reqlen, reqlen,
+                            repbuf, *replenp, replenp, 0, &res);
+
+        if (req == NULL)
+                return res;
+
+        req->rq_reqbuf = req->rq_repbuf = NULL;
+        req->rq_reqbuf_len = req->rq_repbuf_len = 0;
+
+        rawrpc_req_finished(req);
+        return res;
 }

@@ -332,6 +332,18 @@ void server_bulk_callback (ptl_event_t *ev)
         EXIT;
 }
 
+void rawrpc_request_out_callback(ptl_event_t *ev)
+{
+        struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
+        struct ptlrpc_request *req = cbid->cbid_arg;
+
+        /* we suppose request_out_callback() will drop the
+         * reference by 1
+         */
+        request_out_callback(ev);
+        rawrpc_req_finished(req);
+}
+
 static void ptlrpc_master_callback(ptl_event_t *ev)
 {
         struct ptlrpc_cb_id *cbid = ev->md.user_ptr;
@@ -344,7 +356,8 @@ static void ptlrpc_master_callback(ptl_event_t *ev)
                  callback == client_bulk_callback ||
                  callback == request_in_callback ||
                  callback == reply_out_callback ||
-                 callback == server_bulk_callback);
+                 callback == server_bulk_callback ||
+                 callback == rawrpc_request_out_callback);
         
         callback (ev);
 }

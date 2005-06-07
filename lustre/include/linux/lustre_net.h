@@ -559,6 +559,7 @@ extern struct ptlrpc_ni ptlrpc_interfaces[];
 extern int              ptlrpc_ninterfaces;
 extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, struct ptlrpc_peer *peer);
 extern void request_out_callback (ptl_event_t *ev);
+extern void rawrpc_request_out_callback(ptl_event_t *ev);
 extern void reply_in_callback(ptl_event_t *ev);
 extern void client_bulk_callback (ptl_event_t *ev);
 extern void request_in_callback(ptl_event_t *ev);
@@ -600,8 +601,15 @@ int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
 int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
-int ptlrpc_do_rawrpc(struct obd_import *imp, char *reqbuf, int reqlen,
-                     char *repbuf, int *replenp, int timeout);
+
+struct ptlrpc_request * ptl_do_rawrpc(struct obd_import *imp,
+                                      char *reqbuf, int reqbuf_len, int reqlen,
+                                      char *repbuf, int repbuf_len,
+                                      int *replenp, int timeout, int *res);
+int ptl_do_rawrpc_simple(struct obd_import *imp,
+                         char *reqbuf, int reqlen,
+                         char *repbuf, int *replenp);
+void rawrpc_req_finished(struct ptlrpc_request *req);
 
 /* ptlrpc/client.c */
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
