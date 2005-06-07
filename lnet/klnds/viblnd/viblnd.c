@@ -463,7 +463,7 @@ kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
 
         PORTAL_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
-                CERROR("Canot allocate perr\n");
+                CERROR("Cannot allocate peer\n");
                 return -ENOMEM;
         }
 
@@ -476,13 +476,11 @@ kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ibp_conns);
         INIT_LIST_HEAD (&peer->ibp_tx_queue);
 
-        peer->ibp_reconnect_time = jiffies;
-        peer->ibp_reconnect_interval = 
-                *kibnal_tunables.kib_min_reconnect_interval * HZ;
+        peer->ibp_reconnect_interval = 0;       /* OK to connect at any time */
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-        
-        if (kibnal_data.kib_npeers < 
+
+        if (kibnal_data.kib_npeers >=
             *kibnal_tunables.kib_concurrent_peers) {
                 rc = -EOVERFLOW;        /* !! but at least it distinguishes */
         } else if (kibnal_data.kib_listen_handle == NULL) {
@@ -493,7 +491,7 @@ kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
         }
         
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
-        
+
         if (rc != 0) {
                 CERROR("Can't create peer: %s\n", 
                        (rc == -ESHUTDOWN) ? "shutting down" : 
@@ -702,7 +700,7 @@ kibnal_del_peer (ptl_nid_t nid)
                         rc = 0;         /* matched something */
                 }
         }
- out:
+
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
         return (rc);
 }
@@ -1930,7 +1928,7 @@ kibnal_module_init (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel Voltaire IB NAL v0.01");
+MODULE_DESCRIPTION("Kernel Voltaire IB NAL v1.00");
 MODULE_LICENSE("GPL");
 
 module_init(kibnal_module_init);

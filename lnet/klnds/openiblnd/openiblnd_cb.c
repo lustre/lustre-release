@@ -995,7 +995,8 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         }
 
         if (peer->ibp_connecting == 0) {
-                if (!time_after_eq(jiffies, peer->ibp_reconnect_time)) {
+                if (!(peer->ibp_reconnect_interval == 0 || /* first attempt */
+                      time_after_eq(jiffies, peer->ibp_reconnect_time))) {
                         write_unlock_irqrestore (g_lock, flags);
                         tx->tx_status = -EHOSTUNREACH;
                         kibnal_tx_done (tx);
@@ -1533,8 +1534,6 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int rc)
         unsigned long     flags;
 
         LASSERT (rc != 0);
-        LASSERT (peer->ibp_reconnect_interval >= 
-                 *kibnal_tunables.kib_min_reconnect_interval);
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
@@ -1549,10 +1548,15 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int rc)
 
         if (list_empty(&peer->ibp_conns)) {
                 /* Say when active connection can be re-attempted */
+                peer->ibp_reconnect_interval *= 2;
+                peer->ibp_reconnect_interval =
+                        MAX(peer->ibp_reconnect_interval,
+                            *kibnal_tunables.kib_min_reconnect_interval);
+                peer->ibp_reconnect_interval =
+                        MIN(peer->ibp_reconnect_interval,
+                            *kibnal_tunables.kib_max_reconnect_interval);
+                
                 peer->ibp_reconnect_time = jiffies + peer->ibp_reconnect_interval;
-                /* Increase reconnection interval */
-                peer->ibp_reconnect_interval = MIN (peer->ibp_reconnect_interval * 2,
-                                                    IBNAL_MAX_RECONNECT_INTERVAL);
         
                 /* Take peer's blocked blocked transmits; I'll complete
                  * them with error */
@@ -1649,10 +1653,8 @@ kibnal_connreq_done (kib_conn_t *conn, int status)
                        atomic_read (&conn->ibc_refcount));
                 atomic_inc (&conn->ibc_refcount);
                 list_add (&conn->ibc_list, &peer->ibp_conns);
-                
-                /* reset reconnect interval for next attempt */
-                peer->ibp_reconnect_interval =
-                        *kibnal_tunables.kib_min_reconnect_interval;
+
+                peer->ibp_reconnect_interval = 0; /* OK to reconnect at any time */
 
                 /* post blocked sends to the new connection */
                 spin_lock (&conn->ibc_lock);

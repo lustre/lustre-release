@@ -69,9 +69,7 @@ ksocknal_create_route (__u32 ipaddr, int port)
 
         atomic_set (&route->ksnr_refcount, 1);
         route->ksnr_peer = NULL;
-        route->ksnr_timeout = cfs_time_current();
-        route->ksnr_retry_interval = 
-                cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
+        route->ksnr_retry_interval = 0;         /* OK to connect at any time */
         route->ksnr_ipaddr = ipaddr;
         route->ksnr_port = port;
         route->ksnr_connecting = 0;
@@ -341,9 +339,7 @@ ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
 
         /* Successful connection => further attempts can
          * proceed immediately */
-        route->ksnr_timeout = cfs_time_current();
-        route->ksnr_retry_interval = 
-                cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000;
+        route->ksnr_retry_interval = 0;
 }
 
 void

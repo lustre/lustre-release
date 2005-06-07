@@ -150,7 +150,6 @@ static void *
 kpr_seq_routes_start (struct seq_file *s, loff_t *pos) 
 {
         kpr_seq_route_iterator_t *sri;
-        unsigned long             flags;
         int                       rc;
         
         PORTAL_ALLOC(sri, sizeof(*sri));
@@ -179,7 +178,6 @@ static void *
 kpr_seq_routes_next (struct seq_file *s, void *iter, loff_t *pos)
 {
         kpr_seq_route_iterator_t *sri = iter;
-        unsigned long             flags;
         int                       rc;
         loff_t                    next = *pos + 1;
 
@@ -201,7 +199,6 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
         __u32                     net;
         ptl_nid_t                 nid;
         int                       alive;
-        int                       stale;
 
         read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 

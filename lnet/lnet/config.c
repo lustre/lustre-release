@@ -106,9 +106,6 @@ ptl_trimwhite(char *str)
 int
 ptl_nis_conflict(ptl_ni_t *ni1, ptl_ni_t *ni2)
 {
-        int               i;
-        int               j;
-
         if (PTL_NETNAL(PTL_NIDNET(ni1->ni_nid)) != /* different NALs */
             PTL_NETNAL(PTL_NIDNET(ni2->ni_nid)))
                 return 0;
@@ -189,7 +186,6 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
         char     *str;
         ptl_ni_t *ni = NULL;
         __u32     net;
-        int       rc;
 
 	if (strlen(networks) > PAGE_SIZE) {
 		/* _WAY_ conservative */
@@ -579,7 +575,6 @@ ptl_parse_route (char *str)
 	__u32             net;
 	ptl_nid_t         nid;
 	ptl_text_buf_t   *ptb;
-	ptl_text_buf_t   *tb2;
 	int               rc;
 	char             *sep;
 	char             *token = str;

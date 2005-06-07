@@ -656,7 +656,9 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                         continue;
 
                 /* too soon to retry this guy? */
-                if (!cfs_time_aftereq (cfs_time_current(), route->ksnr_timeout))
+                if (!(route->ksnr_retry_interval == 0 || /* first attempt */
+                      cfs_time_aftereq (cfs_time_current(), 
+                                        route->ksnr_timeout)))
                         continue;
                 
                 return (route);
@@ -2005,12 +2007,17 @@ ksocknal_connect (ksock_route_t *route)
         route->ksnr_connecting = 0;
 
         /* This is a retry rather than a new connection */
+        route->ksnr_retry_interval *= 2;
+        route->ksnr_retry_interval = 
+                MAX(route->ksnr_retry_interval,
+                    cfs_time_seconds(*ksocknal_tunables.ksnd_min_reconnectms)/1000);
+        route->ksnr_retry_interval = 
+                MIN(route->ksnr_retry_interval,
+                    cfs_time_seconds(*ksocknal_tunables.ksnd_max_reconnectms)/1000);
+        
         LASSERT (route->ksnr_retry_interval != 0);
         route->ksnr_timeout = cfs_time_add(cfs_time_current(),
                                            route->ksnr_retry_interval);
-        route->ksnr_retry_interval = 
-                MIN (route->ksnr_retry_interval * 2,
-                     cfs_time_seconds(*ksocknal_tunables.ksnd_max_reconnectms)/1000);
 
         if (!list_empty (&peer->ksnp_tx_queue) &&
             ksocknal_find_connecting_route_locked (peer) == NULL) {

@@ -45,7 +45,7 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 	nob = strnlen(name, IFNAMSIZ);
 	if (nob == IFNAMSIZ) {
 		CERROR("Interface name %s too long\n", name);
-		rc -EINVAL;
+		rc = -EINVAL;
 		goto out;
 	}
 	
@@ -67,6 +67,8 @@ libcfs_ipif_query (char *name, int *up, __u32 *ip, __u32 *mask)
 		*ip = *mask = 0;
 		goto out;
 	}
+
+        *up = 1;
 
 	strcpy(ifr.ifr_name, name);
 	ifr.ifr_addr.sa_family = AF_INET;
@@ -275,7 +277,9 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
 		}
 
                 set_fs (KERNEL_DS);
+                then = jiffies;
                 rc = sock_sendmsg (sock, &msg, iov.iov_len);
+                ticks -= then - jiffies;
                 set_fs (oldmm);
 
 		if (rc == nob)
@@ -289,7 +293,7 @@ libcfs_sock_write (struct socket *sock, void *buffer, int nob, int timeout)
                         return (-ECONNABORTED);
                 }
 
-		if (timeout == 0)
+		if (ticks <= 0)
 			return -EAGAIN;
 		
                 buffer = ((char *)buffer) + rc;
@@ -466,6 +470,32 @@ libcfs_sock_setbuf (struct socket *sock, int txbufsize, int rxbufsize)
 }
 
 EXPORT_SYMBOL(libcfs_sock_setbuf);
+
+int
+libcfs_sock_getaddr (struct socket *sock, int remote, __u32 *ip, int *port)
+{
+        struct sockaddr_in sin;
+        int                len = sizeof (sin);
+        int                rc;
+
+        rc = sock->ops->getname (sock, (struct sockaddr *)&sin, &len,
+                                 remote ? 2 : 0);
+        if (rc != 0) {
+                CERROR ("Error %d getting sock %s IP/port\n",
+                        rc, remote ? "peer" : "local");
+                return rc;
+        }
+
+        if (ip != NULL)
+                *ip = ntohl (sin.sin_addr.s_addr);
+
+        if (port != NULL)
+                *port = ntohs (sin.sin_port);
+
+        return 0;
+}
+
+EXPORT_SYMBOL(libcfs_sock_getaddr);
 
 int
 libcfs_sock_getbuf (struct socket *sock, int *txbufsize, int *rxbufsize)

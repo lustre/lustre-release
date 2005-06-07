@@ -520,8 +520,8 @@ kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
         if (!peer->rap_connecting) {
                 LASSERT (list_empty(&peer->rap_tx_queue));
 
-                now = CURRENT_SECONDS;
-                if (now < peer->rap_reconnect_time) {
+                if (!(peer->rap_reconnect_interval == 0 || /* first attempt */
+                      time_after_eq(jiffies, peer->rap_reconnect_time))) {
                         write_unlock_irqrestore(g_lock, flags);
                         kranal_tx_done(tx, -EHOSTUNREACH);
                         return;

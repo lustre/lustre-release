@@ -403,11 +403,10 @@ libcfs_str2net(char *str)
 ptl_nid_t
 libcfs_str2nid(char *str)
 {
-        char           *sep = strchr(str, '@');
+        char             *sep = strchr(str, '@');
         struct nalstrfns *nf;
-        int             nob;
-        __u32           net;
-        __u32           addr;
+        __u32             net;
+        __u32             addr;
 
         if (sep != NULL) {
                 nf = libcfs_str2net_internal(sep + 1, &net);

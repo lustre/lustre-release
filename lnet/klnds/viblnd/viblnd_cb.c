@@ -1315,7 +1315,8 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         }
 
         if (peer->ibp_connecting == 0) {
-                if (!time_after_eq(jiffies, peer->ibp_reconnect_time)) {
+                if (!(peer->ibp_reconnect_interval == 0 || /* first attempt */
+                      time_after_eq(jiffies, peer->ibp_reconnect_time))) {
                         write_unlock_irqrestore(g_lock, flags);
                         tx->tx_status = -EHOSTUNREACH;
                         tx->tx_waiting = 0;
@@ -1752,7 +1753,6 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
          * already dealing with it (either to set it up or tear it down).
          * Caller holds kib_global_lock exclusively in irq context */
         kib_peer_t       *peer = conn->ibc_peer;
-        struct list_head *tmp;
         
         LASSERT (error != 0 || conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
 
@@ -1948,11 +1948,15 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
 
         if (list_empty(&peer->ibp_conns)) {
                 /* Say when active connection can be re-attempted */
+                peer->ibp_reconnect_interval *= 2;
+                peer->ibp_reconnect_interval =
+                        MAX(peer->ibp_reconnect_interval,
+                            *kibnal_tunables.kib_min_reconnect_interval);
+                peer->ibp_reconnect_interval =
+                        MIN(peer->ibp_reconnect_interval,
+                            *kibnal_tunables.kib_max_reconnect_interval);
+                
                 peer->ibp_reconnect_time = jiffies + peer->ibp_reconnect_interval;
-                /* Increase reconnection interval */
-                peer->ibp_reconnect_interval = 
-                        MIN (peer->ibp_reconnect_interval * 2,
-                             *kibnal_tunables.kib_max_reconnect_interval * HZ);
         
                 /* Take peer's blocked transmits to complete with error */
                 list_add(&zombies, &peer->ibp_tx_queue);
@@ -2104,9 +2108,8 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
         list_add(&txs, &peer->ibp_tx_queue);
         list_del_init(&peer->ibp_tx_queue);
         
-        /* reset reconnect interval for next attempt */
-        peer->ibp_reconnect_interval = 
-                *kibnal_tunables.kib_min_reconnect_interval * HZ;
+        peer->ibp_reconnect_interval = 0;       /* OK to reconnect at any time */
+
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         /* Schedule blocked txs */
@@ -2447,7 +2450,6 @@ kibnal_active_connect_callback (cm_cep_handle_t cep, cm_conn_data_t *cd,
         /* CAVEAT EMPTOR: tasklet context */
         kib_conn_t       *conn = (kib_conn_t *)arg;
         kib_connvars_t   *cv = conn->ibc_connvars;
-        unsigned long     flags;
 
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_CONNECT);
         cv->cv_conndata = *cd;
@@ -2794,7 +2796,6 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         /* CAVEAT EMPTOR: tasklet context */
         kib_conn_t      *conn = (kib_conn_t *)arg;
         kib_peer_t      *peer = conn->ibc_peer;
-        unsigned long    flags;
 
         if (arprc != ibat_stat_ok)
                 CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n",

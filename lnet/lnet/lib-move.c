@@ -634,7 +634,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                                                   type, target, routing,
                                                   md->md_niov, md->md_iov.kiov,
                                                   offset, len);
- out:
+
         ptl_ni_decref(ni);                      /* lose ref from kpr_lookup */
         return rc;
 }

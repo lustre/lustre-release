@@ -404,7 +404,6 @@ int
 kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
                                ptl_nid_t *dst_nidp, kra_conn_t **connp)
 {
-        struct sockaddr_in   addr;
         __u32                peer_ip;
         unsigned int         peer_port;
         kra_connreq_t        rx_connreq;
@@ -412,18 +411,13 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
         kra_conn_t          *conn;
         kra_device_t        *dev;
         int                  rc;
-        int                  len;
         int                  i;
 
-        len = sizeof(addr);
-        rc = sock->ops->getname(sock, (struct sockaddr *)&addr, &len, 2);
+        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         if (rc != 0) {
                 CERROR("Can't get peer's IP: %d\n", rc);
                 return rc;
         }
-
-        peer_ip = ntohl(addr.sin_addr.s_addr);
-        peer_port = ntohs(addr.sin_port);
 
         if (peer_port >= 1024) {
                 CERROR("Refusing unprivileged connection from %u.%u.%u.%u/%d\n",
@@ -486,7 +480,7 @@ ranal_connect_sock(kra_peer_t *peer, struct socket **sockp)
         for (port = 1023; port >= 512; port--) {
 
                 rc = libcfs_sock_connect(sockp, &fatal,
-                                         2 * sizeof(kra_conn_t),
+                                         2 * sizeof(kra_msg_t),
                                          0, port, 
                                          peer->rap_ip, peer->rap_port);
                 if (rc == 0)
@@ -756,20 +750,21 @@ kranal_connect (kra_peer_t *peer)
                  * success to avoid messages jumping the queue */
                 LASSERT (list_empty(&peer->rap_tx_queue));
 
-                /* reset reconnection timeouts */
-                peer->rap_reconnect_interval = 
-                        *kranal_tunables.kra_min_reconnect_interval;
-                peer->rap_reconnect_time = CURRENT_SECONDS;
+                peer->rap_reconnect_interval = 0; /* OK to reconnect at any time */
 
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 return;
         }
 
-        LASSERT (peer->rap_reconnect_interval != 0);
-        peer->rap_reconnect_time = CURRENT_SECONDS + peer->rap_reconnect_interval;
-        peer->rap_reconnect_interval = 
-                MAX(*kranal_tunables.kra_max_reconnect_interval,
-                    2 * peer->rap_reconnect_interval);
+        peer->rap_reconnect_interval *= 2;
+        peer->rap_reconnect_interval =
+                MAX(peer->rap_reconnect_interval,
+                    *kranal_tunables.kra_min_reconnect_interval);
+        peer->rap_reconnect_interval =
+                MIN(peer->rap_reconnect_interval,
+                    *kranal_tunables.kra_max_reconnect_interval);
+
+        peer->rap_reconnect_time = jiffies + peer->rap_reconnect_interval * HZ;
 
         /* Grab all blocked packets while we have the global lock */
         list_add(&zombies, &peer->rap_tx_queue);
@@ -802,7 +797,6 @@ kranal_free_acceptsock (kra_acceptsock_t *ras)
 int
 kranal_listener (void *arg)
 {
-        wait_queue_t       wait;
         struct socket     *sock;
         kra_acceptsock_t  *ras;
         int                port;
@@ -817,8 +811,6 @@ kranal_listener (void *arg)
         kportal_daemonize(name);
         kportal_blockallsigs();
 
-        init_waitqueue_entry(&wait, current);
-
         rc = libcfs_sock_listen(&sock, 0, port,
                                 *kranal_tunables.kra_backlog);
         if (rc != 0)
@@ -831,8 +823,6 @@ kranal_listener (void *arg)
         LASSERT (kranal_data.kra_listener_shutdown == 0);
         up(&kranal_data.kra_listener_signal);
 
-        /* Wake me any time something happens on my socket */
-        add_wait_queue(sock->sk->sk_sleep, &wait);
         ras = NULL;
 
         while (kranal_data.kra_listener_shutdown == 0) {
@@ -847,7 +837,7 @@ kranal_listener (void *arg)
                 }
 
                 rc = libcfs_sock_accept(&ras->ras_sock, sock,
-                                        2 * sizeof(kra_conn_t));
+                                        2 * sizeof(kra_msg_t));
                 if (rc != 0) {
                         if (rc != -EAGAIN) {
                                 CWARN("Accept error: %d, listener pausing\n", rc);
@@ -904,7 +894,7 @@ kranal_start_listener (void)
         rc = kranal_data.kra_listener_shutdown;
         LASSERT ((rc != 0) == (kranal_data.kra_listener_sock == NULL));
 
-        CDEBUG(D_NET, "Listener %ld started OK\n", pid);
+        CDEBUG((rc == 0) ? D_NET : D_ERROR, "Listener startup rc: %d\n", rc);
         return rc;
 }
 
@@ -947,9 +937,7 @@ kranal_create_peer (kra_peer_t **peerp, ptl_nid_t nid)
         INIT_LIST_HEAD(&peer->rap_conns);
         INIT_LIST_HEAD(&peer->rap_tx_queue);
 
-        peer->rap_reconnect_time = CURRENT_SECONDS;
-        peer->rap_reconnect_interval = 
-                *kranal_tunables.kra_min_reconnect_interval;
+        peer->rap_reconnect_interval = 0;       /* OK to connect at any time */
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 

@@ -367,8 +367,7 @@ kibnal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ibp_conns);
         INIT_LIST_HEAD (&peer->ibp_tx_queue);
 
-        peer->ibp_reconnect_time = jiffies;
-        peer->ibp_reconnect_interval = IBNAL_MIN_RECONNECT_INTERVAL;
+        peer->ibp_reconnect_interval = 0;       /* OK to connect at any time */
 
         atomic_inc (&kibnal_data.kib_npeers);
         return (peer);

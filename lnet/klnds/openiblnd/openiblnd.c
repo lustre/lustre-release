@@ -595,14 +595,17 @@ kibnal_stop_ib_listener (void)
 int
 kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
 {
-        kib_peer_t    *peer;
-        unsigned long  flags;
+        kib_peer_t     *peer;
+        unsigned long   flags;
+        int             rc;
 
         LASSERT (nid != PTL_NID_ANY);
 
-        PORTAL_ALLOC (peer, sizeof (*peer));
-        if (peer == NULL)
+        PORTAL_ALLOC(peer, sizeof (*peer));
+        if (peer == NULL) {
+                CERROR("Cannot allocate peer\n");
                 return -ENOMEM;
+        }
 
         memset(peer, 0, sizeof(*peer));         /* zero flags etc */
 
@@ -614,27 +617,32 @@ kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ibp_tx_queue);
         INIT_LIST_HEAD (&peer->ibp_connd_list); /* not queued for connecting */
 
-        peer->ibp_reconnect_time = jiffies;
-        peer->ibp_reconnect_interval = *kibnal_tunables.kib_min_reconnect_interval;
+        peer->ibp_reconnect_interval = 0;       /* OK to connect at any time */
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-        
-        if (kibnal_data.kib_listener_shutdown) {
-                /* shutdown has started already */
-                write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
-                
-                PORTAL_FREE(peer, sizeof(*peer));
-                CERROR("Can't create peer: network shutdown\n");
-                return -ESHUTDOWN;
+
+        if (kibnal_data.kib_npeers >=
+            *kibnal_tunables.kib_concurrent_peers) {
+                rc = -EOVERFLOW;        /* !! but at least it distinguishes */
+        } else if (kibnal_data.kib_listener_shutdown) {
+                rc = -ESHUTDOWN;        /* shutdown has started */
+        } else {
+                rc = 0;
+                kibnal_data.kib_npeers++;
         }
-        
-        kibnal_data.kib_npeers++;
         
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
-        CDEBUG(D_NET, "peer %p "LPX64"\n", peer, nid);
-        *peerp = peer;
-        return 0;
+        if (rc != 0) {
+                CERROR("Can't create peer: %s\n", 
+                       (rc == -ESHUTDOWN) ? "shutting down" : 
+                       "too many peers");
+                PORTAL_FREE(peer, sizeof(*peer));
+        } else {
+                *peerp = peer;
+        }
+        
+        return rc;
 }
 
 void

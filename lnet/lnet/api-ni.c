@@ -589,9 +589,6 @@ ptl_shutdown_nalnis (void)
 {
         int                i;
         ptl_ni_t          *ni;
-        ptl_nal_t         *nal;
-        struct list_head  *tmp;
-        struct list_head  *nxt;
         unsigned long      flags;
 
         /* NB called holding the global mutex */
@@ -652,9 +649,11 @@ ptl_shutdown_nalnis (void)
         }
         PTL_UNLOCK(flags);
 
-        LASSERT (ptl_apini.apini_network_tokens != NULL);
-        PORTAL_FREE(ptl_apini.apini_network_tokens,
-                    ptl_apini.apini_network_tokens_nob);
+        if (ptl_apini.apini_network_tokens != NULL) {
+                PORTAL_FREE(ptl_apini.apini_network_tokens,
+                            ptl_apini.apini_network_tokens_nob);
+                ptl_apini.apini_network_tokens = NULL;
+        }
 }
 
 ptl_err_t
@@ -664,7 +663,6 @@ ptl_startup_nalnis (void)
         ptl_ni_t          *ni;
         struct list_head   nilist;
         ptl_err_t          rc = PTL_OK;
-        char              *interface = NULL;
         unsigned long      flags;
         int                nal_type;
         int                retry;
@@ -695,6 +693,9 @@ ptl_startup_nalnis (void)
                                        libcfs_nal2modname(nal_type));
                                 goto failed;
                         }
+
+                        CDEBUG(D_WARNING,"Requesting module %s\n",
+                               libcfs_nal2modname(nal_type));
 
                         request_module(libcfs_nal2modname(nal_type));
 

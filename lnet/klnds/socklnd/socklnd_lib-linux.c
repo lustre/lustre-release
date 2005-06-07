@@ -152,12 +152,10 @@ ksocknal_lib_bind_irq (unsigned int irq)
 int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 {
-        struct sockaddr_in sin;
-        int                len = sizeof (sin);
-        int                rc;
+        int rc = libcfs_sock_getaddr(conn->ksnc_sock, 1,
+				     &conn->ksnc_ipaddr,
+				     &conn->ksnc_port);
 
-        rc = conn->ksnc_sock->ops->getname (conn->ksnc_sock,
-                                            (struct sockaddr *)&sin, &len, 2);
         /* Didn't need the {get,put}connsock dance to deref ksnc_sock... */
         LASSERT (!conn->ksnc_closing);
 
@@ -166,17 +164,12 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
                 return rc;
         }
 
-        conn->ksnc_ipaddr = ntohl (sin.sin_addr.s_addr);
-        conn->ksnc_port   = ntohs (sin.sin_port);
-
-        rc = conn->ksnc_sock->ops->getname (conn->ksnc_sock,
-                                            (struct sockaddr *)&sin, &len, 0);
+        rc = libcfs_sock_getaddr(conn->ksnc_sock, 0,
+				 &conn->ksnc_myipaddr, NULL);
         if (rc != 0) {
                 CERROR ("Error %d getting sock local IP\n", rc);
                 return rc;
         }
-
-        conn->ksnc_myipaddr = ntohl (sin.sin_addr.s_addr);
 
         return 0;
 }
@@ -185,6 +178,7 @@ unsigned int
 ksocknal_lib_sock_irq (struct socket *sock)
 {
         int                irq = 0;
+#if CPU_AFFINITY
         struct dst_entry  *dst;
 
         if (!ksocknal_tunables.ksnd_irq_affinity)
@@ -202,7 +196,8 @@ ksocknal_lib_sock_irq (struct socket *sock)
                 dst_release (dst);
         }
 
-        return (irq);
+#endif
+        return irq;
 }
 
 #if (SOCKNAL_ZC && SOCKNAL_VADDR_ZC)

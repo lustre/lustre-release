@@ -25,7 +25,7 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-static int config_on_load = 1;
+static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
@@ -82,6 +82,8 @@ static int init_kportals_module(void)
                 CERROR("PtlInit: error %d\n", rc);
                 RETURN(rc);
         }
+
+        CDEBUG(D_WARNING, "Startup: config_on_load=%d\n", config_on_load);
 
         if (config_on_load) {
                 ptl_handle_ni_t    nih;

@@ -758,8 +758,6 @@ portals/libcfs/autoMakefile
 portals/libcfs/linux/Makefile
 portals/portals/Makefile
 portals/portals/autoMakefile
-portals/router/Makefile
-portals/router/autoMakefile
 portals/tests/Makefile
 portals/tests/autoMakefile
 portals/unals/Makefile
