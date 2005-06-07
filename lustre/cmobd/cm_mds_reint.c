@@ -132,13 +132,13 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
                 ptlrpc_req_finished(req);
         RETURN(rc);
 }
-
+ 
 static int cmobd_reint_create(struct obd_device *obd, void *record)
 {
         struct cm_obd *cmobd = &obd->u.cm;
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
-        int rc = 0, namelen, datalen;
+        int rc = 0, namelen, datalen, alloc = 0;
         struct mds_rec_create *rec;
         struct mdc_op_data *op_data;
         struct lustre_msg *msg;
@@ -156,10 +156,6 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         
         lid = rec->cr_replayid;
 
-        /* zeroing @rec->cr_replayid out in request, as master MDS should create
-         * own inode (with own store cookie). */
-        memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
-
         /* converting local inode store cookie to remote lustre_id. */
         rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->cr_id,
                           &rec->cr_id, sizeof(rec->cr_id));
@@ -172,15 +168,26 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         /* getting name to be created and its length */
         name = lustre_msg_string(msg, 1, 0);
         namelen = name ? msg->buflens[1] - 1 : 0;
-
+  
         /* getting misc data (symlink) and its length */
         data = (char *)lustre_msg_buf(msg, 2, 0);
-        datalen = data ? msg->buflens[2] : 0;
+        datalen = data ? msg->buflens[2] : 0;       
 
+        if (datalen == 0 && S_ISREG(rec->cr_mode)) {
+                /*Get lov md from inode*/
+                mds_read_md(cmobd->cache_exp->exp_obd, &rec->cr_replayid, 
+                            &data, &datalen);
+                if (datalen > 0)
+                       alloc = 1; 
+        } 
         OBD_ALLOC(op_data, sizeof(*op_data));
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
-        
+        if (op_data == NULL) 
+                GOTO(exit, rc = -ENOMEM);
+ 
+        /* zeroing @rec->cr_replayid out in request, as master MDS should create
+         * own inode (with own store cookie). */
+        memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
+       
         /* prepare mdc request data. */
         cmobd_prepare_mdc_data(op_data, &rec->cr_id, &rec->cr_replayid,
                                name, namelen, rec->cr_mode);
@@ -199,9 +206,13 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
                 rc = mds_update_mid(cmobd->cache_exp->exp_obd, &lid,
                                     &body->id1, sizeof(body->id1));
         }
-
+exit:
         if (req)
                 ptlrpc_req_finished(req);
+        
+        if (alloc == 1)
+                OBD_FREE(data, datalen);
+        
         RETURN(rc);
 }
 

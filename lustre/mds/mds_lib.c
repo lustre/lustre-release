@@ -329,7 +329,7 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                         if (r->ur_tgt == NULL)
                                 RETURN (-EFAULT);
                         r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
-                } else if (S_ISDIR(r->ur_mode)) {
+                } else if (S_ISDIR(r->ur_mode) ) {
                         /* Stripe info for mkdir - just a 16bit integer */
                         if (req->rq_reqmsg->buflens[offset + 2] != 2) {
                                 CERROR("mkdir stripe info does not match "
@@ -339,6 +339,10 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                         }
                         r->ur_eadata = lustre_swab_buf (req->rq_reqmsg,
                                                offset + 2, 2, __swab16s);
+                        r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+                } else if (S_ISREG(r->ur_mode)){
+                        r->ur_eadata = lustre_msg_buf (req->rq_reqmsg, 
+                                                       offset + 2, 0);
                         r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
                 } else {
                         /* Hm, no other users so far? */

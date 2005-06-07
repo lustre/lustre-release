@@ -935,7 +935,8 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, id, valid, NULL, 0, ea_size, request);
+        return md_getattr(cobd_exp, id, valid, ea_name, ea_namelen, ea_size, 
+                          request);
 }
 
 static int cobd_md_req2lustre_md (struct obd_export *mdc_exp, 

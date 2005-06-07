@@ -42,4 +42,6 @@ int mds_update_mid(struct obd_device *obd, struct lustre_id *id,
 int mds_read_mid(struct obd_device *obd, struct lustre_id *id,
                  void *data, int data_len);
 
+int mds_read_md(struct obd_device *obd, struct lustre_id *id, 
+                char **data, int *datalen);
 #endif /* CM_INTERNAL_H */

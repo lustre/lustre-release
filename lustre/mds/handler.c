@@ -1832,6 +1832,55 @@ out:
 }
 EXPORT_SYMBOL(mds_read_mid);
 
+int mds_read_md(struct obd_device *obd, struct lustre_id *id, 
+                char **data, int *datalen)
+{
+        struct dentry *dentry;
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0, mea = 0;
+        char *ea;
+        ENTRY;
+
+        LASSERT(id);
+        LASSERT(obd);
+        
+        dentry = mds_id2dentry(obd, id, NULL);
+        if (IS_ERR(dentry))
+                GOTO(out, rc = PTR_ERR(dentry));
+
+        if (!dentry->d_inode) {
+                CERROR("Can't find object "DLID4".\n",
+                       OLID4(id));
+                GOTO(out_dentry, rc = -EINVAL);
+        }
+        if (S_ISDIR(dentry->d_inode->i_mode)) {
+                *datalen = obd_packmd(mds->mds_md_exp, NULL, NULL);
+                mea = 1; 
+        } else {
+                *datalen = obd_packmd(mds->mds_dt_exp, NULL, NULL); 
+                mea = 0;
+        }
+        OBD_ALLOC(ea, *datalen);
+        if (!ea) {
+                *datalen = 0;
+                GOTO(out_dentry, rc = PTR_ERR(dentry));
+        } 
+        *data = ea;
+        down(&dentry->d_inode->i_sem);
+        rc = fsfilt_get_md(obd, dentry->d_inode, *data, *datalen,
+                           (mea ? EA_MEA : EA_LOV));
+        up(&dentry->d_inode->i_sem);
+        
+        if (rc < 0) 
+                CERROR("Error %d reading eadata for ino %lu\n",
+                        rc, dentry->d_inode->i_ino);
+out_dentry:
+        l_dput(dentry);
+out:
+        RETURN(rc);
+}
+EXPORT_SYMBOL(mds_read_md);
+
 int mds_reint(struct ptlrpc_request *req, int offset,
               struct lustre_handle *lockh)
 {

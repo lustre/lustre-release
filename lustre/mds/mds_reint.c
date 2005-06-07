@@ -787,6 +787,15 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
+                
+                if (rc == 0 && rec->ur_eadata) {
+                        /*for CMOBD to set lov md info when cmobd reint create*/
+                        CDEBUG(D_INFO, "set lsm %p, len %d to inode %lu \n", 
+                               rec->ur_eadata, rec->ur_eadatalen, 
+                               dchild->d_inode->i_ino); 
+                        fsfilt_set_md(obd, dchild->d_inode, handle, rec->ur_eadata,
+                                      rec->ur_eadatalen, EA_LOV);  
+                }
                 EXIT;
                 break;
         }
