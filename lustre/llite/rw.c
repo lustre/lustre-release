@@ -115,8 +115,8 @@ void ll_truncate(struct inode *inode)
         struct obdo oa;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %llu\n", inode->i_ino,
-               inode->i_generation, inode, inode->i_size);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
+               inode->i_generation, inode, inode->i_size, inode->i_size);
 
         if (lli->lli_size_pid != current->pid) {
                 EXIT;
@@ -134,8 +134,8 @@ void ll_truncate(struct inode *inode)
         /* XXX I'm pretty sure this is a hack to paper over a more fundamental
          * race condition. */
         if (lov_merge_size(lsm, 0) == inode->i_size) {
-                CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
-                       lsm->lsm_object_id, inode->i_size);
+                CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
+                       lsm->lsm_object_id, inode->i_size, inode->i_size);
                 GOTO(out_unlock, 0);
         }
 
@@ -156,8 +156,8 @@ void ll_truncate(struct inode *inode)
                 }
         }
 
-        CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
-               lsm->lsm_object_id, inode->i_size);
+        CDEBUG(D_INFO, "calling punch for "LPX64" (new size %Lu=%#Lx)\n",
+               lsm->lsm_object_id, inode->i_size, inode->i_size);
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
@@ -364,6 +364,8 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
                 oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
                 mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
+                oa->o_uid = inode->i_uid;
+                oa->o_gid = inode->i_gid;
 
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                OBD_MD_FLUID | OBD_MD_FLGID;
@@ -455,6 +457,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
 
         while (--total >= 0 && count < want) {
                 struct page *page;
+                int keep;
 
                 if (unlikely(need_resched())) {
                         spin_unlock(&sbi->ll_lock);
@@ -478,18 +481,24 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                         continue;
                 }
 
-                /* If page is dirty or undergoing IO don't discard it */
                 if (llap->llap_write_queued || PageDirty(page) ||
                     (!PageUptodate(page) &&
-                     llap->llap_origin != LLAP_ORIGIN_READAHEAD)) {
+                     llap->llap_origin != LLAP_ORIGIN_READAHEAD))
+                        keep = 1;
+                else
+                        keep = 0;
+
+                LL_CDEBUG_PAGE(D_PAGE, page,"%s LRU page: %s%s%s%s origin %s\n",
+                               keep ? "keep" : "drop",
+                               llap->llap_write_queued ? "wq " : "",
+                               PageDirty(page) ? "pd " : "",
+                               PageUptodate(page) ? "" : "!pu ",
+                               llap->llap_defer_uptodate ? "" : "!du",
+                               llap_origins[llap->llap_origin]);
+
+                /* If page is dirty or undergoing IO don't discard it */
+                if (keep) {
                         unlock_page(page);
-                        LL_CDEBUG_PAGE(D_PAGE, page, "can't drop from cache: "
-                                       "%s%s%s%s origin %s\n",
-                                       llap->llap_write_queued ? "wq " : "",
-                                       PageDirty(page) ? "pd " : "",
-                                       PageUptodate(page) ? "" : "!pu ",
-                                       llap->llap_defer_uptodate ? "" : "!du",
-                                       llap_origins[llap->llap_origin]);
                         continue;
                 }
 
@@ -497,8 +506,6 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                 spin_unlock(&sbi->ll_lock);
 
                 ++count;
-                LL_CDEBUG_PAGE(D_PAGE, page, "drop from cache %lu/%lu\n",
-                               count, want);
                 if (page->mapping != NULL) {
                         ll_ra_accounting(page, page->mapping);
                         ll_truncate_complete_page(page);
@@ -1252,9 +1259,10 @@ int ll_readpage(struct file *filp, struct page *page)
 
         LASSERT(PageLocked(page));
         LASSERT(!PageUptodate(page));
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),offset="LPX64"\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),offset=%Lu=%#Lx\n",
                inode->i_ino, inode->i_generation, inode,
-               (((obd_off)page->index) << PAGE_SHIFT));
+               (((loff_t)page->index) << PAGE_SHIFT),
+               (((loff_t)page->index) << PAGE_SHIFT));
         LASSERT(atomic_read(&filp->f_dentry->d_inode->i_count) > 0);
 
         rc = oig_init(&oig);
