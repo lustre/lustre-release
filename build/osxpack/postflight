@@ -9,3 +9,5 @@ fi
 if [ -d /System/Library/Caches/com.apple.kernelcaches ]; then
 	rm -rf /System/Library/Caches/com.apple.kernelcaches
 fi
+
+touch /System/Library

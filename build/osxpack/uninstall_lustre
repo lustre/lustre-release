@@ -11,24 +11,24 @@ fi
 echo "unloading modules......"
 /sbin/unload_lustre 2 > /dev/null
 
-backpath=/System/LustreBackup
-if ! [ -d $backpath ]; then
+backdir=/System/LustreBackup/SystemBackup
+if ! [ -d $backdir ]; then
 	echo "No backup directory is found, you have not installed lustre or uninstall failed!"
 	exit 1
 fi
 
-if ! [ -f $backpath/lustre-current ]; then
-	echo "No version information of Lustre installation, you have uninstalled or uninstall failed!"
-	exit 2
-fi
-
+# if ! [ -f $backpath/lustre-current ]; then
+#	echo "No version information of Lustre installation, you have uninstalled or uninstall failed!"
+#	exit 2
+# fi
+#
 # get information of the the backup system
-
-backdir=`tail -1 $backpath/lustre-current`
-if ! [ -d $backdir ]; then
-	echo "Miss backup directory, uninstall failed!"
-	exit 3
-fi
+#
+# backdir=`tail -1 $backpath/lustre-current`
+# if ! [ -d $backdir ]; then
+#	echo "Miss backup directory, uninstall failed!"
+#	exit 3
+# fi
 
 # recover the old system
 echo "recover orignal kernel......"
@@ -69,18 +69,23 @@ cp -f $backdir/usr/lib/libIOKit.A.dylib /usr/lib/libIOKit.A.dylib
 cp -f $backdir/usr/lib/libIOKit.dylib /usr/lib/libIOKit.dylib
 cp -f $backdir/usr/lib/libkmod.a /usr/lib/libkmod.a
 cp -f $backdir/usr/lib/libkmodc++.a /usr/lib/libkmodc++.a
+if [ -f $backdir/private/etc/sysctl.conf ]; then
+	cp -f $backdir/private/etc/sysctl.conf /private/etc/sysctl.conf
+else
+	rm -f /private/etc/sysctl.conf
+fi
 
 # 
-cp $backpath/lustre-current /tmp/lustre-v
-count=`grep "SystemBackup" /tmp/lustre-v|wc -l`
-count=`expr $count - 1`
-if [ $count -gt 0 ]; then
-	head -$count /tmp/lustre-v > $backpath/lustre-current
-else
-	# The file should be empty now, it's the last uninstall
-	rm -f $backpath/lustre-current
-fi
-rm -f /tmp/lustre-v
+# cp $backpath/lustre-current /tmp/lustre-v
+# count=`grep "SystemBackup" /tmp/lustre-v|wc -l`
+# count=`expr $count - 1`
+# if [ $count -gt 0 ]; then
+# 	head -$count /tmp/lustre-v > $backpath/lustre-current
+# else
+# 	# The file should be empty now, it's the last uninstall
+#	rm -f $backpath/lustre-current
+# fi
+# rm -f /tmp/lustre-v
 
 # remove unused files
 echo "uninstall lustre modules and utilities......"

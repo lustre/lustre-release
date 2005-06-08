@@ -7,17 +7,13 @@ if ! [ -d $backpath ]; then
 	mkdir -p $backpath
 fi
 
-# find and create backup dir for the installation
-idx=1
-while [ -d ${backpath}/SystemBackup$idx ]; do
-	echo "skip $idx"
-	idx=`expr $idx + 1`
-done
+backdir=${backpath}/SystemBackup
 
-backdir=${backpath}/SystemBackup$idx
-if [ -f $backdir ]; then
-	rm -f $backdir > /dev/null
+# If system has been backed up, just exit
+if [ -d ${backdir} ]; then
+	exit 0
 fi
+
 mkdir $backdir
 chmod 700 $backdir
 
@@ -26,6 +22,7 @@ mkdir -p $backdir/System/Library/Frameworks
 mkdir -p $backdir/System/Library/Extensions
 mkdir -p $backdir/usr/lib
 mkdir -p $backdir/usr/include
+mkdir -p $backdir/private/etc
 
 # backup the old system
 cp /mach_kernel $backdir/
@@ -61,7 +58,10 @@ cp -f /usr/lib/libIOKit.A.dylib $backdir/usr/lib/libIOKit.A.dylib
 cp -f /usr/lib/libIOKit.dylib $backdir/usr/lib/libIOKit.dylib
 cp -f /usr/lib/libkmod.a $backdir/usr/lib/libkmod.a
 cp -f /usr/lib/libkmodc++.a $backdir/usr/lib/libkmodc++.a
+if [ -f /private/etc/sysctl.conf ]; then
+	cp -f /private/etc/sysctl.conf $backdir/private/etc/sysctl.conf
+fi
 
 # record sysctem backup path of current installation 
-echo $backdir >> $backpath/lustre-current
-echo $date > $backdir/install_date
+# echo $backdir >> $backpath/lustre-current
+# echo $date > $backdir/install_date
