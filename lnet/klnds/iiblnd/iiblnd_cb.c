@@ -1827,7 +1827,8 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
                         MIN(peer->ibp_reconnect_interval,
                             *kibnal_tunables.kib_max_reconnect_interval);
                 
-                peer->ibp_reconnect_time += peer->ibp_reconnect_interval;
+                peer->ibp_reconnect_time = jiffies +
+                                           peer->ibp_reconnect_interval * HZ;
         
                 /* Take peer's blocked blocked transmits; I'll complete
                  * them with error */

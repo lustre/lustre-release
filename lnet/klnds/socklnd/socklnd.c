@@ -943,7 +943,7 @@ ksocknal_listener (void *arg)
                         PORTAL_ALLOC(cr, sizeof(*cr));
                         if (cr == NULL) {
                                 CWARN("ENOMEM: listener pausing\n");
-                                libcfs_pause(cfs_time_seconds(1));
+                                cfs_pause(cfs_time_seconds(1));
                                 continue;
                         }
                 }
@@ -955,7 +955,7 @@ ksocknal_listener (void *arg)
                         if (rc != -EAGAIN) {
                                 CWARN("Accept error %d: listener pausing\n",
                                       rc);
-                                libcfs_pause(cfs_time_seconds(1));
+                                cfs_pause(cfs_time_seconds(1));
                         }
                         continue;
                 }
@@ -2027,7 +2027,7 @@ ksocknal_base_shutdown (void)
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                "waiting for connreqs to clean up\n");
-                        libcfs_pause(cfs_time_seconds(1));
+                        cfs_pause(cfs_time_seconds(1));
 
                         spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
                 }
@@ -2077,7 +2077,7 @@ ksocknal_base_shutdown (void)
                                "waiting for %d threads to terminate\n",
                                 ksocknal_data.ksnd_nthreads);
                         read_unlock(&ksocknal_data.ksnd_global_lock);
-                        libcfs_pause(cfs_time_seconds(1));
+                        cfs_pause(cfs_time_seconds(1));
                         read_lock(&ksocknal_data.ksnd_global_lock);
                 }
                 read_unlock(&ksocknal_data.ksnd_global_lock);
@@ -2091,8 +2091,6 @@ ksocknal_base_shutdown (void)
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
 
-        printk(KERN_INFO "Lustre: Routing socket NAL unloaded (final mem %d)\n",
-               atomic_read(&portal_kmemory));
         PORTAL_MODULE_UNUSE;
 }
 
@@ -2115,7 +2113,6 @@ ksocknal_new_incarnation (void)
 ptl_err_t
 ksocknal_base_startup (void)
 {
-        int               pkmem = atomic_read(&portal_kmemory);
         int               rc;
         int               i;
         int               j;
@@ -2251,9 +2248,6 @@ ksocknal_base_startup (void)
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 
-        printk(KERN_INFO 
-               "Lustre: Routing socket NAL loaded (initial mem %d)\n", pkmem);
-        
         return PTL_OK;
 
  failed:
@@ -2288,7 +2282,7 @@ ksocknal_shutdown (ptl_ni_t *ni)
                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                        "waiting for %d peers to disconnect\n",
                        net->ksnn_npeers);
-                libcfs_pause(cfs_time_seconds(1));
+                cfs_pause(cfs_time_seconds(1));
 
                 spin_lock_irqsave(&net->ksnn_lock, flags);
         }
@@ -2420,7 +2414,6 @@ ksocknal_startup (ptl_ni_t *ni)
 
         ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid),
                                net->ksnn_interfaces[0].ksni_ipaddr);
-        CDEBUG(D_WARNING, "Set NID to %s\n", libcfs_nid2str(ni->ni_nid));
 
         ksocknal_data.ksnd_nnets++;
 
@@ -2458,6 +2451,7 @@ ksocknal_module_init (void)
                 return rc;
 
         ptl_register_nal(&ksocknal_nal);
+
         return 0;
 }
 

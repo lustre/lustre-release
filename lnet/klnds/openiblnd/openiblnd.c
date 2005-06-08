@@ -445,7 +445,7 @@ kibnal_ip_listener(void *arg)
                         PORTAL_ALLOC(as, sizeof(*as));
                         if (as == NULL) {
                                 CERROR("Out of Memory: pausing...\n");
-                                libcfs_pause(HZ);
+                                cfs_pause(cfs_time_seconds(1));
                                 continue;
                         }
                         as->ibas_sock = NULL;
@@ -456,7 +456,7 @@ kibnal_ip_listener(void *arg)
                 if (rc != 0) {
                         if (rc != -EAGAIN) {
                                 CERROR("Accept failed: %d, pausing...\n", rc);
-                                libcfs_pause(cfs_time_seconds(1));
+                                cfs_pause(cfs_time_seconds(1));
                         }                                                        
                         continue;
                 }
@@ -621,14 +621,15 @@ kibnal_create_peer (kib_peer_t **peerp, ptl_nid_t nid)
 
         write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
 
-        if (kibnal_data.kib_npeers >=
+        if (atomic_read(&kibnal_data.kib_npeers) >=
             *kibnal_tunables.kib_concurrent_peers) {
                 rc = -EOVERFLOW;        /* !! but at least it distinguishes */
         } else if (kibnal_data.kib_listener_shutdown) {
                 rc = -ESHUTDOWN;        /* shutdown has started */
         } else {
                 rc = 0;
-                kibnal_data.kib_npeers++;
+                /* npeers only grows with kib_global_lock held */
+                atomic_inc(&kibnal_data.kib_npeers);
         }
         
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
@@ -666,9 +667,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
          * they are destroyed, so we can be assured that _all_ state to do
          * with this peer has been cleaned up when its refcount drops to
          * zero. */
-        write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-        kibnal_data.kib_npeers--;
-        write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+        atomic_dec(&kibnal_data.kib_npeers);
 }
 
 void
@@ -1446,7 +1445,7 @@ kibnal_shutdown (ptl_ni_t *ni)
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
                                "waiting for conn reqs to clean up\n");
-                        libcfs_pause(cfs_time_seconds(1));
+                        cfs_pause(cfs_time_seconds(1));
                         
                         spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
                 }
@@ -1454,19 +1453,13 @@ kibnal_shutdown (ptl_ni_t *ni)
 
                 /* Wait for all peer state to clean up */
                 i = 2;
-                write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                while (kibnal_data.kib_npeers != 0) {
-                        write_unlock_irqrestore(&kibnal_data.kib_global_lock,
-                                                flags);
+                while (atomic_read(&kibnal_data.kib_npeers) != 0) {
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                                "waiting for %d peers to close down\n",
-                               kibnal_data.kib_npeers);
-                        libcfs_pause(cfs_time_seconds(1));
-
-                        write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+                               atomic_read(&kibnal_data.kib_npeers));
+                        cfs_pause(cfs_time_seconds(1));
                 }
-                write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
                 /* fall through */
 
         case IBNAL_INIT_CQ:
@@ -1494,7 +1487,7 @@ kibnal_shutdown (ptl_ni_t *ni)
         case IBNAL_INIT_DATA:
                 /* Module refcount only gets to zero when all peers
                  * have been closed so all lists must be empty */
-                LASSERT (kibnal_data.kib_npeers == 0);
+                LASSERT (atomic_read(&kibnal_data.kib_npeers) == 0);
                 LASSERT (kibnal_data.kib_peers != NULL);
                 for (i = 0; i < kibnal_data.kib_peer_hash_size; i++) {
                         LASSERT (list_empty (&kibnal_data.kib_peers[i]));
@@ -1537,8 +1530,6 @@ kibnal_shutdown (ptl_ni_t *ni)
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
-        printk(KERN_INFO "Lustre: OpenIB NAL unloaded (final mem %d)\n",
-               atomic_read(&portal_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1548,7 +1539,6 @@ ptl_err_t
 kibnal_startup (ptl_ni_t *ni)
 {
         struct timeval    tv;
-        int               pkmem = atomic_read(&portal_kmemory);
         int               rc;
         int               i;
 
@@ -1767,9 +1757,6 @@ kibnal_startup (ptl_ni_t *ni)
         /* flag everything initialised */
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
-
-        printk(KERN_INFO "Lustre: OpenIB NAL loaded "
-               "(initial mem %d)\n", pkmem);
 
         return PTL_OK;
 

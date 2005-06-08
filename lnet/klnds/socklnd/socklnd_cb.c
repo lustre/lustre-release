@@ -114,8 +114,7 @@ ksocknal_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
         int      bufnob;
         
         if (ksocknal_data.ksnd_stall_tx != 0) {
-                set_current_state (TASK_UNINTERRUPTIBLE);
-                schedule_timeout (cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
+                cfs_pause(cfs_time_seconds(ksocknal_data.ksnd_stall_tx));
         }
 
         LASSERT (tx->tx_resid != 0);
@@ -292,8 +291,7 @@ ksocknal_receive (ksock_conn_t *conn)
         ENTRY;
         
         if (ksocknal_data.ksnd_stall_rx != 0) {
-                set_current_state (TASK_UNINTERRUPTIBLE);
-                schedule_timeout(cfs_time_seconds (ksocknal_data.ksnd_stall_rx));
+                cfs_pause(cfs_time_seconds (ksocknal_data.ksnd_stall_rx));
         }
 
         rc = ksocknal_connsock_addref(conn);
@@ -715,7 +713,7 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
 
         g_lock = &ksocknal_data.ksnd_global_lock;
         
-        for (retry = 0;; retry) {
+        for (retry = 0;; retry = 1) {
 #if !SOCKNAL_ROUND_ROBIN
                 read_lock (g_lock);
                 peer = ksocknal_find_peer_locked(ni, nid);

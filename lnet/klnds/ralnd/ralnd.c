@@ -831,7 +831,7 @@ kranal_listener (void *arg)
                         PORTAL_ALLOC(ras, sizeof(*ras));
                         if (ras == NULL) {
                                 CERROR("ENOMEM: listener pausing\n");
-                                libcfs_pause(cfs_time_seconds(1));
+                                cfs_pause(cfs_time_seconds(1));
                                 continue;
                         }
                 }
@@ -841,7 +841,7 @@ kranal_listener (void *arg)
                 if (rc != 0) {
                         if (rc != -EAGAIN) {
                                 CWARN("Accept error: %d, listener pausing\n", rc);
-                                libcfs_pause(cfs_time_seconds(1));
+                                cfs_pause(cfs_time_seconds(1));
                         }
                         continue;
                 }
@@ -950,7 +950,7 @@ kranal_create_peer (kra_peer_t **peerp, ptl_nid_t nid)
                 return -ESHUTDOWN;
         }
 
-        kranal_data.kra_npeers++;
+        atomic_inc(&kranal_data.kra_npeers);
 
         write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
@@ -979,9 +979,7 @@ kranal_destroy_peer (kra_peer_t *peer)
          * they are destroyed, so we can be assured that _all_ state to do
          * with this peer has been cleaned up when its refcount drops to
          * zero. */
-        write_lock_irqsave(&kranal_data.kra_global_lock, flags);
-        kranal_data.kra_npeers--;
-        write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+        atomic_dec(&kranal_data.kra_npeers);
 }
 
 kra_peer_t *
@@ -1486,7 +1484,7 @@ kranal_shutdown (ptl_ni_t *ni)
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
                                "waiting for conn reqs to clean up\n");
-                        libcfs_pause(cfs_time_seconds(1));
+                        cfs_pause(cfs_time_seconds(1));
 
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
                 }
@@ -1494,20 +1492,13 @@ kranal_shutdown (ptl_ni_t *ni)
 
                 /* Wait for all peers to be freed */
                 i = 2;
-                write_lock_irqsave(&kranal_data.kra_global_lock, flags);
-                while (kranal_data.kra_npeers != 0) {
-                        write_unlock_irqrestore(&kranal_data.kra_global_lock,
-                                                flags);
+                while (atomic_read(&kranal_data.kra_npeers) != 0) {
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
                                "waiting for %d peers to close down\n",
-                               kranal_data.kra_npeers);
-                        libcfs_pause(cfs_time_seconds(1));
-
-                        write_lock_irqsave(&kranal_data.kra_global_lock, 
-                                           flags);
+                               atomic_read(&kranal_data.kra_npeers));
+                        cfs_pause(cfs_time_seconds(1));
                 }
-                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 /* fall through */
 
         case RANAL_INIT_DATA:
@@ -1519,7 +1510,7 @@ kranal_shutdown (ptl_ni_t *ni)
          * while there are still active connds, but these will be temporary
          * since peer creation always fails after the listener has started to
          * shut down. */
-        LASSERT (kranal_data.kra_npeers == 0);
+        LASSERT (atomic_read(&kranal_data.kra_npeers) == 0);
         
         /* Flag threads to terminate */
         kranal_data.kra_shutdown = 1;
@@ -1548,10 +1539,10 @@ kranal_shutdown (ptl_ni_t *ni)
                 CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
                        "Waiting for %d threads to terminate\n",
                        atomic_read(&kranal_data.kra_nthreads));
-                libcfs_pause(cfs_time_seconds(1));
+                cfs_pause(cfs_time_seconds(1));
         }
 
-        LASSERT (kranal_data.kra_npeers == 0);
+        LASSERT (atomic_read(&kranal_data.kra_npeers) == 0);
         if (kranal_data.kra_peers != NULL) {
                 for (i = 0; i < kranal_data.kra_peer_hash_size; i++)
                         LASSERT (list_empty(&kranal_data.kra_peers[i]));
@@ -1578,8 +1569,6 @@ kranal_shutdown (ptl_ni_t *ni)
         kranal_free_txdescs(&kranal_data.kra_idle_nblk_txs);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
-        printk(KERN_INFO "Lustre: RapidArray NAL unloaded (final mem %d)\n",
                atomic_read(&portal_kmemory));
 
         kranal_data.kra_init = RANAL_INIT_NOTHING;
@@ -1733,9 +1722,6 @@ kranal_startup (ptl_ni_t *ni)
         /*****************************************************/
 
         CDEBUG(D_MALLOC, "initial kmem %d\n", pkmem);
-        printk(KERN_INFO "Lustre: RapidArray NAL loaded "
-               "(initial mem %d)\n", pkmem);
-
         return PTL_OK;
 
  failed:

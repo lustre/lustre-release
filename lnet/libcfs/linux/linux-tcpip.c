@@ -675,12 +675,3 @@ libcfs_sock_release (struct socket *sock)
 }
 
 EXPORT_SYMBOL(libcfs_sock_release);
-
-void
-libcfs_pause (cfs_duration_t ticks)
-{
-        set_current_state(TASK_UNINTERRUPTIBLE);
-        schedule_timeout(ticks);
-}
-
-EXPORT_SYMBOL(libcfs_pause);

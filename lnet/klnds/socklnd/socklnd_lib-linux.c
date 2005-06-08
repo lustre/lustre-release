@@ -139,8 +139,8 @@ ksocknal_lib_bind_irq (unsigned int irq)
         snprintf (cmdline, sizeof (cmdline),
                   "echo %d > /proc/irq/%u/smp_affinity", 1 << cpu, irq);
 
-        printk (KERN_INFO "Lustre: Binding irq %u to CPU %d with cmd: %s\n",
-                irq, cpu, cmdline);
+        LCONSOLE_INFO("Binding irq %u to CPU %d with cmd: %s\n",
+		      irq, cpu, cmdline);
 
         /* FIXME: Find a better method of setting IRQ affinity...
          */

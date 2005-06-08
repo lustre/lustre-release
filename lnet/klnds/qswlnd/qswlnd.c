@@ -133,8 +133,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	while (atomic_read (&kqswnal_data.kqn_pending_txs) != 0) {
 		CDEBUG(D_NET, "waiting for %d pending sends\n",
 		       atomic_read (&kqswnal_data.kqn_pending_txs));
-		set_current_state (TASK_UNINTERRUPTIBLE);
-		schedule_timeout (HZ);
+		cfs_pause(cfs_time_seconds(1));
 	}
 
 	/**********************************************************************/
@@ -170,8 +169,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	/* wait for transmits to complete */
 	while (!list_empty(&kqswnal_data.kqn_activetxds)) {
 		CWARN("waiting for active transmits to complete\n");
-		set_current_state(TASK_UNINTERRUPTIBLE);
-		schedule_timeout(HZ);
+		cfs_pause(cfs_time_seconds(1));
 	}
 
 	if (kqswnal_data.kqn_eptx != NULL)
@@ -185,8 +183,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	while (atomic_read (&kqswnal_data.kqn_nthreads) != 0) {
 		CDEBUG(D_NET, "waiting for %d threads to terminate\n",
 		       atomic_read (&kqswnal_data.kqn_nthreads));
-		set_current_state (TASK_UNINTERRUPTIBLE);
-		schedule_timeout (HZ);
+		cfs_pause(cfs_time_seconds(1));
 	}
 
 	/**********************************************************************/
@@ -301,8 +298,6 @@ kqswnal_shutdown(ptl_ni_t *ni)
 
 	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&portal_kmemory));
 
-	printk (KERN_INFO "Lustre: Routing QSW NAL unloaded (final mem %d)\n",
-                atomic_read(&portal_kmemory));
 	PORTAL_MODULE_UNUSE;
 }
 
@@ -319,7 +314,6 @@ kqswnal_startup (ptl_ni_t *ni)
 	kqswnal_rx_t     *krx;
 	kqswnal_tx_t     *ktx;
 	int               elan_page_idx;
-	int               pkmem = atomic_read(&portal_kmemory);
 
 	LASSERT (ni->ni_nal == &kqswnal_nal);
 
@@ -672,11 +666,6 @@ kqswnal_startup (ptl_ni_t *ni)
 	}
 
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
-
-	printk(KERN_INFO "Lustre: Routing QSW NAL loaded on node %d of %d "
-	       "(initial mem %d)\n", 
-	       kqswnal_data.kqn_elanid, kqswnal_data.kqn_nnodes, pkmem);
-
 	return (PTL_OK);
 }
 

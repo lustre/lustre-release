@@ -147,7 +147,7 @@ typedef struct
 
         struct list_head *kra_peers;            /* hash table of all my known peers */
         int               kra_peer_hash_size;   /* size of kra_peers */
-        int               kra_npeers;           /* # peers extant */
+        atomic_t          kra_npeers;           /* # peers extant */
 
         struct list_head *kra_conns;            /* conns hashed by cqid */
         int               kra_conn_hash_size;   /* size of kra_conns */

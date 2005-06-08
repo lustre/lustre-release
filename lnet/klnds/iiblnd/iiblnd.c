@@ -1271,8 +1271,6 @@ kibnal_shutdown (ptl_ni_t *ni)
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read (&portal_kmemory));
-        printk(KERN_INFO "Lustre: Infinicon IB NAL unloaded (final mem %d)\n",
-               atomic_read(&portal_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1300,7 +1298,6 @@ static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
 ptl_err_t
 kibnal_startup (ptl_ni_t *ni)
 {
-        int                 pkmem = atomic_read(&portal_kmemory);
         IB_PORT_ATTRIBUTES *pattr;
         FSTATUS             frc;
         int                 rc;
@@ -1609,9 +1606,6 @@ kibnal_startup (ptl_ni_t *ni)
         /* flag everything initialised */
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
-
-        printk(KERN_INFO "Lustre: Infinicon IB NAL loaded "
-               "(initial mem %d)\n", pkmem);
 
         return (PTL_OK);
 

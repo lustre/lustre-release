@@ -150,6 +150,9 @@ ptl_register_nal (ptl_nal_t *nal)
         
         list_add (&nal->nal_list, &ptl_apini.apini_nals);
         atomic_set(&nal->nal_refcount, 0);
+        if (nal->nal_type != LONAL)
+                LCONSOLE(0, "%s NAL registered\n",
+                         libcfs_nal2str(nal->nal_type));
 
         PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 }
@@ -164,6 +167,9 @@ ptl_unregister_nal (ptl_nal_t *nal)
         LASSERT (atomic_read(&nal->nal_refcount) == 0);
         
         list_del (&nal->nal_list);
+        if (nal->nal_type != LONAL)
+                LCONSOLE(0, "%s NAL unregistered\n",
+                         libcfs_nal2str(nal->nal_type));
 
         PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 }
@@ -642,6 +648,13 @@ ptl_shutdown_nalnis (void)
                 atomic_dec(&ni->ni_nal->nal_refcount);
                 (ni->ni_nal->nal_shutdown)(ni);
 
+                /* can't deref nal anymore now; it might have unregistered
+                 * itself...  */
+
+                if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL)
+                        LCONSOLE(0, "Removed NI %s\n", 
+                                 libcfs_nid2str(ni->ni_nid));
+
                 PORTAL_FREE(ni, sizeof(*ni));
 
                 PTL_LOCK(flags);
@@ -694,9 +707,6 @@ ptl_startup_nalnis (void)
                                 goto failed;
                         }
 
-                        CDEBUG(D_WARNING,"Requesting module %s\n",
-                               libcfs_nal2modname(nal_type));
-
                         request_module(libcfs_nal2modname(nal_type));
 
                         PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
@@ -711,11 +721,15 @@ ptl_startup_nalnis (void)
                 PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 
                 if (rc != PTL_OK) {
-                        CERROR("Error %d staring up NI %s\n",
+                        CERROR("Error %d starting up NI %s\n",
                                rc, libcfs_nal2str(nal->nal_type));
                         atomic_dec(&nal->nal_refcount);
                         goto failed;
                 }
+
+                if (nal->nal_type != LONAL)
+                        LCONSOLE(0, "Added NI %s\n", 
+                                 libcfs_nid2str(ni->ni_nid));
 
                 list_del(&ni->ni_list);
                 

@@ -216,9 +216,10 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
 
         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
-        seq_printf(s, "net %12s: gateway %s %s\n",
-                   libcfs_net2str(net), libcfs_nid2str(nid),
-                   alive ? "up" : "down");
+        seq_printf(s, "%-8s %4s %s\n",
+                   libcfs_net2str(net),
+                   alive ? "up" : "down",
+                   libcfs_nid2str(nid));
         return 0;
 }
 

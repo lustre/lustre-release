@@ -221,7 +221,7 @@ typedef struct
         
         struct list_head *kib_peers;            /* hash table of all my known peers */
         int               kib_peer_hash_size;   /* size of kib_peers */
-        int               kib_npeers;           /* # peers extant */
+        atomic_t          kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
         void             *kib_connd;            /* the connd task (serialisation assertions) */

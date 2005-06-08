@@ -1323,7 +1323,7 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                         kibnal_tx_done (tx);
                         return;
                 }
-        
+
                 peer->ibp_connecting = 1;
                 peer->ibp_arp_count = 1 + *kibnal_tunables.kib_arp_retries;
                 kibnal_schedule_peer_arp(peer);
@@ -1923,7 +1923,7 @@ kibnal_conn_disconnected(kib_conn_t *conn)
 void
 kibnal_peer_connect_failed (kib_peer_t *peer, int active)
 {
-        struct list_head  zombies;
+        LIST_HEAD        (zombies);
         kib_tx_t         *tx;
         unsigned long     flags;
 
@@ -1956,8 +1956,9 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
                         MIN(peer->ibp_reconnect_interval,
                             *kibnal_tunables.kib_max_reconnect_interval);
                 
-                peer->ibp_reconnect_time = jiffies + peer->ibp_reconnect_interval;
-        
+                peer->ibp_reconnect_time = jiffies + 
+                                           peer->ibp_reconnect_interval * HZ;
+
                 /* Take peer's blocked transmits to complete with error */
                 list_add(&zombies, &peer->ibp_tx_queue);
                 list_del_init(&peer->ibp_tx_queue);
@@ -2030,7 +2031,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
                 case IBNAL_CONN_ACTIVE_CONNECT:
                         LASSERT (active);
                         cm_cancel(conn->ibc_cep);
-                        libcfs_pause(cfs_time_seconds(1)/10);
+                        cfs_pause(cfs_time_seconds(1)/10);
                         /* cm_connect() failed immediately or
                          * callback returned failure */
                         break;
@@ -3003,7 +3004,7 @@ kibnal_disconnect_conn (kib_conn_t *conn)
         write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
 
         cm_cancel(conn->ibc_cep);
-        libcfs_pause(cfs_time_seconds(1)/10);
+        cfs_pause(cfs_time_seconds(1)/10);
 
         if (!conn->ibc_disconnect)              /* CM callback will never happen now */
                 kibnal_conn_decref(conn);

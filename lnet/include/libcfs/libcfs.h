@@ -291,8 +291,6 @@ int libcfs_sock_write(struct socket *sock, void *buffer, int nob, int timeout);
 int libcfs_sock_read(struct socket *sock, void *buffer, int nob, int timeout);
 void libcfs_sock_release(struct socket *sock);
 
-void libcfs_pause(cfs_duration_t ticks);
-
 /* libcfs watchdogs */
 struct lc_watchdog;
 

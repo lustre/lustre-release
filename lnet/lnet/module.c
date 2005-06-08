@@ -83,8 +83,6 @@ static int init_kportals_module(void)
                 RETURN(rc);
         }
 
-        CDEBUG(D_WARNING, "Startup: config_on_load=%d\n", config_on_load);
-
         if (config_on_load) {
                 ptl_handle_ni_t    nih;
 
