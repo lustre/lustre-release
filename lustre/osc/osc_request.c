@@ -3067,9 +3067,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         char *bufs[1] = {key};
         ENTRY;
 
-#define KEY_IS(str) \
-        (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
-
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
 
         if (KEY_IS("next_id")) {

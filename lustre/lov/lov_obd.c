@@ -2035,9 +2035,6 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         int i, rc = 0, err;
         ENTRY;
 
-#define KEY_IS(str) \
-        (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
-
         if (KEY_IS("next_id")) {
                 if (vallen != lov->desc.ld_tgt_count)
                         RETURN(-EINVAL);
@@ -2083,7 +2080,6 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         rc = err;
         }
         RETURN(rc);
-#undef KEY_IS
 }
 
 int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)

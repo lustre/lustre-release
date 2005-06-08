@@ -455,4 +455,7 @@ do {                                                                          \
         (ptr) = (void *)0xdeadbeef;                                           \
 } while (0)
 
+#define KEY_IS(str) \
+        (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
+
 #endif
