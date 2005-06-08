@@ -697,7 +697,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 if (rc != -ENOENT)
-                        CERROR("parent lookup error %d\n", rc);
+                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                               rec->ur_fid1->id, rec->ur_fid1->generation, rc);
                 GOTO(cleanup, rc);
         }
         cleanup_phase = 1; /* locked parent dentry */
@@ -809,24 +810,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CDEBUG(D_INODE, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
                 } else {
-                        struct lustre_handle child_ino_lockh;
-
                         CDEBUG(D_INODE, "created ino %lu with gen %x\n",
                                inode->i_ino, inode->i_generation);
-
-                        /* The inode we were allocated may have just been freed
-                         * by an unlink operation.  We take this lock to
-                         * synchronize against the matching reply-ack-lock taken
-                         * in unlink, to avoid replay problems if this reply
-                         * makes it out to the client but the unlink's does not.
-                         * See bug 2029 for more detail.*/
-                        rc = mds_lock_new_child(obd, inode, &child_ino_lockh);
-                        if (rc != ELDLM_OK) {
-                                CERROR("error locking for unlink/create sync: "
-                                       "%d\n", rc);
-                        } else {
-                                ldlm_lock_decref(&child_ino_lockh, LCK_EX);
-                        }
                 }
 
                 rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
@@ -881,6 +866,13 @@ cleanup:
                         break;
                 }
         } else if (created) {
+                /* The inode we were allocated may have just been freed
+                 * by an unlink operation.  We take this lock to
+                 * synchronize against the matching reply-ack-lock taken
+                 * in unlink, to avoid replay problems if this reply
+                 * makes it out to the client but the unlink's does not.
+                 * See bug 2029 for more detail.*/
+                mds_lock_new_child(obd, dchild->d_inode, NULL);
                 /* save uid/gid of create inode and parent */
                 parent_uid = dir->i_uid;
                 parent_gid = dir->i_gid;
