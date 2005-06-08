@@ -91,7 +91,6 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 #endif
 }
 
-
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
@@ -131,7 +130,6 @@ struct ll_sb_info {
         obd_id                    ll_rootino; /* number of root inode */
 
         struct lustre_mount_data *ll_lmd;
-        char                     *ll_instance;
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */

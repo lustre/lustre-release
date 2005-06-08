@@ -1622,6 +1622,7 @@ llu_fsswop_mount(const char *source,
         struct lustre_md md;
         class_uuid_t uuid;
         struct config_llog_instance cfg;
+        char ll_instance[sizeof(sbi) * 2 + 1];
         struct lustre_profile *lprof;
 	char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
@@ -1651,16 +1652,13 @@ llu_fsswop_mount(const char *source,
 
         /* generate a string unique to this super, let's try
          the address of the super itself.*/
-        OBD_ALLOC(sbi->ll_instance, sizeof(sbi) * 2 + 1);
-        if (sbi->ll_instance == NULL) 
-                GOTO(out_free, err = -ENOMEM);
-        sprintf(sbi->ll_instance, "%p", sbi);
+        sprintf(ll_instance, "%p", sbi);
 
         /* retrive & parse config log */
-        cfg.cfg_instance = sbi->ll_instance;
+        cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
-        err = liblustre_process_log(&cfg,
-				zconf_mdsnid, zconf_mdsname, zconf_profile, 1);
+        err = liblustre_process_log(&cfg, zconf_mdsnid, zconf_mdsname,
+                                    zconf_profile, 1);
         if (err < 0) {
                 CERROR("Unable to process log: %s\n", zconf_profile);
                 GOTO(out_free, err);
@@ -1671,17 +1669,11 @@ llu_fsswop_mount(const char *source,
                 CERROR("No profile found: %s\n", zconf_profile);
                 GOTO(out_free, err = -EINVAL);
         }
-        if (osc)
-                OBD_FREE(osc, strlen(osc) + 1);
-        OBD_ALLOC(osc, strlen(lprof->lp_osc) + 
-                  strlen(sbi->ll_instance) + 2);
-        sprintf(osc, "%s-%s", lprof->lp_osc, sbi->ll_instance);
+        OBD_ALLOC(osc, strlen(lprof->lp_osc) + strlen(ll_instance) + 2);
+        sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
 
-        if (mdc)
-                OBD_FREE(mdc, strlen(mdc) + 1);
-        OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + 
-                  strlen(sbi->ll_instance) + 2);
-        sprintf(mdc, "%s-%s", lprof->lp_mdc, sbi->ll_instance);
+        OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + strlen(ll_instance) + 2);
+        sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
 
         if (!osc) {
                 CERROR("no osc\n");
@@ -1800,6 +1792,10 @@ out_osc:
 out_mdc:
         obd_disconnect(sbi->ll_mdc_exp);
 out_free:
+        if (osc)
+                OBD_FREE(osc, strlen(osc) + 1);
+        if (mdc)
+                OBD_FREE(mdc, strlen(mdc) + 1);
         OBD_FREE(sbi, sizeof(*sbi));
         return err;
 }
