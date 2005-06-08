@@ -246,7 +246,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;
-        struct mds_export_data *med; /*  */
+        struct mds_export_data *med;
         struct mds_client_data *mcd;
         int rc, abort_recovery;
         ENTRY;
@@ -1768,6 +1768,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
+        ldlm_timeout = 6;
         ping_evictor_start();
 
         RETURN(0);
