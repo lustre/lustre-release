@@ -122,6 +122,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         if (atomic_dec_and_test(&lock->l_refc)) {
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+                struct obd_export *export = NULL;
 
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
@@ -134,8 +135,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 ldlm_resource_putref(lock->l_resource);
                 lock->l_resource = NULL;
-                if (lock->l_export)
-                        class_export_put(lock->l_export);
+                export = lock->l_export;
 
                 if (lock->l_parent)
                         LDLM_LOCK_PUT(lock->l_parent);
@@ -145,6 +145,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
                 l_unlock(&ns->ns_lock);
+                if (export)
+                        class_export_put(export);
         }
 
         EXIT;
