@@ -1,4 +1,7 @@
-/* Kernel module to test lustre administrative quotafile format APIs
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Kernel module to test lustre administrative quotafile format APIs
  * from the OBD setup function */
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
@@ -18,7 +21,8 @@
 
 char *test_quotafile[2] = {"usrquota_test", "grpquota_test"};
 
-static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *tgt, 
+static int quotfmt_initialize(struct lustre_quota_info *lqi,
+                              struct obd_device *tgt,
 			      struct lvfs_run_ctxt *saved)
 {
 	struct lustre_disk_dqheader dqhead;
@@ -30,7 +34,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 	struct dentry *de;
 	int i, rc = 0;
 	ENTRY;
-	
+
 	push_ctxt(saved, &tgt->obd_lvfs_ctxt, NULL);
 
 	sema_init(&lqi->qi_sem, 1);
@@ -48,7 +52,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 		if (!IS_ERR(de))
 			dput(de);
 		up(&parent_inode->i_sem);
-		
+
 		/* create quota file */
 		fp = filp_open(name, O_CREAT | O_EXCL, 0644);
 		if (IS_ERR(fp)) {
@@ -58,15 +62,15 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 			break;
 		}
 		lqi->qi_files[i] = fp;
-		
+
 		/* write quotafile header */
 		dqhead.dqh_magic = cpu_to_le32(quota_magics[i]);
 		dqhead.dqh_version = cpu_to_le32(quota_versions[i]);
-		size = fp->f_op->write(fp, (char *)&dqhead, 
-				       sizeof(struct lustre_disk_dqheader), 
+		size = fp->f_op->write(fp, (char *)&dqhead,
+				       sizeof(struct lustre_disk_dqheader),
 				       &offset);
 		if (size != sizeof(struct lustre_disk_dqheader)) {
-			CERROR("error writing quoafile header %s (rc = %d)\n", 
+			CERROR("error writing quoafile header %s (rc = %d)\n",
 			       name, rc);
 			rc = size;
 			break;
@@ -76,7 +80,8 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 	RETURN(rc);
 }
 
-static int quotfmt_finalize(struct lustre_quota_info *lqi, struct obd_device *tgt, 
+static int quotfmt_finalize(struct lustre_quota_info *lqi,
+                            struct obd_device *tgt,
 			    struct lvfs_run_ctxt *saved)
 {
 	struct dentry *de;
@@ -90,21 +95,21 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi, struct obd_device *tg
 
 		if (lqi->qi_files[i] == NULL)
 			continue;
-		
+
 		/* close quota file */
 		filp_close(lqi->qi_files[i], 0);
-		
+
 		/* unlink quota file */
 		down(&parent_inode->i_sem);
-		
+
 		de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
 		if (IS_ERR(de) || de->d_inode == NULL) {
 			rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
-			CERROR("error lookup quotafile %s (rc = %d)\n", 
+			CERROR("error lookup quotafile %s (rc = %d)\n",
 				name, rc);
 			goto dput;
 		}
-		
+
 		rc = vfs_unlink(parent_inode, de);
 		if (rc)
 			CERROR("error unlink quotafile %s (rc = %d)\n",
@@ -123,7 +128,7 @@ static int quotfmt_test_1(struct lustre_quota_info *lqi)
 {
 	int i;
 	ENTRY;
-	
+
 	for (i = 0; i < MAXQUOTAS; i++) {
 		if (!lustre_check_quota_file(lqi, i))
 			RETURN(-EINVAL);
@@ -141,9 +146,9 @@ static void print_quota_info(struct lustre_quota_info *lqi)
 		dqinfo = &lqi->qi_info[i];
 		printk("%s quota info:\n", i == USRQUOTA ? "user " : "group");
 		printk("dqi_bgrace(%u) dqi_igrace(%u) dqi_flags(%lu) dqi_blocks(%u) "
-		       "dqi_free_blk(%u) dqi_free_entry(%u)\n", 
-		       dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags, 
-		       dqinfo->dqi_blocks, dqinfo->dqi_free_blk, 
+		       "dqi_free_blk(%u) dqi_free_entry(%u)\n",
+		       dqinfo->dqi_bgrace, dqinfo->dqi_igrace, dqinfo->dqi_flags,
+		       dqinfo->dqi_blocks, dqinfo->dqi_free_blk,
 		       dqinfo->dqi_free_entry);
 	}
 #endif
@@ -156,7 +161,7 @@ static int quotfmt_test_2(struct lustre_quota_info *lqi)
 
 	for (i = 0; i < MAXQUOTAS; i++) {
 		struct lustre_mem_dqinfo dqinfo;
-		
+
 		rc = lustre_init_quota_info(lqi, i);
 		if (rc) {
 			CERROR("init quotainfo(%d) failed! (rc:%d)\n", i, rc);
@@ -169,7 +174,7 @@ static int quotfmt_test_2(struct lustre_quota_info *lqi)
 			CERROR("read quotainfo(%d) failed! (rc:%d)\n", i, rc);
 			break;
 		}
-		
+
 		if(memcmp(&dqinfo, &lqi->qi_info[i], sizeof(dqinfo))) {
 			rc = -EINVAL;
 			break;
@@ -203,7 +208,7 @@ static struct lustre_dquot *get_rand_dquot(struct lustre_quota_info *lqi)
 	dquot->dq_dqb.dqb_curinodes = rand / 3;
 	dquot->dq_dqb.dqb_btime = jiffies;
 	dquot->dq_dqb.dqb_itime = jiffies;
-	
+
 	return dquot;
 }
 
@@ -218,7 +223,7 @@ static int write_check_dquot(struct lustre_quota_info *lqi)
 	struct mem_dqblk dqblk;
 	int rc = 0;
 	ENTRY;
-	
+
 	dquot = get_rand_dquot(lqi);
 	if (dquot == NULL)
 		RETURN(-ENOMEM);
@@ -280,7 +285,6 @@ repeat:
 		CERROR("read dquot failed! (rc:%d)\n", rc);
 		GOTO(out, rc);
 	}
-
 	if (!dquot->dq_off || test_bit(DQ_FAKE_B, &dquot->dq_flags)) {
 		CERROR("the dquot isn't committed\n");
 		GOTO(out, rc = -EINVAL);
@@ -313,6 +317,8 @@ repeat:
 	if (++i < 2)
 		goto repeat;
 
+        print_quota_info(lqi);
+
 out:
 	put_rand_dquot(dquot);
 	RETURN(rc);
@@ -326,7 +332,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 	for (i = 0; i < 30000; i++) {
 		rc = write_check_dquot(lqi);
 		if (rc) {
-			CERROR("write/check dquot failed at %d! (rc:%d)\n", 
+			CERROR("write/check dquot failed at %d! (rc:%d)\n",
 				i, rc);
 			break;
 		}
@@ -341,13 +347,13 @@ static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
 	struct lustre_quota_info *lqi = NULL;
 	int rc = 0;
 	ENTRY;
-	
+
 	OBD_ALLOC(lqi, sizeof(*lqi));
 	if (lqi == NULL) {
 		CERROR("not enough memory\n");
 		RETURN(-ENOMEM);
 	}
-	
+
 	CWARN("=== Initialize quotafile test\n");
 	rc = quotfmt_initialize(lqi, tgt, &saved);
 	if (rc)
@@ -439,7 +445,7 @@ static int __init quotfmt_test_init(void)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(quotfmt_test, &lvars);
-        return class_register_type(&quotfmt_obd_ops, lvars.module_vars, 
+        return class_register_type(&quotfmt_obd_ops, lvars.module_vars,
 				   "quotfmt_test");
 }
 
