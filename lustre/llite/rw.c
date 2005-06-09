@@ -389,7 +389,7 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         EXIT;
 }
 
-static void ll_ap_get_ucred(void *data, struct obd_ucred *ouc)
+static void ll_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
 {
         struct ll_async_page *llap;
 
@@ -726,11 +726,11 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 RETURN(-EINVAL);
 
         /* set user credit information for this page */
-        llap->llap_ouc.ouc_fsuid = current->fsuid;
-        llap->llap_ouc.ouc_fsgid = current->fsgid;
-        llap->llap_ouc.ouc_cap = current->cap_effective;
+        llap->llap_ouc.luc_fsuid = current->fsuid;
+        llap->llap_ouc.luc_fsgid = current->fsgid;
+        llap->llap_ouc.luc_cap = current->cap_effective;
         ll_i2uctxt(&ctxt, inode, NULL);
-        llap->llap_ouc.ouc_suppgid1 = ctxt.gid1;
+        llap->llap_ouc.luc_suppgid1 = ctxt.gid1;
 
         /* queue a write for some time in the future the first time we
          * dirty the page */

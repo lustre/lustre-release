@@ -1430,10 +1430,10 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
          * at present. And we chose one page's user credit information as
          * the whole rpc's credit information. FIXME */
         if (cmd == OBD_BRW_WRITE) {
-                struct obd_ucred ouc;
+                struct lvfs_ucred ouc;
                 ops->ap_get_ucred(caller_data, &ouc);
-                oa->o_uid = ouc.ouc_fsuid;
-                oa->o_gid = ouc.ouc_fsgid;
+                oa->o_uid = ouc.luc_fsuid;
+                oa->o_gid = ouc.luc_fsgid;
         }
 
         sort_brw_pages(pga, page_count);

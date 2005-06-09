@@ -2073,16 +2073,16 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
 
-        push_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
-        pop_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
         RETURN(rc);
 }

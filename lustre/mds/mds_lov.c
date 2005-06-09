@@ -293,7 +293,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
         struct obd_ioctl_data *data = karg;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc = 0;
 
         ENTRY;
@@ -305,7 +305,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                  &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0)
@@ -313,7 +313,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                          &cfg_uuid);
                 else
                         mds->mds_cfg_llh = NULL;
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 RETURN(rc);
         }
@@ -322,9 +322,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (!mds->mds_cfg_llh)
                         RETURN(-EBADF);
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_close(mds->mds_cfg_llh);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 mds->mds_cfg_llh = NULL;
                 RETURN(rc);
@@ -335,7 +335,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                  &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0) {
@@ -345,7 +345,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         rc = llog_destroy(mds->mds_cfg_llh);
                         llog_free_handle(mds->mds_cfg_llh);
                 }
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 mds->mds_cfg_llh = NULL;
                 RETURN(rc);
@@ -377,10 +377,10 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         RETURN(rc);
                 }
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_write_rec(mds->mds_cfg_llh, &rec, NULL, 0,
                                     cfg_buf, -1);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 OBD_FREE(cfg_buf, data->ioc_plen1);
                 RETURN(rc);
@@ -389,9 +389,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_PARSE: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 if (rc)
                         RETURN(rc);
 
@@ -401,9 +401,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_DUMP_LOG: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 if (rc)
                         RETURN(rc);
 
@@ -448,9 +448,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 int rc2;
 
                 obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
-                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
                 rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
                                    "mds_conn", 0, NULL);
@@ -463,9 +463,9 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
 
-                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
                 RETURN(rc);
         }

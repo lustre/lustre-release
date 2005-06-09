@@ -322,7 +322,7 @@ static int mds_destroy_export(struct obd_export *export)
 {
         struct mds_export_data *med;
         struct obd_device *obd = export->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc = 0;
         ENTRY;
 
@@ -332,7 +332,7 @@ static int mds_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 GOTO(out, 0);
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
@@ -362,7 +362,7 @@ static int mds_destroy_export(struct obd_export *export)
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 out:
         mds_client_free(export);
 
@@ -664,10 +664,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct ldlm_reply *rep = NULL;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct mds_body *body;
         struct dentry *dparent = NULL, *dchild = NULL;
-        struct obd_ucred uc;
+        struct lvfs_ucred uc;
         struct lustre_handle parent_lockh;
         int namesize;
         int rc = 0, cleanup_phase = 0, resent_req = 0;
@@ -700,12 +700,12 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 offset = 1;
         }
 
-        uc.ouc_fsuid = body->fsuid;
-        uc.ouc_fsgid = body->fsgid;
-        uc.ouc_cap = body->capability;
-        uc.ouc_suppgid1 = body->suppgid;
-        uc.ouc_suppgid2 = -1;
-        push_ctxt(&saved, &obd->obd_ctxt, &uc);
+        uc.luc_fsuid = body->fsuid;
+        uc.luc_fsgid = body->fsgid;
+        uc.luc_cap = body->capability;
+        uc.luc_suppgid1 = body->suppgid;
+        uc.luc_suppgid2 = -1;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         cleanup_phase = 1; /* kernel context */
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
 
@@ -796,7 +796,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 }
                 l_dput(dchild);
         case 1:
-                pop_ctxt(&saved, &obd->obd_ctxt, &uc);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         default: ;
         }
         return rc;
@@ -806,10 +806,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct obd_ucred uc;
+        struct lvfs_ucred uc;
         int rc = 0;
         ENTRY;
 
@@ -820,10 +820,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
-        uc.ouc_fsuid = body->fsuid;
-        uc.ouc_fsgid = body->fsgid;
-        uc.ouc_cap = body->capability;
-        push_ctxt(&saved, &obd->obd_ctxt, &uc);
+        uc.luc_fsuid = body->fsuid;
+        uc.luc_fsgid = body->fsgid;
+        uc.luc_cap = body->capability;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
                 rc = req->rq_status = PTR_ERR(de);
@@ -841,7 +841,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         l_dput(de);
         GOTO(out_pop, rc);
 out_pop:
-        pop_ctxt(&saved, &obd->obd_ctxt, &uc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         return rc;
 }
 
@@ -948,9 +948,9 @@ static int mds_readpage(struct ptlrpc_request *req)
         struct dentry *de;
         struct file *file;
         struct mds_body *body, *repbody;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc, size = sizeof(*repbody);
-        struct obd_ucred uc;
+        struct lvfs_ucred uc;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
@@ -966,10 +966,10 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
-        uc.ouc_fsuid = body->fsuid;
-        uc.ouc_fsgid = body->fsgid;
-        uc.ouc_cap = body->capability;
-        push_ctxt(&saved, &obd->obd_ctxt, &uc);
+        uc.luc_fsuid = body->fsuid;
+        uc.luc_fsgid = body->fsgid;
+        uc.luc_cap = body->capability;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_fid2dentry(&obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de))
                 GOTO(out_pop, rc = PTR_ERR(de));
@@ -1008,7 +1008,7 @@ static int mds_readpage(struct ptlrpc_request *req)
 out_file:
         filp_close(file, 0);
 out_pop:
-        pop_ctxt(&saved, &obd->obd_ctxt, &uc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out:
         req->rq_status = rc;
         RETURN(0);
@@ -1045,7 +1045,7 @@ static int mds_quotacheck_thread(void *data)
         struct obd_device *obd;
         struct obd_export *exp;
         struct obd_quotactl *oqctl;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
 
         lock_kernel();
@@ -1065,13 +1065,13 @@ static int mds_quotacheck_thread(void *data)
         oqctl = &qchki->qi_oqctl;
         obd = exp->exp_obd;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         rc = fsfilt_quotacheck(obd, obd->u.mds.mds_sb, oqctl);
         if (rc)
                 CERROR("%s: fsfilt_quotacheck: %d\n", obd->obd_name, rc);
 
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         rc = mds_quotacheck_callback(exp, oqctl);
 
@@ -1138,7 +1138,7 @@ static int mds_quotactl(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_quotactl *oqctl, *repoqc;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc = 0, size = sizeof(*repoqc);
         ENTRY;
 
@@ -1197,9 +1197,9 @@ static int mds_quotactl(struct ptlrpc_request *req)
                 if (repoqc->qc_cmd == Q_GETQUOTA)
                         loqc = oqctl;
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_quotactl(obd, obd->u.mds.mds_sb, loqc);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 if (!rc && loqc->qc_cmd == Q_GETQUOTA) {
                         repoqc->qc_dqblk.dqb_curinodes +=
@@ -1613,12 +1613,12 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         struct mds_obd *mds = &obd->u.mds;
         struct mds_server_data *msd = mds->mds_server_data;
         struct file *filp = mds->mds_rcvd_filp;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         loff_t off = 0;
         int rc;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         msd->msd_last_transno = cpu_to_le64(mds->mds_last_transno);
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
@@ -1626,7 +1626,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         rc = fsfilt_write_record(obd, filp, msd, sizeof(*msd), &off,force_sync);
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         RETURN(rc);
 }
@@ -1801,16 +1801,16 @@ static int mds_postsetup(struct obd_device *obd)
                 RETURN(rc);
 
         if (mds->mds_profile) {
-                struct obd_run_ctxt saved;
+                struct lvfs_run_ctxt saved;
                 struct lustre_profile *lprof;
                 struct config_llog_instance cfg;
 
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
                                              mds->mds_profile, &cfg);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 switch (rc) {
                 case 0:
                         break;
@@ -1914,7 +1914,7 @@ int mds_lov_clean(struct obd_device *obd)
         if (mds->mds_profile) {
                 char * cln_prof;
                 struct config_llog_instance cfg;
-                struct obd_run_ctxt saved;
+                struct lvfs_run_ctxt saved;
                 int len = strlen(mds->mds_profile) + sizeof("-clean") + 1;
 
                 OBD_ALLOC(cln_prof, len);
@@ -1923,10 +1923,10 @@ int mds_lov_clean(struct obd_device *obd)
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
                                         cln_prof, &cfg);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 OBD_FREE(cln_prof, len);
                 OBD_FREE(mds->mds_profile, strlen(mds->mds_profile) + 1);

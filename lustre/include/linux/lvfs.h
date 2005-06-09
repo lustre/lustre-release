@@ -37,13 +37,13 @@
 #endif
 
 /* simple.c */
-struct obd_ucred {
-        __u32 ouc_fsuid;
-        __u32 ouc_fsgid;
-        __u32 ouc_cap;
-        __u32 ouc_suppgid1;
-        __u32 ouc_suppgid2;
-        __u32 ouc_umask;
+struct lvfs_ucred {
+        __u32 luc_fsuid;
+        __u32 luc_fsgid;
+        __u32 luc_cap;
+        __u32 luc_suppgid1;
+        __u32 luc_suppgid2;
+        __u32 luc_umask;
 };
 
 struct lvfs_callback_ops {
@@ -52,11 +52,11 @@ struct lvfs_callback_ops {
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
-struct obd_run_ctxt {
+struct lvfs_run_ctxt {
         struct vfsmount *pwdmnt;
         struct dentry   *pwd;
         mm_segment_t     fs;
-        struct obd_ucred ouc;
+        struct lvfs_ucred ouc;
         int              ngroups;
         struct lvfs_callback_ops cb_ops;
 #ifdef OBD_CTXT_DEBUG
@@ -71,12 +71,12 @@ struct obd_run_ctxt {
 #endif
 
 /* lvfs_common.c */
-struct dentry *lvfs_fid2dentry(struct obd_run_ctxt *, __u64, __u32, __u64 ,void *data);
+struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *, __u64, __u32, __u64 ,void *data);
 
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
-               struct obd_ucred *cred);
-void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
-              struct obd_ucred *cred);
+void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
+               struct lvfs_ucred *cred);
+void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
+              struct lvfs_ucred *cred);
 
 #ifdef __KERNEL__
 

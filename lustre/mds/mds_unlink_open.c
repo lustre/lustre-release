@@ -161,7 +161,7 @@ out_free_lmm:
 int mds_cleanup_orphans(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct file *file;
         struct dentry *dchild, *dentry;
         struct vfsmount *mnt;
@@ -173,7 +173,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         int i = 0, rc = 0, item = 0, namlen;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* dentry and mnt ref dropped in dentry_open() on error, or
          * in filp_close() if dentry_open() succeeds */
         dentry = dget(mds->mds_pending_dir);
@@ -250,7 +250,7 @@ err_out:
                 OBD_FREE(dirent, sizeof(*dirent));
         }
 err_pop:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc == 0)
                 rc = item;
         RETURN(rc);

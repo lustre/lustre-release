@@ -788,7 +788,7 @@ int mds_pin(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *request_body, *reply_body;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc, size = sizeof(*reply_body);
         ENTRY;
 
@@ -799,10 +799,10 @@ int mds_pin(struct ptlrpc_request *req)
                 RETURN(rc);
         reply_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*reply_body));
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = mds_open_by_fid(req, &request_body->fid1, reply_body,
                              request_body->flags, NULL, NULL);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         RETURN(rc);
 }
@@ -1329,7 +1329,7 @@ int mds_close(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *body;
         struct mds_file_data *mfd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct inode *inode;
         int rc, repsize[3] = {sizeof(struct mds_body),
                               obd->u.mds.mds_max_mdsize,
@@ -1380,9 +1380,9 @@ int mds_close(struct ptlrpc_request *req)
                 mds_pack_md(obd, req->rq_repmsg, 1,body,inode,MDS_PACK_MD_LOCK);
         }
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         req->rq_status = mds_mfd_close(req, obd, mfd, 1);
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");

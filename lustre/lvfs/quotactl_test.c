@@ -269,7 +269,7 @@ static int quotactl_test_4(struct obd_device *obd, struct super_block *sb)
 static int quotactl_run_tests(struct obd_device *obd, struct obd_device *tgt)
 {
         struct super_block *sb;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -282,7 +282,7 @@ static int quotactl_run_tests(struct obd_device *obd, struct obd_device *tgt)
                 RETURN(-EINVAL);
         }
 
-        push_ctxt(&saved, &tgt->obd_ctxt, NULL);
+        push_ctxt(&saved, &tgt->obd_lvfs_ctxt, NULL);
 
         rc = quotactl_test_1(tgt, sb);
         if (rc)
@@ -301,7 +301,7 @@ static int quotactl_run_tests(struct obd_device *obd, struct obd_device *tgt)
  cleanup:
         quotactl_test_4(tgt, sb);
 
-        pop_ctxt(&saved, &tgt->obd_ctxt, NULL);
+        pop_ctxt(&saved, &tgt->obd_lvfs_ctxt, NULL);
 
         return rc;
 }

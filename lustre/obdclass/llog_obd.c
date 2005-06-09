@@ -181,7 +181,7 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -205,9 +205,9 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 

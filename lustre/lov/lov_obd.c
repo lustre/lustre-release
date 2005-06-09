@@ -1336,7 +1336,7 @@ static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
 }
 
-static void lov_ap_get_ucred(void *data, struct obd_ucred *ouc)
+static void lov_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
 {
         struct lov_async_page *lap = LAP_FROM_COOKIE(data);
 

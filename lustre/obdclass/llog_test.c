@@ -529,14 +529,14 @@ static int llog_test_7(struct obd_device *obd)
 static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
         sprintf(name, "%x", llog_test_rand);
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         rc = llog_test_1(obd, name);
         if (rc)
@@ -576,7 +576,7 @@ static int llog_run_tests(struct obd_device *obd)
                 if (!rc)
                         rc = err;
         case 0:
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
 
         return rc;

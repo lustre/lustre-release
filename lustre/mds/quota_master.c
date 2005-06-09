@@ -330,7 +330,7 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
         const char *quotafiles[] = LUSTRE_ADMIN_QUOTAFILES;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         char name[64];
         int i, rc = 0;
         struct dentry *dparent = mds->mds_objects_dir;
@@ -338,7 +338,7 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
         ENTRY;
 
         LASSERT(iparent);
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         down(&qinfo->qi_sem);
         for (i = 0; i < MAXQUOTAS; i++) {
@@ -400,7 +400,7 @@ int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl)
         }
         up(&qinfo->qi_sem);
 
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 }
 
@@ -409,14 +409,14 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_quota_info *qinfo = &mds->mds_quota_info;
         const char *quotafiles[] = LUSTRE_ADMIN_QUOTAFILES;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         char name[64];
         int i, rc = 0;
         struct inode *iparent = mds->mds_objects_dir->d_inode;
         ENTRY;
 
         LASSERT(iparent);
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         down(&qinfo->qi_sem);
         /* open admin quota files and read quotafile info */
@@ -450,7 +450,7 @@ int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl)
         }
         up(&qinfo->qi_sem);
 
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         if (rc && rc != -EBUSY) {
                 down(&qinfo->qi_sem);

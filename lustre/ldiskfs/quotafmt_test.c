@@ -19,19 +19,19 @@
 char *test_quotafile[2] = {"usrquota_test", "grpquota_test"};
 
 static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *tgt, 
-			      struct obd_run_ctxt *saved)
+			      struct lvfs_run_ctxt *saved)
 {
 	struct lustre_disk_dqheader dqhead;
 	static const uint quota_magics[] = LUSTRE_INITQMAGICS;
 	static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
 	struct file *fp;
-	struct inode *parent_inode = tgt->obd_ctxt.pwd->d_inode;
+	struct inode *parent_inode = tgt->obd_lvfs_ctxt.pwd->d_inode;
 	size_t size;
 	struct dentry *de;
 	int i, rc = 0;
 	ENTRY;
 	
-	push_ctxt(saved, &tgt->obd_ctxt, NULL);
+	push_ctxt(saved, &tgt->obd_lvfs_ctxt, NULL);
 
 	sema_init(&lqi->qi_sem, 1);
 
@@ -42,7 +42,7 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 
 		/* remove the stale test quotafile */
 		down(&parent_inode->i_sem);
-		de = lookup_one_len(name, tgt->obd_ctxt.pwd, namelen);
+		de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
 		if (!IS_ERR(de) && de->d_inode)
 			vfs_unlink(parent_inode, de);
 		if (!IS_ERR(de))
@@ -77,10 +77,10 @@ static int quotfmt_initialize(struct lustre_quota_info *lqi, struct obd_device *
 }
 
 static int quotfmt_finalize(struct lustre_quota_info *lqi, struct obd_device *tgt, 
-			    struct obd_run_ctxt *saved)
+			    struct lvfs_run_ctxt *saved)
 {
 	struct dentry *de;
-	struct inode *parent_inode = tgt->obd_ctxt.pwd->d_inode;
+	struct inode *parent_inode = tgt->obd_lvfs_ctxt.pwd->d_inode;
 	int i, rc = 0;
 	ENTRY;
 
@@ -97,7 +97,7 @@ static int quotfmt_finalize(struct lustre_quota_info *lqi, struct obd_device *tg
 		/* unlink quota file */
 		down(&parent_inode->i_sem);
 		
-		de = lookup_one_len(name, tgt->obd_ctxt.pwd, namelen);
+		de = lookup_one_len(name, tgt->obd_lvfs_ctxt.pwd, namelen);
 		if (IS_ERR(de) || de->d_inode == NULL) {
 			rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
 			CERROR("error lookup quotafile %s (rc = %d)\n", 
@@ -115,7 +115,7 @@ dput:
 		up(&parent_inode->i_sem);
 	}
 
-	pop_ctxt(saved, &tgt->obd_ctxt, NULL);
+	pop_ctxt(saved, &tgt->obd_lvfs_ctxt, NULL);
 	RETURN(rc);
 }
 
@@ -337,7 +337,7 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
 
 static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
 {
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
 	struct lustre_quota_info *lqi = NULL;
 	int rc = 0;
 	ENTRY;

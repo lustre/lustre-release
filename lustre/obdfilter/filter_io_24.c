@@ -358,7 +358,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
@@ -405,7 +405,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                         iattr.ia_size = this_size;
         }
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -445,7 +445,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 filter_free_iobuf(iobuf);

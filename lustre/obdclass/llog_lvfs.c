@@ -486,7 +486,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                         GOTO(cleanup, rc);
                 }
 
-                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, dchild,
+                handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
                                                     O_RDWR | O_LARGEFILE);
                 if (IS_ERR(handle->lgh_file)) {
                         rc = PTR_ERR(handle->lgh_file);
@@ -525,7 +525,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 if (IS_ERR(dchild))
                         GOTO(cleanup, rc = PTR_ERR(dchild));
                 cleanup_phase = 2;
-                handle->lgh_file = l_dentry_open(&obd->obd_ctxt, dchild,
+                handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
                                                  open_flags);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
@@ -572,9 +572,9 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
                 struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
                 struct inode *inode = fdentry->d_parent->d_inode;
-                struct obd_run_ctxt saved;
+                struct lvfs_run_ctxt saved;
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 dget(fdentry);
                 rc = llog_lvfs_close(handle);
 
@@ -585,7 +585,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 }
 
                 dput(fdentry);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 RETURN(rc);
         }
 
@@ -612,7 +612,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_catid *idarray)
 {
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct l_file *file;
         int rc;
         int size = sizeof(*idarray) * count;
@@ -620,7 +620,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         LASSERT(count);
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -643,7 +643,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         }
 
  out:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc = filp_close(file, 0);
         RETURN(rc);
@@ -654,7 +654,7 @@ EXPORT_SYMBOL(llog_get_cat_list);
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_catid *idarray)
 {
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct l_file *file;
         int rc;
         int size = sizeof(*idarray) * count;
@@ -662,7 +662,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 
         LASSERT(count);
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
                 rc = PTR_ERR(file);
@@ -685,7 +685,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         }
 
  out:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc = filp_close(file, 0);
         RETURN(rc);

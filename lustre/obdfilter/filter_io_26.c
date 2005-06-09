@@ -405,10 +405,10 @@ static int filter_clear_page_cache(struct inode *inode,
 
 static int filter_quota_enforcement(struct obd_device *obd,
                                     unsigned int fsuid, unsigned int fsgid,
-                                    struct obd_ucred **ret_uc)
+                                    struct lvfs_ucred **ret_uc)
 {
         struct filter_obd *filter = &obd->u.filter;
-        struct obd_ucred *uc = NULL;
+        struct lvfs_ucred *uc = NULL;
         ENTRY;
 
         if (!sb_any_quota_enabled(filter->fo_sb))
@@ -419,13 +419,13 @@ static int filter_quota_enforcement(struct obd_device *obd,
                 RETURN(-ENOMEM);
         *ret_uc = uc;
 
-        uc->ouc_fsuid = fsuid;
-        uc->ouc_fsgid = fsgid;
-        uc->ouc_cap = current->cap_effective;
+        uc->luc_fsuid = fsuid;
+        uc->luc_fsgid = fsgid;
+        uc->luc_cap = current->cap_effective;
         if (!fsuid)
-                cap_raise(uc->ouc_cap, CAP_SYS_RESOURCE);
+                cap_raise(uc->luc_cap, CAP_SYS_RESOURCE);
         else
-                cap_lower(uc->ouc_cap, CAP_SYS_RESOURCE);
+                cap_lower(uc->luc_cap, CAP_SYS_RESOURCE);
 
         RETURN(0);
 }
@@ -577,7 +577,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 {
         struct niobuf_local *lnb;
         struct dio_request *dreq = NULL;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
         struct inode *inode = NULL;
@@ -585,7 +585,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
-        struct obd_ucred *uc = NULL;
+        struct lvfs_ucred *uc = NULL;
         int   total_size = 0;
         ENTRY;
 
@@ -637,12 +637,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         /* The client store the user credit information fsuid and fsgid
          * in oa->o_uid and oa->o_gid. In case of quota enabled, we use 
-         * them to build the obd_ucred so as to enforce oss quota check */
+         * them to build the lvfs_ucred so as to enforce oss quota check */
         rc = filter_quota_enforcement(obd, oa->o_uid, oa->o_gid, &uc);
         if (rc)
                 GOTO(cleanup, rc);
 
-        push_ctxt(&saved, &obd->obd_ctxt, uc);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, uc);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -690,7 +690,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, uc);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, uc);
                 if (uc)
                         OBD_FREE(uc, sizeof(*uc));
                 LASSERT(current->journal_info == NULL);

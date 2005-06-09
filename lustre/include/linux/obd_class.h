@@ -580,7 +580,7 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 {
         LASSERT(exp->exp_obd);
 
-        return lvfs_fid2dentry(&exp->exp_obd->obd_ctxt, id_ino, gen, gr,
+        return lvfs_fid2dentry(&exp->exp_obd->obd_lvfs_ctxt, id_ino, gen, gr,
                                exp->exp_obd);
 }
 

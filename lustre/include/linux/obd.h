@@ -130,7 +130,7 @@ struct obd_async_page_ops {
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
         void (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
-        void (*ap_get_ucred)(void *data, struct obd_ucred *ouc);
+        void (*ap_get_ucred)(void *data, struct lvfs_ucred *ouc);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee
@@ -524,7 +524,7 @@ struct obd_device {
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;   /* jiffies */
-        struct obd_run_ctxt     obd_ctxt;
+        struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
