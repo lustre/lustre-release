@@ -998,7 +998,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         }
 
         /* Mark QP created */
-        conn->ibc_state = IBNAL_CONN_INIT;
+        conn->ibc_state = IBNAL_CONN_INIT_QP;
         conn->ibc_connvars->cv_local_qpn = rspattr.create_return.qp_num;
 
         if (rspattr.create_return.receive_max_outstand_wr < 
@@ -1012,6 +1012,9 @@ kibnal_create_conn (cm_cep_handle_t cep)
                        rspattr.create_return.send_max_outstand_wr);
                 goto failed;
         }
+
+        /* Mark init complete */
+        conn->ibc_state = IBNAL_CONN_INIT;
 
         /* 1 ref for caller */
         atomic_set (&conn->ibc_refcount, 1);
@@ -1050,6 +1053,11 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 /* fall through */
 
         case IBNAL_CONN_INIT:
+                vvrc = cm_destroy_cep(conn->ibc_cep);
+                LASSERT (vvrc == vv_return_ok);
+                /* fall through */
+
+        case IBNAL_CONN_INIT_QP:
                 kibnal_set_qp_state(conn, vv_qp_state_reset);
                 vvrc = vv_qp_destroy(kibnal_data.kib_hca, conn->ibc_qp);
                 if (vvrc != vv_return_ok)
@@ -1072,9 +1080,6 @@ kibnal_destroy_conn (kib_conn_t *conn)
 
         if (conn->ibc_peer != NULL)
                 kibnal_peer_decref(conn->ibc_peer);
-
-        vvrc = cm_destroy_cep(conn->ibc_cep);
-        LASSERT (vvrc == vv_return_ok);
 
         PORTAL_FREE(conn, sizeof (*conn));
 
@@ -1706,7 +1711,7 @@ kibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         }
 
         /* TODO: apparently only one adapter is supported */
-        vvrc = vv_hca_open("ANY_HCA", NULL, &kibnal_data.kib_hca);
+        vvrc = vv_hca_open("InfiniHost0", NULL, &kibnal_data.kib_hca);
         if (vvrc != vv_return_ok) {
                 CERROR ("Can't open CA: %d\n", vvrc);
                 goto failed;

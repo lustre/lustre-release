@@ -101,7 +101,7 @@
 #define IBNAL_LOCAL_SUB          1
 #define IBNAL_TRAFFIC_CLASS      0
 #define IBNAL_SOURCE_PATH_BIT    0
-#define IBNAL_OUS_DST_RD         32
+#define IBNAL_OUS_DST_RD         1
 #define IBNAL_IB_MTU             vv_mtu_1024
 
 /* sdp-hca-params.h */
@@ -379,16 +379,17 @@ typedef struct kib_conn
 } kib_conn_t;
 
 #define IBNAL_CONN_INIT_NOTHING       0         /* incomplete init */
-#define IBNAL_CONN_INIT               1         /* completed init */
-#define IBNAL_CONN_ACTIVE_ARP         2         /* active arping */
-#define IBNAL_CONN_ACTIVE_CONNECT     3         /* active sending req */
-#define IBNAL_CONN_ACTIVE_CHECK_REPLY 4         /* active checking reply */
-#define IBNAL_CONN_ACTIVE_RTU         5         /* active sending rtu */
-#define IBNAL_CONN_PASSIVE_WAIT       6         /* passive waiting for rtu */
-#define IBNAL_CONN_ESTABLISHED        7         /* connection established */
-#define IBNAL_CONN_DISCONNECT1        8         /* disconnect phase 1 */
-#define IBNAL_CONN_DISCONNECT2        9         /* disconnect phase 2 */
-#define IBNAL_CONN_DISCONNECTED       10        /* disconnect complete */
+#define IBNAL_CONN_INIT_QP            1         /* QP allocated */
+#define IBNAL_CONN_INIT               2         /* completed init */
+#define IBNAL_CONN_ACTIVE_ARP         3         /* active arping */
+#define IBNAL_CONN_ACTIVE_CONNECT     4         /* active sending req */
+#define IBNAL_CONN_ACTIVE_CHECK_REPLY 5         /* active checking reply */
+#define IBNAL_CONN_ACTIVE_RTU         6         /* active sending rtu */
+#define IBNAL_CONN_PASSIVE_WAIT       7         /* passive waiting for rtu */
+#define IBNAL_CONN_ESTABLISHED        8         /* connection established */
+#define IBNAL_CONN_DISCONNECT1        9         /* disconnect phase 1 */
+#define IBNAL_CONN_DISCONNECT2        10        /* disconnect phase 2 */
+#define IBNAL_CONN_DISCONNECTED       11        /* disconnect complete */
 
 typedef struct kib_peer
 {
