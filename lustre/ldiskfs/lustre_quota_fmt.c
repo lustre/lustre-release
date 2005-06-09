@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  * Lustre administrative quota format.
  *
  *  from
@@ -40,7 +42,7 @@ int lustre_check_quota_file(struct lustre_quota_info *lqi, int type)
 	loff_t offset = 0;
 	static const uint quota_magics[] = LUSTRE_INITQMAGICS;
 	static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
- 
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	size = f->f_op->read(f, (char *)&dqhead, sizeof(struct lustre_disk_dqheader), &offset);
@@ -212,10 +214,10 @@ out_buf:
 }
 
 /* Insert empty block to the list */
-static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info, 
+static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
 			  dqbuf_t buf, uint blk)
 {
-	struct lustre_disk_dqdbheader *dh = (struct lustre_disk_dqdbheader *)buf;
+	struct lustre_disk_dqdbheader *dh =(struct lustre_disk_dqdbheader *)buf;
 	int err;
 
 	dh->dqdh_next_free = cpu_to_le32(info->dqi_free_blk);
@@ -223,7 +225,8 @@ static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
 	dh->dqdh_entries = cpu_to_le16(0);
 	info->dqi_free_blk = blk;
 	lustre_mark_info_dirty(info);
-	if ((err = write_blk(filp, blk, buf)) < 0)	/* Some strange block. We had better leave it... */
+	if ((err = write_blk(filp, blk, buf)) < 0)
+		/* Some strange block. We had better leave it... */
 		return err;
 	return 0;
 }
@@ -722,7 +725,7 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
 	/* write quotafile header */
 	dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
 	dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
-	size = fp->f_op->write(fp, (char *)&dqhead, 
+	size = fp->f_op->write(fp, (char *)&dqhead,
 			       sizeof(struct lustre_disk_dqheader), &offset);
 	
 	if (size != sizeof(struct lustre_disk_dqheader)) {
