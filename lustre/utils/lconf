@@ -3589,6 +3589,7 @@ lconf_options = [
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
     ('node',   "Load config for <nodename>", PARAM),
     ('sec',    "security flavor <null|krb5i|krb5p> of client", PARAM),
+    ('mds_sec',    "security flavor <null|krb5i|krb5p> of client", PARAM),
     ('mds_mds_sec', "security flavor <null|krb5i|krb5p> of inter mds's", PARAM),
     ('mds_ost_sec', "security flavor <null|krb5i|krb5p> of mds's-ost's", PARAM),
     ('cleanup,d', "Cleans up config. (Shutdown)"),
