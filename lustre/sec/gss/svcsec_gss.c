@@ -129,6 +129,7 @@ static void rsi_put(struct cache_head *item, struct cache_detail *cd)
         struct rsi *rsii = container_of(item, struct rsi, h);
         LASSERT(atomic_read(&item->refcnt) > 0);
         if (cache_put(item, cd)) {
+                LASSERT(item->next == NULL);
                 rsi_free(rsii);
                 OBD_FREE(rsii, sizeof(*rsii));
         }
@@ -282,69 +283,67 @@ static int rsi_parse(struct cache_detail *cd,
         ENTRY;
 
         OBD_ALLOC(rsii, sizeof(*rsii));
-        if (!rsii) {
-                CERROR("failed to alloc rsii\n");
+        if (!rsii)
                 RETURN(-ENOMEM);
-        }
         cache_init(&rsii->h);
 
         /* handle */
         len = qword_get(&mesg, buf, mlen);
         if (len < 0)
                 goto out;
-        status = -ENOMEM;
-        if (rawobj_alloc(&rsii->in_handle, buf, len))
+        if (rawobj_alloc(&rsii->in_handle, buf, len)) {
+                status = -ENOMEM;
                 goto out;
+        }
 
         /* token */
         len = qword_get(&mesg, buf, mlen);
-        status = -EINVAL;
         if (len < 0)
-                goto out;;
-        status = -ENOMEM;
-        if (rawobj_alloc(&rsii->in_token, buf, len))
                 goto out;
+        if (rawobj_alloc(&rsii->in_token, buf, len)) {
+                status = -ENOMEM;
+                goto out;
+        }
 
         /* expiry */
         expiry = get_expiry(&mesg);
-        status = -EINVAL;
         if (expiry == 0)
                 goto out;
 
-        /* major/minor */
+        /* major */
+        len = qword_get(&mesg, buf, mlen);
+        if (len <= 0)
+                goto out;
+        rsii->major_status = simple_strtol(buf, &ep, 10);
+        if (*ep)
+                goto out;
+
+        /* minor */
+        len = qword_get(&mesg, buf, mlen);
+        if (len <= 0)
+                goto out;
+        rsii->minor_status = simple_strtol(buf, &ep, 10);
+        if (*ep)
+                goto out;
+
+        /* out_handle */
         len = qword_get(&mesg, buf, mlen);
         if (len < 0)
                 goto out;
-        if (len == 0) {
+        if (rawobj_alloc(&rsii->out_handle, buf, len)) {
+                status = -ENOMEM;
                 goto out;
-        } else {
-                rsii->major_status = simple_strtoul(buf, &ep, 10);
-                if (*ep)
-                        goto out;
-                len = qword_get(&mesg, buf, mlen);
-                if (len <= 0)
-                        goto out;
-                rsii->minor_status = simple_strtoul(buf, &ep, 10);
-                if (*ep)
-                        goto out;
-
-                /* out_handle */
-                len = qword_get(&mesg, buf, mlen);
-                if (len < 0)
-                        goto out;
-                status = -ENOMEM;
-                if (rawobj_alloc(&rsii->out_handle, buf, len))
-                        goto out;
-
-                /* out_token */
-                len = qword_get(&mesg, buf, mlen);
-                status = -EINVAL;
-                if (len < 0)
-                        goto out;
-                status = -ENOMEM;
-                if (rawobj_alloc(&rsii->out_token, buf, len))
-                        goto out;
         }
+
+        /* out_token */
+        len = qword_get(&mesg, buf, mlen);
+        if (len < 0)
+                goto out;
+        if (rawobj_alloc(&rsii->out_token, buf, len)) {
+                status = -ENOMEM;
+                goto out;
+        }
+
         rsii->h.expiry_time = expiry;
         status = gssd_reply(rsii);
 out:
@@ -414,6 +413,7 @@ static void rsc_put(struct cache_head *item, struct cache_detail *cd)
 
         LASSERT(atomic_read(&item->refcnt) > 0);
         if (cache_put(item, cd)) {
+                LASSERT(item->next == NULL);
                 rsc_free(rsci);
                 OBD_FREE(rsci, sizeof(*rsci));
         }
@@ -448,9 +448,8 @@ static struct rsc *rsc_lookup(struct rsc *item, int set)
                 if (!rsc_match(tmp, item))
                         continue;
                 cache_get(&tmp->h);
-                if (!set) {
+                if (!set)
                         goto out_noset;
-                }
                 *hp = tmp->h.next;
                 tmp->h.next = NULL;
                 clear_bit(CACHE_HASHED, &tmp->h.flags);
