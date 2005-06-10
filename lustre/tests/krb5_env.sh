@@ -71,7 +71,35 @@ prepare_krb5_cache() {
     fi
 
     echo "***** refresh Kerberos V5 TGT for uid $UID *****"
-    $KRB5DIR/bin/kinit
+    if [ -z "$GSS_PASS" ]; then
+        $KRB5DIR/bin/kinit
+    else
+        expect <<EOF
+set timeout 30 
+
+log_user 1 
+
+set spawnid [spawn /bin/bash]
+send "export PS1=\"user@host $ \" \r"
+expect {
+    timeout {puts "timeout" ;exit 1}
+    "user@host $ "
+}
+
+send "$KRB5DIR/bin/kinit\r"
+{
+    timeout {puts "timeout" ;exit 1}
+    "Password for "
+
+send "$GSS_PASS\r"
+expect {
+    timeout {puts "timeout" ;exit 1}
+    "user@host $ "
+}
+
+exit 0
+EOF
+    fi
     ret=$?
     return $ret
 }
