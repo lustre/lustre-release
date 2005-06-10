@@ -771,12 +771,12 @@ int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);
 
 /* ptlrpc/lproc_ptlrpc.c */
-#ifdef __KERNEL__
-void ptlrpc_lprocfs_register_obd(struct obd_device *obddev);
-void ptlrpc_lprocfs_unregister_obd(struct obd_device *obddev);
+#ifdef LPROCFS
+void ptlrpc_lprocfs_register_obd(struct obd_device *obd);
+void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd);
 #else
-#define ptlrpc_lprocfs_register_obd(param...) do{}while(0)
-#define ptlrpc_lprocfs_unregister_obd(param...) do{}while(0)
+static inline void ptlrpc_lprocfs_register_obd(struct obd_device *obd) {}
+static inline void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd) {}
 #endif
 
 /* ptlrpc/llog_server.c */

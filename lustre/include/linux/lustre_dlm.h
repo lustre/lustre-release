@@ -168,9 +168,6 @@ struct ldlm_namespace {
         struct list_head       ns_root_list; /* all root resources in ns */
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
-        /*
-        struct proc_dir_entry *ns_proc_dir;
-        */
 
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
@@ -488,7 +485,11 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
 int ldlm_proc_setup(void);
+#ifdef LPROCFS
 void ldlm_proc_cleanup(void);
+#else
+static inline void ldlm_proc_cleanup(void) {}
+#endif
 
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,

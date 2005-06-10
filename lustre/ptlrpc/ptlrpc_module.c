@@ -202,10 +202,6 @@ EXPORT_SYMBOL(ptlrpcd_decref);
 EXPORT_SYMBOL(ptlrpcd_add_req);
 EXPORT_SYMBOL(ptlrpcd_wake);
 
-/* lproc_ptlrpc.c */
-EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
-EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
-
 /* llogd.c */
 EXPORT_SYMBOL(llog_origin_handle_create);
 EXPORT_SYMBOL(llog_origin_handle_next_block);

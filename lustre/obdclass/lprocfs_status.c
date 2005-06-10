@@ -43,7 +43,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 
-#if defined(LPROCFS) && defined(__KERNEL__)
+#if defined(LPROCFS)
 
 struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name)
@@ -874,8 +874,6 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
 
-#endif /* LPROCFS*/
-
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);
 EXPORT_SYMBOL(lprocfs_remove);
@@ -907,3 +905,4 @@ EXPORT_SYMBOL(lprocfs_rd_filesfree);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
 EXPORT_SYMBOL(lprocfs_write_u64_helper);
+#endif /* LPROCFS*/

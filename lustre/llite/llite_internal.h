@@ -168,7 +168,6 @@ struct lov_stripe_md;
 
 extern spinlock_t inode_lock;
 
-extern void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -250,9 +249,16 @@ extern char *llap_origins[];
 #endif
 
 /* llite/lproc_llite.c */
+#ifdef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
+#else
+static inline int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
+                        struct super_block *sb, char *osc, char *mdc){return 0;}
+static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
+#endif
+
 
 /* llite/dir.c */
 extern struct file_operations ll_dir_operations;

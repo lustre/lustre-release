@@ -348,9 +348,11 @@ static struct obd_ops quotactl_obd_ops = {
         .o_cleanup     = quotactl_test_cleanup,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(quotactl_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init quotactl_test_init(void)
 {

@@ -39,7 +39,7 @@ struct proc_dir_entry *ldlm_type_proc_dir = NULL;
 struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
 struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
                              unsigned long count, void *data)
 {
@@ -206,8 +206,10 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         }
 }
-#endif
 #undef MAX_STRING_SIZE
+#else
+#define ldlm_proc_namespace(ns) do {} while (0)
+#endif /* LPROCFS */
 
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
@@ -255,9 +257,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         down(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
         up(&ldlm_namespace_lock);
-#ifdef __KERNEL__
         ldlm_proc_namespace(ns);
-#endif
         RETURN(ns);
 
 out_hash:
@@ -380,7 +380,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
         /* At shutdown time, don't call the cancellation callback */
         ldlm_namespace_cleanup(ns, 0);
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
         {
                 struct proc_dir_entry *dir;
                 dir = lprocfs_srch(ldlm_ns_proc_dir, ns->ns_name);
@@ -409,7 +409,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                                        "of this node.\n", ns->ns_name,
                                        atomic_read(&ns->ns_refcount), rc);
                 }
-                CDEBUG(D_DLMTRACE, 
+                CDEBUG(D_DLMTRACE,
                        "dlm namespace %s free done waiting\n", ns->ns_name);
         }
 

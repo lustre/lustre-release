@@ -410,6 +410,8 @@ EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 EXPORT_SYMBOL(ptlrpc_abort_inflight_superhack);
+
+struct proc_dir_entry *proc_lustre_root;
 EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
@@ -478,14 +480,17 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 }
 
 /* Root for /proc/fs/lustre */
-struct proc_dir_entry *proc_lustre_root = NULL;
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { 0 }
 };
+#else
+#define lprocfs_base NULL
+#endif /* LPROCFS */
 
+#ifdef __KERNEL__
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
 {
         if (*pos >= MAX_OBD_DEVICES)
@@ -639,7 +644,7 @@ int init_obdclass(void)
 #endif
 {
         struct obd_device *obd;
-#ifdef LPROCFS
+#ifdef __KERNEL__
         struct proc_dir_entry *entry;
 #endif
         int err;
@@ -676,9 +681,7 @@ int init_obdclass(void)
 
 #ifdef __KERNEL__
         obd_sysctl_init();
-#endif
 
-#ifdef LPROCFS
         proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
         if (!proc_lustre_root) {
                 printk(KERN_ERR
@@ -720,12 +723,11 @@ static void cleanup_obdclass(void)
 
         obd_cleanup_caches();
         obd_sysctl_clean();
-#ifdef LPROCFS
+
         if (proc_lustre_root) {
                 lprocfs_remove(proc_lustre_root);
                 proc_lustre_root = NULL;
         }
-#endif
 
         class_handle_cleanup();
         class_exit_uuidlist();

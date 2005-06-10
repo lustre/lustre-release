@@ -662,9 +662,11 @@ static struct obd_ops llog_obd_ops = {
         .o_llog_finish = llog_test_llog_finish,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init llog_test_init(void)
 {

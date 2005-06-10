@@ -303,7 +303,7 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-#define LPROCFS_INIT_VARS(name, vclass, vinstance) do {} while (0)
+#define LPROCFS_INIT_VARS(name, vclass, vinstance)
 #define lprocfs_init_vars(...) do {} while (0)
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,

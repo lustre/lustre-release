@@ -24,11 +24,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd_class.h>
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-#else
-
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { 0 }
@@ -39,5 +35,5 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
         { 0 }
 };
 
-#endif /* LPROCFS */
 LPROCFS_INIT_VARS(echo, lprocfs_module_vars, lprocfs_obd_vars)
+#endif /* LPROCFS */

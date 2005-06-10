@@ -29,14 +29,7 @@
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
-#ifndef LPROCFS
-struct lprocfs_vars lprocfs_mds_obd_vars[]  = { {0} };
-struct lprocfs_vars lprocfs_mds_module_vars[] = { {0} };
-struct lprocfs_vars lprocfs_mdt_obd_vars[] = { {0} };
-struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
-
-#else
-
+#ifdef LPROCFS
 static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
                                  int *eof, void *data)
 {
@@ -199,6 +192,6 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = {
         { 0 }
 };
 
-#endif
 LPROCFS_INIT_VARS(mds, lprocfs_mds_module_vars, lprocfs_mds_obd_vars);
 LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
+#endif

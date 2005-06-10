@@ -29,11 +29,7 @@
 
 #include "filter_internal.h"
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-#else
-
+#ifdef LPROCFS
 static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
@@ -582,7 +578,5 @@ int lproc_filter_attach_seqstat(struct obd_device *dev)
                                       &filter_brw_stats_fops, dev);
 }
 
-
-
-#endif /* LPROCFS */
 LPROCFS_INIT_VARS(filter, lprocfs_module_vars, lprocfs_obd_vars)
+#endif /* LPROCFS */

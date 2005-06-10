@@ -1409,7 +1409,7 @@ static int ldlm_setup(void)
         if (ldlm_state == NULL)
                 RETURN(-ENOMEM);
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
         rc = ldlm_proc_setup();
         if (rc != 0)
                 GOTO(out_free, rc);
@@ -1503,7 +1503,7 @@ static int ldlm_setup(void)
 #endif
 
  out_proc:
-#ifdef __KERNEL__
+#ifdef LPROCFS
         ldlm_proc_cleanup();
  out_free:
 #endif

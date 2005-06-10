@@ -436,9 +436,11 @@ static struct obd_ops quotfmt_obd_ops = {
         .o_cleanup     = quotfmt_test_cleanup,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(quotfmt_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init quotfmt_test_init(void)
 {

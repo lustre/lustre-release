@@ -30,11 +30,7 @@
 #include <linux/seq_file.h>
 #include "osc_internal.h"
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-#else
-
+#ifdef LPROCFS
 static int osc_rd_max_pages_per_rpc(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
@@ -452,5 +448,5 @@ int lproc_osc_attach_seqstat(struct obd_device *dev)
                                       &osc_rpc_stats_fops, dev);
 }
 
-#endif /* LPROCFS */
 LPROCFS_INIT_VARS(osc, lprocfs_module_vars, lprocfs_obd_vars)
+#endif /* LPROCFS */

@@ -1621,7 +1621,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         list_splice(&rpc_list, &aa->aa_oaps);
         INIT_LIST_HEAD(&rpc_list);
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
@@ -3367,7 +3367,7 @@ struct obd_ops osc_obd_ops = {
         .o_quotactl             = osc_quotactl,
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct obd_ops sanosc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_cleanup              = client_obd_cleanup,
@@ -3403,14 +3403,14 @@ struct obd_ops sanosc_obd_ops = {
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct lprocfs_static_vars sanlvars;
 #endif
         int rc;
         ENTRY;
 
         lprocfs_init_vars(osc, &lvars);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         lprocfs_init_vars(osc, &sanlvars);
 #endif
 
@@ -3419,13 +3419,13 @@ int __init osc_init(void)
         if (rc)
                 RETURN(rc);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = class_register_type(&sanosc_obd_ops, sanlvars.module_vars,
                                  LUSTRE_SANOSC_NAME);
         if (rc)
                 class_unregister_type(LUSTRE_OSC_NAME);
 #endif
-        
+
         rc = osc_qinfo_init();
 
         RETURN(rc);
@@ -3435,7 +3435,7 @@ int __init osc_init(void)
 static void /*__exit*/ osc_exit(void)
 {
         osc_qinfo_exit();
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         class_unregister_type(LUSTRE_SANOSC_NAME);
 #endif
         class_unregister_type(LUSTRE_OSC_NAME);

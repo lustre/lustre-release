@@ -588,7 +588,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 
         lprocfs_init_vars(lov, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
-#ifdef __KERNEL__
+#ifdef LPROCFS
         {
                 struct proc_dir_entry *entry;
 

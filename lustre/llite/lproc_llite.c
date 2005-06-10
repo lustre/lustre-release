@@ -29,19 +29,12 @@
 
 #include "llite_internal.h"
 
-/* /proc/lustre/llite mount point registration */
 struct proc_dir_entry *proc_lustre_fs_root;
+
+#ifdef LPROCFS
+/* /proc/lustre/llite mount point registration */
 struct file_operations llite_dump_pgcache_fops;
 struct file_operations ll_ra_stats_fops;
-
-#ifndef LPROCFS
-int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
-                                struct super_block *sb, char *osc, char *mdc)
-{
-        return 0;
-}
-void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi){}
-#else
 
 long long mnt_instance;
 

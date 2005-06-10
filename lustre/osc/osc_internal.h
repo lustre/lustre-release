@@ -61,7 +61,7 @@ int osc_qinfo_cleanup(struct client_obd *cli);
 int osc_qinfo_init(void);
 void osc_qinfo_exit(void);
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else
 static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
