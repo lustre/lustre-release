@@ -135,6 +135,7 @@ struct if_quotacheck {
 #ifndef __KERNEL__
 #define NEED_QUOTA_DEFS
 #else
+# include <linux/version.h>
 # if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
 #  define NEED_QUOTA_DEFS
 # endif
