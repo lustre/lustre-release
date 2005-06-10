@@ -2119,6 +2119,13 @@ test_60() {
 }
 run_test 60 "llog sanity tests run from kernel module =========="
 
+test_60b() { # bug 6411
+	dmesg > $DIR/dmesg
+	LLOG_COUNT=`dmesg | grep -c llog_test`
+	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT broken" || true
+}
+run_test 60b "limit repeated messages from CERROR/CWARN ========"
+
 test_61() {
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=`page_size` count=1
