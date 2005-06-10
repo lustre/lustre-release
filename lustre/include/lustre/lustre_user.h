@@ -133,7 +133,14 @@ struct if_quotacheck {
 };
 
 #ifndef __KERNEL__
+#define NEED_QUOTA_DEFS
+#else
+# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
+#  define NEED_QUOTA_DEFS
+# endif
+#endif
 
+#ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
 #define QUOTABLOCK_BITS 10
 #endif
