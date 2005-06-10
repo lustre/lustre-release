@@ -237,10 +237,9 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (err)
-                        GOTO(out, err);
 
-                err = class_process_config(lcfg);
+                if (!err)
+                        err = class_process_config(lcfg);
                 OBD_FREE(lcfg, data->ioc_plen1);
                 GOTO(out, err);
         }
@@ -331,7 +330,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         if (data->ioc_dev >= MAX_OBD_DEVICES) {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
-        } 
+        }
         obd = &obd_dev[data->ioc_dev];
         if (!(obd && obd->obd_set_up) || obd->obd_stopping) {
                 CERROR("OBD ioctl: device not setup %d \n", data->ioc_dev);
