@@ -1065,11 +1065,13 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
-            if not local:
-                panic("unable to determine ip for:", wildcard)
+        elif net_type == 'vib':
+            local = if2addr('ipoib0')
         else:
             host = socket.gethostname()
             local = socket.gethostbyname(host)
+        if not local:
+            panic("unable to determine ip for:", wildcard)
     elif net_type == 'elan':
         # awk '/NodeId/ { print $2 }' 'sys_get_elan_position_file()'
         f = sys_get_elan_position_file()
