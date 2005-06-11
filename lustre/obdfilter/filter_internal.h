@@ -184,9 +184,7 @@ static inline void filter_tally_write(struct filter_obd *filter,
                                  struct page **pages, int nr_pages,
                                  unsigned long *blocks, int blocks_per_page) {}
 static inline void filter_tally_read(struct filter_obd *filter,
-                                      struct niobuf_local *lnb, int niocount)
-                                      {}
-static inline int lproc_filter_attach_seqstat(struct obd_device *dev){return 0;}
+                                     struct niobuf_local *lnb, int niocount) {}
 #endif
 
 

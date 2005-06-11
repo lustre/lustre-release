@@ -117,23 +117,23 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_filter_rd_bunit(char *page, char **start, off_t off, int count, 
-                                   int *eof, void *data)
+static int lprocfs_filter_rd_bunit(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", 
+        return snprintf(page, count, "%lu\n",
                         obd->u.filter.fo_quota_ctxt.lqc_bunit_sz);
 }
 
-static int lprocfs_filter_rd_iunit(char *page, char **start, off_t off, int count, 
-                                   int *eof, void *data)
+static int lprocfs_filter_rd_iunit(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", 
+        return snprintf(page, count, "%lu\n",
                         obd->u.filter.fo_quota_ctxt.lqc_iunit_sz);
 }
 
@@ -174,23 +174,23 @@ static int lprocfs_filter_wr_iunit(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_filter_rd_btune(char *page, char **start, off_t off, int count, 
-                                   int *eof, void *data)
+static int lprocfs_filter_rd_btune(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", 
+        return snprintf(page, count, "%lu\n",
                         obd->u.filter.fo_quota_ctxt.lqc_btune_sz);
 }
 
-static int lprocfs_filter_rd_itune(char *page, char **start, off_t off, int count, 
-                                   int *eof, void *data)
+static int lprocfs_filter_rd_itune(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", 
+        return snprintf(page, count, "%lu\n",
                         obd->u.filter.fo_quota_ctxt.lqc_itune_sz);
 }
 
@@ -204,8 +204,8 @@ static int lprocfs_filter_wr_btune(struct file *file, const char *buffer,
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
-        
-        if (val <= QUOTABLOCK_SIZE * MIN_QLIMIT || val % QUOTABLOCK_SIZE || 
+
+        if (val <= QUOTABLOCK_SIZE * MIN_QLIMIT || val % QUOTABLOCK_SIZE ||
             val >= obd->u.filter.fo_quota_ctxt.lqc_bunit_sz)
                 return -EINVAL;
 
@@ -223,8 +223,8 @@ static int lprocfs_filter_wr_itune(struct file *file, const char *buffer,
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
-        
-        if (val <= MIN_QLIMIT || 
+
+        if (val <= MIN_QLIMIT ||
             val >= obd->u.filter.fo_quota_ctxt.lqc_iunit_sz)
                 return -EINVAL;
 
@@ -253,11 +253,11 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
-        { "quota_bunit_sz", lprocfs_filter_rd_bunit, 
+        { "quota_bunit_sz", lprocfs_filter_rd_bunit,
                             lprocfs_filter_wr_bunit, 0},
         { "quota_btune_sz", lprocfs_filter_rd_btune,
                             lprocfs_filter_wr_btune, 0},
-        { "quota_iunit_sz", lprocfs_filter_rd_iunit, 
+        { "quota_iunit_sz", lprocfs_filter_rd_iunit,
                             lprocfs_filter_wr_iunit, 0},
         { "quota_itune_sz", lprocfs_filter_rd_itune,
                             lprocfs_filter_wr_itune, 0},
@@ -494,7 +494,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                         seq_printf(seq, "%uM", 1<<(i-20));
 
                 seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
-                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           r, pct(r, read_tot), pct(read_cum, read_tot),
                            w, pct(w, write_tot), pct(write_cum, write_tot));
                 if (read_cum == read_tot && write_cum == write_tot)
                         break;
