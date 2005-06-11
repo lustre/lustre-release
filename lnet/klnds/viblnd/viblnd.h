@@ -96,7 +96,7 @@
 #define IBNAL_SERVICE_LEVEL      0
 #define IBNAL_STATIC_RATE        0
 #define IBNAL_RETRY_CNT          7
-#define IBNAL_RNR_CNT            7 
+#define IBNAL_RNR_CNT            6 
 #define IBNAL_EE_FLOW_CNT        1
 #define IBNAL_LOCAL_SUB          1
 #define IBNAL_TRAFFIC_CLASS      0
@@ -112,6 +112,7 @@
 
 /* other low-level IB constants */
 #define IBNAL_LOCAL_ACK_TIMEOUT   0x12
+#define IBNAL_RNR_NAK_TIMER       0x10
 #define IBNAL_PKT_LIFETIME        5
 #define IBNAL_ARB_INITIATOR_DEPTH 0
 #define IBNAL_ARB_RESP_RES        0
