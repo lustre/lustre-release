@@ -789,8 +789,7 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 rtr->destanation_qp            = cv->cv_remote_qpn;
                 rtr->receive_psn               = cv->cv_rxpsn;
                 rtr->responder_rdma_r_atom_num = IBNAL_OUS_DST_RD;
-
-                // XXX ? rtr->opt_min_rnr_nak_timer = 16;
+                rtr->opt_min_rnr_nak_timer     = *kibnal_tunables.kib_rnr_nak_timer;
 
 
                 // XXX sdp sets VV_QP_AT_OP_F but no actual optional options
@@ -806,9 +805,9 @@ kibnal_set_qp_state (kib_conn_t *conn, vv_qp_state_t new_state)
                 struct vv_qp_modify_rts_st *rts = &attr.modify.params.rts;
 
                 rts->send_psn                 = cv->cv_txpsn;
-                rts->local_ack_timeout        = IBNAL_LOCAL_ACK_TIMEOUT;
-                rts->retry_num                = IBNAL_RETRY_CNT;
-                rts->rnr_num                  = IBNAL_RNR_CNT;
+                rts->local_ack_timeout        = *kibnal_tunables.kib_local_ack_timeout;
+                rts->retry_num                = *kibnal_tunables.kib_retry_cnt;
+                rts->rnr_num                  = *kibnal_tunables.kib_rnr_cnt;
                 rts->dest_out_rdma_r_atom_num = IBNAL_OUS_DST_RD;
                 
                 attr.modify.vv_qp_attr_mask = VV_QP_AT_S_PSN |

@@ -104,6 +104,10 @@
 #define IBNAL_ARP_RETRIES            3          /* # times to retry ARP */
 #define IBNAL_HCA_BASENAME           "InfiniHost" /* HCA basename */
 #define IBNAL_IPIF_BASENAME          "ipoib"    /* IPoIB interface basename */
+#define IBNAL_LOCAL_ACK_TIMEOUT      0x12       /* ACK timeout... */
+#define IBNAL_RETRY_CNT              7          /* ...and retries */
+#define IBNAL_RNR_CNT                6          /* RNR retries... */
+#define IBNAL_RNR_NAK_TIMER          0x10       /* ...and interval between them */
 
 /* tunables fixed at compile time */
 #define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
@@ -112,15 +116,13 @@
 #define IBNAL_CREDIT_HIGHWATER       7          /* when to eagerly return credits */
 #define IBNAL_MSG_SIZE              (4<<10)     /* max size of queued messages (inc hdr) */
 
-/* sdp-connection.c */
+/* constants derived from sdp-connection.c */
 #define IBNAL_QKEY               0
 #define IBNAL_PKEY               0xffff
 #define IBNAL_PKEY_IDX           0
 #define IBNAL_SGID_IDX           0
 #define IBNAL_SERVICE_LEVEL      0
 #define IBNAL_STATIC_RATE        0
-#define IBNAL_RETRY_CNT          7
-#define IBNAL_RNR_CNT            7 
 #define IBNAL_EE_FLOW_CNT        1
 #define IBNAL_LOCAL_SUB          1
 #define IBNAL_TRAFFIC_CLASS      0
@@ -128,14 +130,13 @@
 #define IBNAL_OUS_DST_RD         1
 #define IBNAL_IB_MTU             vv_mtu_1024
 
-/* sdp-hca-params.h */
+/* constants derived from sdp-hca-params.h */
 #define PATH_RATE_2_5GB           2
 #define MLX_IPD_1x                1
 #define MLX_IPD_4x                0
 #define IBNAL_R_2_STATIC_RATE(r)  ((r) == PATH_RATE_2_5GB ? MLX_IPD_1x : MLX_IPD_4x)
 
 /* other low-level IB constants */
-#define IBNAL_LOCAL_ACK_TIMEOUT   0x12
 #define IBNAL_PKT_LIFETIME        5
 #define IBNAL_ARB_INITIATOR_DEPTH 0
 #define IBNAL_ARB_RESP_RES        0
@@ -178,6 +179,10 @@ typedef struct
         int              *kib_arp_retries;      /* # times to retry ARP */
         char            **kib_hca_basename;     /* HCA base name */
         char            **kib_ipif_basename;    /* IPoIB interface base name */
+        int              *kib_local_ack_timeout; /* IB RC QP ack timeout... */
+        int              *kib_retry_cnt;        /* ...and retry */
+        int              *kib_rnr_cnt;          /* RNR retries... */
+        int              *kib_rnr_nak_timer;    /* ...and interval */
 
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;

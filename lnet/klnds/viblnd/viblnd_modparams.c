@@ -67,6 +67,22 @@ static char *ipif_basename = IBNAL_IPIF_BASENAME;
 CFS_MODULE_PARM(ipif_basename, "s", charp, 0444,
                 "IPoIB interface base name");
 
+static int local_ack_timeout = IBNAL_LOCAL_ACK_TIMEOUT;
+CFS_MODULE_PARM(local_ack_timeout, "i", int, 0644,
+                "ACK timeout for low-level 'sends'");
+
+static int retry_cnt = IBNAL_RETRY_CNT;
+CFS_MODULE_PARM(retry_cnt, "i", int, 0644,
+                "Retransmissions when no ACK received");
+
+static int rnr_cnt = IBNAL_RNR_CNT;
+CFS_MODULE_PARM(rnr_cnt, "i", int, 0644,
+                "RNR retransmissions");
+
+static int rnr_nak_timer = IBNAL_RNR_NAK_TIMER;
+CFS_MODULE_PARM(rnr_nak_timer, "i", int, 0644,
+                "RNR retransmission interval");
+
 kib_tunables_t kibnal_tunables = {
         .kib_service_number         = &service_number,
         .kib_min_reconnect_interval = &min_reconnect_interval,
@@ -79,6 +95,10 @@ kib_tunables_t kibnal_tunables = {
         .kib_arp_retries            = &arp_retries,
         .kib_hca_basename           = &hca_basename,
         .kib_ipif_basename          = &ipif_basename,
+        .kib_local_ack_timeout      = &local_ack_timeout,
+        .kib_retry_cnt              = &retry_cnt,
+        .kib_rnr_cnt                = &rnr_cnt,
+        .kib_rnr_nak_timer          = &rnr_nak_timer,
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -109,6 +129,14 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(hca_basename_space), 0444, NULL, &proc_dostring},
 	{11, "ipif_basename", ipif_basename_space, 
 	 sizeof(ipif_basename_space), 0444, NULL, &proc_dostring},
+	{12, "local_ack_timeout", &local_ack_timeout, 
+	 sizeof(int), 0644, NULL, &proc_dointvec},
+	{13, "retry_cnt", &retry_cnt, 
+	 sizeof(int), 0644, NULL, &proc_dointvec},
+	{14, "rnr_cnt", &rnr_cnt, 
+	 sizeof(int), 0644, NULL, &proc_dointvec},
+	{15, "rnr_nak_timer", &rnr_nak_timer, 
+	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };
 

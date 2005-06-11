@@ -2480,8 +2480,8 @@ kibnal_connect_conn (kib_conn_t *conn)
 
         cmreq.cep_data.ca_guid              = kibnal_data.kib_hca_attrs.guid;
         cmreq.cep_data.qpn                  = cv->cv_local_qpn;
-        cmreq.cep_data.retry_cnt            = IBNAL_RETRY_CNT;
-        cmreq.cep_data.rtr_retry_cnt        = IBNAL_RNR_CNT;
+        cmreq.cep_data.retry_cnt            = *kibnal_tunables.kib_retry_cnt;
+        cmreq.cep_data.rtr_retry_cnt        = *kibnal_tunables.kib_rnr_cnt;
         cmreq.cep_data.start_psn            = cv->cv_rxpsn;
         cmreq.cep_data.end_to_end_flow_ctrl = IBNAL_EE_FLOW_CNT;
         // XXX ack_timeout?
@@ -2701,9 +2701,6 @@ kibnal_arp_done (kib_conn_t *conn)
         LASSERT (peer->ibp_arp_count > 0);
         
         if (cv->cv_arprc != ibat_stat_ok) {
-                CERROR("Can't Arp "LPX64"@%u.%u.%u.%u: %d\n", peer->ibp_nid,
-                       HIPQUAD(peer->ibp_ip), cv->cv_arprc);
-
                 write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
                 peer->ibp_arp_count--;
                 if (peer->ibp_arp_count == 0) {
