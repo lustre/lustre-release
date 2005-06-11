@@ -2,13 +2,13 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
 
-Severity   : critical (set by LLNL)
-Frequency  : only clusters that some nodes can reach peer node by one of the
-             peer's interfaces.
+Severity   : minor
+Frequency  : Clusters with multiple interfaces not on the same subnet
 Bugzilla   : 5541
-Description: Extra peer list entries will be created by lconf with some peers
-             unreachable.
-Details    : As a result, lustre will always report timeout.
+Description: Nodes will repeatedly try to reconnect to an interface which it
+             cannot reach and report an error to the log.
+Details    : Extra peer list entries will be created by lconf with some peers
+             unreachable.  lconf now validates the peer before adding it.
 
 Severity   : major
 Frequency  : Only if a default stripe is set on the filesystem root.
