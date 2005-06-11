@@ -155,6 +155,25 @@ fi
 ])
 
 #
+# LC_FUNC_FILEMAP_FDATASYNC
+#
+# if filemap_fdatasync() exists
+#
+AC_DEFUN([LC_FUNC_FILEMAP_FDATAWRITE],
+[AC_MSG_CHECKING([whether filemap_fdatawrite() is defined])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	int (*foo)(struct address_space *)= filemap_fdatawrite;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_FILEMAP_FDATAWRITE, 1, [filemap_fdatawrite() found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_FUNC_DIRECT_IO
 #
 # if direct_IO takes a struct file argument
@@ -404,6 +423,7 @@ LC_STRUCT_INODE
 LC_FUNC_REGISTER_CACHE
 LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 LC_FUNC_DEV_SET_RDONLY
+LC_FUNC_FILEMAP_FDATAWRITE
 ])
 
 #

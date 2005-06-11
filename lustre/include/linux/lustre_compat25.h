@@ -166,7 +166,6 @@ typedef long sector_t;
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
 #define ll_call_writepage(inode, page)  \
                                (inode)->i_mapping->a_ops->writepage(page)
-#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
 #define ll_truncate_complete_page(page) truncate_complete_page(page)
 
@@ -322,6 +321,10 @@ static inline int mapping_has_pages(struct address_space *mapping)
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
 #define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
+#endif
+
+#ifndef HAVE_FILEMAP_FDATAWRITE
+#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #endif
 
 #endif /* __KERNEL__ */
