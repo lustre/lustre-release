@@ -108,7 +108,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         if (req->rq_export->exp_failed) {
                 CERROR("committing transaction for disconnected client\n");
                 if (handle)
-                        GOTO(out_commit, rc = -EIO);
+                        GOTO(out_commit, rc);
                 RETURN(rc);
         }
 
