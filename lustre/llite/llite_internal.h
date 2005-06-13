@@ -212,8 +212,6 @@ int ll_objects_destroy(struct ptlrpc_request *request,
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
-int ll_mdc_cancel_unused(struct lustre_handle *, struct inode *, int flags,
-                         void *opaque);
 int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                         void *data, int flag);
 /* llite/rw.c */

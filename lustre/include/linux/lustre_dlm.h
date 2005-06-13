@@ -73,8 +73,10 @@ typedef enum {
                                          * indefinitely */
 
 /* file & record locking */
-#define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
-#define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
+#define LDLM_FL_BLOCK_NOWAIT   0x040000 /* server told not to wait if blocked */
+#define LDLM_FL_TEST_LOCK      0x080000 /* return blocking lock */
+#define LDLM_FL_COBD_SWITCH    0x100000 /* not used yet, but logicaly we have to
+                                         * distinguish diff. situations. */ 
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */

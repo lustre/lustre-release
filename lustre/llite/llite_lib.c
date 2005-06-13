@@ -181,8 +181,8 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         }
 
         if (proc_lustre_fs_root) {
-                err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
-                                                  lov, lmv);
+                err = lprocfs_register_mountpoint(proc_lustre_fs_root,
+                                                  sb, lov, lmv);
                 if (err < 0)
                         CERROR("could not register mount in /proc/lustre");
         }
@@ -267,11 +267,10 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
 
         sb->s_op = &lustre_super_operations;
 
-        /* make root inode
-         * XXX: move this to after cbd setup? */
+        /* make root inode */
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_rootid,
-                         (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID), NULL, 0,
-                         0, &request);
+                         (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID),
+                         NULL, 0, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lov, err);
@@ -499,8 +498,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out, err = -EINVAL);
         }
         
-        err = lustre_common_fill_super(sb, lmv, lov, async, sec, nllu,
-                                       &remote_flag);
+        err = lustre_common_fill_super(sb, lmv, lov, async, sec,
+                                       nllu, &remote_flag);
         EXIT;
 out:
         if (err)
@@ -879,7 +878,6 @@ void lustre_put_super(struct super_block *sb)
 
 int ll_process_config_update(struct ll_sb_info *sbi, int clean)
 {
-        struct obd_export *md_exp = sbi->ll_md_exp;
         struct lustre_mount_data *lmd = sbi->ll_lmd;
         char *profile = lmd->lmd_profile, *name = NULL;
         struct config_llog_instance cfg;
@@ -890,18 +888,18 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
         if (profile == NULL)
                 RETURN(0);
         if (lmd == NULL) {
-                CERROR("Client not mounted with zero-conf; cannot process "
-                       "update log.\n");
+                CERROR("Client not mounted with zero-conf; cannot "
+                       "process update log.\n");
                 RETURN(0);
         }
 
-        rc = ldlm_cli_cancel_unused(md_exp->exp_obd->obd_namespace, NULL,
-                                    LDLM_FL_CONFIG_CHANGE, NULL);
+        rc = obd_cancel_unused(sbi->ll_md_exp, NULL,
+                               LDLM_FL_CONFIG_CHANGE, NULL);
         if (rc != 0)
-                CWARN("ldlm_cli_cancel_unused(mdc): %d\n", rc);
+                CWARN("obd_cancel_unused(mdc): %d\n", rc);
 
-        rc = obd_cancel_unused(sbi->ll_dt_exp, NULL, LDLM_FL_CONFIG_CHANGE,
-                               NULL);
+        rc = obd_cancel_unused(sbi->ll_dt_exp, NULL,
+                               LDLM_FL_CONFIG_CHANGE, NULL);
         if (rc != 0)
                 CWARN("obd_cancel_unused(lov): %d\n", rc);
 
@@ -924,7 +922,7 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
 
         CWARN("Applying configuration log %s\n", name);
 
-        ctxt = llog_get_context(&md_exp->exp_obd->obd_llogs,
+        ctxt = llog_get_context(&sbi->ll_md_exp->exp_obd->obd_llogs,
                                 LLOG_CONFIG_REPL_CTXT);
         rc = class_config_process_llog(ctxt, name, &cfg);
         if (rc == 0)
@@ -940,7 +938,7 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
                 rc = obd_get_info(sbi->ll_dt_exp, strlen("lovdesc") + 1,
                                   "lovdesc", &valsize, &desc);
 
-                rc = obd_init_ea_size(md_exp,
+                rc = obd_init_ea_size(sbi->ll_md_exp,
                                       obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                       (desc.ld_tgt_count *
                                        sizeof(struct llog_cookie)));

@@ -231,19 +231,6 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
-                         int flags, void *opaque)
-{
-        struct ll_inode_info *li = ll_i2info(inode);
-        struct ldlm_res_id res_id =
-                { .name = {id_fid(&li->lli_id), id_group(&li->lli_id)} };
-        struct obd_device *obddev = class_conn2obd(conn);
-        ENTRY;
-        
-        RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
-                                      opaque));
-}
-
 /* Search "inode"'s alias list for a dentry that has the same name and parent as
  * de.  If found, return it.  If not found, return de. */
 struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)

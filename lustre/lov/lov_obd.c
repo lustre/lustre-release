@@ -1773,8 +1773,8 @@ static int lov_cancel_unused(struct obd_export *exp,
         lov = &exp->exp_obd->u.lov;
         if (lsm == NULL) {
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        int err = obd_cancel_unused(lov->tgts[i].ltd_exp, NULL,
-                                                    flags, opaque);
+                        int err = obd_cancel_unused(lov->tgts[i].ltd_exp,
+                                                    NULL, flags, opaque);
                         if (!rc)
                                 rc = err;
                 }

@@ -161,6 +161,17 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         RETURN (0);
 }
 
+static int mdc_cancel_unused(struct obd_export *exp,
+                             struct lov_stripe_md *lsm, 
+			     int flags, void *opaque)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+
+        ENTRY;
+        RETURN(ldlm_cli_cancel_unused(obd->obd_namespace,
+                                      NULL, flags, opaque));
+}
+
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 __u64 valid, const char *ea_name, int ea_namelen,
                 unsigned int ea_size, struct ptlrpc_request **request)
@@ -1483,6 +1494,7 @@ struct obd_ops mdc_obd_ops = {
         .o_set_info      = mdc_set_info,
         .o_get_info      = mdc_get_info,
         .o_brw           = mdc_brw,
+        .o_cancel_unused = mdc_cancel_unused,
         .o_init_ea_size  = mdc_init_ea_size,
 };
 

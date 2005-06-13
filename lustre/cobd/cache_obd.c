@@ -102,7 +102,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
         
         cobd->master_exp = class_conn2export(&conn);
 
-        /* getting master obd */
+        /* getting cache obd */
         cache_obd = class_name2obd(cobd->cache_name);
         if (!cache_obd) {
                 class_disconnect(cobd->master_exp, 0);
@@ -111,7 +111,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_names, rc);
         }
 
-        /* connecting master */
+        /* connecting cache */
         memset(&conn, 0, sizeof(conn));
         rc = class_connect(&conn, cache_obd, &obd->obd_uuid);
         if (rc) {
@@ -119,7 +119,8 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_names, rc);
         }
         cobd->cache_exp = class_conn2export(&conn);
-        /*default set cache on*/
+        
+        /* default set cache on */
         cobd->cache_on = 1;
         EXIT;
 put_names:
@@ -183,10 +184,12 @@ cobd_get_exp(struct obd_device *obd)
         return cobd->master_exp;
 }
 
-static int client_obd_connect(struct obd_device *obd, struct obd_export *exp,
-                              struct lustre_handle *conn,
-                              struct obd_connect_data *data,
-                              unsigned long flags)
+static int
+client_obd_connect(struct obd_device *obd,
+                   struct obd_export *exp,
+                   struct lustre_handle *conn,
+                   struct obd_connect_data *data,
+                   unsigned long flags)
 { 
         struct obd_device *cli_obd;
         int rc = 0;
@@ -206,9 +209,10 @@ static int client_obd_connect(struct obd_device *obd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static int client_obd_disconnect(struct obd_device *obd,
-                                 struct obd_export *exp,
-                                 unsigned long flags)
+static int
+client_obd_disconnect(struct obd_device *obd,
+                      struct obd_export *exp,
+                      unsigned long flags)
 {
         struct obd_device *cli_obd;
         int rc = 0;
@@ -709,8 +713,8 @@ static int cobd_cancel(struct obd_export *exp,
 }
 
 static int cobd_cancel_unused(struct obd_export *exp,
-                              struct lov_stripe_md *ea, int flags,
-                              void *opaque)
+                              struct lov_stripe_md *ea,
+                              int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -724,10 +728,12 @@ static int cobd_cancel_unused(struct obd_export *exp,
         return obd_cancel_unused(cobd_exp, ea, flags, opaque);
 }
 
-static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
-                       int objcount, struct obd_ioobj *obj,
-                       int niocount, struct niobuf_remote *nb,
-                       struct niobuf_local *res, struct obd_trans_info *oti)
+static int cobd_preprw(int cmd, struct obd_export *exp,
+                       struct obdo *oa, int objcount,
+                       struct obd_ioobj *obj, int niocount,
+                       struct niobuf_remote *nb,
+                       struct niobuf_local *res,
+                       struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -738,8 +744,8 @@ static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_preprw(cmd, cobd_exp, oa, objcount, obj, niocount, nb, 
-                          res, oti);
+        return obd_preprw(cmd, cobd_exp, oa, objcount, obj,
+                          niocount, nb, res, oti);
 }
 
 static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -756,8 +762,8 @@ static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_commitrw(cmd, cobd_exp, oa, objcount, obj, niocount, 
-                            local, oti, rc);
+        return obd_commitrw(cmd, cobd_exp, oa, objcount, obj,
+                            niocount, local, oti, rc);
 }
 
 static int cobd_flush(struct obd_device *obd)
@@ -781,11 +787,24 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cobd->cache_on) {
                         struct lustre_handle conn = {0};
 
+                        rc = obd_cancel_unused(cobd->master_real_exp, NULL,
+                                               LDLM_FL_COBD_SWITCH, NULL);
+                        if (rc) {
+                                CWARN("can't cancel unused locks on master export, "
+                                      "err %d\n", rc);
+                        }
+                        
                         rc = client_obd_disconnect(obd, cobd->master_real_exp, 0);
+                        if (rc) {
+                                CWARN("can't disconnect master export, err %d\n",
+                                      rc);
+                        }
+                        
                         rc = client_obd_connect(obd, cobd->cache_exp, &conn,
                                                 NULL, OBD_OPT_REAL_CLIENT);
                         if (rc)
                                 GOTO(out, rc);
+
                         cobd->cache_real_exp = class_conn2export(&conn);
                         cobd->cache_on = 1;
                 }
@@ -800,8 +819,19 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                         cache = class_exp2obd(cobd->cache_exp); 
                         easize = cache->u.cli.cl_max_mds_easize; 
                         cooksize = cache->u.cli.cl_max_mds_cookiesize;
+
+                        rc = obd_cancel_unused(cobd->cache_real_exp, NULL,
+                                               LDLM_FL_COBD_SWITCH, NULL);
+                        if (rc) {
+                                CWARN("can't cancel unused locks on cache export, "
+                                      "err %d\n", rc);
+                        }
                         
                         rc = client_obd_disconnect(obd, cobd->cache_real_exp, 0);
+                        if (rc) {
+                                CWARN("can't disconnect cache export, err %d\n",
+                                      rc);
+                        }
                         rc = client_obd_connect(obd, cobd->master_exp, &conn,
                                                 NULL, OBD_OPT_REAL_CLIENT);
                         if (rc)
@@ -818,6 +848,7 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (cobd->cache_on) {
                         cobd->cache_on = 0;
                         cobd_flush(obd);
+                        cobd->cache_on = 1;
                 } else {
                         CERROR("%s: cache is turned off\n", obd->obd_name);
                 }

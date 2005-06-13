@@ -2094,6 +2094,29 @@ int lmv_brw(int rw, struct obd_export *exp, struct obdo *oa,
         RETURN(err);
 }
 
+static int lmv_cancel_unused(struct obd_export *exp,
+                             struct lov_stripe_md *lsm, 
+			     int flags, void *opaque)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int rc = 0, err, i;
+        ENTRY;
+
+        LASSERT(lsm == NULL);
+        
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                if (!lmv->tgts[i].ltd_exp || !lmv->tgts[i].active)
+                        continue;
+                
+                err = obd_cancel_unused(lmv->tgts[i].ltd_exp,
+                                        NULL, flags, opaque);
+                if (!rc)
+                        rc = err;
+        }
+        RETURN(rc);
+}
+
 struct obd_ops lmv_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_attach               = lmv_attach,
@@ -2115,6 +2138,7 @@ struct obd_ops lmv_obd_ops = {
         .o_notify               = lmv_notify,
         .o_iocontrol            = lmv_iocontrol,
         .o_getready             = lmv_getready,
+        .o_cancel_unused        = lmv_cancel_unused,
 };
 
 struct md_ops lmv_md_ops = {

@@ -2604,7 +2604,8 @@ static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
 }
 
 static int osc_cancel_unused(struct obd_export *exp,
-                             struct lov_stripe_md *lsm, int flags, void *opaque)
+                             struct lov_stripe_md *lsm,
+                             int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
