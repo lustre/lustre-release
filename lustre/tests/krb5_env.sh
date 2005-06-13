@@ -90,6 +90,7 @@ send "$KRB5DIR/bin/kinit\r"
 {
     timeout {puts "timeout" ;exit 1}
     "Password for "
+}
 
 send "$GSS_PASS\r"
 expect {
