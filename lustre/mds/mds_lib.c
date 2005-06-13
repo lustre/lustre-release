@@ -952,15 +952,15 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
 
         /* check permission of setuid */
         if (setuid && !(lsd_perms & LSD_PERM_SETUID)) {
-                CWARN("mds blocked setuid attempt: %u -> %u\n",
-                      rsd->rsd_uid, rsd->rsd_fsuid);
+                CWARN("mds blocked setuid attempt (%u -> %u) from "LPU64"\n",
+                      rsd->rsd_uid, rsd->rsd_fsuid, peernid);
                 RETURN(-EPERM);
         }
 
         /* check permission of setgid */
         if (setgid && !(lsd_perms & LSD_PERM_SETGID)) {
-                CWARN("mds blocked setgid attempt: %u -> %u\n",
-                      rsd->rsd_gid, rsd->rsd_fsgid);
+                CWARN("mds blocked setgid attempt (%u/%u -> %u) from "LPU64"\n",
+                      rsd->rsd_gid, rsd->rsd_fsgid, lsd->lsd_gid, peernid);
                 RETURN(-EPERM);
         }
 
