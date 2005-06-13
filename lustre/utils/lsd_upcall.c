@@ -282,6 +282,16 @@ int parse_perm(__u32 *perm, char *str)
         return 0;
 }
 
+int parse_nid(ptl_nid_t *nidp, char *nid_str)
+{
+        if (!strcmp(nid_str, "*")) {
+                *nidp = PTL_NID_ANY;
+                return 0;
+        }
+
+        return ptl_parse_nid(nidp, nid_str);
+}
+
 int get_one_perm(FILE *fp, struct lsd_permission *perm)
 {
         char nid_str[256], perm_str[256];
@@ -298,7 +308,7 @@ again:
         if (rc != 2)
                 return -1;
 
-        if (ptl_parse_nid(&perm->nid, nid_str))
+        if (parse_nid(&perm->nid, nid_str))
                 return -1;
 
         if (parse_perm(&perm->perm, perm_str))
