@@ -405,7 +405,7 @@ int tracefile_dump_all_pages(char *filename)
         down_write(&tracefile_sem);
 
         filp = cfs_filp_open(filename,
-                             O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600, &rc);
+                             O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0666, &rc);
         if (!filp) {
                 printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
                        filename, rc);
