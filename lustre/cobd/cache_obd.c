@@ -787,13 +787,6 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cobd->cache_on) {
                         struct lustre_handle conn = {0};
 
-                        rc = obd_cancel_unused(cobd->master_real_exp, NULL,
-                                               LDLM_FL_COBD_SWITCH, NULL);
-                        if (rc) {
-                                CWARN("can't cancel unused locks on master export, "
-                                      "err %d\n", rc);
-                        }
-                        
                         rc = client_obd_disconnect(obd, cobd->master_real_exp, 0);
                         if (rc) {
                                 CWARN("can't disconnect master export, err %d\n",
@@ -820,13 +813,6 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
                         easize = cache->u.cli.cl_max_mds_easize; 
                         cooksize = cache->u.cli.cl_max_mds_cookiesize;
 
-                        rc = obd_cancel_unused(cobd->cache_real_exp, NULL,
-                                               LDLM_FL_COBD_SWITCH, NULL);
-                        if (rc) {
-                                CWARN("can't cancel unused locks on cache export, "
-                                      "err %d\n", rc);
-                        }
-                        
                         rc = client_obd_disconnect(obd, cobd->cache_real_exp, 0);
                         if (rc) {
                                 CWARN("can't disconnect cache export, err %d\n",
