@@ -242,6 +242,7 @@ sub exec_test($$) {
       #print "< $_";
       if ($needs_shell) {
 	s#^/bin/sh: line \d+: ##;
+	s#^/bin/sh: ##; # temporarily added by ericm
       }
       push @$result, $_;
     }
