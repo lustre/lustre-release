@@ -71,6 +71,7 @@ extern unsigned int portal_printk;
 #define S_LMV         0x00800000
 #define S_CMOBD       0x01000000
 #define S_SEC         0x02000000
+#define S_GSS         0x04000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
