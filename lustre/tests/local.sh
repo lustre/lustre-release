@@ -34,9 +34,28 @@ STRIPES_PER_OBJ=0	# 0 means stripe over all OSTs
 
 rm -f $config
 
+#
+# duplicated form test-framework.sh
+#
+h2tcp() {
+   echo $1 
+}
+h2elan() {
+   echo $1 | sed 's/[^0-9]*//g'
+}
+h2openib() {
+   echo $1 | sed 's/[^0-9]*//g'
+}
+
+local_nid() {
+    hostname=`hostname`
+    nid=`h2$NETTYPE $hostname`
+    echo $nid
+}
+
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 11
+${LMC} --add net --node  localhost --nid `local_nid` --nettype $NETTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 
