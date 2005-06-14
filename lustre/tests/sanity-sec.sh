@@ -302,25 +302,19 @@ run_test 2 "set/get xattr test (trusted xattr only) ============"
 
 run_acl_subtest()
 {
-    sed -e "s/joe/$USER1/g;s/lisa/$USER2/g;s/users/$GROUP1/g;s/toolies/$GROUP2/g" \
-        $SAVE_PWD/acl/$1.test | $SAVE_PWD/acl/run || error "$? $1.test failed"
+    $SAVE_PWD/acl/run $SAVE_PWD/acl/$1.test
+    return $?
 }
 
 test_3 () {
         SAVE_UMASK=`umask`
-        umask 022
-        USER1=rpm
-        USER2=vsx2
-        GROUP1=nobody
-        GROUP2=users
-
         cd $DIR
 
-        run_acl_subtest cp
-        run_acl_subtest getfacl-noacl
-        run_acl_subtest misc
-        run_acl_subtest permissions
-        run_acl_subtest setfacl
+        run_acl_subtest cp || return 1
+        run_acl_subtest getfacl-noacl || return 2
+        run_acl_subtest misc || return 3
+        run_acl_subtest permissions || return 4
+        run_acl_subtest setfacl || return 5
 
         cd $SAVED_PWD
         umask $SAVE_UMASK
