@@ -95,6 +95,14 @@ static inline int cleanup_group_info(void)
 }
 #endif /* end of groups_info stuff */
 
+/*
+ * this define is from the same namespace as other lookup flags in linux, will
+ * be gone when COBD medium switching will be done more correct manner.
+ * Currently this is dirty hack and this flag is needed to let MDC layer know
+ * that it does not have to check if requested id is the same as receviced from
+ * MDS in mdc_intent_lock() --umka
+ */
+#define LOOKUP_COBD 4096
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 

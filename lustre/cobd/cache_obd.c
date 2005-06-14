@@ -323,19 +323,19 @@ static int cobd_set_info(struct obd_export *exp, obd_count keylen,
         return obd_set_info(cobd_exp, keylen, key, vallen, val);
 }
 
-static int cobd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
+static int cobd_statfs(struct obd_device *obd,
+                       struct obd_statfs *osfs,
                        unsigned long max_age)
 {
         struct obd_export *cobd_exp;
 
         cobd_exp = cobd_get_exp(obd);
-
         return obd_statfs(class_exp2obd(cobd_exp), osfs, max_age);
 }
 
-static int cobd_packmd(struct obd_export *exp,
-                       struct lov_mds_md **disk_tgt,
-                       struct lov_stripe_md *mem_src)
+static int cobd_dt_packmd(struct obd_export *exp,
+                          struct lov_mds_md **disk_tgt,
+                          struct lov_stripe_md *mem_src)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -349,10 +349,10 @@ static int cobd_packmd(struct obd_export *exp,
         return obd_packmd(cobd_exp, disk_tgt, mem_src);
 }
 
-static int cobd_unpackmd(struct obd_export *exp,
-                         struct lov_stripe_md **mem_tgt,
-                         struct lov_mds_md *disk_src,
-                         int disk_len)
+static int cobd_dt_unpackmd(struct obd_export *exp,
+                            struct lov_stripe_md **mem_tgt,
+                            struct lov_mds_md *disk_src,
+                            int disk_len)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -366,10 +366,11 @@ static int cobd_unpackmd(struct obd_export *exp,
         return obd_unpackmd(cobd_exp, mem_tgt, disk_src, disk_len);
 }
 
-static int cobd_create(struct obd_export *exp, struct obdo *obdo,
-                       void *acl, int acl_size,
-                       struct lov_stripe_md **ea,
-                       struct obd_trans_info *oti)
+static int cobd_dt_create(struct obd_export *exp,
+                          struct obdo *obdo,
+                          void *acl, int acl_size,
+                          struct lov_stripe_md **ea,
+                          struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -383,9 +384,10 @@ static int cobd_create(struct obd_export *exp, struct obdo *obdo,
         return obd_create(cobd_exp, obdo, acl, acl_size, ea, oti);
 }
 
-static int cobd_destroy(struct obd_export *exp, struct obdo *obdo,
-                        struct lov_stripe_md *ea,
-                        struct obd_trans_info *oti)
+static int cobd_dt_destroy(struct obd_export *exp,
+                           struct obdo *obdo,
+                           struct lov_stripe_md *ea,
+                           struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -399,14 +401,14 @@ static int cobd_destroy(struct obd_export *exp, struct obdo *obdo,
         return obd_destroy(cobd_exp, obdo, ea, oti); 
 }
 
-static int cobd_precleanup(struct obd_device *obd, int flags)
+static int cobd_dt_precleanup(struct obd_device *obd, int flags)
 {
         /* FIXME-WANGDI: do we need some cleanup here? */
         return 0;
 }
 
-static int cobd_getattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *ea)
+static int cobd_dt_getattr(struct obd_export *exp, struct obdo *oa,
+                           struct lov_stripe_md *ea)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -420,9 +422,9 @@ static int cobd_getattr(struct obd_export *exp, struct obdo *oa,
         return obd_getattr(cobd_exp, oa, ea);
 }
 
-static int cobd_getattr_async(struct obd_export *exp,
-                              struct obdo *obdo, struct lov_stripe_md *ea,
-                              struct ptlrpc_request_set *set)
+static int cobd_dt_getattr_async(struct obd_export *exp,
+                                 struct obdo *obdo, struct lov_stripe_md *ea,
+                                 struct ptlrpc_request_set *set)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -436,9 +438,9 @@ static int cobd_getattr_async(struct obd_export *exp,
         return obd_getattr_async(cobd_exp, obdo, ea, set);
 }
 
-static int cobd_setattr(struct obd_export *exp, struct obdo *obdo,
-                        struct lov_stripe_md *ea,
-                        struct obd_trans_info *oti)
+static int cobd_dt_setattr(struct obd_export *exp, struct obdo *obdo,
+                           struct lov_stripe_md *ea,
+                           struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -452,24 +454,9 @@ static int cobd_setattr(struct obd_export *exp, struct obdo *obdo,
         return obd_setattr(cobd_exp, obdo, ea, oti);
 }
 
-static int cobd_md_getstatus(struct obd_export *exp,
-                             struct lustre_id *rootid)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct obd_export *cobd_exp;
-
-        if (obd == NULL) {
-                CERROR("invalid client cookie "LPX64"\n", 
-                       exp->exp_handle.h_cookie);
-                return -EINVAL;
-        }
-        cobd_exp = cobd_get_exp(obd);
-        return md_getstatus(cobd_exp, rootid);
-}
-
-static int cobd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, obd_count oa_bufs,
-                    struct brw_page *pg, struct obd_trans_info *oti)
+static int cobd_dt_brw(int cmd, struct obd_export *exp, struct obdo *oa,
+                       struct lov_stripe_md *ea, obd_count oa_bufs,
+                       struct brw_page *pg, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -483,11 +470,11 @@ static int cobd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         return obd_brw(cmd, cobd_exp, oa, ea, oa_bufs, pg, oti);
 }
 
-static int cobd_brw_async(int cmd, struct obd_export *exp,
-                          struct obdo *oa, struct lov_stripe_md *ea,
-                          obd_count oa_bufs, struct brw_page *pg,
-                          struct ptlrpc_request_set *set,
-                          struct obd_trans_info *oti)
+static int cobd_dt_brw_async(int cmd, struct obd_export *exp,
+                             struct obdo *oa, struct lov_stripe_md *ea,
+                             obd_count oa_bufs, struct brw_page *pg,
+                             struct ptlrpc_request_set *set,
+                             struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -502,12 +489,12 @@ static int cobd_brw_async(int cmd, struct obd_export *exp,
                              pg, set, oti);
 }
 
-static int cobd_prep_async_page(struct obd_export *exp, 
-                                struct lov_stripe_md *lsm,
-                                struct lov_oinfo *loi, 
-                                struct page *page, obd_off offset, 
-                                struct obd_async_page_ops *ops, 
-                                void *data, void **res)
+static int cobd_dt_prep_async_page(struct obd_export *exp, 
+                                   struct lov_stripe_md *lsm,
+                                   struct lov_oinfo *loi, 
+                                   struct page *page, obd_off offset, 
+                                   struct obd_async_page_ops *ops, 
+                                   void *data, void **res)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -522,11 +509,11 @@ static int cobd_prep_async_page(struct obd_export *exp,
                                    ops, data, res);
 }
 
-static int cobd_queue_async_io(struct obd_export *exp,
-                               struct lov_stripe_md *lsm,
-                               struct lov_oinfo *loi, void *cookie,
-                               int cmd, obd_off off, int count,
-                               obd_flags brw_flags, obd_flags async_flags)
+static int cobd_dt_queue_async_io(struct obd_export *exp,
+                                  struct lov_stripe_md *lsm,
+                                  struct lov_oinfo *loi, void *cookie,
+                                  int cmd, obd_off off, int count,
+                                  obd_flags brw_flags, obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -541,10 +528,10 @@ static int cobd_queue_async_io(struct obd_export *exp,
                                   brw_flags, async_flags);
 }
 
-static int cobd_set_async_flags(struct obd_export *exp,
-                               struct lov_stripe_md *lsm,
-                               struct lov_oinfo *loi, void *cookie,
-                               obd_flags async_flags)
+static int cobd_dt_set_async_flags(struct obd_export *exp,
+                                   struct lov_stripe_md *lsm,
+                                   struct lov_oinfo *loi, void *cookie,
+                                   obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -558,13 +545,13 @@ static int cobd_set_async_flags(struct obd_export *exp,
         return obd_set_async_flags(cobd_exp, lsm, loi, cookie, async_flags);
 }
 
-static int cobd_queue_group_io(struct obd_export *exp, 
-                               struct lov_stripe_md *lsm, 
-                               struct lov_oinfo *loi, 
-                               struct obd_io_group *oig, 
-                               void *cookie, int cmd, obd_off off, 
-                               int count, obd_flags brw_flags,
-                               obd_flags async_flags)
+static int cobd_dt_queue_group_io(struct obd_export *exp, 
+                                  struct lov_stripe_md *lsm, 
+                                  struct lov_oinfo *loi, 
+                                  struct obd_io_group *oig, 
+                                  void *cookie, int cmd, obd_off off, 
+                                  int count, obd_flags brw_flags,
+                                  obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -579,10 +566,10 @@ static int cobd_queue_group_io(struct obd_export *exp,
                                   cmd, off, count, brw_flags, async_flags);
 }
 
-static int cobd_trigger_group_io(struct obd_export *exp, 
-                                 struct lov_stripe_md *lsm, 
-                                 struct lov_oinfo *loi,
-                                 struct obd_io_group *oig)
+static int cobd_dt_trigger_group_io(struct obd_export *exp, 
+                                    struct lov_stripe_md *lsm, 
+                                    struct lov_oinfo *loi,
+                                    struct obd_io_group *oig)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -596,9 +583,9 @@ static int cobd_trigger_group_io(struct obd_export *exp,
         return obd_trigger_group_io(cobd_exp, lsm, loi, oig); 
 }
 
-static int cobd_teardown_async_page(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm,
-                                    struct lov_oinfo *loi, void *cookie)
+static int cobd_dt_teardown_async_page(struct obd_export *exp,
+                                       struct lov_stripe_md *lsm,
+                                       struct lov_oinfo *loi, void *cookie)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -612,9 +599,9 @@ static int cobd_teardown_async_page(struct obd_export *exp,
         return obd_teardown_async_page(cobd_exp, lsm, loi, cookie);
 }
 
-static int cobd_punch(struct obd_export *exp, struct obdo *oa,
-                      struct lov_stripe_md *ea, obd_size start,
-                      obd_size end, struct obd_trans_info *oti)
+static int cobd_dt_punch(struct obd_export *exp, struct obdo *oa,
+                         struct lov_stripe_md *ea, obd_size start,
+                         obd_size end, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -628,9 +615,9 @@ static int cobd_punch(struct obd_export *exp, struct obdo *oa,
         return obd_punch(cobd_exp, oa, ea, start, end, oti);
 }
 
-static int cobd_sync(struct obd_export *exp, struct obdo *oa,
-                     struct lov_stripe_md *ea, obd_size start, 
-                     obd_size end)
+static int cobd_dt_sync(struct obd_export *exp, struct obdo *oa,
+                        struct lov_stripe_md *ea, obd_size start, 
+                        obd_size end)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -644,11 +631,11 @@ static int cobd_sync(struct obd_export *exp, struct obdo *oa,
         return obd_sync(cobd_exp, oa, ea, start, end);
 }
 
-static int cobd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
-                        __u32 type, ldlm_policy_data_t *policy,
-                        __u32 mode, int *flags, void *bl_cb, void *cp_cb,
-                        void *gl_cb, void *data, __u32 lvb_len,
-                        void *lvb_swabber, struct lustre_handle *lockh)
+static int cobd_dt_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
+                           __u32 type, ldlm_policy_data_t *policy,
+                           __u32 mode, int *flags, void *bl_cb, void *cp_cb,
+                           void *gl_cb, void *data, __u32 lvb_len,
+                           void *lvb_swabber, struct lustre_handle *lockh)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -664,9 +651,9 @@ static int cobd_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
                            lvb_swabber, lockh);
 }
 
-static int cobd_match(struct obd_export *exp, struct lov_stripe_md *ea,
-                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
-                      int *flags, void *data, struct lustre_handle *lockh)
+static int cobd_dt_match(struct obd_export *exp, struct lov_stripe_md *ea,
+                         __u32 type, ldlm_policy_data_t *policy, __u32 mode,
+                         int *flags, void *data, struct lustre_handle *lockh)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -680,9 +667,9 @@ static int cobd_match(struct obd_export *exp, struct lov_stripe_md *ea,
         return obd_match(cobd_exp, ea, type, policy, mode, flags, data,
                          lockh); 
 }
-static int cobd_change_cbdata(struct obd_export *exp,
-                              struct lov_stripe_md *lsm, 
-                              ldlm_iterator_t it, void *data)
+static int cobd_dt_change_cbdata(struct obd_export *exp,
+                                 struct lov_stripe_md *lsm, 
+                                 ldlm_iterator_t it, void *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -696,9 +683,9 @@ static int cobd_change_cbdata(struct obd_export *exp,
         return obd_change_cbdata(cobd_exp, lsm, it, data);
 }
 
-static int cobd_cancel(struct obd_export *exp,
-                       struct lov_stripe_md *ea, __u32 mode,
-                       struct lustre_handle *lockh)
+static int cobd_dt_cancel(struct obd_export *exp,
+                          struct lov_stripe_md *ea, __u32 mode,
+                          struct lustre_handle *lockh)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -712,9 +699,9 @@ static int cobd_cancel(struct obd_export *exp,
         return obd_cancel(cobd_exp, ea, mode, lockh);
 }
 
-static int cobd_cancel_unused(struct obd_export *exp,
-                              struct lov_stripe_md *ea,
-                              int flags, void *opaque)
+static int cobd_dt_cancel_unused(struct obd_export *exp,
+                                 struct lov_stripe_md *ea,
+                                 int flags, void *opaque)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -728,12 +715,12 @@ static int cobd_cancel_unused(struct obd_export *exp,
         return obd_cancel_unused(cobd_exp, ea, flags, opaque);
 }
 
-static int cobd_preprw(int cmd, struct obd_export *exp,
-                       struct obdo *oa, int objcount,
-                       struct obd_ioobj *obj, int niocount,
-                       struct niobuf_remote *nb,
-                       struct niobuf_local *res,
-                       struct obd_trans_info *oti)
+static int cobd_dt_preprw(int cmd, struct obd_export *exp,
+                          struct obdo *oa, int objcount,
+                          struct obd_ioobj *obj, int niocount,
+                          struct niobuf_remote *nb,
+                          struct niobuf_local *res,
+                          struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -748,10 +735,10 @@ static int cobd_preprw(int cmd, struct obd_export *exp,
                           niocount, nb, res, oti);
 }
 
-static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
-                         int objcount, struct obd_ioobj *obj,
-                         int niocount, struct niobuf_local *local,
-                         struct obd_trans_info *oti, int rc)
+static int cobd_dt_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
+                            int objcount, struct obd_ioobj *obj,
+                            int niocount, struct niobuf_local *local,
+                            struct obd_trans_info *oti, int rc)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -771,8 +758,8 @@ static int cobd_flush(struct obd_device *obd)
         return 0; 
 }
 
-static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
-                          int len, void *karg, void *uarg)
+static int cobd_dt_iocontrol(unsigned int cmd, struct obd_export *exp,
+                             int len, void *karg, void *uarg)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct cache_obd  *cobd = &obd->u.cobd;
@@ -850,9 +837,10 @@ out:
         return rc;
 }
 
-static int cobd_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
-                          struct obd_device *disk_obd, int count, 
-                          struct llog_catid *logid)
+static int cobd_dt_llog_init(struct obd_device *obd,
+                             struct obd_llogs *llogs, 
+                             struct obd_device *disk_obd,
+                             int count, struct llog_catid *logid)
 {
         struct obd_export *cobd_exp;
         struct obd_device *cobd_obd;
@@ -864,8 +852,9 @@ static int cobd_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                              disk_obd, count, logid);
 }
 
-static int cobd_llog_finish(struct obd_device *obd, struct obd_llogs *llogs, 
-                            int count)
+static int cobd_dt_llog_finish(struct obd_device *obd,
+                               struct obd_llogs *llogs, 
+                               int count)
 {
         struct obd_export *cobd_exp;
         struct obd_device *cobd_obd;
@@ -876,8 +865,8 @@ static int cobd_llog_finish(struct obd_device *obd, struct obd_llogs *llogs,
         return obd_llog_finish(cobd_obd, &cobd_obd->obd_llogs, count);
 }
 
-static int cobd_notify(struct obd_device *obd, struct obd_device *watched,
-                       int active, void *data)
+static int cobd_dt_notify(struct obd_device *obd, struct obd_device *watched,
+                          int active, void *data)
 {
         struct obd_export *cobd_exp;
 
@@ -886,8 +875,9 @@ static int cobd_notify(struct obd_device *obd, struct obd_device *watched,
         return obd_notify(class_exp2obd(cobd_exp), watched, active, data);
 }
 
-static int cobd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
-                    int type, struct obd_client_handle *handle, int flag)
+static int cobd_dt_pin(struct obd_export *exp, obd_id ino, __u32 gen,
+                       int type, struct obd_client_handle *handle,
+                       int flag)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -902,8 +892,9 @@ static int cobd_pin(struct obd_export *exp, obd_id ino, __u32 gen,
         return obd_pin(cobd_exp, ino, gen, type, handle, flag);
 }
 
-static int cobd_unpin(struct obd_export *exp,
-                      struct obd_client_handle *handle, int flag)
+static int cobd_dt_unpin(struct obd_export *exp,
+                         struct obd_client_handle *handle,
+                         int flag)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -918,7 +909,8 @@ static int cobd_unpin(struct obd_export *exp,
         return obd_unpin(cobd_exp, handle, flag);
 }
 
-static int cobd_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
+static int cobd_dt_init_ea_size(struct obd_export *exp, int easize,
+                                int cookiesize)
 {
         struct obd_export *cobd_exp;
 
@@ -926,21 +918,34 @@ static int cobd_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
         return obd_init_ea_size(cobd_exp, easize, cookiesize);
 }
 
-static int  cobd_import_event(struct obd_device *obd,
-                              struct obd_import *imp,
-                              enum obd_import_event event)
+static int cobd_dt_import_event(struct obd_device *obd,
+                                struct obd_import *imp,
+                                enum obd_import_event event)
 {
         struct obd_export *cobd_exp;
 
         cobd_exp = cobd_get_exp(obd);
-
         obd_import_event(class_exp2obd(cobd_exp), imp, event);
-        
         return 0; 
 }
 
+static int cobd_md_getstatus(struct obd_export *exp,
+                             struct lustre_id *rootid)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct obd_export *cobd_exp;
+
+        if (obd == NULL) {
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
+                return -EINVAL;
+        }
+        cobd_exp = cobd_get_exp(obd);
+        return md_getstatus(cobd_exp, rootid);
+}
+
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
-                    	   __u64 valid, const char *ea_name, int ea_namelen,
+                           __u64 valid, const char *ea_name, int ea_namelen,
                            unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -952,13 +957,15 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, id, valid, ea_name, ea_namelen, ea_size, 
-                          request);
+        return md_getattr(cobd_exp, id, valid, ea_name, ea_namelen,
+                          ea_size, request);
 }
 
-static int cobd_md_req2lustre_md (struct obd_export *mdc_exp, 
-                                  struct ptlrpc_request *req, unsigned int offset,
-                                  struct obd_export *osc_exp, struct lustre_md *md)
+static int cobd_md_req2lustre_md(struct obd_export *mdc_exp, 
+                                 struct ptlrpc_request *req,
+                                 unsigned int offset,
+                                 struct obd_export *osc_exp,
+                                 struct lustre_md *md)
 {
         struct obd_device *obd = class_exp2obd(mdc_exp);
         struct obd_export *cobd_exp;
@@ -1022,7 +1029,8 @@ static int cobd_md_create(struct obd_export *exp, struct mdc_op_data *op_data,
                          uid, gid, rdev, request);
 }
 
-static int cobd_md_unlink(struct obd_export *exp, struct mdc_op_data *data,
+static int cobd_md_unlink(struct obd_export *exp,
+                          struct mdc_op_data *data,
                           struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -1096,7 +1104,8 @@ static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_setattr(cobd_exp, data, iattr, ea, ealen, ea2, ea2len, request);
+        return md_setattr(cobd_exp, data, iattr, ea,
+                          ealen, ea2, ea2len, request);
 }
 
 static int cobd_md_readpage(struct obd_export *exp,
@@ -1132,7 +1141,8 @@ static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
         return md_close(cobd_exp, obdo, och, request);
 }
 
-static int cobd_md_done_writing(struct obd_export *exp, struct obdo *obdo)
+static int cobd_md_done_writing(struct obd_export *exp,
+                                struct obdo *obdo)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1212,7 +1222,8 @@ static int cobd_md_store_inode_generation(struct obd_export *exp,
         return md_store_inode_generation(cobd_exp, req, reqoff, repoff);
 }
 
-static int cobd_md_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
+static int cobd_md_set_lock_data(struct obd_export *exp,
+                                 __u64 *l, void *data)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1300,77 +1311,76 @@ static int cobd_md_change_cbdata_name(struct obd_export *exp,
                                      id2, it, data);
 }
 static struct obd_ops cobd_obd_ops = {
-        .o_owner                = THIS_MODULE,
-        .o_attach               = cobd_attach,
-        .o_detach               = cobd_detach,
-        .o_setup                = cobd_setup,
-        .o_cleanup              = cobd_cleanup,
-        .o_connect              = cobd_connect,
-        .o_disconnect           = cobd_disconnect,
-        .o_set_info             = cobd_set_info,
-        .o_get_info             = cobd_get_info,
-        .o_statfs               = cobd_statfs,
+        .o_owner                  = THIS_MODULE,
+        .o_attach                 = cobd_attach,
+        .o_detach                 = cobd_detach,
+        .o_setup                  = cobd_setup,
+        .o_cleanup                = cobd_cleanup,
+        .o_connect                = cobd_connect,
+        .o_disconnect             = cobd_disconnect,
+        .o_set_info               = cobd_set_info,
+        .o_get_info               = cobd_get_info,
+        .o_statfs                 = cobd_statfs,
 
-        .o_packmd               = cobd_packmd,
-        .o_unpackmd             = cobd_unpackmd,
-        .o_create               = cobd_create,
-        .o_destroy              = cobd_destroy,
-        .o_precleanup           = cobd_precleanup,
-        .o_getattr              = cobd_getattr,
-        .o_getattr_async        = cobd_getattr_async,
-        .o_setattr              = cobd_setattr,
-
-        .o_brw                  = cobd_brw,
-        .o_brw_async            = cobd_brw_async,
-        .o_prep_async_page      = cobd_prep_async_page,
-        .o_queue_async_io       = cobd_queue_async_io,
-        .o_set_async_flags      = cobd_set_async_flags,
-        .o_queue_group_io       = cobd_queue_group_io,
-        .o_trigger_group_io     = cobd_trigger_group_io,
-        .o_teardown_async_page  = cobd_teardown_async_page,
-        .o_preprw               = cobd_preprw,
-        .o_punch                = cobd_punch,
-        .o_sync                 = cobd_sync,
-        .o_enqueue              = cobd_enqueue,
-        .o_match                = cobd_match,
-        .o_change_cbdata        = cobd_change_cbdata,
-        .o_cancel               = cobd_cancel,
-        .o_cancel_unused        = cobd_cancel_unused,
-        .o_iocontrol            = cobd_iocontrol,
-        .o_commitrw             = cobd_commitrw,
-        .o_llog_init            = cobd_llog_init,
-        .o_llog_finish          = cobd_llog_finish,
-        .o_notify               = cobd_notify,
-        .o_pin                  = cobd_pin,
-        .o_unpin                = cobd_unpin,
-        .o_import_event         = cobd_import_event,
-        .o_init_ea_size         = cobd_init_ea_size,
+        .o_packmd                 = cobd_dt_packmd,
+        .o_unpackmd               = cobd_dt_unpackmd,
+        .o_create                 = cobd_dt_create,
+        .o_destroy                = cobd_dt_destroy,
+        .o_precleanup             = cobd_dt_precleanup,
+        .o_getattr                = cobd_dt_getattr,
+        .o_getattr_async          = cobd_dt_getattr_async,
+        .o_setattr                = cobd_dt_setattr,
+        .o_brw                    = cobd_dt_brw,
+        .o_brw_async              = cobd_dt_brw_async,
+        .o_prep_async_page        = cobd_dt_prep_async_page,
+        .o_queue_async_io         = cobd_dt_queue_async_io,
+        .o_set_async_flags        = cobd_dt_set_async_flags,
+        .o_queue_group_io         = cobd_dt_queue_group_io,
+        .o_trigger_group_io       = cobd_dt_trigger_group_io,
+        .o_teardown_async_page    = cobd_dt_teardown_async_page,
+        .o_preprw                 = cobd_dt_preprw,
+        .o_punch                  = cobd_dt_punch,
+        .o_sync                   = cobd_dt_sync,
+        .o_enqueue                = cobd_dt_enqueue,
+        .o_match                  = cobd_dt_match,
+        .o_change_cbdata          = cobd_dt_change_cbdata,
+        .o_cancel                 = cobd_dt_cancel,
+        .o_cancel_unused          = cobd_dt_cancel_unused,
+        .o_iocontrol              = cobd_dt_iocontrol,
+        .o_commitrw               = cobd_dt_commitrw,
+        .o_llog_init              = cobd_dt_llog_init,
+        .o_llog_finish            = cobd_dt_llog_finish,
+        .o_notify                 = cobd_dt_notify,
+        .o_pin                    = cobd_dt_pin,
+        .o_unpin                  = cobd_dt_unpin,
+        .o_import_event           = cobd_dt_import_event,
+        .o_init_ea_size           = cobd_dt_init_ea_size,
 };
 
 struct md_ops cobd_md_ops = {
-        .m_getstatus            = cobd_md_getstatus,
-        .m_getattr              = cobd_md_getattr,
-        .m_req2lustre_md        = cobd_md_req2lustre_md,
-        .m_change_cbdata        = cobd_md_change_cbdata,
-        .m_getattr_lock         = cobd_md_getattr_lock,
-        .m_create               = cobd_md_create,
-        .m_unlink               = cobd_md_unlink,
-        .m_valid_attrs          = cobd_md_valid_attrs,
-        .m_rename               = cobd_md_rename,
-        .m_link                 = cobd_md_link,
-        .m_setattr              = cobd_md_setattr,
-        .m_readpage             = cobd_md_readpage,
-        .m_close                = cobd_md_close,
-        .m_done_writing         = cobd_md_done_writing,
-        .m_sync                 = cobd_md_sync,
-        .m_set_open_replay_data = cobd_md_set_open_replay_data,
+        .m_getstatus              = cobd_md_getstatus,
+        .m_getattr                = cobd_md_getattr,
+        .m_req2lustre_md          = cobd_md_req2lustre_md,
+        .m_change_cbdata          = cobd_md_change_cbdata,
+        .m_getattr_lock           = cobd_md_getattr_lock,
+        .m_create                 = cobd_md_create,
+        .m_unlink                 = cobd_md_unlink,
+        .m_valid_attrs            = cobd_md_valid_attrs,
+        .m_rename                 = cobd_md_rename,
+        .m_link                   = cobd_md_link,
+        .m_setattr                = cobd_md_setattr,
+        .m_readpage               = cobd_md_readpage,
+        .m_close                  = cobd_md_close,
+        .m_done_writing           = cobd_md_done_writing,
+        .m_sync                   = cobd_md_sync,
+        .m_set_open_replay_data   = cobd_md_set_open_replay_data,
         .m_clear_open_replay_data = cobd_md_clear_open_replay_data,
         .m_store_inode_generation = cobd_md_store_inode_generation,
-        .m_set_lock_data        = cobd_md_set_lock_data,
-        .m_enqueue              = cobd_md_enqueue,
-        .m_get_real_obd         = cobd_md_get_real_obd,
-        .m_intent_lock          = cobd_md_intent_lock,
-        .m_change_cbdata_name   = cobd_md_change_cbdata_name,
+        .m_set_lock_data          = cobd_md_set_lock_data,
+        .m_enqueue                = cobd_md_enqueue,
+        .m_get_real_obd           = cobd_md_get_real_obd,
+        .m_intent_lock            = cobd_md_intent_lock,
+        .m_change_cbdata_name     = cobd_md_change_cbdata_name,
 };
 
 static int __init cobd_init(void)

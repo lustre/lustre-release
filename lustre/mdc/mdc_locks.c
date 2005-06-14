@@ -602,7 +602,7 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                 
                 /* we have to compare all the fields but type, because MDS can
                  * return fid/mds/ino/gen if inode lives on another MDS -bzzz */
-                if (!id_equal(cid, &mds_body->id1))
+                if ((lookup_flags & LOOKUP_COBD) && !id_equal(cid, &mds_body->id1))
                         RETURN(-ESTALE);
         }
 
