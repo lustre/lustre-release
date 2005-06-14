@@ -1273,7 +1273,9 @@ static int cobd_md_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                        exp->exp_handle.h_cookie);
                 return -EINVAL;
         }
+        lookup_flags |= LOOKUP_COBD;
         cobd_exp = cobd_get_exp(obd);
+        
         return md_intent_lock(cobd_exp, pid, name, len, lmm, lmmsize,
                               cid, it, lookup_flags, reqp, cb_blocking);
 }
