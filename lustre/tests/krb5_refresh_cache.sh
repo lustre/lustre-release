@@ -40,7 +40,7 @@ expect {
 }
 
 send "$KRB5DIR/bin/kinit\r"
-{
+expect {
     timeout {puts "timeout" ;exit 1}
     "Password for "
 }
