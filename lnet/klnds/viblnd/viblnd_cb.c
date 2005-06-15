@@ -2689,9 +2689,6 @@ kibnal_arp_done (kib_conn_t *conn)
         LASSERT (peer->ibp_arp_count > 0);
         
         if (cv->cv_arprc != ibat_stat_ok) {
-                CERROR("Can't Arp "LPX64"@%u.%u.%u.%u: %d\n", peer->ibp_nid,
-                       HIPQUAD(peer->ibp_ip), cv->cv_arprc);
-
                 write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
                 peer->ibp_arp_count--;
                 if (peer->ibp_arp_count == 0) {
