@@ -1114,27 +1114,30 @@ static void sort_brw_pages(struct brw_page *array, int num)
         } while (stride > 1);
 }
 
-/* make sure we the regions we're passing to elan don't violate its '4
- * fragments' constraint.  portal headers are a fragment, all full
- * PAGE_SIZE long pages count as 1 fragment, and each partial page
- * counts as a fragment.  I think.  see bug 934. */
-static obd_count check_elan_limit(struct brw_page *pg, obd_count pages)
+static obd_count 
+max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 {
-        int frags_left = 3;
-        int saw_whole_frag = 0;
-        int i;
+        int count = 1;
+        int offset;
 
-        for (i = 0 ; frags_left && i < pages ; pg++, i++) {
-                if (pg->count == PAGE_SIZE) {
-                        if (!saw_whole_frag) {
-                                saw_whole_frag = 1;
-                                frags_left--;
-                        }
-                } else {
-                        frags_left--;
-                }
-        }
-        return i;
+	LASSERT (pages > 0);
+        offset = pg->off & (PAGE_SIZE - 1);
+        
+	for (;;) {
+		pages--;
+		if (pages == 0)                 /* that's all */
+                        return count;
+                
+                if (offset + pg->count < PAGE_SIZE) /* doesn't end on page boundary */
+			return count;
+		
+		pg++;
+                offset = pg->off & (PAGE_SIZE - 1);
+		if (offset != 0)                /* doesn't start on page boundary */
+			return count;
+		
+		count++;
+	}
 }
 
 static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -1163,7 +1166,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                         pages_per_brw = page_count;
 
                 sort_brw_pages(pga, pages_per_brw);
-                pages_per_brw = check_elan_limit(pga, pages_per_brw);
+                pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
                 rc = osc_brw_internal(cmd, exp, oa, md, pages_per_brw, pga);
 
@@ -1203,7 +1206,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                         pages_per_brw = page_count;
 
                 sort_brw_pages(pga, pages_per_brw);
-                pages_per_brw = check_elan_limit(pga, pages_per_brw);
+                pages_per_brw = max_unfragmented_pages(pga, pages_per_brw);
 
                 rc = async_internal(cmd, exp, oa, md, pages_per_brw, pga, set);
 
@@ -1540,13 +1543,19 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 if (pos == NULL)
                         break;
 
+                /* If there is a gap at the start of this page, it can't merge
+                 * with any previous page, so we'll hand the network a
+                 * "fragmented" page array that it can't transfer in 1 RDMA */
+                if (page_count != 0 && oap->oap_page_off != 0)
+                        break;
+
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
                 lop_update_pending(cli, lop, cmd, -1);
                 list_del_init(&oap->oap_urgent_item);
 
                 if (page_count == 0)
-                        starting_offset = (oap->oap_obj_off +oap->oap_page_off)&
+                        starting_offset = (oap->oap_obj_off + oap->oap_page_off) &
                                           (PTLRPC_MAX_BRW_SIZE - 1);
 
                 /* ask the caller for the size of the io as the rpc leaves. */
@@ -1572,6 +1581,12 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 ending_offset = (oap->oap_obj_off + oap->oap_page_off + 
                                  oap->oap_count) & (PTLRPC_MAX_BRW_SIZE - 1);
                 if (ending_offset == 0)
+                        break;
+
+                /* If there is a gap at the end of this page, it can't merge
+                 * with any subsequent pages, so we'll hand the network a
+                 * "fragmented" page array that it can't transfer in 1 RDMA */
+                if (oap->oap_page_off + oap->oap_count < PAGE_SIZE)
                         break;
         }
 
