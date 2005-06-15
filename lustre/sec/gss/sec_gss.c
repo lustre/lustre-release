@@ -92,6 +92,7 @@ struct rpc_clnt;
 
 static int secinit_compose_request(struct obd_import *imp,
                                    char *buf, int bufsize,
+                                   int lustre_srv,
                                    uid_t uid, gid_t gid,
                                    long token_size,
                                    char __user *token)
@@ -115,7 +116,7 @@ static int secinit_compose_request(struct obd_import *imp,
         hdr->flavor  = cpu_to_le32(PTLRPC_SEC_GSS);
         hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_NONE);
         hdr->msg_len = cpu_to_le32(lmsg_size);
-        hdr->sec_len = cpu_to_le32(7 * 4 + token_size);
+        hdr->sec_len = cpu_to_le32(8 * 4 + token_size);
 
         /* lustre message & secdesc */
         lmsg = buf_to_lustre_msg(buf);
@@ -141,6 +142,9 @@ static int secinit_compose_request(struct obd_import *imp,
         *p++ = cpu_to_le32(0);                          /* seq */
         *p++ = cpu_to_le32(PTLRPC_GSS_SVC_NONE);        /* service */
         *p++ = cpu_to_le32(0);                          /* context handle */
+
+        /* plus lustre svc type */
+        *p++ = cpu_to_le32(lustre_srv);
 
         /* now the token part */
         *p++ = cpu_to_le32((__u32) token_size);
@@ -245,6 +249,7 @@ static int secinit_parse_reply(char *repbuf, int replen,
 struct lgssd_ioctl_param {
         int             version;        /* in   */
         char           *uuid;           /* in   */
+        int             lustre_svc;     /* in   */
         uid_t           uid;            /* in   */
         gid_t           gid;            /* in   */
         long            send_token_size;/* in   */
@@ -269,11 +274,14 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
         int                       rc, reqlen, replen;
 
         if (count != sizeof(param)) {
-                CERROR("partial write\n");
+                CERROR("ioctl size %lu, expect %d, please check lgssd version\n",
+                        count, sizeof(param));
                 RETURN(-EINVAL);
         }
-        if (copy_from_user(&param, buffer, sizeof(param)))
+        if (copy_from_user(&param, buffer, sizeof(param))) {
+                CERROR("failed copy data from lgssd\n");
                 RETURN(-EFAULT);
+        }
 
         if (param.version != GSSD_INTERFACE_VERSION) {
                 CERROR("gssd interface version %d (expect %d)\n",
@@ -293,11 +301,6 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
                 CERROR("no such obd %s\n", obdname);
                 RETURN(-EINVAL);
         }
-        if (strcmp(obd->obd_type->typ_name, "mdc") &&
-            strcmp(obd->obd_type->typ_name, "osc")) {
-                CERROR("%s not a mdc/osc device\n", obdname);
-                RETURN(-EINVAL);
-        }
 
         imp = class_import_get(obd->u.cli.cl_import);
 
@@ -312,6 +315,7 @@ static int gss_send_secinit_rpc(__user char *buffer, unsigned long count)
 
         /* get token */
         reqlen = secinit_compose_request(imp, reqbuf, reqbuf_size,
+                                         param.lustre_svc,
                                          param.uid, param.gid,
                                          param.send_token_size,
                                          param.send_token);
@@ -732,9 +736,9 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
 
         obdtype = import->imp_obd->obd_type->typ_name;
         if (!strcmp(obdtype, "mdc"))
-                gmd.gum_svc = 0;
+                gmd.gum_svc = LUSTRE_GSS_SVC_MDS;
         else if (!strcmp(obdtype, "osc"))
-                gmd.gum_svc = 1;
+                gmd.gum_svc = LUSTRE_GSS_SVC_OSS;
         else {
                 CERROR("gss on %s?\n", obdtype);
                 RETURN(-EINVAL);

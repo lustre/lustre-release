@@ -628,7 +628,8 @@ class LCTLInterface:
 
     # create a new device with lctl
     def newdev(self, type, name, uuid, setup = ""):
-        self.attach(type, name, uuid);
+        if type != 'mds':
+            self.attach(type, name, uuid);
         try:
             self.setup(name, setup)
         except CommandError, e:
@@ -1739,6 +1740,20 @@ class CONFDEV(Module):
         self.client_uuids = self.target.get_refs('client')
         self.obdtype = self.db.get_val('obdtype', '')
 	
+        self.mds_sec = self.db.get_val('mds_sec', '')
+        self.oss_sec = self.db.get_val('oss_sec', '')
+        self.deny_sec = self.db.get_val('deny_sec', '')
+
+        if config.mds_mds_sec:
+            self.mds_sec = config.mds_mds_sec
+        if config.mds_oss_sec:
+            self.oss_sec = config.mds_oss_sec
+        if config.mds_deny_sec:
+            if self.deny_sec:
+                self.deny_sec = "%s,%s" %(self.deny_sec, config.mds_deny_sec)
+            else:
+                self.deny_sec = config.mds_deny_sec
+
         if self.obdtype == None:
             self.obdtype = 'dumb'
 	
@@ -1916,10 +1931,18 @@ class CONFDEV(Module):
 	    config.record = 1
             lctl.clear_log(self.name, self.target.getName() + '-conf')
             lctl.record(self.name, self.target.getName() + '-conf')
+            lctl.attach("mds", self.conf_name, self.conf_uuid)
+            if self.mds_sec:
+                lctl.set_security(self.conf_name, "mds_sec", self.mds_sec)
+            if self.oss_sec:
+                lctl.set_security(self.conf_name, "oss_sec", self.oss_sec)
+            if self.deny_sec:
+                for flavor in string.split(self.deny_sec, ','):
+                    lctl.set_security(self.conf_name, "deny_sec", flavor)
             lctl.newdev("mds", self.conf_name, self.conf_uuid,
                         setup ="%s %s %s %s %s %s" %(self.realdev, self.fstype,
-                                            	     self.conf_name, self.mountfsoptions,
-					    	     master_name, self.obdtype))
+                                        	     self.conf_name, self.mountfsoptions,
+			         	    	     master_name, self.obdtype))
             lctl.end_record()
             config.record = 0
 
@@ -2122,13 +2145,6 @@ class MDSDEV(Module):
  	if self.master != None:
              self.master.prepare()
 
-        lctl.attach("mds", self.name, self.uuid)
-        if config.mds_mds_sec:
-	    lctl.set_security(self.name, "mds_mds_sec", config.mds_mds_sec)
-        if config.mds_ost_sec:
-            lctl.set_security(self.name, "mds_ost_sec", config.mds_ost_sec)
-        lctl.detach(self.name)
-
 	if not config.record:
             self.confobd.start()
     	
@@ -2223,6 +2239,14 @@ class OSD(Module):
         else:
             self.failover_ost = 'n'
 
+        self.deny_sec = self.db.get_val('deny_sec', '')
+
+        if config.ost_deny_sec:
+            if self.deny_sec:
+                self.deny_sec = "%s,%s" %(self.deny_sec, config.ost_deny_sec)
+            else:
+                self.deny_sec = config.ost_deny_sec
+
         active_uuid = get_active_target(ost)
         if not active_uuid:
             panic("No target device found:", target_uuid)
@@ -2237,7 +2261,7 @@ class OSD(Module):
         self.uuid = target_uuid
         self.confobd = CONFDEV(self.db, self.name, 
 			       target_uuid, self.uuid)
-    
+
     def add_module(self, manager):
         if not self.active:
 	    return
@@ -2274,6 +2298,7 @@ class OSD(Module):
             return
 
         run_acceptors()
+
         if self.osdtype == 'obdecho':
             self.info(self.osdtype)
             lctl.newdev("obdecho", self.name, self.uuid)
@@ -2285,6 +2310,10 @@ class OSD(Module):
         	self.confobd.write_conf()
     	    if not config.record:
         	self.confobd.start()        
+
+        if self.deny_sec:
+            for flavor in string.split(self.deny_sec, ','):
+                lctl.set_security(self.name, "deny_sec", flavor)
 
     def write_conf(self):
         if is_prepared(self.name):
@@ -2764,6 +2793,13 @@ class Mountpoint(Module):
         self.obd_uuid = fs.get_first_ref('obd')
         client_uuid = generate_client_uuid(self.name)
 
+        self.oss_sec = self.db.get_val('oss_sec','null')
+        self.mds_sec = self.db.get_val('mds_sec','null')
+        if config.mds_sec:
+            self.mds_sec = config.mds_sec
+        if config.oss_sec:
+            self.oss_sec = config.oss_sec
+
         ost = self.db.lookup(self.obd_uuid)
         if not ost:
             panic("no ost: ", self.obd_uuid)
@@ -2801,11 +2837,9 @@ class Mountpoint(Module):
             # so replace it with Lustre async
             self.clientoptions = string.replace(self.clientoptions, "async", "lasync")
 
-        if not config.sec:
-            config.sec = "null"
-        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,sec=%s%s %s %s" % \
-              (self.vosc.get_name(), self.vmdc.get_name(), config.sec, 
-	       self.clientoptions, config.config, self.path)
+        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,mds_sec=%s,oss_sec=%s%s %s %s" % \
+              (self.vosc.get_name(), self.vmdc.get_name(), self.mds_sec,
+	       self.oss_sec, self.clientoptions, config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
@@ -3588,10 +3622,13 @@ lconf_options = [
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
     ('node',   "Load config for <nodename>", PARAM),
-    ('sec',    "security flavor <null|krb5i|krb5p> of client", PARAM),
-    ('mds_sec',    "security flavor <null|krb5i|krb5p> of client", PARAM),
-    ('mds_mds_sec', "security flavor <null|krb5i|krb5p> of inter mds's", PARAM),
-    ('mds_ost_sec', "security flavor <null|krb5i|krb5p> of mds's-ost's", PARAM),
+    ('sec',"security flavor <null|krb5i|krb5p> between this client with mds", PARAM),
+    ('mds_sec',"security flavor <null|krb5i|krb5p> between this client with mds", PARAM),
+    ('oss_sec',"security flavor <null|krb5i|krb5p> between this client with ost", PARAM),
+    ('mds_mds_sec',"security flavor <null|krb5i|krb5p> between this mds with other mds", PARAM),
+    ('mds_oss_sec',"security flavor <null|krb5i|krb5p> between this mds with ost", PARAM),
+    ('mds_deny_sec', "security flavor <null|krb5i|krb5p> denied by this mds", PARAM),
+    ('ost_deny_sec', "security flavor <null|krb5i|krb5p> denied by this ost", PARAM),
     ('cleanup,d', "Cleans up config. (Shutdown)"),
     ('force,f', "Forced unmounting and/or obd detach during cleanup",
                FLAG, 0),

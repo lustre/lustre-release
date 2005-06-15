@@ -78,7 +78,7 @@ start() {
     active=`facet_active $facet`
     do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
-        --sec $SECURITY $@ $XMLCONFIG
+        --mds_sec $SECURITY $@ $XMLCONFIG
 }
 
 stop() {
@@ -97,13 +97,13 @@ zconf_mount() {
     do_node $client mkdir $mnt 2> /dev/null || :
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre -o sec=$SECURITY,nettype=$NETTYPE \
+	do_node $client mount -t lustre -o mds_sec=$SECURITY,nettype=$NETTYPE \
                 `facet_active_host mds1`:/mds1_svc/client_facet $mnt || return 2
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
        do_node $client $LLMOUNT `facet_active_host mds1`:/mds1_svc/client_facet $mnt \
-               -o sec=$SECURITY,nettype=$NETTYPE|| return 4
+               -o mds_sec=$SECURITY,nettype=$NETTYPE|| return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`

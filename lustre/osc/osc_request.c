@@ -2913,7 +2913,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (keylen == strlen("sec") && memcmp(key, "sec", keylen) == 0) {
+        if (keylen == strlen("sec") &&
+            memcmp(key, "sec", keylen) == 0) {
                 struct client_obd *cli = &exp->exp_obd->u.cli;
 
                 if (vallen == strlen("null") &&

@@ -44,6 +44,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <libcfs/list.h>
+#include <linux/lustre_sec.h>
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
@@ -1030,7 +1031,7 @@ int ost_handle(struct ptlrpc_request *req)
         if (req->rq_reqmsg->opc == SEC_INIT ||
             req->rq_reqmsg->opc == SEC_INIT_CONTINUE ||
             req->rq_reqmsg->opc == SEC_FINI) {
-                RETURN(0);
+                GOTO(out_check_req, rc = 0);
         }
 
         /* XXX identical to MDS */
@@ -1316,6 +1317,7 @@ out_service:
         RETURN(rc);
 }
 
+extern void lgss_svc_cache_purge_all(void);
 static int ost_cleanup(struct obd_device *obd, int flags)
 {
         struct ost_obd *ost = &obd->u.ost;
@@ -1335,6 +1337,10 @@ static int ost_cleanup(struct obd_device *obd, int flags)
         ptlrpc_stop_all_threads(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_create_service);
 
+#ifdef ENABLE_GSS
+        /* XXX */
+        lgss_svc_cache_purge_all();
+#endif
         RETURN(err);
 }
 

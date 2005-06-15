@@ -105,10 +105,11 @@ static inline unsigned long hash_mem(char *buf, int length, int bits)
 
 struct rsi {
         struct cache_head       h;
+        __u32                   lustre_svc;
         __u32                   naltype;
         __u32                   netid;
         __u64                   nid;
-        rawobj_t                in_handle, in_token;
+        rawobj_t                in_handle, in_token, in_srv_type;
         rawobj_t                out_handle, out_token;
         int                     major_status, minor_status;
 };
@@ -153,11 +154,13 @@ static void rsi_request(struct cache_detail *cd,
 {
         struct rsi *rsii = container_of(h, struct rsi, h);
 
-        qword_addhex(bpp, blen, (char *)&rsii->naltype, sizeof(rsii->naltype));
-        qword_addhex(bpp, blen, (char *)&rsii->netid, sizeof(rsii->netid));
-        qword_addhex(bpp, blen, (char *)&rsii->nid, sizeof(rsii->nid));
-        qword_addhex(bpp, blen, (char *)rsii->in_handle.data, rsii->in_handle.len);
-        qword_addhex(bpp, blen, (char *)rsii->in_token.data, rsii->in_token.len);
+        qword_addhex(bpp, blen, (char *) &rsii->lustre_svc,
+                     sizeof(rsii->lustre_svc));
+        qword_addhex(bpp, blen, (char *) &rsii->naltype, sizeof(rsii->naltype));
+        qword_addhex(bpp, blen, (char *) &rsii->netid, sizeof(rsii->netid));
+        qword_addhex(bpp, blen, (char *) &rsii->nid, sizeof(rsii->nid));
+        qword_addhex(bpp, blen, rsii->in_handle.data, rsii->in_handle.len);
+        qword_addhex(bpp, blen, rsii->in_token.data, rsii->in_token.len);
         (*bpp)[-1] = '\n';
 }
 
@@ -644,17 +647,6 @@ gss_svc_searchbyctx(rawobj_t *handle)
         return found;
 }
 
-struct gss_svc_data {
-        /* decoded gss client cred: */
-        struct rpc_gss_wire_cred        clcred;
-        /* internal used status */
-        unsigned int                    is_init:1,
-                                        is_init_continue:1,
-                                        is_err_notify:1,
-                                        is_fini:1;
-        int                             reserve_len;
-};
-
 /* FIXME
  * again hacking: only try to give the svcgssd a chance to handle
  * upcalls.
@@ -923,10 +915,21 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         }
         cache_init(&rsikey->h);
 
+        /* obtain lustre svc type */
+        if (seclen < 4) {
+                CERROR("sec size %d too small\n", seclen);
+                GOTO(out_rsikey, rc = SVC_DROP);
+        }
+        rsikey->lustre_svc = le32_to_cpu(*secdata++);
+        seclen -= 4;
+
+        /* duplicate context handle. currently always 0 */
         if (rawobj_dup(&rsikey->in_handle, &gc->gc_ctx)) {
                 CERROR("fail to dup context handle\n");
                 GOTO(out_rsikey, rc = SVC_DROP);
         }
+
+        /* extract token */
         *res = PTLRPCS_BADVERF;
         if (rawobj_extract(&tmpobj, &secdata, &seclen)) {
                 CERROR("can't extract token\n");
@@ -1176,7 +1179,7 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         struct gss_svc_data *svcdata;
         struct rpc_gss_wire_cred *gc;
         struct ptlrpcs_wire_hdr *sec_hdr;
-        __u32 seclen, *secdata, version, subflavor;
+        __u32 seclen, *secdata, version;
         int rc;
         ENTRY;
 
@@ -1215,14 +1218,15 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         /* Now secdata/seclen is what we want to parse
          */
         version = le32_to_cpu(*secdata++);      /* version */
-        subflavor = le32_to_cpu(*secdata++);    /* subflavor */
+        svcdata->subflavor = le32_to_cpu(*secdata++);    /* subflavor */
         gc->gc_proc = le32_to_cpu(*secdata++);  /* proc */
         gc->gc_seq = le32_to_cpu(*secdata++);   /* seq */
         gc->gc_svc = le32_to_cpu(*secdata++);   /* service */
         seclen -= 5 * 4;
 
         CDEBUG(D_SEC, "wire gss_hdr: %u/%u/%u/%u/%u\n",
-               version, subflavor, gc->gc_proc, gc->gc_seq, gc->gc_svc);
+               version, svcdata->subflavor, gc->gc_proc,
+               gc->gc_seq, gc->gc_svc);
 
         if (version != PTLRPC_SEC_GSS_VERSION) {
                 CERROR("gss version mismatch: %d - %d\n",

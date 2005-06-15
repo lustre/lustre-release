@@ -57,6 +57,7 @@
 #include <linux/lustre_commit_confd.h>
 #include <linux/lustre_acl.h>
 #include "mds_internal.h"
+#include <linux/lustre_sec.h>
 
 static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
@@ -3265,7 +3266,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         sema_init(&mds->mds_md_sem, 1);
         mds->mds_md_connected = 0;
         mds->mds_md_name = NULL;
-        
+
         if (LUSTRE_CFG_BUFLEN(lcfg, 5) > 0 && lustre_cfg_buf(lcfg, 5) &&
             strncmp(lustre_cfg_string(lcfg, 5), "dumb", LUSTRE_CFG_BUFLEN(lcfg, 5))) {
                 class_uuid_t uuid;
@@ -3289,7 +3290,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                         GOTO(err_ops, rc);
                 }
         }
-        
+
         mds->mds_obd_type = MDS_MASTER_OBD;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 6) > 0 && lustre_cfg_buf(lcfg, 6) &&
@@ -3343,7 +3344,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                        obd->obd_name, rc);
                 GOTO(err_ns, rc);
         }
-        
+
         rc = llog_start_commit_thread();
         if (rc < 0)
 
@@ -3631,6 +3632,20 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         /* XXX */
         lgss_svc_cache_purge_all();
 #endif
+
+        spin_lock(&mds->mds_denylist_lock);
+        while (!list_empty( &mds->mds_denylist ) ) {
+                deny_sec_t *p_deny_sec = list_entry(mds->mds_denylist.next,
+                                                    deny_sec_t, list);
+                list_del(&p_deny_sec->list);
+                OBD_FREE(p_deny_sec, sizeof(*p_deny_sec));
+        }
+        spin_unlock(&mds->mds_denylist_lock);
+        if(mds->mds_mds_sec)
+                OBD_FREE(mds->mds_mds_sec, strlen(mds->mds_mds_sec) + 1);
+        if(mds->mds_ost_sec)
+                OBD_FREE(mds->mds_ost_sec, strlen(mds->mds_ost_sec) + 1);
+
         RETURN(0);
 }
 
@@ -3638,13 +3653,14 @@ static int set_security(const char *value, char **sec)
 {
         int rc = 0;
 
-        if (!strcmp(value, "null"))
-                *sec = "null";
-        else if (!strcmp(value, "krb5i"))
-                *sec = "krb5i";
-        else if (!strcmp(value, "krb5p"))
-                *sec = "krb5p";
-        else {
+        if (!strcmp(value, "null") ||
+            !strcmp(value, "krb5i") ||
+            !strcmp(value, "krb5p")) {
+                OBD_ALLOC(*sec, strlen(value) + 1);
+                if(!*sec)
+                        RETURN(-ENOMEM);
+                memcpy(*sec, value, strlen(value) + 1);
+        } else {
                 CERROR("Unrecognized value, force use NULL\n");
                 rc = -EINVAL;
         }
@@ -3661,16 +3677,22 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
 
         switch(lcfg->lcfg_command) {
         case LCFG_SET_SECURITY: {
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) || LUSTRE_CFG_BUFLEN(lcfg, 2))
+                if ((LUSTRE_CFG_BUFLEN(lcfg, 1) == 0) ||
+                    (LUSTRE_CFG_BUFLEN(lcfg, 2) == 0))
                         GOTO(out, rc = -EINVAL);
 
-                if (!strcmp(lustre_cfg_string(lcfg, 1), "mds_mds_sec"))
+                if (!strcmp(lustre_cfg_string(lcfg, 1), "mds_sec"))
                         rc = set_security(lustre_cfg_string(lcfg, 2),
                                           &mds->mds_mds_sec);
-                else if (!strcmp(lustre_cfg_string(lcfg, 2), "mds_ost_sec"))
+                else if (!strcmp(lustre_cfg_string(lcfg, 1), "oss_sec"))
                         rc = set_security(lustre_cfg_string(lcfg, 2),
                                           &mds->mds_ost_sec);
-                else {
+                else if (!strcmp(lustre_cfg_string(lcfg, 1), "deny_sec")){
+                        spin_lock(&mds->mds_denylist_lock);
+                        rc = add_deny_security(lustre_cfg_string(lcfg, 2),
+                                               &mds->mds_denylist);
+                        spin_unlock(&mds->mds_denylist_lock);
+                } else {
                         CERROR("Unrecognized key\n");
                         rc = -EINVAL;
                 }
@@ -3943,6 +3965,10 @@ int mds_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
         int rc = 0;
+        struct mds_obd *mds = &dev->u.mds;
+
+        spin_lock_init(&mds->mds_denylist_lock);
+        INIT_LIST_HEAD(&mds->mds_denylist);
 
         lprocfs_init_multi_vars(0, &lvars);
 

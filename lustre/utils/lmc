@@ -99,6 +99,9 @@ Object creation command summary:
   --mountfsoptions options
   --root_squash uid:gid
   --no_root_squash ptl_nid 
+  --mds_mds_sec flavor
+  --mds_oss_sec flavor
+  --mds_deny_sec flavor[,flavor[...]]
 
 --add lov
   --lov lov_name
@@ -126,6 +129,7 @@ Object creation command summary:
   --mkfsoptions options
   --mountfsoptions options
   --nspath
+  --ost_deny_sec flavor[,flavor[...]]
  
 --delete ost
   --node node_name
@@ -142,6 +146,8 @@ Object creation command summary:
   --lmv lmv_name
   --ost ost_name OR --lov lov_name
   --clientoptions options
+  --mds_sec flavor
+  --oss_sec flavor
 
 --add route
   --node nodename
@@ -237,6 +243,10 @@ lmc_options = [
     ('root_squash', "MDS squash root to appointed uid.", PARAM, ""),
     ('no_root_squash', "Don't squash root for appointed nid.", PARAM, ""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
+    ('mds_mds_sec', "Specify the secure flavor for connection from this mds to other mds.", PARAM, ""),
+    ('mds_oss_sec', "Specify the secure flavor for connection from this mds to ost.", PARAM, ""),
+    ('mds_deny_sec', "Specify the secure flavor which is denied from remote to this mds.", PARAM, ""),
+    ('ost_deny_sec', "Specify the secure flavor which is denied from remote to this ost.", PARAM, ""),
     ('format', ""),
     ('migrate', "used for offline migrate of an ost in conjunctio with add/delete"),
 
@@ -245,6 +255,8 @@ lmc_options = [
     ('path', "Specify the mountpoint for Lustre.", PARAM),
     ('filesystem', "Lustre filesystem name", PARAM,""),
     ('clientoptions', "Specify the options for Lustre, such as async.", PARAM, ""),
+    ('mds_sec', "Specify the secure flavor for connection from this client to mds.", PARAM, ""),
+    ('oss_sec', "Specify the secure flavor for connection from this client to ost.", PARAM, ""),
 
     # lov
     ('lov', "Specify LOV name.", PARAM,""),
@@ -437,7 +449,8 @@ class GenConfig:
 
     def osd(self, name, uuid, fstype, osdtype, devname, format, ost_uuid,
             node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", 
-            mkfsoptions="", mountfsoptions="", backfstype="", backdevname=""):
+            mkfsoptions="", mountfsoptions="", backfstype="", backdevname="",
+            deny_sec=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
@@ -463,6 +476,8 @@ class GenConfig:
                 self.addElement(osd, "mkfsoptions", mkfsoptions)
             if mountfsoptions:
                 self.addElement(osd, "mountfsoptions", mountfsoptions)
+            if deny_sec:
+                self.addElement(osd, "deny_sec", deny_sec)
         if nspath:
             self.addElement(osd, "nspath", nspath)
         return osd
@@ -531,7 +546,8 @@ class GenConfig:
     def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
                nspath="", mkfsoptions="", mountfsoptions="", backfstype="", 
-               backdevname="",lmv_uuid="", root_squash="", no_root_squash=""):
+               backdevname="",lmv_uuid="", root_squash="", no_root_squash="",
+               mds_sec="", oss_sec="", deny_sec=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fstype)
         if backfstype:
@@ -556,6 +572,12 @@ class GenConfig:
             self.addElement(mdd, "root_squash", root_squash)
         if no_root_squash:
             self.addElement(mdd, "no_root_squash", no_root_squash)
+        if mds_sec:
+            self.addElement(mdd, "mds_sec", mds_sec)
+        if oss_sec:
+            self.addElement(mdd, "oss_sec", oss_sec)
+        if deny_sec:
+            self.addElement(mdd, "deny_sec", deny_sec)
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
 	
@@ -576,12 +598,17 @@ class GenConfig:
         mgmt.appendChild(self.ref("active", mgmt_uuid))
         return mgmt
 
-    def mountpoint(self, name, uuid, fs_uuid, path, clientoptions):
+    def mountpoint(self, name, uuid, fs_uuid, path, clientoptions,
+                   mds_sec, oss_sec):
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
         if clientoptions:
             self.addElement(mtpt, "clientoptions", clientoptions)
+        if mds_sec:
+            self.addElement(mtpt, "mds_sec", mds_sec)
+        if oss_sec:
+            self.addElement(mtpt, "oss_sec", oss_sec)
         return mtpt
 
     def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid):
@@ -998,6 +1025,9 @@ def add_mds(gen, lustre, options):
     mountfsoptions = get_option(options, 'mountfsoptions')
     root_squash = get_option(options, 'root_squash')
     no_root_squash = get_option(options, 'no_root_squash')
+    mds_sec = get_option(options, 'mds_mds_sec')
+    oss_sec = get_option(options, 'mds_oss_sec')
+    deny_sec = get_option(options, 'mds_deny_sec')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -1014,7 +1044,7 @@ def add_mds(gen, lustre, options):
                      get_format_flag(options), node_uuid, mds_uuid,
                      size, journal_size, inode_size, nspath, mkfsoptions, 
                      mountfsoptions, backfstype, backdevname,lmv_uuid, 
-		     root_squash, no_root_squash)
+		     root_squash, no_root_squash, mds_sec, oss_sec, deny_sec)
     lustre.appendChild(mdd)
 
 
@@ -1052,6 +1082,7 @@ def add_ost(gen, lustre, options):
         inode_size = ''
         mkfsoptions = ''
         mountfsoptions = ''
+        deny_sec = ''
     else:
         devname = get_option(options, 'dev') # can be unset for bluearcs
         backdevname = get_option(options, 'backdev')
@@ -1062,6 +1093,7 @@ def add_ost(gen, lustre, options):
         inode_size = get_option(options, 'inode_size')
         mkfsoptions = get_option(options, 'mkfsoptions')
         mountfsoptions = get_option(options, 'mountfsoptions')
+        deny_sec = get_option(options, 'ost_deny_sec')
 
     nspath = get_option(options, 'nspath')
 
@@ -1099,7 +1131,7 @@ def add_ost(gen, lustre, options):
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
                   get_format_flag(options), ost_uuid, node_uuid, size,
                   journal_size, inode_size, nspath, mkfsoptions, 
-                  mountfsoptions, backfstype, backdevname)
+                  mountfsoptions, backfstype, backdevname, deny_sec)
 
     node = findByName(lustre, node_name, "node")
 
@@ -1458,6 +1490,8 @@ def add_mtpt(gen, lustre, options):
 
     path = get_option(options, 'path')
     clientoptions = get_option(options, "clientoptions")
+    mds_sec = get_option(options, "mds_sec")
+    oss_sec = get_option(options, "oss_sec")
     fs_name = get_option(options, 'filesystem')
 
     lov_name = get_option(options, 'lov')
@@ -1494,7 +1528,7 @@ def add_mtpt(gen, lustre, options):
         error("MOUNTPOINT: ", name, " already exists.")
 
     uuid = new_uuid(name)
-    mtpt = gen.mountpoint(name, uuid, fs_uuid, path, clientoptions)
+    mtpt = gen.mountpoint(name, uuid, fs_uuid, path, clientoptions, mds_sec, oss_sec)
     node = findByName(lustre, node_name, "node")
     if not node:
         error('node:',  node_name, "not found.")

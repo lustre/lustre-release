@@ -124,7 +124,8 @@ init_options(struct lustre_mount_data *lmd)
         lmd->lmd_remote_flag = 0;
         lmd->lmd_nllu = NOBODY_UID;
         lmd->lmd_nllg = NOBODY_GID;
-        strncpy(lmd->lmd_security, "null", sizeof(lmd->lmd_security));
+        strncpy(lmd->lmd_mds_security, "null", sizeof(lmd->lmd_mds_security));
+        strncpy(lmd->lmd_oss_security, "null", sizeof(lmd->lmd_oss_security));
         return 0;
 }
 
@@ -135,7 +136,8 @@ print_options(struct lustre_mount_data *lmd)
 
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
-        printf("sec_flavor:      %s\n", lmd->lmd_security);
+        printf("mds_sec_flavor:      %s\n", lmd->lmd_mds_security);
+        printf("oss_sec_flavor:      %s\n", lmd->lmd_oss_security);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
 #ifdef CRAY_PORTALS
         if (lmd->lmd_nal != CRAY_KB_SSNAL) {
@@ -327,9 +329,12 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
-                        } else if (!strcmp(opt, "sec")) {
-                                strncpy(lmd->lmd_security, opteq + 1,
-                                        sizeof(lmd->lmd_security));
+                        } else if (!strcmp(opt, "mds_sec")) {
+                                strncpy(lmd->lmd_mds_security, opteq + 1,
+                                        sizeof(lmd->lmd_mds_security));
+                        } else if (!strcmp(opt, "oss_sec")) {
+                                strncpy(lmd->lmd_oss_security, opteq + 1,
+                                        sizeof(lmd->lmd_oss_security));
                         } else if (!strcmp(opt, "nllu")) {
                                 if (parse_nllu(lmd, opteq + 1)) {
                                         fprintf(stderr, "%s: "

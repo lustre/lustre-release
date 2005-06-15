@@ -34,10 +34,10 @@ fi
 [ "$NODE" ] && node_opt="--node $NODE"
 [ "$DEBUG" ] && debug_opt="--ptldebug=$DEBUG"
 
-${LCONF} $NOMOD --sec $SECURITY $portals_opt $lustre_opt $node_opt \
+${LCONF} $NOMOD --mds_sec $SECURITY $portals_opt $lustre_opt $node_opt \
          ${REFORMAT:---reformat} $@ $conf_opt  || exit 5
 
 if [ "$MOUNT2" ]; then
-       $LLMOUNT -v -o sec=$SECURITY `hostname`:/mds1/client $MOUNT2 || exit 6
+       $LLMOUNT -v -o mds_sec=$SECURITY `hostname`:/mds1/client $MOUNT2 || exit 6
 fi
 

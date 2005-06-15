@@ -60,6 +60,7 @@
 #include <libcfs/list.h>
 
 #include <linux/lustre_smfs.h>
+#include <linux/lustre_sec.h>
 #include "filter_internal.h"
 
 /* Group 0 is no longer a legal group, to catch uninitialized IDs */
@@ -1571,8 +1572,13 @@ static int filter_detach(struct obd_device *dev)
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;
+        struct filter_obd *filter = &obd->u.filter;
         int rc;
         ENTRY;
+
+        spin_lock_init(&filter->fo_denylist_lock);
+        INIT_LIST_HEAD(&filter->fo_denylist);
+
         /* all mount options including errors=remount-ro and asyncdel are passed
          * using 4th lcfg param. And it is good, finally we have got rid of
          * hardcoded fs types in the code. */
@@ -1616,6 +1622,15 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         shrink_dcache_parent(filter->fo_sb->s_root);
         filter->fo_sb = 0;
 
+        spin_lock(&filter->fo_denylist_lock);
+        while (!list_empty(&filter->fo_denylist)) {
+                deny_sec_t *p_deny_sec = list_entry(filter->fo_denylist.next,
+                                                    deny_sec_t, list);
+                list_del(&p_deny_sec->list);
+                OBD_FREE(p_deny_sec, sizeof(*p_deny_sec));
+        }
+        spin_unlock(&filter->fo_denylist_lock);
+
         unlock_kernel();
         lvfs_umount_fs(filter->fo_lvfs_ctxt);
         //destroy_buffers(filter->fo_sb->s_dev);
@@ -1626,6 +1641,40 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         ll_clear_rdonly(save_dev);
 
         RETURN(0);
+}
+
+static int filter_process_config(struct obd_device *obd, obd_count len, void *buf)
+{
+        struct lustre_cfg *lcfg = buf;
+        struct filter_obd *filter = &obd->u.filter;
+        int rc = 0;
+        ENTRY;
+
+        switch(lcfg->lcfg_command) {
+        case LCFG_SET_SECURITY: {
+                if ((LUSTRE_CFG_BUFLEN(lcfg, 1) == 0) ||
+                    (LUSTRE_CFG_BUFLEN(lcfg, 2) == 0))
+                        GOTO(out, rc = -EINVAL);
+
+                if (!strcmp(lustre_cfg_string(lcfg, 1), "deny_sec")){
+                        spin_lock(&filter->fo_denylist_lock);
+                        rc = add_deny_security(lustre_cfg_string(lcfg, 2),
+                                               &filter->fo_denylist);
+                        spin_unlock(&filter->fo_denylist_lock);
+                }else {
+                        CERROR("Unrecognized key\n");
+                        rc = -EINVAL;
+                }
+                break;
+        }
+        default: {
+                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                GOTO(out, rc = -EINVAL);
+
+        }
+        }
+out:
+        RETURN(rc);
 }
 
 static int filter_connect_post(struct obd_export *exp, unsigned initial,
@@ -3040,6 +3089,7 @@ static struct obd_ops filter_obd_ops = {
         .o_setup          = filter_setup,
         .o_precleanup     = filter_precleanup,
         .o_cleanup        = filter_cleanup,
+        .o_process_config = filter_process_config,
         .o_connect        = filter_connect,
         .o_connect_post   = filter_connect_post,
         .o_disconnect     = filter_disconnect,

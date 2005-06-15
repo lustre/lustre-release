@@ -833,7 +833,8 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name,
                        imp->imp_initial_recov);
                 RETURN(0);
-        } else if (keylen >= strlen("mds_type") && strcmp(key, "mds_type") == 0) {
+        } else if (keylen >= strlen("mds_type") &&
+                   strcmp(key, "mds_type") == 0) {
                 struct ptlrpc_request *req;
                 char *bufs[2] = {key, val};
                 int rc, size[2] = {keylen, vallen};
@@ -852,7 +853,8 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 imp->imp_server_timeout = 1;
                 CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
                 RETURN(0);
-        } else if (keylen == strlen("sec") && memcmp(key, "sec", keylen) == 0) {
+        } else if (keylen == strlen("sec") &&
+                   memcmp(key, "sec", keylen) == 0) {
                 struct client_obd *cli = &exp->exp_obd->u.cli;
 
                 if (vallen == strlen("null") &&

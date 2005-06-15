@@ -129,8 +129,8 @@ int lustre_init_dt_desc(struct ll_sb_info *sbi)
 extern struct dentry_operations ll_d_ops;
 
 int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
-                             int async, char *security, __u32 *nllu,
-                             __u64 *remote)
+                             int async,  char *mds_security,  char *oss_security,
+                             __u32 *nllu, __u64 *remote)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *request = NULL;
@@ -168,14 +168,14 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                                               OBD_CONNECT_REMOTE);
         memcpy(data->ocd_nllu, nllu, sizeof(data->ocd_nllu));
 
-        if (security == NULL)
-                security = "null";
+        if (mds_security == NULL)
+                mds_security = "null";
 
         err = obd_set_info(obd->obd_self_export, strlen("sec"), "sec",
-                           strlen(security), security);
+                           strlen(mds_security), mds_security);
         if (err) {
                 CERROR("LMV %s: failed to set security %s, err %d\n",
-                        lmv, security, err);
+                        lmv, mds_security, err);
                 OBD_FREE(data, sizeof(*data));
                 RETURN(err);
         }
@@ -236,6 +236,18 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         }
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
+
+       if (oss_security == NULL)
+                oss_security = "null";
+
+        err = obd_set_info(obd->obd_self_export, strlen("sec"), "sec",
+                           strlen(oss_security), oss_security);
+        if (err) {
+                CERROR("LOV %s: failed to set security %s, err %d\n",
+                        lov, oss_security, err);
+                OBD_FREE(data, sizeof(*data));
+                RETURN(err);
+        }
 
         err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data,
                           OBD_OPT_REAL_CLIENT);
@@ -407,8 +419,8 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
-void ll_options(char *options, char **lov, char **lmv, char **sec, 
-                int *async, int *flags)
+void ll_options(char *options, char **lov, char **lmv, char **mds_sec,
+                char **oss_sec, int *async, int *flags)
 {
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -438,7 +450,9 @@ void ll_options(char *options, char **lov, char **lmv, char **sec,
                         *async = 1;
                         continue;
                 }
-                if (!*sec && (*sec = ll_read_opt("sec", this_char)))
+                if (!*mds_sec && (*mds_sec = ll_read_opt("mds_sec", this_char)))
+                        continue;
+                if (!*oss_sec && (*oss_sec = ll_read_opt("oss_sec", this_char)))
                         continue;
                 if (!(*flags & LL_SBI_NOLCK) &&
                     ((*flags) = (*flags) |
@@ -473,8 +487,9 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ll_sb_info *sbi;
         char *lov = NULL;
         char *lmv = NULL;
+        char *mds_sec = NULL;
+        char *oss_sec = NULL;
         int async, err;
-        char *sec = NULL;
         __u32 nllu[2] = { NOBODY_UID, NOBODY_GID };
         __u64 remote_flag = 0;    
         ENTRY;
@@ -486,7 +501,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
 
         sbi->ll_flags |= LL_SBI_READAHEAD;
-        ll_options(data, &lov, &lmv, &sec, &async, &sbi->ll_flags);
+        ll_options(data, &lov, &lmv, &mds_sec, &oss_sec,
+                   &async, &sbi->ll_flags);
 
         if (!lov) {
                 CERROR("no osc\n");
@@ -498,19 +514,22 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out, err = -EINVAL);
         }
         
-        err = lustre_common_fill_super(sb, lmv, lov, async, sec,
+        err = lustre_common_fill_super(sb, lmv, lov, async, mds_sec, oss_sec,
                                        nllu, &remote_flag);
         EXIT;
 out:
         if (err)
                 lustre_free_sbi(sb);
 
-        if (sec)
-                OBD_FREE(sec, strlen(sec) + 1);
         if (lmv)
                 OBD_FREE(lmv, strlen(lmv) + 1);
         if (lov)
                 OBD_FREE(lov, strlen(lov) + 1);
+        if (mds_sec)
+                OBD_FREE(mds_sec, strlen(mds_sec) + 1);
+        if (oss_sec)
+                OBD_FREE(oss_sec, strlen(oss_sec) + 1);
+
         return err;
 } /* ll_read_super */
 
@@ -598,7 +617,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                 GOTO(out_cleanup, rc = -EINVAL);
 
         rc = obd_set_info(obd->obd_self_export, strlen("sec"), "sec",
-                          strlen(lmd->lmd_security), lmd->lmd_security);
+                          strlen(lmd->lmd_mds_security), lmd->lmd_mds_security);
         if (rc)
                 GOTO(out_cleanup, rc);
 
@@ -731,7 +750,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         CERROR("no mds name\n");
                         GOTO(out_free, err = -EINVAL);
                 }
-                lmd->lmd_security[sizeof(lmd->lmd_security) - 1] = 0;
+                lmd->lmd_mds_security[sizeof(lmd->lmd_mds_security) - 1] = 0;
+                lmd->lmd_oss_security[sizeof(lmd->lmd_oss_security) - 1] = 0;
 
                 OBD_ALLOC(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
                 if (sbi->ll_lmd == NULL)
@@ -784,8 +804,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         err = lustre_common_fill_super(sb, lmv, lov, lmd->lmd_async,
-                                       lmd->lmd_security, &lmd->lmd_nllu,
-                                       &lmd->lmd_remote_flag);
+                                       lmd->lmd_mds_security,
+                                       lmd->lmd_oss_security,
+                                       &lmd->lmd_nllu, &lmd->lmd_remote_flag);
 
         if (err)
                 GOTO(out_free, err);

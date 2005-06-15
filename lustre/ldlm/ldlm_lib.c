@@ -536,6 +536,54 @@ static inline int ptlrpc_peer_is_local(struct ptlrpc_peer *peer)
         return (memcmp(&peer->peer_id, &myid, sizeof(myid)) == 0);
 }
 
+/* To check whether the p_flavor is in deny list or not
+ * rc:
+ *      0           not found, pass
+ *      EPERM       found, refuse
+ */
+
+static int check_deny_list(struct list_head *head, ptlrpcs_flavor_t *p_flavor)
+{
+        deny_sec_t *p_deny_sec = NULL;
+        deny_sec_t *n_deny_sec = NULL;
+
+        list_for_each_entry_safe(p_deny_sec, n_deny_sec, head, list) {
+                if ((p_deny_sec->sec.flavor == p_flavor->flavor) &&
+                    (p_deny_sec->sec.subflavor == p_flavor->subflavor))
+                        return -EPERM;
+        }
+        return 0;
+}
+
+int target_check_deny_sec(struct obd_device *target, struct ptlrpc_request *req)
+{
+        struct gss_svc_data *svcdata;
+        ptlrpcs_flavor_t flavor;
+        int rc = 0;
+
+        /* XXX hacking */
+        svcdata = (struct gss_svc_data *) req->rq_sec_svcdata;
+        if (svcdata == NULL) {
+                flavor.flavor = PTLRPC_SEC_NULL;
+                flavor.subflavor = 0;
+        } else {
+                flavor.flavor = PTLRPC_SEC_GSS;
+                flavor.subflavor = svcdata->subflavor;
+        }
+
+        if (!strcmp(target->obd_type->typ_name, LUSTRE_MDS_NAME)) {
+                spin_lock(&target->u.mds.mds_denylist_lock);
+                rc = check_deny_list(&target->u.mds.mds_denylist, &flavor);
+                spin_unlock(&target->u.mds.mds_denylist_lock);
+        } else if (!strcmp(target->obd_type->typ_name, "obdfilter")) {
+                spin_lock(&target->u.filter.fo_denylist_lock);
+                rc = check_deny_list(&target->u.filter.fo_denylist, &flavor);
+                spin_unlock(&target->u.filter.fo_denylist_lock);
+        }
+
+        return rc;
+}
+
 int target_handle_connect(struct ptlrpc_request *req)
 {
         unsigned long connect_flags = 0, *cfp;
@@ -577,6 +625,11 @@ int target_handle_connect(struct ptlrpc_request *req)
                        str, req->rq_peerstr);
                 GOTO(out, rc = -ENODEV);
         }
+
+        /* check the secure deny list of mds/ost */
+        rc = target_check_deny_sec(target, req);
+        if (rc != 0)
+                GOTO(out, rc);
 
         LASSERT_REQSWAB (req, offset + 1);
         str = lustre_msg_string(req->rq_reqmsg, offset + 1, sizeof(cluuid) - 1);

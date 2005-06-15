@@ -255,6 +255,11 @@ struct filter_obd {
 
         struct list_head         fo_llog_list;
         spinlock_t               fo_llog_list_lock;
+
+        /* which secure flavor from remote is denied */
+        spinlock_t              fo_denylist_lock;
+        struct list_head        fo_denylist;
+
 };
 
 struct mds_server_data;
@@ -399,6 +404,9 @@ struct mds_obd {
         /* security related */
         char                            *mds_mds_sec;
         char                            *mds_ost_sec;
+        /* which secure flavor from remote to this mds is denied */
+        spinlock_t                      mds_denylist_lock;
+        struct list_head                mds_denylist;
 };
 
 struct echo_obd {

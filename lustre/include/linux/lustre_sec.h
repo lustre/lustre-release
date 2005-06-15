@@ -37,6 +37,11 @@ typedef struct ptlrpcs_flavor_s {
         __u32   subflavor;
 } ptlrpcs_flavor_t;
 
+typedef struct {
+        struct list_head        list;
+        ptlrpcs_flavor_t        sec;
+} deny_sec_t;
+
 enum ptlrpcs_security_type {
         PTLRPC_SEC_TYPE_NONE    = 0,    /* no security */
         PTLRPC_SEC_TYPE_AUTH    = 1,    /* authentication */
@@ -286,6 +291,39 @@ static inline int ptlrpcs_est_rep_payload(struct ptlrpc_sec *sec,
                 return 0;
 }
 
+static inline int add_deny_security(char *sec, struct list_head *head)
+{
+        int rc = 0;
+        deny_sec_t      *p_deny_sec = NULL;
+
+        LASSERT(sec != NULL);
+
+        OBD_ALLOC(p_deny_sec, sizeof(*p_deny_sec));
+        if (p_deny_sec == NULL) return -ENOMEM;
+
+        if (strcmp(sec, "null") == 0) {
+                p_deny_sec->sec.flavor = PTLRPC_SEC_NULL;
+                p_deny_sec->sec.subflavor = PTLRPC_SEC_NULL;
+        }else if (strcmp(sec, "krb5i") == 0) {
+               p_deny_sec->sec.flavor = PTLRPC_SEC_GSS;
+               p_deny_sec->sec.subflavor = PTLRPC_SEC_GSS_KRB5I;
+        }else if (strcmp(sec, "krb5p") == 0) {
+               p_deny_sec->sec.flavor = PTLRPC_SEC_GSS;
+               p_deny_sec->sec.subflavor = PTLRPC_SEC_GSS_KRB5P;
+        }else{
+               CERROR("unrecognized security type %s\n", (char*) sec);
+               GOTO(out, rc = -EINVAL);
+        }
+
+        list_add_tail(&p_deny_sec->list, head);
+out:
+        if (rc) {
+                if (p_deny_sec)
+                        OBD_FREE(p_deny_sec, sizeof(*p_deny_sec));
+        }
+        return rc;
+}
+
 int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req);
 int ptlrpcs_cli_unwrap_reply(struct ptlrpc_request *req);
 int ptlrpcs_cli_alloc_reqbuf(struct ptlrpc_request *req, int msgsize);
@@ -339,6 +377,37 @@ struct ptlrpc_svcsec {
 #define SVC_DROP        3
 #define SVC_LOGIN       4
 #define SVC_LOGOUT      5
+
+/* FIXME
+ * this should be a gss internal structure. fix these when we
+ * sort out the flavor issues.
+ */
+
+typedef struct rawobj_s {
+        __u32           len;
+        __u8           *data;
+} rawobj_t;
+
+/* on-the-wire gss cred: */
+struct rpc_gss_wire_cred {
+        __u32                   gc_v;           /* version */
+        __u32                   gc_proc;        /* control procedure */
+        __u32                   gc_seq;         /* sequence number */
+        __u32                   gc_svc;         /* service */
+        rawobj_t                gc_ctx;         /* context handle */
+};
+
+struct gss_svc_data {
+        __u32                           subflavor; /* XXX */
+        /* decoded gss client cred: */
+        struct rpc_gss_wire_cred        clcred;
+        /* internal used status */
+        unsigned int                    is_init:1,
+                                        is_init_continue:1,
+                                        is_err_notify:1,
+                                        is_fini:1;
+        int                             reserve_len;
+};
 
 int svcsec_register(struct ptlrpc_svcsec *ss);
 int svcsec_unregister(struct ptlrpc_svcsec *ss);

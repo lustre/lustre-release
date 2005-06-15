@@ -728,12 +728,16 @@ int jt_lcfg_set_security(int argc, char **argv)
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
 
         /* currently only used to set on mds */
-        if (strcmp(argv[1], "mds_mds_sec") && strcmp(argv[1], "mds_ost_sec")) {
+        if (strcmp(argv[1], "mds_sec") &&
+            strcmp(argv[1], "oss_sec") &&
+            strcmp(argv[1], "deny_sec")) {
                 fprintf(stderr, "%s: invalid security key %s\n",
                         jt_cmdname(argv[0]), argv[1]);
                 return -EINVAL;
         }
-        if (strcmp(argv[2], "null") && strcmp(argv[2], "krb5")) {
+        if (strcmp(argv[2], "null") &&
+            strcmp(argv[2], "krb5i") &&
+            strcmp(argv[2], "krb5p")) {
                 fprintf(stderr, "%s: invalid security value %s\n",
                         jt_cmdname(argv[0]), argv[2]);
                 return -EINVAL;

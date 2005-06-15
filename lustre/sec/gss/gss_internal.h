@@ -7,6 +7,7 @@
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 
+#include <linux/lustre_sec.h>
 #ifndef __SEC_GSS_GSS_INTERNAL_H_
 #define __SEC_GSS_GSS_INTERNAL_H_
 
@@ -88,11 +89,7 @@ crypto_tfm_alg_ivsize(struct crypto_tfm *tfm)
 struct ptlrpc_sec;
 struct ptlrpc_cred;
 
-typedef struct rawobj_s {
-        __u32           len;
-        __u8           *data;
-} rawobj_t;
-
+/* rawobj stuff */
 int rawobj_alloc(rawobj_t *obj, char *buf, int len);
 void rawobj_free(rawobj_t *obj);
 int rawobj_equal(rawobj_t *a, rawobj_t *b);
@@ -113,6 +110,15 @@ typedef struct rawobj_buf_s {
  */
 #define GSSD_INTERFACE_VERSION  (1)
 
+/*
+ * target of gss request
+ */
+#define LUSTRE_GSS_SVC_MDS      0
+#define LUSTRE_GSS_SVC_OSS      1
+
+/*
+ * data types in gss header
+ */
 #define MAXSEQ 0x80000000 /* maximum legal sequence number, from rfc 2203 */
 
 enum rpc_gss_proc {
@@ -126,15 +132,6 @@ enum rpc_gss_svc {
         RPC_GSS_SVC_NONE =              1,
         RPC_GSS_SVC_INTEGRITY =         2,
         RPC_GSS_SVC_PRIVACY =           3,
-};
-
-/* on-the-wire gss cred: */
-struct rpc_gss_wire_cred {
-        __u32                   gc_v;           /* version */
-        __u32                   gc_proc;        /* control procedure */
-        __u32                   gc_seq;         /* sequence number */
-        __u32                   gc_svc;         /* service */
-        rawobj_t                gc_ctx;         /* context handle */
 };
 
 /* on-the-wire gss verifier: */
