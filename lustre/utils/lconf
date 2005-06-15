@@ -290,6 +290,8 @@ class AcceptorHandler(DaemonHandler):
         self.port = port
         self.net_type = net_type
         self.flags = ''
+        if config.allow_unprivileged_port:
+            self.flags = '-p'
 
     def pidfile(self):
         return "/var/run/%s-%d.pid" % (self.command, self.port)
@@ -3057,6 +3059,7 @@ lconf_options = [
     ('subsystem', "Set the portals debug subsystem",  PARAM),
     ('gdb_script', "Fullname of gdb debug script", PARAM, default_gdb_script()),
     ('debug_path', "Path to save debug dumps", PARAM, default_debug_path()),
+    ('allow_unprivileged_port', "Allow connections from unprivileged ports"),
 # Client recovery options
     ('recover', "Recover a device"),
     ('group', "The group of devices to configure or cleanup", PARAM),
