@@ -317,7 +317,7 @@ do_node() {
 	echo "CMD: $HOST $@"
 	$PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $PDSH $HOST "(PATH=$RLUSTRE/utils:$RLUSTRE/tests:\$PATH; cd $RPWD; sh -c \"$@\")"
+    $PDSH $HOST "(PATH=$RLUSTRE/utils:$RLUSTRE/tests:/usr/sbin:/sbin:\$PATH; cd $RPWD; sh -c \"$@\")"
 }
 
 mds_list() {
