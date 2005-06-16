@@ -520,7 +520,7 @@ test_22() {	# bug 6063 - AST during recovery
 	$LCTL --device %$mdc2dev disable_recovery
 
 	replay_barrier mds1
-	mkdir $MOUNT1/${tdir}-1	# client1: request to be replayed 
+	mknod $MOUNT1/${tdir}-1	c 0 0 # client1: request to be replayed 
 	ls $MOUNT2		# client2: take lock needed for
 	facet_failover mds1
 
