@@ -10,7 +10,6 @@ export KDCDIR=${KDCDIR:-"/usr/kerberos/sbin"}
 export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
 export LGSSD=${LGSSD:-"/usr/sbin/lgssd"}
 export SVCGSSD=${SVCGSSD:-"/usr/sbin/lsvcgssd"}
-export PDSH=${PDSH:-"ssh"}
 
 export CHECK_KDC=${CHECKKDC:-"no"}
 
