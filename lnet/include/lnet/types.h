@@ -47,6 +47,7 @@ static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
 #define PTL_JID_ANY      ((ptl_jid_t) -1)
 #define PTL_NID_ANY      ((ptl_nid_t) -1)
 #define PTL_PID_ANY      ((ptl_pid_t) -1)
+#define PTL_NETID_ANY    ((ptl_netid_t) -1)
 
 typedef struct {
         ptl_nid_t nid;
