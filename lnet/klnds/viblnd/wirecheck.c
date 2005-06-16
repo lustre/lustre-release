@@ -8,6 +8,7 @@
 #include <portals/api-support.h>
 #include <portals/lib-types.h>
 
+#define IBNAL_USE_FMR 1
 #include "vibnal_wire.h"
 
 #ifndef HAVE_STRNLEN
@@ -154,6 +155,13 @@ main (int argc, char **argv)
         CHECK_MEMBER (kib_immediate_msg_t, ibim_hdr);
         CHECK_MEMBER (kib_immediate_msg_t, ibim_payload[13]);
 
+        CHECK_DEFINE (IBNAL_USE_FMR);
+#if IBNAL_USE_FMR
+        CHECK_STRUCT (kib_rdma_desc_t);
+        CHECK_MEMBER (kib_rdma_desc_t, rd_addr);
+        CHECK_MEMBER (kib_rdma_desc_t, rd_nob);
+        CHECK_MEMBER (kib_rdma_desc_t, rd_key);
+#else
         CHECK_STRUCT (kib_rdma_frag_t);
         CHECK_MEMBER (kib_rdma_frag_t, rf_nob);
         CHECK_MEMBER (kib_rdma_frag_t, rf_addr_lo);
@@ -163,7 +171,7 @@ main (int argc, char **argv)
         CHECK_MEMBER (kib_rdma_desc_t, rd_key);
         CHECK_MEMBER (kib_rdma_desc_t, rd_nfrag);
         CHECK_MEMBER (kib_rdma_desc_t, rd_frags[13]);
-
+#endif
         CHECK_STRUCT (kib_putreq_msg_t);
         CHECK_MEMBER (kib_putreq_msg_t, ibprm_hdr);
         CHECK_MEMBER (kib_putreq_msg_t, ibprm_cookie);
