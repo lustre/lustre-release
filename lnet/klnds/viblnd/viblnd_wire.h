@@ -98,7 +98,7 @@ typedef struct
         } WIRE_ATTR ibm_u;
 } WIRE_ATTR kib_msg_t;
 
-#define IBNAL_MSG_MAGIC       0x0be91b93        /* unique magic */
+#define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
 
 #if IBNAL_USE_FMA				/* ensure version changes on FMA */
 #define IBNAL_MSG_VERSION           0x11
