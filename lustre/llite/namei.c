@@ -75,7 +75,8 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 return 0;
 
         /* Apply the attributes in 'opaque' to this inode */
-        ll_update_inode(inode, md->body, md->lsm);
+        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                ll_update_inode(inode, md->body, md->lsm);
         return 1;
 }
 

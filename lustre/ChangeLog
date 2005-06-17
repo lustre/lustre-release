@@ -18,6 +18,16 @@ Description: Setting a default stripe on the filesystem root prevented the
 Details    : The client was sending extra request flags in the root getattr
              request and did not allocate a reply buffer for the dir EA.
 
+Severity   : major
+Frequency  : occasional, higher if lots of files are accessed by one client
+Bugzilla   : 6159, 6097
+Description: Client trips assertion regarding lsm mismatch/magic
+Details    : While revalidating inodes the VFS looks up inodes with ifind()
+             and in rare cases can find an inode that is being freed.
+             The ll_test_inode() code will free the lsm during ifind()
+             when it finds an existing inode and then the VFS later attaches
+             this free lsm to a new inode.
+
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
