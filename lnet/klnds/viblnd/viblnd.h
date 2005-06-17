@@ -87,16 +87,13 @@
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
 
-#define IBNAL_WHOLE_MEM  1
-#if !IBNAL_WHOLE_MEM
-# error "incompatible with voltaire adaptor-tavor (REGISTER_RAM_IN_ONE_PHY_MR)"
-#endif
+#define IBNAL_USE_FMR  1
 
 /* defaults for modparams/tunables */
 #define IBNAL_SERVICE_NUMBER         0x11b9a2   /* Fixed service number */
 #define IBNAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
 #define IBNAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
-#define IBNAL_CONCURRENT_PEERS       1024       /* # nodes all talking at once to me */
+#define IBNAL_CONCURRENT_PEERS       1152       /* # nodes all talking at once to me */
 #define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
 #define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
 #define IBNAL_NTX                    64         /* # tx descs */
@@ -108,6 +105,9 @@
 #define IBNAL_RETRY_CNT              7          /* ...and retries */
 #define IBNAL_RNR_CNT                6          /* RNR retries... */
 #define IBNAL_RNR_NAK_TIMER          0x10       /* ...and interval between them */
+#if IBNAL_USE_FMR
+#define IBNAL_FMR_REMAPS             1000       /* #FMR remaps before unmap */
+#endif
 
 /* tunables fixed at compile time */
 #define IBNAL_PEER_HASH_SIZE         101        /* # peer lists */
@@ -151,11 +151,10 @@
 #define IBNAL_TX_MSG_BYTES()  (IBNAL_TX_MSGS() * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES()  ((IBNAL_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#if IBNAL_WHOLE_MEM
-# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
-#else
-# define IBNAL_RDMA_BASE      0x0eeb0000
+#if IBNAL_USE_FMR
 # define IBNAL_MAX_RDMA_FRAGS 1
+#else
+# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
 #endif
 
 /* RX messages (per connection) */
@@ -183,28 +182,31 @@ typedef struct
         int              *kib_retry_cnt;        /* ...and retry */
         int              *kib_rnr_cnt;          /* RNR retries... */
         int              *kib_rnr_nak_timer;    /* ...and interval */
-
+#if IBNAL_USE_FMR
+        int              *kib_fmr_remaps;       /* # FMR maps before unmap required */
+#endif
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
+#endif
 } kib_tunables_t;
 
 typedef struct
 {
         int               ibp_npages;           /* # pages */
-        int               ibp_mapped;           /* mapped? */
-        __u64             ibp_vaddr;            /* mapped region vaddr */
-        __u32             ibp_lkey;             /* mapped region lkey */
-        __u32             ibp_rkey;             /* mapped region rkey */
-        vv_mem_reg_h_t    ibp_handle;           /* mapped region handle */
         struct page      *ibp_pages[0];
 } kib_pages_t;
 
+#if IBNAL_USE_FMR
 typedef struct
 {
-        vv_mem_reg_h_t    md_handle;
-        __u32             md_lkey;
-        __u32             md_rkey;
-        __u64             md_addr;
+        vv_fmr_h_t        md_fmrhandle;         /* FMR handle */
+        int               md_fmrcount;          /* # mappings left */
+        int               md_active;            /* mapping in use? */
+        __u32             md_lkey;              /* local key */
+        __u32             md_rkey;              /* remote key */
+        __u64             md_addr;              /* IO VM address */
 } kib_md_t;
+#endif
 
 typedef struct
 {
@@ -281,30 +283,17 @@ typedef struct kib_rx                           /* receive message */
         struct kib_conn          *rx_conn;      /* owning conn */
         int                       rx_responded; /* responded to peer? */
         int                       rx_posted;    /* posted? */
-#if IBNAL_WHOLE_MEM
         vv_l_key_t                rx_lkey;      /* local key */
-#else        
-        __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
-#endif
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
         vv_wr_t                   rx_wrq;       /* receive work item */
         vv_scatgat_t              rx_gl;        /* and its memory */
 } kib_rx_t;
-
-#if IBNAL_WHOLE_MEM
-# define KIBNAL_RX_VADDR(rx) ((__u64)((unsigned long)((rx)->rx_msg)))
-# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_lkey)
-#else
-# define KIBNAL_RX_VADDR(rx) ((rx)->rx_vaddr)
-# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_conn->ibc_rx_pages->ibp_lkey)
-#endif
 
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
         int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         struct kib_conn          *tx_conn;      /* owning conn */
-        int                       tx_mapped;    /* mapped for RDMA? */
         int                       tx_sending;   /* # tx callbacks outstanding */
         int                       tx_queued;    /* queued for sending */
         int                       tx_waiting;   /* waiting for peer */
@@ -312,29 +301,21 @@ typedef struct kib_tx                           /* transmit message */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
         ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
-#if IBNAL_WHOLE_MEM
         vv_l_key_t                tx_lkey;      /* local key for message buffer */
-#else
-        kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
-        __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
-#endif
         kib_msg_t                *tx_msg;       /* message buffer (host vaddr) */
         int                       tx_nwrq;      /* # send work items */
+#if IBNAL_USE_FMR
+        vv_wr_t                   tx_wrq[2];    /* send work items... */
+        vv_scatgat_t              tx_gl[2];     /* ...and their memory */
+        kib_rdma_desc_t           tx_rd[1];     /* rdma descriptor */
+        kib_md_t                  tx_md;        /* FMR mapping descriptor */
+        __u64                    *tx_pages;     /* page phys addrs */
+#else
         vv_wr_t                  *tx_wrq;       /* send work items... */
         vv_scatgat_t             *tx_gl;        /* ...and their memory */
         kib_rdma_desc_t          *tx_rd;        /* rdma descriptor (src buffers) */
-} kib_tx_t;
-
-#if IBNAL_WHOLE_MEM
-# define KIBNAL_TX_VADDR(tx) ((__u64)((unsigned long)((tx)->tx_msg)))
-# define KIBNAL_TX_LKEY(tx)  ((tx)->tx_lkey)
-#else
-# define KIBNAL_TX_VADDR(tx) ((tx)->tx_vaddr)
-# define KIBNAL_TX_LKEY(tx)  (kibnal_data.kib_tx_pages->ibp_lkey)
 #endif
-
-#define KIB_TX_UNMAPPED       0
-#define KIB_TX_MAPPED         1
+} kib_tx_t;
 
 /* Passive connection request (listener callback) queued for handling by connd */
 typedef struct kib_pcreq
@@ -655,6 +636,15 @@ kibnal_set_conn_state (kib_conn_t *conn, int state)
         mb();
 }
 
+#if IBNAL_USE_FMR
+
+static inline int
+kibnal_rd_size (kib_rdma_desc_t *rd) 
+{
+        return rd->rd_nob;
+}
+
+#else
 static inline __u64
 kibnal_rf_addr (kib_rdma_frag_t *rf)
 {
@@ -680,3 +670,4 @@ kibnal_rd_size (kib_rdma_desc_t *rd)
         
         return size;
 }
+#endif

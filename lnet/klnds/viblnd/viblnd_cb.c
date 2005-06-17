@@ -35,24 +35,20 @@ kibnal_tx_done (kib_tx_t *tx)
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
         LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
 
-#if !IBNAL_WHOLE_MEM
-        switch (tx->tx_mapped) {
-        default:
-                LBUG();
-
-        case KIB_TX_UNMAPPED:
-                break;
-
-        case KIB_TX_MAPPED: {
+#if IBNAL_USE_FMR
+        if (tx->tx_md.md_fmrcount == 0) {
                 vv_return_t      vvrc;
 
-                vvrc = vv_mem_region_destroy(kibnal_data.kib_hca,
-                                             tx->tx_md.md_handle);
+                /* mapping must be active (it dropped fmrcount to 0) */
+                LASSERT (tx->tx_md.md_active); 
+
+                vvrc = vv_unmap_fmr(kibnal_data.kib_hca,
+                                    1, &tx->tx_md.md_fmrhandle);
                 LASSERT (vvrc == vv_return_ok);
-                tx->tx_mapped = KIB_TX_UNMAPPED;
-                break;
+
+                tx->tx_md.md_fmrcount = *kibnal_tunables.kib_fmr_remaps;
         }
-        }
+        tx->tx_md.md_active = 0;
 #endif
         for (i = 0; i < 2; i++) {
                 /* tx may have up to 2 ptlmsgs to finalise */
@@ -74,9 +70,9 @@ kibnal_tx_done (kib_tx_t *tx)
         spin_lock(&kibnal_data.kib_tx_lock);
 
         if (tx->tx_isnblk) {
-                list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_nblk_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_nblk_txs);
         } else {
-                list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
                 wake_up (&kibnal_data.kib_idle_tx_waitq);
         }
 
@@ -126,9 +122,7 @@ kibnal_get_idle_tx (int may_block)
                  * but we've got a lock right now and we're unlikely to
                  * wrap... */
                 tx->tx_cookie = kibnal_data.kib_next_tx_cookie++;
-#if IBNAL_WHOLE_MEM
-                LASSERT (tx->tx_mapped == KIB_TX_UNMAPPED);
-#endif
+
                 LASSERT (tx->tx_nwrq == 0);
                 LASSERT (!tx->tx_queued);
                 LASSERT (tx->tx_sending == 0);
@@ -149,13 +143,14 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
 {
         kib_conn_t   *conn = rx->rx_conn;
         int           rc = 0;
+        __u64         addr = (__u64)((unsigned long)((rx)->rx_msg));
         vv_return_t   vvrc;
 
         LASSERT (!in_interrupt());
         
         rx->rx_gl = (vv_scatgat_t) {
-                .v_address = KIBNAL_ADDR2SG(KIBNAL_RX_VADDR(rx)),
-                .l_key     = KIBNAL_RX_LKEY(rx),
+                .v_address = KIBNAL_ADDR2SG(addr),
+                .l_key     = rx->rx_lkey,
                 .length    = IBNAL_MSG_SIZE,
         };
 
@@ -506,7 +501,31 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
         kibnal_conn_decref(conn);
 }
 
-#if IBNAL_WHOLE_MEM
+struct page *
+kibnal_kvaddr_to_page (unsigned long vaddr)
+{
+        struct page *page;
+
+        if (vaddr >= VMALLOC_START &&
+            vaddr < VMALLOC_END) {
+                page = vmalloc_to_page ((void *)vaddr);
+                LASSERT (page != NULL);
+                return page;
+        }
+#if CONFIG_HIGHMEM
+        if (vaddr >= PKMAP_BASE &&
+            vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
+                /* No highmem pages only used for bulk (kiov) I/O */
+                CERROR("find page for address in highmem\n");
+                LBUG();
+        }
+#endif
+        page = virt_to_page (vaddr);
+        LASSERT (page != NULL);
+        return page;
+}
+
+#if !IBNAL_USE_FMR
 int
 kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page, 
                      unsigned long page_offset, unsigned long len)
@@ -524,7 +543,7 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
                 return -EMSGSIZE;
         }
 
-        /* Try to create an address that adapter-tavor will munge into a valid
+        /* Try to create an address that adaptor-tavor will munge into a valid
          * network address, given how it maps all phys mem into 1 region */
         addr = kibnal_page2phys(page) + page_offset + PAGE_OFFSET;
 
@@ -562,30 +581,6 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
 
         rd->rd_nfrag++;
         return 0;
-}
-
-struct page *
-kibnal_kvaddr_to_page (unsigned long vaddr)
-{
-        struct page *page;
-
-        if (vaddr >= VMALLOC_START &&
-            vaddr < VMALLOC_END) {
-                page = vmalloc_to_page ((void *)vaddr);
-                LASSERT (page != NULL);
-                return page;
-        }
-#if CONFIG_HIGHMEM
-        if (vaddr >= PKMAP_BASE &&
-            vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
-                /* Highmem pages only used for bulk (kiov) I/O */
-                CERROR("find page for address in highmem\n");
-                LBUG();
-        }
-#endif
-        page = virt_to_page (vaddr);
-        LASSERT (page != NULL);
-        return page;
 }
 
 int
@@ -690,21 +685,66 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
 }
 #else
 int
+kibnal_map_tx (kib_tx_t *tx, kib_rdma_desc_t *rd, int active,
+               int npages, unsigned long page_offset, int nob)
+{
+        vv_return_t   vvrc;
+        vv_fmr_map_t  map_props;
+
+        LASSERT ((rd != tx->tx_rd) == !active);
+        LASSERT (!tx->tx_md.md_active);
+        LASSERT (tx->tx_md.md_fmrcount > 0);
+        LASSERT (page_offset < PAGE_SIZE);
+        LASSERT (npages >= (1 + ((page_offset + nob - 1)>>PAGE_SHIFT)));
+        LASSERT (npages <= PTL_MD_MAX_IOV);
+
+        memset(&map_props, 0, sizeof(map_props));
+
+        map_props.start          = (void *)page_offset;
+        map_props.size           = nob;
+        map_props.page_array_len = npages;
+        map_props.page_array     = tx->tx_pages;
+
+        vvrc = vv_map_fmr(kibnal_data.kib_hca, tx->tx_md.md_fmrhandle,
+                          &map_props, &tx->tx_md.md_lkey, &tx->tx_md.md_rkey);
+        if (vvrc != vv_return_ok) {
+                CERROR ("Can't map vaddr %p for %d in %d pages: %d\n", 
+                        map_props.start, nob, npages, vvrc);
+                return -EFAULT;
+        }
+
+        tx->tx_md.md_addr = (unsigned long)map_props.start;
+        tx->tx_md.md_active = 1;
+        tx->tx_md.md_fmrcount--;
+
+        rd->rd_key = active ? tx->tx_md.md_lkey : tx->tx_md.md_rkey;
+        rd->rd_nob = nob;
+        rd->rd_addr = tx->tx_md.md_addr;
+
+        /* Compensate for adaptor-tavor's munging of gatherlist addresses */
+        if (active)
+                rd->rd_addr += PAGE_OFFSET;
+
+        return 0;
+}
+
+int
 kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                      vv_access_con_bit_mask_t access,
                      int niov, struct iovec *iov, int offset, int nob)
                  
 {
-#error  "check this thoroughly before enabling"
         /* active if I'm sending */
-        int         active = ((access & vv_acc_r_mem_write) == 0);
-        void       *vaddr;
-        vv_return_t vvrc;
+        int           active = ((access & vv_acc_r_mem_write) == 0);
+        int           resid;
+        int           fragnob;
+        struct page  *page;
+        int           npages;
+        unsigned long page_offset;
+        unsigned long vaddr;
 
         LASSERT (nob > 0);
         LASSERT (niov > 0);
-        LASSERT (tx->tx_mapped == KIB_TX_UNMAPPED);
-        LASSERT ((rd != tx->tx_rd) == !active);
 
         while (offset >= iov->iov_len) {
                 offset -= iov->iov_len;
@@ -718,26 +758,30 @@ kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                 return (-EMSGSIZE);
         }
 
-        vaddr = (void *)(((unsigned long)iov->iov_base) + offset);
-        tx->tx_md.md_addr = (__u64)((unsigned long)vaddr);
-
-        vvrc = vv_mem_region_register(kibnal_data.kib_hca, vaddr, nob,
-                                      kibnal_data.kib_pd, access,
-                                      &tx->tx_md.md_handle, 
-                                      &tx->tx_md.md_lkey,
-                                      &tx->tx_md.md_rkey);
-        if (vvrc != vv_return_ok) {
-                CERROR ("Can't map vaddr %p: %d\n", vaddr, vvrc);
-                return -EFAULT;
-        }
-
-        tx->tx_mapped = KIB_TX_MAPPED;
-
-        rd->rd_key = active ? tx->tx_md.md_lkey : tx->tx_md.md_rkey;
-        rd->rd_nfrag = 1;
-        kibnal_rf_set(&rd->rd_frags[0], tx->tx_md.md_addr, nob);
+        vaddr = ((unsigned long)iov->iov_base) + offset;
         
-        return (0);
+        page_offset = vaddr & (PAGE_SIZE - 1);
+        resid = nob;
+        npages = 0;
+
+        do {
+                LASSERT (npages < PTL_MD_MAX_IOV);
+
+                page = kibnal_kvaddr_to_page(vaddr);
+                if (page == NULL) {
+                        CERROR("Can't find page for %lu\n", vaddr);
+                        return -EFAULT;
+                }
+
+                tx->tx_pages[npages++] = kibnal_page2phys(page);
+
+                fragnob = PAGE_SIZE - (vaddr & (PAGE_SIZE - 1));
+                vaddr += fragnob;
+                resid -= fragnob;
+
+        } while (resid > 0);
+
+        return kibnal_map_tx(tx, rd, active, npages, page_offset, nob);
 }
 
 int
@@ -745,23 +789,18 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                       vv_access_con_bit_mask_t access,
                       int nkiov, ptl_kiov_t *kiov, int offset, int nob)
 {
-#error  "check this thoroughly before enabling"
         /* active if I'm sending */
         int            active = ((access & vv_acc_r_mem_write) == 0);
-        vv_return_t    vvrc;
-        vv_phy_list_t  phys_pages;
-        vv_phy_buf_t  *phys;
-        int            page_offset;
-        int            nphys;
         int            resid;
-        int            phys_size;
-        int            rc;
-
+        int            npages;
+        unsigned long  page_offset;
+        
         CDEBUG(D_NET, "niov %d offset %d nob %d\n", nkiov, offset, nob);
 
         LASSERT (nob > 0);
         LASSERT (nkiov > 0);
-        LASSERT (tx->tx_mapped == KIB_TX_UNMAPPED);
+        LASSERT (nkiov <= PTL_MD_MAX_IOV);
+        LASSERT (!tx->tx_md.md_active);
         LASSERT ((rd != tx->tx_rd) == !active);
 
         while (offset >= kiov->kiov_len) {
@@ -771,92 +810,33 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                 LASSERT (nkiov > 0);
         }
 
-        phys_size = nkiov * sizeof (*phys);
-        PORTAL_ALLOC(phys, phys_size);
-        if (phys == NULL) {
-                CERROR ("Can't allocate tmp phys\n");
-                return (-ENOMEM);
-        }
-
         page_offset = kiov->kiov_offset + offset;
+        
+        resid = offset + nob;
+        npages = 0;
 
-        phys[0].start = kibnal_page2phys(kiov->kiov_page);
-        phys[0].size = PAGE_SIZE;
-
-        nphys = 1;
-        resid = nob - (kiov->kiov_len - offset);
-
-        while (resid > 0) {
-                kiov++;
-                nkiov--;
+        do {
+                LASSERT (npages < PTL_MD_MAX_IOV);
                 LASSERT (nkiov > 0);
 
-                if (kiov->kiov_offset != 0 ||
-                    ((resid > PAGE_SIZE) && 
-                     kiov->kiov_len < PAGE_SIZE)) {
-                        int i;
+                if ((npages > 0 && kiov->kiov_offset != 0) ||
+                    (resid > kiov->kiov_len && 
+                     (kiov->kiov_offset + kiov->kiov_len) != PAGE_SIZE)) {
                         /* Can't have gaps */
                         CERROR ("Can't make payload contiguous in I/O VM:"
-                                "page %d, offset %d, len %d \n", nphys, 
-                                kiov->kiov_offset, kiov->kiov_len);
-
-                        for (i = -nphys; i < nkiov; i++)
-                                CERROR("kiov[%d] %p +%d for %d\n",
-                                       i, kiov[i].kiov_page, 
-                                       kiov[i].kiov_offset, 
-                                       kiov[i].kiov_len);
+                                "page %d, offset %d, len %d \n",
+                                npages, kiov->kiov_offset, kiov->kiov_len);
                         
-                        rc = -EINVAL;
-                        goto out;
+                        return -EINVAL;
                 }
 
-                LASSERT (nphys * sizeof (*phys) < phys_size);
-                phys[nphys].start = kibnal_page2phys(kiov->kiov_page);
-                phys[nphys].size = PAGE_SIZE;
+                tx->tx_pages[npages++] = kibnal_page2phys(kiov->kiov_page);
+                resid -= kiov->kiov_len;
+                kiov++;
+                nkiov--;
+        } while (resid > 0);
 
-                nphys++;
-                resid -= PAGE_SIZE;
-        }
-
-#if 0
-        CWARN ("nphys %d, nob %d, page_offset %d\n", nphys, nob, page_offset);
-        for (i = 0; i < nphys; i++)
-                CWARN ("   [%d] "LPX64"\n", i, phys[i]);
-#endif
-
-        vvrc = vv_phy_mem_region_register(kibnal_data.kib_hca,
-                                          &phys_pages,
-                                          IBNAL_RDMA_BASE,
-                                          nphys,
-                                          page_offset,
-                                          kibnal_data.kib_pd,
-                                          access,
-                                          &tx->tx_md.md_handle,
-                                          &tx->tx_md.md_addr,
-                                          &tx->tx_md.md_lkey,
-                                          &tx->tx_md.md_rkey);
-
-        if (vvrc != vv_return_ok) {
-                CERROR ("Can't map phys: %d\n", vvrc);
-                rc = -EFAULT;
-                goto out;
-        }
-
-        CDEBUG(D_NET, "Mapped %d pages %d bytes @ offset %d: "
-               "lkey %x, rkey %x, addr "LPX64"\n",
-               nphys, nob, page_offset, tx->tx_md.md_lkey, tx->tx_md.md_rkey,
-               tx->tx_md.md_addr);
-
-        tx->tx_mapped = KIB_TX_MAPPED;
-        rc = 0;
-
-        rd->rd_key = active ? tx->tx_md.md_lkey : tx->tx_md.md_rkey;
-        rd->rd_nfrag = 1;
-        kibnal_rf_set(&rd->rd_frags[0], tx->tx_md.md_addr, nob);
-        
- out:
-        PORTAL_FREE(phys, phys_size);
-        return (rc);
+        return kibnal_map_tx(tx, rd, active, npages, page_offset, nob);
 }
 #endif
 
@@ -977,7 +957,37 @@ kibnal_check_sends (kib_conn_t *conn)
                  * QP!! */
 
                 LASSERT (tx->tx_nwrq > 0);
+#if 0
+                if (tx->tx_wrq[0].wr_type == vv_wr_rdma_write) 
+                        CDEBUG(D_WARNING, "WORK[0]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
+                               tx->tx_wrq[0].scatgat_list->v_address,
+                               tx->tx_wrq[0].scatgat_list->length,
+                               tx->tx_wrq[0].scatgat_list->l_key,
+                               tx->tx_wrq[0].type.send.send_qp_type.rc_type.r_addr,
+                               tx->tx_wrq[0].type.send.send_qp_type.rc_type.r_r_key);
+                else
+                        CDEBUG(D_WARNING, "WORK[0]: %s gl %p for %d k %x\n",
+                               tx->tx_wrq[0].wr_type == vv_wr_send ? "SEND" : "????",
+                               tx->tx_wrq[0].scatgat_list->v_address,
+                               tx->tx_wrq[0].scatgat_list->length,
+                               tx->tx_wrq[0].scatgat_list->l_key);
 
+                if (tx->tx_nwrq > 1) {
+                        if (tx->tx_wrq[1].wr_type == vv_wr_rdma_write) 
+                                CDEBUG(D_WARNING, "WORK[1]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
+                                       tx->tx_wrq[1].scatgat_list->v_address,
+                                       tx->tx_wrq[1].scatgat_list->length,
+                                       tx->tx_wrq[1].scatgat_list->l_key,
+                                       tx->tx_wrq[1].type.send.send_qp_type.rc_type.r_addr,
+                                       tx->tx_wrq[1].type.send.send_qp_type.rc_type.r_r_key);
+                        else
+                                CDEBUG(D_WARNING, "WORK[1]: %s gl %p for %d k %x\n",
+                                       tx->tx_wrq[1].wr_type == vv_wr_send ? "SEND" : "????",
+                                       tx->tx_wrq[1].scatgat_list->v_address,
+                                       tx->tx_wrq[1].scatgat_list->length,
+                                       tx->tx_wrq[1].scatgat_list->l_key);
+                }
+#endif           
                 rc = -ECONNABORTED;
                 vvrc = vv_return_ok;
                 if (conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
@@ -1085,6 +1095,7 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
         vv_scatgat_t *gl = &tx->tx_gl[tx->tx_nwrq];
         vv_wr_t      *wrq = &tx->tx_wrq[tx->tx_nwrq];
         int           nob = offsetof (kib_msg_t, ibm_u) + body_nob;
+        __u64         addr = (__u64)((unsigned long)((tx)->tx_msg));
 
         LASSERT (tx->tx_nwrq >= 0 && 
                  tx->tx_nwrq < (1 + IBNAL_MAX_RDMA_FRAGS));
@@ -1093,8 +1104,8 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
         kibnal_init_msg(tx->tx_msg, type, body_nob);
 
         *gl = (vv_scatgat_t) {
-                .v_address = KIBNAL_ADDR2SG(KIBNAL_TX_VADDR(tx)),
-                .l_key     = KIBNAL_TX_LKEY(tx),
+                .v_address = KIBNAL_ADDR2SG(addr),
+                .l_key     = tx->tx_lkey,
                 .length    = nob,
         };
 
@@ -1116,18 +1127,42 @@ int
 kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
                   kib_rdma_desc_t *dstrd, __u64 dstcookie)
 {
-        /* CAVEAT EMPTOR: this 'consumes' the frags in 'dstrd' */
-        int              resid = nob;
         kib_msg_t       *ibmsg = tx->tx_msg;
         kib_rdma_desc_t *srcrd = tx->tx_rd;
+        vv_scatgat_t    *gl;
+        vv_wr_t         *wrq;
+        int              rc;
+
+#if IBNAL_USE_FMR
+        LASSERT (tx->tx_nwrq == 0);
+
+        gl = &tx->tx_gl[0];
+        gl->length    = nob;
+        gl->v_address = KIBNAL_ADDR2SG(srcrd->rd_addr);
+        gl->l_key     = srcrd->rd_key;
+
+        wrq = &tx->tx_wrq[0];
+
+        wrq->wr_id = kibnal_ptr2wreqid(tx, IBNAL_WID_RDMA);
+        wrq->completion_notification = 0;
+        wrq->scatgat_list = gl;
+        wrq->num_of_data_segments = 1;
+        wrq->wr_type = vv_wr_rdma_write;
+        wrq->type.send.solicited_event = 0;
+        wrq->type.send.send_qp_type.rc_type.fance_indicator = 0;
+        wrq->type.send.send_qp_type.rc_type.r_addr = dstrd->rd_addr;
+        wrq->type.send.send_qp_type.rc_type.r_r_key = dstrd->rd_key;
+
+        tx->tx_nwrq = 1;
+        rc = nob;
+#else
+        /* CAVEAT EMPTOR: this 'consumes' the frags in 'dstrd' */
+        int              resid = nob;
         kib_rdma_frag_t *srcfrag;
         int              srcidx;
         kib_rdma_frag_t *dstfrag;
         int              dstidx;
-        vv_scatgat_t    *gl;
-        vv_wr_t         *wrq;
         int              wrknob;
-        int              rc;
 
         /* Called by scheduler */
         LASSERT (!in_interrupt());
@@ -1204,6 +1239,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
 
         if (rc < 0)                             /* no RDMA if completing with failure */
                 tx->tx_nwrq = 0;
+#endif
         
         ibmsg->ibm_u.completion.ibcm_status = rc;
         ibmsg->ibm_u.completion.ibcm_cookie = dstcookie;
@@ -1353,7 +1389,6 @@ kibnal_sendmsg(ptl_ni_t        *ni,
         kib_tx_t   *tx;
         int         nob;
         int         rc;
-        int         n;
 
         /* NB 'private' is different depending on what we're sending.... */
 
@@ -1480,8 +1515,15 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                         return PTL_FAIL;
                 }
 
-                n = ibmsg->ibm_u.get.ibgm_rd.rd_nfrag;
-                nob = offsetof(kib_get_msg_t, ibgm_rd.rd_frags[n]);
+#if IBNAL_USE_FMR
+                nob = sizeof(kib_get_msg_t);
+#else
+                {
+                        int n = ibmsg->ibm_u.get.ibgm_rd.rd_nfrag;
+                        
+                        nob = offsetof(kib_get_msg_t, ibgm_rd.rd_frags[n]);
+                }
+#endif
                 kibnal_init_tx_msg(tx, IBNAL_MSG_GET_REQ, nob);
 
                 tx->tx_ptlmsg[1] = ptl_create_reply_msg(kibnal_data.kib_ni, target.nid, ptlmsg);
@@ -1602,7 +1644,6 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         kib_msg_t   *txmsg;
         int          nob;
         int          rc;
-        int          n;
         
         LASSERT (mlen <= rlen);
         LASSERT (mlen >= 0);
@@ -1670,9 +1711,15 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
                 txmsg->ibm_u.putack.ibpam_src_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
                 txmsg->ibm_u.putack.ibpam_dst_cookie = tx->tx_cookie;
+#if IBNAL_USE_FMR
+                nob = sizeof(kib_putack_msg_t);
+#else
+                {
+                        int n = tx->tx_msg->ibm_u.putack.ibpam_rd.rd_nfrag;
 
-                n = tx->tx_msg->ibm_u.putack.ibpam_rd.rd_nfrag;
-                nob = offsetof(kib_putack_msg_t, ibpam_rd.rd_frags[n]);
+                        nob = offsetof(kib_putack_msg_t, ibpam_rd.rd_frags[n]);
+                }
+#endif
                 kibnal_init_tx_msg(tx, IBNAL_MSG_PUT_ACK, nob);
 
                 tx->tx_ptlmsg[0] = ptlmsg;      /* finalise ptlmsg on completion */

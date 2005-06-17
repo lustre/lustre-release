@@ -16,6 +16,18 @@ typedef struct
         char              ibim_payload[0];      /* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
+#ifndef IBNAL_USE_FMR
+# error "IBNAL_USE_FMR must be defined 1 or 0 before including this file"
+#endif
+
+#if IBNAL_USE_FMR
+typedef struct
+{
+	__u64             rd_addr;             	/* IO VMA address */
+	__u32             rd_nob;              	/* # of bytes */
+	__u32             rd_key;		/* remote key */
+} WIRE_ATTR kib_rdma_desc_t;
+#else
 /* YEUCH! the __u64 address is split into 2 __u32 fields to ensure proper
  * packing.  Otherwise we can't fit enough frags into an IBNAL message (<=
  * smallest page size on any arch). */
@@ -32,9 +44,7 @@ typedef struct
         __u32             rd_nfrag;             /* # fragments */
         kib_rdma_frag_t   rd_frags[0];          /* buffer frags */
 } WIRE_ATTR kib_rdma_desc_t;
-
-/* CAVEAT EMPTOR!  We don't actually put ibprm_rd on the wire; it's just there
- * to remember the source buffers while we wait for the PUT_ACK */
+#endif
 
 typedef struct
 {
@@ -89,7 +99,12 @@ typedef struct
 } WIRE_ATTR kib_msg_t;
 
 #define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
-#define IBNAL_MSG_VERSION              6        /* current protocol version */
+
+#if IBNAL_USE_FMA				/* ensure version changes on FMA */
+#define IBNAL_MSG_VERSION           0x11
+#else
+#define IBNAL_MSG_VERSION           0x10
+#endif
 
 #define IBNAL_MSG_CONNREQ           0xc0        /* connection request */
 #define IBNAL_MSG_CONNACK           0xc1        /* connection acknowledge */

@@ -83,6 +83,12 @@ static int rnr_nak_timer = IBNAL_RNR_NAK_TIMER;
 CFS_MODULE_PARM(rnr_nak_timer, "i", int, 0644,
                 "RNR retransmission interval");
 
+#if IBNAL_USE_FMR
+static int fmr_remaps = IBNAL_FMR_REMAPS;
+CFS_MODULE_PARM(fmr_remaps, "i", int, 0444,
+                "FMR mappings allowed before unmap");
+#endif
+
 kib_tunables_t kibnal_tunables = {
         .kib_service_number         = &service_number,
         .kib_min_reconnect_interval = &min_reconnect_interval,
@@ -99,6 +105,9 @@ kib_tunables_t kibnal_tunables = {
         .kib_retry_cnt              = &retry_cnt,
         .kib_rnr_cnt                = &rnr_cnt,
         .kib_rnr_nak_timer          = &rnr_nak_timer,
+#if IBNAL_USE_FMR
+        .kib_fmr_remaps             = &fmr_remaps,
+#endif
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -137,6 +146,10 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{15, "rnr_nak_timer", &rnr_nak_timer, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
+#if IBNAL_USE_FMR
+	{16, "fmr_remaps", &fmr_remaps, 
+	 sizeof(int), 0444, NULL, &proc_dointvec},
+#endif        
 	{0}
 };
 
