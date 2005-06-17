@@ -38,6 +38,7 @@ rm -f $config
 
 # create nodes
 ${LMC} -m $config --add node --node localhost || exit 10
+${LMC} -m $config --add net --node client --nid '*' --nettype tcp || exit 12
 ${LMC} -m $config --add net --node localhost --nid `hostname` --nettype tcp || exit 11
 
 # configure mds server
@@ -61,3 +62,4 @@ for num in `seq $OSTCOUNT`; do
 done
 
 ${LMC} -m $config --add mtpt --node localhost --path $MOUNT --lmv lmv1 --lov lov1 || exit 40
+${LMC} -m $config --add mtpt --node client --path $MOUNT2 --lmv lmv1 --lov lov1 || exit 41
