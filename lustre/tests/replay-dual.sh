@@ -468,6 +468,7 @@ test_20() {     # bug 3822 - evicting client with enqueued lock
        wait $OPENPID
        dmesg | grep "entering recovery in server" && \
                error "client not evicted" || true
+       do_facet client sysctl -w lustre.fail_loc=0
 }
 run_test 20 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
