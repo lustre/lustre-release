@@ -39,14 +39,12 @@ struct l_readdir_callback {
 #  define lvfs_sbdev_type      struct block_device *
    int fsync_bdev(struct block_device *);
 #  define lvfs_sbdev_sync      fsync_bdev
-#  define lvfs_lock_kernel     lock_kernel()
 # else
 #  define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
 #  define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(lvfs_sbdev(SB)))
 #  define lvfs_sbdev(SB)       (kdev_t_to_nr((SB)->s_dev))
 #  define lvfs_sbdev_type      kdev_t
 #  define lvfs_sbdev_sync      fsync_dev
-#  define lvfs_lock_kernel
 # endif
 
 void lvfs_set_rdonly(lvfs_sbdev_type dev);

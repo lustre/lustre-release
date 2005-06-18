@@ -63,8 +63,7 @@
 #define ll_truncate_complete_page(page) \
                                 truncate_complete_page(page->mapping, page)
 
-#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
-
+#define ll_vfs_create(a,b,c,d)          vfs_create(a,b,c,d)
 #define ll_dev_t                        dev_t
 #define kdev_t                          dev_t
 #define to_kdev_t(dev)                  (dev)
