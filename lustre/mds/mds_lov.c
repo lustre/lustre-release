@@ -430,7 +430,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.mds.mds_sb);
 
-                ll_set_rdonly(ll_sbdev(obd->u.mds.mds_sb));
+                lvfs_set_rdonly(lvfs_sbdev(obd->u.mds.mds_sb));
                 RETURN(0);
         }
 

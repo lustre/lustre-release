@@ -1682,7 +1682,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
-        LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
+        LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
         sema_init(&mds->mds_quota_info.qi_sem, 1);
         sema_init(&mds->mds_orphan_recovery_sem, 1);
@@ -1957,7 +1957,7 @@ static int mds_precleanup(struct obd_device *obd, int stage)
 static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        ll_sbdev_type save_dev;
+        lvfs_sbdev_type save_dev;
         int must_relock = 0;
         ENTRY;
 
@@ -1965,8 +1965,8 @@ static int mds_cleanup(struct obd_device *obd)
 
         if (mds->mds_sb == NULL)
                 RETURN(0);
-        save_dev = ll_sbdev(mds->mds_sb);
-        
+        save_dev = lvfs_sbdev(mds->mds_sb);
+
         if (mds->mds_osc_exp)
                 /* lov export was disconnected by mds_lov_clean;
                    we just need to drop our ref */
@@ -2008,8 +2008,8 @@ static int mds_cleanup(struct obd_device *obd)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        ll_clear_rdonly(save_dev);
-        
+        lvfs_clear_rdonly(save_dev);
+
         if (must_relock)
                 lock_kernel();
 

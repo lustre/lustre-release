@@ -1223,7 +1223,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
 
-        LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
+        LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
         if (lcfg->lcfg_bufcount > 3 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 str = lustre_cfg_string(lcfg, 3);
@@ -1440,7 +1440,7 @@ static int filter_precleanup(struct obd_device *obd, int stage)
 static int filter_cleanup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
-        ll_sbdev_type save_dev;
+        lvfs_sbdev_type save_dev;
         int must_relock = 0;
         ENTRY;
 
@@ -1465,7 +1465,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         if (filter->fo_sb == NULL)
                 RETURN(0);
-        save_dev = ll_sbdev(filter->fo_sb);
+        save_dev = lvfs_sbdev(filter->fo_sb);
 
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
@@ -1492,7 +1492,7 @@ static int filter_cleanup(struct obd_device *obd)
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
 
-        ll_clear_rdonly(save_dev);
+        lvfs_clear_rdonly(save_dev);
 
         if (must_relock)
                 lock_kernel();
@@ -2580,7 +2580,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.filter.fo_sb);
 
-                ll_set_rdonly(ll_sbdev(obd->u.filter.fo_sb));
+                lvfs_set_rdonly(lvfs_sbdev(obd->u.filter.fo_sb));
                 RETURN(0);
         }
 

@@ -196,7 +196,7 @@ do {                                                                         \
 
 #define OBD_FAIL_TIMEOUT(id, secs)                                           \
 do {                                                                         \
-        if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
+        if (OBD_FAIL_CHECK_ONCE(id)) {                                      \
                 CERROR("obd_fail_timeout id %x sleeping for %d secs\n",      \
                        (id), (secs));                                        \
                 set_current_state(TASK_UNINTERRUPTIBLE);                     \
@@ -264,37 +264,7 @@ do {                                                            \
 #ifdef __KERNEL__
 # include <linux/types.h>
 # include <linux/blkdev.h>
-
-
-# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#  define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#  define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
-#  define ll_sbdev(SB)       ((SB)->s_bdev)
-#  define ll_sbdev_type      struct block_device *
-   int fsync_bdev(struct block_device *);
-#  define ll_sbdev_sync      fsync_bdev
-#  define ll_lock_kernel     lock_kernel()
-# else
-#  define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
-#  define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(ll_sbdev(SB)))
-#  define ll_sbdev(SB)       (kdev_t_to_nr((SB)->s_dev))
-#  define ll_sbdev_type      kdev_t
-#  define ll_sbdev_sync      fsync_dev
-#  define ll_lock_kernel
-# endif
-
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-  void dev_set_rdonly(ll_sbdev_type dev, int no_write);
-  void dev_clear_rdonly(int no_write);
-#else
-  void dev_set_rdonly(ll_sbdev_type dev);
-  void dev_clear_rdonly(ll_sbdev_type dev);
-#endif
-int dev_check_rdonly(ll_sbdev_type dev);
-#define ll_check_rdonly(dev) dev_check_rdonly(dev)
-
-void ll_set_rdonly(ll_sbdev_type dev);
-void ll_clear_rdonly(ll_sbdev_type dev);
+# include <linux/lvfs.h>
 
 static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 {
@@ -302,7 +272,7 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
                 BDEVNAME_DECLARE_STORAGE(tmp);
                 CERROR("obd_fail_loc=%x, fail write operation on %s\n",
                        id, ll_bdevname(sb, tmp));
-                ll_set_rdonly(ll_sbdev(sb));
+                lvfs_set_rdonly(lvfs_sbdev(sb));
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }

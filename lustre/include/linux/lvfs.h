@@ -56,7 +56,7 @@ struct lvfs_run_ctxt {
         struct vfsmount *pwdmnt;
         struct dentry   *pwd;
         mm_segment_t     fs;
-        struct lvfs_ucred ouc;
+        struct lvfs_ucred luc;
         int              ngroups;
         struct lvfs_callback_ops cb_ops;
 #ifdef OBD_CTXT_DEBUG

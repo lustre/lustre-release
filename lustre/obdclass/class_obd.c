@@ -102,35 +102,6 @@ unsigned int obd_print_fail_loc(void)
         return obd_fail_loc;
 }
 
-void ll_set_rdonly(ll_sbdev_type dev)
-{
-        CDEBUG(D_IOCTL | D_HA, "set dev %ld rdonly\n", (long)dev);
-        ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-        dev_set_rdonly(dev, 2);
-#else
-        dev_set_rdonly(dev);
-#endif
-}
-
-void ll_clear_rdonly(ll_sbdev_type dev)
-{
-#ifndef HAVE_CLEAR_RDONLY_ON_PUT
-        CDEBUG(D_IOCTL | D_HA, "unset dev %ld rdonly\n", (long)dev);
-        if (ll_check_rdonly(dev)) {
-                ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-                dev_clear_rdonly(2);
-#else
-                dev_clear_rdonly(dev);
-#endif
-        }
-#else 
-        CDEBUG(D_IOCTL | D_HA, "(will unset dev %ld rdonly on put)\n",
-               (long)dev);
-#endif
-}
-
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
@@ -399,8 +370,6 @@ void *obd_psdev = NULL;
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obd_fail_loc);
-EXPORT_SYMBOL(ll_set_rdonly);
-EXPORT_SYMBOL(ll_clear_rdonly);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_dump_on_timeout);

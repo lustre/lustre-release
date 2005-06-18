@@ -56,8 +56,9 @@ int obd_memmax;
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
-# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERT(!segment_eq(get_fs(), get_ds()))
-# define ASSERT_KERNEL_CTXT(msg) LASSERT(segment_eq(get_fs(), get_ds()))
+# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), get_ds()),\
+                                              msg)
+# define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), get_ds()), msg)
 #else
 # define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 # define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
@@ -97,7 +98,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
         save->ngroups = current_ngroups;
-        save->ouc.luc_umask = current->fs->umask;
+        save->luc.luc_umask = current->fs->umask;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -105,11 +106,11 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
-                save->ouc.luc_fsuid = current->fsuid;
-                save->ouc.luc_fsgid = current->fsgid;
-                save->ouc.luc_cap = current->cap_effective;
-                save->ouc.luc_suppgid1 = current_groups[0];
-                save->ouc.luc_suppgid2 = current_groups[1];
+                save->luc.luc_fsuid = current->fsuid;
+                save->luc.luc_fsgid = current->fsgid;
+                save->luc.luc_cap = current->cap_effective;
+                save->luc.luc_suppgid1 = current_groups[0];
+                save->luc.luc_suppgid2 = current_groups[1];
 
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
@@ -172,14 +173,14 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 
         dput(saved->pwd);
         mntput(saved->pwdmnt);
-        current->fs->umask = saved->ouc.luc_umask;
+        current->fs->umask = saved->luc.luc_umask;
         if (uc) {
-                current->fsuid = saved->ouc.luc_fsuid;
-                current->fsgid = saved->ouc.luc_fsgid;
-                current->cap_effective = saved->ouc.luc_cap;
+                current->fsuid = saved->luc.luc_fsuid;
+                current->fsgid = saved->luc.luc_fsgid;
+                current->cap_effective = saved->luc.luc_cap;
                 current_ngroups = saved->ngroups;
-                current_groups[0] = saved->ouc.luc_suppgid1;
-                current_groups[1] = saved->ouc.luc_suppgid2;
+                current_groups[0] = saved->luc.luc_suppgid1;
+                current_groups[1] = saved->luc.luc_suppgid2;
         }
 
         /*
@@ -390,6 +391,43 @@ long l_readdir(struct file *file, struct list_head *dentry_list)
 EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
+
+void lvfs_set_rdonly(lvfs_sbdev_type dev)
+{
+        CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
+        lvfs_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+        dev_set_rdonly(dev, 2);
+#else
+        dev_set_rdonly(dev);
+#endif
+}
+
+int lvfs_check_rdonly(lvfs_sbdev_type dev)
+{
+        return dev_check_rdonly(dev);
+}
+
+void lvfs_clear_rdonly(lvfs_sbdev_type dev)
+{
+#ifndef HAVE_CLEAR_RDONLY_ON_PUT
+        CDEBUG(D_IOCTL | D_HA, "unset dev %lx rdonly\n", (long)dev);
+        if (lvfs_check_rdonly(dev)) {
+                lvfs_sbdev_sync(dev);
+#ifdef HAVE_OLD_DEV_SET_RDONLY
+                dev_clear_rdonly(2);
+#else
+                dev_clear_rdonly(dev);
+#endif
+        }
+#else
+        CDEBUG(D_IOCTL | D_HA, "(will unset dev %lx rdonly on put)\n",
+               (long)dev);
+#endif
+}
+EXPORT_SYMBOL(lvfs_set_rdonly);
+EXPORT_SYMBOL(lvfs_check_rdonly);
+EXPORT_SYMBOL(lvfs_clear_rdonly);
 
 static int __init lvfs_linux_init(void)
 {
