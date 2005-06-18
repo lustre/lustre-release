@@ -187,10 +187,13 @@ pass() {
 	echo PASS $@
 }
 
-MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+mounted_lustre_filesystems() {
+	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+}
+MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then
 	sh llmount.sh
-	MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
+	MOUNT="`mounted_lustre_filesystems`"
 	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
