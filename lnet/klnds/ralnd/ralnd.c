@@ -920,7 +920,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         if (nstale != 0)
                 CWARN("Closed %d stale conns to "LPX64"\n", nstale, peer_nid);
 
-        CDEBUG(D_WARNING, "New connection to "LPX64" on devid[%d] = %d\n",
+        CWARN("New connection to "LPX64" on devid[%d] = %d\n",
                peer_nid, conn->rac_device->rad_idx, conn->rac_device->rad_id);
 
         /* Ensure conn gets checked.  Transmits may have been queued and an

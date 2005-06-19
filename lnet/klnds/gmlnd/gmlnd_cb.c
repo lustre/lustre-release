@@ -166,7 +166,7 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
                "] nid["LPU64"]\n", niov, offset, len, nid);
 	nal_data = libnal->libnal_data;
 	if (!nal_data) {
-		CDEBUG(D_ERROR, "no nal_data\n");
+		CERROR("no nal_data\n");
 		return(PTL_FAIL);
 	} else {
 		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
@@ -205,7 +205,7 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		gmnal_small_tx(libnal, private, cookie, hdr, type, nid, pid,
 			       stxd,  len);
 	} else {
-		CDEBUG(D_ERROR, "Large message send is not supported\n");
+		CERROR("Large message send is not supported\n");
 		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 		gmnal_large_tx(libnal, private, cookie, hdr, type, nid, pid,
@@ -230,7 +230,7 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
                LPSZ"] len["LPSZ"]\n", nid, kniov, offset, len);
 	nal_data = libnal->libnal_data;
 	if (!nal_data) {
-		CDEBUG(D_ERROR, "no nal_data\n");
+		CERROR("no nal_data\n");
 		return(PTL_FAIL);
 	} else {
 		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
@@ -292,7 +292,7 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
 
 		PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
 		iovec_dup = iovec;
-		CDEBUG(D_ERROR, "Large message send it is not supported yet\n");
+		CERROR("Large message send it is not supported yet\n");
 		PORTAL_FREE(iovec, kniov*sizeof(struct iovec));
 		return(PTL_FAIL);
 		for (i=0; i<kniov; i++) {

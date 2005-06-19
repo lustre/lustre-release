@@ -38,6 +38,9 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
+/* Has there been an LBUG? */
+extern unsigned int portals_catastrophe;
+
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
  */

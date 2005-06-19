@@ -31,7 +31,7 @@
 
 #include "tracefile.h"
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS);
 EXPORT_SYMBOL(portal_subsystem_debug);
 
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
@@ -44,6 +44,9 @@ EXPORT_SYMBOL(portal_printk);
 
 unsigned int portal_stack;
 EXPORT_SYMBOL(portal_stack);
+
+unsigned int portals_catastrophe;
+EXPORT_SYMBOL(portals_catastrophe);
 
 #ifdef __KERNEL__
 atomic_t portal_kmemory = ATOMIC_INIT(0);

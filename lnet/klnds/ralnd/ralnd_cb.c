@@ -1438,7 +1438,7 @@ kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
         case RAP_NOT_DONE:
                 if (time_after_eq(jiffies,
                                   conn->rac_last_tx + conn->rac_keepalive*HZ))
-                        CDEBUG(D_WARNING, "EAGAIN sending %02x (idle %lu secs)\n",
+                        CWARN("EAGAIN sending %02x (idle %lu secs)\n",
                                msg->ram_type, (jiffies - conn->rac_last_tx)/HZ);
                 return -EAGAIN;
         }
@@ -1901,8 +1901,8 @@ kranal_complete_closed_conn (kra_conn_t *conn)
                 kranal_tx_done(tx, -ECONNABORTED);
         }
 
-        CDEBUG(D_WARNING, "Closed conn %p -> "LPX64": nmsg %d nreplies %d\n",
-               conn, conn->rac_peer->rap_nid, nfma, nreplies);
+        CWARN("Closed conn %p -> "LPX64": nmsg %d nreplies %d\n",
+              conn, conn->rac_peer->rap_nid, nfma, nreplies);
 }
 
 int
