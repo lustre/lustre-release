@@ -448,11 +448,51 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+static int obd_proc_read_health(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        int rc = 0; //, i;
+        *eof = 1;
+
+        if (portals_catastrophe)
+                rc += snprintf(page + rc, count - rc, "LBUG\n");
+
+#if 0
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd;
+
+                obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+
+                atomic_inc(&obd->obd_refcount);
+                spin_unlock(&obd_dev_lock);
+
+                if (obd_health_check(obd)) {
+                        rc += snprintf(page + rc, count - rc,
+                                       "device %s reported unhealthy\n",
+                                       obd->obd_name);
+                }
+                class_decref(obd);
+                spin_lock(&obd_dev_lock);
+        }
+        spin_unlock(&obd_dev_lock);
+#endif
+
+        if (rc == 0)
+                return snprintf(page, count, "healthy\n");
+
+        rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
+        return rc;
+}
+
 /* Root for /proc/fs/lustre */
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
+        { "health_check", obd_proc_read_health, NULL, NULL },
         { 0 }
 };
 #else

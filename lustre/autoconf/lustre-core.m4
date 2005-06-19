@@ -481,8 +481,17 @@ AC_DEFUN([LC_CONFIGURE],
 AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 
 # include/lustre/lustre_user.h
-AC_CHECK_TYPES([struct if_dqinfo],[],[],[#include <linux/quota.h>])
-AC_CHECK_TYPES([struct if_dqblk],[],[],[#include <linux/quota.h>])
+# See note there re: __ASM_X86_64_PROCESSOR_H
+
+AC_CHECK_TYPES([struct if_dqinfo],[],[],[
+#define __ASM_X86_64_PROCESSOR_H
+#include <linux/quota.h>
+])
+
+AC_CHECK_TYPES([struct if_dqblk],[],[],[
+#define __ASM_X86_64_PROCESSOR_H
+#include <linux/quota.h>
+])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])

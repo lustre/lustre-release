@@ -29,14 +29,13 @@ ext3-raw-lookup.patch
 nfs_export_kernel-2.4.21-chaos.patch 
 ext3-ea-in-inode-2.4.21-chaos.patch 
 listman-2.4.21-chaos.patch 
-ext3-xattr-ptr-arith-fix.patch
 pagecache-lock-2.4.21-chaos.patch 
 ext3-truncate-buffer-head.patch
 inode-max-readahead-2.4.24.patch
 dcache_refcount_debug.patch
 ext3-extents-2.4.21-chaos.patch
 ext3-extents-asyncdel-2.4.21-chaos.patch
-blkdev_tunables-2.4.21-chaos.patch
+blkdev_tunables-2.4.21-chaos.patch 
 small_scatterlist-2.4.21-rhel.patch 
 ext3-nlinks-2.4.21-chaos.patch
 sd_iostats-2.4.21-chaos.patch
@@ -46,6 +45,8 @@ export-show_task-2.4-rhel.patch
 compile-fixes-2.4.21-rhel.patch 
 grab_cache_page_nowait_gfp-rh-2.4.patch 
 remove-suid-2.4-rhel.patch
-qsnet-rhel-2.4.patch
+qsnet-rhel-2.4.patch 
+nfs_statfs-toomanyfiles-rhel-2.4.patch 
+statfs64-cast-unsigned-2.4-rhel.patch
 fsprivate-2.4.patch
 nfsd_iallocsem.patch

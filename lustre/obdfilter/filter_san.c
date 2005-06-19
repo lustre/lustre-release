@@ -38,20 +38,29 @@
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;
-        char *option = NULL;
+        unsigned long page;
+        int rc;
 
         if (lcfg->lcfg_bufcount < 3 || LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)
                 RETURN(-EINVAL);
 
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        page = get_zeroed_page(GFP_KERNEL);
+        if (!page)
+                RETURN(-ENOMEM);
+
         /* for extN/ext3 filesystem, we must mount it with 'writeback' mode */
         if (!strcmp(lustre_cfg_string(lcfg, 2), "ldiskfs"))
-                option = "data=writeback";
+                strcpy((void *)page, "data=writeback");
         else if (!strcmp(lustre_cfg_string(lcfg, 2), "ext3"))
-                option = "data=writeback,asyncdel";
+                strcpy((void *)page, "data=writeback,asyncdel");
         else
                 LBUG(); /* just a reminder */
 
-        return filter_common_setup(obd, len, buf, option);
+        rc = filter_common_setup(obd, len, buf, (void *)page);
+        free_page(page);
+
+        return rc;
 }
 
 int filter_san_preprw(int cmd, struct obd_export *exp, struct obdo *oa,

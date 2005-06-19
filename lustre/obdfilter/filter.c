@@ -1198,7 +1198,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
 /* mount the file system (secretly) */
 int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
-                        char *option)
+                        void *option)
 {
         struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
@@ -1217,8 +1217,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
 
-        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), MS_NOATIME | MS_NODIRATIME,
-                            lustre_cfg_string(lcfg, 1), (void *)option);
+        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),MS_NOATIME|MS_NODIRATIME,
+                            lustre_cfg_string(lcfg, 1), option);
         rc = PTR_ERR(mnt);
         if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
@@ -1344,12 +1344,21 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
+        unsigned long page;
         int rc;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1) || !LUSTRE_CFG_BUFLEN(lcfg, 2))
                 RETURN(-EINVAL);
 
-        rc = filter_common_setup(obd, len, buf, lustre_cfg_buf(lcfg, 4));
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        page = get_zeroed_page(GFP_KERNEL);
+        if (!page)
+                RETURN(-ENOMEM);
+
+        memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
+               LUSTRE_CFG_BUFLEN(lcfg, 4));
+        rc = filter_common_setup(obd, len, buf, (void *)page);
+        free_page(page);
 
         lprocfs_init_vars(filter, &lvars);
         if (rc == 0 && lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&

@@ -28,7 +28,9 @@ Details    : While revalidating inodes the VFS looks up inodes with ifind()
              when it finds an existing inode and then the VFS later attaches
              this free lsm to a new inode.
 
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+------------------------------------------------------------------------------
+
+2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
 
@@ -38,15 +40,15 @@ Bugzilla   : 6172
 Description: Client is evicted, gets IO error writing to file
 Details    : lock ordering changes for bug 5492 reintroduced bug 3267 and
              caused clients to be evicted for AST timeouts.  The fixes in
-	     bug 5192 mean we no longer need to have such short AST timeouts
-	     so ldlm_timeout has been increased.
+             bug 5192 mean we no longer need to have such short AST timeouts
+             so ldlm_timeout has been increased.
 
 Severity   : major
 Frequency  : occasional during --force or --failover shutdown under load
 Bugzilla   : 5949, 4834
 Description: Server oops/LBUG if stopped with --force or --failover under load
 Details    : a collection of import/export refcount and cleanup ordering
-	     issues fixed for safer force cleanup
+             issues fixed for safer force cleanup
 
 Severity   : major
 Frequency  : only filesystems larger than 120 OSTs
@@ -115,15 +117,15 @@ Frequency  : always when accessing e.g. tty/console device nodes
 Bugzilla   : 3790
 Description: tty and some other devices nodes cannot be used on lustre
 Details    : file's private_data field is used by device data and lustre
-	     values in there got lost. New field was added to struct file to
-	     store fs-specific private data.
+             values in there got lost. New field was added to struct file to
+             store fs-specific private data.
 
 Severity   : minor
 Frequency  : when exporting Lustre via NFS
 Bugzilla   : 5275
 Description: NFSD failed occasionally when looking up a path component
 Details    : NFSD is looking up ".." which was broken in ext3 directories
-	     that had grown large enough to become hashed.
+             that had grown large enough to become hashed.
 
 ------------------------------------------------------------------------------
 

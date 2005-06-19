@@ -9,6 +9,14 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 #include <asm/types.h>
+
+/*
+ * asm-x86_64/processor.h on some SLES 9 distros seems to use
+ * kernel-only typedefs.  fortunately skipping it altogether is ok
+ * (for now).
+ */
+#define __ASM_X86_64_PROCESSOR_H
+
 #include <linux/quota.h>
 #ifdef __KERNEL__
 #include <linux/string.h>

@@ -309,10 +309,9 @@ change_active() {
 do_node() {
     HOST=$1
     shift
-
     if $VERBOSE; then
-	echo "CMD: $HOST $@"
-	$PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
+        echo "CMD: $HOST $@"
+        $PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
     $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
 }
@@ -433,55 +432,55 @@ absolute_path() {
 drop_request() {
 # OBD_FAIL_MDS_ALL_REQUEST_NET
     RC=0
-    do_facet mds "echo 0x123 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0x123
     do_facet client "$1" || RC=$?
-    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0
     return $RC
 }
 
 drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
     RC=0
-    do_facet mds "echo 0x122 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0x122
     do_facet client "$@" || RC=$?
-    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0
     return $RC
 }
 
 drop_reint_reply() {
 # OBD_FAIL_MDS_REINT_NET_REP
     RC=0
-    do_facet mds "echo 0x119 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0x119
     do_facet client "$@" || RC=$?
-    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet mds sysctl -w lustre.fail_loc=0
     return $RC
 }
 
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0
-    do_facet ost "echo 0x214 > /proc/sys/lustre/fail_loc"
+    do_facet ost sysctl -w lustre.fail_loc=0x214
     do_facet client "$1" || RC=$?
     do_facet client "sync"
-    do_facet ost "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet ost sysctl -w lustre.fail_loc=0
     return $RC
 }
 
 drop_ldlm_cancel() {
 #define OBD_FAIL_LDLM_CANCEL             0x304
     RC=0
-    do_facet client "echo 0x304 > /proc/sys/lustre/fail_loc"
+    do_facet client sysctl -w lustre.fail_loc=0x304
     do_facet client "$@" || RC=$?
-    do_facet client "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet client sysctl -w lustre.fail_loc=0
     return $RC
 }
 
 drop_bl_callback() {
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
     RC=0
-    do_facet client "echo 0x305 > /proc/sys/lustre/fail_loc"
+    do_facet client sysctl -w lustre.fail_loc=0x305
     do_facet client "$@" || RC=$?
-    do_facet client "echo 0 > /proc/sys/lustre/fail_loc"
+    do_facet client sysctl -w lustre.fail_loc=0
     return $RC
 }
 
