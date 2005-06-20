@@ -1013,37 +1013,6 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
          * message after that point is the responsibility of the NAL.
          * If we don't think the packet is for us, return PTL_IFACE_DUP */
 
-        if (type == PTL_MSG_HELLO) {
-                /* dest_nid is really ptl_magicversion_t */
-                ptl_magicversion_t *mv = (ptl_magicversion_t *)&hdr->dest_nid;
-
-                mv->magic = le32_to_cpu(mv->magic);
-                mv->version_major = le16_to_cpu(mv->version_major);
-                mv->version_minor = le16_to_cpu(mv->version_minor);
-
-                if (mv->magic == PORTALS_PROTO_MAGIC &&
-                    mv->version_major == PORTALS_PROTO_VERSION_MAJOR &&
-                    mv->version_minor == PORTALS_PROTO_VERSION_MINOR) {
-                        CWARN ("%s: Dropping unexpected HELLO message: "
-                               "magic %d, version %d.%d from %s\n",
-                               libcfs_nid2str(ni->ni_nid), mv->magic,
-                               mv->version_major, mv->version_minor,
-                               libcfs_nid2str(hdr->src_nid));
-
-                        /* it's good but we don't want it */
-                        ptl_drop_message(ni, private, hdr);
-                        return PTL_OK;
-                }
-
-                /* we got garbage */
-                CERROR ("%s: Bad HELLO message: "
-                        "magic %d, version %d.%d from %s\n",
-                        libcfs_nid2str(ni->ni_nid), mv->magic,
-                        mv->version_major, mv->version_minor,
-                        libcfs_nid2str(hdr->src_nid));
-                return PTL_FAIL;
-        }
-
         dest_nid = le64_to_cpu(hdr->dest_nid);
         if (dest_nid != ni->ni_nid) {
 

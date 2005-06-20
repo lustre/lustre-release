@@ -99,30 +99,43 @@ typedef struct {
         } msg;
 } WIRE_ATTR ptl_hdr_t;
 
-/* A HELLO message contains the portals magic number and protocol version
+/* A HELLO message contains a magic number and protocol version
  * code in the header's dest_nid, the peer's NID in the src_nid, and
  * PTL_MSG_HELLO in the type field.  All other common fields are zero
  * (including payload_size; i.e. no payload).  
  * This is for use by byte-stream NALs (e.g. TCP/IP) to check the peer is
- * running the same protocol and to find out its NID, so that hosts with
- * multiple IP interfaces can have a single NID. These NALs should exchange
- * HELLO messages when a connection is first established. 
- * Individual NALs can put whatever else they fancy in ptl_hdr_t::msg. 
+ * running the same protocol and to find out its NID. These NALs should
+ * exchange HELLO messages when a connection is first established.  Individual
+ * NALs can put whatever else they fancy in ptl_hdr_t::msg.
  */
 typedef struct {
-        __u32	magic;                          /* PORTALS_PROTO_MAGIC */
+        __u32	magic;                          /* PTL_PROTO_TCP_MAGIC */
         __u16   version_major;                  /* increment on incompatible change */
         __u16   version_minor;                  /* increment on compatible change */
 } WIRE_ATTR ptl_magicversion_t;
 
-#define PORTALS_PROTO_MAGIC                0xeebc0ded
+/* PROTO MAGIC for NALs that once used their own private acceptor */
+#define PTL_PROTO_OPENIB_MAGIC             0x0be91b91
+#define PTL_PROTO_RA_MAGIC                 0x0be91b92
+#define PTL_PROTO_TCP_MAGIC                0xeebc0ded
 
-#define PORTALS_PROTO_VERSION_MAJOR        1
-#define PORTALS_PROTO_VERSION_MINOR        0
+#define PTL_PROTO_TCP_VERSION_MAJOR        1
+#define PTL_PROTO_TCP_VERSION_MINOR        0
 
 /* limit on the number of entries in discontiguous MDs */
 #define PTL_MTU        (1<<20)
 #define PTL_MD_MAX_IOV 256
+
+/* Acceptor connection request */
+typedef struct {
+        __u32       acr_magic;                  /* PTL_ACCEPTOR_PROTO_MAGIC */
+        __u32       acr_version;                /* protocol version */
+        __u64       acr_nid;                    /* target NID */
+} WIRE_ATTR ptl_acceptor_connreq_t;
+
+#define PTL_PROTO_ACCEPTOR_MAGIC         0xacce7100
+#define PTL_PROTO_ACCEPTOR_VERSION       1
+
 
 /* forward refs */
 struct ptl_libmd;
@@ -310,7 +323,11 @@ typedef struct ptl_nal
 
         /* notification of peer health */
         void (*nal_notify)(struct ptl_ni *ni, ptl_nid_t peer, int alive);
-        
+
+#ifdef __KERNEL__
+        /* accept a new connection */
+        ptl_err_t (*nal_accept)(struct ptl_ni *ni, struct socket *sock);
+#endif
 } ptl_nal_t;
 
 #define PTL_MAX_INTERFACES   16

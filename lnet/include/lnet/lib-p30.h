@@ -457,11 +457,22 @@ extern void ptl_me_unlink(ptl_me_t *me);
 extern void ptl_md_unlink(ptl_libmd_t *md);
 extern void ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd);
 
-#ifdef __KERNEL__
 extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
 extern ptl_err_t ptl_set_ip_niaddr (ptl_ni_t *ni);
-#endif
+
+extern ptl_err_t ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
+                             __u32 local_ip, __u32 peer_ip, int peer_port);
+extern void ptl_connect_console_error(int rc, ptl_nid_t peer_nid,
+                                      __u32 peer_ip, int port);
+
+extern int ptl_count_acceptor_nis(ptl_ni_t **first_ni);
+
+extern ptl_err_t ptl_accept(struct socket *sock, __u32 magic, int choose_ni);
+extern int       ptl_acceptor_timeout(void);
+extern int       ptl_acceptor_port(void);
+extern ptl_err_t ptl_acceptor_start(void);
+extern void      ptl_acceptor_stop(void);
 
 extern ptl_err_t ptl_parse_routes (char *route_str);
 extern ptl_err_t ptl_parse_networks (struct list_head *nilist, char *networks);

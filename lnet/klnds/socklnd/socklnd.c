@@ -36,6 +36,7 @@ ptl_nal_t ksocknal_nal = {
         .nal_recv_pages = ksocknal_recv_pages,
         .nal_fwd        = ksocknal_fwd_packet,
         .nal_notify     = ksocknal_notify,
+        .nal_accept     = ksocknal_accept,
 };
 
 ksock_nal_data_t        ksocknal_data;
@@ -911,111 +912,35 @@ ksocknal_create_routes(ksock_peer_t *peer, int port,
                 ksocknal_route_decref(newroute);
 }
 
-int
-ksocknal_listener (void *arg)
+ptl_err_t
+ksocknal_accept (ptl_ni_t *ni, struct socket *sock)
 {
-        char                name[16];
-        ksock_connreq_t    *cr = NULL;
+        ksock_connreq_t    *cr;
         int                 rc;
+        __u32               peer_ip;
+        int                 peer_port;
         unsigned long       flags;
 
-        /* Called with parent blocked on ksnd_listener_signal */
+        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
+        LASSERT (rc == 0);                      /* we succeeded before */
 
-        snprintf(name, sizeof(name), "socknal_ld%03d",
-                 *ksocknal_tunables.ksnd_port);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
+        PORTAL_ALLOC(cr, sizeof(*cr));
+        if (cr == NULL) {
+                CWARN("ENOMEM allocating connection request from"
+                      "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+                return PTL_FAIL;
+        }
 
-        rc = libcfs_sock_listen(&ksocknal_data.ksnd_listener_sock,
-                                0, *ksocknal_tunables.ksnd_port,
-                                *ksocknal_tunables.ksnd_backlog);
+        cr->ksncr_sock = sock;
 
-        /* set init status and unblock parent */
-        ksocknal_data.ksnd_listener_shutdown = rc;
-        mutex_up(&ksocknal_data.ksnd_listener_signal);
+        spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
 
-        if (rc != 0)
-                return rc;
-
-        while (ksocknal_data.ksnd_listener_shutdown == 0) {
-
-                if (cr == NULL) {
-                        PORTAL_ALLOC(cr, sizeof(*cr));
-                        if (cr == NULL) {
-                                CWARN("ENOMEM: listener pausing\n");
-                                cfs_pause(cfs_time_seconds(1));
-                                continue;
-                        }
-                }
-                
-                rc = libcfs_sock_accept(&cr->ksncr_sock, 
-                                        ksocknal_data.ksnd_listener_sock,
-                                        0);
-                if (rc != 0) {
-                        if (rc != -EAGAIN) {
-                                CWARN("Accept error %d: listener pausing\n",
-                                      rc);
-                                cfs_pause(cfs_time_seconds(1));
-                        }
-                        continue;
-                }
-
-                spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
-
-                list_add_tail(&cr->ksncr_list, &ksocknal_data.ksnd_connd_connreqs);
-                wake_up(&ksocknal_data.ksnd_connd_waitq);
+        list_add_tail(&cr->ksncr_list, &ksocknal_data.ksnd_connd_connreqs);
+        wake_up(&ksocknal_data.ksnd_connd_waitq);
                         
-                spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock, flags);
-                cr = NULL;
-        }
-
-        libcfs_sock_release(ksocknal_data.ksnd_listener_sock);
-        if (cr != NULL)
-                PORTAL_FREE(cr, sizeof(*cr));
-
-        /* unblock executioner */
-        mutex_up(&ksocknal_data.ksnd_listener_signal);
-        ksocknal_thread_fini();
-        return 0;
+        spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock, flags);
+        return PTL_OK;
 }
-
-int
-ksocknal_start_listener(void)
-{
-        int   rc;
-
-        /* listener disabled? */
-        if (*ksocknal_tunables.ksnd_backlog <= 0)
-                return 0;
-
-        ksocknal_data.ksnd_listener_shutdown = 0;
-        
-        rc = ksocknal_thread_start (ksocknal_listener, NULL);
-        if (rc != 0) {
-                CERROR("Can't spawn listener: %d\n", rc);
-                return rc;
-        }
-
-        /* until listener starts or fails */
-        mutex_down(&ksocknal_data.ksnd_listener_signal);
-        return ksocknal_data.ksnd_listener_shutdown;
-}
-
-void
-ksocknal_stop_listener(void)
-{
-        /* listener disabled? */
-        if (*ksocknal_tunables.ksnd_backlog <= 0)
-                return;
-
-        /* make the listener exit its loop... */
-        ksocknal_data.ksnd_listener_shutdown = 1;
-        libcfs_sock_abort_accept(ksocknal_data.ksnd_listener_sock);
-
-        /* block until listener exits */
-        mutex_down(&ksocknal_data.ksnd_listener_signal);
-}
-
 
 int
 ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
@@ -1093,10 +1018,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
          * Passive connections use the listener timeout since the peer sends
          * eagerly */
         nid = (route == NULL) ? PTL_NID_ANY : route->ksnr_peer->ksnp_nid;
-        rc = ksocknal_recv_hello (conn, &nid, &incarnation, ipaddrs,
-                                  (route == NULL) ? 
-                                  *ksocknal_tunables.ksnd_listen_timeout :
-                                  *ksocknal_tunables.ksnd_timeout);
+        rc = ksocknal_recv_hello (conn, &nid, &incarnation, ipaddrs);
         if (rc < 0)
                 goto failed_1;
         nipaddrs = rc;
@@ -2017,7 +1939,6 @@ ksocknal_base_shutdown (void)
                 LASSERT (0);
 
         case SOCKNAL_INIT_ALL:
-                ksocknal_stop_listener();
                 /* Wait for queued connreqs to clean up */
                 i = 2;
                 spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
@@ -2133,8 +2054,6 @@ ksocknal_base_startup (void)
 
         rwlock_init(&ksocknal_data.ksnd_global_lock);
 
-        init_mutex_locked(&ksocknal_data.ksnd_listener_signal);
-
         spin_lock_init(&ksocknal_data.ksnd_small_fmp.fmp_lock);
         CFS_INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_idle_fmbs);
         CFS_INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_blocked_conns);
@@ -2239,12 +2158,6 @@ ksocknal_base_startup (void)
                 }
         }
         
-        rc = ksocknal_start_listener();
-        if (rc != 0) {
-                CERROR("Can't start listener: %d\n", rc);
-                goto failed;
-        }
-
         /* flag everything initialised */
         ksocknal_data.ksnd_init = SOCKNAL_INIT_ALL;
 

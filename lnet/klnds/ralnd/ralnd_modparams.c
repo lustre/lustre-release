@@ -51,18 +51,6 @@ static int timeout = RANAL_TIMEOUT;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
 		"communications timeout (seconds)");
 
-static int listener_timeout = RANAL_LISTENER_TIMEOUT;
-CFS_MODULE_PARM(listener_timeout, "i", int, 0644,
-		"passive connection timeout");
-
-static int backlog = RANAL_BACKLOG;
-CFS_MODULE_PARM(backlog, "i", int, 0444,
-		"passive connection (listen) backlog");
-
-static int port = RANAL_PORT;
-CFS_MODULE_PARM(port, "i", int, 0444,
-		"connection request TCP/IP port");
-
 static int max_immediate = RANAL_MAX_IMMEDIATE;
 CFS_MODULE_PARM(max_immediate, "i", int, 0644,
 		"immediate/RDMA breakpoint");
@@ -75,9 +63,6 @@ kra_tunables_t kranal_tunables = {
 	.kra_ntx_nblk               = &ntx_nblk,
 	.kra_fma_cq_size            = &fma_cq_size,
 	.kra_timeout                = &timeout,
-	.kra_listener_timeout       = &listener_timeout,
-	.kra_backlog                = &backlog,
-	.kra_port                   = &port,
 	.kra_max_immediate          = &max_immediate,
 };
 
@@ -97,13 +82,7 @@ static ctl_table kranal_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{7, "timeout", &timeout, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{8, "listener_timeout", &listener_timeout, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{9, "backlog", &backlog, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10, "port", &port, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{11, "max_immediate", &max_immediate, 
+	{8, "max_immediate", &max_immediate, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };

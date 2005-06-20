@@ -37,9 +37,9 @@ void ptl_assert_wire_constants (void)
          * with gcc version 3.3.3 20040412 (Red Hat Linux 3.3.3-7) */
 
         /* Constants... */
-        CLASSERT (PORTALS_PROTO_MAGIC == 0xeebc0ded);
-        CLASSERT (PORTALS_PROTO_VERSION_MAJOR == 1);
-        CLASSERT (PORTALS_PROTO_VERSION_MINOR == 0);
+        CLASSERT (PTL_PROTO_TCP_MAGIC == 0xeebc0ded);
+        CLASSERT (PTL_PROTO_TCP_VERSION_MAJOR == 1);
+        CLASSERT (PTL_PROTO_TCP_VERSION_MINOR == 0);
         CLASSERT (PTL_MSG_ACK == 0);
         CLASSERT (PTL_MSG_PUT == 1);
         CLASSERT (PTL_MSG_GET == 2);
@@ -559,6 +559,37 @@ ptl_net2ni (__u32 net)
 }
 
 int
+ptl_count_acceptor_nis (ptl_ni_t **first_ni)
+{
+        /* Return the # of NIs that need the acceptor.  Return the first one in
+         * *first_ni so the acceptor can pass it connections "blind" to retain
+         * binary compatibility. */
+        int                count = 0;
+        unsigned long      flags;
+        struct list_head  *tmp;
+        ptl_ni_t          *ni;
+
+        PTL_LOCK(flags);
+        list_for_each (tmp, &ptl_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+
+                if (ni->ni_nal->nal_accept != NULL) {
+                        /* This NAL uses the acceptor */
+                        if (count == 0 && first_ni != NULL) {
+                                ptl_ni_addref(ni);
+                                *first_ni = ni;
+                        }
+                        count++;
+                        break;
+                }
+        }
+        
+        PTL_UNLOCK(flags);
+        
+        return count;
+}
+
+int
 ptl_islocalnid (ptl_nid_t nid)
 {
         struct list_head *tmp;
@@ -848,6 +879,14 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
                 goto out;
         }
 
+        rc = ptl_acceptor_start();
+        if (rc != PTL_OK) {
+                ptl_shutdown_nalnis();
+                kpr_finalise();
+                ptl_apini_fini();
+                goto out;
+        }
+
         ptl_apini.apini_refcount = 1;
 
         memset (handle, 0, sizeof(*handle));
@@ -869,6 +908,7 @@ PtlNIFini(ptl_handle_ni_t ni)
 
         ptl_apini.apini_refcount--;
         if (ptl_apini.apini_refcount == 0) {
+                ptl_acceptor_stop();
                 ptl_shutdown_nalnis();
                 kpr_finalise();
                 ptl_apini_fini();

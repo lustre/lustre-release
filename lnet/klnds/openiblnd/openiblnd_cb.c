@@ -971,7 +971,7 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                 }
 
                 rc = kibnal_add_persistent_peer(nid, PTL_NIDADDR(nid),
-                                                *kibnal_tunables.kib_port);
+                                                ptl_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
                                libcfs_nid2str(nid), rc);
@@ -1717,8 +1717,8 @@ kibnal_connreq_done (kib_conn_t *conn, int status)
 }
 
 int
-kibnal_accept (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
-               kib_msg_t *msg, int nob)
+kibnal_accept_connreq (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
+                       kib_msg_t *msg, int nob)
 {
         kib_conn_t    *conn;
         kib_peer_t    *peer;
@@ -1943,8 +1943,8 @@ kibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                 /* Don't really know srcnid until successful unpack */
                 CDEBUG(D_NET, "REQ from ?"LPX64"?\n", msg->ibm_srcnid);
 
-                rc = kibnal_accept(&conn, cid, msg, 
-                                   req->remote_private_data_len);
+                rc = kibnal_accept_connreq(&conn, cid, msg, 
+                                           req->remote_private_data_len);
                 if (rc != 0) {
                         CERROR ("Can't accept ?"LPX64"?: %d\n",
                                 msg->ibm_srcnid, rc);

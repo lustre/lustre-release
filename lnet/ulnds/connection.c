@@ -213,9 +213,9 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
-        hmv->magic         = cpu_to_le32(PORTALS_PROTO_MAGIC);
-        hmv->version_major = cpu_to_le32(PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = cpu_to_le32(PORTALS_PROTO_VERSION_MINOR);
+        hmv->magic         = cpu_to_le32(PTL_PROTO_TCP_MAGIC);
+        hmv->version_major = cpu_to_le32(PTL_PROTO_TCP_VERSION_MAJOR);
+        hmv->version_minor = cpu_to_le32(PTL_PROTO_TCP_VERSION_MINOR);
         
         hdr.src_nid = cpu_to_le64(tcpnal_mynid);
         hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
@@ -238,25 +238,25 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
                 return (rc);
         }
         
-        if (hmv->magic != le32_to_cpu(PORTALS_PROTO_MAGIC)) {
+        if (hmv->magic != le32_to_cpu(PTL_PROTO_TCP_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        cpu_to_le32(hmv->magic), PORTALS_PROTO_MAGIC, *nid);
+                        cpu_to_le32(hmv->magic), PTL_PROTO_TCP_MAGIC, *nid);
                 return (-EPROTO);
         }
 
-        if (hmv->version_major != cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
-            hmv->version_minor != cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
+        if (hmv->version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
+            hmv->version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
                         " from "LPX64"\n",
                         le16_to_cpu (hmv->version_major),
                         le16_to_cpu (hmv->version_minor),
-                        PORTALS_PROTO_VERSION_MAJOR,
-                        PORTALS_PROTO_VERSION_MINOR,
+                        PTL_PROTO_TCP_VERSION_MAJOR,
+                        PTL_PROTO_TCP_VERSION_MINOR,
                         *nid);
                 return (-EPROTO);
         }
 
-#if (PORTALS_PROTO_VERSION_MAJOR != 1)
+#if (PTL_PROTO_TCP_VERSION_MAJOR != 1)
 # error "This code only understands protocol version 1.x"
 #endif
         /* version 1 sends magic/version as the dest_nid of a 'hello' header,

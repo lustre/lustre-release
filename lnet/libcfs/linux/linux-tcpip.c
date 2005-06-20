@@ -563,7 +563,7 @@ libcfs_sock_listen (struct socket **sockp,
 EXPORT_SYMBOL(libcfs_sock_listen);
 
 int
-libcfs_sock_accept (struct socket **newsockp, struct socket *sock, int bufsize)
+libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 {
 	wait_queue_t   wait;
 	struct socket *newsock;
@@ -598,12 +598,6 @@ libcfs_sock_accept (struct socket **newsockp, struct socket *sock, int bufsize)
 	if (rc != 0)
 		goto failed;
 
-        if (bufsize != 0) {
-                rc = libcfs_sock_setbuf(newsock, bufsize, bufsize);
-                if (rc != 0)
-                        goto failed;
-        }
-
 	*newsockp = newsock;
 	return 0;
 
@@ -623,7 +617,7 @@ libcfs_sock_abort_accept (struct socket *sock)
 EXPORT_SYMBOL(libcfs_sock_abort_accept);
 
 int
-libcfs_sock_connect (struct socket **sockp, int *fatal, int bufsize,
+libcfs_sock_connect (struct socket **sockp, int *fatal,
                      __u32 local_ip, int local_port,
                      __u32 peer_ip, int peer_port)
 {
@@ -633,12 +627,6 @@ libcfs_sock_connect (struct socket **sockp, int *fatal, int bufsize,
 	rc = libcfs_sock_create(sockp, fatal, local_ip, local_port);
 	if (rc != 0)
 		return rc;
-
-        if (bufsize != 0) {
-                rc = libcfs_sock_setbuf(*sockp, bufsize, bufsize);
-                if (rc != 0)
-                        goto failed;
-        }
 
         memset (&srvaddr, 0, sizeof (srvaddr));
         srvaddr.sin_family = AF_INET;

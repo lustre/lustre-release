@@ -34,6 +34,7 @@ ptl_nal_t kranal_nal = {
         .nal_send_pages = kranal_send_pages,
         .nal_recv       = kranal_recv,
         .nal_recv_pages = kranal_recv_pages,
+        .nal_accept     = kranal_accept,
 };
 
 kra_data_t              kranal_data;
@@ -59,16 +60,35 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, ptl_nid_t dstnid)
 }
 
 int
-kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int timeout)
+kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
 {
+        int         timeout = active ? *kranal_tunables.kra_timeout :
+                                        ptl_acceptor_timeout();
         int         rc;
 
-        rc = libcfs_sock_read(sock, connreq, sizeof(*connreq), timeout);
+        rc = libcfs_sock_read(sock, &connreq->racr_magic, 
+                              sizeof(connreq->racr_magic), timeout);
         if (rc != 0) {
                 CERROR("Read failed: %d\n", rc);
                 return rc;
         }
 
+        if (!active &&
+            connreq->racr_magic != RANAL_MSG_MAGIC &&
+            connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
+                /* Is this a generic acceptor connection request? */
+                rc = ptl_accept(sock, connreq->racr_magic, 0);
+                if (rc != PTL_OK)               /* nope */
+                        return -EPROTO;
+
+                rc = libcfs_sock_read(sock, &connreq->racr_magic,
+                                      sizeof(connreq->racr_magic), timeout);
+                if (rc != 0) {
+                        CERROR("Read failed: %d\n", rc);
+                        return rc;
+                }
+        }
+        
         if (connreq->racr_magic != RANAL_MSG_MAGIC) {
                 if (__swab32(connreq->racr_magic) != RANAL_MSG_MAGIC) {
                         CERROR("Unexpected magic %08x\n", connreq->racr_magic);
@@ -419,14 +439,7 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
                 return rc;
         }
 
-        if (peer_port >= 1024) {
-                CERROR("Refusing unprivileged connection from %u.%u.%u.%u/%d\n",
-                       HIPQUAD(peer_ip), peer_port);
-                return -ECONNREFUSED;
-        }
-
-        rc = kranal_recv_connreq(sock, &rx_connreq,
-                                 *kranal_tunables.kra_listener_timeout);
+        rc = kranal_recv_connreq(sock, &rx_connreq, 0);
         if (rc != 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rc);
@@ -471,39 +484,6 @@ kranal_passive_conn_handshake (struct socket *sock, ptl_nid_t *src_nidp,
 }
 
 int
-ranal_connect_sock(kra_peer_t *peer, struct socket **sockp)
-{
-        unsigned int        port;
-        int                 fatal;
-        int                 rc;
-
-        for (port = 1023; port >= 512; port--) {
-
-                rc = libcfs_sock_connect(sockp, &fatal,
-                                         2 * sizeof(kra_msg_t),
-                                         0, port, 
-                                         peer->rap_ip, peer->rap_port);
-                if (rc == 0)
-                        return 0;
-                
-                if (!fatal) {
-                        CDEBUG(D_NET, "Port %d already in use\n", port);
-                        continue;
-                }
-
-                CERROR("Can't connect port %d to %u.%u.%u.%u/%d: %d\n",
-                       port, HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                return rc;
-        }
-
-        /* all ports busy */
-        CERROR("Can't connect to %u.%u.%u.%u/%d: all ports busy\n",
-               HIPQUAD(peer->rap_ip), peer->rap_port);
-        return -EHOSTUNREACH;
-}
-
-
-int
 kranal_active_conn_handshake(kra_peer_t *peer,
                              ptl_nid_t *dst_nidp, kra_conn_t **connp)
 {
@@ -525,8 +505,9 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         kranal_pack_connreq(&connreq, conn, peer->rap_nid);
 
-        rc = ranal_connect_sock(peer, &sock);
-        if (rc != 0)
+        rc = ptl_connect(&sock, peer->rap_nid,
+                         0, peer->rap_ip, peer->rap_port);
+        if (rc != PTL_OK)
                 goto failed_0;
 
         /* CAVEAT EMPTOR: the passive side receives with a SHORT rx timeout
@@ -537,14 +518,14 @@ kranal_active_conn_handshake(kra_peer_t *peer,
         if (rc != 0) {
                 CERROR("Can't tx connreq to %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                goto failed_1;
+                goto failed_2;
         }
 
-        rc = kranal_recv_connreq(sock, &connreq, *kranal_tunables.kra_timeout);
+        rc = kranal_recv_connreq(sock, &connreq, 1);
         if (rc != 0) {
                 CERROR("Can't rx connreq from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port, rc);
-                goto failed_1;
+                goto failed_2;
         }
 
         libcfs_sock_release(sock);
@@ -555,7 +536,7 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                        "received "LPX64" expected "LPX64"\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port,
                        connreq.racr_srcnid, peer->rap_nid);
-                goto failed_0;
+                goto failed_1;
         }
 
         if (connreq.racr_devid != dev->rad_id) {
@@ -563,20 +544,23 @@ kranal_active_conn_handshake(kra_peer_t *peer,
                        "received %d expected %d\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port,
                        connreq.racr_devid, dev->rad_id);
-                goto failed_0;
+                goto failed_1;
         }
 
         rc = kranal_set_conn_params(conn, &connreq,
                                     peer->rap_ip, peer->rap_port);
         if (rc != 0)
-                goto failed_0;
+                goto failed_1;
 
         *connp = conn;
         *dst_nidp = connreq.racr_dstnid;
         return 0;
 
- failed_1:
+ failed_2:
         libcfs_sock_release(sock);
+ failed_1:
+        ptl_connect_console_error(rc, peer->rap_nid,
+                                  peer->rap_ip, peer->rap_port);
  failed_0:
         kranal_conn_decref(conn);
         return rc;
@@ -794,125 +778,34 @@ kranal_free_acceptsock (kra_acceptsock_t *ras)
         PORTAL_FREE(ras, sizeof(*ras));
 }
 
-int
-kranal_listener (void *arg)
+ptl_err_t
+kranal_accept (ptl_ni_t *ni, struct socket *sock)
 {
-        struct socket     *sock;
         kra_acceptsock_t  *ras;
-        int                port;
-        char               name[16];
         int                rc;
+        __u32              peer_ip;
+        int                peer_port;
         unsigned long      flags;
 
-        /* Parent thread is blocked or about to block on kra_listener_signal */
+        rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
+        LASSERT (rc == 0);                      /* we succeeded before */
 
-        port = *kranal_tunables.kra_port;
-        snprintf(name, sizeof(name), "kranal_lstn%03d", port);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
-
-        rc = libcfs_sock_listen(&sock, 0, port,
-                                *kranal_tunables.kra_backlog);
-        if (rc != 0)
-                goto out;
-
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-        kranal_data.kra_listener_sock = sock;
-
-        /* unblock waiting parent */
-        LASSERT (kranal_data.kra_listener_shutdown == 0);
-        up(&kranal_data.kra_listener_signal);
-
-        ras = NULL;
-
-        while (kranal_data.kra_listener_shutdown == 0) {
-
-                if (ras == NULL) {
-                        PORTAL_ALLOC(ras, sizeof(*ras));
-                        if (ras == NULL) {
-                                CERROR("ENOMEM: listener pausing\n");
-                                cfs_pause(cfs_time_seconds(1));
-                                continue;
-                        }
-                }
-
-                rc = libcfs_sock_accept(&ras->ras_sock, sock,
-                                        2 * sizeof(kra_msg_t));
-                if (rc != 0) {
-                        if (rc != -EAGAIN) {
-                                CWARN("Accept error: %d, listener pausing\n", rc);
-                                cfs_pause(cfs_time_seconds(1));
-                        }
-                        continue;
-                }
-
-                spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
-
-                list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
-
-                spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
-                wake_up(&kranal_data.kra_connd_waitq);
-
-                ras = NULL;
+        PORTAL_ALLOC(ras, sizeof(*ras));
+        if (ras == NULL) {
+                CERROR("ENOMEM allocating connection request from "
+                       "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+                return PTL_FAIL;
         }
 
-        if (ras != NULL)
-                PORTAL_FREE(ras, sizeof(*ras));
+        ras->ras_sock = sock;
 
-        rc = 0;
-        libcfs_sock_release(sock);
-        kranal_data.kra_listener_sock = NULL;
- out:
-        /* set completion status and unblock thread waiting for me
-         * (parent on startup failure, executioner on normal shutdown) */
-        kranal_data.kra_listener_shutdown = rc;
-        up(&kranal_data.kra_listener_signal);
+        spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
-        return 0;
-}
+        list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
+        wake_up(&kranal_data.kra_connd_waitq);
 
-int
-kranal_start_listener (void)
-{
-        long           pid;
-        int            rc;
-
-        CDEBUG(D_NET, "Starting listener\n");
-
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-
-        kranal_data.kra_listener_shutdown = 0;
-        pid = kernel_thread(kranal_listener, NULL, 0);
-        if (pid < 0) {
-                CERROR("Can't spawn listener: %ld\n", pid);
-                return (int)pid;
-        }
-
-        /* Block until listener has started up. */
-        down(&kranal_data.kra_listener_signal);
-
-        rc = kranal_data.kra_listener_shutdown;
-        LASSERT ((rc != 0) == (kranal_data.kra_listener_sock == NULL));
-
-        CDEBUG((rc == 0) ? D_NET : D_ERROR, "Listener startup rc: %d\n", rc);
-        return rc;
-}
-
-void
-kranal_stop_listener(void)
-{
-        CDEBUG(D_NET, "Stopping listener\n");
-
-        LASSERT (kranal_data.kra_listener_sock != NULL);
-
-        kranal_data.kra_listener_shutdown = 1;
-        libcfs_sock_abort_accept(kranal_data.kra_listener_sock);
-
-        /* Block until listener has torn down. */
-        down(&kranal_data.kra_listener_signal);
-
-        LASSERT (kranal_data.kra_listener_sock == NULL);
-        CDEBUG(D_NET, "Listener stopped\n");
+        spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+        return PTL_OK;
 }
 
 int
@@ -941,7 +834,7 @@ kranal_create_peer (kra_peer_t **peerp, ptl_nid_t nid)
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
-        if (kranal_data.kra_listener_shutdown) {
+        if (kranal_data.kra_nonewpeers) {
                 /* shutdown has started already */
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 
@@ -1469,9 +1362,11 @@ kranal_shutdown (ptl_ni_t *ni)
                 LBUG();
 
         case RANAL_INIT_ALL:
-                /* Stop listener and prevent new peers from being created */
-                kranal_stop_listener();
-
+                /* Prevent new peers from being created */
+                write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+                kranal_data.kra_nonewpeers = 1;
+                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+                
                 /* Remove all existing peers from the peer table */
                 kranal_del_peer(PTL_NID_ANY);
 
@@ -1612,8 +1507,6 @@ kranal_startup (ptl_ni_t *ni)
         kranal_data.kra_connstamp =
         kranal_data.kra_peerstamp = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
-        init_MUTEX_LOCKED(&kranal_data.kra_listener_signal);
-
         rwlock_init(&kranal_data.kra_global_lock);
 
         for (i = 0; i < RANAL_MAXDEVS; i++ ) {
@@ -1712,10 +1605,6 @@ kranal_startup (ptl_ni_t *ni)
                         goto failed;
                 }
         }
-
-        rc = kranal_start_listener();
-        if (rc != 0)
-                goto failed;
 
         /* flag everything initialised */
         kranal_data.kra_init = RANAL_INIT_ALL;

@@ -79,9 +79,6 @@
 #define IBNAL_CONCURRENT_PEERS       1024       /* # nodes all talking at once to me */
 #define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
 #define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
-#define IBNAL_LISTENER_TIMEOUT       5          /* default listener timeout (seconds) */
-#define IBNAL_BACKLOG                127        /* default listener backlog */
-#define IBNAL_PORT                   986        /* default listener port */
 #define IBNAL_NTX                    64         /* # tx descs */
 #define IBNAL_NTX_NBLK               256        /* # reserved tx descs */
 
@@ -127,9 +124,6 @@ typedef struct
         int      *kib_concurrent_peers;         /* max # peers */
         int      *kib_cksum;                    /* checksum kib_msg_t? */
         int      *kib_timeout;                  /* comms timeout (seconds) */
-        int      *kib_listener_timeout;         /* listener's timeout */
-        int      *kib_backlog;                  /* listenter's accept backlog */
-        int      *kib_port;                     /* where the listener listens */
         int      *kib_ntx;                      /* # tx descs */
         int      *kib_ntx_nblk;                 /* # reserved tx descs */
 
@@ -159,16 +153,13 @@ typedef struct
         tTS_IB_GID        kib_svc_gid;          /* device/port GID */
         __u16             kib_svc_pkey;         /* device/port pkey */
         
-        struct semaphore  kib_nid_mutex;        /* serialise NID ops */
-        struct semaphore  kib_listener_signal;  /* signal IP listener completion */
-        struct socket    *kib_listener_sock;    /* IP listener's socket */
-        int               kib_listener_shutdown; /* ask IP listener to close */
         void             *kib_listen_handle;    /* IB listen handle */
         
         rwlock_t          kib_global_lock;      /* stabilize peer/conn ops */
 
         struct list_head *kib_peers;            /* hash table of all my known peers */
         int               kib_peer_hash_size;   /* size of kib_peers */
+        int               kib_nonewpeers;       /* prevent new peers? */
         atomic_t          kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
@@ -215,8 +206,7 @@ typedef struct
 #define IBNAL_INIT_FMR             4
 #define IBNAL_INIT_TXD             5
 #define IBNAL_INIT_CQ              6
-#define IBNAL_INIT_IB              7
-#define IBNAL_INIT_ALL             8
+#define IBNAL_INIT_ALL             7
 
 typedef struct kib_acceptsock                   /* accepted socket queued for connd */
 {
@@ -303,7 +293,7 @@ typedef struct
         }                    ibm_u;
 } kib_msg_t;
 
-#define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
+#define IBNAL_MSG_MAGIC  PTL_PROTO_OPENIB_MAGIC /* unique magic */
 #define IBNAL_MSG_VERSION              2        /* current protocol version */
 
 #define IBNAL_MSG_SVCQRY            0xb0        /* service query */
@@ -534,6 +524,7 @@ ptl_err_t kibnal_recv_pages(ptl_ni_t *ni, void *private,
                             ptl_msg_t *ptlmsg, unsigned int niov,
                             ptl_kiov_t *kiov, size_t offset,
                             size_t mlen, size_t rlen);
+ptl_err_t kibnal_accept(ptl_ni_t *ni, struct socket *sock);
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
 extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 

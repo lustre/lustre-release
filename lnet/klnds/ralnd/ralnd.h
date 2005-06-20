@@ -71,9 +71,6 @@
 #define RANAL_FMA_CQ_SIZE         8192          /* # entries in receive CQ
                                                  * (overflow is a performance hit) */
 #define RANAL_TIMEOUT             30            /* comms timeout (seconds) */
-#define RANAL_LISTENER_TIMEOUT    5             /* listener timeout (seconds) */
-#define RANAL_BACKLOG             127           /* listener's backlog */
-#define RANAL_PORT                987           /* listener's port */
 #define RANAL_MAX_IMMEDIATE      (2<<10)        /* immediate payload breakpoint */
 
 /* tunables determined at compile time */
@@ -100,9 +97,6 @@ typedef struct
         int              *kra_ntx_nblk;         /* # reserved tx descs */
         int              *kra_fma_cq_size;      /* # entries in receive CQ */
         int              *kra_timeout;          /* comms timeout (seconds) */
-        int              *kra_listener_timeout; /* max time the listener can block */
-        int              *kra_backlog;          /* listener's backlog */
-        int              *kra_port;             /* listener's TCP/IP port */
         int              *kra_max_immediate;    /* immediate payload breakpoint */
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -136,10 +130,6 @@ typedef struct
         atomic_t          kra_nthreads;         /* # live threads */
         ptl_ni_t         *kra_ni;               /* _the_ nal instance */
         
-        struct semaphore  kra_listener_signal;  /* block for listener startup/shutdown */
-        struct socket    *kra_listener_sock;    /* listener's socket */
-        int               kra_listener_shutdown; /* ask listener to close */
-
         kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq etc */
         int               kra_ndevs;            /* # devices */
 
@@ -148,6 +138,7 @@ typedef struct
         struct list_head *kra_peers;            /* hash table of all my known peers */
         int               kra_peer_hash_size;   /* size of kra_peers */
         atomic_t          kra_npeers;           /* # peers extant */
+        int               kra_nonewpeers;       /* prevent new peers */
 
         struct list_head *kra_conns;            /* conns hashed by cqid */
         int               kra_conn_hash_size;   /* size of kra_conns */
@@ -255,7 +246,7 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
         __u32             ram_seq;              /* incrementing sequence number */
 } kra_msg_t;
 
-#define RANAL_MSG_MAGIC       0x0be91b92        /* unique magic */
+#define RANAL_MSG_MAGIC      PTL_PROTO_RA_MAGIC /* unique magic */
 #define RANAL_MSG_VERSION              1        /* current protocol version */
 
 #define RANAL_MSG_FENCE             0x80        /* fence RDMA */
@@ -478,6 +469,7 @@ ptl_err_t kranal_recv_pages(ptl_ni_t *ni, void *private,
                             ptl_msg_t *ptlmsg, unsigned int niov,
                             ptl_kiov_t *kiov, size_t offset,
                             size_t mlen, size_t rlen);
+ptl_err_t kranal_accept(ptl_ni_t *ni, struct socket *sock);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table,

@@ -539,7 +539,7 @@ kibnal_del_peer_locked (kib_peer_t *peer)
 }
 
 int
-kibnal_del_peer (ptl_nid_t)
+kibnal_del_peer (ptl_nid_t nid)
 {
         unsigned long      flags;
         struct list_head  *ptmp;
@@ -925,7 +925,7 @@ kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 
         LASSERT (ni == kibnal_data.kib_ni);
 
-        switch(data->ioc_command) {
+        switch(cmd) {
         case IOC_PORTAL_GET_PEER: {
                 ptl_nid_t   nid = 0;
                 int         share_count = 0;

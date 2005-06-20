@@ -498,7 +498,7 @@ kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
                 }
 
                 rc = kranal_add_persistent_peer(nid, PTL_NIDADDR(nid),
-                                                *kranal_tunables.kra_port);
+                                                ptl_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
                                libcfs_nid2str(nid), rc);

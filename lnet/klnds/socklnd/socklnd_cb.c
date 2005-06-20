@@ -747,8 +747,8 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
                         return -EHOSTUNREACH;
                 }
                 
-                rc = ksocknal_add_peer(ni, nid, PTL_NIDADDR(nid),
-                                       *ksocknal_tunables.ksnd_port);
+                rc = ksocknal_add_peer(ni, nid, 
+                                       PTL_NIDADDR(nid), ptl_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
                                libcfs_nid2str(nid), rc);
@@ -1692,9 +1692,9 @@ ksocknal_send_hello (ksock_conn_t *conn,
         LASSERT (!conn->ksnc_closing);
 
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
-        hmv->magic         = cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major = cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor = cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
+        hmv->magic         = cpu_to_le32 (PTL_PROTO_TCP_MAGIC);
+        hmv->version_major = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR);
+        hmv->version_minor = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR);
 
         hdr.src_nid        = cpu_to_le64 (srcnid);
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
@@ -1746,10 +1746,11 @@ ksocknal_invert_type(int type)
 
 int
 ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
-                     __u64 *incarnation, __u32 *ipaddrs,
-                     int timeout)
+                     __u64 *incarnation, __u32 *ipaddrs)
 {
         struct socket      *sock = conn->ksnc_sock;
+        int                 active;
+        int                 timeout;
         int                 rc;
         int                 nips;
         int                 i;
@@ -1757,36 +1758,65 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv;
 
+        active = (*nid != PTL_NID_ANY);
+        timeout = active ? *ksocknal_tunables.ksnd_timeout :
+                            ptl_acceptor_timeout();
+
         hmv = (ptl_magicversion_t *)&hdr.dest_nid;
         LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
-        rc = libcfs_sock_read(sock, hmv, sizeof (*hmv), timeout);
+        rc = libcfs_sock_read(sock, &hmv->magic, sizeof (hmv->magic), timeout);
         if (rc != 0) {
                 CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
                         rc, HIPQUAD(conn->ksnc_ipaddr));
                 return (rc);
         }
 
-        if (hmv->magic != le32_to_cpu (PORTALS_PROTO_MAGIC)) {
+        if (!active && 
+            hmv->magic != le32_to_cpu (PTL_PROTO_TCP_MAGIC)) {
+                /* Is this a generic acceptor connection request? */
+                rc = ptl_accept(sock, hmv->magic, 0);
+                if (rc != PTL_OK)
+                        return -EPROTO;
+
+                /* Yes it is! Start over again now I've skipping it. */
+                rc = libcfs_sock_read(sock, &hmv->magic, 
+                                      sizeof (hmv->magic), timeout);
+                if (rc != 0) {
+                        CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
+                                rc, HIPQUAD(conn->ksnc_ipaddr));
+                        return (rc);
+                }
+        }
+        
+        if (hmv->magic != le32_to_cpu (PTL_PROTO_TCP_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from %u.%u.%u.%u\n",
-                        __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC,
+                        __cpu_to_le32 (hmv->magic), PTL_PROTO_TCP_MAGIC,
                         HIPQUAD(conn->ksnc_ipaddr));
                 return (-EPROTO);
         }
 
-        if (hmv->version_major != cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
-            hmv->version_minor != cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
+        rc = libcfs_sock_read(sock, &hmv->magic + 1,
+                              sizeof(*hmv) - sizeof(hmv->magic), timeout);
+        if (rc != 0) {
+                CERROR ("Error %d reading HELLO from %u.%u.%u.%u\n",
+                        rc, HIPQUAD(conn->ksnc_ipaddr));
+                return (rc);
+        }
+        
+        if (hmv->version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
+            hmv->version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
                         " from %u.%u.%u.%u\n",
                         le16_to_cpu (hmv->version_major),
                         le16_to_cpu (hmv->version_minor),
-                        PORTALS_PROTO_VERSION_MAJOR,
-                        PORTALS_PROTO_VERSION_MINOR,
+                        PTL_PROTO_TCP_VERSION_MAJOR,
+                        PTL_PROTO_TCP_VERSION_MINOR,
                         HIPQUAD(conn->ksnc_ipaddr));
                 return (-EPROTO);
         }
 
-#if (PORTALS_PROTO_VERSION_MAJOR != 1)
+#if (PTL_PROTO_TCP_VERSION_MAJOR != 1)
 # error "This code only understands protocol version 1.x"
 #endif
         /* version 1 sends magic/version as the dest_nid of a 'hello'
@@ -1816,7 +1846,7 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
                 return (-EPROTO);
         }
 
-        if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
+        if (!active) {                          /* don't know peer's nid yet */
                 *nid = le64_to_cpu(hdr.src_nid);
         } else if (*nid != le64_to_cpu (hdr.src_nid)) {
                 LCONSOLE_ERROR("Connected successfully to nid %s on host "
@@ -1887,33 +1917,6 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         return (nips);
 }
 
-int
-ksocknal_connect_peer (ksock_route_t *route, int type)
-{
-        struct socket      *sock;
-        int                 rc;
-        int                 port;
-        int                 fatal;
-        
-        for (port = 1023; port > 512; --port) {
-                /* Iterate through reserved ports. */
-
-                rc = libcfs_sock_connect(&sock, &fatal, 0,
-                                         route->ksnr_myipaddr, port,
-                                         route->ksnr_ipaddr, route->ksnr_port);
-                if (rc == 0) {
-                        rc = ksocknal_create_conn(route, sock, type);
-                        return rc;
-                }
-
-                if (fatal)
-                        return rc;
-        }
-
-        CERROR("Out of ports trying to bind to a reserved port\n");
-        return (-EADDRINUSE);
-}
-
 void
 ksocknal_connect (ksock_route_t *route)
 {
@@ -1922,6 +1925,7 @@ ksocknal_connect (ksock_route_t *route)
         ksock_peer_t     *peer;
         unsigned long     flags;
         int               type;
+        struct socket    *sock;
         int               rc = 0;
 
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
@@ -1945,10 +1949,20 @@ ksocknal_connect (ksock_route_t *route)
 
                 write_unlock_irqrestore(&ksocknal_data.ksnd_global_lock, flags);
 
-                rc = ksocknal_connect_peer (route, type);
-                if (rc != 0)
+                rc = ptl_connect(&sock, route->ksnr_peer->ksnp_nid,
+                                 route->ksnr_myipaddr, 
+                                 route->ksnr_ipaddr, route->ksnr_port);
+                if (rc != PTL_OK)
                         goto failed;
 
+                rc = ksocknal_create_conn(route, sock, type);
+                if (rc != 0) {
+                        ptl_connect_console_error(rc, route->ksnr_peer->ksnp_nid,
+                                                  route->ksnr_ipaddr, 
+                                                  route->ksnr_port);
+                        goto failed;
+                }
+                
                 write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
         }
 
@@ -1958,46 +1972,6 @@ ksocknal_connect (ksock_route_t *route)
         return;
 
  failed:
-        switch (rc) {
-        /* "normal" errors */
-        case -ECONNREFUSED:
-                LCONSOLE_ERROR("Connection was refused by host %u.%u.%u.%u on "
-                               "port %d; check that Lustre is running on that "
-                               "node.\n",
-                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-                break;
-        case -EHOSTUNREACH:
-        case -ENETUNREACH:
-                LCONSOLE_ERROR("Host %u.%u.%u.%u was unreachable; the network "
-                               "or that node may be down, or Lustre may be "
-                               "misconfigured.\n",
-                               HIPQUAD(route->ksnr_ipaddr));
-                break;
-        case -ETIMEDOUT:
-                LCONSOLE_ERROR("Connecting to host %u.%u.%u.%u on port %d took "
-                               "too long; that node may be hung or "
-                               "experiencing high load.\n",
-                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-                break;
-        /* errors that should be rare */
-        case -EPROTO:
-                LCONSOLE_ERROR("Protocol error connecting to host %u.%u.%u.%u "
-                               "on port %d: Is it running a compatible version"
-                               " of Lustre?\n", 
-                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-                break;
-        case -EADDRINUSE:
-                LCONSOLE_ERROR("No privileged ports available to connect to "
-                               "host %u.%u.%u.%u on port %d\n",
-                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-                break;
-        default:
-                LCONSOLE_ERROR("Unexpected error %d connecting to "
-                               "host %u.%u.%u.%u on port %d\n", rc,
-                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
-                break;
-        }
-
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
         peer = route->ksnr_peer;

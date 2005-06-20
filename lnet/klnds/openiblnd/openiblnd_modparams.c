@@ -47,18 +47,6 @@ static int timeout = IBNAL_TIMEOUT;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
 		"timeout (seconds)");
 
-static int listener_timeout = IBNAL_LISTENER_TIMEOUT;
-CFS_MODULE_PARM(listener_timeout, "i", int, 0644,
-		"passive connection timeout (seconds)");
-
-static int backlog = IBNAL_BACKLOG;
-CFS_MODULE_PARM(backlog, "i", int, 0444,
-		"passive connection (listen) backlog");
-
-static int port = IBNAL_PORT;
-CFS_MODULE_PARM(port, "i", int, 0444,
-		"connection request TCP/IP port");
-
 static int ntx = IBNAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
 		"# of 'normal' message descriptors");
@@ -74,9 +62,6 @@ kib_tunables_t kibnal_tunables = {
         .kib_concurrent_peers       = &concurrent_peers,
 	.kib_cksum                  = &cksum,
         .kib_timeout                = &timeout,
-        .kib_listener_timeout       = &listener_timeout,
-	.kib_backlog                = &backlog,
-	.kib_port                   = &port,
         .kib_ntx                    = &ntx,
         .kib_ntx_nblk               = &ntx_nblk,
 };
@@ -96,15 +81,9 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{6, "timeout", &timeout, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{7, "listener_timeout", &listener_timeout, 
-	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{8, "backlog", &backlog, 
+	{7, "ntx", &ntx, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "port", &port, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10, "ntx", &ntx, 
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{11, "ntx_nblk", &ntx_nblk, 
+	{8, "ntx_nblk", &ntx_nblk, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{0}
 };

@@ -15,16 +15,7 @@ ksocknal_lib_tunables_init ()
 	int    j = 1;
 	
         ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "port", ksocknal_tunables.ksnd_port, 
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "backlog", ksocknal_tunables.ksnd_backlog, 
-		 sizeof (int), 0444, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "timeout", ksocknal_tunables.ksnd_timeout, 
-		 sizeof (int), 0644, NULL, &proc_dointvec};
-        ksocknal_ctl_table[i++] = (ctl_table)
-		{j++, "listen_timeout", ksocknal_tunables.ksnd_listen_timeout, 
 		 sizeof (int), 0644, NULL, &proc_dointvec};
         ksocknal_ctl_table[i++] = (ctl_table)
 		{j++, "nconnds", ksocknal_tunables.ksnd_nconnds, 

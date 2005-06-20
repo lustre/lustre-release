@@ -45,10 +45,7 @@
 #include <portals/socknal.h>
 
 /* default vals for tunables/modparams */
-#define SOCKNAL_PORT             988            /* the socknal service # */
-#define SOCKNAL_BACKLOG          127            /* listen backlog */
 #define SOCKNAL_TIMEOUT          50             /* default comms timeout (seconds) */
-#define SOCKNAL_LISTEN_TIMEOUT   10             /* default listener timeout (seconds) */
 #define SOCKNAL_NCONND           4              /* # socknal connection daemons */
 #define SOCKNAL_MIN_RECONNECTMS  1000           /* first connection retry after (mS)... */
 #define SOCKNAL_MAX_RECONNECTMS  60000          /* ...exponentially increasing to this */
@@ -133,10 +130,7 @@ typedef struct                                  /* in-use interface */
 
 typedef struct
 {
-        int              *ksnd_port;            /* the socknal service # */
-        int              *ksnd_backlog;         /* listen backlog */
         int              *ksnd_timeout;         /* "stuck" socket timeout (seconds) */
-        int              *ksnd_listen_timeout;  /* passive connection timeout */
         int              *ksnd_nconnds;         /* # connection daemons */
         int              *ksnd_min_reconnectms; /* first connection retry after (ms)... */
         int              *ksnd_max_reconnectms; /* ...exponentially increasing to this */
@@ -174,10 +168,6 @@ typedef struct
         int               ksnd_init;            /* initialisation state */
         int               ksnd_nnets;           /* # networks set up */
 
-        int               ksnd_listener_shutdown; /* listener start/stop/rc */
-        struct socket    *ksnd_listener_sock;   /* listener's socket */
-        struct semaphore  ksnd_listener_signal; /* parent waits here */
-        
         rwlock_t          ksnd_global_lock;     /* stabilize peer/conn ops */
         struct list_head *ksnd_peers;           /* hash table of all my known peers */
         int               ksnd_peer_hash_size;  /* size of ksnd_peers */
@@ -507,7 +497,7 @@ ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
                               ptl_msg_t *ptlmsg, unsigned int niov,
                               ptl_kiov_t *kiov, size_t offset,
                               size_t mlen, size_t rlen);
-
+ptl_err_t ksocknal_accept(ptl_ni_t *ni, struct socket *sock);
 
 extern int ksocknal_add_peer(ptl_ni_t *ni, ptl_nid_t nid, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, ptl_nid_t nid);
@@ -535,8 +525,7 @@ extern int ksocknal_reaper (void *arg);
 extern int ksocknal_send_hello (ksock_conn_t *conn, ptl_nid_t nid,
                                 __u64 incarnation, __u32 *ipaddrs, int nipaddrs);
 extern int ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid, 
-                                __u64 *incarnation, __u32 *ipaddrs,
-                                int timeout);
+                                __u64 *incarnation, __u32 *ipaddrs);
 
 extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);
