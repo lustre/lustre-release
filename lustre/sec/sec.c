@@ -164,14 +164,24 @@ int ptlrpcs_cred_unlink_expired(struct ptlrpc_cred *cred,
 {
         LASSERT(cred->pc_sec);
 
+        /* only unlink non-busy entries */
         if (atomic_read(&cred->pc_refcount) != 0)
                 return 0;
+        /* expire is 0 means never expire. a newly created gss cred
+         * which during upcall also has 0 expiration
+         */
+        if (cred->pc_expire == 0)
+                return 0;
+        /* check real expiration */
         if (time_after(cred->pc_expire, get_seconds()))
                 return 0;
 
+        LASSERT((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
+                PTLRPC_CRED_UPTODATE);
+        CWARN("cred %p: get expired, unlink\n", cred);
+
         list_del(&cred->pc_hash);
         list_add(&cred->pc_hash, freelist);
-        CDEBUG(D_SEC, "put cred %p into freelist\n", cred);
         return 1;
 }
 
@@ -187,6 +197,11 @@ void ptlrpcs_credcache_gc(struct ptlrpc_sec *sec,
         for (i = 0; i < PTLRPC_CREDCACHE_NR; i++) {
                 list_for_each_entry_safe(cred, n, &sec->ps_credcache[i],
                                          pc_hash) {
+                        if (cred->pc_flags & (PTLRPC_CRED_DEAD |
+                                              PTLRPC_CRED_ERROR)) {
+                                LASSERT(atomic_read(&cred->pc_refcount));
+                                continue;
+                        }
                         ptlrpcs_cred_unlink_expired(cred, freelist);
                 }
         }
@@ -254,8 +269,13 @@ retry:
                 ptlrpcs_credcache_gc(sec, &freelist);
 
         list_for_each_entry_safe(cred, n, &sec->ps_credcache[hash], pc_hash) {
-                if (cred->pc_flags & PTLRPC_CRED_DEAD)
+                /* for DEAD and ERROR entries, its final put will
+                 * release them, so we simply skip here.
+                 */
+                if (cred->pc_flags & (PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR)) {
+                        LASSERT(atomic_read(&cred->pc_refcount));
                         continue;
+                }
                 if (ptlrpcs_cred_unlink_expired(cred, &freelist))
                         continue;
                 if (cred->pc_ops->match(cred, vcred)) {
@@ -305,23 +325,29 @@ struct ptlrpc_cred * ptlrpcs_cred_lookup(struct ptlrpc_sec *sec,
         RETURN(cred);
 }
 
-int ptlrpcs_req_get_cred(struct ptlrpc_request *req)
+static struct ptlrpc_cred *get_cred(struct ptlrpc_sec *sec)
 {
-        struct obd_import *imp = req->rq_import;
         struct vfs_cred vcred;
-        ENTRY;
 
-        LASSERT(!req->rq_cred);
-        LASSERT(imp);
-        LASSERT(imp->imp_sec);
-
+        LASSERT(sec);
         /* XXX
          * for now we simply let PAG == real uid
          */
         vcred.vc_pag = (__u64) current->uid;
         vcred.vc_uid = current->uid;
 
-        req->rq_cred = cred_cache_lookup(imp->imp_sec, &vcred, 1);
+        return cred_cache_lookup(sec, &vcred, 1);
+}
+
+int ptlrpcs_req_get_cred(struct ptlrpc_request *req)
+{
+        struct obd_import *imp = req->rq_import;
+        ENTRY;
+
+        LASSERT(!req->rq_cred);
+        LASSERT(imp);
+
+        req->rq_cred = get_cred(imp->imp_sec);
 
         if (!req->rq_cred) {
                 CERROR("req %p: fail to get cred from cache\n", req);
@@ -329,6 +355,52 @@ int ptlrpcs_req_get_cred(struct ptlrpc_request *req)
         }
 
         RETURN(0);
+}
+
+/*
+ * check whether current user have valid credential for an import or not.
+ * might repeatedly try in case of non-fatal errors.
+ * return 0 on success, 1 on failure
+ */
+int ptlrpcs_check_cred(struct obd_import *imp)
+{
+        struct ptlrpc_cred *cred;
+        ENTRY;
+
+again:
+        cred = get_cred(imp->imp_sec);
+        if (!cred)
+                RETURN(0);
+
+        if (ptlrpcs_cred_is_uptodate(cred)) {
+                if (!ptlrpcs_cred_check_expire(cred)) {
+                        ptlrpcs_cred_put(cred, 1);
+                        RETURN(0);
+                } else {
+                        ptlrpcs_cred_put(cred, 1);
+                        goto again;
+                }
+        }
+
+        ptlrpcs_cred_refresh(cred);
+        if (ptlrpcs_cred_is_uptodate(cred)) {
+                ptlrpcs_cred_put(cred, 1);
+                RETURN(0);
+        }
+
+        if (cred->pc_flags & PTLRPC_CRED_ERROR ||
+            !imp->imp_replayable) {
+                ptlrpcs_cred_put(cred, 1);
+                RETURN(1);
+        }
+
+        ptlrpcs_cred_put(cred, 1);
+
+        if (signal_pending(current)) {
+                CWARN("%s: interrupted\n", current->comm);
+                RETURN(1);
+        }
+        goto again;
 }
 
 static void ptlrpcs_sec_destroy(struct ptlrpc_sec *sec);
@@ -342,8 +414,8 @@ void ptlrpcs_cred_put(struct ptlrpc_cred *cred, int sync)
         LASSERT(atomic_read(&cred->pc_refcount));
 
         spin_lock(&sec->ps_lock);
-        if (atomic_dec_and_test(&cred->pc_refcount) &&
-            sync && cred->pc_flags & PTLRPC_CRED_DEAD) {
+        if (atomic_dec_and_test(&cred->pc_refcount) && sync &&
+            cred->pc_flags & (PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR)) {
                 list_del_init(&cred->pc_hash);
                 ptlrpcs_cred_destroy(cred);
                 if (!atomic_read(&sec->ps_credcount) &&
@@ -417,8 +489,10 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
 
         LASSERT(cred);
 
-        if (ptlrpcs_cred_is_uptodate(cred))
-                RETURN(0);
+        if (ptlrpcs_cred_is_uptodate(cred)) {
+                if (!ptlrpcs_cred_check_expire(cred))
+                        RETURN(0);
+        }
 
         if (cred->pc_flags & PTLRPC_CRED_ERROR) {
                 req->rq_ptlrpcs_err = 1;
@@ -435,6 +509,7 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
                         LASSERT(cred == req->rq_cred);
                         CERROR("req %p: failed to replace dead cred %p\n",
                                 req, cred);
+                        req->rq_ptlrpcs_err = 1;
                         RETURN(-ENOMEM);
                 }
         }
@@ -911,6 +986,7 @@ EXPORT_SYMBOL(ptlrpcs_req_get_cred);
 EXPORT_SYMBOL(ptlrpcs_req_drop_cred);
 EXPORT_SYMBOL(ptlrpcs_req_replace_dead_cred);
 EXPORT_SYMBOL(ptlrpcs_req_refresh_cred);
+EXPORT_SYMBOL(ptlrpcs_check_cred);
 EXPORT_SYMBOL(ptlrpcs_cli_alloc_reqbuf);
 EXPORT_SYMBOL(ptlrpcs_cli_free_reqbuf);
 EXPORT_SYMBOL(ptlrpcs_cli_alloc_repbuf);

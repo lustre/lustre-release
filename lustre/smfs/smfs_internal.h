@@ -55,7 +55,7 @@ struct smfs_control_device {
 #define INODE_OPS_CHECK          0x2
 #define FILE_OPS_CHECK           0x4
 #define DENTRY_OPS_CHECK         0x8
-#define DEV_OPS_CHECK            0x10
+#define SPECIAL_OPS_CHECK        0x10
 #define SYMLINK_OPS_CHECK        0x20
 #define DIR_OPS_CHECK            0x40
 
@@ -98,6 +98,7 @@ extern struct file_operations smfs_iopen_fops;
 /*file.c*/
 extern struct inode_operations smfs_file_iops;
 extern struct file_operations  smfs_file_fops;
+extern struct inode_operations smfs_special_iops;
 extern int smfs_ioctl(struct inode * inode, struct file * filp,
                       unsigned int cmd, unsigned long arg);
 extern int smfs_fsync(struct file * file, struct dentry *dentry, int datasync);
@@ -108,6 +109,7 @@ extern int smfs_getxattr(struct dentry *dentry, const char *name, void *buffer,
                          size_t size);
 extern ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size);
 extern int smfs_removexattr(struct dentry *dentry, const char *name);
+extern int smfs_permission(struct inode *inode, int mask, struct nameidata *nd);
 extern int smfs_open(struct inode * inode, struct file * filp);
 extern int smfs_release(struct inode * inode, struct file * filp);
 /*inode.c*/

@@ -200,8 +200,10 @@ only need to verify that ACL permissions make a difference.
 	$ su bin
 	$ echo e/*
 	> e/h
-	$ echo i > e/i
-	> e/i: Permission denied
+following 2 lines seems not valid, which also failed on ext3 in FC3 enviroment,
+although it pass in FC2. commented out by CFS (agreed with HP)
+#	$ echo i > e/i
+#	> e/i: Permission denied
 
 	$ su
 	$ setfacl -m u:bin:rwx e

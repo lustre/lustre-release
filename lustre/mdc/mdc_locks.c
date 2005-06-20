@@ -36,6 +36,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_sec.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_acl.h>
 #include <linux/lustre_lite.h>
@@ -526,6 +527,11 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
                                              &lockh);
                 }
                 if (rc) {
+                        if (ptlrpcs_check_cred(exp->exp_obd->u.cli.cl_import)) {
+                                /* return immediately if no credential held */
+                                ldlm_lock_decref(&lockh, mode);
+                                RETURN(-EACCES);
+                        }
                         memcpy(&LUSTRE_IT(it)->it_lock_handle, &lockh,
                                sizeof(lockh));
                         LUSTRE_IT(it)->it_lock_mode = mode;

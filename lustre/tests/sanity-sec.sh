@@ -18,6 +18,7 @@ export SECURITY=${SECURITY:-"null"}
 
 TMP=${TMP:-/tmp}
 FSTYPE=${FSTYPE:-ext3}
+NETTYPE=${NETTYPE:-tcp}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -36,22 +37,13 @@ SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
+RUNAS=${RUNAS:-"runas"}
 
 . krb5_env.sh
 
 if [ $UID -ne 0 ]; then
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-fi
-
-if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
-    start_krb5_kdc || exit 1
-    if [ $RUNAS_ID -ne $UID ]; then
-        $RUNAS ./krb5_refresh_cache.sh || exit 2
-    fi
+    echo "Must be run as root"
+    exit 1
 fi
 
 export NAME=${NAME:-local}
@@ -209,8 +201,8 @@ EOF
 
 mynidstr(){
         lctl << EOF
-        network tcp
-        mynid
+        network $NETTYPE
+        shownid
         quit
 EOF
 }
@@ -218,7 +210,7 @@ EOF
 test_1(){
         mdsnum=`mdsdevice|awk ' $3=="mds" {print $1}'`
 	if [ ! -z "$mdsnum" ];then
-        mynid=`mynidstr|awk '{print $4}'`
+        mynid=`mynidstr`
         mkdir $DIR/test_0a_dir1
         touch $DIR/test_0a_file1
         ln -s $DIR/test_0a_file1 $DIR/test_0a_filelink1
@@ -307,17 +299,30 @@ run_acl_subtest()
 }
 
 test_3 () {
-        SAVE_UMASK=`umask`
-        cd $DIR
+    # acl tests are using user "bin" and "daemon", which uid are 1 and 2
+    # in most distributions
+    if [ `using_krb5_sec $SECURITY` == 'y' ] ; then
+        $RUNAS -u 1 ./krb5_refresh_cache.sh || exit 20
+        $RUNAS -u 2 ./krb5_refresh_cache.sh || exit 21
+    fi
 
-        run_acl_subtest cp || return 1
-        run_acl_subtest getfacl-noacl || return 2
-        run_acl_subtest misc || return 3
-        run_acl_subtest permissions || return 4
-        run_acl_subtest setfacl || return 5
+    SAVE_UMASK=`umask`
+    cd $DIR
 
-        cd $SAVED_PWD
-        umask $SAVE_UMASK
+    run_acl_subtest cp || return 1
+    run_acl_subtest getfacl-noacl || return 2
+    run_acl_subtest misc || return 3
+    run_acl_subtest permissions || return 4
+    run_acl_subtest setfacl || return 5
+
+    # inheritance test got from HP
+    cp $SAVE_PWD/acl/make-tree . || return 6
+    chmod +x make-tree || return 7
+    run_acl_subtest inheritance || return 8
+    rm -f make-tree
+
+    cd $SAVED_PWD
+    umask $SAVE_UMASK
 }
 run_test 3 "==============acl test ============="
 

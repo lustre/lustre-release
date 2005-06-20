@@ -50,6 +50,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_sec.h>
 #include "llite_internal.h"
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
@@ -249,6 +250,12 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
                 if (rc < 0) {
                         CERROR("lock enqueue: rc: %d\n", rc);
                         return ERR_PTR(rc);
+                }
+        } else {
+                if (ptlrpcs_check_cred(obddev->u.cli.cl_import)) {
+                        /* return immediately if no credential held */
+                        ldlm_lock_decref(&lockh, LCK_PR);
+                        return ERR_PTR(-EACCES);
                 }
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);

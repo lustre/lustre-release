@@ -769,26 +769,27 @@ exit:
 }
 
 struct inode_operations smfs_dir_iops = {
-        create:         smfs_create,
-        lookup:         smfs_lookup,
+        .create         = smfs_create,
+        .lookup         = smfs_lookup,
 #if HAVE_LOOKUP_RAW
-        lookup_raw:     smfs_lookup_raw,
+        .lookup_raw     = smfs_lookup_raw,
 #endif
-        link:           smfs_link,              /* BKL held */
-        unlink:         smfs_unlink,            /* BKL held */
-        symlink:        smfs_symlink,           /* BKL held */
-        mkdir:          smfs_mkdir,             /* BKL held */
-        rmdir:          smfs_rmdir,             /* BKL held */
-        mknod:          smfs_mknod,             /* BKL held */
-        rename:         smfs_rename,            /* BKL held */
-        setxattr:       smfs_setxattr,          /* BKL held */
-        getxattr:       smfs_getxattr,          /* BKL held */
-        listxattr:      smfs_listxattr,         /* BKL held */
-        removexattr:    smfs_removexattr,       /* BKL held */
+        .link           = smfs_link,              /* BKL held */
+        .unlink         = smfs_unlink,            /* BKL held */
+        .symlink        = smfs_symlink,           /* BKL held */
+        .mkdir          = smfs_mkdir,             /* BKL held */
+        .rmdir          = smfs_rmdir,             /* BKL held */
+        .mknod          = smfs_mknod,             /* BKL held */
+        .rename         = smfs_rename,            /* BKL held */
+        .setxattr       = smfs_setxattr,
+        .getxattr       = smfs_getxattr,
+        .listxattr      = smfs_listxattr,
+        .removexattr    = smfs_removexattr,
+        .permission     = smfs_permission,
 };
 
 struct inode_operations smfs_iopen_iops = {
-        lookup:         smfs_iopen_lookup,
+        .lookup         = smfs_iopen_lookup,
 };
 
 static ssize_t smfs_read_dir(struct file *filp, char *buf,

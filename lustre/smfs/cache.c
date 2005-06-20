@@ -193,6 +193,18 @@ static void setup_sm_symlink_ops(struct inode *inode)
         unlock_kernel();
 }
 
+static void setup_sm_special_ops(struct inode *inode)
+{
+        struct smfs_super_info *smb = S2SMI(inode->i_sb);
+        struct inode *cache_inode = I2CI(inode);
+        
+        setup_iops(cache_inode, &smfs_special_iops, &smb->sm_ops->sm_special_iops);
+
+        lock_kernel();
+        smb->smsi_ops_check |= SPECIAL_OPS_CHECK;
+        unlock_kernel();
+}
+
 #define SMFS_IOPEN_INO  1
 
 void sm_set_inode_ops(struct inode *inode)
@@ -223,6 +235,10 @@ void sm_set_inode_ops(struct inode *inode)
                         setup_sm_symlink_ops(inode);
                 inode->i_op = &smb->sm_ops->sm_sym_iops;
                 inode->i_fop =  &smb->sm_ops->sm_sym_fops;
+        } else {
+                if (!(smb->smsi_ops_check & SPECIAL_OPS_CHECK))
+                        setup_sm_special_ops(inode);
+                inode->i_op = &smb->sm_ops->sm_special_iops;
         }
 }
 

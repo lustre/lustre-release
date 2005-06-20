@@ -53,6 +53,7 @@ struct sm_operations {
         struct inode_operations sm_dir_iops;
         struct inode_operations sm_file_iops;
         struct inode_operations sm_sym_iops;
+        struct inode_operations sm_special_iops;
         struct file_operations sm_dir_fops;
         struct file_operations sm_file_fops;
         struct file_operations sm_sym_fops;

@@ -78,10 +78,11 @@ static int smfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 struct inode_operations smfs_sym_iops = {
         .readlink        = smfs_readlink,
         .follow_link     = smfs_follow_link,
-        .setxattr        = smfs_setxattr,          /* BKL held */
-        .getxattr        = smfs_getxattr,          /* BKL held */
-        .listxattr       = smfs_listxattr,         /* BKL held */
-        .removexattr     = smfs_removexattr,       /* BKL held */
+        .setxattr        = smfs_setxattr,
+        .getxattr        = smfs_getxattr,
+        .listxattr       = smfs_listxattr,
+        .removexattr     = smfs_removexattr,
+        .permission      = smfs_permission,
 };
 
 struct file_operations smfs_sym_fops = {

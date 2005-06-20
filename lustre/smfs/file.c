@@ -531,12 +531,41 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
         RETURN(rc);
 }
 
+int smfs_permission(struct inode *inode, int mask, struct nameidata *nd)
+{
+        struct inode *cache_inode = I2CI(inode);
+        int rc = 0;
+
+        ENTRY;
+        
+        LASSERT(cache_inode);
+        LASSERT(cache_inode->i_op->permission);
+
+        pre_smfs_inode(inode, cache_inode);
+
+        rc = cache_inode->i_op->permission(cache_inode, mask, nd);
+
+        post_smfs_inode(inode, cache_inode);
+
+        RETURN(rc);
+}
+
 struct inode_operations smfs_file_iops = {
         .truncate       = smfs_truncate,          /* BKL held */
         .setattr        = smfs_setattr,           /* BKL held */
-        .setxattr       = smfs_setxattr,          /* BKL held */
-        .getxattr       = smfs_getxattr,          /* BKL held */
-        .listxattr      = smfs_listxattr,         /* BKL held */
-        .removexattr    = smfs_removexattr,       /* BKL held */
+        .setxattr       = smfs_setxattr,
+        .getxattr       = smfs_getxattr,
+        .listxattr      = smfs_listxattr,
+        .removexattr    = smfs_removexattr,
+        .permission     = smfs_permission,
+};
+
+struct inode_operations smfs_special_iops = {
+        .setattr        = smfs_setattr,           /* BKL held */
+        .setxattr       = smfs_setxattr,
+        .getxattr       = smfs_getxattr,
+        .listxattr      = smfs_listxattr,
+        .removexattr    = smfs_removexattr,
+        .permission     = smfs_permission,
 };
 

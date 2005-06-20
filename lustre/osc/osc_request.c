@@ -2424,6 +2424,12 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
                              lockh);
         if (rc == 1) {
+                if (ptlrpcs_check_cred(obd->u.cli.cl_import)) {
+                        /* return immediately if no credential held */
+                        ldlm_lock_decref(lockh, mode);
+                        RETURN(-EACCES);
+                }
+
                 osc_set_data_with_check(lockh, data);
                 if (*flags & LDLM_FL_HAS_INTENT) {
                         /* I would like to be able to ASSERT here that rss <=
@@ -2450,6 +2456,12 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
                                      policy, LCK_PW, lockh);
                 if (rc == 1) {
+                        if (ptlrpcs_check_cred(obd->u.cli.cl_import)) {
+                                /* return immediately if no credential held */
+                                ldlm_lock_decref(lockh, LCK_PW);
+                                RETURN(-EACCES);
+                        }
+
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */

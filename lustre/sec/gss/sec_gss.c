@@ -833,7 +833,8 @@ waiting:
                 goto out;
 
         if (signal_pending(current)) {
-                CERROR("cred %p: interrupted upcall\n", cred);
+                CERROR("%s: cred %p: interrupted upcall\n",
+                       current->comm, cred);
                 cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 res = -EINTR;
         } else if (res == 0) {
@@ -991,7 +992,8 @@ static int gss_cred_sign(struct ptlrpc_cred *cred,
                req->rq_reqbuf, lmsg.data, lmsg.len, mic.data, mic.len);
         major = kgss_get_mic(ctx->gc_gss_ctx, GSS_C_QOP_DEFAULT, &lmsg, &mic);
         if (major) {
-                CERROR("gss compute mic error, major %x\n", major);
+                CERROR("cred %p: req %p compute mic error, major %x\n",
+                       cred, req, major);
                 rc = -EACCES;
                 goto out;
         }
@@ -1068,8 +1070,18 @@ static int gss_cred_verify(struct ptlrpc_cred *cred,
 
                 major = kgss_verify_mic(ctx->gc_gss_ctx, &lmsg, &mic, NULL);
                 if (major != GSS_S_COMPLETE) {
-                        CERROR("gss verify mic error: major %x\n", major);
-                        GOTO(proc_data_out, rc = -EINVAL);
+                        CERROR("cred %p: req %p verify mic error: major %x\n",
+                               cred, req, major);
+
+                        if (major == GSS_S_CREDENTIALS_EXPIRED ||
+                            major == GSS_S_CONTEXT_EXPIRED) {
+                                ptlrpcs_cred_expire(cred);
+                                req->rq_ptlrpcs_restart = 1;
+                                rc = 0;
+                        } else
+                                rc = -EINVAL;
+
+                        GOTO(proc_data_out, rc);
                 }
 
                 req->rq_repmsg = (struct lustre_msg *) lmsg.data;
@@ -1102,12 +1114,9 @@ proc_data_out:
                                req, cred, (major == GSS_S_NO_CONTEXT) ?
                                            "NO_CONTEXT" : "BAD_SIG");
 
-                        ptlrpcs_cred_die(cred);
-                        rc = ptlrpcs_req_replace_dead_cred(req);
-                        if (!rc)
-                                req->rq_ptlrpcs_restart = 1;
-                        else
-                                CERROR("replace dead cred failed %d\n", rc);
+                        ptlrpcs_cred_expire(cred);
+                        req->rq_ptlrpcs_restart = 1;
+                        rc = 0;
                 } else {
                         CERROR("req %p: unrecognized gss error (%x/%x)\n",
                                 req, major, minor);
@@ -1177,7 +1186,8 @@ static int gss_cred_seal(struct ptlrpc_cred *cred,
         vlen -= 4;
 
         msg_buf.buf = (__u8 *) req->rq_reqmsg - GSS_PRIVBUF_PREFIX_LEN;
-        msg_buf.buflen = req->rq_reqlen + GSS_PRIVBUF_PREFIX_LEN + GSS_PRIVBUF_SUFFIX_LEN;
+        msg_buf.buflen = req->rq_reqlen + GSS_PRIVBUF_PREFIX_LEN +
+                                          GSS_PRIVBUF_SUFFIX_LEN;
         msg_buf.dataoff = GSS_PRIVBUF_PREFIX_LEN;
         msg_buf.datalen = req->rq_reqlen;
 
@@ -1187,7 +1197,7 @@ static int gss_cred_seal(struct ptlrpc_cred *cred,
         major = kgss_wrap(ctx->gc_gss_ctx, GSS_C_QOP_DEFAULT,
                           &msg_buf, &cipher_buf);
         if (major) {
-                CERROR("error wrap: major 0x%x\n", major);
+                CERROR("cred %p: error wrap: major 0x%x\n", cred, major);
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -1213,7 +1223,7 @@ static int gss_cred_unseal(struct ptlrpc_cred *cred,
         struct ptlrpcs_wire_hdr *sec_hdr;
         rawobj_t                cipher_text, plain_text;
         __u32                   *vp, vlen, subflavor, proc, seq, svc;
-        int                     rc;
+        __u32                   major, rc;
         ENTRY;
 
         LASSERT(req->rq_repbuf);
@@ -1271,11 +1281,21 @@ static int gss_cred_unseal(struct ptlrpc_cred *cred,
                 ctx = gss_cred_get_ctx(cred);
                 LASSERT(ctx);
 
-                rc = kgss_unwrap(ctx->gc_gss_ctx, GSS_C_QOP_DEFAULT,
-                                 &cipher_text, &plain_text);
-                if (rc) {
-                        CERROR("error unwrap: 0x%x\n", rc);
-                        GOTO(proc_out, rc = -EINVAL);
+                major = kgss_unwrap(ctx->gc_gss_ctx, GSS_C_QOP_DEFAULT,
+                                    &cipher_text, &plain_text);
+                if (major) {
+                        CERROR("cred %p: error unwrap: major 0x%x\n",
+                               cred, major);
+
+                        if (major == GSS_S_CREDENTIALS_EXPIRED ||
+                            major == GSS_S_CONTEXT_EXPIRED) {
+                                ptlrpcs_cred_expire(cred);
+                                req->rq_ptlrpcs_restart = 1;
+                                rc = 0;
+                        } else
+                                rc = -EINVAL;
+
+                        GOTO(proc_out, rc);
                 }
 
                 req->rq_repmsg = (struct lustre_msg *) vp;
