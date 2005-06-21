@@ -500,6 +500,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 spin_lock_init(&fed->fed_lock);
 
                 fcd = NULL;
+                exp->exp_connected = 0;
                 exp->exp_req_replay_needed = 1;
                 exp->exp_lock_replay_needed = 1;
                 atomic_inc(&obd->obd_req_replay_clients);

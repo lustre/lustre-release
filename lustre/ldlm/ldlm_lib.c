@@ -719,10 +719,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
-        CWARN("%s: connection from %s@%s/%lu %st"LPU64"\n", target->obd_name, cluuid.uuid,
-              ptlrpc_peernid2str(&req->rq_peer, peer_str), *cfp,
-              target->obd_recovering ? "recovering/" : "",
-              conn_data->transno);
+        CWARN("%s: connection from %s@%s/%lu %st"LPU64"\n", target->obd_name,
+              cluuid.uuid, ptlrpc_peernid2str(&req->rq_peer, peer_str), *cfp,
+              target->obd_recovering ? "recovering/" : "", conn_data->transno);
 
         if (target->obd_recovering) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
@@ -1352,7 +1351,9 @@ static int target_recovery_thread(void *arg)
         /* If some clients haven't connected in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
-                CERROR("some clients haven't connect in time, evict them ...\n");
+                CERROR("some clients haven't connect in time (%d/%d),"
+                       "evict them ...\n", obd->obd_connected_clients,
+                       obd->obd_max_recoverable_clients);
                 obd->obd_abort_recovery = 0;
                 stale = class_disconnect_stale_exports(obd, connect_done, 0);
                 atomic_sub(stale, &obd->obd_req_replay_clients);
