@@ -45,7 +45,7 @@ CFS_MODULE_PARM(accept_secure_only, "i", int, 0644,
                 "Accept connection requests only from secure ports?");
 
 static int acceptor_proto_version = PTL_PROTO_ACCEPTOR_VERSION;
-CFS_MODULE_PARM(acceptor_version, "i", int, 0444,
+CFS_MODULE_PARM(acceptor_proto_version, "i", int, 0444,
                 "Acceptor protocol version (outgoing connection requests)");
 
 struct {
@@ -95,7 +95,13 @@ ptl_connect_console_error (int rc, ptl_nid_t peer_nid,
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
                 break;
-        /* errors that should be rare */
+        case -ECONNRESET:
+                LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "
+                               "port %d was reset; "
+                               "Is it running a compatible version of Lustre?\n",
+                               libcfs_nid2str(peer_nid),
+                               HIPQUAD(peer_ip), peer_port);
+                break;
         case -EPROTO:
                 LCONSOLE_ERROR("Protocol error connecting to %s at host "
                                "%u.%u.%u.%u on port %d: "
@@ -303,7 +309,6 @@ ptl_acceptor(void *arg)
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
-	int            nal;
         ptl_ni_t      *blind_ni;
 
         /* If there is only a single NI that needs me, I'll pass her
@@ -314,9 +319,6 @@ ptl_acceptor(void *arg)
         if (rc > 1) {
                 ptl_ni_decref(blind_ni);
                 blind_ni = NULL;
-        } else {
-                CWARN("Passing all incoming connections to NI %s\n",
-                      libcfs_nid2str(blind_ni->ni_nid));
         }
         
 	LASSERT (ptl_acceptor_state.pta_sock == NULL);
@@ -328,7 +330,6 @@ ptl_acceptor(void *arg)
 	LASSERT (acceptor_backlog > 0);
 	rc = libcfs_sock_listen(&ptl_acceptor_state.pta_sock,
 				0, acceptor_port, acceptor_backlog);
-
 	if (rc != 0)
 		ptl_acceptor_state.pta_sock = NULL;
 
@@ -339,7 +340,7 @@ ptl_acceptor(void *arg)
 	if (rc != 0)
 		return rc;
 	
-	while (ptl_acceptor_state.pta_shutdown != 0) {
+	while (ptl_acceptor_state.pta_shutdown == 0) {
 		
 		rc = libcfs_sock_accept(&newsock, ptl_acceptor_state.pta_sock);
 		if (rc != 0) {
@@ -416,7 +417,6 @@ ptl_err_t
 ptl_acceptor_start(void)
 {
 	long   pid;
-	int    rc;
 
 	LASSERT (ptl_acceptor_state.pta_sock == NULL);
 	init_mutex_locked(&ptl_acceptor_state.pta_signal);
@@ -433,10 +433,14 @@ ptl_acceptor_start(void)
 
 	mutex_down(&ptl_acceptor_state.pta_signal); /* wait for acceptor to startup */
 
-	if (ptl_acceptor_state.pta_shutdown == 0) /* started OK */
+	if (ptl_acceptor_state.pta_shutdown == 0) {
+                /* started OK */
+                LASSERT (ptl_acceptor_state.pta_sock != NULL);
 		return PTL_OK;
+        }
 
 	CERROR ("Can't start acceptor: %d\n", ptl_acceptor_state.pta_shutdown);
+        LASSERT (ptl_acceptor_state.pta_sock == NULL);
 	return PTL_FAIL;
 }
 

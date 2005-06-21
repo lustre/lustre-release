@@ -649,7 +649,6 @@ libcfs_sock_connect (struct socket **sockp, int *fatal,
                "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
                HIPQUAD(local_ip), local_port, HIPQUAD(peer_ip), peer_port);
 
- failed:
 	sock_release(*sockp);
         return rc;
 }

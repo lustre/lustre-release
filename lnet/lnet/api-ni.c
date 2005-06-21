@@ -580,7 +580,6 @@ ptl_count_acceptor_nis (ptl_ni_t **first_ni)
                                 *first_ni = ni;
                         }
                         count++;
-                        break;
                 }
         }
         
@@ -978,30 +977,33 @@ PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
 ptl_err_t
 PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
 {
-        ptl_ni_t      *ni;
-        unsigned long  flags;
+        ptl_ni_t         *ni;
+        unsigned long     flags;
+        struct list_head *tmp;
+        ptl_err_t         rc = PTL_FAIL;
 
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
 
-        /* pretty useless; just return the NID of the first local interface */
+        /* pretty useless; just return the NID of the first local interface,
+         * that isn't LONAL; it has the same NID on all nodes */
 
         PTL_LOCK(flags);
-        
-        if (list_empty(&ptl_apini.apini_nis)) {
-                PTL_UNLOCK(flags);
-                return PTL_FAIL;
-        }
-        
-        id->pid = ptl_apini.apini_pid;
 
-        ni = list_entry(ptl_apini.apini_nis.next,
-                        ptl_ni_t, ni_list);
-        id->nid = ni->ni_nid;
+        list_for_each(tmp, &ptl_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+                if (ni->ni_nal->nal_type == LONAL)
+                        continue;
+
+                id->nid = ni->ni_nid;
+                id->pid = ptl_apini.apini_pid;
+                rc = PTL_OK;
+                break;
+        }
 
         PTL_UNLOCK(flags);
 
-        return PTL_OK;
+        return rc;
 }
 
 ptl_err_t
