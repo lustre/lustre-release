@@ -209,8 +209,13 @@ void ptlrpcs_credcache_gc(struct ptlrpc_sec *sec,
         EXIT;
 }
 
+/*
+ * grace: mark cred DEAD, allow graceful destroy like notify
+ *        server side, etc.
+ * force: flush all entries, otherwise only free ones be flushed.
+ */
 static
-int ptlrpcs_flush_credcache(struct ptlrpc_sec *sec, int force)
+int ptlrpcs_flush_credcache(struct ptlrpc_sec *sec, int grace, int force)
 {
         struct ptlrpc_cred *cred, *n;
         LIST_HEAD(freelist);
@@ -230,8 +235,9 @@ int ptlrpcs_flush_credcache(struct ptlrpc_sec *sec, int force)
                         } else
                                 list_move(&cred->pc_hash, &freelist);
 
-                        /* don't remove CRED_UPTODATE flag here */
                         cred->pc_flags |= PTLRPC_CRED_DEAD;
+                        if (!grace)
+                                cred->pc_flags &= ~PTLRPC_CRED_UPTODATE;
                 }
         }
         spin_unlock(&sec->ps_lock);
@@ -707,7 +713,7 @@ static void ptlrpcs_sec_destroy(struct ptlrpc_sec *sec)
 void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
 {
         if (atomic_dec_and_test(&sec->ps_refcount)) {
-                ptlrpcs_flush_credcache(sec, 1);
+                ptlrpcs_flush_credcache(sec, 1, 1);
 
                 if (atomic_read(&sec->ps_credcount) == 0) {
                         ptlrpcs_sec_destroy(sec);
@@ -722,7 +728,7 @@ void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
 
 void ptlrpcs_sec_invalidate_cache(struct ptlrpc_sec *sec)
 {
-        ptlrpcs_flush_credcache(sec, 1);
+        ptlrpcs_flush_credcache(sec, 0, 1);
 }
 
 int sec_alloc_reqbuf(struct ptlrpc_sec *sec,

@@ -1330,18 +1330,18 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         /* cred's refcount is 0, steal one */
         atomic_inc(&cred->pc_refcount);
 
-        gcred = container_of(cred, struct gss_cred, gc_base);
-        gcred->gc_ctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
-        imp = cred->pc_sec->ps_import;
-        LASSERT(imp);
-
         if (!(cred->pc_flags & PTLRPC_CRED_UPTODATE)) {
-                CDEBUG(D_SEC, "Destroy a dead gss cred %p(%u@%s)\n",
-                       gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
+                CDEBUG(D_SEC, "Destroy dead cred %p(%u@%s)\n",
+                       cred, cred->pc_uid, imp->imp_target_uuid.uuid);
                 atomic_dec(&cred->pc_refcount);
                 EXIT;
                 return;
         }
+
+        gcred = container_of(cred, struct gss_cred, gc_base);
+        gcred->gc_ctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
+        imp = cred->pc_sec->ps_import;
+        LASSERT(imp);
 
         CDEBUG(D_SEC, "client destroy gss cred %p(%u@%s)\n",
                gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
