@@ -330,9 +330,19 @@ ptl_acceptor(void *arg)
 	LASSERT (acceptor_backlog > 0);
 	rc = libcfs_sock_listen(&ptl_acceptor_state.pta_sock,
 				0, acceptor_port, acceptor_backlog);
-	if (rc != 0)
-		ptl_acceptor_state.pta_sock = NULL;
+	if (rc != 0) {
+                if (rc == -EADDRINUSE)
+                        LCONSOLE_ERROR("Can't start acceptor on port %d: "
+                                       "port already in use\n",
+                                       acceptor_port);
+                else
+                        LCONSOLE_ERROR("Can't start acceptor on port %d: "
+                                       "unexpected error %d\n",
+                                       acceptor_port, rc);
 
+		ptl_acceptor_state.pta_sock = NULL;
+        }
+        
 	/* set init status and unblock parent */
 	ptl_acceptor_state.pta_shutdown = rc;
 	mutex_up(&ptl_acceptor_state.pta_signal);
