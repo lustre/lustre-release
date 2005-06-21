@@ -249,8 +249,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                 RETURN(err);
         }
 
-        err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data,
-                          OBD_OPT_REAL_CLIENT);
+        err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data, 0);
         if (err == -EBUSY) {
                 CERROR("An OST (lov %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
