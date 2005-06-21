@@ -61,6 +61,10 @@ case "$lustretag" in
 	portalstag=$lustretag
 	;;
 
+    b_ioprovement)
+	portalstag=b_ioprovement
+	;;
+
     v1_[0-3]*|v1_4_*|[A-Z]*)
 	portalstag="$lustretag"
 	;;
