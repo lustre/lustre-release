@@ -45,11 +45,6 @@ def development_mode():
         return 1
     return 0
 
-if development_mode():
-    sys.path.append('../utils')
-else:
-    sys.path.extend(PYMOD_DIR)
-
 import Lustre
 
 # Global parameters
@@ -1120,18 +1115,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 
 def sys_get_branch():
     """Returns kernel release"""
-    try:
-        fp = open('/proc/sys/kernel/osrelease')
-        lines = fp.readlines()
-        fp.close()
-
-        for l in lines:
-            version = string.split(l)
-            a = string.split(version[0], '.')
-            return a[0] + '.' + a[1]
-    except IOError, e:
-        log(e)
-    return ""
+    return os.uname()[2][:3]
 
 def mod_loaded(modname):
     """Check if a module is already loaded. Look in /proc/modules for it."""
@@ -1683,7 +1667,13 @@ class MDSDEV(Module):
         self.devpath = self.db.get_val('devpath','')
         self.size = self.db.get_val_int('devsize', 0)
         self.journal_size = self.db.get_val_int('journalsize', 0)
+
         self.fstype = self.db.get_val('fstype', '')
+        if sys_get_branch() == '2.4' and self.fstype == 'ldiskfs':
+            self.fstype = 'ext3'
+        elif sys_get_branch() == '2.6' and self.fstype == 'ext3':
+            self.fstype = 'ldiskfs'
+
         self.nspath = self.db.get_val('nspath', '')
         self.mkfsoptions = '-i 4096 ' + self.db.get_val('mkfsoptions', '')
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
@@ -1951,7 +1941,13 @@ class OSD(Module):
         if self.size > 1000000:
                 self.mkfsoptions = '-i 16384 ' + self.mkfsoptions
         self.mountfsoptions = self.db.get_val('mountfsoptions', '')
+
         self.fstype = self.db.get_val('fstype', '')
+        if sys_get_branch() == '2.4' and self.fstype == 'ldiskfs':
+            self.fstype = 'ext3'
+        elif sys_get_branch() == '2.6' and self.fstype == 'ext3':
+            self.fstype = 'ldiskfs'
+
         self.nspath = self.db.get_val('nspath', '')
         target_uuid = self.db.get_first_ref('target')
         ost = self.db.lookup(target_uuid)
