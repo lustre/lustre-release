@@ -28,6 +28,15 @@ Details    : While revalidating inodes the VFS looks up inodes with ifind()
              when it finds an existing inode and then the VFS later attaches
              this free lsm to a new inode.
 
+Severity   : minor
+Frequency  : occasional
+Description: While starting a server, the fsfilt_ext3 module could not be 
+             loaded.
+Details    : CFS's improved ext3 filesystem is named ldiskfs for 2.6
+             kernels.  Previously, lconf would still use the ext3 name
+             when trying to load modules.  Now, it will correctly use
+             ext3 on 2.4 and ldiskfs on 2.6.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>
