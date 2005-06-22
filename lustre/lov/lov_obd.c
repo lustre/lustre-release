@@ -1836,7 +1836,7 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         if (set) {
                 __u32 expected_stripes = lov->desc.ld_default_stripe_count ?
                                          lov->desc.ld_default_stripe_count :
-                                         lov->desc.ld_active_tgt_count;
+                                         1;
 
                 if (osfs->os_files != LOV_U64_MAX)
                         do_div(osfs->os_files, expected_stripes);

@@ -139,7 +139,9 @@ int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
 {
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
-        if (!stripe_count || stripe_count > lov->desc.ld_active_tgt_count)
+        if (!stripe_count)
+                stripe_count = 1;
+        if (stripe_count > lov->desc.ld_active_tgt_count)
                 stripe_count = lov->desc.ld_active_tgt_count;
         /* for now, we limit the stripe count directly, when bug 4424 is
          * fixed this needs to be somewhat dynamic based on whether ext3
