@@ -560,6 +560,9 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
        }
 
+        if (desc->ld_default_stripe_count == 0)
+                desc->ld_default_stripe_count = 1;
+
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
          * of 4GB or larger on 32-bit CPUs. */
@@ -1834,9 +1837,7 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         }
 
         if (set) {
-                __u32 expected_stripes = lov->desc.ld_default_stripe_count ?
-                                         lov->desc.ld_default_stripe_count :
-                                         1;
+                __u32 expected_stripes = lov_get_stripecnt(lov, 0);
 
                 if (osfs->os_files != LOV_U64_MAX)
                         do_div(osfs->os_files, expected_stripes);

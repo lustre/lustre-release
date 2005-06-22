@@ -41,10 +41,8 @@ Severity   : enhancement
 Description: The default stripe count has been changed to 1
 Details    : The interpretation of the default stripe count (0, to lfs
              or lmc) has been changed to mean striping across a single
-             OST, rather than all available.  To get the previous
-             behaviour, a stripe count of -1 can be used, however for
-             general usage we have found a stripe count of 1 or 2
-             works best.
+             OST, rather than all available.  For general usage we have
+             found a stripe count of 1 or 2 works best.
  
 ------------------------------------------------------------------------------
 

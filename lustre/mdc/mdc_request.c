@@ -1047,6 +1047,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 {
         struct obd_device *obd = mdc_exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
         struct lov_desc desc;
         __u32 valsize = sizeof(desc);
         int rc, size;
@@ -1061,12 +1062,9 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         if (rc)
                 RETURN(rc);
 
-        /* If default_stripe_count is zero we stripe over a single OST */
-        if (desc.ld_default_stripe_count != 0) {
-                struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC,
-                                             .lsm_stripe_count = 1 };
-                size = obd_size_diskmd(lov_exp, &lsm);
-        }
+        lsm.lsm_stripe_count = desc.ld_default_stripe_count;
+        size = obd_size_diskmd(lov_exp, &lsm);
+
         if (cli->cl_default_mds_easize < size)
                 cli->cl_default_mds_easize = size;
 
