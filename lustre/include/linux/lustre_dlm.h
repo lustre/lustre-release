@@ -158,7 +158,9 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
 
 struct ldlm_valblock_ops {
         int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res, struct lustre_msg *m,
+        
+        int (*lvbo_update)(struct ldlm_resource *res,
+                           struct lustre_msg *m,
                            int buf_idx, int increase);
 };
 

@@ -1201,7 +1201,7 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_obj *obj;
-        int rc;
+        int rc, mds;
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -1210,25 +1210,31 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
 
         if (data->namelen != 0) {
                 /* usual link request */
-                obj = lmv_grab_obj(obd, &data->id1);
+                obj = lmv_grab_obj(obd, &data->id2);
                 if (obj) {
                         rc = raw_name2idx(obj->hashtype, obj->objcount, 
                                           data->name, data->namelen);
-                        data->id1 = obj->objs[rc].id;
+                        data->id2 = obj->objs[rc].id;
                         lmv_put_obj(obj);
                 }
+
+                mds = id_group(&data->id2);
                 
                 CDEBUG(D_OTHER,"link "DLID4":%*s to "DLID4"\n",
                        OLID4(&data->id2), data->namelen, data->name,
                        OLID4(&data->id1));
         } else {
+                mds = id_group(&data->id1);
+                
                 /* request from MDS to acquire i_links for inode by id1 */
                 CDEBUG(D_OTHER, "inc i_nlinks for "DLID4"\n",
                        OLID4(&data->id1));
         }
-                        
-        rc = md_link(lmv->tgts[id_group(&data->id1)].ltd_exp, 
-                     data, request);
+
+        CDEBUG(D_OTHER, "forward to MDS #%u ("DLID4")\n",
+               mds, OLID4(&data->id1));
+        rc = md_link(lmv->tgts[mds].ltd_exp, data, request);
+        
         RETURN(rc);
 }
 

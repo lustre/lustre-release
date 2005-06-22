@@ -373,11 +373,12 @@ struct mds_obd {
         struct obd_export               *mds_dt_exp;
         int                              mds_has_dt_desc;
         struct lov_desc                  mds_dt_desc;
-        obd_id                          *mds_dt_objids;
-        int                              mds_dt_objids_valid;
-        int                              mds_dt_nextid_set;
-        struct file                     *mds_dt_objid_filp;
+
         spinlock_t                       mds_dt_lock;
+        obd_id                          *mds_dt_objids;
+        struct file                     *mds_dt_objid_filp;
+        int                              mds_dt_objids_valid;
+
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         
@@ -407,6 +408,7 @@ struct mds_obd {
         /* which secure flavor from remote to this mds is denied */
         spinlock_t                      mds_denylist_lock;
         struct list_head                mds_denylist;
+        struct semaphore                mds_create_sem;
 };
 
 struct echo_obd {
@@ -545,13 +547,19 @@ struct niobuf_local {
         int rc;
 };
 
+#define OBD_MODE_ASYNC (1 << 0)
+#define OBD_MODE_CROW  (1 << 1)
+
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
+
+typedef int (*obd_obj_alloc_func_t)(obd_id *objid);
 
 struct obd_trans_info {
         __u64                    oti_transno;
         __u64                   *oti_objid;
-        /* Only used on the server side for tracking acks. */
+
+        /* only used on the server side for tracking acks. */
         struct oti_req_ack_lock {
                 struct lustre_handle lock;
                 __u32                mode;
@@ -560,7 +568,8 @@ struct obd_trans_info {
         struct llog_cookie       oti_onecookie;
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
-        int                      oti_async;
+        int                      oti_flags;
+        obd_obj_alloc_func_t     oti_obj_alloc;
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)

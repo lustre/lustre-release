@@ -781,10 +781,6 @@ static int filter_start_page_write(struct inode *inode,
         return 0;
 }
 
-struct dentry *filter_id2dentry(struct obd_device *obd,
-                                struct dentry *dir_dentry,
-                                obd_gr group, obd_id id);
-
 int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj,
                 int niocount, struct niobuf_remote *nb,

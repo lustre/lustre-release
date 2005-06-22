@@ -55,6 +55,19 @@ void cpu_to_le_lov_desc (struct lov_desc *ld)
         ld->ld_pattern = cpu_to_le32 (ld->ld_pattern);
 }
 
+void mds_dt_save_objids(struct obd_device *obd, obd_id *ids)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int i;
+        ENTRY;
+
+        spin_lock(&mds->mds_dt_lock);
+        for (i = 0; i < mds->mds_dt_desc.ld_tgt_count; i++)
+                ids[i] = mds->mds_dt_objids[i];
+        spin_unlock(&mds->mds_dt_lock);
+        EXIT;
+}
+
 void mds_dt_update_objids(struct obd_device *obd, obd_id *ids)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -63,8 +76,8 @@ void mds_dt_update_objids(struct obd_device *obd, obd_id *ids)
 
         spin_lock(&mds->mds_dt_lock);
         for (i = 0; i < mds->mds_dt_desc.ld_tgt_count; i++)
-                if (ids[i] > (mds->mds_dt_objids)[i])
-                        (mds->mds_dt_objids)[i] = ids[i];
+                if (ids[i] > mds->mds_dt_objids[i])
+                        mds->mds_dt_objids[i] = ids[i];
         spin_unlock(&mds->mds_dt_lock);
         EXIT;
 }
@@ -72,14 +85,15 @@ void mds_dt_update_objids(struct obd_device *obd, obd_id *ids)
 static int mds_dt_read_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        obd_id *ids;
+        int i, rc, size;
         loff_t off = 0;
-        int i, rc, size = mds->mds_dt_desc.ld_tgt_count * sizeof(*ids);
+        obd_id *ids;
         ENTRY;
 
         if (mds->mds_dt_objids != NULL)
                 RETURN(0);
 
+        size = mds->mds_dt_desc.ld_tgt_count * sizeof(*ids);
         OBD_ALLOC(ids, size);
         if (ids == NULL)
                 RETURN(-ENOMEM);
@@ -87,17 +101,19 @@ static int mds_dt_read_objids(struct obd_device *obd)
 
         if (mds->mds_dt_objid_filp->f_dentry->d_inode->i_size == 0)
                 RETURN(0);
+        
         rc = fsfilt_read_record(obd, mds->mds_dt_objid_filp, ids, size, &off);
         if (rc < 0) {
-                CERROR("Error reading objids %d\n", rc);
+                CERROR("error reading objids %d\n", rc);
         } else {
                 mds->mds_dt_objids_valid = 1;
                 rc = 0;
         }
 
-        for (i = 0; i < mds->mds_dt_desc.ld_tgt_count; i++)
-                CDEBUG(D_INFO, "read last object "LPU64" for idx %d\n",
-                       mds->mds_dt_objids[i], i);
+        for (i = 0; i < mds->mds_dt_desc.ld_tgt_count; i++) {
+                CDEBUG(D_INFO, "read last object "LPU64
+                       " for idx %d\n", mds->mds_dt_objids[i], i);
+        }
 
         RETURN(rc);
 }
@@ -105,25 +121,26 @@ static int mds_dt_read_objids(struct obd_device *obd)
 int mds_dt_write_objids(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int i, rc, size;
         loff_t off = 0;
-        int i, rc, size = mds->mds_dt_desc.ld_tgt_count * sizeof(obd_id);
         ENTRY;
 
         for (i = 0; i < mds->mds_dt_desc.ld_tgt_count; i++)
                 CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
                        mds->mds_dt_objids[i], i);
 
+        size = mds->mds_dt_desc.ld_tgt_count * sizeof(obd_id);
         rc = fsfilt_write_record(obd, mds->mds_dt_objid_filp,
                                  mds->mds_dt_objids, size, &off, 0);
         RETURN(rc);
 }
 
-int mds_dt_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
+int mds_dt_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {
-        int rc;
+        struct lov_stripe_md *empty_ea = NULL;
+        struct obd_trans_info oti = { 0 };
         struct obdo *oa = NULL;
-        struct obd_trans_info oti = {0};
-        struct lov_stripe_md  *empty_ea = NULL;
+        int rc;
         ENTRY;
 
         LASSERT(mds->mds_dt_objids != NULL);
@@ -138,32 +155,27 @@ int mds_dt_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
                 RETURN(-ENOMEM);
         
         memset(oa, 0, sizeof(*oa));
+
         oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         oa->o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         oa->o_flags = OBD_FL_DELORPHAN;
         
         if (ost_uuid != NULL) {
-                memcpy(&oa->o_inline, ost_uuid, sizeof(*ost_uuid));
+                memcpy(&oa->o_inline, ost_uuid,
+                       sizeof(*ost_uuid));
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mds->mds_dt_exp, oa, NULL, 0, &empty_ea, &oti);
+
+        /* 
+         * passing current objids for letting data layer know last objids MDS
+         * knows about and do appropriate. --umka
+         */
+        oti.oti_objid = mds->mds_dt_objids;
+        
+        rc = obd_create(mds->mds_dt_exp, oa,
+                        NULL, 0, &empty_ea, &oti);
+        
         obdo_free(oa);
-        RETURN(rc);
-}
-
-/* update the LOV-OSC knowledge of the last used object id's */
-int mds_dt_set_nextid(struct obd_device *obd)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        int rc;
-        ENTRY;
-
-        LASSERT(!obd->obd_recovering);
-
-        LASSERT(mds->mds_dt_objids != NULL);
-
-        rc = obd_set_info(mds->mds_dt_exp, strlen("next_id"), "next_id",
-                          mds->mds_dt_desc.ld_tgt_count, mds->mds_dt_objids);
         RETURN(rc);
 }
 
@@ -226,8 +238,8 @@ static int mds_dt_update_desc(struct obd_device *obd, struct obd_export *lov)
 int mds_dt_connect(struct obd_device *obd, char *lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lustre_handle conn = {0,};
-        int rc, i;
+        struct lustre_handle conn = { 0 };
+        int i, rc = 0;
         ENTRY;
 
         if (IS_ERR(mds->mds_dt_obd))
@@ -247,7 +259,8 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
         if (mds->mds_ost_sec) {
                 rc = obd_set_info(mds->mds_dt_obd->obd_self_export,
                                   strlen("sec"), "sec",
-                                  strlen(mds->mds_ost_sec), mds->mds_ost_sec);
+                                  strlen(mds->mds_ost_sec),
+                                  mds->mds_ost_sec);
                 if (rc) {
                         mds->mds_dt_obd = ERR_PTR(rc);
                         RETURN(rc);
@@ -290,10 +303,13 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
                 GOTO(err_reg, rc);
         }
 
-        /* If we're mounting this code for the first time on an existing FS,
-         * we need to populate the objids array from the real OST values */
+        /*
+         * If we're mounting this code for the first time on an existing FS, we
+         * need to populate the objids array from the real OST values.
+         */
         if (!mds->mds_dt_objids_valid) {
                 __u32 size = sizeof(obd_id) * mds->mds_dt_desc.ld_tgt_count;
+                
                 rc = obd_get_info(mds->mds_dt_exp, strlen("last_id"),
                                   "last_id", &size, mds->mds_dt_objids);
                 if (!rc) {
@@ -307,12 +323,12 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
                                        "writing objids file: %d\n", rc);
                 }
         }
-
-        /* I want to see a callback happen when the OBD moves to a
-         * "For General Use" state, and that's when we'll call
-         * set_nextid().  The class driver can help us here, because
-         * it can use the obd_recovering flag to determine when the
-         * the OBD is full available. */
+        /*
+         * I want to see a callback happen when the OBD moves to a "For General
+         * Use" state, and that's when we'll call set_nextid(). The class driver
+         * can help us here, because it can use the obd_recovering flag to
+         * determine when the the OBD is full available.
+         */
         if (!obd->obd_recovering) {
                 CDEBUG(D_OTHER, "call mds_postrecov_common()\n");
                 rc = mds_postrecov_common(obd);
@@ -325,8 +341,8 @@ err_reg:
         obd_register_observer(mds->mds_dt_obd, NULL);
 err_discon:
         obd_disconnect(mds->mds_dt_exp, 0);
-        mds->mds_dt_exp = NULL;
         mds->mds_dt_obd = ERR_PTR(rc);
+        mds->mds_dt_exp = NULL;
         return rc;
 }
 
@@ -665,9 +681,9 @@ int mds_dt_synchronize(void *data)
         CWARN("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, uuid->uuid);
 
-        rc = mds_dt_clearorphans(&obd->u.mds, uuid);
+        rc = mds_dt_clear_orphans(&obd->u.mds, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at mds_dt_clearorphans(): %d\n", 
+                CERROR("%s: failed at mds_dt_clear_orphans(): %d\n", 
                        obd->obd_name, rc);
                 GOTO(cleanup, rc);
         }

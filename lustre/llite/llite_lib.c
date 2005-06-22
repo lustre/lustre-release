@@ -141,9 +141,8 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         struct obd_device *obd;
         struct obd_statfs osfs;
         struct lustre_md md;
-        kdev_t devno;
-        int err;
         __u32 valsize;
+        int err;
         ENTRY;
 
         obd = class_name2obd(lmv);
@@ -212,11 +211,18 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
-       
-        devno = get_uuid2int((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid, 
-                             strlen((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid));
 
-        sb->s_dev = devno;
+        /* in 2.6.x FS is not allowed to form s_dev */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        {
+                kdev_t devno;
+                
+                devno = get_uuid2int((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid, 
+                                     strlen((char *)sbi->ll_md_exp->exp_obd->obd_uuid.uuid));
+                
+                sb->s_dev = devno;
+        }
+#endif
 
         /* after statfs, we are supposed to have connected to MDSs,
          * so it's ok to check remote flag returned.
@@ -1170,7 +1176,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         /* from sys_utime() */
                         if (!(ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET))) {
                                 if (current->fsuid != inode->i_uid &&
-                                    (rc=ll_permission(inode,MAY_WRITE,NULL))!=0)
+                                    (rc = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                                         RETURN(rc);
                         } else {
                                 /* from inode_change_ok() */
@@ -1228,7 +1234,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
-        } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
+        } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET | ATTR_UID | ATTR_GID)) {
                 struct obdo *oa = NULL;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
@@ -1241,6 +1247,17 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 oa->o_id = lsm->lsm_object_id;
                 oa->o_gr = lsm->lsm_object_gr;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+                if (ia_valid & ATTR_UID) {
+                        oa->o_uid = inode->i_uid;
+                        oa->o_valid |= OBD_MD_FLUID;
+                }
+
+                if (ia_valid & ATTR_GID) {
+                        oa->o_gid = inode->i_gid;
+                        oa->o_valid |= OBD_MD_FLGID;
+                }
+
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME);
                 rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL);
@@ -1248,6 +1265,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc)
                         CERROR("obd_setattr fails: rc = %d\n", rc);
         }
+
         RETURN(rc);
 }
 

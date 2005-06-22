@@ -268,17 +268,21 @@ static int osc_setattr(struct obd_export *exp, struct obdo *oa,
 
         request->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(request);
-        if (rc)
-                GOTO(out, rc);
+        if (oti != NULL && (oti->oti_flags & OBD_MODE_ASYNC)) {
+                ptlrpcd_add_req(request);
+                rc = 0;
+        } else {
+                rc = ptlrpc_queue_wait(request);
+                if (rc)
+                        GOTO(out, rc);
 
-        body = lustre_swab_repbuf(request, 0, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL)
-                GOTO(out, rc = -EPROTO);
+                body = lustre_swab_repbuf(request, 0, sizeof(*body),
+                                          lustre_swab_ost_body);
+                if (body == NULL)
+                        GOTO(out, rc = -EPROTO);
 
-        memcpy(oa, &body->oa, sizeof(*oa));
-
+                memcpy(oa, &body->oa, sizeof(*oa));
+        }
         EXIT;
 out:
         ptlrpc_req_finished(request);
@@ -417,7 +421,8 @@ static int osc_punch(struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *md, obd_size start, obd_size end)
+                    struct lov_stripe_md *md, obd_size start,
+                    obd_size end)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
@@ -492,8 +497,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         memcpy(&body->oa, oa, sizeof(*oa));
         request->rq_replen = lustre_msg_size(1, &size);
 
-        if (oti != NULL && oti->oti_async) {
-                /* asynchrounous destroy */
+        if (oti != NULL && (oti->oti_flags & OBD_MODE_ASYNC)) {
                 ptlrpcd_add_req(request);
                 rc = 0;
         } else {
@@ -1264,7 +1268,6 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
 
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
-
         spin_unlock(&cli->cl_loi_list_lock);
 
         obdo_free(aa->aa_oa);
@@ -2867,26 +2870,6 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         int rc = 0;
         ENTRY;
 
-        if (keylen == strlen("next_id") &&
-            memcmp(key, "next_id", strlen("next_id")) == 0) {
-                if (vallen != sizeof(obd_id))
-                        RETURN(-EINVAL);
-		obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
-                CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
-                       exp->exp_obd->obd_name,
-                       obd->u.cli.cl_oscc.oscc_next_id);
-
-                RETURN(0);
-        }
-
-        if (keylen == strlen("growth_count") &&
-            memcmp(key, "growth_count", strlen("growth_count")) == 0) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
-		obd->u.cli.cl_oscc.oscc_max_grow_count = *((int*)val);
-                RETURN(0);
-        }
-
         if (keylen == strlen("unlinked") &&
             memcmp(key, "unlinked", keylen) == 0) {
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
@@ -2915,7 +2898,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (keylen == strlen("async") && memcmp(key, "async", keylen) == 0) {
+        if (keylen == strlen("async") &&
+            memcmp(key, "async", keylen) == 0) {
                 struct client_obd *cl = &obd->u.cli;
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
@@ -2951,16 +2935,18 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
         }
 
-        if (keylen < strlen("mds_conn") || memcmp(key, "mds_conn", keylen) != 0)
+        if (keylen < strlen("mds_conn") ||
+            memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
-        ctxt = llog_get_context(&exp->exp_obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
+        ctxt = llog_get_context(&exp->exp_obd->obd_llogs,
+                                LLOG_UNLINK_ORIG_CTXT);
         if (ctxt) {
                 if (rc == 0)
                         rc = llog_initiator_connect(ctxt);
                 else
-                        CERROR("cannot establish the connect for ctxt %p: %d\n",
-                               ctxt, rc);
+                        CERROR("cannot establish the connect for "
+                               "ctxt %p: %d\n", ctxt, rc);
         }
 
         imp->imp_server_timeout = 1;
@@ -2976,6 +2962,7 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_unlink_orig_logops;
+
 static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                          struct obd_device *tgt, int count,
                          struct llog_catid *catid)
@@ -3012,7 +2999,6 @@ static int osc_llog_finish(struct obd_device *obd,
         rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_SIZE_REPL_CTXT));
         RETURN(rc);
 }
-
 
 static int osc_connect(struct lustre_handle *exph,
                        struct obd_device *obd, struct obd_uuid *cluuid,

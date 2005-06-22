@@ -300,7 +300,8 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         LASSERT(list_empty(&lock->l_res_link));
 
         lock->l_resource = ldlm_resource_get(ns, NULL, new_resid,
-                                             lock->l_resource->lr_type, 1);
+                                             lock->l_resource->lr_type, 
+					     1);
         if (lock->l_resource == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
@@ -769,7 +770,8 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                         parent_res = parent_lock->l_resource;
         }
 
-        res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
+        res = ldlm_resource_get(ns, parent_res, res_id,
+                                type, 1);
         if (res == NULL)
                 RETURN(NULL);
 

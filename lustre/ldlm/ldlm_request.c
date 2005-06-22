@@ -922,8 +922,10 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 }
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.*/
-void ldlm_change_cbdata(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
-                        ldlm_iterator_t iter, void *data)
+void ldlm_change_cbdata(struct ldlm_namespace *ns, 
+		        struct ldlm_res_id *res_id,
+                        ldlm_iterator_t iter, 
+			void *data)
 {
         struct ldlm_resource *res;
         ENTRY;

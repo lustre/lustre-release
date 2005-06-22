@@ -180,8 +180,8 @@ out_unlock:
         up(&lli->lli_size_sem);
 } /* ll_truncate */
 
-int ll_prepare_write(struct file *file, struct page *page, unsigned from,
-                     unsigned to)
+int ll_prepare_write(struct file *file, struct page *page,
+                     unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -209,11 +209,22 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         oa->o_id = lsm->lsm_object_id;
         oa->o_gr = lsm->lsm_object_gr;
         oa->o_mode = inode->i_mode;
+
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
                 OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode), oa, lsm,
-                     1, &pga, NULL);
+        /*
+         * needed for quota to create OSS object on write with correct
+         * owner/group.
+         */
+        oa->o_uid = inode->i_uid;
+        oa->o_valid |= OBD_MD_FLUID;
+
+        oa->o_gid = inode->i_gid;
+        oa->o_valid |= OBD_MD_FLGID;
+        
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode),
+                     oa, lsm, 1, &pga, NULL);
         if (rc)
                 GOTO(out_free_oa, rc);
 
@@ -317,9 +328,13 @@ static int ll_ap_refresh_count(void *data, int cmd)
         lli = ll_i2info(page->mapping->host);
         lsm = lli->lli_smd;
 
-        down(&lli->lli_size_sem);
+        /*
+         * this callback is called with client lock taken, thus, it should not
+         * sleep or deadlock is possible. --umka
+         */
+//        down(&lli->lli_size_sem);
         kms = lov_merge_size(lsm, 1);
-        up(&lli->lli_size_sem);
+//        up(&lli->lli_size_sem);
 
         /* catch race with truncate */
         if (((__u64)page->index << PAGE_SHIFT) >= kms)

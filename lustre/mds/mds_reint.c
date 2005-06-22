@@ -499,35 +499,38 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_RM) {
                         rc = -EOPNOTSUPP;
                         if (inode->i_op && inode->i_op->removexattr) 
-                                rc = inode->i_op->removexattr(de,
-                                                    rec->ur_eadata);
-                } else if ((S_ISREG(inode->i_mode) ||
-                            S_ISDIR(inode->i_mode)) && rec->ur_eadata != NULL) {
+                                rc = inode->i_op->removexattr(de, rec->ur_eadata);
+                } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
                         struct lov_stripe_md *lsm = NULL;
                         struct lov_user_md *lum = NULL;
-                        
-                        rc = ll_permission(inode, MAY_WRITE, NULL);
-                        if (rc < 0)
-                                GOTO(cleanup, rc);
 
-                        lum = rec->ur_eadata;
-                        /* if lmm_stripe_size is -1 delete default stripe from dir */
-                        if (S_ISDIR(inode->i_mode) &&
-                            lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
-                                rc = fsfilt_set_md(obd, inode, handle, NULL, 0, EA_LOV);
-                                if (rc)
+                        if (rec->ur_eadata != NULL) {
+                                rc = ll_permission(inode, MAY_WRITE, NULL);
+                                if (rc < 0)
                                         GOTO(cleanup, rc);
-                        } else {
-                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
-                                                   0, &lsm, rec->ur_eadata);
-                                if (rc)
-                                        GOTO(cleanup, rc);
+
+                                lum = rec->ur_eadata;
+                        
+                                /* if lmm_stripe_size is -1 delete default
+                                 * stripe from dir */
+                                if (S_ISDIR(inode->i_mode) &&
+                                    lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
+                                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0, EA_LOV);
+                                        if (rc)
+                                                GOTO(cleanup, rc);
+                                } else {
+                                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                                           mds->mds_dt_exp, 0,
+                                                           &lsm, rec->ur_eadata);
+                                        if (rc)
+                                                GOTO(cleanup, rc);
                                 
-                                obd_free_memmd(mds->mds_dt_exp, &lsm);
-                                rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                                   rec->ur_eadatalen, EA_LOV);
-                                if (rc)
-                                        GOTO(cleanup, rc);
+                                        obd_free_memmd(mds->mds_dt_exp, &lsm);
+                                        rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
+                                                           rec->ur_eadatalen, EA_LOV);
+                                        if (rc)
+                                                GOTO(cleanup, rc);
+                                }
                         }
                 }    
         }
@@ -2249,7 +2252,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         body->valid |= OBD_MD_FLCOOKIE;
                 }
                 
-                rc = mds_destroy_objects(obd, child_inode, 1);
+                rc = mds_destroy_object(obd, child_inode, 1);
                 if (rc) {
                         CERROR("can't remove OST object, err %d\n",
                                rc);
@@ -3507,7 +3510,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         body->valid |= OBD_MD_FLCOOKIE;
                 }
                 
-                rc = mds_destroy_objects(obd, old_inode, 1);
+                rc = mds_destroy_object(obd, old_inode, 1);
                 if (rc) {
                         CERROR("can't remove OST object, err %d\n",
                                rc);

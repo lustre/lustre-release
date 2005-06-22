@@ -565,10 +565,6 @@ static int fsfilt_smfs_set_fs_flags(struct inode *inode, int flags)
 
         if (flags & SM_ALL_PLG) /* enable all plugins */
                 SMFS_SET(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
-        if (flags & SM_PRECREATE) /* disable logs for precreated objs */
-                SMFS_CLEAR(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
-
-
 #if 0
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
                 SMFS_SET_INODE_COW(inode);
@@ -588,9 +584,6 @@ static int fsfilt_smfs_clear_fs_flags(struct inode *inode, int flags)
         */
         if(flags & SM_ALL_PLG) /* disable all plugins */
                 SMFS_CLEAR(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
-        if (flags & SM_PRECREATE) /* enable log again */
-                SMFS_SET(I2SMI(inode)->smi_flags, SMFS_PLG_ALL);
-
         RETURN(rc);
 }
 

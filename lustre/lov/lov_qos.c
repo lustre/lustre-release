@@ -182,6 +182,3 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 out:
         RETURN(rc);
 }
-
-
-

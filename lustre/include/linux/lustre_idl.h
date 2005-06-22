@@ -463,10 +463,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_FROM_GRANT 0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED    0x40 /* the ost manages this */
 
-#define OBD_OBJECT_EOF 0xffffffffffffffffULL
-
-#define OST_MIN_PRECREATE 32
-#define OST_MAX_PRECREATE 20000
+#define OBD_OBJECT_EOF     0xffffffffffffffffULL
 
 struct obd_ioobj {
         obd_id               ioo_id;

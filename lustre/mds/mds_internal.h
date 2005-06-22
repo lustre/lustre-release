@@ -140,10 +140,8 @@ int mds_dt_set_info(struct obd_export *exp, obd_count keylen,
                      void *key, obd_count vallen, void *val);
 int mds_get_lovtgts(struct obd_device *, int tgt_count, struct obd_uuid *);
 int mds_dt_write_objids(struct obd_device *obd);
-void mds_dt_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_dt_set_growth(struct mds_obd *mds, int count);
-int mds_dt_set_nextid(struct obd_device *obd);
-int mds_dt_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
+int mds_dt_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched,
                int active, void *data);
@@ -152,10 +150,17 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                           struct lustre_msg *msg, int offset);
+void mds_dt_update_objids(struct obd_device *obd, obd_id *ids);
+void mds_dt_save_objids(struct obd_device *obd, obd_id *ids);
 
 /* mds/mds_open.c */
-int mds_destroy_objects(struct obd_device *obd,
-                        struct inode *inode, int async);
+int
+mds_create_object(struct obd_device *obd, struct ptlrpc_request *req,
+                  int offset, struct mds_update_record *rec,
+                  struct dentry *dchild, void **handle,
+                  obd_id *ids);
+int mds_destroy_object(struct obd_device *obd,
+                       struct inode *inode, int async);
 int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);

@@ -601,6 +601,7 @@ fsfilt_clear_fs_flags(struct obd_device *obd, struct inode *inode, int flags)
                 return obd->obd_fsops->fs_clear_fs_flags(inode, flags);
         return 0;
 }
+
 static inline int 
 fsfilt_precreate_rec(struct obd_device *obd, struct dentry *dentry,
                      int *num, struct obdo *oa)

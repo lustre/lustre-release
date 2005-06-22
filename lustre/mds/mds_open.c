@@ -247,35 +247,34 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
         struct mds_body *body;
-        int error;
+        int rc = 0;
         ENTRY;
 
         mfd = mds_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
-                GOTO(cleanup_dentry, error = -ENOMEM);
+                GOTO(cleanup_dentry, rc = -ENOMEM);
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
 
         if (flags & FMODE_WRITE) {
                 /* FIXME: in recovery, need to pass old epoch here */
-                error = mds_get_write_access(mds, dentry->d_inode, 0);
-                if (error)
-                        GOTO(cleanup_mfd, error);
+                rc = mds_get_write_access(mds, dentry->d_inode, 0);
+                if (rc)
+                        GOTO(cleanup_mfd, rc);
 #ifdef IFILTERDATA_ACTUALLY_USED
                 body->io_epoch = MDS_FILTERDATA(dentry->d_inode)->io_epoch;
-#endif /*IFILTERDATA_ACTUALLY_USED*/
+#endif
         } else if (flags & FMODE_EXEC) {
-                error = mds_deny_write_access(mds, dentry->d_inode);
-                if (error)
-                        GOTO(cleanup_mfd, error);
+                rc = mds_deny_write_access(mds, dentry->d_inode);
+                if (rc)
+                        GOTO(cleanup_mfd, rc);
         }
 
         dget(dentry);
 
-        /* Mark the file as open to handle open-unlink. */
-
+        /* mark the file as open to handle open-unlink. */
         DOWN_WRITE_I_ALLOC_SEM(dentry->d_inode);
         mds_orphan_open_inc(dentry->d_inode);
         UP_WRITE_I_ALLOC_SEM(dentry->d_inode);
@@ -290,41 +289,50 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         mds_mfd_put(mfd);
 
         body->handle.cookie = mfd->mfd_handle.h_cookie;
-
         RETURN(mfd);
-
 cleanup_mfd:
         mds_mfd_put(mfd);
         mds_mfd_destroy(mfd);
 cleanup_dentry:
-        return ERR_PTR(error);
+        return ERR_PTR(rc);
 }
 
-static void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
-                                struct lov_desc *desc)
+/* this is object id allocation callback */
+static int mds_obj_alloc(obd_id *objid)
+{
+        ENTRY;
+        LASSERT(objid != NULL);
+        RETURN(++(*objid));
+}
+
+static inline void
+mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
+                    struct lov_desc *desc)
 {
         int i;
+        
         for (i = 0; i < le32_to_cpu(lmm->lmm_stripe_count); i++) {
                 ids[le32_to_cpu(lmm->lmm_objects[i].l_ost_idx)] =
                         le64_to_cpu(lmm->lmm_objects[i].l_object_id);
         }
 }
 
-/* Must be called with i_sem held */
-static int mds_create_objects(struct ptlrpc_request *req, int offset,
-                              struct mds_update_record *rec,
-                              struct mds_obd *mds, struct obd_device *obd,
-                              struct dentry *dchild, void **handle, 
-                              obd_id **ids)
+/* must be called with i_sem held */
+int
+mds_create_object(struct obd_device *obd, struct ptlrpc_request *req,
+                  int offset, struct mds_update_record *rec,
+                  struct dentry *dchild, void **handle,
+                  obd_id *ids)
 {
-        struct obdo *oa = NULL;
+        struct inode *inode = dchild->d_inode;
+        struct mds_obd *mds = &obd->u.mds;
         struct obd_trans_info oti = { 0 };
-        struct mds_body *body;
         struct lov_stripe_md *lsm = NULL;
         struct lov_mds_md *lmm = NULL;
-        struct inode *inode = dchild->d_inode;
-        void *lmm_buf;
         int rc, lmm_bufsize, lmm_size;
+        struct obdo *oa = NULL;
+        struct mds_body *body;
+        void *lmm_buf;
         ENTRY;
 
         if (rec->ur_flags & MDS_OPEN_DELAY_CREATE ||
@@ -338,11 +346,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (body->valid & OBD_MD_FLEASIZE)
                 RETURN(0);
 
-        OBD_ALLOC(*ids, mds->mds_dt_desc.ld_tgt_count * sizeof(**ids));
-        if (*ids == NULL)
-                RETURN(-ENOMEM);
-        oti.oti_objid = *ids;
-
+        oti.oti_objid = ids;
+                
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 LASSERT(id_ino(rec->ur_id2));
@@ -352,19 +357,25 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 LASSERT(lmm);
 
                 if (*handle == NULL)
-                        *handle = fsfilt_start(obd,inode,FSFILT_OP_CREATE,NULL);
+                        *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
                 if (IS_ERR(*handle)) {
                         rc = PTR_ERR(*handle);
                         *handle = NULL;
-                        GOTO(out_ids, rc);
+                        RETURN(rc);
                 }
 
-                mds_objids_from_lmm(*ids, lmm, &mds->mds_dt_desc);
+                /* 
+                 * FIXME: this is evil layering violation, all things related to
+                 * stripping should be done by LOV.  --umka.
+                 */
+                mds_objids_from_lmm(ids, lmm, &mds->mds_dt_desc);
 
                 lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
                 lmm_bufsize = req->rq_repmsg->buflens[offset];
-                LASSERT(lmm_buf);
+                
+                LASSERT(lmm_buf != NULL);
                 LASSERT(lmm_bufsize >= lmm_size);
+
                 memcpy(lmm_buf, lmm, lmm_size);
                 rc = fsfilt_set_md(obd, inode, *handle, lmm,
                                    lmm_size, EA_LOV);
@@ -374,11 +385,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         }
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
-                GOTO(out_ids, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         oa = obdo_alloc();
         if (oa == NULL)
-                GOTO(out_ids, rc = -ENOMEM);
+                RETURN(-ENOMEM);
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = inode->i_ino;
         oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
@@ -389,8 +400,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
 
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|OBD_MD_FLMTIME|
-                        OBD_MD_FLCTIME);
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         if (!(rec->ur_flags & MDS_OPEN_HAS_OBJS)) {
                 /* check if things like lfs setstripe are sending us the ea */
@@ -415,15 +426,25 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         OBD_FREE(lmm, mds->mds_max_mdsize);
                         if (rc)
                                 GOTO(out_oa, rc);
-                } 
+                }
+
+                /* 
+                 * create with CROW flag and base ids for allocating new ids on
+                 * them.
+                 */
+                oti.oti_flags |= OBD_MODE_CROW;
+                oti.oti_obj_alloc = mds_obj_alloc;
+
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
                 rc = obd_create(mds->mds_dt_exp, oa, NULL, 0, &lsm, &oti);
+
                 if (rc) {
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
                                 level = D_INODE;
-                        CDEBUG(level, "error creating objects for "
-                                      "inode %lu: rc = %d\n",
+                        CDEBUG((rc == -ENOSPC ? D_INODE : D_ERROR),
+                               "error creating objects for "
+                               "inode %lu: rc = %d\n",
                                inode->i_ino, rc);
                         if (rc > 0) {
                                 CERROR("obd_create returned invalid "
@@ -435,16 +456,17 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         } else {
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_dt_exp,
                                    0, &lsm, rec->ur_eadata);
-                if (rc) {
+                if (rc)
                         GOTO(out_oa, rc);
-                }
+
                 lsm->lsm_object_id = oa->o_id;
                 lsm->lsm_object_gr = oa->o_gr;
         }
         if (inode->i_size) {
                 oa->o_size = inode->i_size;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
-                                OBD_MD_FLMTIME| OBD_MD_FLCTIME| OBD_MD_FLSIZE);
+                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+                
                 rc = obd_setattr(mds->mds_dt_exp, oa, lsm, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
@@ -465,7 +487,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         rc = obd_packmd(mds->mds_dt_exp, &lmm, lsm);
         if (!id_ino(rec->ur_id2))
                 obd_free_memmd(mds->mds_dt_exp, &lsm);
-        LASSERT(rc >= 0);
+        if (rc < 0) {
+                CERROR("cannot pack lsm, err = %d\n", rc);
+                GOTO(out_oa, rc);
+        }
+
         lmm_size = rc;
         body->eadatasize = rc;
 
@@ -487,22 +513,18 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         memcpy(lmm_buf, lmm, lmm_size);
         obd_free_diskmd(mds->mds_dt_exp, &lmm);
- out_oa:
+out_oa:
         oti_free_cookies(&oti);
         obdo_free(oa);
- out_ids:
-        if (rc) {
-                OBD_FREE(*ids, mds->mds_dt_desc.ld_tgt_count * sizeof(**ids));
-                *ids = NULL;
-        }
-        if(lsm)
+
+        if (lsm)
                 obd_free_memmd(mds->mds_dt_exp, &lsm);
         RETURN(rc);
 }
 
 int
-mds_destroy_objects(struct obd_device *obd,
-                    struct inode *inode, int async)
+mds_destroy_object(struct obd_device *obd,
+                   struct inode *inode, int async)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
@@ -512,8 +534,8 @@ mds_destroy_objects(struct obd_device *obd,
         LASSERT(inode != NULL);
 
         if (inode->i_nlink != 0) {
-                CWARN("attempt to destroy OSS object when "
-                      "i_nlink == %d\n", (int)inode->i_nlink);
+                CDEBUG(D_INODE, "attempt to destroy OSS object when "
+                       "i_nlink == %d\n", (int)inode->i_nlink);
                 RETURN(0);
         }
         
@@ -696,10 +718,10 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                            struct mds_body *body, int flags, void **handle,
                            struct mds_update_record *rec, struct ldlm_reply *rep)
 {
-        struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd = NULL;
-        obd_id *ids = NULL; /* object IDs created */
+        obd_id *ids = NULL;
         unsigned mode;
         int rc = 0;
         ENTRY;
@@ -707,6 +729,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         /* atomically create objects if necessary */
         down(&dchild->d_inode->i_sem);
         mode = dchild->d_inode->i_mode;
+
         if ((S_ISREG(mode) && !(body->valid & OBD_MD_FLEASIZE)) || 
             (S_ISDIR(mode) && !(body->valid & OBD_MD_FLDIREA))) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
@@ -716,6 +739,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         RETURN(rc);
                 }
         }
+
         if (rec != NULL) {
                 /* no EA: create objects */
                 if ((body->valid & OBD_MD_FLEASIZE) &&
@@ -723,16 +747,49 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         up(&dchild->d_inode->i_sem);
                         RETURN(-EEXIST);
                 }
+                
                 if (!(body->valid & OBD_MD_FLEASIZE)) {
-                        /* no EA: create objects */
-                        rc = mds_create_objects(req, 2, rec, mds, obd,
-                                                dchild, handle, &ids);
-                        if (rc) {
-                                CERROR("mds_create_objects: rc = %d\n", rc);
+                        int ids_size = mds->mds_dt_desc.ld_tgt_count * sizeof(*ids);
+                        
+                        OBD_ALLOC(ids, ids_size);
+                        if (ids == NULL) {
                                 up(&dchild->d_inode->i_sem);
+                                RETURN(-ENOMEM);
+                        }
+
+                        /* 
+                         * synchronizing object creating to prevent another
+                         * threads take the same base objid values.
+                         */
+                        down(&mds->mds_create_sem);
+
+                        /* preparing base ids */
+                        mds_dt_save_objids(obd, ids);
+
+                        /* 
+                         * create objects, @ids will contain new allocated obj
+                         * ids.
+                         */
+                        rc = mds_create_object(obd, req, 2, rec,
+                                               dchild, handle, ids);
+                        if (rc) {
+                                CERROR("mds_create_object: rc = %d\n", rc);
+                                up(&mds->mds_create_sem);
+                                up(&dchild->d_inode->i_sem);
+                                OBD_FREE(ids, ids_size);
                                 RETURN(rc);
                         }
+
+                        /*
+                         * update MDS objids by new ones allocated in
+                         * mds_create_object().
+                         */
+                        mds_dt_update_objids(obd, ids);
+                        OBD_FREE(ids, ids_size);
+                        
+                        up(&mds->mds_create_sem);
                 }
+                
                 if (S_ISREG(dchild->d_inode->i_mode) &&
                     (body->valid & OBD_MD_FLEASIZE)) {
                         rc = mds_revalidate_lov_ea(obd, dchild->d_inode,
@@ -746,6 +803,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         }
                 }
         }
+        
         rc = mds_pack_acl(obd, req->rq_repmsg, 3, body, dchild->d_inode);
         if (rc < 0) {
                 CERROR("mds_pack_acl: rc = %d\n", rc);
@@ -759,6 +817,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                 OBD_MD_FLATIME | OBD_MD_FLMTIME);
         }
+
         up(&dchild->d_inode->i_sem);
 
         intent_set_disposition(rep, DISP_OPEN_OPEN);
@@ -768,12 +827,6 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
 
         CDEBUG(D_INODE, "mfd %p, cookie "LPX64"\n", mfd,
                mfd->mfd_handle.h_cookie);
-        if (ids != NULL) {
-                mds_dt_update_objids(obd, ids);
-                OBD_FREE(ids, sizeof(*ids) * mds->mds_dt_desc.ld_tgt_count);
-        }
-        //if (rc)
-        //        mds_mfd_destroy(mfd);
         RETURN(rc);
 }
 
@@ -949,8 +1002,8 @@ int mds_open(struct mds_update_record *rec, int offset,
 
                 LASSERT(id_ino(rec->ur_id2));
 
-                rc = mds_open_by_id(req, rec->ur_id2, body, rec->ur_flags,
-                                    rec, rep);
+                rc = mds_open_by_id(req, rec->ur_id2, body,
+                                    rec->ur_flags, rec, rep);
                 if (rc != -ENOENT) {
                         mds_body_do_reverse_map(med, body);
                         RETURN(rc);
@@ -1511,7 +1564,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
 		
-		rc = mds_destroy_objects(obd, inode, 1);
+		rc = mds_destroy_object(obd, inode, 1);
 		if (rc) {
 			CERROR("cannot destroy OSS object on close, err %d\n",
 			       rc);

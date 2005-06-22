@@ -591,10 +591,10 @@ int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea)
 int lov_update_create_set(struct lov_request_set *set,
                           struct lov_request *req, int rc)
 {
+        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         struct obd_trans_info *oti = set->set_oti;
         struct lov_stripe_md *lsm = set->set_md;
         struct lov_oinfo *loi;
-        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         ENTRY;
 
         req->rq_stripe = set->set_success;
@@ -658,7 +658,7 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **ea,
                 /* If the MDS file was truncated up to some size, stripe over
                  * enough OSTs to allow the file to be created at that size. */
                 if (src_oa->o_valid & OBD_MD_FLSIZE) {
-                        stripes=((src_oa->o_size+LUSTRE_STRIPE_MAXBYTES)>>12)-1;
+                        stripes = ((src_oa->o_size + LUSTRE_STRIPE_MAXBYTES) >> 12) - 1;
                         do_div(stripes, (__u32)(LUSTRE_STRIPE_MAXBYTES >> 12));
 
                         if (stripes > lov->desc.ld_active_tgt_count)

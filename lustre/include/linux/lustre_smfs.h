@@ -162,7 +162,6 @@ struct fs_extent{
 
 /* SMFS external flags and methods */
 #define SM_ALL_PLG      0x80L
-#define SM_PRECREATE    0x100L
 
 #define SM_DO_REC               0x1
 #define SM_INIT_REC             0x2

@@ -83,8 +83,10 @@ mds_unlink_object(struct mds_obd *mds, struct inode *inode,
 
         CDEBUG(D_INODE, "destroy OSS object %d/%d\n",
                (int)oa->o_id, (int)oa->o_gr);
+
+        if (async)
+                oti.oti_flags |= OBD_MODE_ASYNC;
         
-        oti.oti_async = async;
         rc = obd_destroy(mds->mds_dt_exp, oa, lsm, &oti);
         obdo_free(oa);
 out_free_memmd:

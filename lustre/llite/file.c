@@ -1158,62 +1158,6 @@ out:
         return retval;
 }
 
-static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
-                               unsigned long arg)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_export *exp = ll_i2dtexp(inode);
-        struct ll_recreate_obj ucreatp;
-        struct obd_trans_info oti = { 0 };
-        struct obdo *oa = NULL;
-        int lsm_size;
-        int rc = 0;
-        struct lov_stripe_md *lsm, *lsm2;
-        ENTRY;
-
-        if (!capable (CAP_SYS_ADMIN))
-                RETURN(-EPERM);
-
-        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
-                            sizeof(struct ll_recreate_obj));
-        if (rc) {
-                RETURN(-EFAULT);
-        }
-        oa = obdo_alloc();
-        if (oa == NULL) 
-                RETURN(-ENOMEM);
-
-        down(&lli->lli_open_sem);
-        lsm = lli->lli_smd;
-        if (lsm == NULL)
-                GOTO(out, rc = -ENOENT);
-        lsm_size = sizeof(*lsm) + (sizeof(struct lov_oinfo) *
-                   (lsm->lsm_stripe_count));
-
-        OBD_ALLOC(lsm2, lsm_size);
-        if (lsm2 == NULL)
-                GOTO(out, rc = -ENOMEM);
-
-        oa->o_id = ucreatp.lrc_id;
-        oa->o_nlink = ucreatp.lrc_ost_idx;
-        oa->o_gr = ucreatp.lrc_group;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
-        oa->o_flags |= OBD_FL_RECREATE_OBJS;
-        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-        oti.oti_objid = NULL;
-        memcpy(lsm2, lsm, lsm_size);
-        rc = obd_create(exp, oa, NULL, 0, &lsm2, &oti);
-
-        OBD_FREE(lsm2, lsm_size);
-        GOTO(out, rc);
-out:
-        up(&lli->lli_open_sem);
-        obdo_free(oa);
-        return rc;
-}
-
 static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                                     int flags, struct lov_user_md *lum,
                                     int lum_size)
@@ -1309,12 +1253,12 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 }
 
 static int ll_lov_setea(struct inode *inode, struct file *file,
-                            unsigned long arg)
+                        unsigned long arg)
 {
         int flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
         struct lov_user_md  *lump;
         int lum_size = sizeof(struct lov_user_md) +
-                       sizeof(struct lov_user_ost_data);
+                sizeof(struct lov_user_ost_data);
         int rc;
         ENTRY;
 
@@ -1497,8 +1441,6 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         }
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
-        case LL_IOC_RECREATE_OBJ:
-                RETURN(ll_lov_recreate_obj(inode, file, arg));
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
                 RETURN( ll_iocontrol(inode, file, cmd, arg) );
@@ -1607,7 +1549,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
                 oa->o_id = lsm->lsm_object_id;
                 oa->o_gr = lsm->lsm_object_gr;
-                oa->o_valid = OBD_MD_FLID;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
                 obdo_from_inode(oa, inode, (OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                             OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                             OBD_MD_FLGROUP));

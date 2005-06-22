@@ -111,6 +111,18 @@ int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
 
+struct dentry *filter_crow_object(struct obd_device *obd, __u64 ogr,
+                                  __u64 oid);
+
+int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
+                            struct obdo *oa, struct obd_trans_info *oti);
+
+int filter_setattr(struct obd_export *exp, struct obdo *oa,
+                   struct lov_stripe_md *md, struct obd_trans_info *oti);
+
+int filter_create_object(struct obd_device *obd, struct obdo *oa,
+                         obd_gr group);
+
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
 

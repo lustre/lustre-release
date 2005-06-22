@@ -1057,8 +1057,11 @@ test_51b() {
     mkdir -p $DIR/$tdir-2
     multiop $DIR/$tdir-1/f O_c &
     pid=$!
+
     # give multiop a chance to open
-    sleep 1
+    # 1 second seems to be not enough, we met already such a cases
+    # --umka
+    sleep 5
 
     do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000107"
     touch $DIR/${tdir}-2/f &

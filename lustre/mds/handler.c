@@ -344,10 +344,19 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
         if (inode->i_ino != id_ino(&mds->mds_rootid) && generation &&
             inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
-                CERROR("bad inode %lu, link: %lu, ct: %d, generation %u/%u\n",
-                       inode->i_ino, (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
+                if (id_group(id) != mds->mds_num) {
+                        CERROR("bad inode %lu found, link: %lu, ct: %d, generation "
+                               "%u != %u, mds %u != %u, request to wrong MDS?\n",
+                               inode->i_ino, (unsigned long)inode->i_nlink,
+                               atomic_read(&inode->i_count), inode->i_generation,
+                               generation, mds->mds_num, (unsigned)id_group(id));
+                } else {
+                        CERROR("bad inode %lu found, link: %lu, ct: %d, generation "
+                               "%u != %u, inode is recreated while request handled?\n",
+                               inode->i_ino, (unsigned long)inode->i_nlink,
+                               atomic_read(&inode->i_count), inode->i_generation,
+                               generation);
+                }
                 dput(result);
                 RETURN(ERR_PTR(-ENOENT));
         }
@@ -868,16 +877,14 @@ int mds_get_md(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
-
 /* Call with lock=1 if you want mds_pack_md to take the i_sem.
  * Call with lock=0 if the caller has already taken the i_sem. */
 int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
                 struct mds_body *body, struct inode *inode, int lock, int mea)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int rc, lmm_size;
         void *lmm;
-        int lmm_size;
-        int rc;
         ENTRY;
 
         lmm = lustre_msg_buf(msg, offset, 0);
@@ -902,11 +909,9 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
 
         rc = mds_get_md(obd, inode, lmm, &lmm_size, lock, mea);
         if (rc > 0) {
-                if (S_ISDIR(inode->i_mode))
-                        body->valid |= OBD_MD_FLDIREA;
-                else
-                        body->valid |= OBD_MD_FLEASIZE;
-
+                body->valid |= S_ISDIR(inode->i_mode) ?
+                        OBD_MD_FLDIREA : OBD_MD_FLEASIZE;
+                
                 if (mea)
                         body->valid |= OBD_MD_MEA;
                 
@@ -916,6 +921,7 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
 
         RETURN(rc);
 }
+
 int mds_pack_link(struct dentry *dentry, struct ptlrpc_request *req,
                   struct mds_body *repbody, int reply_off)
 {
@@ -3264,6 +3270,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* we have to know mdsnum before touching underlying fs -bzzz */
         atomic_set(&mds->mds_open_count, 0);
         sema_init(&mds->mds_md_sem, 1);
+        sema_init(&mds->mds_create_sem, 1);
         mds->mds_md_connected = 0;
         mds->mds_md_name = NULL;
 
@@ -3478,13 +3485,6 @@ int mds_postrecov_common(struct obd_device *obd)
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
         LASSERT(ctxt != NULL);
 
-        /* set nextid first, so we are sure it happens */
-        rc = mds_dt_set_nextid(obd);
-        if (rc) {
-                CERROR("%s: mds_dt_set_nextid() failed\n", obd->obd_name);
-                GOTO(out, rc);
-        }
-
         /* clean PENDING dir */
         rc = mds_cleanup_orphans(obd);
         if (rc < 0)
@@ -3493,8 +3493,8 @@ int mds_postrecov_common(struct obd_device *obd)
 
         group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         valsize = sizeof(group);
-        rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"), "mds_conn",
-                          valsize, &group);
+        rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"),
+                          "mds_conn", valsize, &group);
         if (rc)
                 GOTO(out, rc);
 
@@ -3507,7 +3507,7 @@ int mds_postrecov_common(struct obd_device *obd)
         }
 
         /* remove the orphaned precreated objects */
-        rc = mds_dt_clearorphans(mds, NULL /* all OSTs */);
+        rc = mds_dt_clear_orphans(mds, NULL /* all OSTs */);
         if (rc)
                 GOTO(err_llog, rc);
 

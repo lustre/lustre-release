@@ -1921,7 +1921,7 @@ test_54a() {
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }
-run_test 54a "unix damain socket test =========================="
+run_test 54a "unix domain socket test =========================="
 
 test_54b() {
 	f="$DIR/f54b"
