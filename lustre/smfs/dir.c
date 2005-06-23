@@ -591,7 +591,9 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                 rc = -ENOMEM;
                 goto exit;
         }
-
+        
+        dentry_unhash(cache_dentry);
+        
         handle = smfs_trans_start(dir, FSFILT_OP_RMDIR, NULL);
         if (IS_ERR(handle) ) {
                 rc = -ENOSPC;
