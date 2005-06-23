@@ -1251,7 +1251,6 @@ got_child:
                         MD_COUNTER_INCREMENT(obd, create);
                 }
 
-                down(&dchild->d_inode->i_sem);
                 if (ino) {
                         rc = mds_update_inode_sid(obd, dchild->d_inode,
                                                   handle, rec->ur_id2);
@@ -1273,8 +1272,7 @@ got_child:
                                        "rc = %d\n", rc);
                         }
                 }
-                up(&dchild->d_inode->i_sem);
-                
+
                 if (!(rec->ur_flags & O_EXCL)) { /* bug 3313 */
                         rc = fsfilt_commit(obd, dchild->d_inode->i_sb,
                                            dchild->d_inode, handle, 
