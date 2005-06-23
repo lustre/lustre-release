@@ -915,7 +915,7 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
                         down(&ctxt->loc_objects_dir->d_inode->i_sem);
                         fdentry = lookup_one_len(id_name, ctxt->loc_objects_dir,
                                                  id_len);
-                        if (fdentry == NULL || fdentry->d_inode == NULL) {
+                        if (IS_ERR(fdentry) || fdentry->d_inode == NULL) {
                                 CERROR("destroy non_existent object %s\n", 
                                        id_name);
                                 GOTO(out_err, rc = IS_ERR(fdentry) ?

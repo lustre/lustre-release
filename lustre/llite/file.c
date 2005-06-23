@@ -393,7 +393,8 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
-                if (LUSTRE_IT(it)->it_disposition) {
+                if (it_disposition(it, DISP_LOOKUP_POS) && /* Positive lookup */
+                    it_disposition(it, DISP_OPEN_OPEN)) { /* & OPEN happened */
                         struct obd_client_handle *och;
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow*/

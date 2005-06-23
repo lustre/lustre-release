@@ -1574,18 +1574,29 @@ static int filter_detach(struct obd_device *dev)
 
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
+        struct lustre_cfg *lcfg = buf;
+        unsigned long page;
         int rc;
         ENTRY;
 
         spin_lock_init(&filter->fo_denylist_lock);
         INIT_LIST_HEAD(&filter->fo_denylist);
 
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        page = get_zeroed_page(GFP_KERNEL);
+        if (!page)
+                RETURN(-ENOMEM);
+
+        memcpy((void *)page, lustre_cfg_buf(lcfg, 4),
+               LUSTRE_CFG_BUFLEN(lcfg, 4));
+        
         /* all mount options including errors=remount-ro and asyncdel are passed
          * using 4th lcfg param. And it is good, finally we have got rid of
          * hardcoded fs types in the code. */
-        rc = filter_common_setup(obd, len, buf, lustre_cfg_buf(lcfg, 4));
+        rc = filter_common_setup(obd, len, buf, (void *)page);
+        free_page(page);
+        
         if (rc)
                 RETURN(rc);
         rc = filter_post_fs_setup(obd);

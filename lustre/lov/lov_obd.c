@@ -976,6 +976,12 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
+        LASSERT(!(src_oa->o_valid & ~(OBD_MD_FLID|OBD_MD_FLTYPE | OBD_MD_FLMODE|
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME | OBD_MD_FLFLAGS |
+                                      OBD_MD_FLSIZE | OBD_MD_FLGROUP |
+                                      OBD_MD_FLUID | OBD_MD_FLGID)));
+
         LASSERT(!(src_oa->o_valid & OBD_MD_FLGROUP) || src_oa->o_gr > 0);
 
         lov = &exp->exp_obd->u.lov;

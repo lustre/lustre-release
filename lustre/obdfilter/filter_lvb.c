@@ -79,7 +79,11 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         if (dentry->d_inode == NULL) {
                 lvb->lvb_size = 0;
                 lvb->lvb_blocks = 0;
-                lvb->lvb_mtime = LTIME_S(CURRENT_TIME);
+
+                /* making client use MDS mtime as this one is zero, bigger one
+                 * will be taken and this does not break POSIX. Thanks to
+                 * Andreas. --umka */
+                lvb->lvb_mtime = 0;
         } else {
                 lvb->lvb_size = dentry->d_inode->i_size;
                 lvb->lvb_blocks = dentry->d_inode->i_blocks;

@@ -267,7 +267,7 @@ static int lvfs_reint_link(struct super_block *sb, struct reint_record *r_rec)
         old_dentry = lookup_one_len(old_nd.last.name, old_dparent,
                                     old_nd.last.len);
 
-        if (!old_dentry || !old_dentry->d_inode ||
+        if (IS_ERR(old_dentry) || !old_dentry->d_inode ||
             is_bad_inode(old_dentry->d_inode))
                 GOTO(cleanup, rc = -ENODEV);
         if (dir->i_rdev != old_dentry->d_inode->i_rdev)
@@ -321,7 +321,7 @@ static int lvfs_reint_unlink(struct super_block *sb, struct reint_record *r_rec)
         dir = dparent->d_inode;
 
         dentry = lookup_one_len(nd.last.name, dparent, nd.last.len);
-        if (!dentry || !dentry->d_inode || is_bad_inode(dentry->d_inode))
+        if (IS_ERR(dentry) || !dentry->d_inode || is_bad_inode(dentry->d_inode))
                 GOTO(cleanup, rc = -ENODEV);
 
         if (!SMFS_DO_WRITE_KML(r_rec->u_rec.ur_flags))
@@ -390,7 +390,7 @@ static int lvfs_reint_rename(struct super_block *sb, struct reint_record *r_rec)
         dir = dparent->d_inode;
         dentry = lookup_one_len(nd.last.name, dparent, nd.last.len);
 
-        if (!dentry || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
+        if (IS_ERR(dentry) || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
                 path_release(&nd);
                 RETURN(rc);
         }
@@ -466,7 +466,7 @@ static int lvfs_reint_setattr(struct super_block *sb,
         dir = dparent->d_inode;
         dentry = lookup_one_len(nd.last.name, dparent, nd.last.len);
 
-        if (!dentry || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
+        if (IS_ERR(dentry) || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
                 path_release(&nd);
                 RETURN(rc);
         }
@@ -508,7 +508,7 @@ static int lvfs_reint_close(struct super_block *sb, struct reint_record *r_rec)
         dir = dparent->d_inode;
         dentry = lookup_one_len(nd.last.name, dparent, nd.last.len);
 
-        if (!dentry || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
+        if (IS_ERR(dentry) || !dentry->d_inode || is_bad_inode(dentry->d_inode)) {
                 path_release(&nd);
                 RETURN(rc);
         }
