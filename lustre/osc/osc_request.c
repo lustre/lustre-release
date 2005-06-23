@@ -2935,6 +2935,16 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
         }
 
+        if (keylen == strlen("flush_cred") &&
+            memcmp(key, "flush_cred", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                if (cli->cl_import)
+                        ptlrpcs_import_flush_creds(cli->cl_import,
+                                                   *((uid_t *) val));
+                RETURN(0);
+        }
+
         if (keylen < strlen("mds_conn") ||
             memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);

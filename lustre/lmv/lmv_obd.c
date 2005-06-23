@@ -1904,8 +1904,9 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
 int lmv_set_info(struct obd_export *exp, obd_count keylen,
                  void *key, obd_count vallen, void *val)
 {
-        struct obd_device *obd;
-        struct lmv_obd *lmv;
+        struct lmv_tgt_desc    *tgt;
+        struct obd_device      *obd;
+        struct lmv_obd         *lmv;
         ENTRY;
 
         obd = class_exp2obd(exp);
@@ -1925,7 +1926,6 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
         /* maybe this could be default */
         if ((keylen == strlen("sec") && strcmp(key, "sec") == 0) ||
             (keylen == strlen("nllu") && strcmp(key, "nllu") == 0)) {
-                struct lmv_tgt_desc *tgt;
                 struct obd_export *exp;
                 int rc = 0, err, i;
 
@@ -1959,6 +1959,23 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 spin_unlock(&lmv->lmv_lock);
 
                 RETURN(rc);
+        }
+
+        if ((keylen == strlen("flush_cred") &&
+             strcmp(key, "flush_cred") == 0)) {
+                int rc = 0, i;
+
+                for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
+                     i++, tgt++) {
+                        if (!tgt->ltd_exp)
+                                continue;
+                        rc = obd_set_info(tgt->ltd_exp,
+                                          keylen, key, vallen, val);
+                        if (rc)
+                                RETURN(rc);
+                }
+
+                RETURN(0);
         }
 
         RETURN(-EINVAL);

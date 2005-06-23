@@ -64,6 +64,8 @@
 #define LL_IOC_GROUP_LOCK               _IOW ('f', 161, long)
 #define LL_IOC_GROUP_UNLOCK             _IOW ('f', 162, long)
 
+#define LL_IOC_FLUSH_CRED               _IOW ('f', 170, long)
+
 #define O_LOV_DELAY_CREATE    0100000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK   0x00000001

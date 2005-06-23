@@ -138,10 +138,17 @@ struct ptlrpc_credops {
                            struct ptlrpc_request *req);
 };
 
-#define PTLRPC_CRED_UPTODATE    0x00000001 /* uptodate */
-#define PTLRPC_CRED_DEAD        0x00000002 /* mark expired gracefully */
-#define PTLRPC_CRED_ERROR       0x00000004 /* fatal error (refresh, etc.) */
-#define PTLRPC_CRED_FLAGS_MASK  0x00000007
+#define PTLRPC_CRED_UPTODATE_BIT        0 /* uptodate */
+#define PTLRPC_CRED_DEAD_BIT            1 /* mark expired gracefully */
+#define PTLRPC_CRED_ERROR_BIT           2 /* fatal error (refresh, etc.) */
+
+#define PTLRPC_CRED_UPTODATE            (1 << PTLRPC_CRED_UPTODATE_BIT)
+#define PTLRPC_CRED_DEAD                (1 << PTLRPC_CRED_DEAD_BIT)
+#define PTLRPC_CRED_ERROR               (1 << PTLRPC_CRED_ERROR_BIT)
+
+#define PTLRPC_CRED_FLAGS_MASK          (PTLRPC_CRED_UPTODATE |         \
+                                         PTLRPC_CRED_DEAD |             \
+                                         PTLRPC_CRED_ERROR)
 
 struct ptlrpc_cred {
         struct list_head        pc_hash;   /* linked into hash table */
@@ -149,7 +156,7 @@ struct ptlrpc_cred {
         struct ptlrpc_sec      *pc_sec;
         struct ptlrpc_credops  *pc_ops;
         unsigned long           pc_expire;
-        int                     pc_flags;
+        unsigned long           pc_flags;
         /* XXX maybe should not be here */
         __u64                   pc_pag;
         uid_t                   pc_uid;
@@ -227,14 +234,6 @@ static inline void ptlrpcs_cred_get(struct ptlrpc_cred *cred)
         atomic_inc(&cred->pc_refcount);
 }
 
-static inline int ptlrpcs_cred_is_uptodate(struct ptlrpc_cred *cred)
-{
-        LASSERT(cred);
-        LASSERT(atomic_read(&cred->pc_refcount));
-        return ((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
-                PTLRPC_CRED_UPTODATE);
-}
-
 static inline int ptlrpcs_cred_refresh(struct ptlrpc_cred *cred)
 {
         LASSERT(cred);
@@ -244,25 +243,32 @@ static inline int ptlrpcs_cred_refresh(struct ptlrpc_cred *cred)
         return cred->pc_ops->refresh(cred);
 }
 
-/* we set the cred flags is safe since cred cache code don't
- * touch cred with refcount > 0
- */
-static inline void ptlrpcs_cred_expire(struct ptlrpc_cred *cred)
+static inline int ptlrpcs_cred_is_uptodate(struct ptlrpc_cred *cred)
 {
-        LASSERT(atomic_read(&cred->pc_refcount));
-        LASSERT(cred->pc_sec);
-
-        if (cred->pc_flags & PTLRPC_CRED_DEAD)
-                return;
-        cred->pc_flags |= PTLRPC_CRED_DEAD;
-        cred->pc_flags &= ~PTLRPC_CRED_UPTODATE;
-        CWARN("cred %p: get expired\n", cred);
+        smp_mb();
+        return ((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
+                PTLRPC_CRED_UPTODATE);
 }
 
-/* usually called upon an UPTODATE cred */
-static inline int ptlrpcs_cred_check_expire(struct ptlrpc_cred *cred)
+static inline int ptlrpcs_cred_is_dead(struct ptlrpc_cred *cred)
+{
+        smp_mb();
+        return ((cred->pc_flags & (PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR)) != 0);
+}
+
+#define ptlrpcs_cred_expire(cred)                                       \
+        if (!test_and_set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags)) { \
+                CWARN("cred %p: get expired\n", cred);                  \
+                clear_bit(PTLRPC_CRED_UPTODATE_BIT, &cred->pc_flags);   \
+        }
+
+static inline int ptlrpcs_cred_check_uptodate(struct ptlrpc_cred *cred)
 {
         LASSERT(atomic_read(&cred->pc_refcount));
+
+        if (!ptlrpcs_cred_is_uptodate(cred))
+                return 1;
+
         if (cred->pc_expire == 0)
                 return 0;
         if (time_after(cred->pc_expire, get_seconds()))
@@ -346,6 +352,7 @@ void ptlrpcs_cli_free_repbuf(struct ptlrpc_request *req);
 /* higher interface */
 int  ptlrpcs_import_get_sec(struct obd_import *imp);
 void ptlrpcs_import_drop_sec(struct obd_import *imp);
+void ptlrpcs_import_flush_creds(struct obd_import *imp, uid_t uid);
 int  ptlrpcs_req_get_cred(struct ptlrpc_request *req);
 void ptlrpcs_req_drop_cred(struct ptlrpc_request *req);
 int  ptlrpcs_req_replace_dead_cred(struct ptlrpc_request *req);

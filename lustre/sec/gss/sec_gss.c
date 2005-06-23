@@ -88,7 +88,7 @@ struct rpc_clnt;
  **********************************************/
 
 #define SECINIT_RPC_TIMEOUT     (30)
-#define SECFINI_RPC_TIMEOUT     (30)
+#define SECFINI_RPC_TIMEOUT     (10)
 
 static int secinit_compose_request(struct obd_import *imp,
                                    char *buf, int bufsize,
@@ -577,7 +577,7 @@ void gss_cred_set_ctx(struct ptlrpc_cred *cred, struct gss_cl_ctx *ctx)
         write_lock(&gss_ctx_lock);
         old = gcred->gc_ctx;
         gcred->gc_ctx = ctx;
-        cred->pc_flags |= PTLRPC_CRED_UPTODATE;
+        set_bit(PTLRPC_CRED_UPTODATE_BIT, &cred->pc_flags);
         write_unlock(&gss_ctx_lock);
         if (old)
                 gss_put_ctx(old);
@@ -715,6 +715,8 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         int                         res;
         ENTRY;
 
+        might_sleep();
+
         /* any flags means it has been handled, do nothing */
         if (cred->pc_flags & PTLRPC_CRED_FLAGS_MASK)
                 RETURN(0);
@@ -780,7 +782,7 @@ again:
          * administrator via lctl etc.
          */
         if (cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) {
-                CWARN("cred %p("LPU64"/%u) was set flags %x unexpectedly\n",
+                CWARN("cred %p("LPU64"/%u) was set flags %lx unexpectedly\n",
                       cred, cred->pc_pag, cred->pc_uid, cred->pc_flags);
                 cred->pc_flags |= PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR;
                 gss_unhash_msg_nolock(gss_new);
@@ -839,7 +841,7 @@ waiting:
                 res = -EINTR;
         } else if (res == 0) {
                 CERROR("cred %p: upcall timedout\n", cred);
-                cred->pc_flags |= PTLRPC_CRED_DEAD;
+                set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags);
                 res = -ETIMEDOUT;
         } else
                 res = 0;
@@ -906,7 +908,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         if (rc || gss_err) {
                 CERROR("parse init downcall: rpc %d, gss 0x%x\n", rc, gss_err);
                 if (rc != -ERESTART || gss_err != 0)
-                        cred->pc_flags |= PTLRPC_CRED_ERROR;
+                        set_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags);
                 if (rc == 0)
                         rc = -EPERM;
                 goto err_out;
@@ -918,7 +920,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
 
         return 0;
 err_out:
-        cred->pc_flags |= PTLRPC_CRED_DEAD;
+        set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags);
         return rc;
 }
 #endif
@@ -1327,21 +1329,24 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         int                      replen, rc;
         ENTRY;
 
-        /* cred's refcount is 0, steal one */
-        atomic_inc(&cred->pc_refcount);
+        imp = cred->pc_sec->ps_import;
+        LASSERT(imp);
 
-        if (!(cred->pc_flags & PTLRPC_CRED_UPTODATE)) {
+        if (test_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags) ||
+            !test_bit(PTLRPC_CRED_UPTODATE_BIT, &cred->pc_flags)) {
                 CDEBUG(D_SEC, "Destroy dead cred %p(%u@%s)\n",
                        cred, cred->pc_uid, imp->imp_target_uuid.uuid);
-                atomic_dec(&cred->pc_refcount);
                 EXIT;
                 return;
         }
 
+        might_sleep();
+
+        /* cred's refcount is 0, steal one */
+        atomic_inc(&cred->pc_refcount);
+
         gcred = container_of(cred, struct gss_cred, gc_base);
         gcred->gc_ctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
-        imp = cred->pc_sec->ps_import;
-        LASSERT(imp);
 
         CDEBUG(D_SEC, "client destroy gss cred %p(%u@%s)\n",
                gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
@@ -1528,12 +1533,12 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         }
 
         if (err || gss_err) {
-                cred->pc_flags |= PTLRPC_CRED_DEAD;
+                set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags);
                 if (err != -ERESTART || gss_err != 0)
-                        cred->pc_flags |= PTLRPC_CRED_ERROR;
+                        set_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags);
                 CERROR("cred %p: rpc err %d, gss err 0x%x, fatal %d\n",
-                        cred, err, gss_err,
-                        ((cred->pc_flags & PTLRPC_CRED_ERROR) != 0));
+                       cred, err, gss_err,
+                       (test_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags) != 0));
         } else {
                 CDEBUG(D_SEC, "get initial ctx:\n");
                 gss_cred_set_ctx(cred, ctx);
@@ -1768,7 +1773,7 @@ struct ptlrpc_cred * gss_create_cred(struct ptlrpc_sec *sec,
         atomic_set(&cred->pc_refcount, 0);
         cred->pc_sec = sec;
         cred->pc_ops = &gss_credops;
-        cred->pc_expire = get_seconds() + GSS_CRED_EXPIRE;
+        cred->pc_expire = 0;
         cred->pc_flags = 0;
         cred->pc_pag = vcred->vc_pag;
         cred->pc_uid = vcred->vc_uid;

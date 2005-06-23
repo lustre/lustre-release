@@ -728,6 +728,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
         }
+        case LL_IOC_FLUSH_CRED:
+                RETURN(ll_flush_cred(inode));
         default:
                 return obd_iocontrol(cmd, sbi->ll_dt_exp, 0,
                                      NULL, (void *)arg);

@@ -331,6 +331,7 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 int null_if_equal(struct ldlm_lock *lock, void *data);
 int ll_process_config_update(struct ll_sb_info *sbi, int clean);
+int ll_flush_cred(struct inode *inode);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;

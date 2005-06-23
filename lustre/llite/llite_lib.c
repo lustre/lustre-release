@@ -1795,3 +1795,31 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 
         return rc;
 }
+
+int ll_flush_cred(struct inode *inode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        uid_t   uid = current->fsuid;
+        int     rc = 0;
+
+        /* XXX to avoid adding api, we simply use set_info() interface
+         * to notify underlying obds. set_info() is more like a ioctl() now...
+         */
+        if (sbi->ll_md_exp) {
+                rc = obd_set_info(sbi->ll_md_exp,
+                                  strlen("flush_cred"), "flush_cred",
+                                  sizeof(uid), &uid);
+                if (rc)
+                        return rc;
+        }
+
+        if (sbi->ll_dt_exp) {
+                rc = obd_set_info(sbi->ll_dt_exp,
+                                  strlen("flush_cred"), "flush_cred",
+                                  sizeof(uid), &uid);
+                if (rc)
+                        return rc;
+        }
+
+        return rc;
+}

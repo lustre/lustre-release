@@ -136,8 +136,7 @@ static int lsd_make_upcall(struct upcall_cache *cache,
                        "/proc/fs/lustre/mds/lsd_upcall\n",
                        argv[0], argv[1], rc);
         } else {
-                CWARN("Invoked upcall %s %s\n",
-                        argv[0], argv[1]);
+                CDEBUG(D_SEC, "Invoked upcall %s %s\n", argv[0], argv[1]);
         }
         RETURN(rc);
 }

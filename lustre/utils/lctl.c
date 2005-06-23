@@ -25,8 +25,12 @@
 
 
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <portals/ptlctl.h>
 #include "obdctl.h"
 #include "parser.h"
@@ -43,6 +47,75 @@ static int jt_noop(int argc, char **argv) {
 static int jt_opt_ignore_errors(int argc, char **argv) {
         Parser_ignore_errors(1);
         return 0;
+}
+
+/*
+ * XXX Should not belong to here
+ */
+static int flush_cred_ioctl(char *mp)
+{
+        int fd, rc;
+
+        fd = open(mp, O_RDONLY);
+        if (fd == -1) {
+                fprintf(stderr, "flush_cred_ioctl: error open %s: %s\n",
+                        mp, strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_FLUSH_CRED);
+        if (rc == -1) {
+                fprintf(stderr, "flush_cred_ioctl: error ioctl %s: %s\n",
+                        mp, strerror(errno));
+        }
+
+        close(fd);
+        return rc;
+}
+
+static int jt_flush_cred(int argc, char **argv)
+{
+        FILE   *proc;
+        char    procline[PATH_MAX], *line;
+        int     i, rc = 0;
+
+        /* no args means search all lustre mountpoints */
+        if (argc < 2) {
+                proc = fopen("/proc/mounts", "r");
+                if (!proc) {
+                        fprintf(stderr, "%s: can't open /proc/mounts\n",
+                                jt_cmdname(argv[0]));
+                        return -1;
+                }
+
+                while ((line = fgets(procline, PATH_MAX, proc)) != NULL) {
+                        char dev[PATH_MAX];
+                        char mp[PATH_MAX];
+                        char fs[PATH_MAX];
+
+                        if (sscanf(line, "%s %s %s", dev, mp, fs) != 3) {
+                                fprintf(stderr, "%s: unexpected format in "
+                                                "/proc/mounts\n",
+                                        jt_cmdname(argv[0]));
+                                return -1;
+                        }
+
+                        if (strcmp(fs, "lustre") &&
+                            strcmp(fs, "lustre_lite"))
+                                continue;
+
+                        if (flush_cred_ioctl(mp))
+                                rc = -1;
+                }
+        } else {
+                /* follow the exact flush sequence as supplied */
+                for (i = 1; i < argc; i++) {
+                        if (flush_cred_ioctl(argv[i]))
+                                rc = -1;
+                }
+        }
+
+        return rc;
 }
 
 command_t cmdlist[] = {
@@ -261,6 +334,10 @@ command_t cmdlist[] = {
          "usage: lsync\n"},  
         {"cache_off", jt_obd_cache_off, 0,
          "usage: lsync\n"},  
+/*
+        {"obd_flush_cred", jt_obd_flush_cred, 0,
+         "usage: obd_flush_cred [all]\n"},
+*/
         /*snap operations*/
         {"snap_add", jt_obd_snap_add, 0, 
          "usage: snap_add <dev_name> <snap_name>\n"}, 
@@ -288,6 +365,11 @@ command_t cmdlist[] = {
         {"llog_remove", jt_llog_remove, 0,
          "remove one log from catalog, erase it from disk.\n"
          "usage: llog_remove <catalog id|catalog name> <log id>"},
+
+        /* Misc commands */
+        {"flush_cred", jt_flush_cred, 0,
+         "flush the client side credential.\n"
+         "usage: flush_cred [mountpoint]..."},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},

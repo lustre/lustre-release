@@ -135,16 +135,29 @@ void ptlrpcs_init_credcache(struct ptlrpc_sec *sec)
         sec->ps_nextgc = get_seconds() + (sec->ps_expire >> 1);
 }
 
-static void ptlrpcs_cred_destroy(struct ptlrpc_cred *cred)
+/*
+ * return 1 means we should also destroy the sec structure.
+ * normally return 0
+ */
+static int ptlrpcs_cred_destroy(struct ptlrpc_cred *cred)
 {
         struct ptlrpc_sec *sec = cred->pc_sec;
+        int rc = 0;
 
         LASSERT(cred->pc_sec);
         LASSERT(atomic_read(&cred->pc_refcount) == 0);
         LASSERT(list_empty(&cred->pc_hash));
 
         cred->pc_ops->destroy(cred);
-        atomic_dec(&sec->ps_credcount);
+
+        /* spinlock to protect against ptlrpcs_sec_put() */
+        LASSERT(atomic_read(&sec->ps_credcount));
+        spin_lock(&sec->ps_lock);
+        if (atomic_dec_and_test(&sec->ps_credcount) &&
+            !atomic_read(&sec->ps_refcount))
+                rc = 1;
+        spin_unlock(&sec->ps_lock);
+        return rc;
 }
 
 static void ptlrpcs_destroy_credlist(struct list_head *head)
@@ -159,29 +172,55 @@ static void ptlrpcs_destroy_credlist(struct list_head *head)
 }
 
 static
-int ptlrpcs_cred_unlink_expired(struct ptlrpc_cred *cred,
-                                struct list_head *freelist)
+int cred_check_dead(struct ptlrpc_cred *cred,
+                    struct list_head *freelist, int removal)
 {
-        LASSERT(cred->pc_sec);
+        /* here we do the exact thing as asked. but an alternative
+         * way is remove dead entries immediately without be asked
+         * remove, since dead entry will not lead to further rpcs.
+         */
+        if (unlikely(ptlrpcs_cred_is_dead(cred))) {
+                /* don't try to destroy a busy entry */
+                if (atomic_read(&cred->pc_refcount))
+                        return 1;
+                goto out;
+        }
 
-        /* only unlink non-busy entries */
+        /* a busy non-dead entry is considered as "good" one.
+         * Note in a very busy client where cred always busy, we
+         * will not be able to find the expire here, but some other
+         * part will, e.g. checking during refresh, or got error
+         * notification from server, etc. We don't touch busy cred
+         * here is because a busy cred's flag might be changed at
+         * anytime by the owner, we don't want to compete with them.
+         */
         if (atomic_read(&cred->pc_refcount) != 0)
                 return 0;
+
         /* expire is 0 means never expire. a newly created gss cred
          * which during upcall also has 0 expiration
          */
         if (cred->pc_expire == 0)
                 return 0;
+
         /* check real expiration */
         if (time_after(cred->pc_expire, get_seconds()))
                 return 0;
 
-        LASSERT((cred->pc_flags & PTLRPC_CRED_FLAGS_MASK) ==
-                PTLRPC_CRED_UPTODATE);
-        CWARN("cred %p: get expired, unlink\n", cred);
+        /* although we'v checked the bit right above, there's still
+         * possibility that somebody else set the bit elsewhere.
+         */
+        ptlrpcs_cred_expire(cred);
 
-        list_del(&cred->pc_hash);
-        list_add(&cred->pc_hash, freelist);
+out:
+        if (removal) {
+                LASSERT(atomic_read(&cred->pc_refcount) >= 0);
+                LASSERT(cred->pc_sec);
+                LASSERT(spin_is_locked(&cred->pc_sec->ps_lock));
+                LASSERT(freelist);
+
+                list_move(&cred->pc_hash, freelist);
+        }
         return 1;
 }
 
@@ -196,37 +235,38 @@ void ptlrpcs_credcache_gc(struct ptlrpc_sec *sec,
         CDEBUG(D_SEC, "do gc on sec %s\n", sec->ps_type->pst_name);
         for (i = 0; i < PTLRPC_CREDCACHE_NR; i++) {
                 list_for_each_entry_safe(cred, n, &sec->ps_credcache[i],
-                                         pc_hash) {
-                        if (cred->pc_flags & (PTLRPC_CRED_DEAD |
-                                              PTLRPC_CRED_ERROR)) {
-                                LASSERT(atomic_read(&cred->pc_refcount));
-                                continue;
-                        }
-                        ptlrpcs_cred_unlink_expired(cred, freelist);
-                }
+                                         pc_hash)
+                        cred_check_dead(cred, freelist, 1);
         }
         sec->ps_nextgc = get_seconds() + sec->ps_expire;
         EXIT;
 }
 
 /*
- * grace: mark cred DEAD, allow graceful destroy like notify
- *        server side, etc.
- * force: flush all entries, otherwise only free ones be flushed.
+ * @uid: which user. "-1" means flush all.
+ * @grace: mark cred DEAD, allow graceful destroy like notify
+ *         server side, etc.
+ * @force: flush all entries, otherwise only free ones be flushed.
  */
 static
-int ptlrpcs_flush_credcache(struct ptlrpc_sec *sec, int grace, int force)
+int flush_credcache(struct ptlrpc_sec *sec, uid_t uid,
+                    int grace, int force)
 {
         struct ptlrpc_cred *cred, *n;
         LIST_HEAD(freelist);
         int i, busy = 0;
         ENTRY;
 
+        might_sleep_if(grace);
+
         spin_lock(&sec->ps_lock);
         for (i = 0; i < PTLRPC_CREDCACHE_NR; i++) {
                 list_for_each_entry_safe(cred, n, &sec->ps_credcache[i],
                                          pc_hash) {
                         LASSERT(atomic_read(&cred->pc_refcount) >= 0);
+
+                        if (uid != -1 && uid != cred->pc_uid)
+                                continue;
                         if (atomic_read(&cred->pc_refcount)) {
                                 busy = 1;
                                 if (!force)
@@ -235,12 +275,14 @@ int ptlrpcs_flush_credcache(struct ptlrpc_sec *sec, int grace, int force)
                         } else
                                 list_move(&cred->pc_hash, &freelist);
 
-                        cred->pc_flags |= PTLRPC_CRED_DEAD;
+                        set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags);
                         if (!grace)
-                                cred->pc_flags &= ~PTLRPC_CRED_UPTODATE;
+                                clear_bit(PTLRPC_CRED_UPTODATE_BIT,
+                                          &cred->pc_flags);
                 }
         }
         spin_unlock(&sec->ps_lock);
+
         ptlrpcs_destroy_credlist(&freelist);
         RETURN(busy);
 }
@@ -256,33 +298,32 @@ int ptlrpcs_cred_get_hash(__u64 pag)
         return (pag & PTLRPC_CREDCACHE_MASK);
 }
 
+/*
+ * return an uptodate or newly created cred entry.
+ */
 static
 struct ptlrpc_cred * cred_cache_lookup(struct ptlrpc_sec *sec,
                                        struct vfs_cred *vcred,
-                                       int create)
+                                       int create, int remove_dead)
 {
         struct ptlrpc_cred *cred, *new = NULL, *n;
         LIST_HEAD(freelist);
         int hash, found = 0;
         ENTRY;
 
+        might_sleep();
+
         hash = ptlrpcs_cred_get_hash(vcred->vc_pag);
 
 retry:
         spin_lock(&sec->ps_lock);
+
         /* do gc if expired */
-        if (time_after(get_seconds(), sec->ps_nextgc))
+        if (remove_dead && time_after(get_seconds(), sec->ps_nextgc))
                 ptlrpcs_credcache_gc(sec, &freelist);
 
         list_for_each_entry_safe(cred, n, &sec->ps_credcache[hash], pc_hash) {
-                /* for DEAD and ERROR entries, its final put will
-                 * release them, so we simply skip here.
-                 */
-                if (cred->pc_flags & (PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR)) {
-                        LASSERT(atomic_read(&cred->pc_refcount));
-                        continue;
-                }
-                if (ptlrpcs_cred_unlink_expired(cred, &freelist))
+                if (cred_check_dead(cred, &freelist, remove_dead))
                         continue;
                 if (cred->pc_ops->match(cred, vcred)) {
                         found = 1;
@@ -327,7 +368,7 @@ struct ptlrpc_cred * ptlrpcs_cred_lookup(struct ptlrpc_sec *sec,
         struct ptlrpc_cred *cred;
         ENTRY;
 
-        cred = cred_cache_lookup(sec, vcred, 0);
+        cred = cred_cache_lookup(sec, vcred, 0, 1);
         RETURN(cred);
 }
 
@@ -342,7 +383,7 @@ static struct ptlrpc_cred *get_cred(struct ptlrpc_sec *sec)
         vcred.vc_pag = (__u64) current->uid;
         vcred.vc_uid = current->uid;
 
-        return cred_cache_lookup(sec, &vcred, 1);
+        return cred_cache_lookup(sec, &vcred, 1, 1);
 }
 
 int ptlrpcs_req_get_cred(struct ptlrpc_request *req)
@@ -373,19 +414,19 @@ int ptlrpcs_check_cred(struct obd_import *imp)
         struct ptlrpc_cred *cred;
         ENTRY;
 
+        might_sleep();
 again:
         cred = get_cred(imp->imp_sec);
         if (!cred)
                 RETURN(0);
 
         if (ptlrpcs_cred_is_uptodate(cred)) {
-                if (!ptlrpcs_cred_check_expire(cred)) {
-                        ptlrpcs_cred_put(cred, 1);
-                        RETURN(0);
-                } else {
-                        ptlrpcs_cred_put(cred, 1);
-                        goto again;
-                }
+                /* get_cred() has done expire checking, so we don't
+                 * expect it could expire so quickly, and actually
+                 * we don't care.
+                 */
+                ptlrpcs_cred_put(cred, 1);
+                RETURN(0);
         }
 
         ptlrpcs_cred_refresh(cred);
@@ -415,27 +456,51 @@ void ptlrpcs_cred_put(struct ptlrpc_cred *cred, int sync)
 {
         struct ptlrpc_sec *sec = cred->pc_sec;
 
-        LASSERT(cred);
         LASSERT(sec);
         LASSERT(atomic_read(&cred->pc_refcount));
 
         spin_lock(&sec->ps_lock);
-        if (atomic_dec_and_test(&cred->pc_refcount) && sync &&
-            cred->pc_flags & (PTLRPC_CRED_DEAD | PTLRPC_CRED_ERROR)) {
-                list_del_init(&cred->pc_hash);
-                ptlrpcs_cred_destroy(cred);
-                if (!atomic_read(&sec->ps_credcount) &&
-                    !atomic_read(&sec->ps_refcount)) {
-                        CWARN("put last cred on a dead sec %p(%s), "
-                              "also destroy the sec\n", sec,
-                               sec->ps_type->pst_name);
-                        spin_unlock(&sec->ps_lock);
 
-                        ptlrpcs_sec_destroy(sec);
-                        return;
-                }
+        /* this has to be protected by ps_lock, because cred cache
+         * management code might increase ref against a 0-refed cred.
+         */
+        if (!atomic_dec_and_test(&cred->pc_refcount)) {
+                spin_unlock(&sec->ps_lock);
+                return;
         }
+
+        /* if sec already unused, we have to destroy the cred (prevent it
+         * hanging there for ever)
+         */
+        if (atomic_read(&sec->ps_refcount) == 0) {
+                if (!test_and_set_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags))
+                        CWARN("cred %p: force expire on a unused sec\n", cred);
+                list_del_init(&cred->pc_hash);
+        } else if (unlikely(sync && ptlrpcs_cred_is_dead(cred)))
+                list_del_init(&cred->pc_hash);
+
+        if (!list_empty(&cred->pc_hash)) {
+                spin_unlock(&sec->ps_lock);
+                return;
+        }
+
+        /* if required async, and we reached here, we have to clear
+         * the UPTODATE bit, thus no rpc is needed in destroy procedure.
+         */
+        if (!sync)
+                clear_bit(PTLRPC_CRED_UPTODATE_BIT, &cred->pc_flags);
+
         spin_unlock(&sec->ps_lock);
+
+        /* destroy this cred */
+        if (!ptlrpcs_cred_destroy(cred))
+                return;
+
+        LASSERT(!atomic_read(&sec->ps_credcount));
+        LASSERT(!atomic_read(&sec->ps_refcount));
+
+        CWARN("sec %p(%s), put last cred, also destroy the sec\n",
+              sec, sec->ps_type->pst_name);
 }
 
 void ptlrpcs_req_drop_cred(struct ptlrpc_request *req)
@@ -446,10 +511,8 @@ void ptlrpcs_req_drop_cred(struct ptlrpc_request *req)
         LASSERT(req->rq_cred);
 
         if (req->rq_cred) {
-                /* We'd like to not use 'sync' mode, but might cause
-                 * some cred leak. Need more thinking here. FIXME
-                 */
-                ptlrpcs_cred_put(req->rq_cred, 1);
+                /* this could be called with spinlock hold, use async mode */
+                ptlrpcs_cred_put(req->rq_cred, 0);
                 req->rq_cred = NULL;
         } else
                 CDEBUG(D_SEC, "req %p have no cred\n", req);
@@ -467,7 +530,7 @@ int ptlrpcs_req_replace_dead_cred(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(cred);
-        LASSERT(cred->pc_flags & PTLRPC_CRED_DEAD);
+        LASSERT(test_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags));
 
         ptlrpcs_cred_get(cred);
         ptlrpcs_req_drop_cred(req);
@@ -486,7 +549,10 @@ int ptlrpcs_req_replace_dead_cred(struct ptlrpc_request *req)
 
 /*
  * since there's no lock on the cred, its status could be changed
- * by other threads at any time, we allow this race.
+ * by other threads at any time, we allow this race. If an uptodate
+ * cred turn to dead quickly under us, we don't know and continue
+ * using it, that's fine. if necessary the later error handling code
+ * will catch it.
  */
 int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
 {
@@ -495,17 +561,15 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
 
         LASSERT(cred);
 
-        if (ptlrpcs_cred_is_uptodate(cred)) {
-                if (!ptlrpcs_cred_check_expire(cred))
-                        RETURN(0);
-        }
+        if (!ptlrpcs_cred_check_uptodate(cred))
+                RETURN(0);
 
-        if (cred->pc_flags & PTLRPC_CRED_ERROR) {
+        if (test_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags)) {
                 req->rq_ptlrpcs_err = 1;
                 RETURN(-EPERM);
         }
 
-        if (cred->pc_flags & PTLRPC_CRED_DEAD) {
+        if (test_bit(PTLRPC_CRED_DEAD_BIT, &cred->pc_flags)) {
                 if (ptlrpcs_req_replace_dead_cred(req) == 0) {
                         LASSERT(cred != req->rq_cred);
                         CDEBUG(D_SEC, "req %p: replace cred %p => %p\n",
@@ -521,8 +585,9 @@ int ptlrpcs_req_refresh_cred(struct ptlrpc_request *req)
         }
 
         ptlrpcs_cred_refresh(cred);
+
         if (!ptlrpcs_cred_is_uptodate(cred)) {
-                if (cred->pc_flags & PTLRPC_CRED_ERROR)
+                if (test_bit(PTLRPC_CRED_ERROR_BIT, &cred->pc_flags))
                         req->rq_ptlrpcs_err = 1;
 
                 CERROR("req %p: failed to refresh cred %p, fatal %d\n",
@@ -712,10 +777,17 @@ static void ptlrpcs_sec_destroy(struct ptlrpc_sec *sec)
 
 void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
 {
-        if (atomic_dec_and_test(&sec->ps_refcount)) {
-                ptlrpcs_flush_credcache(sec, 1, 1);
+        int ncred;
 
-                if (atomic_read(&sec->ps_credcount) == 0) {
+        if (atomic_dec_and_test(&sec->ps_refcount)) {
+                flush_credcache(sec, -1, 1, 1);
+
+                /* this spinlock is protect against ptlrpcs_cred_destroy() */
+                spin_lock(&sec->ps_lock);
+                ncred = atomic_read(&sec->ps_credcount);
+                spin_unlock(&sec->ps_lock);
+
+                if (ncred == 0) {
                         ptlrpcs_sec_destroy(sec);
                 } else {
                         CWARN("sec %p(%s) is no usage while %d cred still "
@@ -728,7 +800,7 @@ void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
 
 void ptlrpcs_sec_invalidate_cache(struct ptlrpc_sec *sec)
 {
-        ptlrpcs_flush_credcache(sec, 0, 1);
+        flush_credcache(sec, -1, 0, 1);
 }
 
 int sec_alloc_reqbuf(struct ptlrpc_sec *sec,
@@ -952,6 +1024,16 @@ void ptlrpcs_import_drop_sec(struct obd_import *imp)
         EXIT;
 }
 
+void ptlrpcs_import_flush_creds(struct obd_import *imp, uid_t uid)
+{
+        LASSERT(imp);
+
+        class_import_get(imp);
+        if (imp->imp_sec)
+                flush_credcache(imp->imp_sec, uid, 1, 1);
+        class_import_put(imp);
+}
+
 int __init ptlrpc_sec_init(void)
 {
         int rc;
@@ -986,6 +1068,7 @@ EXPORT_SYMBOL(ptlrpcs_sec_put);
 EXPORT_SYMBOL(ptlrpcs_sec_invalidate_cache);
 EXPORT_SYMBOL(ptlrpcs_import_get_sec);
 EXPORT_SYMBOL(ptlrpcs_import_drop_sec);
+EXPORT_SYMBOL(ptlrpcs_import_flush_creds);
 EXPORT_SYMBOL(ptlrpcs_cred_lookup);
 EXPORT_SYMBOL(ptlrpcs_cred_put);
 EXPORT_SYMBOL(ptlrpcs_req_get_cred);

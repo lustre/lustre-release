@@ -1462,6 +1462,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT3_IOC_SETVERSION_OLD:
         case EXT3_IOC_SETVERSION:
         */
+        case LL_IOC_FLUSH_CRED:
+                RETURN(ll_flush_cred(inode));
         default:
                 RETURN( obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
                                       (void *)arg) );

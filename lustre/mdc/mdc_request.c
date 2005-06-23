@@ -877,6 +877,14 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 }
                 CERROR("unrecognized security type %s\n", (char*) val);
                 rc = -EINVAL;
+        } else if (keylen == strlen("flush_cred") &&
+                   memcmp(key, "flush_cred", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                if (cli->cl_import)
+                        ptlrpcs_import_flush_creds(cli->cl_import,
+                                                   *((uid_t *) val));
+                rc = 0;
         } else if (keylen == strlen("async") && memcmp(key, "async", keylen) == 0) {
                 struct client_obd *cl = &exp->exp_obd->u.cli;
                 if (vallen != sizeof(int))

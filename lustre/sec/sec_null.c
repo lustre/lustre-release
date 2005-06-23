@@ -38,27 +38,23 @@
 
 static int null_cred_refresh(struct ptlrpc_cred *cred)
 {
-        ENTRY;
-        LASSERT(cred->pc_flags & PTLRPC_CRED_UPTODATE);
-        RETURN(0);
+        LASSERT(test_bit(PTLRPC_CRED_UPTODATE_BIT, &cred->pc_flags));
+        return 0;
 }
 
 static int null_cred_match(struct ptlrpc_cred *cred,
                            struct vfs_cred *vcred)
 {
-        ENTRY;
-        RETURN(1);
+        return 1;
 }
 
 static int null_cred_sign(struct ptlrpc_cred *cred,
                           struct ptlrpc_request *req)
 {
         struct ptlrpcs_wire_hdr *hdr = buf_to_sec_hdr(req->rq_reqbuf);
-        ENTRY;
 
         hdr->sec_len = cpu_to_le32(0);
-
-        RETURN(0);
+        return 0;
 }
 
 static int null_cred_verify(struct ptlrpc_cred *cred,
@@ -68,7 +64,7 @@ static int null_cred_verify(struct ptlrpc_cred *cred,
 
         if (hdr->sec_len != 0) {
                 CERROR("security payload %u not zero\n", hdr->sec_len);
-                RETURN(-EPROTO);
+                return -EPROTO;
         }
 
         req->rq_repmsg = (struct lustre_msg *)(hdr + 1);
@@ -76,7 +72,7 @@ static int null_cred_verify(struct ptlrpc_cred *cred,
         CDEBUG(D_SEC, "set repmsg at %p, len %d\n",
                req->rq_repmsg, req->rq_replen);
 
-        RETURN(0);
+        return 0;
 }
 
 static void null_cred_destroy(struct ptlrpc_cred *cred)
@@ -145,7 +141,7 @@ struct ptlrpc_cred* null_create_cred(struct ptlrpc_sec *sec,
         atomic_set(&cred->pc_refcount, 0);
         cred->pc_sec = sec;
         cred->pc_ops = &null_credops;
-        cred->pc_expire = (-1UL >> 1); /* never expire */
+        cred->pc_expire = 0;
         cred->pc_flags = PTLRPC_CRED_UPTODATE;
         cred->pc_pag = vcred->vc_pag;
         cred->pc_uid = vcred->vc_uid;
