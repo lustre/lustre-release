@@ -313,7 +313,7 @@ do_node() {
         echo "CMD: $HOST $@"
         $PDSH $HOST $LCTL mark "$@" > /dev/null 2>&1 || :
     fi
-    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; sh -c \"$@\")"
+    $PDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin; cd $RPWD; sh -c \"$@\")"
 }
 
 do_facet() {
