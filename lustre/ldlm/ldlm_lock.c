@@ -157,6 +157,7 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
         ENTRY;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (!list_empty(&lock->l_lru)) {
+                LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
                 lock->l_resource->lr_namespace->ns_nr_unused--;
                 LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
@@ -1093,15 +1094,24 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         int granted = 0;
+        int old_mode, rc;
+        ldlm_error_t err;
         ENTRY;
 
-        LBUG();
+        if (new_mode == lock->l_granted_mode) { // No changes? Just return.
+                *flags |= LDLM_FL_BLOCK_GRANTED;
+                RETURN(lock->l_resource);
+        }
+
+        LASSERTF(new_mode == LCK_PW && lock->l_granted_mode == LCK_PR,
+                 "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
         res = lock->l_resource;
         ns = res->lr_namespace;
 
         l_lock(&ns->ns_lock);
 
+        old_mode = lock->l_req_mode;
         lock->l_req_mode = new_mode;
         ldlm_resource_unlink_lock(lock);
 
@@ -1112,6 +1122,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 } else {
                         /* This should never happen, because of the way the
                          * server handles conversions. */
+                        LDLM_ERROR(lock, "Erroneous flags %d on local lock\n",
+                                   *flags);
                         LBUG();
 
                         res->lr_tmp = &rpc_list;
@@ -1123,10 +1135,20 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                 lock->l_completion_ast(lock, 0, NULL);
                 }
         } else {
-                /* FIXME: We should try the conversion right away and possibly
-                 * return success without the need for an extra AST */
-                ldlm_resource_add_lock(res, &res->lr_converting, lock);
-                *flags |= LDLM_FL_BLOCK_CONV;
+                int pflags = 0;
+                ldlm_processing_policy policy;
+                policy = ldlm_processing_policy_table[res->lr_type];
+                res->lr_tmp = &rpc_list;
+                rc = policy(lock, &pflags, 0, &err);
+                res->lr_tmp = NULL;
+                if (rc == LDLM_ITER_STOP) {
+                        lock->l_req_mode = old_mode;
+                        ldlm_resource_add_lock(res, &res->lr_granted, lock);
+                        res = NULL;
+                } else {
+                        *flags |= LDLM_FL_BLOCK_GRANTED;
+                        granted = 1;
+                }
         }
 
         l_unlock(&ns->ns_lock);

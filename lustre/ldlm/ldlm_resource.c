@@ -356,7 +356,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
 
                         if (!ldlm_resource_putref(res)) {
                                 CERROR("Namespace %s resource refcount %d "
-                                       "after lock cleanup\n",
+                                       "after lock cleanup; forcing cleanup.\n",
                                        ns->ns_name,
                                        atomic_read(&res->lr_refcount));
                         }

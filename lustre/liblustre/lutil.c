@@ -277,9 +277,6 @@ int liblustre_init_current(char *comm)
                 CERROR("Not enough memory\n");
                 return -ENOMEM;
         }
-        current->fs = &current->__fs;
-        current->fs->umask = umask(0777);
-        umask(current->fs->umask);
 
         strncpy(current->comm, comm, sizeof(current->comm));
         current->pid = getpid();

@@ -42,7 +42,6 @@
 #include <linux/iobuf.h>
 #endif
 
-
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_mds.h>

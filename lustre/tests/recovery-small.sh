@@ -393,7 +393,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	client_reconnect
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
-run_test 24 "fsync error (should return error)" 
+run_test 24 "fsync error (should return error)"
 
 test_26() {      # bug 5921 - evict dead exports 
 # this test can only run from a client on a separate node.

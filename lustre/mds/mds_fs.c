@@ -47,7 +47,6 @@
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
-#define MDS_MAX_CLIENT_WORDS (MDS_MAX_CLIENTS / sizeof(unsigned long))
 
 #define LAST_RCVD "last_rcvd"
 #define LOV_OBJID "lov_objid"
@@ -195,8 +194,7 @@ free:
 
 static int mds_server_free_data(struct mds_obd *mds)
 {
-        OBD_FREE(mds->mds_client_bitmap,
-                 MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_FREE(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         OBD_FREE(mds->mds_server_data, sizeof(*mds->mds_server_data));
         mds->mds_server_data = NULL;
 
@@ -224,8 +222,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         if (!msd)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_WAIT(mds->mds_client_bitmap,
-                  MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_ALLOC_WAIT(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         if (!mds->mds_client_bitmap) {
                 OBD_FREE(msd, sizeof(*msd));
                 RETURN(-ENOMEM);
@@ -705,8 +702,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_dput, rc);
         }
         if (de->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64" %s\n",
-                       oa->o_id, fidname);
+                CERROR("destroying non-existent object "LPU64" %s: rc %d\n",
+                       oa->o_id, fidname, rc);
                 GOTO(out_dput, rc = -ENOENT);
         }
 
@@ -714,10 +711,10 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
            that is unlinked, not spanned across multiple OSTs */
         handle = fsfilt_start_log(obd, mds->mds_objects_dir->d_inode,
                                   FSFILT_OP_UNLINK, oti, 1);
-        if (IS_ERR(handle)) {
-                GOTO(out_dput, rc = PTR_ERR(handle));
-        }
 
+        if (IS_ERR(handle))
+                GOTO(out_dput, rc = PTR_ERR(handle));
+        
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",

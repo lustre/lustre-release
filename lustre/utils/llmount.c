@@ -26,11 +26,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
+#include <sys/utsname.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
@@ -147,15 +149,26 @@ init_options(struct lustre_mount_data *lmd)
 int
 print_options(struct lustre_mount_data *lmd)
 {
+#if CRAY_PORTALS
+        const int   cond_print = (lmd->lmd_nal != CRAY_KB_SSNAL);
+#else
+        const int   cond_print = 1;
+#endif
         int i;
 
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
-        printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+
+        if (cond_print)
+                printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+
         printf("nal:             %x\n", lmd->lmd_nal);
-        printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
-        printf("port:            %d\n", lmd->lmd_port);
+
+        if (cond_print) {
+                printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
+                printf("port:            %d\n", lmd->lmd_port);
+        }
 
         for (i = 0; i < route_index; i++)
                 printf("route:           "LPX64" : "LPX64" - "LPX64"\n",
@@ -384,6 +397,12 @@ set_local(struct lustre_mount_data *lmd)
                         progname, lmd->lmd_nal);
                 return 1;
 
+#if CRAY_PORTALS
+        case CRAY_KB_SSNAL:
+                return 0;
+
+        case CRAY_KB_ERNAL:
+#else
         case SOCKNAL:
                 /* We need to do this before the mount is started if routing */
                 system("/sbin/modprobe ksocknal");
@@ -392,14 +411,49 @@ set_local(struct lustre_mount_data *lmd)
         case IIBNAL:
         case VIBNAL:
         case RANAL:
+#endif
+        {
+                struct utsname uts;
+
                 rc = gethostname(buf, sizeof(buf) - 1);
                 if (rc) {
-                        fprintf (stderr, "%s: can't get local buf: %d\n",
-                                 progname, rc);
+                        fprintf(stderr, "%s: can't get hostname: %s\n",
+                                progname, strerror(rc));
                         return rc;
                 }
+
+                rc = uname(&uts);
+                /* for 2.6 kernels, reserve at least 8MB free, or we will
+                 * go OOM during heavy read load */
+                if (rc == 0 && strncmp(uts.release, "2.6", 3) == 0) {
+                        int f, minfree = 32768;
+                        char name[40], val[40];
+                        FILE *meminfo;
+
+                        meminfo = fopen("/proc/meminfo", "r");
+                        if (meminfo != NULL) {
+                                while (fscanf(meminfo, "%s %s %*s\n", name, val) != EOF) {
+                                        if (strcmp(name, "MemTotal:") == 0) {
+                                                f = strtol(val, NULL, 0);
+                                                if (f > 0 && f < 8 * minfree)
+                                                        minfree = f / 16;
+                                                break;
+                                        }
+                                }
+                                fclose(meminfo);
+                        }
+                        f = open("/proc/sys/vm/min_free_kbytes", O_WRONLY);
+                        if (f >= 0) {
+                                sprintf(val, "%d", minfree);
+                                write(f, val, strlen(val));
+                                close(f);
+                        }
+                }
                 break;
-        case QSWNAL: {
+        }
+#if !CRAY_PORTALS
+        case QSWNAL:
+        {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
                                   "/proc/elan/device0/position",
@@ -429,6 +483,7 @@ set_local(struct lustre_mount_data *lmd)
                 }
                 break;
         }
+#endif
         }
 
         if (ptl_parse_nid (&nid, ptr) != 0) {
@@ -452,6 +507,13 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         progname, lmd->lmd_nal);
                 return 1;
 
+#if CRAY_PORTALS
+        case CRAY_KB_SSNAL:
+                lmd->lmd_server_nid = strtoll(hostname,0,0);
+                return 0;
+
+        case CRAY_KB_ERNAL:
+#else
         case IIBNAL:
                 if (lmd->lmd_server_nid != PTL_NID_ANY)
                         break;
@@ -468,6 +530,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
         case OPENIBNAL:
         case VIBNAL:
         case RANAL:
+#endif
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
@@ -483,6 +546,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         return (1);
                 }
                 break;
+#if !CRAY_PORTALS
         case QSWNAL: {
                 char buf[64];
 
@@ -504,8 +568,8 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 
                 break;
         }
+#endif
         }
-
         return 0;
 }
 
@@ -518,12 +582,12 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
         int rc;
 
         if (lmd_bad_magic(lmd))
-                return -EINVAL;
+                return 4;
 
         if (strlen(source) >= sizeof(buf)) {
                 fprintf(stderr, "%s: host:/mds/profile argument too long\n",
                         progname);
-                return -EINVAL;
+                return 1;
         }
         strcpy(buf, source);
         if ((s = strchr(buf, ':'))) {

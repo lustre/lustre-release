@@ -356,20 +356,20 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         EXIT;
 }
 
-static void llu_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
+static void llu_ap_get_ucred(void *data, struct lvfs_ucred *luc)
 {
         struct ll_async_page *llap;
         struct ll_uctxt ctxt;
-        ENTRY;
-
+        ENTRY; 
+        
         llap = LLAP_FROM_COOKIE(data);
-
-        ouc->luc_fsuid = current->fsuid;
-        ouc->luc_fsgid = current->fsgid;
-        ouc->luc_cap = current->cap_effective;
+        
+        luc->luc_fsuid = current->fsuid;
+        luc->luc_fsgid = current->fsgid;
+        luc->luc_cap = current->cap_effective;
         ll_i2uctxt(&ctxt, llap->llap_inode, NULL);
-        ouc->luc_suppgid1 = ctxt.gid1;
-
+        luc->luc_suppgid1 = ctxt.gid1;
+        
         EXIT;
 }
 

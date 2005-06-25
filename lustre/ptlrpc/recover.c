@@ -71,7 +71,7 @@ void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
 
         } else {
                 CWARN("Invoked upcall %s %s %s\n",
-                       argv[0], argv[1], argv[2]);
+                      argv[0], argv[1], argv[2]);
         }
 }
 

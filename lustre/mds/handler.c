@@ -700,7 +700,11 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 offset = 1;
         }
 
+#if CRAY_PORTALS
+        uc.luc_fsuid = req->rq_uid;
+#else
         uc.luc_fsuid = body->fsuid;
+#endif
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
         uc.luc_suppgid1 = body->suppgid;
@@ -820,7 +824,11 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
+#if CRAY_PORTALS
+        uc.luc_fsuid = req->rq_uid;
+#else
         uc.luc_fsuid = body->fsuid;
+#endif
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
@@ -966,7 +974,11 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
+#if CRAY_PORTALS
+        uc.luc_fsuid = req->rq_uid;
+#else
         uc.luc_fsuid = body->fsuid;
+#endif
         uc.luc_fsgid = body->fsgid;
         uc.luc_cap = body->capability;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
@@ -1703,7 +1715,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         rc = mds_fs_setup(obd, mnt);
         if (rc) {
-                CERROR("MDS filesystem method init failed: rc = %d\n", rc);
+                CERROR("%s: MDS filesystem method init failed: rc = %d\n",
+                       obd->obd_name, rc);
                 GOTO(err_ns, rc);
         }
 
@@ -1896,7 +1909,7 @@ int mds_postrecov(struct obd_device *obd)
         }
 
 out:
-        RETURN(rc < 0 ? rc: item);
+        RETURN(rc < 0 ? rc : item);
 
 err_llog:
         /* cleanup all llogging subsystems */
@@ -2057,7 +2070,8 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
         /* If the xid matches, then we know this is a resent request,
          * and allow it. (It's probably an OPEN, for which we don't
          * send a lock */
-        if (req->rq_xid == exp->exp_mds_data.med_mcd->mcd_last_xid)
+        if (req->rq_xid == 
+            le64_to_cpu(exp->exp_mds_data.med_mcd->mcd_last_xid))
                 return;
 
         /* This remote handle isn't enqueued, so we never received or

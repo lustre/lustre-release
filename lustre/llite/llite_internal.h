@@ -49,6 +49,7 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_INODE_DEAD                  0xdeadd00d
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
+
 struct ll_inode_info {
         int                     lli_inode_magic;
         int                     lli_size_pid;

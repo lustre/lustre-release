@@ -644,8 +644,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export == NULL) {
                 if (target->obd_recovering) {
-                        CERROR("denying connection for new client %s: "
-                               "%d clients in recovery for %lds\n", cluuid.uuid,
+                        CERROR("%s: denying connection for new client %s: "
+                               "%d clients in recovery for %lds\n",
+                               target->obd_name, cluuid.uuid,
                                target->obd_recoverable_clients,
                                (target->obd_recovery_timer.expires-jiffies)/HZ);
                         rc = -EBUSY;

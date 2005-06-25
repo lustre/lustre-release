@@ -40,6 +40,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#ifdef HAVE_LINUX_TYPES_H
+#include <linux/types.h>
+#else
+#include "types.h"
+#endif
+#ifdef HAVE_LINUX_UNISTD_H
+#include <linux/unistd.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <portals/ptlctl.h>
 

@@ -277,7 +277,6 @@ int mdc_enqueue(struct obd_export *exp,
 
         if (it->it_op & IT_OPEN) {
                 it->it_create_mode |= S_IFREG;
-                it->it_create_mode &= ~current->fs->umask;
 
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = data->namelen + 1;
@@ -431,9 +430,8 @@ int mdc_enqueue(struct obd_export *exp,
                 }
 
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
-                        /* The eadata is opaque; just check that it is
-                         * there.  Eventually, obd_unpackmd() will check
-                         * the contents */
+                        /* The eadata is opaque; just check that it is there.
+                         * Eventually, obd_unpackmd() will check the contents */
                         eadata = lustre_swab_repbuf(req, 2, body->eadatasize,
                                                     NULL);
                         if (eadata == NULL) {

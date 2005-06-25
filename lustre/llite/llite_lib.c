@@ -1430,7 +1430,8 @@ void ll_umount_begin(struct super_block *sb)
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
+               sb->s_count, atomic_read(&sb->s_active));
 
         obd = class_exp2obd(sbi->ll_mdc_exp);
         if (obd == NULL) {
@@ -1540,4 +1541,3 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
         LBUG();
         return NULL;
 }
-

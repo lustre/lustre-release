@@ -210,6 +210,12 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
         l_unlock(&ns->ns_lock);
 
         ldlm_lock_decref_and_cancel(lockh, mode);
+
+        /* XXX - HACK because we shouldn't call ldlm_lock_destroy()
+         *       from llite/file.c/ll_file_flock(). */
+        if (lock->l_resource->lr_type == LDLM_FLOCK) {
+                ldlm_lock_destroy(lock);
+        }
 }
 
 int ldlm_cli_enqueue(struct obd_export *exp,
@@ -433,6 +439,8 @@ cleanup:
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
                                   int *flags)
 {
+        struct ldlm_resource *res;
+        int rc;
         ENTRY;
         if (lock->l_resource->lr_namespace->ns_client) {
                 CERROR("Trying to cancel local lock\n");
@@ -440,16 +448,22 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
         }
         LDLM_DEBUG(lock, "client-side local convert");
 
-        ldlm_lock_convert(lock, new_mode, flags);
-        ldlm_reprocess_all(lock->l_resource);
-
+        res = ldlm_lock_convert(lock, new_mode, flags);
+        if (res) {
+                ldlm_reprocess_all(res);
+                rc = 0;
+        } else {
+                rc = EDEADLOCK;
+        }
         LDLM_DEBUG(lock, "client-side local convert handler END");
         LDLM_LOCK_PUT(lock);
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* FIXME: one of ldlm_cli_convert or the server side should reject attempted
  * conversion of locks which are on the waiting or converting queue */
+/* Caller of this code is supposed to take care of lock readers/writers
+   accounting */
 int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 {
         struct ldlm_request *body;
@@ -498,13 +512,23 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
                 GOTO (out, rc = -EPROTO);
         }
 
+        if (req->rq_status)
+                GOTO(out, rc = req->rq_status);
+
         res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
-        if (res != NULL)
+        if (res != NULL) {
                 ldlm_reprocess_all(res);
-        /* Go to sleep until the lock is granted. */
-        /* FIXME: or cancelled. */
-        if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC, NULL);
+                /* Go to sleep until the lock is granted. */
+                /* FIXME: or cancelled. */
+                if (lock->l_completion_ast) {
+                        rc = lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC,
+                                                    NULL);
+                        if (rc)
+                                GOTO(out, rc);
+                }
+        } else {
+                rc = EDEADLOCK;
+        }
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
@@ -613,6 +637,10 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         LIST_HEAD(cblist);
         ENTRY;
 
+#ifndef __KERNEL__
+        sync = LDLM_SYNC; /* force to be sync in user space */
+#endif
+
         l_lock(&ns->ns_lock);
         count = ns->ns_nr_unused - ns->ns_max_unused;
 
@@ -644,6 +672,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                                  "lock %p next %p prev %p\n",
                                  lock, &lock->l_export_chain.next,
                                  &lock->l_export_chain.prev);
+                        __LDLM_DEBUG(D_INFO, lock, "adding to LRU clear list");
                         list_add(&lock->l_export_chain, &cblist);
                 }
 

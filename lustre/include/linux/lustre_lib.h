@@ -35,8 +35,7 @@
 # include <linux/signal.h>
 # include <linux/types.h>
 #endif
-#include <libcfs/portals_lib.h>
-#include <libcfs/kp30.h> /* XXX just for LASSERT! */
+#include <libcfs/kp30.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
 
@@ -206,59 +205,59 @@ static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
         if (data->ioc_len > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_len larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_len larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen1 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen1 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen2 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen2 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen3 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen3 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen4 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen4 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen4 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-                printk("LustreError: OBD ioctl: inlbuf1 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-                printk("LustreError: OBD ioctl: inlbuf2 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf3 && !data->ioc_inllen3) {
-                printk("LustreError: OBD ioctl: inlbuf3 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf3 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf4 && !data->ioc_inllen4) {
-                printk("LustreError: OBD ioctl: inlbuf4 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf4 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf1 && !data->ioc_plen1) {
-                printk("LustreError: OBD ioctl: pbuf1 pointer but 0 length\n");
+                CERROR("OBD ioctl: pbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf2 && !data->ioc_plen2) {
-                printk("LustreError: OBD ioctl: pbuf2 pointer but 0 length\n");
+                CERROR("OBD ioctl: pbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_plen1 && !data->ioc_pbuf1) {
-                printk("LustreError: OBD ioctl: plen1 set but NULL pointer\n");
+                CERROR("OBD ioctl: plen1 set but NULL pointer\n");
                 return 1;
         }
         if (data->ioc_plen2 && !data->ioc_pbuf2) {
-                printk("LustreError: OBD ioctl: plen2 set but NULL pointer\n");
+                CERROR("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
         if (obd_ioctl_packlen(data) != data->ioc_len) {
-                printk("LustreError: OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+                CERROR("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
                        obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }
@@ -668,13 +667,29 @@ do {                                                                           \
 #else /* !__KERNEL__ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
+        long timeout = info->lwi_timeout, elapse, last = 0;                    \
         int __timed_out = 0;                                                   \
+                                                                               \
+        if (info->lwi_timeout == 0)                                            \
+            timeout = 1000000000;                                              \
+        else                                                                   \
+            last = time(NULL);                                                 \
                                                                                \
         for (;;) {                                                             \
             if (condition)                                                     \
                 break;                                                         \
-            if (liblustre_wait_event(info->lwi_timeout))                       \
+            if (liblustre_wait_event(timeout)) {                               \
+                if (timeout == 0 || info->lwi_timeout == 0)                    \
+                        continue;                                              \
+                elapse = time(NULL) - last;                                    \
+                if (elapse) {                                                  \
+                        last += elapse;                                        \
+                        timeout -= elapse;                                     \
+                        if (timeout < 0)                                       \
+                                timeout = 0;                                   \
+                }                                                              \
                 continue;                                                      \
+            }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
                 __timed_out = 1;                                               \
                 if (info->lwi_on_timeout == NULL ||                            \

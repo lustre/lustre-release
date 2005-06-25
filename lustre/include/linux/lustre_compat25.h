@@ -118,8 +118,8 @@ static inline int cleanup_group_info(void)
 
 #else /* 2.4.. */
 
-#ifdef HAVE_MM_INLINE 
-#include <linux/mm_inline.h> 
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
 #endif
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)

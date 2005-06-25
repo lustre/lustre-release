@@ -129,10 +129,10 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         }
 
         rc = vfs_unlink(pending_dir, dchild);
-        if (rc)
+        if (rc) {
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
-        else if (lmm_size) {
+        } else if (lmm_size) {
                 OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
@@ -174,8 +174,6 @@ int mds_cleanup_orphans(struct obd_device *obd)
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        /* dentry and mnt ref dropped in dentry_open() on error, or
-         * in filp_close() if dentry_open() succeeds */
         dentry = dget(mds->mds_pending_dir);
         if (IS_ERR(dentry))
                 GOTO(err_pop, rc = PTR_ERR(dentry));
@@ -219,6 +217,13 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 if (!dchild->d_inode) {
                         CERROR("orphan %s has been removed\n", d_name);
                         GOTO(next, rc = 0);
+                }
+
+                if (is_bad_inode(dchild->d_inode)) {
+                        CERROR("bad orphan inode found %lu/%u\n",
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation);
+                        GOTO(next, rc = -ENOENT);
                 }
 
                 child_inode = dchild->d_inode;

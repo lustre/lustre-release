@@ -748,10 +748,10 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
         RETURN(rc);
 }
 
-static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
+static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                             loff_t *ppos)
 {
-        struct inode *inode = filp->f_dentry->d_inode;
+        struct inode *inode = file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_lock_tree tree;
@@ -760,8 +760,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         __u64 kms;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld=%#Lx\n",
-               inode->i_ino, inode->i_generation,inode,(long)count,*ppos,*ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, count, *ppos);
 
         /* "If nbyte is 0, read() will return 0 and have no other results."
          *                      -- Single Unix Spec */
@@ -798,9 +798,9 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         }
 
         node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
-        tree.lt_fd = LUSTRE_FPRIVATE(filp);
+        tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
-                          filp->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
+                          file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
                 RETURN(rc);
 
@@ -823,11 +823,11 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        filp->f_ramax = 0;
+        file->f_ramax = 0;
 #else
-        filp->f_ra.ra_pages = 0;
+        file->f_ra.ra_pages = 0;
 #endif
-        retval = generic_file_read(filp, buf, count, ppos);
+        retval = generic_file_read(file, buf, count, ppos);
 
  out:
         ll_tree_unlock(&tree);
@@ -841,15 +841,14 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                              loff_t *ppos)
 {
         struct inode *inode = file->f_dentry->d_inode;
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
         loff_t maxbytes = ll_file_maxbytes(inode);
         ssize_t retval;
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE,"VFS Op:inode=%lu/%u(%p),size=%lu,offset=%Ld=%#Lx\n",
-               inode->i_ino, inode->i_generation,inode,(long)count,*ppos,*ppos);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
+               inode->i_ino, inode->i_generation, inode, count, *ppos);
 
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
 
@@ -859,16 +858,18 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         /* If file was opened for LL_IOC_LOV_SETSTRIPE but the ioctl wasn't
          * called on the file, don't fail the below assertion (bug 2388). */
-        if (file->f_flags & O_LOV_DELAY_CREATE && lsm == NULL)
+        if (file->f_flags & O_LOV_DELAY_CREATE && 
+            ll_i2info(inode)->lli_smd == NULL)
                 RETURN(-EBADF);
 
-        LASSERT(lsm != NULL);
+        LASSERT(ll_i2info(inode)->lli_smd != NULL);
 
         if (file->f_flags & O_APPEND)
                 node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
         else
-                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1,
+                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
                                           LCK_PW);
+
         if (IS_ERR(node))
                 RETURN(PTR_ERR(node));
 
@@ -1067,6 +1068,11 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
                 RETURN(-EFAULT);
 
         rc = ll_lov_setstripe_ea_info(inode, file, flags, &lum, sizeof(lum));
+        if (rc == 0) {
+                 put_user(0, &lump->lmm_stripe_count);
+                 rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, ll_i2obdexp(inode),
+                                    0, ll_i2info(inode)->lli_smd, lump);
+        }
         RETURN(rc);
 }
 
@@ -1322,8 +1328,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
         obddev = sbi->ll_mdc_exp->exp_obd;
-        rc = ldlm_cli_enqueue(obddev->obd_self_export, NULL,
-                              obddev->obd_namespace,
+        rc = ldlm_cli_enqueue(sbi->ll_mdc_exp, NULL, obddev->obd_namespace,
                               res_id, LDLM_FLOCK, &flock, mode, &flags,
                               NULL, ldlm_flock_completion_ast, NULL, file_lock,
                               NULL, 0, NULL, &lockh);

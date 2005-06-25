@@ -333,7 +333,10 @@ struct ptlrpc_request {
         struct timeval       rq_arrival_time;       /* request arrival time */
         struct ptlrpc_reply_state *rq_reply_state;  /* separated reply state */
         struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer*/
-
+#if CRAY_PORTALS
+        ptl_uid_t            rq_uid;            /* peer uid, used in MDS only */
+#endif
+        
         /* client-only incoming reply */
         ptl_handle_md_t      rq_reply_md_h;
         wait_queue_head_t    rq_reply_waitq;

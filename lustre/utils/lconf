@@ -45,6 +45,11 @@ def development_mode():
         return 1
     return 0
 
+if development_mode():
+    sys.path.append('../utils')
+else:
+    sys.path.extend(PYMOD_DIR)
+
 import Lustre
 
 # Global parameters
@@ -148,8 +153,10 @@ def logall(msgs):
         print string.strip(s)
 
 def debug(*args):
+    # apparently, (non)execution of the following line affects mds device
+    # startup order (e.g. two mds's using loopback devices), so always do it.
+    msg = string.join(map(str,args))
     if config.verbose:
-        msg = string.join(map(str,args))
         print msg
 
 # ack, python's builtin int() does not support '0x123' syntax.
@@ -469,7 +476,7 @@ class LCTLInterface:
         self.run(cmds)
 
     def add_peer(self, net_type, nid, hostaddr, port):
-        if net_type  in ('tcp','openib','ra') and not config.lctl_dump:
+        if net_type  in ('tcp','openib','ra','cray_kern_nal') and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s %s %d
@@ -938,7 +945,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
     if fstype in ('ext3', 'extN', 'ldiskfs'):
-        htree = 'echo "feature FEATURE_C5" | debugfs -w'
+        htree = 'tune2fs -O dir_index'
         (ret, out) = run (htree, dev)
         if ret:
             panic("Unable to enable htree:", dev)
@@ -953,7 +960,7 @@ def loop_base():
             loop='/dev/loop'
     return loop
 
-# find loop device assigned to thefile
+# find loop device assigned to the file
 def find_loop(file):
     loop = loop_base()
     for n in xrange(0, MAX_LOOP_DEVICES):
@@ -1065,7 +1072,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     # don't need a real nid for config log - client will replace (bug5619)
     if config.record:
         local = "54321"
-    elif net_type in ('tcp','openib','iib','vib','ra'):
+    elif net_type in ('tcp','openib','iib','vib','ra','cray_kern_nal'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -2079,7 +2086,7 @@ class Client(Module):
         self.target_name = tgtdb.getName()
         self.target_uuid = tgtdb.getUUID()
         self.db = tgtdb
-	self.backup_targets = []
+        self.backup_targets = []
 
         self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:

@@ -839,14 +839,23 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (!lock) {
                 req->rq_status = EINVAL;
         } else {
+                void *res;
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
-                                  &dlm_rep->lock_flags);
-                if (ldlm_del_waiting_lock(lock))
-                        CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                req->rq_status = 0;
+                do_gettimeofday(&lock->l_enqueued_time);
+                res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
+                                        &dlm_rep->lock_flags);
+                if (res) {
+                        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                        if (ldlm_del_waiting_lock(lock))
+                                CDEBUG(D_DLMTRACE,"converted waiting lock %p\n",
+                                       lock);
+                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                        req->rq_status = 0;
+                } else {
+                        req->rq_status = EDEADLOCK;
+                }
         }
 
         if (lock) {
@@ -1548,7 +1557,9 @@ static int ldlm_cleanup(int force)
         wake_up(&expired_lock_thread.elt_waitq);
         wait_event(expired_lock_thread.elt_waitq,
                    expired_lock_thread.elt_state == ELT_STOPPED);
-
+#else
+        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
 #endif
 
         OBD_FREE(ldlm_state, sizeof(*ldlm_state));
@@ -1587,9 +1598,6 @@ void __exit ldlm_exit(void)
         LASSERTF(kmem_cache_destroy(ldlm_lock_slab) == 0,
                  "couldn't free ldlm lock slab\n");
 }
-
-/* ldlm_flock.c */
-EXPORT_SYMBOL(ldlm_flock_completion_ast);
 
 /* ldlm_extent.c */
 EXPORT_SYMBOL(ldlm_extent_shift_kms);

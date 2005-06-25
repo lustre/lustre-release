@@ -373,6 +373,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         ll_inode2fid(&pfid, parent);
         ll_i2uctxt(&ctxt, parent, NULL);
 
+        it->it_create_mode &= ~current->fs->umask;
+
         rc = mdc_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
                              dentry->d_name.name, dentry->d_name.len, NULL, 0,
                              NULL, it, lookup_flags, &req, ll_mdc_blocking_ast);

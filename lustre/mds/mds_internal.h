@@ -147,7 +147,6 @@ int mds_lov_disconnect(struct obd_device *obd);
 void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
-int mds_lov_set_growth(struct mds_obd *mds, int count);
 int mds_lov_set_nextid(struct obd_device *obd);
 int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 int mds_post_mds_lovconf(struct obd_device *obd);

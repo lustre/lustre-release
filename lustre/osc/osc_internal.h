@@ -32,6 +32,10 @@ struct osc_async_page {
         void                    *oap_caller_data;
 };
 
+#define OAP_FROM_COOKIE(c)                                                      \
+        (LASSERT(((struct osc_async_page *)(c))->oap_magic == OAP_MAGIC),       \
+         (struct osc_async_page *)(c))
+
 struct osc_cache_waiter {
         struct list_head        ocw_entry;
         wait_queue_head_t       ocw_waitq;

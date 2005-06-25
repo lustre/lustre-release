@@ -101,8 +101,6 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         RETURN(rc);
 }
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
-
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
  * we grab the lock back in setattr_raw to avoid races.
@@ -185,7 +183,6 @@ void ll_truncate(struct inode *inode)
         up(&lli->lli_size_sem);
 } /* ll_truncate */
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                      unsigned to)
 {
@@ -260,24 +257,13 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         return rc;
 }
 
-struct ll_async_page *llap_from_cookie(void *cookie)
-{
-        struct ll_async_page *llap = cookie;
-        if (llap->llap_magic != LLAP_MAGIC)
-                return ERR_PTR(-EINVAL);
-        return llap;
-};
-
 static int ll_ap_make_ready(void *data, int cmd)
 {
         struct ll_async_page *llap;
         struct page *page;
         ENTRY;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap))
-                RETURN(-EINVAL);
-
+        llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
 
         LASSERT(cmd != OBD_BRW_READ);
@@ -327,10 +313,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         /* readpage queues with _COUNT_STABLE, shouldn't get here. */
         LASSERT(cmd != OBD_BRW_READ);
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap))
-                RETURN(PTR_ERR(llap));
-
+        llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
         lli = ll_i2info(page->mapping->host);
         lsm = lli->lli_smd;
@@ -379,12 +362,7 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         struct ll_async_page *llap;
         ENTRY;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         ll_inode_fill_obdo(llap->llap_page->mapping->host, cmd, oa);
         EXIT;
 }
@@ -393,7 +371,7 @@ static void ll_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
 {
         struct ll_async_page *llap;
 
-        llap = llap_from_cookie(data);
+        llap = LLAP_FROM_COOKIE(data);
         if (IS_ERR(llap)) {
                 EXIT;
                 return;
@@ -801,12 +779,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         struct page *page;
         ENTRY;
 
-        llap = llap_from_cookie(data);
-        if (IS_ERR(llap)) {
-                EXIT;
-                return;
-        }
-
+        llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
         LASSERT(PageLocked(page));
 
@@ -1222,8 +1195,8 @@ int ll_writepage(struct page *page)
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
         } else {
-                rc = queue_or_sync_write(exp, inode, llap,
-                                         PAGE_SIZE, ASYNC_READY | ASYNC_URGENT);
+                rc = queue_or_sync_write(exp, inode, llap, PAGE_SIZE,
+                                         ASYNC_READY | ASYNC_URGENT);
         }
         if (rc)
                 page_cache_release(page);

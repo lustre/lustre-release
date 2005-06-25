@@ -942,8 +942,6 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
-        mode &= ~current->fs->umask;
-
         switch (mode & S_IFMT) {
         case 0:
         case S_IFREG:
@@ -1178,7 +1176,6 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         if (st->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
-        mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0, mode,
                          current->fsuid, current->fsgid, 0, &request);
@@ -1213,7 +1210,6 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
 #endif
 #define FCNTL_FLMASK_INVALID (O_NONBLOCK|O_ASYNC)
 
-#if 0
 /* refer to ll_file_flock() for details */
 static int llu_file_flock(struct inode *ino,
                           int cmd,
@@ -1284,7 +1280,7 @@ static int llu_file_flock(struct inode *ino,
                 LBUG();
         }
 
-        CDEBUG(D_DLMTRACE, "inode="LPU64", pid="LPU64", flags=%#x, mode=%u, "
+        CDEBUG(D_DLMTRACE, "inode="LPU64", pid=%u, flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", st->st_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
@@ -1409,12 +1405,13 @@ static int llu_fcntl_setlk(struct inode *ino, int cmd, struct flock *flock)
 out:
         return error;
 }
-#endif
 
 static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
 {
         struct llu_inode_info *lli = llu_i2info(ino);
         long flags;
+        struct flock *flock;
+        long err;
 
         switch (cmd) {
         case F_GETFL:
@@ -1433,23 +1430,17 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                                       (lli->lli_open_flags & ~FCNTL_FLMASK);
                 *rtn = 0;
                 return 0;
-#if 0
-        case F_GETLK: {
-                struct flock *flock = va_arg(ap, struct flock *);
-                int err = llu_fcntl_getlk(ino, flock);
-                *rtn = err ? -1: 0;
-
+        case F_GETLK:
+                flock = va_arg(ap, struct flock *);
+                err = llu_fcntl_getlk(ino, flock);
+                *rtn = err? -1: 0;
                 return err;
-        }
         case F_SETLK:
-        case F_SETLKW: {
-                struct flock *flock = va_arg(ap, struct flock *);
-                int err = llu_fcntl_setlk(ino, cmd, flock);
-                *rtn = err ? -1: 0;
-
+        case F_SETLKW:
+                flock = va_arg(ap, struct flock *);
+                err = llu_fcntl_setlk(ino, cmd, flock);
+                *rtn = err? -1: 0;
                 return err;
-        }
-#endif
         }
 
         CERROR("unsupported fcntl cmd %x\n", cmd);

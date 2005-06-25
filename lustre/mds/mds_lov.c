@@ -476,6 +476,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(0);
 
         default:
+                CDEBUG(D_INFO, "unknown command %x\n", cmd);
                 RETURN(-EINVAL);
         }
         RETURN(0);

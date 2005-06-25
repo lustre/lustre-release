@@ -58,6 +58,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <libcfs/list.h>
 #include <portals/p30.h>
@@ -90,7 +92,7 @@ typedef unsigned short umode_t;
 
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE (2*200+5*10+0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
 static inline void inter_module_put(void *a)
 {
@@ -168,35 +170,38 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 #endif /* __LITTLE_ENDIAN */
 
 /* bits ops */
-static __inline__ int set_bit(int nr,long * addr)
-{
-	int	mask, retval;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr |= mask;
-	return retval;
+/* a long can be more than 32 bits, so use BITS_PER_LONG
+ * to allow the compiler to adjust the bit shifting accordingly
+ */
+
+/* test if bit nr is set in bitmap addr; returns previous value of bit nr */
+static __inline__ int set_bit(int nr, long * addr)
+{
+        long    mask;
+
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr |= mask;
+        return nr;
 }
 
+/* clear bit nr in bitmap addr; returns previous value of bit nr*/
 static __inline__ int clear_bit(int nr, long * addr)
 {
-	int	mask, retval;
+        long    mask;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr &= ~mask;
-	return retval;
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr &= ~mask;
+        return nr;
 }
 
 static __inline__ int test_bit(int nr, long * addr)
 {
-	int	mask;
-
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	return ((mask & *addr) != 0);
+        return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
 }
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
@@ -555,12 +560,7 @@ struct signal {
         int signal;
 };
 
-struct fs_struct {
-        int umask;
-};
-
 struct task_struct {
-        struct fs_struct *fs;
         int state;
         struct signal pending;
         char comm[32];
@@ -571,8 +571,6 @@ struct task_struct {
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
-        
-        struct fs_struct __fs;
 };
 
 extern struct task_struct *current;
@@ -768,9 +766,58 @@ void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
 
+/* flock related */
+struct nfs_lock_info {
+        __u32             state;
+        __u32             flags;
+        void            *host;
+};
+
+struct file_lock {
+        struct file_lock *fl_next;      /* singly linked list for this inode  */
+        struct list_head fl_link;       /* doubly linked list of all locks */
+        struct list_head fl_block;      /* circular list of blocked processes */
+        void *fl_owner;
+        unsigned int fl_pid;
+        wait_queue_head_t fl_wait;
+        struct file *fl_file;
+        unsigned char fl_flags;
+        unsigned char fl_type;
+        loff_t fl_start;
+        loff_t fl_end;
+
+        void (*fl_notify)(struct file_lock *);  /* unblock callback */
+        void (*fl_insert)(struct file_lock *);  /* lock insertion callback */
+        void (*fl_remove)(struct file_lock *);  /* lock removal callback */
+
+        void *fl_fasync; /* for lease break notifications */
+        unsigned long fl_break_time;    /* for nonblocking lease breaks */
+
+        union {
+                struct nfs_lock_info    nfs_fl;       
+        } fl_u;
+};
+
+#ifndef OFFSET_MAX
+#define INT_LIMIT(x)    (~((x)1 << (sizeof(x)*8 - 1)))
+#define OFFSET_MAX      INT_LIMIT(loff_t)
+#endif
+
+/* XXX: defined in kernel */
+#define FL_POSIX        1
+#define FL_SLEEP        128
+
 /* quota */
 #define QUOTA_OK 0
 #define NO_QUOTA 1
+
+/* proc */
+#define proc_symlink(...)                       \
+({                                              \
+        void *result = NULL;                    \
+        result;                                 \
+})
+
 
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>
