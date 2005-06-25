@@ -328,6 +328,7 @@ static int smfs_init_plugins(struct super_block * sb, int flags)
         ENTRY;
         
         INIT_LIST_HEAD(&smb->smsi_plg_list);
+        init_rwsem(&smb->plg_sem);
 
         if (SMFS_IS(flags, SMFS_PLG_KML)) 
                 smfs_init_kml(sb);
@@ -476,57 +477,46 @@ void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
 }
 /* Plugin API */
 int smfs_register_plugin(struct super_block * sb,
-                         struct smfs_plugin * new_plugin) 
+                         struct smfs_plugin * plg) 
 {
+        struct smfs_plugin * tmp = NULL;
         struct smfs_super_info * smb = S2SMI(sb);
-        struct smfs_plugin * plg = NULL;
-        struct list_head * plist = &S2SMI(sb)->smsi_plg_list;
+        struct list_head * plist = &smb->smsi_plg_list;
+        int rc = 0;
         
         ENTRY;
         
-        list_for_each_entry(plg, plist, plg_list) {
-                if (plg->plg_type == new_plugin->plg_type) {
+        down_write(&smb->plg_sem);
+        list_for_each_entry(tmp, plist, plg_list) {
+                if (tmp->plg_type == plg->plg_type) {
                         CWARN("Plugin is already registered\n");
-                        RETURN(-EEXIST);
+                        rc = -EEXIST;
+                        goto exit;
                 }
         }
-        
-        
-        if (SMFS_IS(smb->smsi_flags, new_plugin->plg_type)) {
-                CWARN("Plugin is already registered\n");
-                RETURN(-EEXIST);  
-        }
-                
-        OBD_ALLOC(plg, sizeof(*plg));
-        if (!plg) {
-                CWARN("Cannot allocate memory for plugin\n");
-                RETURN(-ENOMEM);
-        }
-        
-        memcpy(plg, new_plugin, sizeof(*plg));
+
         list_add_tail(&plg->plg_list, plist);
-        
+exit:
+        up_write(&smb->plg_sem);
         RETURN(0);
 }
 
-void * smfs_deregister_plugin(struct super_block *sb, int type)
+struct smfs_plugin * smfs_deregister_plugin(struct super_block *sb, int type)
 {
         struct smfs_plugin * plg = NULL;
-        struct list_head * plist = &S2SMI(sb)->smsi_plg_list;
-        void * priv = NULL;
-        
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct list_head * plist = &smb->smsi_plg_list;
+                
         ENTRY;
-
+        down_write(&smb->plg_sem);
         list_for_each_entry(plg, plist, plg_list) {
                 if (plg->plg_type == type) {
                         list_del(&plg->plg_list);
-                        priv = plg->plg_private;
-                        OBD_FREE(plg, sizeof(*plg));
                         break;
                 }
         }
-                
-        RETURN(priv);
+        up_write(&smb->plg_sem);
+        RETURN(plg);
 }
 
 void smfs_pre_hook (struct inode * inode, int op, void * msg) 
@@ -539,6 +529,7 @@ void smfs_pre_hook (struct inode * inode, int op, void * msg)
         //ENTRY;
         LASSERT(op < HOOK_MAX);
         //call hook operations
+        down_read(&smb->plg_sem);
         list_for_each_entry(plg, hlist, plg_list) {
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type))
@@ -550,7 +541,7 @@ void smfs_pre_hook (struct inode * inode, int op, void * msg)
                 if (plg->plg_pre_op)
                         plg->plg_pre_op(op, inode, msg, 0, plg->plg_private);
         }
-
+        up_read(&smb->plg_sem);
         //EXIT;
 }
 
@@ -562,7 +553,7 @@ void smfs_post_hook (struct inode * inode, int op, void * msg, int ret)
         struct smfs_plugin *plg;
         
         //ENTRY;
-        
+        down_read(&smb->plg_sem);
         list_for_each_entry(plg, hlist, plg_list) {
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type))
@@ -574,7 +565,7 @@ void smfs_post_hook (struct inode * inode, int op, void * msg, int ret)
                 if (plg->plg_post_op)
                         plg->plg_post_op(op, inode, msg, ret, plg->plg_private);
         }
-
+        up_read(&smb->plg_sem);
         //EXIT;
 }
 
@@ -588,6 +579,7 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
         //ENTRY;
         LASSERT(op < PLG_HELPER_MAX);
         //call hook operations
+        down_read(&smb->plg_sem);
         list_for_each_entry_safe(plg, tmp, hlist, plg_list) {
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type) && (op != PLG_START))
@@ -596,7 +588,7 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
                 if (plg->plg_helper)
                        rc += plg->plg_helper(op, sb, msg, plg->plg_private);
         }
-
+        up_read(&smb->plg_sem);
         //EXIT;
         
         return rc;

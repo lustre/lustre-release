@@ -187,10 +187,11 @@ int ost_rec_pack(char *buffer, struct dentry *dentry, struct inode *dir,
         }
         return 0;
 }
-
+#if 0
 int ost_rec_pack_init(struct smfs_super_info *smsi)
 {
 
         smsi->smsi_pack_rec[PACK_OST] = ost_rec_pack;
         return 0;
 }
+#endif

@@ -122,7 +122,7 @@ int smfs_helper (struct super_block *, int, void *);
 #define SMFS_PLG_HELP(sb, op, data)  smfs_helper(sb, op, data)
 
 int smfs_register_plugin(struct super_block *, struct smfs_plugin *);
-void * smfs_deregister_plugin(struct super_block *, int);
+struct smfs_plugin * smfs_deregister_plugin(struct super_block *, int);
 
 int smfs_init_dummy(struct super_block *);
 int smfs_init_kml(struct super_block *);

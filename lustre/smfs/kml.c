@@ -39,6 +39,7 @@
 #include <linux/lustre_smfs.h>
 #include "smfs_internal.h"
 
+#if 0
 #define KML_BUF_REC_INIT(buffer, pbuf, len)     \
 do {                                            \
         pbuf = buffer + sizeof(int);            \
@@ -104,7 +105,7 @@ static int smfs_llog_process_rec_cb(struct llog_handle *handle,
 exit:
         RETURN(rc);
 }
-
+#endif
 #if 0
 /* not used curently */
 static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
@@ -176,7 +177,8 @@ EXPORT_SYMBOL(smfs_rec_unpack); /* cmobd/cm_reint.c */
 int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                        unsigned long from, unsigned long num)
 {
-        return 0;//smfs_post_rec_write(dir, dentry, &from, &num);
+        //smfs_post_rec_write(dir, dentry, &from, &num);
+        return 0;
 }
 #if 0
 int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa)
@@ -240,9 +242,7 @@ int smfs_process_rec(struct super_block *sb,
         }
         RETURN(rc);
 }
-#endif
 
-#if 0
 /*smfs_path is gotten from intermezzo*/
 static char* smfs_path(struct dentry *dentry, struct dentry *root, char *buffer,
                        int buflen)
@@ -700,10 +700,17 @@ static int smfs_kml_post_op(int code, struct inode * inode,
 /* Helpers */
 static int smfs_exit_kml(struct super_block *sb, void * arg, struct kml_priv * priv)
 {
+        struct smfs_plugin * plg = NULL;
         ENTRY;
 
-        smfs_deregister_plugin(sb, SMFS_PLG_KML);
-        OBD_FREE(priv, sizeof(*priv));
+        plg = smfs_deregister_plugin(sb, SMFS_PLG_KML);
+        if (plg)
+                OBD_FREE(plg, sizeof(*plg));
+        else
+                CERROR("Cannot find KLM plugin while unregistering\n");
+        
+        if (priv)
+                OBD_FREE(priv, sizeof(*priv));
         
         EXIT;
         return 0;
@@ -754,7 +761,7 @@ static int smfs_start_kml(struct super_block *sb, void *arg,
                 RETURN(rc);
         }
         
-        (*ctxt)->llog_proc_cb = smfs_llog_process_rec_cb;
+        (*ctxt)->llog_proc_cb = NULL;//smfs_llog_process_rec_cb;
 
         SMFS_SET(smb->plg_flags, SMFS_PLG_KML);
 
@@ -803,33 +810,38 @@ int smfs_init_kml(struct super_block *sb)
 {
         int rc = 0;
         struct kml_priv * priv = NULL;
-        struct smfs_plugin plg = {
-                .plg_type = SMFS_PLG_KML,
-                .plg_pre_op = NULL,
-                .plg_post_op = &smfs_kml_post_op,
-                .plg_helper = &smfs_kml_help_op,
-                .plg_private = NULL,
-        };
-        
+        struct smfs_plugin * plg = NULL;
         ENTRY;
-
+        
+        OBD_ALLOC(plg, sizeof(*plg));
+        if (!plg) {
+                rc = -ENOMEM;
+                goto exit;
+        }
+        
+        plg->plg_type = SMFS_PLG_KML;
+        plg->plg_pre_op = NULL;
+        plg->plg_post_op = &smfs_kml_post_op;
+        plg->plg_helper = &smfs_kml_help_op;
+                
         OBD_ALLOC(priv, sizeof(*priv));
         if (!priv) {
-                RETURN(-ENOMEM);
+                rc = -ENOMEM;
+                goto exit;
         }
 
-        plg.plg_private = priv;
-        /*
-        rc = ost_rec_pack_init(smb);
-        if (rc)
-                return rc;
+        plg->plg_private = priv;
+
+        rc = smfs_register_plugin(sb, plg);
+        if (!rc) 
+                RETURN(0);
+exit: 
+        if (priv)
+                OBD_FREE(priv, sizeof(*priv));
         
-        rc = mds_rec_pack_init(smb);
-        if (rc)
-                return rc;
-        */
-        rc = smfs_register_plugin(sb, &plg);
-        
+        if (plg)
+                OBD_FREE(plg, sizeof(*plg));
+
         RETURN(rc);
 }
 
