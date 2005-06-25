@@ -618,6 +618,7 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
         smfs_trans_commit(dir, handle, 0);
 
 exit:
+	dput(cache_dentry);
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);
         RETURN(rc);
