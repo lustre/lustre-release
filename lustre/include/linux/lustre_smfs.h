@@ -34,19 +34,19 @@ struct snap_inode_info {
 };
 struct smfs_inode_info {
         /* this first part of struct should be the same as in mds_info_info */
-        struct lustre_id smi_id;
+        //struct lustre_id smi_id;
         
         /* smfs part. */
         struct inode *smi_inode;
         __u32  smi_flags;
 	struct snap_inode_info sm_sninfo;
 };
-
+#if 0
 struct journal_operations {
         void *(*tr_start)(struct inode *, int op);
         void (*tr_commit)(void *handle);
 };
-
+#endif
 struct sm_operations {
         /* operations on the file store */
         struct super_operations sm_sb_ops;
@@ -57,20 +57,22 @@ struct sm_operations {
         struct file_operations sm_dir_fops;
         struct file_operations sm_file_fops;
         struct file_operations sm_sym_fops;
-        struct dentry_operations sm_dentry_ops;
-        struct journal_operations sm_journal_ops;
+        //struct dentry_operations sm_dentry_ops;
+        //struct journal_operations sm_journal_ops;
 };
 
 /*smfs rec*/
-typedef int (*smfs_pack_rec_func)(char *buffer, struct dentry *dentry,
+/*typedef int (*smfs_pack_rec_func)(char *buffer, struct dentry *dentry,
                                   struct inode *dir, void *data1,
                                   void *data2, int op);
+
 typedef enum {
         PACK_NORMAL = 0,
         PACK_OST = 1,
         PACK_MDS = 2,
         PACK_MAX = 3,
 } pack_func_t;
+*/
 
 struct mds_kml_pack_info {
         int mpi_bufcount;
@@ -92,12 +94,13 @@ struct smfs_super_info {
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
 	struct snap_super_info	 *smsi_snap_info;   /* snap table cow */
-        smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
+        //smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
+        struct rw_semaphore      plg_sem; /*rw semaphore to protect plg operations */
         __u32                    plg_flags;        /* flags */
         __u32                    smsi_flags;
         __u32                    smsi_ops_check;
         struct list_head         smsi_plg_list;
-        kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
+        //kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
 };
 
 
@@ -122,7 +125,7 @@ struct fs_extent{
 };
 
 #define I2SMI(inode)  ((struct smfs_inode_info *) ((inode->u.generic_ip)))
-#define I2FSI(inode)  (((inode->u.generic_ip)))
+//#define I2FSI(inode)  (((inode->u.generic_ip)))
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define S2FSI(sb)   (((sb->u.generic_sbp)))
@@ -163,14 +166,17 @@ struct fs_extent{
 /* SMFS external flags and methods */
 #define SM_ALL_PLG      0x80L
 
-#define SM_DO_REC               0x1
-#define SM_INIT_REC             0x2
-#define SM_CACHE_HOOK           0x4
-#define SM_OVER_WRITE           0x8
-#define SM_DIRTY_WRITE          0x10
+#define SM_KML_PLG      0x1L
+#define SM_DO_REC       SM_KML_PLG
+
+//#define SM_INIT_REC             0x2
+//#define SM_CACHE_HOOK           0x4
+//#define SM_OVER_WRITE           0x8
+//#define SM_DIRTY_WRITE          0x10
 #define SM_DO_COW         	0x20
 #define SM_DO_COWED         	0x40
 
+/*
 #define SMFS_DO_REC(smfs_info) (smfs_info->smsi_flags & SM_DO_REC)
 #define SMFS_SET_REC(smfs_info) (smfs_info->smsi_flags |= SM_DO_REC)
 #define SMFS_CLEAN_REC(smfs_info) (smfs_info->smsi_flags &= ~SM_DO_REC)
@@ -198,7 +204,7 @@ struct fs_extent{
 #define SMFS_INODE_DIRTY_WRITE(inode) (I2SMI(inode)->smi_flags & SM_DIRTY_WRITE)
 #define SMFS_SET_INODE_DIRTY_WRITE(inode) (I2SMI(inode)->smi_flags |= SM_DIRTY_WRITE)
 #define SMFS_CLEAN_INODE_DIRTY_WRITE(inode) (I2SMI(inode)->smi_flags &= ~SM_DIRTY_WRITE)
-
+*/
 #define SMFS_DO_COW(smfs_info) (smfs_info->smsi_flags & SM_DO_COW)
 #define SMFS_SET_COW(smfs_info) (smfs_info->smsi_flags |= SM_DO_COW)
 #define SMFS_CLEAN_COW(smfs_info) (smfs_info->smsi_flags &= ~SM_DO_COW)
@@ -212,9 +218,9 @@ struct fs_extent{
 #define SMFS_CLEAN_INODE_COWED(inode) (I2SMI(inode)->smi_flags &= ~SM_DO_COWED)
 
 
-#define LVFS_SMFS_BACK_ATTR "lvfs_back_attr"
+//#define LVFS_SMFS_BACK_ATTR "lvfs_back_attr"
 
-
+#if 0
 #define REC_COUNT_BIT       0
 #define REC_COUNT_MASK      0x01 /*0001*/
 #define REC_OP_BIT          1
@@ -226,8 +232,8 @@ struct fs_extent{
 #define REC_GET_OID_BIT     5
 #define REC_GET_OID_MASK    0x20 /*100000*/
 
-#define REC_PACK_TYPE_BIT   6
-#define REC_PACK_TYPE_MASK  0x1C0 /*111000000*/
+//#define REC_PACK_TYPE_BIT   6
+//#define REC_PACK_TYPE_MASK  0x1C0 /*111000000*/
 
 #define SET_REC_COUNT_FLAGS(flag, count_flag) \
                 (flag |= count_flag << REC_COUNT_BIT)
@@ -259,11 +265,11 @@ struct fs_extent{
 #define GET_REC_PACK_TYPE_INDEX(flag) \
                 ((flag & REC_PACK_TYPE_MASK) >> REC_PACK_TYPE_BIT)
 
-#define SMFS_REC_ALL             0x1
-#define SMFS_REC_BY_COUNT        0x0
+//#define SMFS_REC_ALL             0x1
+//#define SMFS_REC_BY_COUNT        0x0
 
-#define SMFS_REINT_REC           0x1
-#define SMFS_UNDO_REC            0x2
+//#define SMFS_REINT_REC           0x1
+//#define SMFS_UNDO_REC            0x2
 
 #define SMFS_WRITE_KML           0x1
 #define SMFS_DEC_LINK            0x1
@@ -277,19 +283,20 @@ struct fs_extent{
         (GET_REC_COUNT_FLAGS(flag) == SMFS_REC_ALL)
 #define SMFS_DO_REC_BY_COUNT(flag) \
         (GET_REC_COUNT_FLAGS(flag) == SMFS_REC_BY_COUNT)
+
 #define SMFS_DO_WRITE_KML(flag) \
         (GET_REC_WRITE_KML_FLAGS(flag) == SMFS_WRITE_KML)
+
 #define SMFS_DO_DEC_LINK(flag) \
         (GET_REC_DEC_LINK_FLAGS(flag) == SMFS_DEC_LINK)
 
 #define SMFS_DO_GET_OID(flag) \
         (GET_REC_GET_OID_FLAGS(flag) == SMFS_GET_OID)
-
+#endif
 /*DIRTY flags of write ops*/
 #define REINT_EXTENTS_FLAGS         "replay_flags"
 #define SMFS_DIRTY_WRITE        0x01
 #define SMFS_OVER_WRITE         0x02
-
 
 static inline void duplicate_inode(struct inode *dst_inode,
                                    struct inode *src_inode)
@@ -297,7 +304,7 @@ static inline void duplicate_inode(struct inode *dst_inode,
         dst_inode->i_mode = src_inode->i_mode;
         dst_inode->i_uid = src_inode->i_uid;
         dst_inode->i_gid = src_inode->i_gid;
-        dst_inode->i_nlink = src_inode->i_nlink;
+        //dst_inode->i_nlink = src_inode->i_nlink;
         dst_inode->i_size = src_inode->i_size;
         dst_inode->i_atime = src_inode->i_atime;
         dst_inode->i_ctime = src_inode->i_ctime;
@@ -317,7 +324,6 @@ static inline void post_smfs_inode(struct inode *inode,
 {
         if (inode && cache_inode) {
                 duplicate_inode(inode, cache_inode);
-                
                 /*
                  * here we must release the cache_inode, otherwise we will have
                  * no chance to do it later.
@@ -327,15 +333,25 @@ static inline void post_smfs_inode(struct inode *inode,
         }
 }
 
+static inline void i_nlink_inc(struct inode * inode)
+{
+        inode->i_nlink++;
+        if (I2SMI(inode))
+                I2CI(inode)->i_nlink++;
+}
+
+static inline void i_nlink_dec(struct inode * inode)
+{
+        inode->i_nlink--;
+        if (I2SMI(inode))
+                I2CI(inode)->i_nlink--;
+}
+
 static inline void pre_smfs_inode(struct inode *inode,
                                   struct inode *cache_inode)
 {
         if (inode && cache_inode) {
                 cache_inode->i_flags = inode->i_flags;
-                //cache_inode->i_state = inode->i_state;
-                if (S_ISDIR(inode->i_mode)) {
-                        cache_inode->i_nlink = inode->i_nlink;
-                }
                 cache_inode->i_generation = inode->i_generation;
         }
 }

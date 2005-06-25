@@ -61,6 +61,7 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
                         atomic_read(&cache_inode->i_count));
         
         post_smfs_inode(inode, cache_inode);
+        inode->i_nlink = cache_inode->i_nlink;
         sm_set_inode_ops(inode);
 
         //inherit parent inode flags

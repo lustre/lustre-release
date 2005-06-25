@@ -919,16 +919,19 @@ static int fsfilt_smfs_precreate_rec(struct dentry *dentry, int *count,
         return rc;
 }
 
+// should be rewrote when needed
 static int fsfilt_smfs_get_ino_write_extents(struct super_block *sb, ino_t ino,
                                              char **pbuf, int *size)
 {
+        int rc = 0;
+#if 0
         struct fs_extent *fs_extents;
         struct ldlm_extent *extents = NULL;
         struct inode *inode;
         struct inode *cache_inode;
         struct fsfilt_operations *cache_fsfilt = NULL;
         struct lvfs_run_ctxt saved;
-        int    rc = 0, fs_ex_size, ex_num, flags;
+        int    fs_ex_size, ex_num, flags;
         char   *buf = NULL, *ex_buf = NULL;
         ENTRY;
 
@@ -995,6 +998,7 @@ out:
         if (rc && extents)
                 OBD_FREE(ex_buf, (*size) * (sizeof(struct ldlm_extent)));
         pop_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
+#endif
         return rc;
 }
 
@@ -1124,11 +1128,15 @@ static int fsfilt_smfs_del_dir_entry(struct obd_device * obd,
         
         rc = cache_fsfilt->fs_del_dir_entry(obd, cache_dentry);
 
-        if (!rc)
+        if (!rc) {
                 d_drop(dentry);
-
-        post_smfs_inode(dentry->d_inode, cache_inode);
-        post_smfs_inode(dentry->d_parent->d_inode, cache_dir);
+                if (cache_inode) {
+                        post_smfs_inode(dentry->d_inode, cache_inode);
+                        if (S_ISDIR(dentry->d_inode->i_mode))
+                                dentry->d_parent->d_inode->i_nlink--;
+                }
+                post_smfs_inode(dentry->d_parent->d_inode, cache_dir);                        
+        }
 exit:
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);

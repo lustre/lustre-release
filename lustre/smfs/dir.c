@@ -375,6 +375,7 @@ static int smfs_link(struct dentry *old_dentry,
         rc = cache_dir->i_op->link(cache_old_dentry, cache_dir, cache_dentry);
         if (!rc) {
                 atomic_inc(&old_inode->i_count);
+                old_inode->i_nlink++;
                 dput(iopen_connect_dentry(dentry, old_inode, 0));
         }
 
@@ -437,9 +438,11 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
                 
         SMFS_POST_HOOK(dir, HOOK_UNLINK, &msg, rc); 
-
-        post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
-        post_smfs_inode(dir, cache_dir);
+        if (!rc) {
+                post_smfs_inode(dentry->d_inode, cache_inode);
+                dentry->d_inode->i_nlink--;
+                post_smfs_inode(dir, cache_dir);
+        }
         
         smfs_trans_commit(dir, handle, 0);
 exit:
@@ -548,7 +551,7 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
                 inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode,
                                        I2SMI(dir), 0);
                 if (inode) {
-                        //smsf_update_dentry(dentry, cache_dentry);
+                        dir->i_nlink++;
                         d_instantiate(dentry, inode);
                 }
                 else
@@ -572,6 +575,7 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
         struct inode *parent = I2CI(dentry->d_parent->d_inode);
         struct dentry *cache_dentry = NULL;
         struct dentry *cache_parent = NULL;
+        struct inode * inode = dentry->d_inode;
         void *handle = NULL;
         int    rc = 0;
         struct hook_unlink_msg msg = {
@@ -592,33 +596,36 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                 goto exit;
         }
         
-        dentry_unhash(cache_dentry);
-        
         handle = smfs_trans_start(dir, FSFILT_OP_RMDIR, NULL);
         if (IS_ERR(handle) ) {
                 rc = -ENOSPC;
                 goto exit;
         }
-        
+
+        dentry_unhash(cache_dentry);
+
         pre_smfs_inode(dir, cache_dir);
-        pre_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
+        pre_smfs_inode(inode, cache_inode);
         
         SMFS_PRE_HOOK(dir, HOOK_RMDIR, &msg); 
         
         rc = cache_dir->i_op->rmdir(cache_dir, cache_dentry);
               
         SMFS_POST_HOOK(dir, HOOK_RMDIR, &msg, rc); 
-        
-        post_smfs_inode(dir, cache_dir);
-        post_smfs_inode(dentry->d_inode, cache_dentry->d_inode);
-        //like vfs_rmdir is doing with inode
-        if (!rc)
-                cache_dentry->d_inode->i_flags |= S_DEAD;
-        
+        if (!rc) {
+                if (inode->i_nlink != 2)
+                        CWARN("Directory #%lu under rmdir has %i nlinks\n",
+                                inode->i_ino, inode->i_nlink);
+                inode->i_nlink = 0;
+                dir->i_nlink--;
+                post_smfs_inode(dir, cache_dir);
+                post_smfs_inode(inode, cache_inode);
+                //like vfs_rmdir is doing with inode
+                cache_inode->i_flags |= S_DEAD;
+        }
         smfs_trans_commit(dir, handle, 0);
-
+        dput(cache_dentry);
 exit:
-	dput(cache_dentry);
         post_smfs_dentry(cache_dentry);
         post_smfs_dentry(cache_parent);
         RETURN(rc);
@@ -695,6 +702,7 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 {
         struct inode *cache_old_dir = I2CI(old_dir);
         struct inode *cache_new_dir = I2CI(new_dir);
+        struct inode *new_inode = new_dentry->d_inode;
         struct inode *cache_old_inode = I2CI(old_dentry->d_inode);
         struct inode *old_parent = I2CI(old_dentry->d_parent->d_inode);
         struct inode *new_parent = I2CI(new_dentry->d_parent->d_inode);
@@ -716,8 +724,8 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         if (!cache_old_dir || !cache_new_dir || !cache_old_inode)
                 RETURN(-ENOENT);
 
-        if (new_dentry->d_inode) {
-                cache_new_inode = I2CI(new_dentry->d_inode);
+        if (new_inode) {
+                cache_new_inode = I2CI(new_inode);
                 if (!cache_new_inode)
                         RETURN(-ENOENT);
         }
@@ -746,8 +754,9 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         
         pre_smfs_inode(old_dir, cache_old_dir);
         pre_smfs_inode(new_dir, cache_new_dir);
-        if (new_dentry->d_inode)
-                pre_smfs_inode(new_dentry->d_inode, cache_new_dentry->d_inode);
+        pre_smfs_inode(old_dentry->d_inode, cache_old_inode);
+        if (new_inode)
+                pre_smfs_inode(new_inode, cache_new_inode);
 
         SMFS_PRE_HOOK(old_dir, HOOK_RENAME, &msg); 
         
@@ -755,12 +764,24 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
                                          cache_new_dir, cache_new_dentry);
         
         SMFS_POST_HOOK(old_dir, HOOK_RENAME, &msg, rc); 
-
-        post_smfs_inode(old_dir, cache_old_dir);
-        post_smfs_inode(new_dir, cache_new_dir);
-        if (new_dentry->d_inode)
-                post_smfs_inode(new_dentry->d_inode, cache_new_dentry->d_inode);
-        
+        if (!rc) {
+                post_smfs_inode(old_dir, cache_old_dir);
+                post_smfs_inode(new_dir, cache_new_dir);
+                post_smfs_inode(old_dentry->d_inode, cache_old_inode);
+                if (new_inode) {
+                        post_smfs_inode(new_inode, cache_new_inode);
+                        new_inode->i_nlink--;
+                }
+                //directory is renamed
+                if (S_ISDIR(old_dentry->d_inode->i_mode)) {
+                        old_dir->i_nlink--;
+                        if (new_inode) {
+                                new_inode->i_nlink--;
+                        } else {
+                                new_dir->i_nlink++;
+                        }
+                }
+        }
         smfs_trans_commit(old_dir, handle, 0);
         
 exit:
@@ -777,13 +798,13 @@ struct inode_operations smfs_dir_iops = {
 #if HAVE_LOOKUP_RAW
         .lookup_raw     = smfs_lookup_raw,
 #endif
-        .link           = smfs_link,              /* BKL held */
-        .unlink         = smfs_unlink,            /* BKL held */
-        .symlink        = smfs_symlink,           /* BKL held */
-        .mkdir          = smfs_mkdir,             /* BKL held */
-        .rmdir          = smfs_rmdir,             /* BKL held */
-        .mknod          = smfs_mknod,             /* BKL held */
-        .rename         = smfs_rename,            /* BKL held */
+        .link           = smfs_link,              
+        .unlink         = smfs_unlink,            
+        .symlink        = smfs_symlink,           
+        .mkdir          = smfs_mkdir,             
+        .rmdir          = smfs_rmdir,             
+        .mknod          = smfs_mknod,             
+        .rename         = smfs_rename,            
         .setxattr       = smfs_setxattr,
         .getxattr       = smfs_getxattr,
         .listxattr      = smfs_listxattr,

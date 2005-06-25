@@ -45,6 +45,7 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_acl.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_smfs.h>
 #include "mds_internal.h"
 
 struct mds_logcancel_data {
@@ -1761,8 +1762,8 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                  S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
                  inode->i_nlink);
         if (S_ISDIR(mode)) {
-                inode->i_nlink++;
-                pending_dir->i_nlink++;
+                i_nlink_inc(inode);
+                i_nlink_inc(pending_dir);
                 mark_inode_dirty(inode);
                 mark_inode_dirty(pending_dir);
         }
@@ -1862,7 +1863,7 @@ int mds_create_local_dentry(struct mds_update_record *rec,
                        (unsigned long)child->d_inode->i_generation, rc);
         else {
                 if (S_ISDIR(child->d_inode->i_mode)) {
-                        id_dir->i_nlink++;
+                        i_nlink_inc(id_dir);
                         mark_inode_dirty(id_dir);
                 }
                 mark_inode_dirty(child->d_inode);
@@ -2372,7 +2373,7 @@ static int mds_reint_link_acquire(struct mds_update_record *rec,
                 rc = PTR_ERR(handle);
                 GOTO(cleanup, rc);
         }
-        de_src->d_inode->i_nlink++;
+        i_nlink_inc(de_src->d_inode);
         mark_inode_dirty(de_src->d_inode);
 
         EXIT;
