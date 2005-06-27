@@ -2081,7 +2081,7 @@ test_57b() {
 
 	MDSFREE2="`cat /proc/fs/lustre/mds/*/kbytesfree`"
 	MDCFREE2="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
-	if [ "$MDCFREE" != "$MDCFREE2" ]; then
+	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
 		else
