@@ -1342,7 +1342,9 @@ got_child:
 		obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
 		GOTO(cleanup, rc = -EAGAIN);
 	}
- 
+
+#warning "disable opencache lock for CMD2"
+#if 0
         /* Obtain OPEN lock as well */
         policy.l_inodebits.bits |= MDS_INODELOCK_OPEN;
 
@@ -1383,6 +1385,7 @@ got_child:
 
                 cleanup_phase = 3;
         }
+#endif
 
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle,
