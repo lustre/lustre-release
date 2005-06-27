@@ -185,8 +185,70 @@ static inline void filter_tally_write(struct filter_obd *filter,
                                  unsigned long *blocks, int blocks_per_page) {}
 static inline void filter_tally_read(struct filter_obd *filter,
                                      struct niobuf_local *lnb, int niocount) {}
-static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
+static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {};
 #endif
 
+/* Quota stuff */
+#ifdef HAVE_QUOTA_SUPPORT
+int filter_quota_setup(struct filter_obd *filter);
+void filter_quota_cleanup(struct filter_obd *filter);
+void filter_quota_set_info(struct obd_export *exp, struct obd_device *obd);
+int filter_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
+int filter_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
+int filter_quota_enforcement(struct obd_device *obd,
+                                    unsigned int fsuid, unsigned int fsgid,
+                                    struct lvfs_ucred **ret_uc);
+int filter_get_quota_flag(struct obd_device *obd, struct obdo *oa);
+int filter_quota_check_master(struct obd_device *obd, struct inode *inode);
+
+#ifdef LPROCFS
+int lprocfs_filter_rd_bunit(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+int lprocfs_filter_rd_iunit(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+int lprocfs_filter_wr_bunit(struct file *file, const char *buffer,
+                                   unsigned long count, void *data);
+int lprocfs_filter_wr_iunit(struct file *file, const char *buffer,
+                                   unsigned long count, void *data);
+int lprocfs_filter_rd_btune(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+int lprocfs_filter_rd_itune(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+int lprocfs_filter_wr_btune(struct file *file, const char *buffer,
+                                   unsigned long count, void *data);
+int lprocfs_filter_wr_itune(struct file *file, const char *buffer,
+                                   unsigned long count, void *data);
+#endif /* LPROCFS */
+#else /* Quota */
+static inline int filter_quota_setup(struct filter_obd *filter)
+{
+        return 0;
+}
+static inline void filter_quota_cleanup(struct filter_obd *filter) {}
+static inline void filter_quota_set_info(struct obd_export *exp, struct obd_device *obd) {}
+static inline int filter_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        return -ENOTSUPP;
+}
+static inline int filter_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        return -ENOTSUPP;
+}
+static inline int filter_quota_enforcement(struct obd_device *obd,
+                                    unsigned int fsuid, unsigned int fsgid,
+                                    struct lvfs_ucred **ret_uc)
+{
+        return 0;
+}
+static inline int filter_get_quota_flag(struct obd_device *obd,
+                                 struct obdo *oa)
+{
+        return 0;
+}
+static inline int filter_quota_check_master(struct obd_device *obd, struct inode *inode)
+{
+        return 0;
+}
+#endif /* Quota */
 
 #endif

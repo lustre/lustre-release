@@ -818,6 +818,9 @@ struct file_lock {
         result;                                 \
 })
 
+#ifndef ENOTSUPP
+#define ENOTSUPP ENOTSUP
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>

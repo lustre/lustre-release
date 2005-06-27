@@ -301,27 +301,35 @@ static inline int fsfilt_quotacheck(struct obd_device *obd,
                                     struct super_block *sb,
                                     struct obd_quotactl *oqctl)
 {
-       return obd->obd_fsops->fs_quotacheck(sb, oqctl);
+        if (obd->obd_fsops->fs_quotacheck)
+                return obd->obd_fsops->fs_quotacheck(sb, oqctl);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_quotactl(struct obd_device *obd,
                                   struct super_block *sb,
                                   struct obd_quotactl *oqctl)
 {
-       return obd->obd_fsops->fs_quotactl(sb, oqctl);
+        if (obd->obd_fsops->fs_quotactl)
+                return obd->obd_fsops->fs_quotactl(sb, oqctl);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_quotainfo(struct obd_device *obd,
                                    struct lustre_quota_info *lqi,
                                    int type, int cmd)
 {
-        return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+        if (obd->obd_fsops->fs_quotainfo)
+                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_dquot(struct obd_device *obd,
                                struct lustre_dquot *dquot, int cmd)
 {
-        return obd->obd_fsops->fs_dquot(dquot, cmd);
+        if (obd->obd_fsops->fs_dquot)
+                return obd->obd_fsops->fs_dquot(dquot, cmd);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_map_inode_pages(struct obd_device *obd,

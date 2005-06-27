@@ -11,4 +11,21 @@ extern void ost_print_req(void *seq_file, struct ptlrpc_request *req);
 # define ost_print_req NULL
 #endif
 
+#ifdef HAVE_QUOTA_SUPPORT
+/* Quota stuff */
+int ost_quotacheck(struct ptlrpc_request *req);
+int ost_quotactl(struct ptlrpc_request *req);
+#else
+static inline int ost_quotacheck(struct ptlrpc_request *req)
+{
+        req->rq_status = -ENOTSUPP;
+        return -ENOTSUPP;
+}
+static inline int ost_quotactl(struct ptlrpc_request *req)
+{
+        req->rq_status = -ENOTSUPP;
+        return -ENOTSUPP;
+}
+#endif
+
 #endif /* OST_INTERNAL_H */

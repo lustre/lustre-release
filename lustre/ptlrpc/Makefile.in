@@ -17,7 +17,7 @@ ptlrpc_objs += pers.o lproc_ptlrpc.o
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
 
 ifeq ($(PATCHLEVEL),6)
-ptlrpc-objs += @top_srcdir@/lustre/mds/quota_context.o
+#ptlrpc-objs += @top_srcdir@/lustre/mds/quota_context.o
 endif
 
 default: all

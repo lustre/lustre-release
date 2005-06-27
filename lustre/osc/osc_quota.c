@@ -3,20 +3,8 @@
  *
  *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -243,3 +231,96 @@ void osc_qinfo_exit(void)
         LASSERTF(kmem_cache_destroy(qinfo_cachep) == 0,
                  "couldn't destroy osc quota info slab\n"); 
 }
+
+int osc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        struct ptlrpc_request *req;
+        struct obd_quotactl *body;
+        int size = sizeof(*body);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_QUOTACHECK, 1, &size,
+                              NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        memcpy(body, oqctl, sizeof(*body));
+
+        req->rq_replen = lustre_msg_size(0, NULL);
+
+        spin_lock(&cli->cl_qchk_lock);
+        cli->cl_qchk_stat = CL_QUOTACHECKING;
+        spin_unlock(&cli->cl_qchk_lock);
+
+        rc = ptlrpc_queue_wait(req);
+        if (rc) {
+                spin_lock(&cli->cl_qchk_lock);
+                cli->cl_qchk_stat = rc;
+                spin_unlock(&cli->cl_qchk_lock);
+        }
+ out:
+        ptlrpc_req_finished(req);
+        RETURN (rc);
+}
+
+int osc_poll_quotacheck(struct obd_export *exp,
+                                  struct if_quotacheck *qchk)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        int stat;
+        ENTRY;
+                                                                                                                 
+        spin_lock(&cli->cl_qchk_lock);
+        stat = cli->cl_qchk_stat;
+        spin_unlock(&cli->cl_qchk_lock);
+                                                                                                                 
+        qchk->stat = stat;
+        if (stat == CL_QUOTACHECKING) {
+                qchk->stat = -ENODATA;
+                stat = 0;
+        } else if (qchk->stat) {
+                if (qchk->stat > CL_QUOTACHECKING)
+                        qchk->stat = stat = -EINTR;
+                                                                                                                 
+                strncpy(qchk->obd_type, "obdfilter", 10);
+                qchk->obd_uuid = cli->cl_import->imp_target_uuid;
+        }
+        RETURN(stat);
+}
+
+int osc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        struct ptlrpc_request *req;
+        struct obd_quotactl *oqc;
+        int size = sizeof(*oqctl);
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_QUOTACTL, 1, &size,
+                              NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        memcpy(lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*oqctl)), oqctl, size);
+
+        req->rq_replen = lustre_msg_size(1, &size);
+
+        rc = ptlrpc_queue_wait(req);
+        if (!rc) {
+                oqc = lustre_swab_repbuf(req, 0, sizeof (*oqc),
+                                         lustre_swab_obd_quotactl);
+                if (oqc == NULL) {
+                        CERROR ("Can't unpack mds_body\n");
+                        GOTO(out, rc = -EPROTO);
+                }
+
+                memcpy(oqctl, oqc, sizeof(*oqctl));
+        }
+out:
+        ptlrpc_req_finished(req);
+        RETURN (rc);
+}
+

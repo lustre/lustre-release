@@ -50,12 +50,14 @@ kmem_cache_t *obdo_cachep = NULL;
 EXPORT_SYMBOL(obdo_cachep);
 kmem_cache_t *import_cachep = NULL;
 
+#ifdef HAVE_QUOTA_SUPPORT
 kmem_cache_t *qunit_cachep = NULL;
 struct list_head qunit_hash[NR_DQHASH];
 spinlock_t qunit_hash_lock = SPIN_LOCK_UNLOCKED;
 EXPORT_SYMBOL(qunit_cachep);
 EXPORT_SYMBOL(qunit_hash);
 EXPORT_SYMBOL(qunit_hash_lock);
+#endif
 
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
@@ -370,6 +372,7 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 
 static void obd_cleanup_qunit_cache(void)
 {
+#ifdef HAVE_QUOTA_SUPPORT
         int i;
         ENTRY;
 
@@ -384,6 +387,7 @@ static void obd_cleanup_qunit_cache(void)
                 qunit_cachep = NULL;
         }
         EXIT;
+#endif
 }
 
 void obd_cleanup_caches(void)
@@ -405,6 +409,8 @@ void obd_cleanup_caches(void)
 
 static int obd_init_qunit_cache(void)
 {
+
+#ifdef HAVE_QUOTA_SUPPORT
         int i;
         ENTRY;
 
@@ -419,6 +425,7 @@ static int obd_init_qunit_cache(void)
         for (i = 0; i < NR_DQHASH; i++)
                 INIT_LIST_HEAD(qunit_hash + i);
         spin_unlock(&qunit_hash_lock);
+#endif
         RETURN(0);
 }
 

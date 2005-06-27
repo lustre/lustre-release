@@ -32,7 +32,7 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/quotaops.h>
+#include <linux/lustre_quota.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
@@ -563,17 +563,9 @@ int mds_fs_cleanup(struct obd_device *obd)
                 l_dput(mds->mds_pending_dir);
                 mds->mds_pending_dir = NULL;
         }
-        
-        /* close admin quota files */
-        down(&mds->mds_quota_info.qi_sem);
-        for (i = 0; i < MAXQUOTAS; i++) {
-		if (mds->mds_quota_info.qi_files[i]) {
-                        filp_close(mds->mds_quota_info.qi_files[i], 0);
-                        mds->mds_quota_info.qi_files[i] = NULL;
-                }
-	}
-        up(&mds->mds_quota_info.qi_sem);
 
+        mds_fs_quota_cleanup(mds);
+        
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);

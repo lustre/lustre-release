@@ -42,7 +42,6 @@
 #include <linux/init.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/quotaops.h>
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 # include <linux/mount.h>
 # include <linux/buffer_head.h>
@@ -1278,8 +1277,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         spin_lock_init(&filter->fo_w_disk_iosize.oh_lock);
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
 
-        atomic_set(&filter->fo_quotachecking, 1);
-
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL)
@@ -1297,10 +1294,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 GOTO(err_post, rc);
         }
 
-        rc = qctxt_init(&filter->fo_quota_ctxt, filter->fo_sb, NULL);
+        rc = filter_quota_setup(filter);
         if (rc) {
-                CERROR("initialize quota context failed! (rc:%d)\n", rc);
-                qctxt_cleanup(&filter->fo_quota_ctxt, 0);
                 GOTO(err_post, rc);
         }
 
@@ -1468,7 +1463,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         ping_evictor_stop();
 
-        qctxt_cleanup(&filter->fo_quota_ctxt, 0);
+        filter_quota_cleanup(filter);
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
@@ -2548,8 +2543,7 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
         
-        /* setup the quota context import */
-        obd->u.filter.fo_quota_ctxt.lqc_import = exp->exp_imp_reverse;
+        filter_quota_set_info(exp, obd);
 
         RETURN(rc);
 }
@@ -2620,67 +2614,6 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 RETURN(-EINVAL);
         }
         RETURN(0);
-}
-
-static int filter_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct lvfs_run_ctxt saved;
-        struct obd_device *obd = exp->exp_obd;
-        int rc;
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        rc = fsfilt_quotacheck(obd, obd->u.filter.fo_sb, oqctl);
-        if (rc)
-                CERROR("%s: fsfilt_quotacheck: %d\n", obd->obd_name, rc);
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        RETURN(rc);
-}
-
-static int filter_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct lvfs_run_ctxt saved;
-        int rc = 0;
-        ENTRY;
-
-        if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF ||
-            oqctl->qc_cmd == Q_GETOINFO || oqctl->qc_cmd == Q_GETOQUOTA ||
-            oqctl->qc_cmd == Q_GETQUOTA) {
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = fsfilt_quotactl(obd, obd->u.filter.fo_sb, oqctl);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        } else if (oqctl->qc_cmd == Q_INITQUOTA) {
-                unsigned int uid = 0, gid = 0;
-
-                /* initialize quota limit to MIN_QLIMIT */
-                LASSERT(oqctl->qc_dqblk.dqb_valid == QIF_BLIMITS);
-                LASSERT(oqctl->qc_dqblk.dqb_bhardlimit == MIN_QLIMIT);
-                LASSERT(oqctl->qc_dqblk.dqb_bsoftlimit == 0);
-                oqctl->qc_cmd = Q_SETQUOTA;
-                rc = fsfilt_quotactl(obd, obd->u.filter.fo_sb, oqctl);
-                /* this value will be replied to client, we must restore it */
-                oqctl->qc_cmd = Q_INITQUOTA;
-                if (rc)
-                        RETURN(rc);
-
-                /* trigger qunit pre-acquire */
-                if (oqctl->qc_type == USRQUOTA)
-                        uid = oqctl->qc_id;
-                else
-                        gid = oqctl->qc_id;
-
-                rc = qctxt_adjust_qunit(obd, &obd->u.filter.fo_quota_ctxt, 
-                                        uid, gid, 1);
-        } else {
-                CERROR("%s: unsupported filter_quotactl command: %d\n",
-                       obd->obd_name, oqctl->qc_cmd);
-                LBUG();
-        }
-
-        RETURN(rc);
 }
 
 static struct dentry *filter_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,

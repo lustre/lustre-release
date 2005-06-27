@@ -2188,64 +2188,6 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
-static int lov_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0;
-        ENTRY;
-
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
-
-                if (!lov->tgts[i].active) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
-                        continue;
-                }
-
-                err = obd_quotacheck(lov->tgts[i].ltd_exp, oqctl);
-                if (err) {
-                        if (lov->tgts[i].active && !rc)
-                                rc = err;
-                        continue;
-                }
-        }
-
-        RETURN(rc);
-}
-
-static int lov_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lov_obd *lov = &obd->u.lov;
-        __u64 curspace = oqctl->qc_dqblk.dqb_curspace;
-        int i, rc = 0;
-        ENTRY;
-
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                int err;
-
-                if (!lov->tgts[i].active) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
-                        continue;
-                }
-
-                err = obd_quotactl(lov->tgts[i].ltd_exp, oqctl);
-                if (err) {
-                        if (lov->tgts[i].active && !rc)
-                                rc = err;
-                        continue;
-                }
-
-                if (oqctl->qc_cmd == Q_GETQUOTA)
-                        curspace += oqctl->qc_dqblk.dqb_curspace;
-        }
-
-        if (oqctl->qc_cmd == Q_GETQUOTA)
-                oqctl->qc_dqblk.dqb_curspace = curspace;
-        RETURN(rc);
-}
-
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -2286,8 +2228,10 @@ struct obd_ops lov_obd_ops = {
         .o_llog_init           = lov_llog_init,
         .o_llog_finish         = lov_llog_finish,
         .o_notify              = lov_notify,
+#ifdef HAVE_QUOTA_SUPPORT
         .o_quotacheck          = lov_quotacheck,
         .o_quotactl            = lov_quotactl,
+#endif
 };
 
 int __init lov_init(void)

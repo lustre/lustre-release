@@ -1,6 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
+ *
  * Kernel module to test lustre administrative quotafile format APIs
  * from the OBD setup function */
 #ifndef EXPORT_SYMTAB

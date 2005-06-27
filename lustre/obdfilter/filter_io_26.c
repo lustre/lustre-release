@@ -403,71 +403,6 @@ static int filter_clear_page_cache(struct inode *inode,
         return 0;
 }
 
-static int filter_quota_enforcement(struct obd_device *obd,
-                                    unsigned int fsuid, unsigned int fsgid,
-                                    struct lvfs_ucred **ret_uc)
-{
-        struct filter_obd *filter = &obd->u.filter;
-        struct lvfs_ucred *uc = NULL;
-        ENTRY;
-
-        if (!sb_any_quota_enabled(filter->fo_sb))
-                RETURN(0);
-
-        OBD_ALLOC(uc, sizeof(*uc));
-        if (!uc)
-                RETURN(-ENOMEM);
-        *ret_uc = uc;
-
-        uc->luc_fsuid = fsuid;
-        uc->luc_fsgid = fsgid;
-        uc->luc_cap = current->cap_effective;
-        if (!fsuid)
-                cap_raise(uc->luc_cap, CAP_SYS_RESOURCE);
-        else
-                cap_lower(uc->luc_cap, CAP_SYS_RESOURCE);
-
-        RETURN(0);
-}
-
-static int filter_get_quota_flag(struct obd_device *obd,
-                                 struct obdo *oa)
-{
-        struct filter_obd *filter = &obd->u.filter;
-        int cnt;
-        int rc = 0, err;
-        ENTRY;
-
-        if (!sb_any_quota_enabled(filter->fo_sb))
-                RETURN(rc);
-
-        oa->o_flags = QUOTA_OK;
-
-        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct obd_quotactl oqctl;
-
-                oqctl.qc_cmd = Q_GETQUOTA;
-                oqctl.qc_type = cnt;
-                oqctl.qc_id = (cnt == USRQUOTA) ? oa->o_uid : oa->o_gid;
-                err = fsfilt_quotactl(obd, filter->fo_sb, &oqctl);
-                if (err) {
-                        if (!rc)
-                                rc = err;
-                        continue;
-                }
-
-                /* set over quota flags for a uid/gid */
-                oa->o_valid |= (cnt == USRQUOTA) ?
-                               OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA;
-                if (oqctl.qc_dqblk.dqb_bhardlimit &&
-                   (toqb(oqctl.qc_dqblk.dqb_curspace) > oqctl.qc_dqblk.dqb_bhardlimit))
-                        oa->o_flags |= (cnt == USRQUOTA) ? 
-                                       OBD_FL_NO_USRQUOTA : OBD_FL_NO_GRPQUOTA;
-        }
-
-        RETURN(rc);
-}
-
 /* Must be called with i_sem taken for writes; this will drop it */
 int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                      struct obd_export *exp, struct iattr *attr,
@@ -477,7 +412,6 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-        struct lustre_quota_ctxt *qctxt = &obd->u.filter.fo_quota_ctxt;
         int rc, rc2;
         ENTRY;
 
@@ -512,8 +446,7 @@ remap:
                  * pre-dqacq in time or this user has exceeded quota limit, we
                  * have to wait for the completion of in flight dqacq/dqrel,
                  * then try again */
-                if (qctxt_wait_on_dqacq(obd, qctxt, inode->i_uid,
-                                        inode->i_gid, 1) == -EAGAIN)
+                if (filter_quota_check_master(obd, inode))
                         goto remap;
         }
 

@@ -220,4 +220,8 @@ int lov_getstripe(struct obd_export *exp,
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
 
+/* Quota stuff */
+int lov_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
+
 #endif

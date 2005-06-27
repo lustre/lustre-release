@@ -305,8 +305,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
                               struct mds_obd *mds, struct obd_device *obd,
                               struct dentry *dchild, void **handle,
-                              obd_id **ids, struct llog_cookie **ret_logcookies,
-                              int *setattr_async_flag)
+                              obd_id **ids)
 {
         struct obdo *oa;
         struct obd_trans_info oti = { 0 };
@@ -367,8 +366,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(0);
         }
 
-        LASSERT(ret_logcookies);
-        LASSERT(setattr_async_flag);
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
@@ -427,7 +424,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         }
                         GOTO(out_oa, rc);
                 }
-                *setattr_async_flag = 1;
         } else {
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_osc_exp,
                                    0, &lsm, rec->ur_eadata);
@@ -462,35 +458,13 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         lmm_size = rc;
         body->eadatasize = rc;
 
-        if (*handle == NULL) {
-                if (*setattr_async_flag)
-                        *handle = fsfilt_start_log(obd, inode, 
-                                                   FSFILT_OP_CREATE, NULL, 
-                                                   le32_to_cpu(lmm->lmm_stripe_count));
-                else
-                        *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
-        }
+        if (*handle == NULL)
+                *handle = fsfilt_start(obd, inode, FSFILT_OP_CREATE, NULL);
         if (IS_ERR(*handle)) {
                 rc = PTR_ERR(*handle);
                 *handle = NULL;
                 GOTO(out_oa, rc);
         }
-
-        /* write mds setattr log for created objects */
-        if (*setattr_async_flag && lmm_size) {
-                struct llog_cookie *logcookies = NULL;
-
-                OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
-                if (logcookies == NULL)
-                        GOTO(out_oa, rc = -ENOMEM);
-                *ret_logcookies = logcookies;
-
-                if (mds_log_op_setattr(obd, inode, lmm, lmm_size, logcookies,
-                                       mds->mds_max_cookiesize) <= 0) {
-                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
-                        *ret_logcookies = NULL;
-               }
-        }  
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
         lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
@@ -664,9 +638,7 @@ static int accmode(struct inode *inode, int flags)
 /* Handles object creation, actual opening, and I/O epoch */
 static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                            struct mds_body *body, int flags, void **handle,
-                           struct mds_update_record *rec,struct ldlm_reply *rep,
-                           struct llog_cookie **logcookies,
-                           int *setattr_async_flag)
+                           struct mds_update_record *rec,struct ldlm_reply *rep)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -696,8 +668,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 if (!(body->valid & OBD_MD_FLEASIZE)) {
                         /* no EA: create objects */
                         rc = mds_create_objects(req, 2, rec, mds, obd,
-                                                dchild, handle, &ids,
-                                                logcookies, setattr_async_flag);
+                                                dchild, handle, &ids);
                         if (rc) {
                                 CERROR("mds_create_objects: rc = %d\n", rc);
                                 up(&dchild->d_inode->i_sem);
@@ -774,8 +745,7 @@ static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
  open:
-        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep,
-                             NULL, NULL);
+        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep);
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
@@ -848,10 +818,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         int parent_mode = LCK_PR;
         void *handle = NULL;
         struct dentry_params dp;
-        struct lov_mds_md *lmm = NULL;
-        int lmm_size = 0;
-        struct llog_cookie *logcookies = NULL;
-        int setattr_async_flag = 0;
         uid_t parent_uid = 0;
         gid_t parent_gid = 0;
         ENTRY;
@@ -1082,21 +1048,12 @@ int mds_open(struct mds_update_record *rec, int offset,
 
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,
-                             rep, &logcookies, &setattr_async_flag);
+                             rep);
         GOTO(cleanup, rc);
 
  cleanup:
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
-        /* do mds to ost setattr for new created objects */
-        if (rc == 0 && setattr_async_flag) {
-                lmm = lustre_msg_buf(req->rq_repmsg, 2, 0);
-                lmm_size = req->rq_repmsg->buflens[2];
-                mds_osc_setattr_async(obd, dchild->d_inode, lmm, lmm_size,
-                                      logcookies);
-        }
-        if (logcookies)
-                OBD_FREE(logcookies, mds->mds_max_cookiesize);
 
  cleanup_no_trans:
         switch (cleanup_phase) {
