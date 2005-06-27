@@ -42,7 +42,7 @@ endif # CRAY_PORTALS
 
 install-data-hook: $(install_data_hook)
 
-EXTRA_DIST := Info.plist
+EXTRA_DIST := Info.plist router.h
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c portals
 DIST_SOURCES = $(portals-objs:%.o=%.c)
