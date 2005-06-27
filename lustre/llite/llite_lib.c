@@ -527,6 +527,7 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
+                LASSERT(pcfg.pcfg_nid);
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_misc    = lmd->lmd_port;
                 err = libcfs_nal_cmd(&pcfg);
@@ -541,7 +542,6 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         lcfg->lcfg_nal = lmd->lmd_nal;
         lcfg->lcfg_nid = lmd->lmd_server_nid;
         LASSERT(lcfg->lcfg_nal);
-        LASSERT(lcfg->lcfg_nid);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
