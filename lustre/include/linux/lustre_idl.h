@@ -609,8 +609,10 @@ struct lustre_fid {
         __u64 lf_id;                   /* fid counter maintained on per 
                                           group basis */
         __u64 lf_group;                /* sequence group num */
+#if 0
         __u32 lf_version;              /* what snapfs version of inode */
         __u32 lf_padding;
+#endif
 };
 
 struct lustre_id {

@@ -790,8 +790,12 @@ void mdc_pack_id(struct lustre_id *id, obd_id ino,
 #define id_group(id)                            \
         (id)->li_fid.lf_group
 
+#if 0
 #define id_version(id)                          \
         (id)->li_fid.lf_version
+#else
+#define id_version(id)
+#endif
 
 #define id_assign_fid(id1, id2)                 \
         ((id1)->li_fid = (id2)->li_fid)
@@ -817,7 +821,7 @@ void mdc_pack_id(struct lustre_id *id, obd_id ino,
         do {                                                            \
                 id_fid((id)) = le64_to_cpu(id_fid((id)));               \
                 id_group((id)) = le64_to_cpu(id_group((id)));           \
-                id_version((id)) = le32_to_cpu(id_version((id)));       \
+                /*id_version((id)) = le32_to_cpu(id_version((id)));*/   \
                 id_ino((id)) = le64_to_cpu(id_ino((id)));               \
                 id_gen((id)) = le32_to_cpu(id_gen((id)));               \
                 id_type((id)) = le32_to_cpu(id_type((id)));             \
@@ -827,7 +831,7 @@ void mdc_pack_id(struct lustre_id *id, obd_id ino,
         do {                                                            \
                 id_fid((id)) = cpu_to_le64(id_fid((id)));               \
                 id_group((id)) = cpu_to_le64(id_group((id)));           \
-                id_version((id)) = cpu_to_le32(id_version((id)));       \
+                /*id_version((id)) = cpu_to_le32(id_version((id)));*/   \
                 id_ino((id)) = cpu_to_le64(id_ino((id)));               \
                 id_gen((id)) = cpu_to_le32(id_gen((id)));               \
                 id_type((id)) = cpu_to_le32(id_type((id)));             \

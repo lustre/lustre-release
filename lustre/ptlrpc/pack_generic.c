@@ -646,7 +646,7 @@ void lustre_swab_lustre_fid(struct lustre_fid *fid)
 {
         __swab64s (&fid->lf_id);
         __swab64s (&fid->lf_group);
-        __swab32s (&fid->lf_version);
+        /*__swab32s (&fid->lf_version);*/
 }
 
 void lustre_swab_lustre_id (struct lustre_id *id)
