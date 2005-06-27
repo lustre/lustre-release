@@ -529,7 +529,7 @@ int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
-        int i, rc = 0;
+        int rc = 0;
 
         if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
