@@ -392,7 +392,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc;
 
-        lock_kernel();
+        lock_24kernel();
 
         /* A _really_ horrible hack to avoid removing the data stored
          * in the block pointers; this is really the "small" stripe MD data.
@@ -427,7 +427,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                         rc = inode_setattr(inode, iattr);
         }
 
-        unlock_kernel();
+        unlock_24kernel();
 
         return rc;
 }
@@ -451,11 +451,11 @@ static int fsfilt_ext3_set_xattr(struct inode * inode, void *handle, char *name,
 {
         int rc = 0;
 
-        lock_kernel();
+        lock_24kernel();
 
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
                                    name, buffer, buffer_size, 0);
-        unlock_kernel();
+        unlock_24kernel();
         if (rc)
                 CERROR("set xattr %s from inode %lu: rc %d\n",
                        name,  inode->i_ino, rc);
@@ -467,11 +467,11 @@ static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
 {
         int rc = 0;
        
-        lock_kernel();
+        lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
                             name, buffer, buffer_size);
-        unlock_kernel();
+        unlock_24kernel();
 
         if (buffer == NULL)
                 return (rc == -ENODATA) ? 0 : rc;
@@ -683,10 +683,10 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
         fcb->cb_data = cb_data;
 
         CDEBUG(D_EXT2, "set callback for last_num: "LPD64"\n", last_num);
-        lock_kernel();
+        lock_24kernel();
         journal_callback_set(handle, fsfilt_ext3_cb_func,
                              (struct journal_callback *)fcb);
-        unlock_kernel();
+        unlock_24kernel();
         return 0;
 }
 
@@ -824,9 +824,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
-        lock_kernel();
+        lock_24kernel();
         handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
-        unlock_kernel();
+        unlock_24kernel();
         if (IS_ERR(handle)) {
                 ext3_down_truncate_sem(inode);
                 return PTR_ERR(handle);
@@ -834,9 +834,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
-                lock_kernel();
+                lock_24kernel();
                 journal_stop(handle);
-                unlock_kernel();
+                unlock_24kernel();
                 ext3_down_truncate_sem(inode);
                 return EXT_REPEAT;
         }
@@ -1189,9 +1189,9 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
                 if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM)) {
                         CWARN("%s: set mdsnum %d in ext3\n",
                               obd->obd_name, mds->mds_num);
-                        lock_kernel();
+                        lock_24kernel();
                         handle = journal_start(sbi->s_journal, 1);
-                        unlock_kernel();
+                        unlock_24kernel();
                         LASSERT(!IS_ERR(handle));
                         err = ext3_journal_get_write_access(handle, sbi->s_sbh);
                         LASSERT(err == 0);
@@ -1200,9 +1200,9 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
                         es->s_mdsnum = mds->mds_num;
                         err = ext3_journal_dirty_metadata(handle, sbi->s_sbh);
                         LASSERT(err == 0);
-                        lock_kernel();
+                        lock_24kernel();
                         journal_stop(handle);
-                        unlock_kernel();
+                        unlock_24kernel();
                 } else {
                         CWARN("%s: mdsnum initialized to %u in ext3fs\n",
                                 obd->obd_name, es->s_mdsnum);
@@ -1254,9 +1254,9 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
         dentry->d_mdsnum = mds;
         dentry->d_generation = generation;
         dentry->d_fid = fid;
-        lock_kernel();
+        lock_24kernel();
         err = ext3_add_dir_entry(dentry);
-        unlock_kernel();
+        unlock_24kernel();
         
         l_dput(dentry);
 
@@ -1272,9 +1272,9 @@ static int fsfilt_ext3_del_dir_entry(struct obd_device *obd,
 {
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
         int err;
-        lock_kernel();
+        lock_24kernel();
         err = ext3_del_dir_entry(dentry);
-        unlock_kernel();
+        unlock_24kernel();
         if (err == 0)
                 d_drop(dentry);
         return err;
