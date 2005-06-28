@@ -2341,13 +2341,8 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa,
                 GOTO(cleanup, rc = PTR_ERR(dchild));
         cleanup_phase = 2;
 
-        if (dchild->d_inode != NULL) {
-                CERROR("%s: serious error: objid %.*s already "
-                       "exists; is this filesystem corrupted?\n",
-                       obd->obd_name, dchild->d_name.len,
-                       dchild->d_name.name);
-                GOTO(cleanup, rc = -EEXIST);
-        }
+        if (dchild->d_inode != NULL)
+                GOTO(cleanup, rc = 0);
 
         handle = fsfilt_start_log(obd, dparent->d_inode,
                                   FSFILT_OP_CREATE, NULL, 1);
