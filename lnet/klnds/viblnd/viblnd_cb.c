@@ -36,7 +36,8 @@ kibnal_tx_done (kib_tx_t *tx)
         LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
 
 #if IBNAL_USE_FMR
-        if (tx->tx_md.md_fmrcount == 0) {
+        if (tx->tx_md.md_fmrcount == 0 ||
+            ptlrc != PTL_OK) {
                 vv_return_t      vvrc;
 
                 /* mapping must be active (it dropped fmrcount to 0) */
@@ -184,7 +185,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
                                conn->ibc_qp, &rx->rx_wrq);
         spin_unlock(&conn->ibc_lock);
 
-        if (vvrc == 0) {
+        if (vvrc == vv_return_ok) {
                 if (credit) {
                         spin_lock(&conn->ibc_lock);
                         conn->ibc_outstanding_credits++;
