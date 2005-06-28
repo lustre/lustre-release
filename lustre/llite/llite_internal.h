@@ -163,6 +163,8 @@ struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;
+        struct lustre_handle fd_cwlockh;
+        unsigned long fd_gid;
 };
 
 struct lov_stripe_md;

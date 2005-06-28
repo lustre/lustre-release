@@ -196,7 +196,8 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (time_after(lock->l_callback_timeout, jiffies))
+                if (time_after(lock->l_callback_timeout, jiffies) ||
+                    (lock->l_req_mode == LCK_GROUP))
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
@@ -672,8 +673,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -EFAULT);
         }
 
-        if (dlm_req->lock_desc.l_req_mode < LCK_EX ||
-            dlm_req->lock_desc.l_req_mode > LCK_NL ||
+        if (dlm_req->lock_desc.l_req_mode <= LCK_MINMODE ||
+            dlm_req->lock_desc.l_req_mode >= LCK_MAXMODE ||
             dlm_req->lock_desc.l_req_mode & (dlm_req->lock_desc.l_req_mode-1)) {
                 DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d\n",
                           dlm_req->lock_desc.l_req_mode);

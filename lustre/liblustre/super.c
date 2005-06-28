@@ -1448,7 +1448,6 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
         return ENOSYS;
 }
 
-#if 0
 static int llu_get_grouplock(struct inode *inode, unsigned long arg)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
@@ -1506,7 +1505,6 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 
         RETURN(0);
 }       
-#endif
 
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
@@ -1515,7 +1513,6 @@ static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
         liblustre_wait_event(0);
 
         switch (request) {
-#if 0
         unsigned long arg;
         case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
@@ -1523,7 +1520,6 @@ static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
         case LL_IOC_GROUP_UNLOCK:
                 arg = va_arg(ap, unsigned long);
                 return llu_put_grouplock(ino, arg);
-#endif
         }
 
         CERROR("did not support ioctl cmd %lx\n", request);

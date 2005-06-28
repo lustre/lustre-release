@@ -878,7 +878,7 @@ void ll_removepage(struct page *page)
         EXIT;
 }
 
-static int ll_page_matches(struct page *page, int readahead)
+static int ll_page_matches(struct page *page, int fd_flags)
 {
         struct lustre_handle match_lockh = {0};
         struct inode *inode = page->mapping->host;
@@ -886,11 +886,14 @@ static int ll_page_matches(struct page *page, int readahead)
         int flags, matches;
         ENTRY;
 
+        if (unlikely(fd_flags & LL_FILE_GROUP_LOCKED))
+                RETURN(1);
+
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_TEST_LOCK;
-        if (!readahead)
+        if (!(fd_flags&LL_FILE_READAHEAD))
                 flags |= LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
@@ -1032,7 +1035,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                         goto next_page;
 
                 /* bail when we hit the end of the lock. */
-                if ((rc = ll_page_matches(page, 1)) <= 0) {
+                if ((rc = ll_page_matches(page, flags|LL_FILE_READAHEAD)) <= 0) {
                         LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
                                        "lock match failed: rc %d\n", rc);
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
@@ -1267,7 +1270,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 GOTO(out_oig, rc = 0);
         }
 
-        rc = ll_page_matches(page, 0);
+        rc = ll_page_matches(page, fd->fd_flags);
         if (rc < 0) {
                 LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n", rc);
                 GOTO(out, rc);

@@ -58,6 +58,7 @@
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
+#define LL_FILE_READAHEAD               0x00000004
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1

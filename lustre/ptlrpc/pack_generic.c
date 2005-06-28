@@ -1847,7 +1847,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_res_id *)0)->name[4]));
 
         /* Checks for struct ldlm_extent */
-        LASSERTF((int)sizeof(struct ldlm_extent) == 16, " found %lld\n",
+        LASSERTF((int)sizeof(struct ldlm_extent) == 24, " found %lld\n",
                  (long long)(int)sizeof(struct ldlm_extent));
         LASSERTF((int)offsetof(struct ldlm_extent, start) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct ldlm_extent, start));

@@ -285,6 +285,14 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         int rc, valid;
         ENTRY;
 
+        /* clear group lock, if present */
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+                struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
+                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = llu_extent_unlock(fd, inode, lsm, LCK_GROUP,
+                                       &fd->fd_cwlockh);
+        }
+
         obdo.o_id = st->st_ino;
         obdo.o_valid = OBD_MD_FLID;
         valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLSIZE |OBD_MD_FLBLOCKS |

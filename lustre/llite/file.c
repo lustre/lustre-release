@@ -42,6 +42,14 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         int rc;
         ENTRY;
 
+        /* clear group lock, if present */
+        if (unlikely(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+                rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
+                                      &fd->fd_cwlockh);
+        }
+
         obdo.o_id = inode->i_ino;
         obdo.o_valid = OBD_MD_FLID;
         obdo_from_inode(&obdo, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
@@ -1087,6 +1095,66 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
                             (void *)arg);
 }
 
+static int ll_get_grouplock(struct inode *inode, struct file *file,
+                         unsigned long arg)
+{
+        struct ll_file_data *fd = file->private_data;
+        ldlm_policy_data_t policy = { .l_extent = { .start = 0,
+                                                    .end = OBD_OBJECT_EOF}};
+        struct lustre_handle lockh = { 0 };
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int flags = 0, rc;
+        ENTRY;
+
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+                RETURN(-EINVAL);
+        }
+
+        policy.l_extent.gid = arg;
+        if (file->f_flags & O_NONBLOCK)
+                flags = LDLM_FL_BLOCK_NOWAIT;
+
+        rc = ll_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh, flags);
+        if (rc)
+                RETURN(rc);
+
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_gid = arg;
+        memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
+
+        RETURN(0);
+}
+
+static int ll_put_grouplock(struct inode *inode, struct file *file,
+                         unsigned long arg)
+{
+        struct ll_file_data *fd = file->private_data;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        int rc;
+        ENTRY;
+
+        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+                /* Ugh, it's already unlocked. */
+                RETURN(-EINVAL);
+        }
+
+        if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
+                RETURN(-EINVAL);
+        
+        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+
+        rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
+        if (rc)
+                RETURN(rc);
+
+        fd->fd_gid = 0;
+        memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
+
+        RETURN(0);
+}       
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -1134,6 +1202,11 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT3_IOC_GETVERSION_OLD:
         case EXT3_IOC_GETVERSION:
                 RETURN(put_user(inode->i_generation, (int *) arg));
+        case LL_IOC_GROUP_LOCK:
+                RETURN(ll_get_grouplock(inode, file, arg));
+        case LL_IOC_GROUP_UNLOCK:
+                RETURN(ll_put_grouplock(inode, file, arg));
+
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
          * network encode the arg field.
@@ -1164,9 +1237,13 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         if (origin == 2) { /* SEEK_END */
                 ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
                 struct ll_inode_info *lli = ll_i2info(inode);
-                int rc;
+                int nonblock = 0, rc;
 
-                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
+                if (file->f_flags & O_NONBLOCK)
+                        nonblock = LDLM_FL_BLOCK_NOWAIT;
+
+                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,
+                                    nonblock);
                 if (rc != 0)
                         RETURN(rc);
 
