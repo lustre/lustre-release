@@ -91,6 +91,7 @@ static inline int qctxt_wait_on_dqacq(struct obd_device *obd,
 struct quotacheck_info {
 };
 
+#undef DQUOT_OFF
 #define DQUOT_OFF(sb) do {} while(0)
 
 #endif /*!HAVE_QUOTA_SUPPORT */
