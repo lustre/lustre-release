@@ -911,6 +911,103 @@ test_27m() {
 }
 run_test 27m "create file while OST0 was full =================="
 
+# osc's keep a NOSPC stick flag that gets unset with rmdir
+reset_enospc() {
+    sysctl -w lustre.fail_loc=0
+    mkdir -p $DIR/d27/nospc
+    rmdir $DIR/d27/nospc
+}
+
+exhaust_precreations() {
+    local i
+    ostidx=$1
+    ost=$(head -n $(( ostidx + 1 )) /proc/fs/lustre/lov/${LOVNAME}/target_obd | tail -n 1 | awk '{print $2}' | sed -e 's/_UUID$//')
+    mds=$(find /proc/fs/lustre/mds/ -maxdepth 1 -type d | tail -n 1)
+    mds=$(basename $mds)
+
+    last_id=$(tail -n 1 /proc/fs/lustre/osc/OSC_*_${ost}_${mds}/prealloc_last_id)
+    next_id=$(tail -n 1 /proc/fs/lustre/osc/OSC_*_${ost}_${mds}/prealloc_next_id)
+
+    mkdir -p $DIR/d27/${ost}
+    $LSTRIPE $DIR/d27/${ost} 0 $ostidx 1
+    sysctl -w lustre.fail_loc=0x215
+    echo "Creating to objid $last_id on ost $ost..."
+    for (( i = next_id; i <= last_id; i++ )) ; do
+	touch $DIR/d27/${ost}/f$i
+    done
+    reset_enospc
+}
+
+exhaust_all_precreations() {
+    local i
+    for (( i=0; i < OSTCOUNT; i++ )) ; do
+	exhaust_precreations $i
+    done
+}
+
+test_27n() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27n
+    exhaust_precreations 0
+    sysctl -w lustre.fail_loc=0x80000215
+    touch $DIR/d27/f27n || error
+    reset_enospc
+}
+run_test 27n "creating a file while some OSTs are full (should succeed) ==="
+
+test_27o() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27o
+    exhaust_all_precreations
+    sysctl -w lustre.fail_loc=0x215
+    touch $DIR/d27/f27o && error
+    reset_enospc
+}
+run_test 27o "creating a file while all OSTs are full (should error) ==="
+
+test_27p() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27p
+    exhaust_precreations 0
+    $MCREATE $DIR/d27/f27p || error
+    $TRUNCATE $DIR/d27/f27p 80000000 || error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27p || error
+    sysctl -w lustre.fail_loc=0x80000215
+    echo foo >> $DIR/d27/f27p || error
+    $CHECKSTAT -s 80000004 $DIR/d27/f27p || error
+    reset_enospc
+}
+run_test 27p "appending to a truncated file while some OSTs are full ==="
+
+test_27q() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27q
+    exhaust_precreations 0
+    $MCREATE $DIR/d27/f27q || error
+    $TRUNCATE $DIR/d27/f27q 80000000 || error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27q || error
+    sysctl -w lustre.fail_loc=0x215
+    echo foo >> $DIR/d27/f27q && error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27q || error
+    reset_enospc
+}
+run_test 27q "appending to a truncated file while all OSTs are full (should error) ==="
+
+test_27r() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27r
+    exhaust_precreations 0
+    sysctl -w lustre.fail_loc=0x80000215
+    $LSTRIPE $DIR/d27/f27r 0 0 -1 && error
+    reset_enospc
+}
+run_test 27r "creating a file while some OSTs are full with an explicit stripe count (should error) ==="
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error

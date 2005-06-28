@@ -102,6 +102,11 @@ unsigned int obd_print_fail_loc(void)
         return obd_fail_loc;
 }
 
+void obd_set_fail_loc(unsigned int fl)
+{
+        obd_fail_loc = fl;
+}
+
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {

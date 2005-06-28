@@ -72,6 +72,37 @@ void qos_shrink_lsm(struct lov_request_set *set)
         }
 }
 
+int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
+{
+        struct lov_stripe_md *lsm = set->set_md;
+        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
+        int stripe, i, rc = -EIO;
+        ENTRY;
+
+        ost_idx = (req->rq_idx + 1) % ost_count; 
+        for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
+                if (lov->tgts[ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
+                        continue;
+                }
+                /* check if objects has been created on this ost */
+                for (stripe = req->rq_stripe; stripe >= 0; stripe--) {
+                        if (ost_idx == lsm->lsm_oinfo[stripe].loi_ost_idx)
+                                break;
+                }
+
+                if (stripe < 0) {
+                        req->rq_idx = ost_idx;
+                        rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa, 
+                                        &req->rq_md, set->set_oti);
+                        if (!rc)
+                                break;
+                }
+        }
+        RETURN(rc);
+}
+
 #define LOV_CREATE_RESEED_INTERVAL 1000
 /* FIXME use real qos data to prepare the lov create request */
 int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)

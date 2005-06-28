@@ -43,7 +43,17 @@ Details    : The interpretation of the default stripe count (0, to lfs
              or lmc) has been changed to mean striping across a single
              OST, rather than all available.  For general usage we have
              found a stripe count of 1 or 2 works best.
- 
+
+Severity   : major
+Frequency  : occasional
+Bugzilla   : 6409, 6834
+Description: Creating files with an explicit stripe count may lead to
+             a failed assertion on the MDS
+Details    : If some OSTs are full or unavailable, creating files may
+             trigger a failed assertion on the MDS.  Now, Lustre will
+             try to use other servers or return an error to the
+             client.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

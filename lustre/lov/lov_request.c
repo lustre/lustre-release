@@ -497,9 +497,33 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
         LASSERT(set->set_completes);
 
-        if (!set->set_success)
-                GOTO(cleanup, rc = -EIO);
-        if (*lsmp == NULL && set->set_count != set->set_success) {
+        /* try alloc objects on other osts if osc_create fails for
+         * exceptions: RPC failure, ENOSPC, etc */
+        if (set->set_count != set->set_success) {
+                list_for_each_entry (req, &set->set_list, rq_link) {
+                        if (req->rq_rc == 0)
+                                continue;
+                        
+                        set->set_completes--;
+                        req->rq_complete = 0;
+                        
+                        rc = qos_remedy_create(set, req);
+                        lov_update_create_set(set, req, rc);
+
+                        if (rc)
+                                break;
+                }
+        }
+
+        /* no successful creates */
+        if (set->set_success == 0)
+                GOTO(cleanup, rc);
+        
+        /* If there was an explicit stripe set, fail.  Otherwise, we
+         * got some objects and that's not bad. */
+        if (set->set_count != set->set_success) {
+                if (*lsmp)
+                        GOTO(cleanup, rc);
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
@@ -535,7 +559,7 @@ cleanup:
                 if (!req->rq_complete || req->rq_rc)
                         continue;
 
-                sub_exp = lov->tgts[req->rq_idx].ltd_exp,
+                sub_exp = lov->tgts[req->rq_idx].ltd_exp;
                 err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
