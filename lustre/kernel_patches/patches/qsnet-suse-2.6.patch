@@ -94302,14 +94302,14 @@ Index: linux-2.6.5/kernel/Makefile
 ===================================================================
 --- linux-2.6.5.orig/kernel/Makefile	2005-05-11 12:10:11.148128808 -0400
 +++ linux-2.6.5/kernel/Makefile	2005-05-11 12:10:12.685895032 -0400
-@@ -30,6 +30,7 @@
+@@ -26,6 +26,7 @@
+ obj-$(CONFIG_EVLOG) += evlbuf.o evlapi.o evlposix.o
+ obj-$(CONFIG_HOOK) += hook.o
+ obj-$(CONFIG_TRIGEVENT_HOOKS) += trigevent_hooks.o
++obj-$(CONFIG_PTRACK) += ptrack.o
+ obj-$(CONFIG_LTT) += ltt/
  obj-$(CONFIG_KPROBES) += kprobes.o
  obj-$(CONFIG_CPUSETS) += cpuset.o
- obj-$(CONFIG_CKRM_CPU_SCHEDULE) += ckrm_classqueue.o ckrm_sched.o
-+obj-$(CONFIG_PTRACK) += ptrack.o
- 
- ifneq ($(CONFIG_IA64),y)
- # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
 Index: linux-2.6.5/kernel/ptrack.c
 ===================================================================
 --- linux-2.6.5.orig/kernel/ptrack.c	2004-02-23 16:02:56.000000000 -0500
