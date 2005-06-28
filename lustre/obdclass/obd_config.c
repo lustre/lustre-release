@@ -217,7 +217,7 @@ static int __class_detach(struct obd_device *obd)
         int err = 0;
         ENTRY;
 
-        CDEBUG(D_CONFIG | D_WARNING, "destroying obd %d (%s)\n",
+        CDEBUG(D_CONFIG, "destroying obd %d (%s)\n",
                obd->obd_minor, obd->obd_name);
 
         if (OBP(obd, detach))
