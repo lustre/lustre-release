@@ -58,7 +58,16 @@ struct fsfilt_operations {
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
-        /* this method is needed to make IO operation fsfilt nature depend. */
+        /*
+         * this method is needed to make IO operation fsfilt nature depend.
+         *
+         * This operation maybe synchronous or asynchronous.
+         *
+         * Return convention: positive number of bytes written (synchronously)
+         * on success. Negative errno value on failure. Zero if asynchronous
+         * IO was submitted successfully.
+         *
+         */
         int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
@@ -82,7 +91,7 @@ struct fsfilt_operations {
                                   struct obd_quotactl *oqctl);
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
-        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type, 
+        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
                                  int cmd);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
 };
@@ -253,7 +262,7 @@ static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
                                   struct inode *inode, void *bio)
 {
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
-        
+
         if (rw == OBD_BRW_READ)
                 return obd->obd_fsops->fs_send_bio(READ, inode, bio);
         return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);

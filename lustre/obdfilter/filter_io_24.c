@@ -79,7 +79,7 @@ static void check_pending_bhs(unsigned long *blocks, int nr_pages, dev_t dev,
 /* when brw_kiovec() is asked to read from block -1UL it just zeros
  * the page.  this gives us a chance to verify the write mappings
  * as well */
-static int filter_cleanup_mappings(int rw, struct kiobuf *iobuf, 
+static int filter_cleanup_mappings(int rw, struct kiobuf *iobuf,
                                    struct inode *inode)
 {
         int i, blocks_per_page_bits = PAGE_SHIFT - inode->i_blkbits;
@@ -179,7 +179,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
         if (iobuf->nr_pages * blocks_per_page > KIO_MAX_SECTORS)
                 GOTO(cleanup, rc = -EINVAL);
 
-        if (iobuf->nr_pages * blocks_per_page > 
+        if (iobuf->nr_pages * blocks_per_page >
             OBDFILTER_CREATED_SCRATCHPAD_ENTRIES)
                 GOTO(cleanup, rc = -EINVAL);
 
@@ -432,8 +432,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
-        if (err)
+        if (err) {
+                CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
+        }
         if (obd_sync_filter && !err)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",

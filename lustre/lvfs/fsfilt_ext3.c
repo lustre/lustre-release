@@ -388,14 +388,17 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
 static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
 {
+        journal_t *journal = EXT3_JOURNAL(inode);
         tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
-        if (is_journal_aborted(EXT3_JOURNAL(inode)))
+        if (unlikely(is_journal_aborted(journal)))
                 return -EIO;
 
         log_wait_commit(EXT3_JOURNAL(inode), tid);
 
+        if (unlikely(is_journal_aborted(journal)))
+                return -EIO;
         return 0;
 }
 
@@ -518,17 +521,29 @@ static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct bio *bio)
 #else
 static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
 {
-        int rc, blocks_per_page;
+        int rc, blk_per_page;
 
         rc = brw_kiovec(rw, 1, &bio, inode->i_dev,
                         KIOBUF_GET_BLOCKS(bio), 1 << inode->i_blkbits);
+        /*
+         * brw_kiovec() returns number of bytes actually written. If error
+         * occurred after something was written, error code is returned though
+         * kiobuf->errno. (See bug 6854.)
+         */
 
-        blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        blk_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
 
-        if (rc != (1 << inode->i_blkbits) * bio->nr_pages * blocks_per_page) {
-                CERROR("short write?  expected %d, wrote %d\n",
-                       (1 << inode->i_blkbits) * bio->nr_pages *
-                       blocks_per_page, rc);
+        if (rc != (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page) {
+                CERROR("short write?  expected %d, wrote %d (%d)\n",
+                       (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page,
+                       rc, bio->errno);
+        }
+        if (bio->errno != 0) {
+                CERROR("IO error. Wrote %d of %d (%d)\n",
+                       rc,
+                       (1 << inode->i_blkbits) * bio->nr_pages * blk_per_page,
+                       bio->errno);
+                rc = bio->errno;
         }
 
         return rc;
