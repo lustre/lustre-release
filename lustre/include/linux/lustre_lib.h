@@ -35,6 +35,7 @@
 # include <linux/signal.h>
 # include <linux/types.h>
 #endif
+#include <portals/p30.h>
 #include <libcfs/portals_lib.h>
 #include <libcfs/kp30.h> /* XXX just for LASSERT! */
 #include <linux/lustre_idl.h>
