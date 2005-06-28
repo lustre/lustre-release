@@ -177,6 +177,10 @@ do {                                                                    \
 # include <unistd.h>
 # include <time.h>
 # include <limits.h>
+# include <errno.h>
+# include <sys/ioctl.h>                         /* for _IOWR */
+
+# define CFS_MODULE_PARM(name, t, type, perm, desc)
 
 #endif /* End of !__KERNEL__ */
 

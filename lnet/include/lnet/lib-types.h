@@ -266,7 +266,7 @@ typedef struct ptl_nal
 {
         /* fields managed by portals */
         struct list_head  nal_list;             /* stash in the NAL table */
-        atomic_t          nal_refcount;         /* # active instances */
+        int               nal_refcount;         /* # active instances */
 
         /* fields initialised by the NAL */
         unsigned int      nal_type;
@@ -338,7 +338,7 @@ typedef struct ptl_ni {
         void             *ni_data;              /* instance-specific data */
         ptl_nal_t        *ni_nal;               /* procedural interface */
         int               ni_shutdown;          /* shutting down? */
-        atomic_t          ni_refcount;          /* reference count */
+        int               ni_refcount;          /* reference count */
         char             *ni_interfaces[PTL_MAX_INTERFACES]; /* equivalent interfaces to use */
 } ptl_ni_t;
 

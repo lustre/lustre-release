@@ -30,6 +30,7 @@ typedef struct {                                /* tmp struct for parsing routes
 
 static int ptl_tbnob = 0;			/* track text buf allocation */
 #define PTL_MAX_TEXTBUF_NOB     (64<<10)	/* bound allocation */
+#define PTL_SINGLE_TEXTBUF_NOB  (4<<10)
 
 void 
 ptl_syntax(char *name, char *str, int offset, int width)
@@ -187,7 +188,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
         ptl_ni_t *ni = NULL;
         __u32     net;
 
-	if (strlen(networks) > PAGE_SIZE) {
+	if (strlen(networks) > PTL_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
 		CERROR("Can't parse networks; string too long\n");
 		return PTL_FAIL;
@@ -344,7 +345,7 @@ ptl_new_text_buf (int str_len)
 	int             nob;
 
 	nob = offsetof(ptl_text_buf_t, ptb_text[str_len + 1]);
-	if (nob > PAGE_SIZE) {
+	if (nob > PTL_SINGLE_TEXTBUF_NOB) {
 		/* _way_ conservative for "route net gateway..." */
 		CERROR("text buffer too big\n");
 		return NULL;
@@ -566,7 +567,7 @@ int
 ptl_parse_route (char *str)
 {
 	/* static scratch buffer OK (single threaded) */
-	static char       cmd[PAGE_SIZE];
+	static char       cmd[PTL_SINGLE_TEXTBUF_NOB];
 
 	struct list_head  nets;
 	struct list_head  gateways;

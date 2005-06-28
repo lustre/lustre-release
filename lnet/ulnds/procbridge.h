@@ -42,4 +42,18 @@ extern void *nal_thread(void *);
 extern void set_address(bridge t,ptl_pid_t pidrequest);
 extern void procbridge_wakeup_nal(procbridge p);
 
+extern ptl_err_t procbridge_startup (ptl_ni_t *);
+extern void procbridge_shutdown (ptl_ni_t *);
+
+extern ptl_err_t tcpnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
+                             ptl_hdr_t *hdr, int type, ptl_process_id_t target,
+                             int routing, unsigned int niov, struct iovec *iov,
+                             size_t offset, size_t len);
+ptl_err_t tcpnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
+                      unsigned int niov, struct iovec *iov,
+                      size_t offset, size_t mlen, size_t rlen);
+
+
+
+
 #endif

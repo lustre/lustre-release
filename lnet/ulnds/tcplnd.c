@@ -33,10 +33,8 @@
 #include <netinet/in.h>
 #include <pqtimer.h>
 #include <dispatch.h>
-#include <bridge.h>
-#include <ipmap.h>
+#include <procbridge.h>
 #include <connection.h>
-#include <pthread.h>
 #include <errno.h>
 #ifndef __CYGWIN__
 #include <syscall.h>

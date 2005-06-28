@@ -1043,7 +1043,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 /* lose extra ref from ptl_net2ni NB we wait for all the peers
                  * to be deleted before ni teardown can complete; i.e. ni can't
                  * disappear until all its peer table entries has gone so
-                 * there's no to account the peer's refs on ni. */
+                 * there's no need to account the peer's refs on ni. */
                 ptl_ni_decref(ni);
 
                 if (rc != 0)

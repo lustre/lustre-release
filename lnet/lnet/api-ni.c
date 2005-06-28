@@ -149,7 +149,8 @@ ptl_register_nal (ptl_nal_t *nal)
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == NULL);
         
         list_add (&nal->nal_list, &ptl_apini.apini_nals);
-        atomic_set(&nal->nal_refcount, 0);
+        nal->nal_refcount = 0;
+
         if (nal->nal_type != LONAL)
                 LCONSOLE(0, "%s NAL registered\n",
                          libcfs_nal2str(nal->nal_type));
@@ -164,7 +165,7 @@ ptl_unregister_nal (ptl_nal_t *nal)
 
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_find_nal_by_type(nal->nal_type) == nal);
-        LASSERT (atomic_read(&nal->nal_refcount) == 0);
+        LASSERT (nal->nal_refcount == 0);
         
         list_del (&nal->nal_list);
         if (nal->nal_type != LONAL)
@@ -548,7 +549,7 @@ ptl_net2ni (__u32 net)
                 ni = list_entry(tmp, ptl_ni_t, ni_list);
 
                 if (PTL_NIDNET(ni->ni_nid) == net) {
-                        ptl_ni_addref(ni);
+                        ptl_ni_addref_locked(ni);
                         PTL_UNLOCK(flags);
                         return ni;
                 }
@@ -565,6 +566,7 @@ ptl_count_acceptor_nis (ptl_ni_t **first_ni)
          * *first_ni so the acceptor can pass it connections "blind" to retain
          * binary compatibility. */
         int                count = 0;
+#ifdef __KERNEL__
         unsigned long      flags;
         struct list_head  *tmp;
         ptl_ni_t          *ni;
@@ -576,7 +578,7 @@ ptl_count_acceptor_nis (ptl_ni_t **first_ni)
                 if (ni->ni_nal->nal_accept != NULL) {
                         /* This NAL uses the acceptor */
                         if (count == 0 && first_ni != NULL) {
-                                ptl_ni_addref(ni);
+                                ptl_ni_addref_locked(ni);
                                 *first_ni = ni;
                         }
                         count++;
@@ -584,7 +586,7 @@ ptl_count_acceptor_nis (ptl_ni_t **first_ni)
         }
         
         PTL_UNLOCK(flags);
-        
+#endif
         return count;
 }
 
@@ -605,19 +607,6 @@ ptl_islocalnid (ptl_nid_t nid)
         
         PTL_UNLOCK(flags);
         return 0;
-}
-
-void
-ptl_queue_zombie_ni (ptl_ni_t *ni)
-{
-        unsigned long flags;
-
-        LASSERT (atomic_read(&ni->ni_refcount) == 0);
-        LASSERT (ptl_apini.apini_init);
-        
-        PTL_LOCK(flags);
-        list_add_tail(&ni->ni_list, &ptl_apini.apini_zombie_nis);
-        PTL_UNLOCK(flags);
 }
 
 void
@@ -645,11 +634,8 @@ ptl_shutdown_nalnis (void)
 
                 ni->ni_shutdown = 1;
                 ptl_apini.apini_nzombie_nis++;
-                PTL_UNLOCK(flags);
 
-                ptl_ni_decref(ni); /* drop apini's ref (shutdown on last ref) */
-
-                PTL_LOCK(flags);
+                ptl_ni_decref_locked(ni); /* drop apini's ref (shutdown on last ref) */
         }
 
         /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
@@ -663,19 +649,18 @@ ptl_shutdown_nalnis (void)
                         if ((i & (-i)) == i)
                                 CDEBUG(D_WARNING,"Waiting for %d zombie NIs\n",
                                        ptl_apini.apini_nzombie_nis);
-                        set_current_state(TASK_UNINTERRUPTIBLE);
-                        schedule_timeout(cfs_time_seconds(1));
+                        cfs_pause(cfs_time_seconds(1));
                         PTL_LOCK(flags);
                 }
 
                 ni = list_entry(ptl_apini.apini_zombie_nis.next,
                                 ptl_ni_t, ni_list);
                 list_del(&ni->ni_list);
+                ni->ni_nal->nal_refcount--;
 
                 PTL_UNLOCK(flags);
 
                 LASSERT (!in_interrupt());
-                atomic_dec(&ni->ni_nal->nal_refcount);
                 (ni->ni_nal->nal_shutdown)(ni);
 
                 /* can't deref nal anymore now; it might have unregistered
@@ -727,9 +712,9 @@ ptl_startup_nalnis (void)
                         nal = ptl_find_nal_by_type(nal_type);
                         if (nal != NULL) 
                                 break;
-                        
-                        PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
 
+                        PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
+#ifdef __KERNEL
                         if (retry) {
                                 CERROR("Can't load NAL %s, module %s\n",
                                        libcfs_nal2str(nal_type),
@@ -738,12 +723,20 @@ ptl_startup_nalnis (void)
                         }
 
                         request_module(libcfs_nal2modname(nal_type));
-
+#else
+                        CERROR("NAL %s not supported\n",
+                               libcfs_nal2str(nal_type));
+                        goto failed;
+#endif
                         PTL_MUTEX_DOWN(&ptl_apini.apini_nal_mutex);
                 }
 
-                atomic_set(&ni->ni_refcount, 1);
-                atomic_inc(&nal->nal_refcount);
+                ni->ni_refcount = 1;
+
+                PTL_LOCK(flags);
+                nal->nal_refcount++;
+                PTL_UNLOCK(flags);
+                
                 ni->ni_nal = nal;
 
                 rc = (nal->nal_startup)(ni);
@@ -753,7 +746,9 @@ ptl_startup_nalnis (void)
                 if (rc != PTL_OK) {
                         CERROR("Error %d starting up NI %s\n",
                                rc, libcfs_nal2str(nal->nal_type));
-                        atomic_dec(&nal->nal_refcount);
+                        PTL_LOCK(flags);
+                        nal->nal_refcount--;
+                        PTL_UNLOCK(flags);
                         goto failed;
                 }
 
@@ -805,8 +800,8 @@ PtlInit(int *max_interfaces)
 #else
         pthread_mutex_init(&ptl_apini.apini_mutex, NULL);
         pthread_cond_init(&ptl_apini.apini_cond, NULL);
-        pthread_mutex_init(&ptl_apini.apini_nal_mutex);
-        pthread_mutex_init(&ptl_apini.apini_api_mutex);
+        pthread_mutex_init(&ptl_apini.apini_nal_mutex, NULL);
+        pthread_mutex_init(&ptl_apini.apini_api_mutex, NULL);
 #endif
 
         ptl_apini.apini_init = 1;

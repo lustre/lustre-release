@@ -23,6 +23,8 @@
 
 #include "router.h"
 
+#ifdef __KERNEL__
+
 kpr_state_t kpr_state;
 
 static int forwarding = 0;
@@ -753,9 +755,8 @@ kpr_ctl(unsigned int cmd, void *arg)
 void
 kpr_finalise (void)
 {
-#ifdef __KERNEL__
         kpr_proc_fini();
-#endif
+
         while (!list_empty (&kpr_state.kpr_nets)) {
                 kpr_net_entry_t *ne = list_entry(kpr_state.kpr_nets.next,
                                                  kpr_net_entry_t, kpne_list);
@@ -805,10 +806,8 @@ kpr_initialise (void)
         if (rc != PTL_OK)
                 kpr_finalise();
 
-#ifdef __KERNEL__
         if (rc == PTL_OK)
                 kpr_proc_init();
-#endif
 
         return (rc == PTL_OK) ? 0 : -EINVAL;
 }
@@ -818,3 +817,56 @@ EXPORT_SYMBOL(kpr_lookup);
 EXPORT_SYMBOL(kpr_fwd_start);
 EXPORT_SYMBOL(kpr_fwd_done);
 EXPORT_SYMBOL(kpr_notify);
+
+#else
+
+ptl_nid_t
+kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
+{
+        ptl_ni_t            *ni = *nip;
+        ptl_ni_t            *gwni;
+        __u32                target_net = PTL_NIDNET(target_nid);
+
+        if (ni == NULL) {                       /* ni not determined yet */
+                gwni = ptl_net2ni(target_net);  /* is it a local network? */
+                if (gwni != NULL) {
+                        *nip = gwni;
+                        return target_nid;
+                }
+        } else {                                /* ni already determined */
+                if (target_net == PTL_NIDNET(ni->ni_nid)) {
+                        ptl_ni_addref(ni);      /* extra ref so caller can drop blindly */
+                        return target_nid;
+                }
+        }
+
+        CERROR("Nid %s is not on a local network\n", 
+               libcfs_nid2str(target_nid));
+
+        return PTL_NID_ANY;
+}
+
+int
+kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
+{
+        return -EOPNOTSUPP;
+}
+
+int 
+kpr_ctl(unsigned int cmd, void *arg)
+{
+        return -EINVAL;
+}
+
+void
+kpr_finalise (void)
+{
+}
+
+int
+kpr_initialise (void)
+{
+        return 0;
+}
+
+#endif

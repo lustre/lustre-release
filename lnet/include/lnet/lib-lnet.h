@@ -52,7 +52,7 @@ static inline int ptl_md_exhausted (ptl_libmd_t *md)
 #define PTL_UNLOCK(flags)                                               \
         pthread_mutex_unlock(&ptl_apini.apini_mutex)
 #define PTL_MUTEX_DOWN(m) pthread_mutex_lock(m)
-#define PTL_MUTEX_UP(m)   pthread_mutex_up(m)
+#define PTL_MUTEX_UP(m)   pthread_mutex_unlock(m)
 #endif
 
 #ifdef PTL_USE_LIB_FREELIST
@@ -394,21 +394,39 @@ kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, ptl_hdr_t *hdr,
 /******************************************************************************/
 
 static inline void
-ptl_ni_addref(ptl_ni_t *ni) 
+ptl_ni_addref_locked(ptl_ni_t *ni) 
 {
-        LASSERT (atomic_read(&ni->ni_refcount) > 0);
-        atomic_inc(&ni->ni_refcount);
+        LASSERT (ni->ni_refcount > 0);
+        ni->ni_refcount++;
 }
 
-extern void ptl_queue_zombie_ni (ptl_ni_t *ni);
+static inline void
+ptl_ni_addref(ptl_ni_t *ni) 
+{
+        unsigned long flags;
+        
+        PTL_LOCK(flags);
+        ptl_ni_addref_locked(ni);
+        PTL_UNLOCK(flags);
+}
+
+static inline void
+ptl_ni_decref_locked(ptl_ni_t *ni)
+{
+        LASSERT (ni->ni_refcount > 0);
+        ni->ni_refcount--;
+        if (ni->ni_refcount == 0)
+                list_add_tail(&ni->ni_list, &ptl_apini.apini_zombie_nis);
+}
 
 static inline void
 ptl_ni_decref(ptl_ni_t *ni)
 {
-        /* CAVEAT EMPTOR! must NOT be holding PTL_LOCK() (deadlock) */
-        LASSERT (atomic_read(&ni->ni_refcount) > 0);
-        if (atomic_dec_and_test(&ni->ni_refcount))
-                ptl_queue_zombie_ni(ni);
+        unsigned long flags;
+        
+        PTL_LOCK(flags);
+        ptl_ni_decref_locked(ni);
+        PTL_UNLOCK(flags);
 }
 
 extern ptl_nal_t ptl_lonal;
@@ -461,6 +479,7 @@ extern void ptl_register_nal(ptl_nal_t *nal);
 extern void ptl_unregister_nal(ptl_nal_t *nal);
 extern ptl_err_t ptl_set_ip_niaddr (ptl_ni_t *ni);
 
+#ifdef __KERNEL__
 extern ptl_err_t ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
                              __u32 local_ip, __u32 peer_ip, int peer_port);
 extern void ptl_connect_console_error(int rc, ptl_nid_t peer_nid,
@@ -471,6 +490,7 @@ extern int ptl_count_acceptor_nis(ptl_ni_t **first_ni);
 extern ptl_err_t ptl_accept(struct socket *sock, __u32 magic, int choose_ni);
 extern int       ptl_acceptor_timeout(void);
 extern int       ptl_acceptor_port(void);
+#endif
 extern ptl_err_t ptl_acceptor_start(void);
 extern void      ptl_acceptor_stop(void);
 

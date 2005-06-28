@@ -24,21 +24,11 @@
 # define EXPORT_SYMTAB
 #endif
 
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/errno.h>
-#include <linux/proc_fs.h>
-#include <linux/init.h>
-
 #define DEBUG_SUBSYSTEM S_PTLROUTER
 
-#include <libcfs/kp30.h>
-#include <portals/kpr.h>
-#include <portals/p30.h>
 #include <portals/lib-p30.h>
+
+#ifdef __KERNEL__
 
 typedef struct
 {
@@ -90,5 +80,6 @@ extern kpr_state_t  kpr_state;
 
 extern void kpr_proc_init (void);
 extern void kpr_proc_fini (void);
+#endif /* __KERNEL__ */
 
 #endif /* _KPLROUTER_H */

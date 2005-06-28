@@ -150,7 +150,6 @@ EXPORT_SYMBOL(ptl_finalize);
 EXPORT_SYMBOL(ptl_parse);
 EXPORT_SYMBOL(ptl_create_reply_msg);
 EXPORT_SYMBOL(ptl_net2ni);
-EXPORT_SYMBOL(ptl_queue_zombie_ni);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");

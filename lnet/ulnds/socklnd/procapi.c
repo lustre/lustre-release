@@ -59,17 +59,6 @@ void procbridge_wakeup_nal(procbridge p)
     syscall(SYS_write, p->notifier[0], buf, sizeof(buf));
 }
 
-/* forward decl */
-extern ptl_err_t procbridge_startup (ptl_ni_t *, char **);
-extern void procbridge_shutdown (ptl_ni_t *);
-extern ptl_err_t tcpnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                             ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-                             unsigned int niov, struct iovec *iov, 
-                             size_t offset, size_t len);
-extern ptl_err_t tcpnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                             unsigned int niov, struct iovec *iov,
-                             size_t offset, size_t mlen, size_t rlen);
-
 ptl_nal_t tcpnal_nal = {
         .nal_type      = SOCKNAL,
         .nal_startup   = procbridge_startup,
