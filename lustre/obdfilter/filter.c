@@ -1478,7 +1478,7 @@ static int filter_cleanup(struct obd_device *obd)
 
         shrink_dcache_parent(filter->fo_sb->s_root);
 
-        DQUOT_OFF(filter->fo_sb);
+        LL_DQUOT_OFF(filter->fo_sb);
 
         if (atomic_read(&filter->fo_vfsmnt->mnt_count) > 1)
                 CERROR("%s: mount point %p busy, mnt_count: %d\n",

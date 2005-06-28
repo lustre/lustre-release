@@ -569,7 +569,7 @@ int mds_fs_cleanup(struct obd_device *obd)
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
-        DQUOT_OFF(mds->mds_sb);
+        LL_DQUOT_OFF(mds->mds_sb);
 
         return rc;
 }
