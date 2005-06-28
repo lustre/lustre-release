@@ -1358,22 +1358,10 @@ got_child:
                 child_mode = LCK_CR;
 
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
-                struct lustre_id sid;
-		
-		down(&dchild->d_inode->i_sem);
-                rc = mds_read_inode_sid(obd, dchild->d_inode, &sid);
-                up(&dchild->d_inode->i_sem);
-                if (rc) {
-                        CERROR("Can't read inode self id, "
-                               "inode %lu, rc %d\n",
-                               dchild->d_inode->i_ino, rc);
-                        GOTO(cleanup, rc);
-                }
-                
 		/* In case of replay we do not get a lock assuming that the
                    caller has it already */
-                child_res_id.name[0] = id_fid(&sid);
-                child_res_id.name[1] = id_group(&sid);
+                child_res_id.name[0] = id_fid(&body->id1);
+                child_res_id.name[1] = id_group(&body->id1);
 
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                       child_res_id, LDLM_IBITS, &policy,
