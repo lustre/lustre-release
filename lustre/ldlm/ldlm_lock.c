@@ -593,8 +593,8 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
                         continue;
 
-                if (lock->l_resource->lr_type == LDLM_EXTENT &&
-                    mode == LCK_GROUP &&
+                if (unlikely(mode == LCK_GROUP) &&
+                    lock->l_resource->lr_type == LDLM_EXTENT &&
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
 

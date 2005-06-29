@@ -100,6 +100,7 @@ enum ra_stat {
         RA_STAT_MISS,
         RA_STAT_DISTANT_READPAGE,
         RA_STAT_MISS_IN_WINDOW,
+        RA_STAT_FAILED_GRAB_PAGE,
         RA_STAT_FAILED_MATCH,
         RA_STAT_DISCARDED,
         RA_STAT_ZERO_LEN,

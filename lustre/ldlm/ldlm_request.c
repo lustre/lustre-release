@@ -86,8 +86,10 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         int rc = 0;
         ENTRY;
 
-        if (flags == LDLM_FL_WAIT_NOREPROC)
+        if (flags == LDLM_FL_WAIT_NOREPROC) {
+                LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
                 goto noreproc;
+        }
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV))) {

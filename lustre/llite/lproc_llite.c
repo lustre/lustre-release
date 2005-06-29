@@ -683,6 +683,7 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
                 [RA_STAT_MISS] = "misses",
                 [RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",
                 [RA_STAT_MISS_IN_WINDOW] = "miss inside window",
+                [RA_STAT_FAILED_GRAB_PAGE] = "failed grab_cache_page",
                 [RA_STAT_FAILED_MATCH] = "failed lock match",
                 [RA_STAT_DISCARDED] = "read but discarded",
                 [RA_STAT_ZERO_LEN] = "zero length file",

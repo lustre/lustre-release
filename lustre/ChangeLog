@@ -54,6 +54,17 @@ Details    : If some OSTs are full or unavailable, creating files may
              try to use other servers or return an error to the
              client.
 
+Severity   : minor
+Frequency  : occasional
+Bugzilla   : 6469
+Description: Multiple concurrent overlapping read+write on multiple SMP nodes
+             caused lock timeout during readahead (since 1.4.2).
+Details    : Processes doing readahead might match a lock that hasn't been
+             granted yet if there are overlapping and conflicting lock
+             requests.  The readahead process waits on ungranted lock
+	     (original lock is CBPENDING), while OST waits for that process
+	     to cancel CBPENDING read lock and eventually evicts client.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

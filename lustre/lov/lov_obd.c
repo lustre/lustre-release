@@ -827,11 +827,11 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         RETURN(rc);
 }
 
-#define ASSERT_LSM_MAGIC(lsmp)                                  \
-do {                                                            \
-        LASSERT((lsmp) != NULL);                                \
+#define ASSERT_LSM_MAGIC(lsmp)                                          \
+do {                                                                    \
+        LASSERT((lsmp) != NULL);                                        \
         LASSERTF((lsmp)->lsm_magic == LOV_MAGIC, "%p->lsm_magic=%x\n",  \
-                 (lsmp), (lsmp)->lsm_magic);                    \
+                 (lsmp), (lsmp)->lsm_magic);                            \
 } while (0)
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,

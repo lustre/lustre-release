@@ -892,9 +892,9 @@ static int ll_page_matches(struct page *page, int fd_flags)
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
-        flags = LDLM_FL_TEST_LOCK;
-        if (!(fd_flags&LL_FILE_READAHEAD))
-                flags |= LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        flags = LDLM_FL_TEST_LOCK | LDLM_FL_BLOCK_GRANTED;
+        if (!(fd_flags & LL_FILE_READAHEAD))
+                flags |= LDLM_FL_CBPENDING
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
@@ -1020,6 +1020,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 /* skip locked pages from previous readpage calls */
                 page = grab_cache_page_nowait_gfp(mapping, i, gfp_mask);
                 if (page == NULL) {
+                        ll_ra_stats_inc(mapping, RA_STAT_FAILED_GRAB_PAGE);
                         CDEBUG(D_READA, "g_c_p_n failed\n");
                         continue;
                 }
@@ -1035,7 +1036,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                         goto next_page;
 
                 /* bail when we hit the end of the lock. */
-                if ((rc = ll_page_matches(page, flags|LL_FILE_READAHEAD)) <= 0) {
+                if ((rc = ll_page_matches(page, flags|LL_FILE_READAHEAD)) <= 0){
                         LL_CDEBUG_PAGE(D_READA | D_PAGE, page,
                                        "lock match failed: rc %d\n", rc);
                         ll_ra_stats_inc(mapping, RA_STAT_FAILED_MATCH);
