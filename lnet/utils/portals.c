@@ -311,7 +311,9 @@ int jt_ptl_network(int argc, char **argv)
         int                      count;
         int                      rc;
 
-        if (set && !strcmp(argv[1], "unconfigure")) {
+        if (set && 
+            (!strcmp(argv[1], "unconfigure") ||
+             !strcmp(argv[1], "down"))) {
                 PORTAL_IOC_INIT(data);
                 rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
                 

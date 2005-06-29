@@ -138,6 +138,7 @@ EXPORT_SYMBOL(PtlEQFree);
 EXPORT_SYMBOL(PtlEQGet);
 EXPORT_SYMBOL(PtlGetId);
 EXPORT_SYMBOL(PtlMDBind);
+EXPORT_SYMBOL(ptl_apini);
 EXPORT_SYMBOL(ptl_iov_nob);
 EXPORT_SYMBOL(ptl_copy_iov2buf);
 EXPORT_SYMBOL(ptl_copy_buf2iov);

@@ -1490,6 +1490,8 @@ kqswnal_parse (kqswnal_rx_t *krx)
 {
         ptl_hdr_t      *hdr = (ptl_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
         ptl_nid_t       dest_nid;
+        ptl_nid_t       src_nid;
+        ptl_nid_t       sender_nid;
         int             payload_nob;
         int             nob;
         int             niov;
@@ -1509,22 +1511,13 @@ kqswnal_parse (kqswnal_rx_t *krx)
                 return;
         }
 
-        dest_nid = le64_to_cpu(hdr->dest_nid);
-
+        dest_nid   = le64_to_cpu(hdr->dest_nid); /* final dest */
+        src_nid    = le64_to_cpu(hdr->src_nid); /* original source */
+        sender_nid = PTL_MKNID(PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid),
+                               ep_rxd_node(krx->krx_rxd)); /* who sent it to me */
 #if KQSW_CHECKSUM
         LASSERTF (0, "checksums for forwarded packets not implemented\n");
 #endif
-
-        if (PTL_NIDNET(dest_nid) == PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid)) {
-                /* should have gone direct to peer */
-                CERROR("dropping packet from %s for %s: target is peer\n", 
-                       libcfs_nid2str(le64_to_cpu(hdr->src_nid)), 
-                       libcfs_nid2str(dest_nid));
-
-                kqswnal_rx_decref (krx);
-                return;
-        }
-
         nob = payload_nob = krx->krx_nob - KQSW_HDR_SIZE;
         niov = 0;
         if (nob > 0) {
@@ -1543,7 +1536,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
                 }
         }
 
-        kpr_fwd_init (&krx->krx_fwd, dest_nid, 
+        kpr_fwd_init (&krx->krx_fwd, dest_nid, sender_nid, src_nid,
                       hdr, payload_nob, niov, krx->krx_kiov,
                       kqswnal_fwd_callback, krx);
 

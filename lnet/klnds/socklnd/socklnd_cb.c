@@ -1057,7 +1057,9 @@ int
 ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
 {
         int       payload_nob = conn->ksnc_rx_nob_left;
+        ptl_nid_t src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
         ptl_nid_t dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
+        ptl_nid_t sender_nid = conn->ksnc_peer->ksnp_nid;
         int       niov = 0;
         int       nob = payload_nob;
 
@@ -1088,13 +1090,13 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
                 niov++;
         }
 
-        kpr_fwd_init(&fmb->fmb_fwd, dest_nid, &fmb->fmb_hdr,
-                     payload_nob, niov, fmb->fmb_kiov,
+        kpr_fwd_init(&fmb->fmb_fwd, dest_nid, sender_nid, src_nid,
+                     &fmb->fmb_hdr, payload_nob, niov, fmb->fmb_kiov,
                      ksocknal_fmb_callback, fmb);
 
         if (payload_nob == 0) {         /* got complete packet already */
                 CDEBUG (D_NET, "%p %s->%s fwd_start (immediate)\n", conn, 
-                        libcfs_nid2str(le64_to_cpu(conn->ksnc_hdr.src_nid)), 
+                        libcfs_nid2str(src_nid), 
                         libcfs_nid2str(dest_nid));
 
                 kpr_fwd_start (conn->ksnc_peer->ksnp_ni, &fmb->fmb_fwd);
@@ -1116,12 +1118,11 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
         memcpy(conn->ksnc_rx_kiov, fmb->fmb_kiov, niov * sizeof(ptl_kiov_t));
         
         CDEBUG (D_NET, "%p %s->%s %d reading body\n", conn,
-                libcfs_nid2str(le64_to_cpu(conn->ksnc_hdr.src_nid)), 
-                libcfs_nid2str(dest_nid), payload_nob);
+                libcfs_nid2str(src_nid), libcfs_nid2str(dest_nid), payload_nob);
         return (0);
 }
 
-void
+ptl_err_t
 ksocknal_fwd_parse (ksock_conn_t *conn)
 {
         ptl_nid_t     dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
@@ -1141,32 +1142,8 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                        libcfs_nid2str(src_nid),
                        libcfs_nid2str(dest_nid),
                        body_len);
-
                 ksocknal_new_packet (conn, 0);  /* on to new packet */
-                return;
-        }
-
-        if (PTL_NIDNET(conn->ksnc_hdr.dest_nid) ==
-            PTL_NIDNET(conn->ksnc_peer->ksnp_ni->ni_nid)) {
-                /* should have gone direct */
-                CERROR ("dropping packet from %s for %s: "
-                        "target is a peer\n",
-                        libcfs_nid2str(src_nid),
-                        libcfs_nid2str(dest_nid));
-
-                /* on to next packet (skip this one's body) */
-                ksocknal_new_packet (conn, body_len);
-                return;
-        }
-
-        if (!kpr_forwarding()) {
-                CERROR("dropping packet from %s for %s: "
-                       "I'm not a router\n",
-                       libcfs_nid2str(src_nid),
-                       libcfs_nid2str(dest_nid));
-
-                ksocknal_new_packet (conn, body_len); /* on to new packet */
-                return;
+                return PTL_FAIL;
         }
 
         if (body_len > PTL_MTU) {      /* too big to forward */
@@ -1177,12 +1154,14 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                         body_len);
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
-                return;
+                return PTL_FAIL;
         }
 
         conn->ksnc_rx_state = SOCKNAL_RX_GET_FMB;       /* Getting FMB now */
         conn->ksnc_rx_nob_left = body_len;              /* stash packet size */
         conn->ksnc_rx_nob_wanted = body_len;            /* (no slop) */
+
+        return PTL_OK;
 }
 
 int
@@ -1305,23 +1284,28 @@ ksocknal_process_receive (ksock_conn_t *conn)
         case SOCKNAL_RX_HEADER:
                 rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
 
-                if (rc == PTL_IFACE_DUP) {
+                switch (rc) {
+                case PTL_OK:
+                        break;
+                        
+                case PTL_IFACE_DUP:
                         /* This packet isn't for me (still in net byte order) */
-                        ksocknal_fwd_parse (conn);
-                        switch (conn->ksnc_rx_state) {
-                        case SOCKNAL_RX_HEADER: /* skipped (zero payload) */
-                                return (0);     /* => come back later */
-                        case SOCKNAL_RX_SLOP:   /* skipping packet's body */
-                                goto try_read;  /* => go read it */
-                        case SOCKNAL_RX_GET_FMB: /* forwarding */
-                                goto get_fmb;   /* => go get a fwd msg buffer */
-                        default:
-                                LBUG ();
+                        rc = ksocknal_fwd_parse (conn);
+                        if (rc == PTL_OK) {
+                                switch (conn->ksnc_rx_state) {
+                                case SOCKNAL_RX_HEADER: /* skipped (zero payload) */
+                                        return (0);     /* => come back later */
+                                case SOCKNAL_RX_SLOP:   /* skipping packet's body */
+                                        goto try_read;  /* => go read it */
+                                case SOCKNAL_RX_GET_FMB: /* forwarding */
+                                        goto get_fmb;   /* => go get a fwd msg buffer */
+                                default:
+                                        LBUG ();
+                                }
+                                /* Not Reached */
                         }
-                        /* Not Reached */
-                }
-
-                if (rc != PTL_OK) {
+                        /* fall through */
+                default:
                         /* I just received garbage: give up on this conn */
                         ksocknal_close_conn_and_siblings (conn, rc);
                         return (-EPROTO);

@@ -1027,6 +1027,11 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
         if (route != NULL) {
                 peer = route->ksnr_peer;
                 ksocknal_peer_addref(peer);
+
+                /* additional routes after interface exchange? */
+                ksocknal_create_routes(peer, conn->ksnc_port,
+                                       ipaddrs, nipaddrs);
+                rc = 0;
         } else {
                 ni = ptl_net2ni(PTL_NIDNET(nid));
 
@@ -1065,25 +1070,14 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_peer_addref(peer);
 
                 write_unlock_irqrestore(global_lock, flags);
-        }
-
-        if (route != NULL) {
-                /* additional routes after interface exchange? */
-                ksocknal_create_routes(peer, conn->ksnc_port,
-                                       ipaddrs, nipaddrs);
-                rc = 0;
-        } else {
-                ptl_ni_t    *ni = peer->ksnp_ni;
-                ksock_net_t *net = ni->ni_data;
 
                 nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-
                 rc = ksocknal_send_hello (conn, ni->ni_nid,
                                           net->ksnn_incarnation,
                                           ipaddrs, nipaddrs);
+                if (rc < 0)
+                        goto failed_2;
         }
-        if (rc < 0)
-                goto failed_2;
 
         write_lock_irqsave (global_lock, flags);
 

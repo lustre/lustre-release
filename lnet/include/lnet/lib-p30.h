@@ -377,12 +377,15 @@ int       kpr_initialise(void);
 void      kpr_finalise(void);
 
 static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, ptl_hdr_t *hdr,
-              int nob, int niov, ptl_kiov_t *kiov,
+kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t target_nid,
+              ptl_nid_t sender_nid, ptl_nid_t source_nid, 
+              ptl_hdr_t *hdr, int nob, int niov, ptl_kiov_t *kiov,
               kpr_fwd_callback_t callback, void *callback_arg)
 {
-        fwd->kprfd_target_nid   = nid;
-        fwd->kprfd_gateway_nid  = nid;
+        fwd->kprfd_target_nid   = target_nid;
+        fwd->kprfd_gateway_nid  = target_nid;
+        fwd->kprfd_sender_nid   = sender_nid;
+        fwd->kprfd_source_nid   = source_nid;
         fwd->kprfd_hdr          = hdr;
         fwd->kprfd_nob          = nob;
         fwd->kprfd_niov         = niov;

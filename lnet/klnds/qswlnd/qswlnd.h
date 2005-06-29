@@ -75,7 +75,6 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <libcfs/kp30.h>
-#include <portals/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 

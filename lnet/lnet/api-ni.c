@@ -714,7 +714,7 @@ ptl_startup_nalnis (void)
                                 break;
 
                         PTL_MUTEX_UP(&ptl_apini.apini_nal_mutex);
-#ifdef __KERNEL
+#ifdef __KERNEL__
                         if (retry) {
                                 CERROR("Can't load NAL %s, module %s\n",
                                        libcfs_nal2str(nal_type),

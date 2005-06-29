@@ -588,6 +588,11 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         gw_nid = kpr_lookup (&ni, target.nid, sizeof(*hdr) + len);
         if (gw_nid == PTL_NID_ANY) {
                 CERROR("No route to %s\n", libcfs_id2str(target));
+                LCONSOLE_ERROR("Cannot send to %s: %s is not a local network "
+                               "and I can't route to it. Is lustre configured "
+                               "correctly?\n", libcfs_nid2str(target.nid),
+                               libcfs_net2str(PTL_NIDNET(target.nid)));
+                               
                 return PTL_FAIL;
         }
 

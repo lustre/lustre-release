@@ -267,6 +267,8 @@ ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
         }
 
         if (!choose_ni) {
+                CDEBUG(D_WARNING, "Skipped %s from %u.%u.%u.%u\n", 
+                       libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip));
                 /* I got called just to skip the connection request */
                 return PTL_OK;
         }
@@ -290,6 +292,9 @@ ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
                 return PTL_FAIL;
         }
                 
+        CDEBUG(D_WARNING, "Accept %s from %u.%u.%u.%u\n",
+               libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip));
+
         rc = ni->ni_nal->nal_accept(ni, sock);
         if (rc != PTL_OK)
                 CERROR("NI %s refused connection from %u.%u.%u.%u\n",
@@ -306,22 +311,24 @@ ptl_acceptor(void *arg)
 	char           name[16];
 	struct socket *newsock;
 	int            rc;
+        int            n_acceptor_nis;
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
         ptl_ni_t      *blind_ni;
 
+	LASSERT (ptl_acceptor_state.pta_sock == NULL);
+
         /* If there is only a single NI that needs me, I'll pass her
          * connections "blind".  Otherwise I'll have to read the bytestream to
-         * see which NI the connection is for. */
-        rc = ptl_count_acceptor_nis(&blind_ni);
-        LASSERT (rc > 0);
-        if (rc > 1) {
+         * see which NI the connection is for.  NB I don't get to run at all if
+         * there are 0 acceptor_nis... */
+        n_acceptor_nis = ptl_count_acceptor_nis(&blind_ni);
+        LASSERT (n_acceptor_nis > 0);
+        if (n_acceptor_nis > 1) {
                 ptl_ni_decref(blind_ni);
                 blind_ni = NULL;
         }
-        
-	LASSERT (ptl_acceptor_state.pta_sock == NULL);
 
 	snprintf(name, sizeof(name), "acceptor_%03d", acceptor_port);
 	kportal_daemonize(name);
@@ -350,6 +357,10 @@ ptl_acceptor(void *arg)
 	if (rc != 0)
 		return rc;
 	
+        CDEBUG(D_WARNING, "Acceptor starting (%d nets: blind_ni %s)\n", 
+               n_acceptor_nis,
+               blind_ni == NULL ? "NULL" : libcfs_nid2str(blind_ni->ni_nid));
+        
 	while (ptl_acceptor_state.pta_shutdown == 0) {
 		
 		rc = libcfs_sock_accept(&newsock, ptl_acceptor_state.pta_sock);

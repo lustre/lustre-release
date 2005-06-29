@@ -249,7 +249,9 @@ typedef union {
 typedef struct {
         struct list_head     kprfd_list;        /* stash in queues (routing target can use) */
         ptl_nid_t            kprfd_target_nid;  /* final destination NID */
-        ptl_nid_t            kprfd_gateway_nid; /* gateway NID */
+        ptl_nid_t            kprfd_gateway_nid; /* next hop NID */
+        ptl_nid_t            kprfd_sender_nid;  /* previous hop NID */
+        ptl_nid_t            kprfd_source_nid;  /* original sender's NID */
         ptl_hdr_t           *kprfd_hdr;         /* header in wire byte order */
         int                  kprfd_nob;         /* # payload bytes */
         int                  kprfd_niov;        /* # payload frags */

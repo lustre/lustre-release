@@ -363,7 +363,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 {
 	ptl_nid_t            target_nid = fwd->kprfd_target_nid;
         __u32                target_net = PTL_NIDNET(target_nid);
-        __u32                source_net = PTL_NIDNET(src_ni->ni_nid);
+        __u32                receiver_net = PTL_NIDNET(src_ni->ni_nid);
         int                  nob = fwd->kprfd_nob;
         kpr_gateway_entry_t *ge;
         ptl_ni_t            *dst_ni;
@@ -375,11 +375,16 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         int                  rc;
         int                  found;
 
-        CDEBUG (D_NET, "forward [%p] %s from %s\n", fwd,
-                libcfs_nid2str(target_nid), libcfs_nid2str(src_ni->ni_nid));
+        CDEBUG (D_NET, "src %s sender %s receiver %s target %s\n", 
+                libcfs_nid2str(fwd->kprfd_source_nid),
+                libcfs_nid2str(fwd->kprfd_sender_nid),
+                libcfs_nid2str(src_ni->ni_nid),
+                libcfs_nid2str(target_nid));
 
-        LASSERT (target_net != source_net);
         LASSERT (nob == ptl_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
+
+        /* it's not for any local NID (i.e. it's going to get sent) */
+        LASSERT (!ptl_islocalnid(target_nid));
 
 	fwd->kprfd_src_ni = src_ni;             /* stash calling ni */
 
@@ -390,20 +395,59 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         kpr_state.kpr_fwd_bytes += nob + sizeof(ptl_hdr_t);
         spin_unlock(&kpr_state.kpr_stats_lock);
 
-        rc = -ESHUTDOWN;
-	if (src_ni->ni_shutdown)                /* caller is shutting down */
-		goto failed;
-
-        rc = -ENETUNREACH;
-        if (!kpr_forwarding())                  /* I'm not a router */
+        rc = -EDESTADDRREQ;
+        if (target_net == receiver_net) {
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                LCONSOLE_ERROR("Refusing to forward message from %s for %s "
+                               "received from %s on %s: it should have been "
+                               "sent directly\n",
+                               libcfs_nid2str(fwd->kprfd_source_nid),
+                               libcfs_nid2str(fwd->kprfd_target_nid),
+                               libcfs_nid2str(fwd->kprfd_sender_nid),
+                               libcfs_nid2str(src_ni->ni_nid));
                 goto failed;
+        }
 
+        rc = -ESHUTDOWN;
+	if (src_ni->ni_shutdown) {              /* caller is shutting down */
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                LCONSOLE_ERROR("Refusing to forward message from %s for %s "
+                               "received from %s on %s: system shutting down\n",
+                               libcfs_nid2str(fwd->kprfd_source_nid),
+                               libcfs_nid2str(fwd->kprfd_target_nid),
+                               libcfs_nid2str(fwd->kprfd_sender_nid),
+                               libcfs_nid2str(src_ni->ni_nid));
+		goto failed;
+        }
+        
+        rc = -ENETUNREACH;
+        if (!kpr_forwarding()) {                /* I'm not a router */
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                LCONSOLE_ERROR("Refusing to forward message from %s for %s "
+                               "received from %s on %s: forwarding disabled!\n",
+                               libcfs_nid2str(fwd->kprfd_source_nid),
+                               libcfs_nid2str(fwd->kprfd_target_nid),
+                               libcfs_nid2str(fwd->kprfd_sender_nid),
+                               libcfs_nid2str(src_ni->ni_nid));
+                goto failed;
+        }
+        
         /* Is the target_nid on a local network? */
         dst_ni = ptl_net2ni(target_net);
         if (dst_ni != NULL) {
-                if (dst_ni->ni_nal->nal_fwd == NULL)
+                if (dst_ni->ni_nal->nal_fwd == NULL) {
+                        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                        LCONSOLE_ERROR("Refusing to forward message from %s for %s "
+                                       "received from %s on %s: "
+                                       "net %s doesn't route!\n",
+                                       libcfs_nid2str(fwd->kprfd_source_nid),
+                                       libcfs_nid2str(fwd->kprfd_target_nid),
+                                       libcfs_nid2str(fwd->kprfd_sender_nid),
+                                       libcfs_nid2str(src_ni->ni_nid),
+                                       libcfs_net2str(PTL_NIDNET(dst_ni->ni_nid)));
                         goto failed;
-
+                }
+                
                 fwd->kprfd_gateway_nid = target_nid;
                 atomic_inc (&kpr_state.kpr_queue_depth);
 
@@ -429,8 +473,17 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                         break;
         }
 
-        if (!found)
+        if (!found) {
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                LCONSOLE_ERROR("Can't forward message from %s for %s "
+                               "received from %s on %s: "
+                               "no routes to destination network!\n",
+                               libcfs_nid2str(fwd->kprfd_source_nid),
+                               libcfs_nid2str(fwd->kprfd_target_nid),
+                               libcfs_nid2str(fwd->kprfd_sender_nid),
+                               libcfs_nid2str(src_ni->ni_nid));
                 goto failed;
+        }
         
 	/* Search routes for one that has a gateway to target_nid NOT on the caller's network */
         dst_ni = NULL;
@@ -438,7 +491,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         list_for_each (e, &ne->kpne_routes) {
 		re = list_entry (e, kpr_route_entry_t, kpre_list);
 
-		if (PTL_NIDNET(re->kpre_gateway->kpge_nid) == source_net)
+		if (PTL_NIDNET(re->kpre_gateway->kpge_nid) == receiver_net)
 			continue;               /* don't route to same net */
 
                 if (!re->kpre_gateway->kpge_alive)
@@ -468,9 +521,18 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 
         LASSERT ((ge == NULL) == (dst_ni == NULL));
         
-        if (ge == NULL)
+        if (ge == NULL) {
+                read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+                LCONSOLE_ERROR("Can't forward message from %s for %s "
+                               "received from %s on %s: "
+                               "all relevant gateways are down!\n",
+                               libcfs_nid2str(fwd->kprfd_source_nid),
+                               libcfs_nid2str(fwd->kprfd_target_nid),
+                               libcfs_nid2str(fwd->kprfd_sender_nid),
+                               libcfs_nid2str(src_ni->ni_nid));
                 goto failed;
-                
+        }
+        
         kpr_update_weight (ge, nob);
 
         fwd->kprfd_gateway_nid = ge->kpge_nid;
@@ -493,12 +555,12 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         kpr_state.kpr_fwd_errors++;
         spin_unlock_irqrestore(&kpr_state.kpr_stats_lock, flags);
 
+        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+
         CDEBUG (D_NET, "Failed to forward [%p] %s from %s\n", fwd, 
                 libcfs_nid2str(target_nid), libcfs_nid2str(src_ni->ni_nid));
 
 	(fwd->kprfd_callback)(src_ni, fwd->kprfd_callback_arg, rc);
-
-        read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 }
 
 void
