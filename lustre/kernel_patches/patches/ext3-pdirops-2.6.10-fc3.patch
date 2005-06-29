@@ -8,8 +8,8 @@
 
 Index: linux-2.6.10/fs/ext3/super.c
 ===================================================================
---- linux-2.6.10.orig/fs/ext3/super.c	2005-03-31 15:35:26.000000000 +0800
-+++ linux-2.6.10/fs/ext3/super.c	2005-03-31 19:44:54.251322480 +0800
+--- linux-2.6.10.orig/fs/ext3/super.c	2005-04-06 19:38:35.000000000 +0400
++++ linux-2.6.10/fs/ext3/super.c	2005-06-29 20:09:30.000000000 +0400
 @@ -458,6 +458,9 @@
  #endif
  	ei->i_rsv_window.rsv_end = EXT3_RESERVE_WINDOW_NOT_ALLOCATED;
@@ -39,8 +39,8 @@ Index: linux-2.6.10/fs/ext3/super.c
  };
 Index: linux-2.6.10/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.10.orig/fs/ext3/namei.c	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/fs/ext3/namei.c	2005-03-31 19:48:53.958881392 +0800
+--- linux-2.6.10.orig/fs/ext3/namei.c	2004-12-25 00:34:58.000000000 +0300
++++ linux-2.6.10/fs/ext3/namei.c	2005-06-29 20:12:23.000000000 +0400
 @@ -53,6 +53,9 @@
  {
  	struct buffer_head *bh;
@@ -1006,7 +1006,17 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	if (bh)
  		brelse(bh);
  	dx_release(frames);
-@@ -1989,6 +2313,7 @@
+@@ -1753,7 +2077,9 @@
+ 		iput (inode);
+ 		goto out_stop;
+ 	}
++	spin_lock(&EXT3_SB(dir->i_sb)->s_next_gen_lock);
+ 	dir->i_nlink++;
++	spin_unlock(&EXT3_SB(dir->i_sb)->s_next_gen_lock);
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+ 	d_instantiate(dentry, inode);
+@@ -1989,6 +2315,7 @@
  	struct buffer_head * bh;
  	struct ext3_dir_entry_2 * de;
  	handle_t *handle;
@@ -1014,7 +1024,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  
  	/* Initialize quotas before so that eventual writes go in
  	 * separate transaction */
-@@ -1998,7 +2323,7 @@
+@@ -1998,7 +2325,7 @@
  		return PTR_ERR(handle);
  
  	retval = -ENOENT;
@@ -1023,7 +1033,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	if (!bh)
  		goto end_rmdir;
  
-@@ -2008,14 +2333,19 @@
+@@ -2008,14 +2335,19 @@
  	inode = dentry->d_inode;
  
  	retval = -EIO;
@@ -1045,7 +1055,17 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	if (retval)
  		goto end_rmdir;
  	if (inode->i_nlink != 2)
-@@ -2048,6 +2378,7 @@
+@@ -2031,7 +2363,9 @@
+ 	ext3_orphan_add(handle, inode);
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
+ 	ext3_mark_inode_dirty(handle, inode);
++	spin_lock(&EXT3_SB(dir->i_sb)->s_next_gen_lock);
+ 	dir->i_nlink--;
++	spin_unlock(&EXT3_SB(dir->i_sb)->s_next_gen_lock);
+ 	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+ 
+@@ -2048,6 +2382,7 @@
  	struct buffer_head * bh;
  	struct ext3_dir_entry_2 * de;
  	handle_t *handle;
@@ -1053,7 +1073,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  
  	/* Initialize quotas before so that eventual writes go
  	 * in separate transaction */
-@@ -2060,15 +2391,17 @@
+@@ -2060,15 +2395,17 @@
  		handle->h_sync = 1;
  
  	retval = -ENOENT;
@@ -1073,7 +1093,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  
  	if (!inode->i_nlink) {
  		ext3_warning (inode->i_sb, "ext3_unlink",
-@@ -2077,6 +2410,7 @@
+@@ -2077,6 +2414,7 @@
  		inode->i_nlink = 1;
  	}
  	retval = ext3_delete_entry(handle, dir, de, bh);
@@ -1081,7 +1101,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	if (retval)
  		goto end_unlink;
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
-@@ -2196,6 +2530,7 @@
+@@ -2196,6 +2534,7 @@
  	struct buffer_head * old_bh, * new_bh, * dir_bh;
  	struct ext3_dir_entry_2 * old_de, * new_de;
  	int retval;
@@ -1089,7 +1109,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  
  	old_bh = new_bh = dir_bh = NULL;
  
-@@ -2211,7 +2546,10 @@
+@@ -2211,7 +2550,10 @@
  	if (IS_DIRSYNC(old_dir) || IS_DIRSYNC(new_dir))
  		handle->h_sync = 1;
  
@@ -1101,7 +1121,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	/*
  	 *  Check for inode number is _not_ due to possible IO errors.
  	 *  We might rmdir the source, keep it as pwd of some process
-@@ -2224,7 +2562,7 @@
+@@ -2224,7 +2566,7 @@
  		goto end_rename;
  
  	new_inode = new_dentry->d_inode;
@@ -1110,7 +1130,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	if (new_bh) {
  		if (!new_inode) {
  			brelse (new_bh);
-@@ -2288,7 +2626,7 @@
+@@ -2288,7 +2630,7 @@
  		struct buffer_head *old_bh2;
  		struct ext3_dir_entry_2 *old_de2;
  
@@ -1119,7 +1139,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  		if (old_bh2) {
  			retval = ext3_delete_entry(handle, old_dir,
  						   old_de2, old_bh2);
-@@ -2331,6 +2669,14 @@
+@@ -2331,6 +2673,14 @@
  	retval = 0;
  
  end_rename:
@@ -1134,7 +1154,7 @@ Index: linux-2.6.10/fs/ext3/namei.c
  	brelse (dir_bh);
  	brelse (old_bh);
  	brelse (new_bh);
-@@ -2339,6 +2685,29 @@
+@@ -2339,6 +2689,29 @@
  }
  
  /*
@@ -1166,8 +1186,8 @@ Index: linux-2.6.10/fs/ext3/namei.c
  struct inode_operations ext3_dir_inode_operations = {
 Index: linux-2.6.10/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/ext3_fs_i.h	2004-12-25 05:33:49.000000000 +0800
-+++ linux-2.6.10/include/linux/ext3_fs_i.h	2005-03-31 19:44:54.254322024 +0800
+--- linux-2.6.10.orig/include/linux/ext3_fs_i.h	2004-12-25 00:33:49.000000000 +0300
++++ linux-2.6.10/include/linux/ext3_fs_i.h	2005-06-29 20:09:30.000000000 +0400
 @@ -19,6 +19,7 @@
  #include <linux/rwsem.h>
  #include <linux/rbtree.h>
@@ -1190,8 +1210,8 @@ Index: linux-2.6.10/include/linux/ext3_fs_i.h
  #endif	/* _LINUX_EXT3_FS_I */
 Index: linux-2.6.10/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/ext3_fs.h	2004-12-25 05:34:58.000000000 +0800
-+++ linux-2.6.10/include/linux/ext3_fs.h	2005-03-31 19:44:54.254322024 +0800
+--- linux-2.6.10.orig/include/linux/ext3_fs.h	2004-12-25 00:34:58.000000000 +0300
++++ linux-2.6.10/include/linux/ext3_fs.h	2005-06-29 20:09:30.000000000 +0400
 @@ -355,6 +355,7 @@
  #define EXT3_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
  #define EXT3_MOUNT_RESERVATION		0x10000	/* Preallocation */
