@@ -347,14 +347,21 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
         int i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
+#ifdef CRAY_PORTALS
+                char *ptr = desc->bd_iov[i].iov_base;
+                int len = desc->bd_iov[i].iov_len;
+#else
                 struct page *page = desc->bd_iov[i].kiov_page;
-                char *ptr = kmap(page);
-                int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
+                char *ptr = kmap(page) + (desc->bd_iov[i].kiov_offset &
+                                          ~PAGE_MASK);
+                int len = desc->bd_iov[i].kiov_len;
+#endif
 
-                cksum = crc32_le(cksum, ptr + off, desc->bd_iov[i].kiov_len);
+                cksum = crc32_le(cksum, ptr, len);
+#ifndef CRAY_PORTALS
                 kunmap(page);
-                LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n",
-                               off, cksum);
+#endif
+                LL_CDEBUG_PAGE(D_PAGE, page, "idx %d checksum %x\n", i, cksum);
         }
 
         return cksum;
