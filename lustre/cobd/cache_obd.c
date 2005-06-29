@@ -53,6 +53,8 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
         struct cache_obd  *cobd = &obd->u.cobd;
         struct obd_device *master_obd, *cache_obd;
         struct lustre_handle conn = { 0 };
+        int    inst_len = 0, mname_len = 0, cname_len = 0;
+        
         int rc = 0;
         ENTRY;
 
@@ -69,23 +71,42 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                        obd->obd_name);
                 RETURN(-EINVAL);
         }
-        sema_init(&cobd->sem, 1);
-
+        inst_len = LUSTRE_CFG_BUFLEN(lcfg, 3);
+        
+        if (inst_len) {
+                LASSERT(lustre_cfg_buf(lcfg, 3) != NULL);
+                mname_len = LUSTRE_CFG_BUFLEN(lcfg, 1) + inst_len;  
+                cname_len = LUSTRE_CFG_BUFLEN(lcfg, 2) + inst_len;  
+        } else {
+                mname_len = LUSTRE_CFG_BUFLEN(lcfg, 1);
+                cname_len = LUSTRE_CFG_BUFLEN(lcfg, 2);
+        } 
+       
         /*get the cache obd name and master name */
-        OBD_ALLOC(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
+        OBD_ALLOC(cobd->master_name, mname_len);
         if (!cobd->master_name) 
                 RETURN(-ENOMEM);
-        memcpy(cobd->master_name, lustre_cfg_string(lcfg, 1), 
-               LUSTRE_CFG_BUFLEN(lcfg, 1));
-        
-        OBD_ALLOC(cobd->cache_name, LUSTRE_CFG_BUFLEN(lcfg, 2));
-        if (!cobd->cache_name) {
-                OBD_FREE(cobd->master_name, LUSTRE_CFG_BUFLEN(lcfg, 1));
-                RETURN(-ENOMEM);
-        }
-        memcpy(cobd->cache_name, lustre_cfg_string(lcfg, 2), 
-               LUSTRE_CFG_BUFLEN(lcfg, 2));
+        if(inst_len)
+                sprintf(cobd->master_name, "%s-%s", lustre_cfg_string(lcfg, 1), 
+                        lustre_cfg_string(lcfg, 3));
+        else 
+                sprintf(cobd->master_name, "%s", lustre_cfg_string(lcfg, 1));
 
+        
+        OBD_ALLOC(cobd->cache_name, cname_len);
+        if (!cobd->cache_name) {
+                OBD_FREE(cobd->master_name, mname_len);
+                RETURN(-ENOMEM);
+        } 
+        if(inst_len)
+                sprintf(cobd->cache_name, "%s-%s", lustre_cfg_string(lcfg, 2), 
+                        lustre_cfg_string(lcfg, 3));
+        else 
+                sprintf(cobd->cache_name, "%s", lustre_cfg_string(lcfg, 2));
+
+        CDEBUG(D_INFO, "master name %s cache name %s\n", cobd->master_name,
+               cobd->cache_name);
+        
         /* getting master obd */
         master_obd = class_name2obd(cobd->master_name);
         if (!master_obd) {
@@ -101,14 +122,13 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                GOTO(put_names, rc);
         
         cobd->master_exp = class_conn2export(&conn);
-
         /* getting cache obd */
         cache_obd = class_name2obd(cobd->cache_name);
         if (!cache_obd) {
                 class_disconnect(cobd->master_exp, 0);
                 CERROR("can't find cache obd by name %s\n",
                        cobd->cache_name);
-                GOTO(put_names, rc);
+                GOTO(put_names, rc = -EINVAL);
         }
 
         /* connecting cache */
@@ -119,7 +139,8 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_names, rc);
         }
         cobd->cache_exp = class_conn2export(&conn);
-        
+       
+        sema_init(&cobd->sem, 1);
         /* default set cache on */
         cobd->cache_on = 1;
         EXIT;
@@ -318,7 +339,8 @@ static int cobd_set_info(struct obd_export *exp, obd_count keylen,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        
+       
+        LASSERT(cobd_exp); 
         /* intercept cache utilisation info? */
         return obd_set_info(cobd_exp, keylen, key, vallen, val);
 }

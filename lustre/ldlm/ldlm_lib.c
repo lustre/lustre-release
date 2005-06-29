@@ -307,7 +307,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                         mgmt_name = lustre_cfg_string(lcfg, 3);
                 }
         }
-
+#if 0
         if (mgmt_name != NULL) {
                 /* Register with management client if we need to. */
                 CDEBUG(D_HA, "%s registering with %s for events about %s\n",
@@ -332,7 +332,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 if (!rc)
                         cli->cl_mgmtcli_obd = mgmt_obd;
         }
-
+#endif
         RETURN(rc);
 
 err_import:
