@@ -377,6 +377,21 @@ del_ost() {
     shift
     do_lmc --delete ost --node ${facet}_facet --ost ${facet}_svc $*
 }
+add_cmobd() {
+    facet=$1
+    cache_facet=$2
+    master_facet=$3
+    shift; shift; shift
+    do_lmc --add cmobd --node mds1_facet --cmobd ${facet}_svc --cache_obd ${cache_facet} --master_obd ${master_facet}  
+}
+
+add_cobd() {
+    facet=$1
+    client_facet=$2
+    master_facet=$3
+    shift; shift; shift
+    do_lmc --add cobd --node mds1_facet --cmobd ${facet}_svc --cache_obd ${cache_facet} --master_obd ${master_facet}  
+}
 
 deactivate_ost() {
     facet=$1
@@ -403,6 +418,14 @@ add_lov_to_lmv() {
     lmv=$2
     shift; shift
     do_lmc --add lov --lmv $lmv --lov $lov $*
+}
+
+add_lov_to_cache_master_lmv() {
+    lov=$1
+    cache_lmv=$2
+    master_lmv=$3
+    shift; shift; shift
+    do_lmc --add lov --cachelmv $cache_lmv --masterlmv $master_lmv --lov $lov $*
 }
 
 add_lmv() {

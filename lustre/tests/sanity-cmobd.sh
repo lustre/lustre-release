@@ -1,187 +1,23 @@
-#!/bin/bash
+#!/bin/sh
+
 set -e
 
-ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
-# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+#
+# This test needs to be run on the client
+#
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+LUSTRE=${LUSTRE:-`dirname $0`/..}
 
-SRCDIR=`dirname $0`
-export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+. ${CONFIG:=$LUSTRE/tests/cfg/smfs.sh}
 
-TMP=${TMP:-/tmp}
-FSTYPE=${FSTYPE:-ext3}
+. $LUSTRE/tests/test-framework.sh
 
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-CREATETEST=${CREATETEST:-createtest}
-LFS=${LFS:-lfs}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
-LFIND=${LFIND:-"$LFS find"}
-LVERIFY=${LVERIFY:-ll_dirstripe_verify}
-LCTL=${LCTL:-lctl}
-MCREATE=${MCREATE:-mcreate}
-OPENFILE=${OPENFILE:-openfile}
-OPENUNLINK=${OPENUNLINK:-openunlink}
-TOEXCL=${TOEXCL:-toexcl}
-TRUNCATE=${TRUNCATE:-truncate}
-MUNLINK=${MUNLINK:-munlink}
-SOCKETSERVER=${SOCKETSERVER:-socketserver}
-SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
-IOPENTEST1=${IOPENTEST1:-iopentest1}
-IOPENTEST2=${IOPENTEST2:-iopentest2}
-PTLDEBUG=${PTLDEBUG:-0}
-MODE=${MODE:mds}
+init_test_env $@
 
-if [ $UID -ne 0 ]; then
-	RUNAS_ID="$UID"
-	RUNAS=""
-else
-	RUNAS_ID=${RUNAS_ID:-500}
-	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
-fi
-
-export NAME=${NAME:-cmobd}
-
-SAVE_PWD=$PWD
-
-clean() {
-	echo -n "cln.."
-	sh llmountcleanup.sh > /dev/null || exit 20
-	I_MOUNTED=no
-}
-CLEAN=${CLEAN:-clean}
-
-start() {
-	echo -n "mnt.."
-	sh llrmount.sh > /dev/null || exit 10
-	I_MOUNTED=yes
-	echo "done"
-}
-START=${START:-start}
-
-log() {
-	echo "$*"
-	lctl mark "$*" 2> /dev/null || true
-}
-
-trace() {
-	log "STARTING: $*"
-	strace -o $TMP/$1.strace -ttt $*
-	RC=$?
-	log "FINISHED: $*: rc $RC"
-	return 1
-}
-TRACE=${TRACE:-""}
-
-check_kernel_version() {
-	VERSION_FILE=/proc/fs/lustre/kernel_version
-	WANT_VER=$1
-	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
-	GOT_VER=`cat $VERSION_FILE`
-	[ $GOT_VER -ge $WANT_VER ] && return 0
-	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
-	return 1
-}
-
-run_one() {
-	if ! cat /proc/mounts | grep -q $DIR; then
-		$START
-	fi
-	echo $PTLDEBUG >/proc/sys/portals/debug	
-	log "== test $1: $2"
-	export TESTNAME=test_$1
-	test_$1 || error "test_$1: exit with rc=$?"
-	unset TESTNAME
-	pass
-	cd $SAVE_PWD
-	$CLEAN
-}
-
-build_test_filter() {
-        for O in $ONLY; do
-            eval ONLY_${O}=true
-        done
-        for E in $EXCEPT $ALWAYS_EXCEPT; do
-            eval EXCEPT_${E}=true
-        done
-}
-
-_basetest() {
-    echo $*
-}
-
-basetest() {
-    IFS=abcdefghijklmnopqrstuvwxyz _basetest $1
-}
-
-run_test() {
-         base=`basetest $1`
-         if [ "$ONLY" ]; then
-                 testname=ONLY_$1
-                 if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
-                 fi
-                 testname=ONLY_$base
-                 if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
-                 fi
-                 echo -n "."
-                 return 0
- 	fi
-        testname=EXCEPT_$1
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1"
-                 return 0
-        fi
-        testname=EXCEPT_$base
-        if [ ${!testname}x != x ]; then
-                 echo "skipping excluded test $1 (base $base)"
-                 return 0
-        fi
-        run_one $1 "$2"
- 	return $?
-}
-
-[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
-
-error() { 
-	log "FAIL: $@"
-	if [ "$SANITYLOG" ]; then
-		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
-	else
-		exit 1
-	fi
-}
-
-pass() { 
-	echo PASS
-}
-
-MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
-if [ -z "$MOUNT" ]; then
-	sh llmount.sh
-	MOUNT="`mount | awk '/^'$NAME' .* lustre_lite / { print $3 }'`"
-	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
-	I_MOUNTED=yes
-fi
-
-[ `echo $MOUNT | wc -w` -gt 1 ] && error "NAME=$NAME mounted more than once"
-
-DIR=${DIR:-$MOUNT}
-[ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
-
-rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
-echo preparing for tests involving mounts
-EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
-touch $EXT2_DEV
-mke2fs -j -F $EXT2_DEV 8000 > /dev/null
+assert_env MDSCOUNT
 
 lsync() {
         name=$1
@@ -191,13 +27,72 @@ lsync() {
                 echo "Can't find device $name"
                 return 1
         }
-        
 ${LCTL} << EOF
 device $device
 lsync
 EOF
         return $?
 }
+gen_config() {
+	rm -f $XMLCONFIG
+
+    	add_lmv cache_lmv_svc
+	set -vx 
+    	add_mds $CACHE_MDS --dev $MDS_CACHE_DEV --size $MDSSIZE --lmv cache_lmv_svc \
+            --mountfsoptions $MDS_MOUNT_OPS  || exit 10
+	set -e
+    	add_lmv master_lmv_svc
+    	add_mds $MASTER1_MDS --dev $MDS_MASTER1_DEV --size $MDSSIZE --lmv master_lmv_svc
+
+    	add_lov_to_cache_master_lmv lov1 cache_lmv_svc master_lmv_svc --stripe_sz $STRIPE_BYTES \
+				--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+
+    	add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
+
+    	add_cmobd cmobd_mds ${CACHE_MDS}_svc master_lmv_svc  
+
+    	do_lmc --add cobd --node client_facet --cobd cobd_svc --cache_obd cache_lmv_svc \
+		   --master_obd master_lmv_svc  
+    
+    	add_client client cobd --lov lov1 --path $MOUNT
+}
+
+build_test_filter
+
+cleanup() {
+    	zconf_umount `hostname` $MOUNT
+    	stop $CACHE_MDS ${FORCE} $MDSLCONFARGS
+    	stop $MASTER1_MDS ${FORCE} $MDSLCONFARGS
+    	stop ost ${FORCE} --dump cleanup.log
+}
+
+if [ "$ONLY" == "cleanup" ]; then
+    	sysctl -w portals.debug=0 || true
+    	cleanup
+    	exit
+fi
+
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
+setup() {
+    	gen_config
+    	start ost --reformat $OSTLCONFARGS 
+    	[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    
+    	start $MASTER1_MDS --reformat $MDSLCONFARGS
+    	start $CACHE_MDS   --reformat $MDSLCONFARGS
+    
+    	grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+}
+
+$SETUP
+
+if [ "$ONLY" == "setup" ]; then
+    exit 0
+fi
+
+mkdir -p $DIR
 
 test_1a() {
         rm -fr $DIR/1a0 > /dev/null
@@ -205,44 +100,44 @@ test_1a() {
         echo "mkdir $DIR/1a0"
 	mkdir $DIR/1a0 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "touch $DIR/1a0/f0"
         touch $DIR/1a0/f0 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "chmod +x $DIR/1a0/f0"
         chmod +x $DIR/1a0/f0 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "mv $DIR/1a0/f0 $DIR/1a0/f01"
         mv $DIR/1a0/f0 $DIR/1a0/f01 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "rm $DIR/1a0/f01"
         rm $DIR/1a0/f01 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "touch $DIR/1a0/f01"
         touch $DIR/1a0/f01 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "ln $DIR/1a0/f01 $DIR/1a0/f01h"
         ln $DIR/1a0/f01 $DIR/1a0/f01h || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAMEN >/dev/null || error
         
         echo "ln -s $DIR/1a0/f01 $DIR/1a0/f01s"
         ln -s $DIR/1a0/f01 $DIR/1a0/f01s || error
 
         rm -fr $DIR/1a0 > /dev/null
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
 }
 run_test 1a " WB test (lsync after each MD operation)============="
 
@@ -266,7 +161,7 @@ test_1b() {
 
         rm -fr $DIR/1b0 > /dev/null
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
 }
 run_test 1b " WB test (lsync after bunch of MD operarions)============="
 
@@ -276,33 +171,18 @@ test_2a() {
         echo "createmany -o $DIR/2a0/f 4000"
 	createmany -o $DIR/2a0/f 4000
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
 }
 
+run_test 2a " WB test (flush createmany on master LMV) ======================"
 test_2b() {
         echo "find $DIR/2a0 -type f -exec rm -f {} \;"
 	find $DIR/2a0 -type f -exec rm -f {} \;
 	rmdir $DIR/2a0 || error
         echo "cache flush on $NAME"
-        lsync $NAME >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
 }
-
-[ "x$MODE" = "xlmv" ] && {
-run_test 2a " WB test (flush createmany on master LMV) ======================"
 run_test 2b " WB test (flush delmany on master LMV) ========================="
-}
 
-TMPDIR=$OLDTMPDIR
-TMP=$OLDTMP
-HOME=$OLDHOME
+$CLEANUP
 
-log "cleanup: ========================================================"
-if [ "`mount | grep ^$NAME`" ]; then
-	rm -rf $DIR/[Rdfs][1-9]*
-	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error
-	fi
-fi
-
-echo "=========================== finished ============================"
-[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
