@@ -933,7 +933,6 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list)
                                 (w->w_lock, &w->w_desc, w->w_data,
                                  LDLM_CB_BLOCKING);
                 } else if (w->w_lock->l_completion_ast != NULL) {
-                        LASSERT(w->w_lock->l_completion_ast != NULL);
                         rc = w->w_lock->l_completion_ast(w->w_lock, w->w_flags,
                                                          w->w_data);
                 } else {
