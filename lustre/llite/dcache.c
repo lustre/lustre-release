@@ -523,7 +523,7 @@ out:
 
 do_lookup:
         if (it != &lookup_it) {
-                ll_intent_release(it);
+                ll_lookup_finish_locks(it, de);
                 it = &lookup_it;
                 if (ll_intent_alloc(it))
                         LBUG();
