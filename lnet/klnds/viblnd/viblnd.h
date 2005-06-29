@@ -131,8 +131,6 @@
 
 #define IBNAL_NTX                 64            /* # tx descs */
 #define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
-/* reduced from 256 to ensure we register < 255 pages per region.  
- * this can change if we register all memory. */
 
 #define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
 

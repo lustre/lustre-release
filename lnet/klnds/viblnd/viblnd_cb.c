@@ -37,7 +37,7 @@ kibnal_tx_done (kib_tx_t *tx)
 
 #if IBNAL_USE_FMR
         if (tx->tx_md.md_fmrcount == 0 ||
-            ptlrc != PTL_OK) {
+            (ptlrc != PTL_OK && tx->tx_md.md_active)) {
                 vv_return_t      vvrc;
 
                 /* mapping must be active (it dropped fmrcount to 0) */
