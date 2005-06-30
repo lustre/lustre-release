@@ -894,7 +894,7 @@ static int ll_page_matches(struct page *page, int fd_flags)
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_TEST_LOCK | LDLM_FL_BLOCK_GRANTED;
         if (!(fd_flags & LL_FILE_READAHEAD))
-                flags |= LDLM_FL_CBPENDING
+                flags |= LDLM_FL_CBPENDING;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
