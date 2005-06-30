@@ -356,6 +356,7 @@ typedef struct                                  /* loopback descriptor */
         }                lod_iov;
 } lo_desc_t;
 
+/* loopback descriptor types */
 #define LOD_IOV     0xeb105
 #define LOD_KIOV    0xeb106
 

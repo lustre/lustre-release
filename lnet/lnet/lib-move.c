@@ -579,9 +579,10 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
           ptl_hdr_t *hdr, int type, ptl_process_id_t target,
           ptl_libmd_t *md, ptl_size_t offset, ptl_size_t len)
 {
-        ptl_nid_t gw_nid;
-        int       routing = 0;
-        ptl_err_t rc;
+        unsigned long flags;
+        ptl_nid_t     gw_nid;
+        int           routing = 0;
+        ptl_err_t     rc;
 
         /* CAVEAT EMPTOR! ni != NULL == interface pre-determined (ACK) */
 
@@ -596,14 +597,25 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                 return PTL_FAIL;
         }
 
-        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL) {
+        if (ni->ni_nal->nal_type != LONAL) {
                 if (gw_nid != ni->ni_nid) {         /* it's not for me */
                         routing = gw_nid != target.nid; /* will gateway have to forward? */
                 } else if (allow_destination_aliases || /* force lonal? */
                            implicit_loopback) {
-                        ptl_ni_addref(ptl_loni);
-                        ptl_ni_decref(ni);
+
+                        PTL_LOCK(flags);
+                        ptl_ni_decref_locked(ni);
                         ni = ptl_loni;
+                        if (ni != NULL)
+                                ptl_ni_addref_locked(ni);
+                        PTL_UNLOCK(flags);
+                        
+                        if (ni == NULL)         /* shutdown in progress */
+                                return PTL_FAIL;
+
+                        if (implicit_loopback)
+                                target.nid = ni->ni_nid;
+
                 } else {                        /* barf */
                         ptl_ni_decref(ni);
                         CERROR("Attempt to send to self via %s, not LONAL\n",
@@ -1118,25 +1130,6 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
 
         return PTL_OK;
         /* That's "OK I can parse it", not "OK I like it" :) */
-}
-
-ptl_ni_t *
-ptl_nid2ni (ptl_nid_t nid)
-{
-        struct list_head   *tmp;
-        ptl_ni_t           *ni;
-        
-        /* Called holding PTL_LOCK */
-
-        list_for_each (tmp, &ptl_apini.apini_nis) {
-                ni = list_entry(tmp, ptl_ni_t, ni_list);
-                
-                /* network type & number match in target NID and ni's NID */
-                if (((ni->ni_nid ^ nid)>>32) == 0)
-                        return ni;
-        }
-
-        return NULL;
 }
 
 ptl_err_t

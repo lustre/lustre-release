@@ -490,7 +490,7 @@ extern void ptl_connect_console_error(int rc, ptl_nid_t peer_nid,
 
 extern int ptl_count_acceptor_nis(ptl_ni_t **first_ni);
 
-extern ptl_err_t ptl_accept(struct socket *sock, __u32 magic, int choose_ni);
+extern ptl_err_t ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic);
 extern int       ptl_acceptor_timeout(void);
 extern int       ptl_acceptor_port(void);
 #endif

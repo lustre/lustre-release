@@ -333,7 +333,7 @@ kibnal_handle_svcqry (struct socket *sock)
                                       ptl_acceptor_timeout());
         } else {
                 /* This might be a generic acceptor connection request... */
-                rc = ptl_accept(sock, msg->ibm_magic, 0);
+                rc = ptl_accept(kibnal_data.kib_ni, sock, msg->ibm_magic);
                 if (rc != PTL_OK)
                         goto out;
 

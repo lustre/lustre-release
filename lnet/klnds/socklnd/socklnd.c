@@ -311,17 +311,17 @@ ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
         if (route->ksnr_myipaddr != conn->ksnc_myipaddr) {
                 if (route->ksnr_myipaddr == 0) {
                         /* route wasn't bound locally yet (the initial route) */
-                        CWARN("Binding %s %u.%u.%u.%u to %u.%u.%u.%u\n",
-                              libcfs_nid2str(peer->ksnp_nid),
-                              HIPQUAD(route->ksnr_ipaddr),
-                              HIPQUAD(conn->ksnc_myipaddr));
+                        CDEBUG(D_NET, "Binding %s %u.%u.%u.%u to %u.%u.%u.%u\n",
+                               libcfs_nid2str(peer->ksnp_nid),
+                               HIPQUAD(route->ksnr_ipaddr),
+                               HIPQUAD(conn->ksnc_myipaddr));
                 } else {
-                        CWARN("Rebinding %s %u.%u.%u.%u from "
-                              "%u.%u.%u.%u to %u.%u.%u.%u\n",
-                              libcfs_nid2str(peer->ksnp_nid),
-                              HIPQUAD(route->ksnr_ipaddr),
-                              HIPQUAD(route->ksnr_myipaddr),
-                              HIPQUAD(conn->ksnc_myipaddr));
+                        CDEBUG(D_NET, "Rebinding %s %u.%u.%u.%u from "
+                               "%u.%u.%u.%u to %u.%u.%u.%u\n",
+                               libcfs_nid2str(peer->ksnp_nid),
+                               HIPQUAD(route->ksnr_ipaddr),
+                               HIPQUAD(route->ksnr_myipaddr),
+                               HIPQUAD(conn->ksnc_myipaddr));
 
                         iface = ksocknal_ip2iface(route->ksnr_peer->ksnp_ni,
                                                   route->ksnr_myipaddr);
@@ -926,11 +926,14 @@ ksocknal_accept (ptl_ni_t *ni, struct socket *sock)
 
         PORTAL_ALLOC(cr, sizeof(*cr));
         if (cr == NULL) {
-                CWARN("ENOMEM allocating connection request from"
-                      "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
+                LCONSOLE_ERROR("Dropping connection request from "
+                               "%u.%u.%u.%u: memory exhausted\n",
+                               HIPQUAD(peer_ip));
                 return PTL_FAIL;
         }
 
+        ptl_ni_addref(ni);
+        cr->ksncr_ni   = ni;
         cr->ksncr_sock = sock;
 
         spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock, flags);
@@ -943,13 +946,13 @@ ksocknal_accept (ptl_ni_t *ni, struct socket *sock)
 }
 
 int
-ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
+ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route, 
+                      struct socket *sock, int type)
 {
         rwlock_t          *global_lock = &ksocknal_data.ksnd_global_lock;
+        ksock_net_t       *net = (ksock_net_t *)ni->ni_data;
         __u32              ipaddrs[PTL_MAX_INTERFACES];
         int                nipaddrs;
-        ptl_ni_t          *ni;
-        ksock_net_t       *net;
         ptl_nid_t          nid;
         struct list_head  *tmp;
         __u64              incarnation;
@@ -1000,15 +1003,12 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 goto failed_1;
 
         if (route != NULL) {
-                ni = route->ksnr_peer->ksnp_ni;
-                net = (ksock_net_t *)ni->ni_data;
+                LASSERT(ni == route->ksnr_peer->ksnp_ni);
 
                 /* Active connection sends HELLO eagerly */
                 nipaddrs = ksocknal_local_ipvec(ni, ipaddrs);
 
-                rc = ksocknal_send_hello (conn, ni->ni_nid, 
-                                          net->ksnn_incarnation,
-                                          ipaddrs, nipaddrs);
+                rc = ksocknal_send_hello (ni, conn, ipaddrs, nipaddrs);
                 if (rc != 0)
                         goto failed_1;
         }
@@ -1018,7 +1018,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
          * Passive connections use the listener timeout since the peer sends
          * eagerly */
         nid = (route == NULL) ? PTL_NID_ANY : route->ksnr_peer->ksnp_nid;
-        rc = ksocknal_recv_hello (conn, &nid, &incarnation, ipaddrs);
+        rc = ksocknal_recv_hello (ni, conn, &nid, &incarnation, ipaddrs);
         if (rc < 0)
                 goto failed_1;
         nipaddrs = rc;
@@ -1033,24 +1033,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                                        ipaddrs, nipaddrs);
                 rc = 0;
         } else {
-                ni = ptl_net2ni(PTL_NIDNET(nid));
-
-                if (ni == NULL) {
-                        CERROR("Refusing connection attempt "
-                               "(no matching net)\n");
-                        rc = -ECONNREFUSED;
-                        goto failed_1;
-                }
-
-                net = (ksock_net_t *)ni->ni_data;
                 rc = ksocknal_create_peer(&peer, ni, nid);
-
-                /* lose extra ref from ptl_net2ni NB we wait for all the peers
-                 * to be deleted before ni teardown can complete; i.e. ni can't
-                 * disappear until all its peer table entries has gone so
-                 * there's no need to account the peer's refs on ni. */
-                ptl_ni_decref(ni);
-
                 if (rc != 0)
                         goto failed_1;
 
@@ -1072,9 +1055,7 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 write_unlock_irqrestore(global_lock, flags);
 
                 nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-                rc = ksocknal_send_hello (conn, ni->ni_nid,
-                                          net->ksnn_incarnation,
-                                          ipaddrs, nipaddrs);
+                rc = ksocknal_send_hello (ni, conn, ipaddrs, nipaddrs);
                 if (rc < 0)
                         goto failed_2;
         }
@@ -1180,11 +1161,11 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_connsock_decref(conn);
         }
 
-        CWARN("New conn %s %u.%u.%u.%u -> %u.%u.%u.%u/%d"
-              " incarnation:"LPD64" sched[%d]/%d\n",
-              libcfs_nid2str(nid), HIPQUAD(conn->ksnc_myipaddr),
-              HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
-              (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
+        CDEBUG(D_NET, "New conn %s %u.%u.%u.%u -> %u.%u.%u.%u/%d"
+               " incarnation:"LPD64" sched[%d]/%d\n",
+               libcfs_nid2str(nid), HIPQUAD(conn->ksnc_myipaddr),
+               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
+               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
 
         ksocknal_conn_decref(conn);
         return (0);
@@ -1433,11 +1414,11 @@ ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation)
                 if (conn->ksnc_incarnation == incarnation)
                         continue;
 
-                CWARN("Closing stale conn %s ip:%08x/%d "
-                      "incarnation:"LPD64"("LPD64")\n",
-                      libcfs_nid2str(peer->ksnp_nid), 
-                      conn->ksnc_ipaddr, conn->ksnc_port,
-                      conn->ksnc_incarnation, incarnation);
+                CDEBUG(D_NET, "Closing stale conn %s ip:%08x/%d "
+                       "incarnation:"LPD64"("LPD64")\n",
+                       libcfs_nid2str(peer->ksnp_nid), 
+                       conn->ksnc_ipaddr, conn->ksnc_port,
+                       conn->ksnc_incarnation, incarnation);
 
                 count++;
                 ksocknal_close_conn_locked (conn, -ESTALE);

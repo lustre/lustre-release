@@ -76,7 +76,7 @@ ptl_connect_console_error (int rc, ptl_nid_t peer_nid,
         /* "normal" errors */
         case -ECONNREFUSED:
                 LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u "
-                               "on port %d was refused; "
+                               "on port %d was refused: "
                                "check that Lustre is running on that node.\n",
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
@@ -84,28 +84,30 @@ ptl_connect_console_error (int rc, ptl_nid_t peer_nid,
         case -EHOSTUNREACH:
         case -ENETUNREACH:
                 LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u "
-                               "was unreachable; the network or that node may "
+                               "was unreachable: the network or that node may "
                                "be down, or Lustre may be misconfigured.\n",
                                libcfs_nid2str(peer_nid), HIPQUAD(peer_ip));
                 break;
         case -ETIMEDOUT:
                 LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "
-                               "port %d took too long; that node may be hung "
+                               "port %d took too long: that node may be hung "
                                "or experiencing high load.\n",
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
                 break;
         case -ECONNRESET:
                 LCONSOLE_ERROR("Connection to %s at host %u.%u.%u.%u on "
-                               "port %d was reset; "
-                               "Is it running a compatible version of Lustre?\n",
+                               "port %d was reset: "
+                               "is it running a compatible version of Lustre "
+                               "and is %s one of its NIDs?\n",
                                libcfs_nid2str(peer_nid),
-                               HIPQUAD(peer_ip), peer_port);
+                               HIPQUAD(peer_ip), peer_port,
+                               libcfs_nid2str(peer_nid));
                 break;
         case -EPROTO:
                 LCONSOLE_ERROR("Protocol error connecting to %s at host "
                                "%u.%u.%u.%u on port %d: "
-                               "Is it running a compatible version of Lustre?\n",
+                               "is it running a compatible version of Lustre?\n",
                                libcfs_nid2str(peer_nid),
                                HIPQUAD(peer_ip), peer_port);
                 break;
@@ -193,7 +195,7 @@ ptl_accept_magic(__u32 magic, __u32 constant)
 }
 
 ptl_err_t
-ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
+ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
 {
         ptl_acceptor_connreq_t  cr;
         __u32                   peer_ip;
@@ -201,41 +203,31 @@ ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
         int                     rc;
         int                     flip;
         ptl_ni_t               *ni;
+        char                   *str;
 
         /* CAVEAT EMPTOR: I may be called by a NAL in any thread's context if I
          * passed the new socket "blindly" to the single NI that needed an
-         * acceptor.  If so, 'choose_ni' is FALSE... */
+         * acceptor.  If so, blind_ni != NULL... */
 
         LASSERT (sizeof(cr) <= 16);             /* not too big for the stack */
         
         rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         LASSERT (rc == 0);                      /* we succeeded before */
 
-        if (ptl_accept_magic(magic, PTL_PROTO_TCP_MAGIC)) {
-                CERROR("Refusing connection from %u.%u.%u.%u: "
-                       " 'old' socknal/tcpnal acceptor protocol\n",
-                       HIPQUAD(peer_ip));
-                return PTL_FAIL;
-        }
-        
-        if (ptl_accept_magic(magic, PTL_PROTO_RA_MAGIC)) {
-                CERROR("Refusing connection from %u.%u.%u.%u: "
-                       " 'old' ranal acceptor protocol\n",
-                       HIPQUAD(peer_ip));
-                return PTL_FAIL;
-        }
-        
-        if (ptl_accept_magic(magic, PTL_PROTO_OPENIB_MAGIC)) {
-                CERROR("Refusing connection from %u.%u.%u.%u: "
-                       " 'old' openibnal acceptor protocol\n",
-                       HIPQUAD(peer_ip));
-                return PTL_FAIL;
-        }
-            
         if (!ptl_accept_magic(magic, PTL_PROTO_ACCEPTOR_MAGIC)) {
-                CERROR("Refusing connection from %u.%u.%u.%u: "
-                       " unrecognised magic %08x\n",
-                       HIPQUAD(peer_ip), magic);
+
+                if (magic == le32_to_cpu(PTL_PROTO_TCP_MAGIC))
+                        str = "'old' socknal/tcpnal";
+                else if (ptl_accept_magic(magic, PTL_PROTO_RA_MAGIC))
+                        str = "'old' ranal";
+                else if (ptl_accept_magic(magic, PTL_PROTO_OPENIB_MAGIC))
+                        str = "'old' openibnal";
+                else
+                        str = "unrecognised";
+            
+                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u magic %08x: "
+                               " %s acceptor protocol\n",
+                               HIPQUAD(peer_ip), magic, str);
                 return PTL_FAIL;
         }
 
@@ -260,17 +252,10 @@ ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
         }
         
         if (cr.acr_version != PTL_PROTO_ACCEPTOR_VERSION) {
-                CERROR("Refusing connection from %u.%u.%u.%u: "
-                       " unrecognised protocol version %d\n",
-                       HIPQUAD(peer_ip), cr.acr_version);
+                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u: "
+                               " unrecognised protocol version %d\n",
+                               HIPQUAD(peer_ip), cr.acr_version);
                 return PTL_FAIL;
-        }
-
-        if (!choose_ni) {
-                CDEBUG(D_WARNING, "Skipped %s from %u.%u.%u.%u\n", 
-                       libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip));
-                /* I got called just to skip the connection request */
-                return PTL_OK;
         }
 
         ni = ptl_net2ni(PTL_NIDNET(cr.acr_nid));
@@ -278,27 +263,38 @@ ptl_accept(struct socket *sock, __u32 magic, int choose_ni)
             ni->ni_nid != cr.acr_nid) /* right NET, but wrong NID! */ {
                 if (ni != NULL)
                         ptl_ni_decref(ni);
-                CERROR("Refusing connection from %u.%u.%u.%u for %s: "
-                       " No matching NI\n",
-                       HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
+                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
+                               " No matching NI\n",
+                               HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return PTL_FAIL;
         }
 
         if (ni->ni_nal->nal_accept == NULL) {
                 ptl_ni_decref(ni);
-                CERROR("Refusing connection from %u.%u.%u.%u for %s: "
-                       " NI doesn not accept IP connections\n",
-                       HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
+                LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
+                               " NI doesn not accept IP connections\n",
+                               HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return PTL_FAIL;
         }
                 
-        CDEBUG(D_WARNING, "Accept %s from %u.%u.%u.%u\n",
-               libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip));
+        CDEBUG(D_NET, "Accept %s from %u.%u.%u.%u%s\n",
+               libcfs_nid2str(cr.acr_nid), HIPQUAD(peer_ip),
+               blind_ni == NULL ? "" : " (blind)");
 
-        rc = ni->ni_nal->nal_accept(ni, sock);
-        if (rc != PTL_OK)
-                CERROR("NI %s refused connection from %u.%u.%u.%u\n",
-                       libcfs_nid2str(ni->ni_nid), HIPQUAD(peer_ip));
+        if (blind_ni == NULL) {
+                rc = ni->ni_nal->nal_accept(ni, sock);
+                if (rc != PTL_OK)
+                        CERROR("NI %s refused connection from %u.%u.%u.%u\n",
+                               libcfs_nid2str(ni->ni_nid), HIPQUAD(peer_ip));
+        } else {
+                /* blind_ni is the only NI that needs me and it was given the
+                 * chance to handle this connection request itself in case it
+                 * was sent by an "old" socknal.  But this connection request
+                 * uses the new acceptor protocol and I'm just being called to
+                 * verify and skip it */
+                LASSERT (ni == blind_ni);
+                rc = PTL_OK;
+        }
 
         ptl_ni_decref(ni);
         return rc;
@@ -415,7 +411,7 @@ ptl_acceptor(void *arg)
 			goto failed;
 		}
 
-                rc = ptl_accept(newsock, magic, 1);
+                rc = ptl_accept(NULL, newsock, magic);
                 if (rc != PTL_OK)
                         goto failed;
                 

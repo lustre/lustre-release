@@ -77,7 +77,7 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
             connreq->racr_magic != RANAL_MSG_MAGIC &&
             connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
                 /* Is this a generic acceptor connection request? */
-                rc = ptl_accept(sock, connreq->racr_magic, 0);
+                rc = ptl_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
                 if (rc != PTL_OK)               /* nope */
                         return -EPROTO;
 

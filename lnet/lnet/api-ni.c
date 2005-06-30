@@ -596,23 +596,28 @@ ptl_islocalnid (ptl_nid_t nid)
         struct list_head *tmp;
         ptl_ni_t         *ni;
         unsigned long     flags;
+        int               islocal = 0;
 
         PTL_LOCK(flags);
+
         list_for_each (tmp, &ptl_apini.apini_nis) {
                 ni = list_entry(tmp, ptl_ni_t, ni_list);
 
-                if (ni->ni_nid == nid)
-                        return 1;
+                if (ni->ni_nid == nid) {
+                        islocal = 1;
+                        break;
+                }
         }
         
         PTL_UNLOCK(flags);
-        return 0;
+        return islocal;
 }
 
 void
 ptl_shutdown_nalnis (void)
 {
         int                i;
+        int                islo;
         ptl_ni_t          *ni;
         unsigned long      flags;
 
@@ -638,6 +643,10 @@ ptl_shutdown_nalnis (void)
                 ptl_ni_decref_locked(ni); /* drop apini's ref (shutdown on last ref) */
         }
 
+        /* Drop the cached loopback NI. */
+        ptl_ni_decref_locked(ptl_loni);
+        ptl_loni = NULL;
+
         /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
          * and shut them down in guaranteed thread context */
         i = 2;
@@ -660,13 +669,15 @@ ptl_shutdown_nalnis (void)
 
                 PTL_UNLOCK(flags);
 
+                islo = ni->ni_nal->nal_type == LONAL;
+
                 LASSERT (!in_interrupt());
                 (ni->ni_nal->nal_shutdown)(ni);
 
                 /* can't deref nal anymore now; it might have unregistered
                  * itself...  */
 
-                if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL)
+                if (!islo)
                         LCONSOLE(0, "Removed NI %s\n", 
                                  libcfs_nid2str(ni->ni_nid));
 
@@ -762,6 +773,9 @@ ptl_startup_nalnis (void)
                 list_add_tail(&ni->ni_list, &ptl_apini.apini_nis);
                 PTL_UNLOCK(flags);
         }
+
+        ptl_loni = ptl_net2ni(PTL_MKNET(LONAL, 0));
+        LASSERT (ptl_loni != NULL);
 
         return PTL_OK;
         

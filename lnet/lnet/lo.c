@@ -255,7 +255,6 @@ void
 lonal_shutdown(ptl_ni_t *ni)
 {
 	CDEBUG (D_NET, "shutdown\n");
-	LASSERT (ni == ptl_loni);
         LASSERT (lonal_instanced);
         
         lonal_instanced = 0;
@@ -265,7 +264,6 @@ ptl_err_t
 lonal_startup (ptl_ni_t *ni)
 {
 	LASSERT (ni->ni_nal == &ptl_lonal);
-	LASSERT (ni == ptl_loni);
 	LASSERT (!lonal_instanced);
         lonal_instanced = 1;
 

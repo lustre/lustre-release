@@ -1258,11 +1258,11 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 LASSERT (rc != -EAGAIN);
 
                 if (rc == 0)
-                        CWARN ("[%p] EOF from %s ip %d.%d.%d.%d:%d\n",
-                               conn, 
-                               libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
-                               HIPQUAD(conn->ksnc_ipaddr),
-                               conn->ksnc_port);
+                        CDEBUG (D_NET, "[%p] EOF from %s ip %d.%d.%d.%d:%d\n",
+                                conn, 
+                                libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
+                                HIPQUAD(conn->ksnc_ipaddr),
+                                conn->ksnc_port);
                 else if (!conn->ksnc_closing)
                         CERROR ("[%p] Error %d on read from %s"
                                 " ip %d.%d.%d.%d:%d\n",
@@ -1658,11 +1658,11 @@ void ksocknal_write_callback (ksock_conn_t *conn)
 }
 
 int
-ksocknal_send_hello (ksock_conn_t *conn, 
-                     ptl_nid_t srcnid, __u64 incarnation,
+ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
                      __u32 *ipaddrs, int nipaddrs)
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
+        ksock_net_t        *net = (ksock_net_t *)ni->ni_data;
         struct socket      *sock = conn->ksnc_sock;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
@@ -1680,12 +1680,12 @@ ksocknal_send_hello (ksock_conn_t *conn,
         hmv->version_major = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR);
 
-        hdr.src_nid        = cpu_to_le64 (srcnid);
+        hdr.src_nid        = cpu_to_le64 (ni->ni_nid);
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
 
         hdr.msg.hello.type = cpu_to_le32 (conn->ksnc_type);
-        hdr.msg.hello.incarnation = cpu_to_le64 (incarnation);
+        hdr.msg.hello.incarnation = cpu_to_le64 (net->ksnn_incarnation);
 
         for (i = 0; i < nipaddrs; i++) {
                 ipaddrs[i] = __cpu_to_le32 (ipaddrs[i]);
@@ -1729,8 +1729,8 @@ ksocknal_invert_type(int type)
 }
 
 int
-ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
-                     __u64 *incarnation, __u32 *ipaddrs)
+ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
+                     ptl_nid_t *nid, __u64 *incarnation, __u32 *ipaddrs)
 {
         struct socket      *sock = conn->ksnc_sock;
         int                 active;
@@ -1759,11 +1759,12 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
         if (!active && 
             hmv->magic != le32_to_cpu (PTL_PROTO_TCP_MAGIC)) {
                 /* Is this a generic acceptor connection request? */
-                rc = ptl_accept(sock, hmv->magic, 0);
+                rc = ptl_accept(ni, sock, hmv->magic);
                 if (rc != PTL_OK)
                         return -EPROTO;
 
-                /* Yes it is! Start over again now I've skipping it. */
+                /* Yes it is! Start over again now I've skipping the generic
+                 * request */
                 rc = libcfs_sock_read(sock, &hmv->magic, 
                                       sizeof (hmv->magic), timeout);
                 if (rc != 0) {
@@ -1906,7 +1907,7 @@ ksocknal_connect (ksock_route_t *route)
 {
         CFS_LIST_HEAD    (zombies);
         ksock_tx_t       *tx;
-        ksock_peer_t     *peer;
+        ksock_peer_t     *peer = route->ksnr_peer;
         unsigned long     flags;
         int               type;
         struct socket    *sock;
@@ -1933,15 +1934,15 @@ ksocknal_connect (ksock_route_t *route)
 
                 write_unlock_irqrestore(&ksocknal_data.ksnd_global_lock, flags);
 
-                rc = ptl_connect(&sock, route->ksnr_peer->ksnp_nid,
+                rc = ptl_connect(&sock, peer->ksnp_nid,
                                  route->ksnr_myipaddr, 
                                  route->ksnr_ipaddr, route->ksnr_port);
                 if (rc != PTL_OK)
                         goto failed;
 
-                rc = ksocknal_create_conn(route, sock, type);
+                rc = ksocknal_create_conn(peer->ksnp_ni, route, sock, type);
                 if (rc != 0) {
-                        ptl_connect_console_error(rc, route->ksnr_peer->ksnp_nid,
+                        ptl_connect_console_error(rc, peer->ksnp_nid,
                                                   route->ksnr_ipaddr, 
                                                   route->ksnr_port);
                         goto failed;
@@ -1958,7 +1959,6 @@ ksocknal_connect (ksock_route_t *route)
  failed:
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
-        peer = route->ksnr_peer;
         LASSERT (route->ksnr_connecting);
         route->ksnr_connecting = 0;
 
@@ -2043,7 +2043,9 @@ ksocknal_connd (void *arg)
                         spin_unlock_irqrestore(&ksocknal_data.ksnd_connd_lock, 
                                                flags);
                         
-                        ksocknal_create_conn(NULL, cr->ksncr_sock, SOCKNAL_CONN_NONE);
+                        ksocknal_create_conn(cr->ksncr_ni, NULL, 
+                                             cr->ksncr_sock, SOCKNAL_CONN_NONE);
+                        ptl_ni_decref(cr->ksncr_ni);
                         PORTAL_FREE(cr, sizeof(*cr));
                         
                         spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock,

@@ -357,7 +357,7 @@ libcfs_sock_read (struct socket *sock, void *buffer, int nob, int timeout)
                         return rc;
 
                 if (rc == 0)
-                        return -ECONNABORTED;
+                        return -ECONNRESET;
 
                 buffer = ((char *)buffer) + rc;
                 nob -= rc;

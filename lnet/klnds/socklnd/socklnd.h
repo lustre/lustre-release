@@ -382,6 +382,7 @@ typedef struct ksock_peer
 typedef struct ksock_connreq
 {
         struct list_head    ksncr_list;         /* stash on ksnd_connd_connreqs */
+        ptl_ni_t           *ksncr_ni;           /* chosen NI */
         struct socket      *ksncr_sock;         /* accepted socket */
 } ksock_connreq_t;
 
@@ -501,7 +502,7 @@ ptl_err_t ksocknal_accept(ptl_ni_t *ni, struct socket *sock);
 extern int ksocknal_add_peer(ptl_ni_t *ni, ptl_nid_t nid, __u32 ip, int port);
 extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, ptl_nid_t nid);
 extern ksock_peer_t *ksocknal_find_peer (ptl_ni_t *ni, ptl_nid_t nid);
-extern int ksocknal_create_conn (ksock_route_t *route,
+extern int ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
@@ -521,10 +522,11 @@ extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern int ksocknal_send_hello (ksock_conn_t *conn, ptl_nid_t nid,
-                                __u64 incarnation, __u32 *ipaddrs, int nipaddrs);
-extern int ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid, 
-                                __u64 *incarnation, __u32 *ipaddrs);
+extern int ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
+                                __u32 *ipaddrs, int nipaddrs);
+extern int ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
+                                ptl_nid_t *nid, __u64 *incarnation, 
+                                __u32 *ipaddrs);
 
 extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);

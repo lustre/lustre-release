@@ -105,78 +105,47 @@ ptl_trimwhite(char *str)
 }
 
 int
-ptl_nis_conflict(ptl_ni_t *ni1, ptl_ni_t *ni2)
-{
-        if (PTL_NETNAL(PTL_NIDNET(ni1->ni_nid)) != /* different NALs */
-            PTL_NETNAL(PTL_NIDNET(ni2->ni_nid)))
-                return 0;
-
-        if (ni1 != ni2 &&
-            PTL_NIDNET(ni1->ni_nid) == PTL_NIDNET(ni2->ni_nid)) {
-                CERROR("Duplicate network: %s\n",
-                       libcfs_net2str(PTL_NIDNET(ni1->ni_nid)));
-                return 1;
-        }
-
-        if (ni1->ni_interfaces[0] == NULL ||   
-            ni2->ni_interfaces[0] == NULL) {
-                /* one (or both) using all available interfaces */
-                if (ni1 != ni2) {
-                        CERROR("Interface conflict: %s, %s\n",
-                               libcfs_net2str(PTL_NIDNET(ni1->ni_nid)),
-                               libcfs_net2str(PTL_NIDNET(ni2->ni_nid)));
-                        return 1;
-                }
-                return 0;
-        }
-#if 0
-        /* leave this commented out so the same interface can be included explicitly in 2
-         * networks. */
-
-        for (i = 0; i < PTL_MAX_INTERFACES; i++) {
-                if (ni1->ni_interfaces[i] == NULL)
-                        break;
-
-                for (j = 0; j < PTL_MAX_INTERFACES; j++) {
-                        if (ni2->ni_interfaces[j] == NULL)
-                                break;
-
-                        if (ni1 == ni2 && i == j)
-                                continue;
-
-                        if (strcmp(ni1->ni_interfaces[i],
-                                   ni2->ni_interfaces[j]))
-                                continue;
-                        
-                        CERROR("Duplicate interface: %s(%s), %s(%s)\n",
-                               libcfs_net2str(PTL_NIDNET(ni1->ni_nid)),
-                               ni1->ni_interfaces[i],
-                               libcfs_net2str(PTL_NIDNET(ni2->ni_nid)),
-                               ni2->ni_interfaces[i]);
-                        return 1;
-                }
-        }
-#endif   
-        return 0;
-}
-
-ptl_err_t
-ptl_check_ni_conflicts(ptl_ni_t *ni, struct list_head *nilist)
+ptl_net_unique(__u32 net, struct list_head *nilist)
 {
         struct list_head *tmp;
-        ptl_ni_t         *ni2;
+        ptl_ni_t         *ni;
 
-        /* Yes! ni _has_ just been added to this list. */
-        LASSERT (ni == list_entry(nilist->prev, ptl_ni_t, ni_list));
-        
         list_for_each (tmp, nilist) {
-                ni2 = list_entry(tmp, ptl_ni_t, ni_list);
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
 
-                if (ptl_nis_conflict(ni, ni2))
-                        return PTL_FAIL;
+                if (PTL_NIDNET(ni->ni_nid) == net)
+                        return 0;
         }
         
-        return PTL_OK;
+        return 1;
+}
+
+ptl_ni_t *
+ptl_new_ni(__u32 net, struct list_head *nilist)
+{
+        ptl_ni_t *ni;
+
+        if (!ptl_net_unique(net, nilist)) {
+                LCONSOLE_ERROR("Duplicate network specified: %s\n",
+                               libcfs_net2str(net));
+                return NULL;
+        }
+        
+        PORTAL_ALLOC(ni, sizeof(*ni));
+        if (ni == NULL) {
+                CERROR("Out of memory creating network %s\n",
+                       libcfs_net2str(net));
+                return NULL;
+        }
+        
+        /* zero counters/flags, NULL pointers... */
+        memset(ni, 0, sizeof(*ni));
+
+        /* NAL will fill in the address part of the NID */
+        ni->ni_nid = PTL_MKNID(net, 0);
+
+        list_add_tail(&ni->ni_list, nilist);
+        return ni;
 }
 
 ptl_err_t
@@ -185,12 +154,12 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 	int       tokensize = strlen(networks) + 1;
         char     *tokens;
         char     *str;
-        ptl_ni_t *ni = NULL;
+        ptl_ni_t *ni;
         __u32     net;
 
 	if (strlen(networks) > PTL_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
-		CERROR("Can't parse networks; string too long\n");
+		LCONSOLE_ERROR("Can't parse networks: string too long\n");
 		return PTL_FAIL;
 	}
 
@@ -204,17 +173,11 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
         ptl_apini.apini_network_tokens_nob = tokensize;
         memcpy (tokens, networks, tokensize);
 	str = tokens;
-
-        PORTAL_ALLOC(ptl_loni, sizeof(*ptl_loni));
-        if (ptl_loni == NULL) {
-                CERROR("Can't allocate LO NI\n");
-                goto failed;
-        }
+        
         /* Add in the loopback network */
-        /* zero counters/flags, NULL pointers... */
-        memset(ptl_loni, 0, sizeof(*ptl_loni));
-        ptl_loni->ni_nid = PTL_MKNID(PTL_MKNET(LONAL, 0), 0);
-        list_add_tail(&ptl_loni->ni_list, nilist);
+        ni = ptl_new_ni(PTL_MKNET(LONAL, 0), nilist);
+        if (ni == NULL)
+                goto failed;
         
         while (str != NULL && *str != 0) {
                 char      *comma = strchr(str, ',');
@@ -222,17 +185,14 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                 int        niface;
 		char      *iface;
 
-                PORTAL_ALLOC(ni, sizeof(*ni));
-                if (ni == NULL) {
-                        CERROR ("ENOMEM parsing 'networks=\"%s\"'\n", networks);
-                        goto failed;
-                }
-                /* zero counters/flags, NULL pointers... */
-                memset(ni, 0, sizeof(*ni));
-                list_add_tail(&ni->ni_list, nilist);
-                
+                /* NB we don't check interface conflicts here; it's the NALs
+                 * responsibility (if it cares at all) */
+
                 if (bracket == NULL ||
 		    (comma != NULL && comma < bracket)) {
+
+                        /* no interface list specified */
+
 			if (comma != NULL)
 				*comma++ = 0;
 			net = libcfs_str2net(ptl_trimwhite(str));
@@ -243,8 +203,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                                 goto failed;
                         }
 
-                        ni->ni_nid = PTL_MKNID(net, 0);
-                        if (ptl_check_ni_conflicts(ni, nilist) != PTL_OK)
+                        if (ptl_new_ni(net, nilist) == NULL)
                                 goto failed;
 
 			str = comma;
@@ -259,7 +218,9 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                         goto failed;
                 } 
 
-                ni->ni_nid = PTL_MKNID(net, 0);
+                ni = ptl_new_ni(net, nilist);
+                if (ni == NULL)
+                        goto failed;
 
                 niface = 0;
 		iface = bracket + 1;
@@ -285,8 +246,8 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                         }
 
                         if (niface == PTL_MAX_INTERFACES) {
-                                LCONSOLE_ERROR("Too many interfaces for %s\n",
-                                               libcfs_net2str(PTL_NIDNET(ni->ni_nid)));
+                                LCONSOLE_ERROR("Too many interfaces for net %s\n",
+                                               libcfs_net2str(net));
                                 goto failed;
                         }
 
@@ -294,9 +255,6 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 			iface = comma;
 		} while (iface != NULL);
 
-                if (ptl_check_ni_conflicts(ni, nilist) != PTL_OK)
-                        goto failed;
-                
 		str = bracket + 1;
 		comma = strchr(bracket + 1, ',');
 		if (comma != NULL) {
