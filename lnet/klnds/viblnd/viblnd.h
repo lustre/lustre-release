@@ -96,8 +96,8 @@
 #define IBNAL_CONCURRENT_PEERS       1152       /* # nodes all talking at once to me */
 #define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
 #define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
-#define IBNAL_NTX                    64         /* # tx descs */
-#define IBNAL_NTX_NBLK               128        /* # reserved tx descs */
+#define IBNAL_NTX                    32         /* # tx descs */
+#define IBNAL_NTX_NBLK               256        /* # reserved tx descs */
 #define IBNAL_ARP_RETRIES            3          /* # times to retry ARP */
 #define IBNAL_HCA_BASENAME           "InfiniHost" /* HCA basename */
 #define IBNAL_IPIF_BASENAME          "ipoib"    /* IPoIB interface basename */
