@@ -2176,6 +2176,7 @@ test_57b() {
 	$LFIND $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
 	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
+	sleep 1 # make sure we get new statfs data
 	MDSFREE2="`cat /proc/fs/lustre/mds/*/kbytesfree`"
 	MDCFREE2="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
 	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then

@@ -1581,11 +1581,12 @@ class LOV(Module):
         self.stripe_off = self.db.get_val_int('stripeoffset', 0)
         self.pattern = self.db.get_val_int('stripepattern', 0)
         self.devlist = []
-        self.stripe_cnt = 0
+        self.stripe_cnt = self.db.get_val_int('stripecount', 1)
         self.osclist = []
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
         self.fs_name = fs_name
+        # settings below here won't be seen by the MDSDEV code!
         if config_only:
             self.config_only = 1
             return
@@ -1616,7 +1617,7 @@ class LOV(Module):
                 index = index + 1
         if self.osclist == []:
             panic('No OSCs configured for LOV')
-        self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
+        debug('dbg LOV __init__:', self.osclist, self.devlist, self.stripe_cnt)
 
     def prepare(self):
         debug('dbg LOV prepare')
@@ -1721,17 +1722,19 @@ class MDSDEV(Module):
             if (lov.stripe_cnt > 0):
                 stripe_count = lov.stripe_cnt
             else:
-                stripe_count = len(lov.devlist)
+                stripe_count = 1
             if stripe_count > 77:
                 self.inode_size = 4096
             elif stripe_count > 34:
                 self.inode_size = 2048
             elif stripe_count > 13:
                 self.inode_size = 1024
-            elif stripe_count > 2:
-                self.inode_size = 512
+            #elif stripe_count < 3:
+            #    self.inode_size = 256
             else:
-                self.inode_size = 256
+                self.inode_size = 512
+
+        debug('stripe_count %d, inode_size %d', stripe_count, self.inode_size)
 
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
