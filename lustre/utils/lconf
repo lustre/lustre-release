@@ -656,7 +656,7 @@ class LCTLInterface:
     def abort_recovery(self, name):
         cmds = """
   ignore_errors
-  device %s
+  device $%s
   abort_recovery
   quit""" % (name)
         self.run(cmds)
