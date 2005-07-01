@@ -129,8 +129,8 @@
 
 #define IBNAL_ARP_RETRIES         3             /* How many times to retry ARP */
 
-#define IBNAL_NTX                 64            /* # tx descs */
-#define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
+#define IBNAL_NTX                 32            /* # tx descs */
+#define IBNAL_NTX_NBLK            256           /* # reserved tx descs */
 
 #define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
 
