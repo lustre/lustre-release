@@ -51,9 +51,9 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891_lustre.1.4.0-phik/drivers/s
 +extern void sd_iostats_bump(int disk, unsigned int nsect, int iswrite);
 +#else
 +static inline void sd_iostats_init(void) {}
-+static inline void sd_iostats_init_disk(struct gendisk *) {}
++static inline void sd_iostats_init_disk(struct gendisk *disk) {}
 +static inline void sd_iostats_fini(void) {}
-+static inline void sd_iostats_bump(kdev_t dev, unsigned int nsect, int iswrite) {}
++static inline void sd_iostats_bump(int disk, unsigned int nsect, int iswrite) {}
 +#endif
  
  /*
