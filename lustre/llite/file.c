@@ -338,8 +338,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct lov_stripe_md *lsm;
         struct ptlrpc_request *req;
         int rc = 0;
-        struct obd_client_handle **och_p;
-        __u64 *och_usecount;
+        struct obd_client_handle **och_p = NULL;
+        __u64 *och_usecount = NULL;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n",
