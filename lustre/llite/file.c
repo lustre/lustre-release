@@ -1550,6 +1550,22 @@ struct file_operations ll_file_operations = {
         /* .lock           = ll_file_flock */
 };
 
+struct file_operations ll_file_operations_flock = {
+        .read           = ll_file_read,
+        .write          = ll_file_write,
+        .ioctl          = ll_file_ioctl,
+        .open           = ll_file_open,
+        .release        = ll_file_release,
+        .mmap           = ll_file_mmap,
+        .llseek         = ll_file_seek,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        .sendfile       = generic_file_sendfile,
+#endif
+        .fsync          = ll_fsync,
+        .lock           = ll_file_flock
+};
+
+
 struct inode_operations ll_file_inode_operations = {
         .setattr_raw    = ll_setattr_raw,
         .setattr        = ll_setattr,

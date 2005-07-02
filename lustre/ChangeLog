@@ -65,6 +65,14 @@ Details    : Processes doing readahead might match a lock that hasn't been
 	     (original lock is CBPENDING), while OST waits for that process
 	     to cancel CBPENDING read lock and eventually evicts client.
 
+Severity   : enhancement
+Bugzilla   : 6931
+Description: Provide flock support for clients
+Details    : Implement fcntl advisory locking and file status functions.
+	     This feature is provided as an optional mount flag:
+	     mount -t lustre -o [flock|noflock] ...
+
+	
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

@@ -68,6 +68,7 @@ void usage(FILE *out)
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
+                "\t\tflock/noflock: enable/disable flock support\n"
                 "\t\tnettype={tcp,elan,iibnal,lonal}: network type\n"
                 "\t\tcluster_id=0xNNNN: cluster this node is part of\n"
                 "\t\tlocal_nid=0xNNNN: client ID (default ipaddr or nodenum)\n"
@@ -247,40 +248,46 @@ struct opt_map {
         const char *opt;        /* option name */
         int skip;               /* skip in mtab option string */
         int inv;                /* true if flag value should be inverted */
-        int mask;               /* flag mask value */
+        int ms_mask;            /* MS flag mask value */
+        int lmd_mask;           /* LMD flag mask value */
 };
 
 static const struct opt_map opt_map[] = {
-  { "defaults", 0, 0, 0         },      /* default options */
-  { "rw",       1, 1, MS_RDONLY },      /* read-write */
-  { "ro",       0, 0, MS_RDONLY },      /* read-only */
-  { "exec",     0, 1, MS_NOEXEC },      /* permit execution of binaries */
-  { "noexec",   0, 0, MS_NOEXEC },      /* don't execute binaries */
-  { "suid",     0, 1, MS_NOSUID },      /* honor suid executables */
-  { "nosuid",   0, 0, MS_NOSUID },      /* don't honor suid executables */
-  { "dev",      0, 1, MS_NODEV  },      /* interpret device files  */
-  { "nodev",    0, 0, MS_NODEV  },      /* don't interpret devices */
-  { "async",    0, 1, MS_SYNCHRONOUS},  /* asynchronous I/O */
-  { "auto",     0, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0, 0         },      /* Can  only be mounted explicitly */
-  { "nousers",  0, 1, 0         },      /* Forbid ordinary user to mount */
-  { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
-  { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
-  { "_netdev",  0, 0, 0         },      /* Device accessible only via network */
-  { NULL,       0, 0, 0         }
+  { "defaults", 0, 0, 0, 0         },      /* default options */
+  { "rw",       1, 1, MS_RDONLY, 0 },      /* read-write */
+  { "ro",       0, 0, MS_RDONLY, 0 },      /* read-only */
+  { "exec",     0, 1, MS_NOEXEC, 0 },      /* permit execution of binaries */
+  { "noexec",   0, 0, MS_NOEXEC, 0 },      /* don't execute binaries */
+  { "suid",     0, 1, MS_NOSUID, 0 },      /* honor suid executables */
+  { "nosuid",   0, 0, MS_NOSUID, 0 },      /* don't honor suid executables */
+  { "dev",      0, 1, MS_NODEV,  0 },      /* interpret device files  */
+  { "nodev",    0, 0, MS_NODEV,  0 },      /* don't interpret devices */
+  { "async",    0, 1, MS_SYNCHRONOUS, 0},  /* asynchronous I/O */
+  { "auto",     0, 0, 0, 0         },      /* Can be mounted using -a */
+  { "noauto",   0, 0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "nousers",  0, 1, 0, 0         },      /* Forbid ordinary user to mount */
+  { "nouser",   0, 1, 0, 0         },      /* Forbid ordinary user to mount */
+  { "noowner",  0, 1, 0, 0         },      /* Device owner has no special privs */
+  { "_netdev",  0, 0, 0, 0         },      /* Device accessible only via network */
+  { "flock",    0, 0, 0, LMD_FLG_FLOCK},   /* Enable flock support */
+  { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
+  { NULL,       0, 0, 0, 0         }
 };
 /****************************************************************************/
 
-static int parse_one_option(const char *check, int *flagp)
+static int parse_one_option(const char *check, int *ms_flags, int *lmd_flags)
 {
         const struct opt_map *opt;
 
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
                 if (strcmp(check, opt->opt) == 0) {
-                        if (opt->inv)
-                                *flagp &= ~(opt->mask);
-                        else
-                                *flagp |= opt->mask;
+                        if (opt->inv) {
+                                *ms_flags &= ~(opt->ms_mask);
+                                *lmd_flags &= ~(opt->lmd_mask);
+                        } else {
+                                *ms_flags |= opt->ms_mask;
+                                *lmd_flags |= opt->lmd_mask;
+                        }
                         return 1;
                 }
         }
@@ -349,7 +356,7 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                                 usage(stderr);
                         }
                 } else {
-                        if (parse_one_option(opt, flagp))
+                        if (parse_one_option(opt, flagp, &lmd->lmd_flags))
                                 continue;
 
                         fprintf(stderr, "%s: unknown option '%s'\n",

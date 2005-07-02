@@ -119,6 +119,7 @@ struct ll_ra_info {
 /* flags for sbi->ll_flags */
 #define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
 #define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
+#define LL_SBI_FLOCK            0x4
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -148,6 +149,7 @@ struct ll_sb_info {
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
+        struct file_operations   *ll_fop;
 };
 
 struct ll_readahead_state {
@@ -300,6 +302,7 @@ void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
+extern struct file_operations ll_file_operations_flock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,

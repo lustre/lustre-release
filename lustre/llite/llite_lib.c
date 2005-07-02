@@ -157,6 +157,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
 
+        if (sbi->ll_flags & LL_SBI_FLOCK) {
+                sbi->ll_fop = &ll_file_operations_flock;
+        } else {
+                sbi->ll_fop = &ll_file_operations;
+        }
+
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
@@ -401,6 +407,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
 
 void ll_options(char *options, char **ost, char **mdc, int *flags)
 {
+        int tmp;
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         char *opt_ptr = options;
@@ -425,11 +432,21 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         continue;
                 if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
                         continue;
-                if (!(*flags & LL_SBI_NOLCK) &&
-                    ((*flags) = (*flags) |
-                                ll_set_opt("nolock", this_char,
-                                           LL_SBI_NOLCK)))
+                tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
+                if (tmp) {
+                        *flags |= tmp;
                         continue;
+                }
+                tmp = ll_set_opt("flock", this_char, LL_SBI_FLOCK);
+                if (tmp) {
+                        *flags |= tmp;
+                        continue;
+                }
+                tmp = ll_set_opt("noflock", this_char, LL_SBI_FLOCK);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        continue;
+                }
         }
         EXIT;
 }
@@ -720,6 +737,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 if (sbi->ll_lmd == NULL)
                         GOTO(out_free, err = -ENOMEM);
                 memcpy(sbi->ll_lmd, lmd, sizeof(*lmd));
+                if (lmd->lmd_flags & LMD_FLG_FLOCK)
+                        sbi->ll_flags |= LL_SBI_FLOCK;
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
@@ -1289,8 +1308,9 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         /* OIDEBUG(inode); */
 
         if (S_ISREG(inode->i_mode)) {
+                struct ll_sb_info *sbi = ll_i2sbi(inode);
                 inode->i_op = &ll_file_inode_operations;
-                inode->i_fop = &ll_file_operations;
+                inode->i_fop = sbi->ll_fop;
                 inode->i_mapping->a_ops = &ll_aops;
                 EXIT;
         } else if (S_ISDIR(inode->i_mode)) {
