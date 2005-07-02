@@ -455,7 +455,7 @@ test_20() {     # bug 3822 - evicting client with enqueued lock
        mkdir -p $MOUNT1/$tdir
        touch $MOUNT1/$tdir/f0
 #define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
-       statmany -s $MOUNT1/$tdir/f 500 &
+       statmany -s $MOUNT1/$tdir/f 1 500 &
        OPENPID=$!
        NOW=`date +%s`
        do_facet mds1 sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
