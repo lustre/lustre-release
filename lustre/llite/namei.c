@@ -168,11 +168,8 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                 /* For lookup locks: Invalidate all dentries associated with
                    this inode, for UPDATE locks - invalidate directory pages */
-                if (inode == NULL) {
-                        if (bits & MDS_INODELOCK_OPEN)
-                                LDLM_ERROR(lock, "null inode");
+                if (inode == NULL)
                         break;
-                }
 
                 if (lock->l_resource->lr_name.name[0] != id_fid(&li->lli_id) ||
                     lock->l_resource->lr_name.name[1] != id_group(&li->lli_id)) {
