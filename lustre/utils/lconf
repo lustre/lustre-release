@@ -2599,6 +2599,7 @@ class CMOBD(Module):
     	    self.master.cleanup()
 
     def add_module(self, manager):
+	manager.add_lustre_module('smfs', 'smfs')
 	manager.add_lustre_module('cmobd', 'cmobd')
         self.master.add_module(manager)
 
@@ -2663,10 +2664,10 @@ class COBD(Module):
         return self.cache.name
 
     def prepare(self):
-        self.master.prepare()
-        self.cache.prepare()
         if not config.record and is_prepared(self.name):
             return
+	self.master.prepare()
+        self.cache.prepare()
         self.info(self.master_uuid, self.cache_uuid)
         lctl.newdev("cobd", self.name, self.uuid,
                     setup ="%s %s" %(self.master.name,
