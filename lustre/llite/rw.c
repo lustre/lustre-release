@@ -124,14 +124,17 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %llu\n", inode->i_ino,
                inode->i_generation, inode, inode->i_size);
 
+        if (lli->lli_size_pid != current->pid) {
+                EXIT;
+                return;
+        }
+
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
                        inode->i_ino);
                 GOTO(out_unlock, 0);
         }
 
-        if (lli->lli_size_pid != current->pid)
-                GOTO(out_unlock, 0);
         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
         
         if (lov_merge_size(lsm, 0) == inode->i_size) {
