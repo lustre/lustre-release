@@ -342,7 +342,7 @@ test_9() {
         start_ost
         start_mds
         CHECK_PTLDEBUG="`do_facet mds sysctl portals.debug | cut -d= -f2`"
-        if [ "$CHECK_PTLDEBUG" = "3" ]; then
+        if [ $CHECK_PTLDEBUG = "3" ]; then
            echo "lconf --debug success"
         else
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
