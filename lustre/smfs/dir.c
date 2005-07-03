@@ -215,14 +215,20 @@ static int smfs_do_lookup (struct inode * dir,
                 smfs_update_dentry(dentry, tmp);         
                 
                 if (tmp->d_inode) {
-                        if (!tmp->d_inode->i_nlink)
-                                CWARN("inode #%lu (%p) nlink is 0\n",
-                                      tmp->d_inode->i_ino, tmp->d_inode);
-                        
                         *inode = smfs_get_inode(dir->i_sb, tmp->d_inode, 
                                                 I2SMI(dir), 0); 
                         if (!(*inode))
                                 rc = -ENOENT;
+                        else {
+                                if (!tmp->d_inode->i_nlink) {
+                                        struct inode * ind = tmp->d_inode;
+                                
+                                        CWARN("inode #%lu (%s) nlink is %i/%i\n",
+                                              ind->i_ino, tmp->d_name.name, ind->i_nlink, (*inode)->i_nlink);
+                                        CWARN("parent #%lu (%s) nlink is %i\n",
+                                              dir->i_ino, tmp->d_parent->d_name.name, cache_dir->i_nlink);
+                                }
+                        }
                 }
         }
         
