@@ -919,8 +919,7 @@ reset_enospc() {
     rmdir $DIR/d27/nospc
 }
 
-MDS=$(find $LPROC/mds/ -maxdepth 1 -type d | tail -n 1)
-MDS=$(basename $MDS)
+MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 
 exhaust_precreations() {
 	local i
