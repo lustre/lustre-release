@@ -932,9 +932,9 @@ Index: linux-2.6.10/fs/ext3/mballoc.c
 +		 * We've been searching too long. Let's try to allocate
 +		 * the best chunk we've found so far
 +		 */
-+		ext3_warning(inode->i_sb, __FUNCTION__,
++		/*ext3_warning(inode->i_sb, __FUNCTION__,
 +			     "too long searching: got %d want %d\n",
-+			     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
++			     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);*/
 +		ext3_mb_try_best_found(&ac, &e3b);
 +		if (ac.ac_status != AC_STATUS_FOUND) {
 +			/*
