@@ -16,3 +16,4 @@ ext3-mds-num-2.6.10-fc3.patch
 ext3-fid-2.6.7.patch
 ext3-raw-lookup-2.6.10.patch
 ext3-disable-reservation-2.6.10-fc3.patch
+ext3-mballoc2-2.6.10-fc3.patch
