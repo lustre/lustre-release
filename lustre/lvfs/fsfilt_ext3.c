@@ -762,8 +762,16 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
                                                                                                                                                                                                      
                 /* try to predict block placement */
                 if ((ex = path[depth].p_ext)) {
+#if 0
+                        /* This prefers to eat into a contiguous extent
+                         * rather than find an extent that the whole
+                         * request will fit into.  This can fragment data
+                         * block allocation and prevents our lovely 1M I/Os
+                         * from reaching the disk intact. */
+
                         if (ex->ee_block + ex->ee_len == block)
                                 *aflags |= 1;
+#endif
                         return ex->ee_start + (block - ex->ee_block);
                 }
                                                                                                                                                                                                      
