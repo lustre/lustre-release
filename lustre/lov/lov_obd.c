@@ -763,21 +763,9 @@ lov_create(struct obd_export *exp, struct obdo *src_oa,
                 struct lov_request *req = 
                         list_entry(pos, struct lov_request, rq_link);
 
-                obd_id *objids = oti->oti_objid;
-
-                if (oti->oti_obj_alloc) {
-                        __u64 next_id;
-                                
-                        /* 
-                         * allocating new objid. Here it is delegated to caller,
-                         * that is MDS in CROW case.
-                         */
-                        next_id = oti->oti_obj_alloc(&objids[req->rq_idx]);
-                        req->rq_oa->o_id = next_id;
-                } else {
-                        /* and here is default "allocator" */
-                        req->rq_oa->o_id = ++objids[req->rq_idx];
-                }
+                /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
+                rc = obd_create(lov->tgts[req->rq_idx].ltd_exp,
+                                req->rq_oa, NULL, 0, &req->rq_md, oti);
                 lov_update_create_set(set, req, rc);
         }
         rc = lov_fini_create_set(set, ea);

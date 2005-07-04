@@ -2509,6 +2509,9 @@ filter_clear_orphans(struct obd_export *exp, struct obdo *oa)
         CDEBUG(D_HA, "%s:["LPU64"] after destroy: set last_objids = "
                LPU64"\n", exp->exp_obd->obd_name, doa->o_gr, oa->o_id);
 
+        /* return next free id to be used as a new start of sequence -bzzz */
+        oa->o_id = last + 1;
+
         filter_set_last_id(filter, oa->o_gr, oa->o_id);
         clear_bit(doa->o_gr, &filter->fo_destroys_in_progress);
         up(&filter->fo_create_locks[oa->o_gr]);

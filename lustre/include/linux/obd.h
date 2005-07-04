@@ -553,8 +553,6 @@ struct niobuf_local {
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
 
-typedef int (*obd_obj_alloc_func_t)(obd_id *objid);
-
 struct obd_trans_info {
         __u64                    oti_transno;
         __u64                   *oti_objid;
@@ -569,7 +567,6 @@ struct obd_trans_info {
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
         int                      oti_flags;
-        obd_obj_alloc_func_t     oti_obj_alloc;
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)

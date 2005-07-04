@@ -56,13 +56,24 @@
 #include <linux/obd_class.h>
 #include "osc_internal.h"
 
+int oscc_recovering(struct osc_creator *oscc)
+{
+        int recov = 0;
+
+        spin_lock(&oscc->oscc_lock);
+        recov = oscc->oscc_flags & OSCC_FLAG_RECOVERING;
+        spin_unlock(&oscc->oscc_lock);
+
+        return recov;
+}
+
 /* this only is used now for deleting orphanes */
 int osc_create(struct obd_export *exp, struct obdo *oa,
                void *acl, int acl_size, struct lov_stripe_md **ea,
                struct obd_trans_info *oti)
 {
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
-        int rc = 0;
+        int rc = 0, try_again = 1;
         ENTRY;
 
         LASSERT(oa);
@@ -117,8 +128,51 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(rc);
         }
 
-        LBUG();
-        RETURN(0);
+        while (try_again) {
+                /* If orphans are being recovered, then we must wait until
+                   it is finished before we can continue with create. */
+                if (oscc_recovering(oscc)) {
+                        struct l_wait_info lwi;
+
+                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
+                               oscc);
+
+                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        rc = l_wait_event(oscc->oscc_waitq,
+                                          !oscc_recovering(oscc), &lwi);
+                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                        if (rc == -ETIMEDOUT) {
+                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
+                                       oscc);
+                                RETURN(rc);
+                        }
+                        CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
+                               oscc);
+                }
+
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_EXITING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        rc = -ENOSPC;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                oscc->oscc_next_id++;
+                oa->o_id = oscc->oscc_next_id;
+                try_again = 0;
+                spin_unlock(&oscc->oscc_lock);
+
+                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                       oscc->oscc_obd->u.cli.cl_import->imp_target_uuid.uuid,
+                       oa->o_id);
+        }
+
+        RETURN(rc);
 }
 
 void oscc_init(struct obd_device *obd)
@@ -134,4 +188,5 @@ void oscc_init(struct obd_device *obd)
         oscc->oscc_obd = obd;
         spin_lock_init(&oscc->oscc_lock);
         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
+        init_waitqueue_head(&oscc->oscc_waitq);
 }

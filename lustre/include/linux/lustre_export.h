@@ -33,6 +33,8 @@ struct osc_creator {
         spinlock_t              oscc_lock;
         struct obd_device      *oscc_obd;
         int                     oscc_flags;
+        obd_id                  oscc_next_id;
+        wait_queue_head_t       oscc_waitq;
 };
 
 struct ldlm_export_data {

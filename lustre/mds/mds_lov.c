@@ -323,6 +323,7 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
                                        "writing objids file: %d\n", rc);
                 }
         }
+
         /*
          * I want to see a callback happen when the OBD moves to a "For General
          * Use" state, and that's when we'll call set_nextid(). The class driver
@@ -659,11 +660,15 @@ int mds_dt_synchronize(void *data)
         if (rc)
                 GOTO(cleanup, rc);
 
+        /* we don't set next id manually, instead OSCs will set them
+         * during own recovery from DELORPHAN reply -bzzz */
+#if 0
         vals[0] = index;
         rc = mds_dt_set_info(obd->obd_self_export, strlen("next_id"),
                              "next_id", 2, vals);
         if (rc)
                 GOTO(cleanup, rc);
+#endif
 
         obd_llog_finish(obd, &obd->obd_llogs, old_count);
         obd_llog_cat_initialize(obd, &obd->obd_llogs, count, name);

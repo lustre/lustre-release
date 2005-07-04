@@ -292,6 +292,7 @@ out:
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         struct ptlrpc_request *request;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
@@ -337,6 +338,16 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 GOTO (out_req, rc = -EPROTO);
         }
 
+        if ((oa->o_valid & OBD_MD_FLFLAGS) && oa->o_flags == OBD_FL_DELORPHAN) {
+                struct obd_import *imp = class_exp2cliimp(exp);
+                /* MDS declares last known object, OSS responses
+                 * with next possible object -bzzz */
+                spin_lock(&oscc->oscc_lock);
+                oscc->oscc_next_id = body->oa.o_id;
+                spin_unlock(&oscc->oscc_lock);
+                CDEBUG(D_HA, "%s: set nextid "LPD64" after recovery\n",
+                       imp->imp_target_uuid.uuid, oa->o_id);
+        }
         memcpy(oa, &body->oa, sizeof(*oa));
 
         /* This should really be sent by the OST */
