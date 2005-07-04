@@ -373,6 +373,7 @@ run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
 	./mmap_sanity -d $MOUNT1 -m $MOUNT2
+	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="
 

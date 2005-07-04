@@ -88,7 +88,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 }
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                                   struct llog_logid *logid, 
+                                   struct llog_logid *logid,
                                    struct llog_gen *gen,
                                    struct obd_uuid *uuid)
 {
@@ -136,7 +136,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         loi = lsm->lsm_oinfo;
         lov = &obd->u.lov;
         for (i = 0; i < count; i++, cookies++, loi++) {
-                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd;
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
                 int err;
 

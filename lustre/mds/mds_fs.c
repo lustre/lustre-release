@@ -184,8 +184,14 @@ int mds_client_free(struct obd_export *exp)
                 LBUG();
         }
 
+
+        /* Make sure the server's last_transno is up to date. Do this
+         * after the client is freed so we know all the client's
+         * transactions have been committed. */
+        mds_update_server_data(exp->exp_obd, 0);
+
         EXIT;
-free:
+ free:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
         med->med_mcd = NULL;
 
@@ -677,7 +683,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         void *handle;
         int err, namelen, rc = 0;
         ENTRY;
-        
+
         memset(&ucred, 0, sizeof(ucred));
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);

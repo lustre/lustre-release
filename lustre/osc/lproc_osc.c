@@ -124,7 +124,8 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX || val > num_physpages / 4)
+        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX ||
+            val > num_physpages >> (20 - PAGE_SHIFT - 2)) /* 1/4 of RAM */
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);

@@ -366,7 +366,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 RETURN(0);
         }
 
-
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
 

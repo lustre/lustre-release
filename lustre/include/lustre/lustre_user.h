@@ -8,7 +8,16 @@
 
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
+
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
+#ifdef HAVE_LINUX_QUOTA_H
+#include <linux/quota.h>
+#endif
 
 /*
  * asm-x86_64/processor.h on some SLES 9 distros seems to use
@@ -17,7 +26,6 @@
  */
 #define __ASM_X86_64_PROCESSOR_H
 
-#include <linux/quota.h>
 #ifdef __KERNEL__
 #include <linux/string.h>
 #else
@@ -212,5 +220,28 @@ struct if_quotactl {
         char                    obd_type[10];
         struct obd_uuid         obd_uuid;
 };
+
+#ifndef LPU64
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
+#if defined(__x86_64__) && defined(__KERNEL__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%u"
+# define LPSSZ "%d"
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+# define LPU64 "%lu"
+# define LPD64 "%ld"
+# define LPX64 "%#lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#endif
+#endif /* !LPU64 */
 
 #endif /* _LUSTRE_USER_H */

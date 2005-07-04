@@ -85,7 +85,7 @@ Object creation command summary:
   --node node_name
   --mds mds_name
   --dev path
-  --fstype extN|ext3
+  --fstype ldiskfs|ext3
   --size size
   --nspath
   --journal_size size
@@ -104,10 +104,11 @@ Object creation command summary:
 --add ost
   --node node_name
   --ost ost_name 
+  --failover
   --lov lov_name 
   --dev path
   --size size
-  --fstype extN|ext3
+  --fstype ldiskfs|ext3
   --journal_size size
   --inode_size size
   --osdtype obdecho|obdfilter
@@ -209,8 +210,8 @@ lmc_options = [
     ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
 
     # cobd
-    ('real_obd', "", PARAM),
-    ('cache_obd', "", PARAM),
+    ('real_obd', "Specify the real device for the cache obd system.", PARAM),
+    ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
 
     ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
     ]
@@ -371,15 +372,15 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
+    def osd(self, name, uuid, fstype, osdtype, devname, format, ost_uuid,
             node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", 
             mkfsoptions="", mountfsoptions=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
         osd.appendChild(self.ref("node", node_uuid))
-        if fs:
-            self.addElement(osd, "fstype", fs)
+        if fstype:
+            self.addElement(osd, "fstype", fstype)
         if devname:
             dev = self.addElement(osd, "devpath", devname)
             self.addElement(osd, "autoformat", format)
@@ -391,7 +392,7 @@ class GenConfig:
                 self.addElement(osd, "inodesize", "%s" % (inode_size))
             if mkfsoptions:
                 self.addElement(osd, "mkfsoptions", mkfsoptions)
-	    if mountfsoptions:
+            if mountfsoptions:
                 self.addElement(osd, "mountfsoptions", mountfsoptions)
         if nspath:
             self.addElement(osd, "nspath", nspath)
@@ -434,11 +435,11 @@ class GenConfig:
             self.addElement(mds, "group", group)
         return mds
 
-    def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
+    def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
                nspath="", mkfsoptions="", mountfsoptions=""):
         mdd = self.newService("mdsdev", name, uuid)
-        self.addElement(mdd, "fstype", fs)
+        self.addElement(mdd, "fstype", fstype)
         dev = self.addElement(mdd, "devpath", devname)
         self.addElement(mdd, "autoformat", format)
         if dev_size:
@@ -451,7 +452,7 @@ class GenConfig:
             self.addElement(mdd, "nspath", nspath)
         if mkfsoptions:
             self.addElement(mdd, "mkfsoptions", mkfsoptions)
-	if mountfsoptions:
+        if mountfsoptions:
             self.addElement(mdd, "mountfsoptions", mountfsoptions)
 
         mdd.appendChild(self.ref("node", node_uuid))
@@ -469,7 +470,7 @@ class GenConfig:
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
-	if clientoptions:
+        if clientoptions:
             self.addElement(mtpt, "clientoptions", clientoptions)
         return mtpt
 
@@ -648,7 +649,7 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp','openib','ra'):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan','gm','iib','vib','lo'):
+    elif net_type in ('elan','gm','iib','vib','lo','cray_kern_nal'):
         port = 0
     else:
         print "Unknown net_type: ", net_type
@@ -776,7 +777,7 @@ def add_ost(gen, lustre, options):
         journal_size = ''
         inode_size = ''
         mkfsoptions = ''
-	mountfsoptions = ''
+        mountfsoptions = ''
     else:
         devname = get_option(options, 'dev') # can be unset for bluearcs
         size = get_option(options, 'size')
@@ -784,7 +785,7 @@ def add_ost(gen, lustre, options):
         journal_size = get_option(options, 'journal_size')
         inode_size = get_option(options, 'inode_size')
         mkfsoptions = get_option(options, 'mkfsoptions')
-	mountfsoptions = get_option(options, 'mountfsoptions')
+        mountfsoptions = get_option(options, 'mountfsoptions')
         
     nspath = get_option(options, 'nspath')
 

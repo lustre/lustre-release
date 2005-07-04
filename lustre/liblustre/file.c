@@ -147,7 +147,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         if (llu_is_root_inode(inode))
                 RETURN(0);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", st->st_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", (long long)st->st_ino);
         LL_GET_INTENT(inode, it);
 
         if (!it->d.lustre.it_disposition) {

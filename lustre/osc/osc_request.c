@@ -1275,7 +1275,7 @@ unlock:
 
 /* this is trying to propogate async writeback errors back up to the
  * application.  As an async write fails we record the error code for later if
- * the app does an fsync.  as long as errors persist we force future rpcs to be
+ * the app does an fsync.  As long as errors persist we force future rpcs to be
  * sync so that the app can get a sync error and break the cycle of queueing
  * pages for which writeback will fail. */
 static void osc_process_ar(struct osc_async_rc *ar, struct ptlrpc_request *req,

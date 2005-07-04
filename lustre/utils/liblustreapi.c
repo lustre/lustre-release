@@ -42,8 +42,6 @@
 #include <sys/syscall.h>
 #ifdef HAVE_LINUX_TYPES_H
 #include <linux/types.h>
-#else
-#include "types.h"
 #endif
 #ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
@@ -56,7 +54,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
-#include <lustre/lustre_user.h>
+#include <lustre/liblustreapi.h>
 #include <linux/obd_lov.h>
 
 static void err_msg(char *fmt, ...)
@@ -421,7 +419,7 @@ int llapi_file_get_stripe(char *path, struct lov_user_md *lum)
                 return errno;
         }
 
-        strncpy((char *)lum, fname, sizeof(*lum));
+        strcpy((char *)lum, fname);
         if (ioctl(fd, IOC_MDC_GETSTRIPE, (void *)lum) == -1) {
                 close(fd);
                 free(dname);

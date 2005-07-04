@@ -964,8 +964,8 @@ static int mds_readpage(struct ptlrpc_request *req)
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {
-                CERROR("mds: out of memory while packing readpage reply\n");
-                RETURN(-ENOMEM);
+                CERROR("error packing readpage reply: rc %d\n", rc);
+                GOTO(out, rc);
         }
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
@@ -1138,8 +1138,9 @@ int mds_handle(struct ptlrpc_request *req)
                 int recovering, abort_recovery;
 
                 if (req->rq_export == NULL) {
-                        CERROR("lustre_mds: operation %d on unconnected MDS\n",
-                               req->rq_reqmsg->opc);
+                        CERROR("operation %d on unconnected MDS from %s\n",
+                               req->rq_reqmsg->opc,
+                               req->rq_peerstr);
                         req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
                 }
@@ -1610,7 +1611,7 @@ static int mds_postsetup(struct obd_device *obd)
                 cfg.cfg_instance = NULL;
                 cfg.cfg_uuid = mds->mds_lov_uuid;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
+                rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                              mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 switch (rc) {
@@ -1726,7 +1727,7 @@ int mds_lov_clean(struct obd_device *obd)
                 cfg.cfg_uuid = mds->mds_lov_uuid;
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
+                class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                         cln_prof, &cfg);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 

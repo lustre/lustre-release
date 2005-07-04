@@ -148,6 +148,7 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 /* Determine if the lock is compatible with all locks on the queue.
  * We stop walking the queue if we hit ourselves so we don't take
  * conflicting locks enqueued after us into accound, or we'd wait forever.
+ *
  * 0 if the lock is not compatible
  * 1 if the lock is compatible
  * 2 if this group lock is compatible and requires no further checking
@@ -202,11 +203,11 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 /* locks are compatible, overlap doesn't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                       /* non-group locks are compatible, overlap doesn't
-                          matter */
+                        /* non-group locks are compatible, overlap doesn't
+                           matter */
                         if (likely(req_mode != LCK_GROUP))
                                 continue;
-                                
+
                         /* If we are trying to get a GROUP lock and there is
                            another one of this kind, we need to compare gid */
                         if (req->l_policy_data.l_extent.gid ==

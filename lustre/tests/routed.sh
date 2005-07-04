@@ -79,7 +79,6 @@ for R in $ROUTERS; do
 		--target_cluster_id $SERVER_CLUSTER
 done
 
---dev $OSTDEV --size $OSTSIZE
 # OSTNODE
 COUNT=1
 for OSTNODE in $OSTNODES; do

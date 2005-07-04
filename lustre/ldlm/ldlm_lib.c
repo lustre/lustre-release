@@ -404,7 +404,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
 
         imp->imp_dlm_handle = *dlm_handle;
         rc = ptlrpc_init_import(imp);
-        if (rc != 0) 
+        if (rc != 0)
                 GOTO(out_ldlm, rc);
 
         if (data)
@@ -1189,7 +1189,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 LBUG();
         memcpy(saved_req, req, sizeof *saved_req);
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
-        
+
         /* Don't race cleanup */
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_stopping) {

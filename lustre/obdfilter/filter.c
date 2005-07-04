@@ -1821,7 +1821,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
                 orig_uid = dentry->d_inode->i_uid;
                 orig_gid = dentry->d_inode->i_gid;
-                handle = fsfilt_start_log(exp->exp_obd, dentry->d_inode, 
+                handle = fsfilt_start_log(exp->exp_obd, dentry->d_inode,
                                           FSFILT_OP_SETATTR, oti, 1);
         } else {
                 handle = fsfilt_start(exp->exp_obd, dentry->d_inode,
@@ -2093,12 +2093,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 recreate_obj = 1;
         } else {
                 OBD_ALLOC(osfs, sizeof(*osfs));
-                if(osfs == NULL)
+                if (osfs == NULL)
                         RETURN(-ENOMEM);
                 rc = filter_statfs(obd, osfs, jiffies-HZ);
-                if(rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
-                        CDEBUG(D_HA, "This OST has not enough space! avail "LPU64"\n",
-                                osfs->os_bavail << filter->fo_sb->s_blocksize_bits);
+                if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
+                        CDEBUG(D_HA, "OST out of space! avail "LPU64"\n",
+                              osfs->os_bavail<<filter->fo_sb->s_blocksize_bits);
                         *num=0;
                         rc = -ENOSPC;
                 }
@@ -2698,10 +2698,8 @@ static int __init obdfilter_init(void)
 
         rc = class_register_type(&filter_obd_ops, lvars.module_vars,
                                  OBD_FILTER_DEVICENAME);
-        if (rc) {
+        if (rc)
                 GOTO(out, rc);
-                return rc;
-        }
 
         rc = class_register_type(&filter_sanobd_ops, lvars.module_vars,
                                  OBD_FILTER_SAN_DEVICENAME);

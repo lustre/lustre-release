@@ -5,5 +5,5 @@
 # See the file COPYING in this distribution
 
 SUBDIRS = linux lustre
-EXTRA_DIST = ioctl.h liblustre.h 
+EXTRA_DIST = ioctl.h liblustre.h types.h
 

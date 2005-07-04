@@ -203,7 +203,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
-                   llu_i2stat(inode)->st_size, stripe, lvb->lvb_size);
+                   (long long)llu_i2stat(inode)->st_size, stripe,lvb->lvb_size);
  iput:
         I_RELE(inode);
  out:
@@ -228,7 +228,7 @@ int llu_glimpse_size(struct inode *inode)
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", st->st_ino);
+        CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
         rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, llu_extent_lock_callback,
@@ -241,10 +241,10 @@ int llu_glimpse_size(struct inode *inode)
 
         st->st_size = lov_merge_size(lli->lli_smd, 0);
         st->st_blocks = lov_merge_blocks(lli->lli_smd);
-        //lli->lli_st_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
+        st->st_mtime = lov_merge_mtime(lli->lli_smd, st->st_mtime);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               st->st_size, st->st_blocks);
+               (long long)st->st_size, st->st_blocks);
 
         obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 
@@ -269,7 +269,8 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 RETURN(0);
 
         CDEBUG(D_DLMTRACE, "Locking inode %llu, start "LPU64" end "LPU64"\n",
-               st->st_ino, policy->l_extent.start, policy->l_extent.end);
+               (long long)st->st_ino, policy->l_extent.start,
+               policy->l_extent.end);
 
         rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
                          &ast_flags, llu_extent_lock_callback,
@@ -282,7 +283,8 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
             policy->l_extent.end == OBD_OBJECT_EOF)
                 st->st_size = lov_merge_size(lsm, 1);
 
-        //inode->i_mtime = lov_merge_mtime(lsm, inode->i_mtime);
+        if (rc == 0)
+                st->st_mtime = lov_merge_mtime(lsm, st->st_mtime);
 
         RETURN(rc);
 }

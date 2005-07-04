@@ -508,7 +508,7 @@ struct obd_device {
         int obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-                obd_no_recov:1, obd_stopping:1, obd_starting:1, 
+                obd_no_recov:1, obd_stopping:1, obd_starting:1,
                 obd_force:1, obd_fail:1;
         atomic_t obd_refcount;
         wait_queue_head_t obd_refcount_waitq;

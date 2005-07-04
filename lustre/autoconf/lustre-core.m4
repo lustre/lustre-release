@@ -482,6 +482,7 @@ AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
+AC_CHECK_HEADERS([linux/quota.h])
 
 AC_CHECK_TYPES([struct if_dqinfo],[],[],[
 #define __ASM_X86_64_PROCESSOR_H

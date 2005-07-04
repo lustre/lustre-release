@@ -529,7 +529,7 @@ build_test_filter() {
             eval ONLY_${O}=true
         done
         [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping `echo $EXCEPT $ALWAYS_EXCEPT`"
+		log "skipping test `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

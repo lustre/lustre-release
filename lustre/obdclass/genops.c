@@ -887,8 +887,7 @@ void oig_release(struct obd_io_group *oig)
 }
 EXPORT_SYMBOL(oig_release);
 
-void oig_add_one(struct obd_io_group *oig,
-                  struct oig_callback_context *occ)
+void oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
 {
         unsigned long flags;
         CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);

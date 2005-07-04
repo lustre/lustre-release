@@ -80,7 +80,6 @@ struct mds_update_record {
 #define ur_cap      ur_uc.luc_cap
 #define ur_suppgid1 ur_uc.luc_suppgid1
 #define ur_suppgid2 ur_uc.luc_suppgid2
-#define ur_umask    ur_uc.luc_umask
 
 #define MDS_LR_SERVER_SIZE    512
 

@@ -531,7 +531,7 @@ struct ptlrpc_service {
         struct list_head  srv_history_rqbds;    /* request buffer history */
         int               srv_n_history_rqbds;  /* # request buffers in history */
         int               srv_max_history_rqbds; /* max # request buffers in history */
-        
+
         atomic_t          srv_outstanding_replies;
         struct list_head  srv_reply_queue;      /* replies waiting for service */
 

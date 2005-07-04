@@ -1098,7 +1098,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 static int ll_get_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         ldlm_policy_data_t policy = { .l_extent = { .start = 0,
                                                     .end = OBD_OBJECT_EOF}};
         struct lustre_handle lockh = { 0 };
@@ -1129,7 +1129,7 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
 static int ll_put_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc;
@@ -1142,7 +1142,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 
         if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
                 RETURN(-EINVAL);
-        
+
         fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
 
         rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
@@ -1153,7 +1153,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
 
         RETURN(0);
-}       
+}
 
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)

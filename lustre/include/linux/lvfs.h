@@ -30,7 +30,7 @@
 
 #if defined __KERNEL__
 #include <linux/lvfs_linux.h>
-#endif 
+#endif
 
 #ifdef LIBLUSTRE
 #include <lvfs_user_fs.h>

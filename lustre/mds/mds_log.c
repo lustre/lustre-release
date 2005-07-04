@@ -191,7 +191,7 @@ static struct llog_operations mds_ost_orig_logops = {
 };
 
 static struct llog_operations mds_size_repl_logops = {
-        lop_cancel:     mds_llog_repl_cancel
+        lop_cancel:     mds_llog_repl_cancel,
 };
 
 int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,

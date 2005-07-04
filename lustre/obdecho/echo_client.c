@@ -481,8 +481,10 @@ echo_client_page_debug_check(struct lov_stripe_md *lsm,
                 rc2 = block_debug_check("test_brw", 
                                         addr + delta, OBD_ECHO_BLOCK_SIZE, 
                                         stripe_off, stripe_id);
-                if (rc2 != 0)
+                if (rc2 != 0) {
+                        CERROR ("Error in echo object "LPX64"\n", id);
                         rc = rc2;
+                }
         }
 
         kunmap(page);

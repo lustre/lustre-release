@@ -33,15 +33,19 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include "types.h"
+#endif
+
 #ifdef __KERNEL__
-# include <asm/types.h>
 # include <linux/types.h>
-# include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
+# include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
 #else
-# include <asm/types.h>
 # include <stdint.h>
 #endif
 #endif

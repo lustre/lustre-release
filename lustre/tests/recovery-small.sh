@@ -252,8 +252,8 @@ test_17() {
     sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to fail
-    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
-    do_facet client "rm $DIR/$tfile" || return 2
+    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 3
+    do_facet client "rm $DIR/$tfile" || return 4
     return 0
 }
 run_test 17 "timeout bulk get, evict client (2732)"

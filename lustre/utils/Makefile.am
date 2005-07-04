@@ -4,6 +4,7 @@ SUBDIRS = Lustre
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
+AM_LDFLAGS := -L$(top_builddir)/portals/utils
 
 LIBPTLCTL := $(top_builddir)/portals/utils/libptlctl.a
 
@@ -36,12 +37,10 @@ wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
 wiretest_SOURCES = wiretest.c
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h
-
 lload_SOURCES = lload.c 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c parser.c obd.c
-
 llmount_SOURCES = llmount.c 
 llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL)
 llmount_DEPENDENCIES := $(LIBPTLCTL)

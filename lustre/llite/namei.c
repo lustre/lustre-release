@@ -190,7 +190,7 @@ int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                 { .name = {inode->i_ino, inode->i_generation} };
         struct obd_device *obddev = class_conn2obd(conn);
         ENTRY;
-        
+
         RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
                                       opaque));
 }

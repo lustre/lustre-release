@@ -91,7 +91,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
 }
 
 void
-ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd) 
+ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 {
         struct ptlrpc_srv_ni  *sni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service *svc = sni->sni_service;
@@ -136,7 +136,7 @@ ptlrpc_grow_req_bufs(struct ptlrpc_srv_ni *srv_ni)
 }
 
 void
-ptlrpc_save_lock (struct ptlrpc_request *req, 
+ptlrpc_save_lock (struct ptlrpc_request *req,
                   struct lustre_handle *lock, int mode)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
@@ -171,13 +171,13 @@ ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs)
         wake_up (&svc->srv_waitq);
 }
 
-void 
+void
 ptlrpc_commit_replies (struct obd_device *obd)
 {
         struct list_head   *tmp;
         struct list_head   *nxt;
         unsigned long       flags;
-        
+
         /* Find any replies that have been committed and get their service
          * to attend to complete them. */
 
@@ -186,7 +186,7 @@ ptlrpc_commit_replies (struct obd_device *obd)
 
         list_for_each_safe (tmp, nxt, &obd->obd_uncommitted_replies) {
                 struct ptlrpc_reply_state *rs =
-                        list_entry (tmp, struct ptlrpc_reply_state, rs_obd_list);
+                        list_entry(tmp, struct ptlrpc_reply_state, rs_obd_list);
 
                 LASSERT (rs->rs_difficult);
 
@@ -199,7 +199,7 @@ ptlrpc_commit_replies (struct obd_device *obd)
                         spin_unlock (&svc->srv_lock);
                 }
         }
-        
+
         spin_unlock_irqrestore (&obd->obd_uncommitted_replies_lock, flags);
 }
 
@@ -283,7 +283,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         LASSERT (ptlrpc_ninterfaces > 0);
         LASSERT (nbufs > 0);
         LASSERT (bufsize >= max_req_size);
-        
+
         ssize = offsetof (struct ptlrpc_service,
                           srv_interfaces[ptlrpc_ninterfaces]);
         OBD_ALLOC(service, ssize);
@@ -325,7 +325,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         spin_lock (&ptlrpc_all_services_lock);
         list_add (&service->srv_list, &ptlrpc_all_services);
         spin_unlock (&ptlrpc_all_services_lock);
-        
+
         /* Now allocate the request buffers, assuming all interfaces require
          * the same number. */
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
@@ -608,7 +608,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 spin_unlock_irqrestore (&svc->srv_lock, flags);
                 RETURN(0);
         }
-        
+
         rs = list_entry (svc->srv_reply_queue.next,
                          struct ptlrpc_reply_state, rs_list);
 
@@ -637,7 +637,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
 
         been_handled = rs->rs_handled;
         rs->rs_handled = 1;
-        
+
         nlocks = rs->rs_nlocks;                 /* atomic "steal", but */
         rs->rs_nlocks = 0;                      /* locks still on rs_locks! */
 
@@ -655,7 +655,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         if ((!been_handled && rs->rs_on_net) || 
             nlocks > 0) {
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
-                
+
                 if (!been_handled && rs->rs_on_net) {
                         PtlMDUnlink(rs->rs_md_h);
                         /* Ignore return code; we're racing with
@@ -697,13 +697,13 @@ liblustre_check_services (void *arg)
         int  rc;
         struct list_head *tmp, *nxt;
         ENTRY;
-        
+
         /* I'm relying on being single threaded, not to have to lock
          * ptlrpc_all_services etc */
         list_for_each_safe (tmp, nxt, &ptlrpc_all_services) {
                 struct ptlrpc_service *svc =
                         list_entry (tmp, struct ptlrpc_service, srv_list);
-                
+
                 if (svc->srv_nthreads != 0)     /* I've recursed */
                         continue;
 
@@ -711,16 +711,16 @@ liblustre_check_services (void *arg)
                  * (arbitrarily) to recursing 1 stack frame per service.
                  * Note that the problem with recursion is that we have to
                  * unwind completely before our caller can resume. */
-                
+
                 svc->srv_nthreads++;
-                
+
                 do {
                         rc = ptlrpc_server_handle_reply(svc);
                         rc |= ptlrpc_server_handle_request(svc);
                         rc |= (ptlrpc_server_post_idle_rqbds(svc) > 0);
                         did_something |= rc;
                 } while (rc);
-                
+
                 svc->srv_nthreads--;
         }
 
@@ -769,7 +769,7 @@ static int
 ptlrpc_retry_rqbds(void *arg)
 {
         struct ptlrpc_service *svc = (struct ptlrpc_service *)arg;
-        
+
         svc->srv_rqbd_timeout = 0;
         return (-ETIMEDOUT);
 }
@@ -955,7 +955,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         if (thread == NULL)
                 RETURN(-ENOMEM);
         init_waitqueue_head(&thread->t_ctl_waitq);
-        
+
         d.dev = dev;
         d.svc = svc;
         d.name = name;
@@ -1015,7 +1015,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                  * event with its 'unlink' flag set for each posted rqbd */
                 list_for_each(tmp, &srv_ni->sni_active_rqbds) {
                         struct ptlrpc_request_buffer_desc *rqbd =
-                                list_entry(tmp, struct ptlrpc_request_buffer_desc, 
+                                list_entry(tmp, struct ptlrpc_request_buffer_desc,
                                            rqbd_list);
 
                         rc = PtlMDUnlink(rqbd->rqbd_md_h);
@@ -1031,7 +1031,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
                         if (rc == 0)
                                 break;
-                        
+
                         /* Network access will complete in finite time but
                          * the HUGE timeout lets us CWARN for visibility of
                          * sluggish NALs */
@@ -1086,7 +1086,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         while (!list_empty(&service->srv_idle_rqbds)) {
                 struct ptlrpc_request_buffer_desc *rqbd =
                         list_entry(service->srv_idle_rqbds.next,
-                                   struct ptlrpc_request_buffer_desc, 
+                                   struct ptlrpc_request_buffer_desc,
                                    rqbd_list);
 
                 ptlrpc_free_rqbd(rqbd);

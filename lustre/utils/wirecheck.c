@@ -458,6 +458,7 @@ check_ldlm_extent(void)
         CHECK_STRUCT(ldlm_extent);
         CHECK_MEMBER(ldlm_extent, start);
         CHECK_MEMBER(ldlm_extent, end);
+        CHECK_MEMBER(ldlm_extent, gid);
 }
 
 void
@@ -467,7 +468,6 @@ check_ldlm_flock(void)
         CHECK_STRUCT(ldlm_flock);
         CHECK_MEMBER(ldlm_flock, start);
         CHECK_MEMBER(ldlm_flock, end);
-        CHECK_MEMBER(ldlm_flock, blocking_export);
         CHECK_MEMBER(ldlm_flock, blocking_pid);
         CHECK_MEMBER(ldlm_flock, pid);
 }
