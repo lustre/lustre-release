@@ -154,6 +154,7 @@ run_test() {
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 error() { 
+	sysctl -w lustre.fail_loc=0
 	log "FAIL: $TESTNAME $@"
 	if [ "$SANITYLOG" ]; then
 		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
@@ -908,43 +909,44 @@ test_27m() {
 	touch $DIR/d27/f27m_$i
 	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
 		error "OST0 was full but new created file still use it"
-	rm $DIR/d27/f27m_1
+	rm -r $DIR/d27
 }
 run_test 27m "create file while OST0 was full =================="
 
 # osc's keep a NOSPC stick flag that gets unset with rmdir
 reset_enospc() {
-    sysctl -w lustre.fail_loc=0
-    mkdir -p $DIR/d27/nospc
-    rmdir $DIR/d27/nospc
+	[ "$1" ] && FAIL_LOC=$1 || FAIL_LOC=0
+	mkdir -p $DIR/d27/nospc
+	rmdir $DIR/d27/nospc
+	sysctl -w lustre.fail_loc=$FAIL_LOC
 }
 
 MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 
 exhaust_precreations() {
-	local i
 	OSTIDX=$1
 	OST=$(head -n $((OSTIDX + 1)) $LPROC/lov/${LOVNAME}/target_obd |\
 		tail -n 1 | awk '{print $2}' | sed -e 's/_UUID$//')
 
-	last_id=$(tail -n 1 $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_last_id)
-	next_id=$(tail -n 1 $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_next_id)
+	last_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_last_id)
+	next_id=$(cat $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
 	$LSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
+#define OBD_FAIL_OST_ENOSPC              0x215
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
-	for (( i = next_id; i <= last_id; i++ )) ; do
-		touch $DIR/d27/${OST}/f$i
-	done
-	reset_enospc
+	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
+	grep '[0-9]' $LPROC/osc/OSC_*_${OST}_${MDS}/prealloc*
+	reset_enospc $2
 }
 
 exhaust_all_precreations() {
 	local i
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		exhaust_precreations $i
+		exhaust_precreations $i 0x215
 	done
+	reset_enospc $1
 }
 
 test_27n() {
@@ -952,9 +954,8 @@ test_27n() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27n
-	exhaust_precreations 0
+	exhaust_precreations 0 0x80000215
 
-	sysctl -w lustre.fail_loc=0x80000215
 	touch $DIR/d27/f27n || error
 
 	reset_enospc
@@ -966,9 +967,8 @@ test_27o() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27o
-	exhaust_all_precreations
+	exhaust_all_precreations 0x215
 
-	sysctl -w lustre.fail_loc=0x215
 	touch $DIR/d27/f27o && error
 
 	reset_enospc
@@ -980,13 +980,12 @@ test_27p() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27p
-	exhaust_precreations 0
 
 	$MCREATE $DIR/d27/f27p || error
 	$TRUNCATE $DIR/d27/f27p 80000000 || error
 	$CHECKSTAT -s 80000000 $DIR/d27/f27p || error
 
-	sysctl -w lustre.fail_loc=0x80000215
+	exhaust_precreations 0 0x80000215
 	echo foo >> $DIR/d27/f27p || error
 	$CHECKSTAT -s 80000004 $DIR/d27/f27p || error
 
@@ -999,13 +998,13 @@ test_27q() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27q
-	exhaust_precreations 0
 
 	$MCREATE $DIR/d27/f27q || error
 	$TRUNCATE $DIR/d27/f27q 80000000 || error
 	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error
 
-	sysctl -w lustre.fail_loc=0x215
+	exhaust_all_precreations 0x215
+
 	echo foo >> $DIR/d27/f27q && error
 	$CHECKSTAT -s 80000000 $DIR/d27/f27q || error
 
@@ -1018,14 +1017,13 @@ test_27r() {
 
 	reset_enospc
 	rm -f $DIR/d27/f27r
-	exhaust_precreations 0
+	exhaust_precreations 0 0x80000215
 
-	sysctl -w lustre.fail_loc=0x80000215
-	$LSTRIPE $DIR/d27/f27r 0 0 2 && error
+	$LSTRIPE $DIR/d27/f27r 0 0 2 # && error
 
 	reset_enospc
 }
-run_test 27r "stripe file with some full OSTs (should error) ==="
+run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ==="
 
 test_28() {
 	mkdir $DIR/d28
