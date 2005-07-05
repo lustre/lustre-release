@@ -76,14 +76,14 @@ struct llog_fill_rec_data {
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 typedef int (*llog_fill_rec_cb_t)(struct llog_rec_hdr *rec, void *data);
+extern struct llog_handle *llog_alloc_handle(void);
 int llog_init_handle(struct llog_handle *handle, int flags,
                      struct obd_uuid *uuid);
+extern void llog_free_handle(struct llog_handle *handle);
 int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                  void *data, void *catdata);
-extern struct llog_handle *llog_alloc_handle(void);
-extern void llog_free_handle(struct llog_handle *handle);
-extern int llog_close(struct llog_handle *cathandle);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
+extern int llog_close(struct llog_handle *cathandle);
 
 /* llog_cat.c   -  catalog api */
 struct llog_process_data {
@@ -229,7 +229,7 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
                                struct llog_operations **lop)
 {
-       if (ctxt == NULL)
+        if (ctxt == NULL)
                 return -ENOTCONN;
 
         *lop = ctxt->loc_logops;

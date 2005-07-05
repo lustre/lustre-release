@@ -518,9 +518,10 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-    echo "${TESTSUITE}: **** FAIL:" $@
-    log "FAIL: $@"
-    exit 1
+	sysctl -w lustre.fail_loc=0
+	echo "${TESTSUITE}: **** FAIL:" $@
+	log "FAIL: $@"
+	exit 1
 }
 
 build_test_filter() {

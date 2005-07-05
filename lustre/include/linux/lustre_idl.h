@@ -36,7 +36,7 @@
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
 #else
-#include "types.h"
+#include <lustre/types.h>
 #endif
 
 #ifdef __KERNEL__
