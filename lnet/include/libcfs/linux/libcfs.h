@@ -17,7 +17,19 @@
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
 #else
-#include "types.h"
+/* this is actually coming from within lustre, a layering violation.
+ * we may not even need it, as libuptlctl (the dependency for which it
+ * is needed in liblustre building on catamount, bug 6923) shows no
+ * apparent need to be included in liblustre AFAICS.  The change of
+ * include to lustre/types.h only makes this explicit instead of implicit.
+ * To be resolved.  For now, make it CRAY_PORTALS only, to avoid breaking
+ * non-b1_4 branches that don't have this file.
+ */
+# if CRAY_PORTALS
+#  include <lustre/types.h>
+# else
+#  include "types.h"
+# endif
 #endif
 
 
