@@ -102,7 +102,11 @@ if [ $UID -ne 0 ]; then
         RUNAS=""
 else
         RUNAS_ID=${RUNAS_ID:-500}
-        RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+        if [ -z "$RUNAS_GID" ]; then
+	    RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+        else
+	    RUNAS=${RUNAS:-"runas -u $RUNAS_ID -g $RUNAS_GID"}
+        fi
 fi
 
 OLDTMPDIR=$TMPDIR
