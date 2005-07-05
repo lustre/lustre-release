@@ -318,6 +318,12 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         *err = ELDLM_OK;
 
         if (!first_enq) {
+                /* Careful observers will note that we don't handle -EWOULDBLOCK
+                 * here, but it's ok for a non-obvious reason -- compat_queue
+                 * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT).
+                 * flags should always be zero here, and if that ever stops
+                 * being true, we want to find out. */
+                LASSERT(*flags == 0);
                 LASSERT(res->lr_tmp != NULL);
                 rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0, flags,
                                               err);
