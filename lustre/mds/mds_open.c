@@ -922,11 +922,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mea *mea = NULL;
         int mea_size, update_mode;
         int child_mode = LCK_PR;
-        /* Always returning LOOKUP lock if open succesful to guard
-           dentry on client. */
-        ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_LOOKUP}};
-        struct ldlm_res_id child_res_id = { .name = {0}};
-        int lock_flags = 0;
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "parent "DLID4" name %*s mode %o",
@@ -1303,9 +1298,6 @@ got_child:
 
 #warning "disable opencache lock for CMD2"
 #if 0
-        /* Obtain OPEN lock as well */
-        policy.l_inodebits.bits |= MDS_INODELOCK_OPEN;
-
         /* We cannot use acc_mode here, because it is zeroed in case of
            creating a file, so we get wrong lockmode */
         if (accmode(rec->ur_flags) & MAY_WRITE)
@@ -1315,9 +1307,18 @@ got_child:
         else
                 child_mode = LCK_CR;
 
+        /* Always returning LOOKUP lock if open succesful to guard
+         * dentry on client. In case of replay we do not get a lock
+         * assuming that the caller has it already */
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
-		/* In case of replay we do not get a lock assuming that the
-                   caller has it already */
+                struct ldlm_res_id child_res_id = { .name = {0}};
+                ldlm_policy_data_t policy;
+                int lock_flags = 0;
+                
+                /* LOOKUP lock will protect dentry on client -bzzz */
+                policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP |
+                                                MDS_INODELOCK_OPEN;
+
                 child_res_id.name[0] = id_fid(&body->id1);
                 child_res_id.name[1] = id_group(&body->id1);
 
