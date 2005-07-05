@@ -412,7 +412,7 @@ set_local(struct lustre_mount_data *lmd)
 #else
         case SOCKNAL:
                 /* We need to do this before the mount is started if routing */
-                system("/sbin/modprobe ksocknal");
+                system("/sbin/modprobe -q ksocknal");
         case TCPNAL:
         case OPENIBNAL:
         case IIBNAL:
@@ -468,7 +468,7 @@ set_local(struct lustre_mount_data *lmd)
                 int   i = 0;
 
                 /* We need to do this before the mount is started if routing */
-                system("/sbin/modprobe kqswnal");
+                system("/sbin/modprobe -q kqswnal");
                 do {
                         rc = get_local_elan_id(pfiles[i], buf);
                 } while (rc != 0 && pfiles[++i] != NULL);
