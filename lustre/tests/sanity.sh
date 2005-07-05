@@ -2471,7 +2471,7 @@ test_99f() {
 run_test 99f "cvs commit ======================================="
 
 test_100() {
-        netstat -ta | while read PROT SND RCV LOCAL REMOTE STAT; do
+        netstat -tan | while read PROT SND RCV LOCAL REMOTE STAT; do
                 LPORT=`echo $LOCAL | cut -d: -f2`
                 RPORT=`echo $REMOTE | cut -d: -f2`
                 if [ "$PROT" = "tcp" ] && [ "$LPORT" != "*" ] && [ "$RPORT" != "*" ] && [ $RPORT -eq 988 ] && [ $LPORT -gt 1024 ]; then
