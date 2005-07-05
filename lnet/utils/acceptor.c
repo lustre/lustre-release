@@ -45,35 +45,79 @@ void usage(char *myname)
         exit (1);
 }
 
-void create_pidfile(char *name, int port)
+char *pidfile_name(char *name, int port)
 {
-        char pidfile[1024];
-        FILE *fp;
+        static char pidfile[1024];
 
         snprintf(pidfile, sizeof(pidfile), "%s/%s-%d.pid",
                  PIDFILE_DIR, name, port);
+
+        return pidfile;
+}
+
+void pidfile_create(char *name, int port)
+{
+        char *pidfile = pidfile_name(name, port);
+        FILE *fp;
 
         if ((fp = fopen(pidfile, "w"))) {
                 fprintf(fp, "%d\n", getpid());
                 fclose(fp);
         } else {
-                syslog(LOG_ERR, "%s: %s\n", pidfile,
-                       strerror(errno));
+                syslog(LOG_DAEMON|LOG_ERR, "%s: %s\n", pidfile,strerror(errno));
         }
+}
+
+int pidfile_cleanup(char *name, int port)
+{
+        char *pidfile = pidfile_name(name, port);
+        int rc;
+
+        rc = unlink(pidfile);
+        if (rc && errno != -ENOENT)
+                fprintf(stderr, "%s: error removing %s: %s\n",
+                        PROGNAME, pidfile, strerror(errno));
+
+        return errno;
 }
 
 int pidfile_exists(char *name, int port)
 {
-        char pidfile[1024];
+        char *pidfile = pidfile_name(name, port);
+        FILE *fpid;
+        int pid, rc;
 
         snprintf(pidfile, sizeof(pidfile), "%s/%s-%d.pid",
                  PIDFILE_DIR, name, port);
 
-        if (!access(pidfile, F_OK)) {
-                fprintf(stderr, "%s: exists, acceptor already running.\n",
-                        pidfile);
+        fpid = fopen(pidfile, "r+");
+        if (fpid == NULL) {
+                if (errno == ENOENT)
+                        return 0;
+
+                fprintf(stderr, "%s: error opening %s: %s.\n",
+                        PROGNAME, pidfile, strerror(errno));
                 return (1);
         }
+
+        rc = fscanf(fpid, "%i", &pid);
+        fclose(fpid);
+        if (rc != 1) {
+                fprintf(stderr,"%s: %s didn't contain a valid pid, removing.\n",
+                        PROGNAME, pidfile);
+                goto stale;
+        }
+
+        if (kill(pid, 0) == 0) {
+                fprintf(stderr, "%s: %s exists, acceptor pid %d running.\n",
+                        PROGNAME, pidfile, pid);
+                return (1);
+        }
+
+        fprintf(stderr, "%s: stale %s exists, pid %d doesn't, removing.\n",
+                PROGNAME, pidfile, pid);
+stale:
+        pidfile_cleanup(name, port);
         return (0);
 }
 
@@ -102,7 +146,7 @@ show_connection (int fd, __u32 net_ip)
         else
                 snprintf(host, sizeof(host), "%s", h->h_name);
 
-        syslog(LOG_INFO, "Accepted host: %s\n", host);
+        syslog(LOG_DAEMON | LOG_INFO, "Accepted host: %s\n", host);
 }
 
 int main(int argc, char **argv)
@@ -140,7 +184,7 @@ int main(int argc, char **argv)
         port = atol(argv[optind++]);
 
         if (pidfile_exists(PROGNAME, port))
-                exit(1);
+                return(EEXIST);
 
         memset(&srvaddr, 0, sizeof(srvaddr));
         srvaddr.sin_family = AF_INET;
@@ -149,43 +193,49 @@ int main(int argc, char **argv)
 
         fd = socket(PF_INET, SOCK_STREAM, 0);
         if (fd < 0) {
+                rc = errno;
                 perror("opening socket");
-                exit(1);
+                return(rc);
         }
 
         o = 1;
         if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &o, sizeof(o))) {
+                rc = errno;
                 perror("Cannot set REUSEADDR socket opt");
-                exit(1);
+                return(rc);
         }
 
         rc = bind(fd, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
-        if ( rc == -1 ) {
+        if (rc == -1) {
+                rc = errno;
                 perror("bind: ");
-                exit(1);
+                return(rc);
         }
 
         if (listen(fd, 127)) {
+                rc = errno;
                 perror("listen: ");
-                exit(1);
+                return(rc);
         }
         fprintf(stderr, "listening on port %d\n", port);
 
         pfd = open("/dev/portals", O_RDWR);
-        if ( pfd < 0 ) {
+        if (pfd < 0) {
+                rc = errno;
                 perror("opening portals device");
-                exit(1);
+                return(rc);
         }
 
         rc = daemon(0, noclose);
         if (rc < 0) {
+                rc = errno;
                 perror("daemon(): ");
-                exit(1);
+                return(rc);
         }
 
         openlog(PROGNAME, LOG_PID, LOG_DAEMON);
-        syslog(LOG_INFO, "started, listening on port %d\n", port);
-        create_pidfile(PROGNAME, port);
+        syslog(LOG_DAEMON | LOG_INFO, "started, listening on port %d\n", port);
+        pidfile_create(PROGNAME, port);
 
         while (1) {
                 struct sockaddr_in clntaddr;
@@ -201,7 +251,8 @@ int main(int argc, char **argv)
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
                         perror("accept");
-                        exit(0);
+                        pidfile_cleanup(PROGNAME, port);
+                        return(0);
                         continue;
                 }
 
@@ -212,7 +263,8 @@ int main(int argc, char **argv)
                 if (!hosts_access(&request)) {
                         inet_ntop(AF_INET, &clntaddr.sin_addr,
                                   addrstr, INET_ADDRSTRLEN);
-                        syslog(LOG_WARNING, "Unauthorized access from %s:%hd\n",
+                        syslog(LOG_DAEMON | LOG_WARNING,
+                               "Unauthorized access from %s:%hd\n",
                                addrstr, ntohs(clntaddr.sin_port));
                         close (cfd);
                         continue;
@@ -222,7 +274,8 @@ int main(int argc, char **argv)
                 if (require_privports && ntohs(clntaddr.sin_port) >= IPPORT_RESERVED) {
                         inet_ntop(AF_INET, &clntaddr.sin_addr,
                                   addrstr, INET_ADDRSTRLEN);
-                        syslog(LOG_ERR, "Closing non-privileged connection from %s:%d\n",
+                        syslog(LOG_DAEMON | LOG_ERR,
+                               "Closing non-privileged connection from %s:%d\n",
                                addrstr, ntohs(clntaddr.sin_port));
                         rc = close(cfd);
                         if (rc)
@@ -252,6 +305,7 @@ int main(int argc, char **argv)
         }
 
         closelog();
-        exit(0);
+        pidfile_cleanup(PROGNAME, port);
 
+        return (0);
 }
