@@ -3,7 +3,7 @@ mds-objs := mds_log.o mds_unlink_open.o mds_lov.o handler.o mds_reint.o
 mds-objs += mds_fs.o lproc_mds.o mds_open.o mds_lib.o
 
 ifeq ($(PATCHLEVEL),6)
-mds-objs += quota_context.o quota_master.o
+#mds-objs += quota_master.o
 endif
 
 @INCLUDE_RULES@

@@ -30,5 +30,12 @@ ext3-xattr-ptr-arith-fix.patch
 procfs-ndynamic-2.4.21-suse2.patch 
 ext3-truncate-buffer-head.patch
 loop-sync-2.4.21-suse.patch
+inode-max-readahead-2.4.24.patch
 ext3-extents-2.4.21-suse2.patch 
 ext3-extents-asyncdel-2.4.24.patch
+ext3-nlinks-2.4.21-chaos.patch
+export-show_task-2.4-cray.patch
+grab_cache_page_nowait_gfp-2.4.21-suse2.patch
+remove-suid-2.4-rhel.patch
+fsprivate-2.4-suse.patch
+nfsd_iallocsem.patch

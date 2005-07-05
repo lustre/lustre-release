@@ -26,11 +26,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
+#include <sys/utsname.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
@@ -129,6 +131,7 @@ print_options(struct lustre_mount_data *lmd)
         printf("nid:             %s\n", libcfs_nid2str(lmd->lmd_nid));
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
+
         return 0;
 }
 
@@ -225,12 +228,12 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
         int   rc;
 
         if (lmd_bad_magic(lmd))
-                return -EINVAL;
+                return 4;
 
         if (strlen(source) >= sizeof(buf)) {
                 fprintf(stderr, "%s: nid:/mds/profile argument too long\n",
                         progname);
-                return -EINVAL;
+                return 1;
         }
         strcpy(buf, source);
         if ((s = strchr(buf, ':'))) {

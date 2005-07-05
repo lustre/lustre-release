@@ -71,7 +71,7 @@ void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
 
         } else {
                 CWARN("Invoked upcall %s %s %s\n",
-                       argv[0], argv[1], argv[2]);
+                      argv[0], argv[1], argv[2]);
         }
 }
 
@@ -91,7 +91,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
                 return;
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
-        
+
         argv[0] = obd_lustre_upcall;
         argv[1] = "FAILED_IMPORT";
         argv[2] = imp->imp_target_uuid.uuid;
@@ -108,8 +108,7 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
         if (rc < 0) {
                 CERROR("Error invoking recovery upcall %s %s %s %s %s %s: %d; "
                        "check /proc/sys/lustre/lustre_upcall\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], rc);
-
+                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5],rc);
         } else {
                 CWARN("Invoked upcall %s %s %s %s %s %s\n",
                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
@@ -130,17 +129,15 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         ENTRY;
 
         LASSERT (obd_lustre_upcall != NULL);
-        
+
         if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
                 CDEBUG(D_HA, "%s: starting recovery without upcall\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_connect_import(imp, NULL);
-        } 
-        else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
+        } else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
                 CDEBUG(D_HA, "%s: recovery disabled\n",
                         imp->imp_target_uuid.uuid);
-        } 
-        else {
+        } else {
                 CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
                         imp->imp_target_uuid.uuid);
                 ptlrpc_run_failed_import_upcall(imp);
@@ -271,7 +268,6 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
-        int rc;
         struct obd_import *imp= failed_req->rq_import;
         unsigned long flags;
         ENTRY;
@@ -290,8 +286,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                                imp->imp_obd->obd_name);
                         ptlrpc_deactivate_import(imp);
                 }
-
-                rc = ptlrpc_connect_import(imp, NULL);
+                ptlrpc_connect_import(imp, NULL);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then
@@ -318,9 +313,11 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
+                CWARN("setting import %s INACTIVE by administrator request\n",
+                      imp->imp_target_uuid.uuid);
                 ptlrpc_invalidate_import(imp);
                 imp->imp_deactive = 1;
-        } 
+        }
 
         /* When activating, mark import valid, and attempt recovery */
         if (active) {
@@ -341,6 +338,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid)
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp);
 
+        imp->imp_deactive = 0;
         rc = ptlrpc_recover_import_no_retry(imp, new_uuid);
 
         RETURN(rc);
@@ -391,35 +389,4 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                imp->imp_target_uuid.uuid);
 
         RETURN(rc);
-}
-
-void ptlrpc_fail_export(struct obd_export *exp)
-{
-        int rc, already_failed;
-        unsigned long flags;
-
-        spin_lock_irqsave(&exp->exp_lock, flags);
-        already_failed = exp->exp_failed;
-        exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
-
-        if (already_failed) {
-                CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",
-                       exp, exp->exp_client_uuid.uuid);
-                return;
-        }
-
-        CDEBUG(D_HA, "disconnecting export %p/%s\n",
-               exp, exp->exp_client_uuid.uuid);
-
-        if (obd_dump_on_timeout)
-                portals_debug_dumplog();
-
-        /* Most callers into obd_disconnect are removing their own reference
-         * (request, for example) in addition to the one from the hash table.
-         * We don't have such a reference here, so make one. */
-        class_export_get(exp);
-        rc = obd_disconnect(exp);
-        if (rc)
-                CERROR("disconnecting export %p failed: %d\n", exp, rc);
 }

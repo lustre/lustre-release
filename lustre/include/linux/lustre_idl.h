@@ -197,6 +197,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 //#define MSG_CONNECT_PEER        0x8
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
+#define MSG_CONNECT_ASYNC       0x40
 
 /* Connect flags */
 
@@ -369,11 +370,11 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_MDS        (0x100000000ULL) /* where an inode lives on */
 #define OBD_MD_REINT      (0x200000000ULL) /* reintegrate oa */
 
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
-                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE|\
-                           OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
-
+#define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
+                          OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
+                          OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
+                          OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
+                          OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -499,6 +500,8 @@ typedef enum {
         REINT_UNLINK   = 4,
         REINT_RENAME   = 5,
         REINT_OPEN     = 6,
+//      REINT_CLOSE    = 7,
+//      REINT_WRITE    = 8,
         REINT_MAX
 } mds_reint_t;
 
@@ -731,7 +734,8 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
  *  LOV data structures
  */
 
-#define LOV_MIN_STRIPE_SIZE 65536UL /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_SIZE 65536   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MAX_STRIPE_COUNT  160   /* until bug 4424 is fixed */
 
 #define LOV_MAX_UUID_BUFFER_SIZE  8192
 /* The size of the buffer the lov/mdc reserves for the
@@ -782,18 +786,22 @@ extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 
 /* lock types */
 typedef enum {
+        LCK_MINMODE = 0,
         LCK_EX = 1,
         LCK_PW = 2,
         LCK_PR = 4,
         LCK_CW = 8,
         LCK_CR = 16,
-        LCK_NL = 32
+        LCK_NL = 32,
+        LCK_GROUP = 64,
+        LCK_MAXMODE
 } ldlm_mode_t;
 
 typedef enum {
         LDLM_PLAIN     = 10,
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,
+//      LDLM_IBITS     = 13,
         LDLM_MAX_TYPE
 } ldlm_type_t;
 
@@ -802,6 +810,7 @@ typedef enum {
 struct ldlm_extent {
         __u64 start;
         __u64 end;
+        __u64 gid;
 };
 
 struct ldlm_flock {
@@ -961,7 +970,7 @@ typedef enum {
         MDS_UNLINK_REC   = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
         MDS_SETATTR_REC  = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
         OBD_CFG_REC      = LLOG_OP_MAGIC | 0x20000,
-//      unused           = LLOG_OP_MAGIC | 0x30000,
+        PTL_CFG_REC      = LLOG_OP_MAGIC | 0x30000, /* obsolete */
         LLOG_GEN_REC     = LLOG_OP_MAGIC | 0x40000,
         LLOG_HDR_MAGIC   = LLOG_OP_MAGIC | 0x45539,
         LLOG_LOGID_MAGIC = LLOG_OP_MAGIC | 0x4553b,
@@ -1139,10 +1148,10 @@ static inline struct ll_fid *obdo_fid(struct obdo *oa)
 
 /* qutoa */
 struct qunit_data {
-	__u32 qd_id;
-	__u32 qd_type;
-	__u32 qd_count;
-	__u32 qd_isblk;	/* indicating if it's block quota */
+        __u32 qd_id;
+        __u32 qd_type;
+        __u32 qd_count;
+        __u32 qd_isblk; /* indicating if it's block quota */
 };
 extern void lustre_swab_qdata(struct qunit_data *d);
 

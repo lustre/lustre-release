@@ -17,7 +17,6 @@ ext3-san-2.4.20.patch
 ext3-map_inode_page-2.4.21-suse2.patch 
 ext3-error-export.patch
 iopen-2.4.19-suse.patch
-tcp-zero-copy-2.4.21-suse-171.patch 
 jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 ext3-no-write-super-chaos.patch
@@ -28,3 +27,5 @@ ext3-ea-in-inode-2.4.21-sles.patch
 listman-2.4.20.patch
 ext3-truncate-buffer-head.patch
 lookup-stack-symbols-2.4.21-suse-171.patch 
+fsprivate-2.4-suse.patch
+nfsd_iallocsem.patch

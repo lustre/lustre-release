@@ -2,7 +2,7 @@ Index: linux-2.6.5-suse/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.5-suse.orig/fs/ext3/mballoc.c	2005-03-02 22:42:20.659360368 +0300
 +++ linux-2.6.5-suse/fs/ext3/mballoc.c	2005-03-11 16:13:13.000000000 +0300
-@@ -0,0 +1,1863 @@
+@@ -0,0 +1,1864 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -932,8 +932,9 @@ Index: linux-2.6.5-suse/fs/ext3/mballoc.c
 +		 * We've been searching too long. Let's try to allocate
 +		 * the best chunk we've found so far
 +		 */
-+		printk(KERN_ERR "EXT3-fs: too long searching (%d/%d)\n",
-+				ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
++		ext3_warning(inode->i_sb, __FUNCTION__,
++			     "too long searching: got %d want %d\n",
++			     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
 +		ext3_mb_try_best_found(&ac, &e3b);
 +		if (ac.ac_status != AC_STATUS_FOUND) {
 +			/*

@@ -219,7 +219,9 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         /* XXX Registering the same xid on retried bulk makes my head
          * explode trying to understand how the original request's bulk
          * might interfere with the retried request -eeb */
-        LASSERT (!desc->bd_registered || req->rq_xid != desc->bd_last_xid);
+        LASSERTF (!desc->bd_registered || req->rq_xid != desc->bd_last_xid,
+                  "registered: %d  rq_xid: "LPU64" bd_last_xid: "LPU64"\n",
+                  desc->bd_registered, req->rq_xid, desc->bd_last_xid);
         desc->bd_registered = 1;
         desc->bd_last_xid = req->rq_xid;
 
@@ -381,6 +383,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         ptl_md_t         reply_md;
         ENTRY;
 
+        OBD_FAIL_RETURN(OBD_FAIL_PTLRPC_DROP_RPC, 0); 
+
         LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
 
         /* If this is a re-transmit, we're required to have disengaged
@@ -395,7 +399,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 request->rq_err = 1;
                 RETURN(-ENODEV);
         }
-
+        
         connection = request->rq_import->imp_connection;
 
         if (request->rq_bulk != NULL) {

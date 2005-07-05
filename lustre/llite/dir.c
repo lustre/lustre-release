@@ -298,7 +298,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         unsigned long n = pos >> PAGE_CACHE_SHIFT;
         unsigned long npages = dir_pages(inode);
         unsigned chunk_mask = ~(ext2_chunk_size(inode)-1);
-        unsigned char *types = NULL;
+        unsigned char *types = ext2_filetype_table;
         int need_revalidate = (filp->f_version != inode->i_version);
         int rc = 0;
         ENTRY;
@@ -341,16 +341,15 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                 for ( ;(char*)de <= limit; de = ext2_next_entry(de)) {
                         if (de->inode) {
                                 int over;
-                                unsigned char d_type = DT_UNKNOWN;
 
                                 rc = 0; /* no error if we return something */
-                                if (types && de->file_type < EXT2_FT_MAX)
-                                        d_type = types[de->file_type];
 
                                 offset = (char *)de - kaddr;
                                 over = filldir(dirent, de->name, de->name_len,
                                                (n<<PAGE_CACHE_SHIFT) | offset,
-                                               le32_to_cpu(de->inode), d_type);
+                                               le32_to_cpu(de->inode),
+                                               types[de->file_type &
+                                                     (EXT2_FT_MAX - 1)]);
                                 if (over) {
                                         ext2_put_page(page);
                                         GOTO(done, rc);
@@ -398,7 +397,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), cmd=%#x\n",
                inode->i_ino, inode->i_generation, inode, cmd);
 
-        if (_IOC_TYPE(cmd) == 'T') /* tty ioctls */
+        /* asm-ppc{,64} declares TCGETS, et. al. as type 't' not 'T' */
+        if (_IOC_TYPE(cmd) == 'T' || _IOC_TYPE(cmd) == 't') /* tty ioctls */
                 return -ENOTTY;
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);
@@ -421,7 +421,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 char *buf = NULL;
                 char *filename;
                 int namelen, rc, len = 0;
-                unsigned long valid;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -436,10 +435,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                valid = OBD_MD_FLID;
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid,
-                                      filename, namelen, valid, 0, &request);
+                rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, filename, namelen,
+                                      OBD_MD_FLID, 0, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
@@ -498,13 +496,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_mds_md *lmm;
                 struct ll_fid fid;
                 struct mds_body *body;
-                unsigned long valid = 0;
                 int rc, lmmsize;
 
-                valid |= OBD_MD_FLDIREA;
-
                 ll_inode2fid(&fid, inode);
-                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid,
+                rc = mdc_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_FLDIREA,
                                  obd_size_diskmd(sbi->ll_osc_exp, NULL),
                                  &request);
                 if (rc < 0) {
@@ -840,8 +835,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 RETURN(rc?:error);
         }
+        case OBD_IOC_GETNAME: {  
+                struct obd_device *obd = class_exp2obd(sbi->ll_osc_exp);
+                if (!obd)
+                        RETURN(-EFAULT);
+                if (copy_to_user((void *)arg, obd->obd_name, 
+                                strlen(obd->obd_name) + 1))
+                        RETURN (-EFAULT);
+                RETURN(0);
+        }
         default:
-                return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);
+                RETURN(obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg));
         }
 }
 

@@ -41,7 +41,7 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 void ptlrpc_initiate_recovery(struct obd_import *imp);
 
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *proc_entry,
                                      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
@@ -117,5 +117,6 @@ int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 void ptlrpc_pinger_wake_up(void);
+void ptlrpc_ping_import_soon(struct obd_import *imp);
 
 #endif /* PTLRPC_INTERNAL_H */

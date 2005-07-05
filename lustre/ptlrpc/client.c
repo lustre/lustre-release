@@ -97,7 +97,7 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
         desc->bd_md_h = PTL_INVALID_HANDLE;
         desc->bd_portal = portal;
         desc->bd_type = type;
-        
+
         return desc;
 }
 
@@ -176,7 +176,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         else
                 class_import_put(desc->bd_import);
 
-        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc, 
+        OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
                                 bd_iov[desc->bd_max_iov]));
         EXIT;
 }
@@ -189,6 +189,9 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         ENTRY;
 
         LASSERT((unsigned long)imp > 0x1000);
+        LASSERT(imp != LP_POISON);
+        LASSERT((unsigned long)imp->imp_client > 0x1000);
+        LASSERT(imp->imp_client != LP_POISON);
 
         OBD_ALLOC(request, sizeof(*request));
         if (!request) {
@@ -211,13 +214,13 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
         request->rq_export = NULL;
-        
+
         request->rq_req_cbid.cbid_fn  = request_out_callback;
         request->rq_req_cbid.cbid_arg = request;
 
         request->rq_reply_cbid.cbid_fn  = reply_in_callback;
         request->rq_reply_cbid.cbid_arg = request;
-        
+
         request->rq_phase = RQ_PHASE_NEW;
 
         /* XXX FIXME bug 249 */
@@ -342,7 +345,7 @@ void ptlrpc_set_add_new_req(struct ptlrpc_request_set *set,
  *
  * The imp->imp_lock must be held.
  */
-static int ptlrpc_import_delay_req(struct obd_import *imp, 
+static int ptlrpc_import_delay_req(struct obd_import *imp,
                                    struct ptlrpc_request *req, int *status)
 {
         int delay = 0;
@@ -355,31 +358,24 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                 DEBUG_REQ(D_ERROR, req, "Uninitialized import.");
                 *status = -EIO;
                 LBUG();
-        }
-        else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
+        } else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
-        }
-        /* allow CONNECT even if import is invalid */
-        else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
+        } else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
                  imp->imp_state == LUSTRE_IMP_CONNECTING) {
-                ;
-        }
-        /*
-         * If the import has been invalidated (such as by an OST failure), the
-         * request must fail with -EIO.  
-         */
-        else if (imp->imp_invalid) {
-                DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
+                /* allow CONNECT even if import is invalid */ ;
+        } else if (imp->imp_invalid) {
+                /* If the import has been invalidated (such as by an OST
+                 * failure), the request must fail with -EIO. */
+                if (!imp->imp_deactive)
+                        DEBUG_REQ(D_ERROR, req, "IMP_INVALID");
                 *status = -EIO;
-        } 
-        else if (req->rq_import_generation != imp->imp_generation) {
+        } else if (req->rq_import_generation != imp->imp_generation) {
                 DEBUG_REQ(D_ERROR, req, "req wrong generation:");
                 *status = -EIO;
-        } 
-        else if (req->rq_send_state != imp->imp_state) {
-                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake 
-                    || req->rq_no_delay) 
+        } else if (req->rq_send_state != imp->imp_state) {
+                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake ||
+                    req->rq_no_delay)
                         *status = -EWOULDBLOCK;
                 else
                         delay = 1;
@@ -401,10 +397,10 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 DEBUG_REQ(D_NET, req, "REPLIED:");
                 GOTO(out, rc = 1);
         }
-        
+
         if (req->rq_net_err && !req->rq_timedout) {
                 spin_unlock_irqrestore (&req->rq_lock, flags);
-                rc = ptlrpc_expire_one_request(req); 
+                rc = ptlrpc_expire_one_request(req);
                 spin_lock_irqsave (&req->rq_lock, flags);
                 GOTO(out, rc);
         }
@@ -437,7 +433,7 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = req->rq_repmsg->status;
         if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
-                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err == %d", 
+                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err == %d",
                           err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
@@ -471,14 +467,14 @@ static int after_reply(struct ptlrpc_request *req)
         LASSERT (req->rq_nob_received <= req->rq_replen);
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
         if (rc) {
-                CERROR("unpack_rep failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d\n", rc);
                 RETURN(-EPROTO);
         }
 
         if (req->rq_repmsg->type != PTL_RPC_MSG_REPLY &&
             req->rq_repmsg->type != PTL_RPC_MSG_ERR) {
-                CERROR("invalid packet type received (type=%u)\n",
-                       req->rq_repmsg->type);
+                DEBUG_REQ(D_ERROR, req, "invalid packet received (type=%u)\n",
+                          req->rq_repmsg->type);
                 RETURN(-EPROTO);
         }
 
@@ -544,7 +540,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
                 DEBUG_REQ(D_HA, req, "req from PID %d waiting for recovery: "
                           "(%s != %s)",
-                          req->rq_reqmsg->status, 
+                          req->rq_reqmsg->status,
                           ptlrpc_import_state_name(req->rq_send_state),
                           ptlrpc_import_state_name(imp->imp_state));
                 LASSERT(list_empty (&req->rq_list));
@@ -619,7 +615,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         GOTO(interpret, req->rq_status);
 
                 if (req->rq_net_err && !req->rq_timedout)
-                        ptlrpc_expire_one_request(req); 
+                        ptlrpc_expire_one_request(req);
 
                 if (req->rq_err) {
                         ptlrpc_unregister_reply(req);
@@ -637,7 +633,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 /* ptlrpc_queue_wait->l_wait_event guarantees that rq_intr
                  * will only be set after rq_timedout, but the oig waiting
                  * path sets rq_intr irrespective of whether ptlrpcd has
-                 * seen a timeout.  our policy is to only interpret 
+                 * seen a timeout.  our policy is to only interpret
                  * interrupted rpcs after they have timed out */
                 if (req->rq_intr && (req->rq_timedout || req->rq_waiting)) {
                         /* NB could be on delayed list */
@@ -733,7 +729,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                    it can be errored if the import is
                                    evicted after recovery. */
                                 spin_lock_irqsave (&req->rq_lock, flags);
-                                list_add_tail(&req->rq_list, 
+                                list_add_tail(&req->rq_list,
                                               &imp->imp_delayed_list);
                                 spin_unlock_irqrestore(&req->rq_lock, flags);
                                 continue;
@@ -862,8 +858,8 @@ int ptlrpc_expired_set(void *data)
                         list_entry(tmp, struct ptlrpc_request, rq_set_chain);
 
                 /* request in-flight? */
-                if (!((req->rq_phase == RQ_PHASE_RPC && !req->rq_waiting 
-                       && !req->rq_resend) ||
+                if (!((req->rq_phase == RQ_PHASE_RPC && !req->rq_waiting &&
+                       !req->rq_resend) ||
                       (req->rq_phase == RQ_PHASE_BULK)))
                         continue;
 
@@ -1345,8 +1341,8 @@ restart:
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                 DEBUG_REQ(D_HA, req, "\"%s\" waiting for recovery: (%s != %s)",
-                          current->comm, 
-                          ptlrpc_import_state_name(req->rq_send_state), 
+                          current->comm,
+                          ptlrpc_import_state_name(req->rq_send_state),
                           ptlrpc_import_state_name(imp->imp_state));
                 lwi = LWI_INTR(interrupted_request, req);
                 rc = l_wait_event(req->rq_reply_waitq,
@@ -1354,8 +1350,8 @@ restart:
                                    req->rq_err),
                                   &lwi);
                 DEBUG_REQ(D_HA, req, "\"%s\" awake: (%s == %s or %d == 1)",
-                          current->comm, 
-                          ptlrpc_import_state_name(imp->imp_state), 
+                          current->comm,
+                          ptlrpc_import_state_name(imp->imp_state),
                           ptlrpc_import_state_name(req->rq_send_state),
                           req->rq_err);
 
@@ -1387,8 +1383,18 @@ restart:
         if (req->rq_resend) {
                 lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
-                if (req->rq_bulk != NULL)
+                if (req->rq_bulk != NULL) {
                         ptlrpc_unregister_bulk (req);
+
+                        /* bulk requests are supposed to be
+                         * idempotent, so we are free to bump the xid
+                         * here, which we need to do before
+                         * registering the bulk again (bug 6371).
+                         * print the old xid first for sanity.
+                         */
+                        DEBUG_REQ(D_HA, req, "bumping xid for bulk: ");
+                        req->rq_xid = ptlrpc_next_xid();
+                }
 
                 DEBUG_REQ(D_HA, req, "resending: ");
         }
@@ -1467,7 +1473,7 @@ restart:
 
  out:
         if (req->rq_bulk != NULL) {
-                if (rc >= 0) {                  
+                if (rc >= 0) {
                         /* success so far.  Note that anything going wrong
                          * with bulk now, is EXTREMELY strange, since the
                          * server must have believed that the bulk
@@ -1512,7 +1518,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         unsigned long flags;
 
         atomic_dec(&imp->imp_replay_inflight);
-        
+
         if (!req->rq_replied) {
                 CERROR("request replay timed out, restarting recovery\n");
                 GOTO(out, rc = -ETIMEDOUT);
@@ -1525,12 +1531,12 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         LASSERT (req->rq_nob_received <= req->rq_replen);
         rc = lustre_unpack_msg(req->rq_repmsg, req->rq_nob_received);
         if (rc) {
-                CERROR("unpack_rep failed: %d\n", rc);
+                DEBUG_REQ(D_ERROR, req, "unpack_rep failed: %d\n", rc);
                 GOTO(out, rc = -EPROTO);
         }
 
-        if (req->rq_repmsg->type == PTL_RPC_MSG_ERR && 
-            req->rq_repmsg->status == -ENOTCONN) 
+        if (req->rq_repmsg->type == PTL_RPC_MSG_ERR &&
+            req->rq_repmsg->status == -ENOTCONN)
                 GOTO(out, rc = req->rq_repmsg->status);
 
         /* The transno had better not change over replay. */
@@ -1558,7 +1564,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         rc = ptlrpc_import_recovery_state_machine(imp);
  out:
         req->rq_send_state = aa->praa_old_state;
-        
+
         if (rc != 0)
                 /* this replay failed, so restart recovery */
                 ptlrpc_connect_import(imp, NULL);

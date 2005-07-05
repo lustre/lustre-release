@@ -6,18 +6,7 @@
  *
  *   This file is part of Lustre, http://www.lustre.org/
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
- *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
  *
  * A kernel module which tests the fsfilt quotacheck API from the OBD setup function.
  */
@@ -204,9 +193,11 @@ static struct obd_ops quotacheck_obd_ops = {
         .o_cleanup     = quotacheck_test_cleanup,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(quotacheck_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init quotacheck_test_init(void)
 {

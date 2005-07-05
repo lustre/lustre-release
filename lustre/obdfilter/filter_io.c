@@ -272,7 +272,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb;
         struct dentry *dentry = NULL;
@@ -297,7 +297,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_READ, obj->ioo_bufcnt,
                                 &iobuf);
@@ -318,7 +318,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
-        for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt; 
+        for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
                 lnb->dentry = dentry;
                 lnb->offset = rnb->offset;
@@ -327,8 +327,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 if (inode->i_size <= rnb->offset)
                       /* If there's no more data, abort early.
-                      * lnb->page == NULL and lnb->rc == 0, so it's
-                      * easy to detect later. */
+                       * lnb->page == NULL and lnb->rc == 0, so it's
+                       * easy to detect later. */
                         break;
                 else
                         rc = filter_alloc_dio_page(obd, inode, lnb);
@@ -375,7 +375,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         if (iobuf != NULL)
                 filter_free_iobuf(iobuf);
 
-        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 CERROR("io error %d\n", rc);
 
@@ -512,7 +512,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                struct niobuf_local *res,
                                struct obd_trans_info *oti)
 {
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = res;
         struct fsfilt_objinfo fso;
@@ -527,13 +527,14 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
+        /* This iobuf is for reading any partial pages from disk */
         rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_READ,
                                 obj->ioo_bufcnt, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1;
 
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
                                    obj->ioo_id);
         if (IS_ERR(dentry))
@@ -648,7 +649,7 @@ cleanup:
                 if (rc)
                         filter_free_dio_pages(objcount, obj, niocount, res);
         case 3:
-                pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 filter_free_iobuf(iobuf);
         case 2:
                 if (rc)
@@ -659,7 +660,7 @@ cleanup:
                 if (oa)
                         filter_grant_incoming(exp, oa);
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
-                pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 filter_free_iobuf(iobuf);
                 break;
         default:;

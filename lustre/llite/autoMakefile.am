@@ -8,4 +8,4 @@ modulefs_DATA = llite$(KMODEXT)
 endif
 
 DIST_SOURCES := $(llite-objs:.o=.c) llite_internal.h rw24.c super.c rw26.c super25.c
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

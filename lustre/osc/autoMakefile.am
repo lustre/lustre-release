@@ -14,5 +14,5 @@ if MODULES
 modulefs_DATA = osc$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(osc-objs:%.o=%.c) osc_internal.h

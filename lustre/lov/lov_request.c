@@ -277,6 +277,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
@@ -384,6 +385,7 @@ int lov_prep_match_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
@@ -495,9 +497,33 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
         LASSERT(set->set_completes);
 
-        if (!set->set_success)
-                GOTO(cleanup, rc = -EIO);
-        if (*lsmp == NULL && set->set_count != set->set_success) {
+        /* try alloc objects on other osts if osc_create fails for
+         * exceptions: RPC failure, ENOSPC, etc */
+        if (set->set_count != set->set_success) {
+                list_for_each_entry (req, &set->set_list, rq_link) {
+                        if (req->rq_rc == 0)
+                                continue;
+                        
+                        set->set_completes--;
+                        req->rq_complete = 0;
+                        
+                        rc = qos_remedy_create(set, req);
+                        lov_update_create_set(set, req, rc);
+
+                        if (rc)
+                                break;
+                }
+        }
+
+        /* no successful creates */
+        if (set->set_success == 0)
+                GOTO(cleanup, rc);
+        
+        /* If there was an explicit stripe set, fail.  Otherwise, we
+         * got some objects and that's not bad. */
+        if (set->set_count != set->set_success) {
+                if (*lsmp)
+                        GOTO(cleanup, rc);
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
@@ -533,7 +559,7 @@ cleanup:
                 if (!req->rq_complete || req->rq_rc)
                         continue;
 
-                sub_exp = lov->tgts[req->rq_idx].ltd_exp,
+                sub_exp = lov->tgts[req->rq_idx].ltd_exp;
                 err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
@@ -1203,6 +1229,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obdo *src_oa,
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
 
                 lov_set_add_req(req, set);
         }
@@ -1281,6 +1308,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obdo *src_oa,
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
 
                 lov_set_add_req(req, set);
         }

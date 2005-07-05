@@ -31,6 +31,7 @@
 #include <libcfs/list.h>
 #else
 #include <liblustre.h>
+#include <linux/obd_class.h>
 #endif
 
 #include "ldlm_internal.h"
@@ -362,9 +363,11 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 break;
         }
 
+        /* At this point we're granting the lock request. */
+        req->l_granted_mode = req->l_req_mode;
+
         /* Add req to the granted queue before calling ldlm_reprocess_all(). */
         if (!added) {
-                req->l_granted_mode = req->l_req_mode;
                 list_del_init(&req->l_res_link);
                 /* insert new lock before ownlocks in list. */
                 ldlm_resource_add_lock(res, ownlocks, req);
@@ -431,6 +434,9 @@ ldlm_flock_interrupted_wait(void *data)
         /* take lock off the deadlock detection waitq. */
         list_del_init(&lock->l_flock_waitq);
 
+        /* client side - set flag to prevent lock from being put on lru list */
+        lock->l_flags |= LDLM_FL_CBPENDING;
+
         ldlm_lock_decref_internal(lock, lock->l_req_mode);
         ldlm_lock2handle(lock, &lockh);
         ldlm_cli_cancel(&lockh);
@@ -456,19 +462,12 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LASSERT(flags != LDLM_FL_WAIT_NOREPROC);
 
-        if (flags == 0) {
-                wake_up(&lock->l_waitq);
-                RETURN(0);
-        }
-
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV)))
                 goto  granted;
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");
-
-        ldlm_lock_dump(D_OTHER, lock, 0);
 
         fwd.fwd_lock = lock;
         obd = class_exp2obd(lock->l_conn_export);
@@ -490,17 +489,12 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                           ((lock->l_req_mode == lock->l_granted_mode) ||
                            lock->l_destroyed), &lwi);
 
-        if (rc) {
-                LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
-                           rc);
-                RETURN(rc);
-        }
-
-        LASSERT(!(lock->l_destroyed));
-
+        LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
+        RETURN(rc);
+ 
 granted:
 
-        LDLM_DEBUG(lock, "client-side enqueue waking up");
+        LDLM_DEBUG(lock, "client-side enqueue granted");
         ns = lock->l_resource->lr_namespace;
         l_lock(&ns->ns_lock);
 
@@ -529,14 +523,18 @@ granted:
                 getlk->fl_start = lock->l_policy_data.l_flock.start;
                 getlk->fl_end = lock->l_policy_data.l_flock.end;
         } else {
+                int noreproc = LDLM_FL_WAIT_NOREPROC;
+
                 /* We need to reprocess the lock to do merges or splits
                  * with existing locks owned by this process. */
-                flags = LDLM_FL_WAIT_NOREPROC;
-                ldlm_process_flock_lock(lock, &flags, 1, &err);
+                ldlm_process_flock_lock(lock, &noreproc, 1, &err);
+                if (flags == 0)
+                        wake_up(&lock->l_waitq);
         }
         l_unlock(&ns->ns_lock);
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_flock_completion_ast);
 
 int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, int flag)

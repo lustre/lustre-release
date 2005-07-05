@@ -43,10 +43,10 @@ static int mds_log_fill_unlink_rec(struct llog_rec_hdr *rec, void *data)
 {
         struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
         struct llog_unlink_rec *lur = (struct llog_unlink_rec *)rec;
-                                                                                                                             
+
         lur->lur_oid = lfd->lfd_id;
         lur->lur_ogen = lfd->lfd_ogen;
-                                                                                                                             
+
         RETURN(0);
 }
 
@@ -55,10 +55,10 @@ static int mds_log_fill_setattr_rec(struct llog_rec_hdr *rec, void *data)
 {
         struct llog_fill_rec_data *lfd = (struct llog_fill_rec_data *)data;
         struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
-                                                                                                                             
+
         lsr->lsr_oid = lfd->lfd_id;
         lsr->lsr_ogen = lfd->lfd_ogen;
-                                                                                                                             
+
         RETURN(0);
 }
 
@@ -155,34 +155,33 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         struct llog_setattr_rec *lsr;
         int rc;
         ENTRY;
-                                                                                                                             
+
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
-                                                                                                                             
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
-                          lmm, lmm_size);
+
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
 
         OBD_ALLOC(lsr, sizeof(*lsr));
         if (!lsr)
-                RETURN(-ENOMEM);
-                                                                                                                             
+                GOTO(out, rc = -ENOMEM);
+
         /* prepare setattr log record */
         lsr->lsr_hdr.lrh_len = lsr->lsr_tail.lrt_len = sizeof(*lsr);
         lsr->lsr_hdr.lrh_type = MDS_SETATTR_REC;
         lsr->lsr_uid = inode->i_uid;
         lsr->lsr_gid = inode->i_gid;
-                                                                                                                             
+
         /* write setattr log */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
         rc = llog_add(ctxt, &lsr->lsr_hdr, lsm, logcookies,
                       cookies_size / sizeof(struct llog_cookie),
                       mds_log_fill_setattr_rec);
 
-        obd_free_memmd(mds->mds_osc_exp, &lsm);
         OBD_FREE(lsr, sizeof(*lsr));
-
+ out:
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
 

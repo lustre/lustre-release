@@ -26,10 +26,7 @@
 #include <linux/seq_file.h>
 #include "ost_internal.h"
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-#else
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,   0, 0 },
         { 0 }
@@ -74,5 +71,5 @@ ost_print_req(void *seq_file, struct ptlrpc_request *req)
         }
 }
 
-#endif /* LPROCFS */
 LPROCFS_INIT_VARS(ost, lprocfs_module_vars, lprocfs_obd_vars)
+#endif /* LPROCFS */

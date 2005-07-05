@@ -58,6 +58,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <libcfs/list.h>
 #include <portals/p30.h>
@@ -76,6 +78,10 @@ typedef unsigned short umode_t;
 
 #endif
 
+#ifndef CURRENT_SECONDS
+# define CURRENT_SECONDS time(0)
+#endif
+
 /* This is because lprocfs_status.h gets included here indirectly.  It would
  * be much better to just avoid lprocfs being included into liblustre entirely
  * but that requires more header surgery than I can handle right now.
@@ -86,7 +92,7 @@ typedef unsigned short umode_t;
 
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE (2*200+5*10+0)
+#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
 
 static inline void inter_module_put(void *a)
 {
@@ -162,35 +168,38 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
 #endif /* __LITTLE_ENDIAN */
 
 /* bits ops */
-static __inline__ int set_bit(int nr,long * addr)
-{
-	int	mask, retval;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr |= mask;
-	return retval;
+/* a long can be more than 32 bits, so use BITS_PER_LONG
+ * to allow the compiler to adjust the bit shifting accordingly
+ */
+
+/* test if bit nr is set in bitmap addr; returns previous value of bit nr */
+static __inline__ int set_bit(int nr, long * addr)
+{
+        long    mask;
+
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr |= mask;
+        return nr;
 }
 
+/* clear bit nr in bitmap addr; returns previous value of bit nr*/
 static __inline__ int clear_bit(int nr, long * addr)
 {
-	int	mask, retval;
+        long    mask;
 
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	retval = (mask & *addr) != 0;
-	*addr &= ~mask;
-	return retval;
+        addr += nr / BITS_PER_LONG;
+        mask = 1UL << (nr & (BITS_PER_LONG - 1));
+        nr = (mask & *addr) != 0;
+        *addr &= ~mask;
+        return nr;
 }
 
 static __inline__ int test_bit(int nr, long * addr)
 {
-	int	mask;
-
-	addr += nr >> 5;
-	mask = 1 << (nr & 0x1f);
-	return ((mask & *addr) != 0);
+        return ((1UL << (nr & (BITS_PER_LONG - 1))) & ((addr)[nr / BITS_PER_LONG])) != 0;
 }
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
@@ -312,14 +321,7 @@ static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
 /* random */
 
-static inline void get_random_bytes(void *ptr, int size)
-{
-        int *p = (int *)ptr;
-        int i, count = size/sizeof(int);
-
-        for (i = 0; i< count; i++)
-                *p++ = rand();
-}
+void get_random_bytes(void *ptr, int size);
 
 /* memory */
 
@@ -374,6 +376,10 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_MASK  PAGE_MASK
 
 /* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
+
+/* 2.4 defines */
+#define PAGE_LIST_ENTRY list
+#define PAGE_LIST(page) ((page)->list)
 
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
@@ -552,24 +558,28 @@ struct signal {
         int signal;
 };
 
-struct fs_struct {
-        int umask;
-};
-
 struct task_struct {
-        struct fs_struct *fs;
         int state;
         struct signal pending;
         char comm[32];
         int pid;
         int fsuid;
         int fsgid;
+        int max_groups;
+        int ngroups;
+        gid_t *groups;
         __u32 cap_effective;
 };
 
 extern struct task_struct *current;
-
-#define in_group_p(a) 0 /* FIXME */
+int in_group_p(gid_t gid);
+static inline int capable(int cap)
+{
+        if (current->cap_effective & (1 << cap))
+                return 1;
+        else
+                return 0;
+}
 
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
@@ -609,6 +619,7 @@ static inline int schedule_timeout(signed long t)
 }
 
 #define lock_kernel() do {} while (0)
+#define unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)
@@ -682,6 +693,33 @@ typedef struct { volatile int counter; } atomic_t;
 #define unlikely(exp) (exp)
 #endif
 
+/* FIXME sys/capability will finally included linux/fs.h thus
+ * cause numerous trouble on x86-64. as temporary solution for
+ * build broken at cary, we copy definition we need from capability.h
+ * FIXME
+ */
+struct _cap_struct;
+typedef struct _cap_struct *cap_t;
+typedef int cap_value_t;
+typedef enum {
+    CAP_EFFECTIVE=0,
+    CAP_PERMITTED=1,
+    CAP_INHERITABLE=2
+} cap_flag_t;
+typedef enum {
+    CAP_CLEAR=0,
+    CAP_SET=1
+} cap_flag_value_t;
+
+#define CAP_DAC_OVERRIDE        1
+#define CAP_DAC_READ_SEARCH     2
+#define CAP_FOWNER              3
+#define CAP_FSETID              4
+#define CAP_SYS_ADMIN          21
+
+cap_t   cap_get_proc(void);
+int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
+
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
@@ -717,6 +755,62 @@ struct liblustre_wait_callback {
 void *liblustre_register_wait_callback(int (*fn)(void *arg), void *arg);
 void liblustre_deregister_wait_callback(void *notifier);
 int liblustre_wait_event(int timeout);
+
+/* flock related */
+struct nfs_lock_info {
+        __u32             state;
+        __u32             flags;
+        void            *host;
+};
+
+struct file_lock {
+        struct file_lock *fl_next;      /* singly linked list for this inode  */
+        struct list_head fl_link;       /* doubly linked list of all locks */
+        struct list_head fl_block;      /* circular list of blocked processes */
+        void *fl_owner;
+        unsigned int fl_pid;
+        wait_queue_head_t fl_wait;
+        struct file *fl_file;
+        unsigned char fl_flags;
+        unsigned char fl_type;
+        loff_t fl_start;
+        loff_t fl_end;
+
+        void (*fl_notify)(struct file_lock *);  /* unblock callback */
+        void (*fl_insert)(struct file_lock *);  /* lock insertion callback */
+        void (*fl_remove)(struct file_lock *);  /* lock removal callback */
+
+        void *fl_fasync; /* for lease break notifications */
+        unsigned long fl_break_time;    /* for nonblocking lease breaks */
+
+        union {
+                struct nfs_lock_info    nfs_fl;       
+        } fl_u;
+};
+
+#ifndef OFFSET_MAX
+#define INT_LIMIT(x)    (~((x)1 << (sizeof(x)*8 - 1)))
+#define OFFSET_MAX      INT_LIMIT(loff_t)
+#endif
+
+/* XXX: defined in kernel */
+#define FL_POSIX        1
+#define FL_SLEEP        128
+
+/* quota */
+#define QUOTA_OK 0
+#define NO_QUOTA 1
+
+/* proc */
+#define proc_symlink(...)                       \
+({                                              \
+        void *result = NULL;                    \
+        result;                                 \
+})
+
+#ifndef ENOTSUPP
+#define ENOTSUPP ENOTSUP
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/lustre_idl.h>

@@ -23,6 +23,5 @@ void ptlrpc_activate_import(struct obd_import *imp);
 void ptlrpc_deactivate_import(struct obd_import *imp);
 void ptlrpc_invalidate_import(struct obd_import *imp);
 void ptlrpc_fail_import(struct obd_import *imp, int generation);
-void ptlrpc_fail_export(struct obd_export *exp);
 
 #endif

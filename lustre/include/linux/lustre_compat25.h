@@ -44,9 +44,8 @@
 #endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
-#define TryLockPage(page)                TestSetPageLocked(page)
-#define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
-#define Page_Uptodate(page)              PageUptodate(page)
+#define TryLockPage(page)               TestSetPageLocked(page)
+#define Page_Uptodate(page)             PageUptodate(page)
 #define ll_redirty_page(page)           set_page_dirty(page)
 
 #define KDEVT_INIT(val)                 (val)
@@ -64,8 +63,7 @@
 #define ll_truncate_complete_page(page) \
                                 truncate_complete_page(page->mapping, page)
 
-#define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
-
+#define ll_vfs_create(a,b,c,d)          vfs_create(a,b,c,d)
 #define ll_dev_t                        dev_t
 #define kdev_t                          dev_t
 #define to_kdev_t(dev)                  (dev)
@@ -120,8 +118,8 @@ static inline int cleanup_group_info(void)
 
 #else /* 2.4.. */
 
-#ifdef HAVE_MM_INLINE 
-#include <linux/mm_inline.h> 
+#ifdef HAVE_MM_INLINE
+#include <linux/mm_inline.h>
 #endif
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
@@ -236,8 +234,8 @@ static inline void cond_resched(void)
 #define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
 #define __clear_page_ll_data(page) page->private = 0
 #define PageWriteback(page) 0
-#define set_page_writeback(page)
-#define end_page_writeback(page)
+#define set_page_writeback(page) do {} while (0)
+#define end_page_writeback(page) do {} while (0)
 
 static inline int mapping_mapped(struct address_space *mapping)
 {
@@ -322,6 +320,10 @@ static inline int mapping_has_pages(struct address_space *mapping)
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
 #define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
+#endif
+
+#ifndef HAVE_FILEMAP_FDATAWRITE
+#define filemap_fdatawrite(mapping)      filemap_fdatasync(mapping)
 #endif
 
 #endif /* __KERNEL__ */

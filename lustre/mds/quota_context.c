@@ -9,18 +9,8 @@
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   No redistribution or use is permitted outside of Cluster File Systems, Inc.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
@@ -442,8 +432,10 @@ schedule_dqacq(struct obd_device *obd,
                 /* build dqacq/dqrel request */
                 LASSERT(qctxt->lqc_import);
                 req = ptlrpc_prep_req(qctxt->lqc_import, opc, 1, &size, NULL);
-                if (!req)
+                if (!req) {
+                        dqacq_completion(obd, qctxt, qdata, -ENOMEM, opc);
                         RETURN(-ENOMEM);
+                }
 
                 reqdata = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*reqdata));
                 memcpy(reqdata, qdata, sizeof(*reqdata));
@@ -470,7 +462,7 @@ wait_completion:
                 if (qw.qw_rc == 0)
                         rc = -EAGAIN;
 
-                QDATA_DEBUG(p, "wait dqacq done. (rc:%d)\n", qw.qw_rc);
+                CDEBUG(D_QUOTA, "wait dqacq done. (rc:%d)\n", qw.qw_rc);
         }
         RETURN(rc);
 }
@@ -510,6 +502,7 @@ next:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(qctxt_adjust_qunit);
 
 int
 qctxt_wait_on_dqacq(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
@@ -541,6 +534,7 @@ next:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(qctxt_wait_on_dqacq);
 
 int
 qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
@@ -564,6 +558,7 @@ qctxt_init(struct lustre_quota_ctxt *qctxt, struct super_block *sb,
 
         RETURN(0);
 }
+EXPORT_SYMBOL(qctxt_init);
 
 void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
 {
@@ -586,3 +581,4 @@ void qctxt_cleanup(struct lustre_quota_ctxt *qctxt, int force)
         spin_unlock(&qunit_hash_lock);
         EXIT;
 }
+EXPORT_SYMBOL(qctxt_cleanup);

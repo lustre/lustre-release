@@ -93,7 +93,13 @@ void ptlrpc_fill_bulk_md(ptl_md_t *md, struct ptlrpc_bulk_desc *desc)
 {
 #if CRAY_PORTALS
         LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_PHYS)));
+#if defined(REDSTORM) && (NALID_FROM_IFACE(CRAY_QK_NAL) == PTL_IFACE_SS_ACCEL)
+       /* Enforce iov_count == 1 constraint only for SeaStar accel mode on
+        * compute nodes (ie, REDSTORM)
+        *
+        * iov_count of > 1 is supported via PTL_MD_IOVEC in other contexts */
         LASSERT (desc->bd_iov_count == 1);
+#endif
 #else
         LASSERT (!(md->options & (PTL_MD_IOVEC | PTL_MD_KIOV | PTL_MD_PHYS)));
 #endif

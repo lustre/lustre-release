@@ -57,7 +57,13 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         int rc;
         ENTRY;
 
-        LASSERT(ctxt->loc_imp);
+        if (ctxt->loc_imp == NULL) {
+                /* This used to be an assert; bug 6200 */
+                CERROR("ctxt->loc_imp == NULL for context idx %d.  Unable to "
+                       "complete MDS/OSS recovery, but I'll try again next "
+                       "time.  Not fatal.\n", ctxt->loc_idx);
+                RETURN(-EINVAL);
+        }
         imp = ctxt->loc_imp;
 
         handle = llog_alloc_handle();

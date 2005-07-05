@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  * Lustre administrative quota format.
  *
  *  from
@@ -40,7 +42,7 @@ int lustre_check_quota_file(struct lustre_quota_info *lqi, int type)
 	loff_t offset = 0;
 	static const uint quota_magics[] = LUSTRE_INITQMAGICS;
 	static const uint quota_versions[] = LUSTRE_INITQVERSIONS;
- 
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	size = f->f_op->read(f, (char *)&dqhead, sizeof(struct lustre_disk_dqheader), &offset);
@@ -212,10 +214,10 @@ out_buf:
 }
 
 /* Insert empty block to the list */
-static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info, 
+static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
 			  dqbuf_t buf, uint blk)
 {
-	struct lustre_disk_dqdbheader *dh = (struct lustre_disk_dqdbheader *)buf;
+	struct lustre_disk_dqdbheader *dh =(struct lustre_disk_dqdbheader *)buf;
 	int err;
 
 	dh->dqdh_next_free = cpu_to_le32(info->dqi_free_blk);
@@ -223,7 +225,8 @@ static int put_free_dqblk(struct file *filp, struct lustre_mem_dqinfo *info,
 	dh->dqdh_entries = cpu_to_le16(0);
 	info->dqi_free_blk = blk;
 	lustre_mark_info_dirty(info);
-	if ((err = write_blk(filp, blk, buf)) < 0)	/* Some strange block. We had better leave it... */
+	if ((err = write_blk(filp, blk, buf)) < 0)
+		/* Some strange block. We had better leave it... */
 		return err;
 	return 0;
 }
@@ -536,7 +539,8 @@ static int remove_tree(struct lustre_dquot *dquot, uint *blk, int depth)
 		int i;
 		ref[GETIDINDEX(dquot->dq_id, depth)] = cpu_to_le32(0);
 		for (i = 0; i < LUSTRE_DQBLKSIZE && !buf[i]; i++);	/* Block got empty? */
-		if (i == LUSTRE_DQBLKSIZE) {
+		/* don't put the root block into free blk list! */
+		if (i == LUSTRE_DQBLKSIZE && *blk != LUSTRE_DQTREEOFF) {
 			put_free_dqblk(filp, info, buf, *blk);
 			*blk = 0;
 		}
@@ -550,6 +554,7 @@ out_buf:
 }
 
 /* Delete dquot from tree */
+#ifndef	QFMT_NO_DELETE
 static int lustre_delete_dquot(struct lustre_dquot *dquot)
 {
 	uint tmp = LUSTRE_DQTREEOFF;
@@ -558,6 +563,7 @@ static int lustre_delete_dquot(struct lustre_dquot *dquot)
 		return 0;
 	return remove_tree(dquot, &tmp, 0);
 }
+#endif
 
 /* Find entry in block */
 static loff_t find_block_dqentry(struct lustre_dquot *dquot, uint blk)
@@ -669,7 +675,8 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 			/* We need to escape back all-zero structure */
 			memset(&empty, 0, sizeof(struct lustre_disk_dqblk));
 			empty.dqb_itime = cpu_to_le64(1);
-			if (!memcmp(&empty, &ddquot, sizeof(struct lustre_disk_dqblk)))
+			if (!memcmp(&empty, &ddquot,
+				    sizeof(struct lustre_disk_dqblk)))
 				ddquot.dqb_itime = 0;
 		}
 		set_fs(fs);
@@ -683,24 +690,19 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 int lustre_commit_dquot(struct lustre_dquot *dquot)
 {
 	int rc = 0;
-	/* We clear the flag everytime so we don't loop when there was an IO error... */
+	/* always clear the flag so we don't loop on an IO error... */
 	clear_bit(DQ_MOD_B, &dquot->dq_flags);
 
-	/* The block/inode usage in admin quotafile isn't the real usage over all cluster,
-	 * so keep the fake dquot entry on disk is meaningless, just remove it */
-#ifndef	QFMT_NO_DELETE
+	/* The block/inode usage in admin quotafile isn't the real usage
+	 * over all cluster, so keep the fake dquot entry on disk is
+	 * meaningless, just remove it */
 	if (test_bit(DQ_FAKE_B, &dquot->dq_flags))
 		rc = lustre_delete_dquot(dquot);
-	}
-	else {
+	else
 		rc = lustre_write_dquot(dquot);
-	}
-#else
-	rc = lustre_write_dquot(dquot);
-#endif
 	if (rc < 0)
 		return rc;
-	
+
 	if (lustre_info_dirty(&dquot->dq_info->qi_info[dquot->dq_type]))
 		rc = lustre_write_quota_info(dquot->dq_info, dquot->dq_type);
 
@@ -723,7 +725,7 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
 	/* write quotafile header */
 	dqhead.dqh_magic = cpu_to_le32(quota_magics[type]);
 	dqhead.dqh_version = cpu_to_le32(quota_versions[type]);
-	size = fp->f_op->write(fp, (char *)&dqhead, 
+	size = fp->f_op->write(fp, (char *)&dqhead,
 			       sizeof(struct lustre_disk_dqheader), &offset);
 	
 	if (size != sizeof(struct lustre_disk_dqheader)) {

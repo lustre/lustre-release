@@ -31,14 +31,14 @@
 #include <linux/lustre_lib.h>
 
 /* XXX currently ctxt functions should not be used ?? */
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
-               struct obd_ucred *uc)
+void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
+               struct lvfs_ucred *uc)
 {
         LBUG();
 }
 
-void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
-              struct obd_ucred *uc)
+void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
+              struct lvfs_ucred *uc)
 {
         LBUG();
 }

@@ -672,7 +672,7 @@ test_33() {
     touch $DIR/$tfile
     fail_abort mds
     # this file should be gone, because the replay was aborted
-    $CHECKSTAT -t file $DIR/$tfile && return 1
+    $CHECKSTAT -t file $DIR/$tfile && return 3
     return 0
 }
 run_test 33 "abort recovery before client does replay"
@@ -837,6 +837,8 @@ test_42() {
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
+    DEBUG42=`sysctl portals.debug | tr -d ' '`
+    sysctl -w portals.debug=-1
     facet_failover ost
     
     # osc is evicted, fs is smaller
@@ -844,6 +846,7 @@ test_42() {
     [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
+    sysctl -w $DEBUG42
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
@@ -1020,13 +1023,15 @@ run_test 57 "test recovery from llog for setattr op"
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
     do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
-    createmany -o $DIR/$tfile-%d 30000
+    mkdir $DIR/$tdir
+    createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier mds
     fail mds
     sleep 2
-    $CHECKSTAT -t file $DIR/$tfile-* || return 1
+    $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
     do_facet mds "sysctl -w lustre.fail_loc=0x0"
-    rm -f $DIR/$tfile-*
+    unlinkmany $DIR/$tdir/$tfile-%d 2500
+    rmdir $DIR/$tdir
 }
 run_test 58 "test recovery from llog for setattr op (test llog_gen_rec)"
 

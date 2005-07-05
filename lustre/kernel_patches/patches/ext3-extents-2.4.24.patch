@@ -2513,9 +2513,9 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
-+#define EXT3_IOC_GET_EXTENTS		_IOR('f', 5, long)
-+#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 6, long)
-+#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_EXTENTS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 8, long)
++#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 9, long)
  
  /*
   * Structure of an inode on the disk

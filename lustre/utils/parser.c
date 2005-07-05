@@ -341,16 +341,46 @@ int init_input()
 #define add_history(s)
 char * readline(char * prompt)
 {
-        char line[2048];
-        int n = 0;
+        int size = 2048;
+        char *line = malloc(size);
+        char *ptr = line;
+        int c;
+
+        if (line == NULL)
+                return NULL;
         if (prompt)
                 printf ("%s", prompt);
-        if (fgets(line, sizeof(line), stdin) == NULL)
-                return (NULL);
-        n = strlen(line);
-        if (n && line[n-1] == '\n')
-                line[n-1] = '\0';
-        return strdup(line);
+
+        while (1) {
+                if ((c = fgetc(stdin)) != EOF) {
+                        if (c == '\n')
+                                goto out;
+                        *ptr++ = c;
+ 
+                        if (ptr - line >= size - 1) {
+                                char *tmp;
+
+                                size *= 2;
+                                tmp = malloc(size);
+                                if (tmp == NULL)
+                                        goto outfree;
+                                memcpy(tmp, line, ptr - line);
+                                ptr = tmp + (ptr - line);
+                                free(line);
+                                line = tmp;
+                        }
+                } else {
+                        if (ferror(stdin))
+                                goto outfree;
+                        goto out;
+                }
+        }
+out:
+        *ptr = 0;
+        return line;
+outfree:
+        free(line);
+        return NULL;
 }
 #endif
 

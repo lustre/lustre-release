@@ -100,7 +100,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                               int buf_idx, int increase)
 {
         int rc = 0;
-        struct ost_lvb *lvb = res->lr_lvb_data;
+        struct ost_lvb *lvb;
         struct obd_device *obd;
         struct dentry *dentry;
         ENTRY;
@@ -113,6 +113,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                 RETURN(0);
 
         down(&res->lr_lvb_sem);
+        lvb = res->lr_lvb_data;
         if (lvb == NULL) {
                 CERROR("No lvb when running lvbo_update!\n");
                 GOTO(out, rc = 0);

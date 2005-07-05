@@ -211,6 +211,9 @@ void request_in_callback(ptl_event_t *ev)
         req->rq_peer = ev->initiator;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
+#if CRAY_PORTALS
+        req->rq_uid = ev->uid;
+#endif
         
         spin_lock_irqsave (&service->srv_lock, flags);
 
@@ -393,6 +396,12 @@ ptl_pid_t ptl_get_pid(void)
 
 #ifndef  __KERNEL__
         pid = getpid();
+# if CRAY_PORTALS
+	/* hack to keep pid in range accepted by ernal */
+	pid &= 0xFF;
+	if (pid == LUSTRE_SRV_PTL_PID)
+		pid++;
+# endif
 #else
         pid = LUSTRE_SRV_PTL_PID;
 #endif
@@ -404,7 +413,7 @@ int ptlrpc_ni_init(void)
         int              rc;
         char             str[20];
         ptl_pid_t        pid;
-        
+
         pid = ptl_get_pid();
 
         /* We're not passing any limits yet... */
@@ -425,6 +434,11 @@ int ptlrpc_ni_init(void)
         /* kernel portals calls our master callback when events are added to
          * the event queue.  In fact lustre never pulls events off this queue,
          * so it's only sized for some debug history. */
+# if CRAY_PORTALS
+        rc = PtlNIDebug(pni->pni_ni_h, 0xffffffff);
+        if (rc != PTL_OK)
+                CDEBUG(D_ERROR, "Can't enable Cray Portals Debug: rc %d\n", rc);
+# endif
         rc = PtlEQAlloc(ptlrpc_ni_h, 1024, ptlrpc_master_callback,
                         &ptlrpc_eq_h);
 #else
@@ -487,7 +501,7 @@ liblustre_check_events (int timeout)
         int         i;
         ENTRY;
 
-        rc = PtlEQPoll(ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
+        rc = PtlEQPoll(&ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
         if (rc == PTL_EQ_EMPTY)
                 RETURN(0);
         

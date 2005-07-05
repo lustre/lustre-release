@@ -9,3 +9,6 @@ export-filemap_populate.patch
 grab_cache_page_nowait_gfp-2.6-suse.patch 
 remove-suid-2.6-suse.patch
 link_notlast-susefix.patch
+uml-exprt-clearuser.patch
+qsnet-suse-2.6.patch 
+fsprivate-2.6.patch

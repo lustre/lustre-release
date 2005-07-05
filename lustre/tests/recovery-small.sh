@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  2986
-ALWAYS_EXCEPT="20b"
+#         bug  2986 5494
+ALWAYS_EXCEPT="20b  24"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -136,14 +136,14 @@ run_test 9 "pause bulk on OST (bug 1420)"
 
 #bug 1521
 test_10() {
-    do_facet client mcreate $MOUNT/f10        || return 1
-    drop_bl_callback "chmod 0777 $MOUNT/f10"  || return 2
+    do_facet client mcreate $MOUNT/$tfile        || return 1
+    drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
     # wait for the mds to evict the client
     #echo "sleep $(($TIMEOUT*2))"
     #sleep $(($TIMEOUT*2))
-    do_facet client touch  $MOUNT/f10 || echo "touch failed, evicted"
-    do_facet client checkstat -v -p 0777 $MOUNT/f10  || return 3
-    do_facet client "munlink $MOUNT/f10"
+    do_facet client touch $MOUNT/$tfile || echo "touch failed, evicted"
+    do_facet client checkstat -v -p 0777 $MOUNT/$tfile  || return 3
+    do_facet client "munlink $MOUNT/$tfile"
 }
 run_test 10 "finish request on server after client eviction (bug 1521)"
 
@@ -393,12 +393,75 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	client_reconnect
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
-run_test 24 "fsync error (should return error)" 
+run_test 24 "fsync error (should return error)"
 
-test_25a() {
+test_26() {      # bug 5921 - evict dead exports 
+# this test can only run from a client on a separate node.
+	[ "`lsmod | grep obdfilter`" ] && \
+	    echo "skipping test 26 (local OST)" && return
+	[ "`lsmod | grep mds`" ] && \
+	    echo "skipping test 26 (local MDS)" && return
+	OST_FILE=/proc/fs/lustre/obdfilter/ost_svc/num_exports
+        OST_EXP="`do_facet ost cat $OST_FILE`"
+	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
+	echo starting with $OST_NEXP1 OST exports
+# OBD_FAIL_PTLRPC_DROP_RPC 0x505
+	do_facet client sysctl -w lustre.fail_loc=0x505
+	# evictor takes up to 2.25x to evict.  But if there's a 
+	# race to start the evictor from various obds, the loser
+	# might have to wait for the next ping.
+	echo Waiting for $(($TIMEOUT * 4)) secs
+	sleep $(($TIMEOUT * 4))
+        OST_EXP="`do_facet ost cat $OST_FILE`"
+	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
+	echo ending with $OST_NEXP2 OST exports
+	do_facet client sysctl -w lustre.fail_loc=0x0
+        [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted"
+	return 0
+}
+run_test 26 "evict dead exports"
+
+test_27() {
+	[ "`lsmod | grep mds`" ] || \
+	    { echo "skipping test 27 (non-local MDS)" && return 0; }
 	mkdir -p $DIR/$tdir
-	# put a load of file creates/writes/deletes for 10 min.
-	do_facet client "writemany -q -a $DIR/$tdir/$tfile 600 5" &
+	writemany -q -a $DIR/$tdir/$tfile 0 5 &
+	CLIENT_PID=$!
+	sleep 1
+	FAILURE_MODE="SOFT"
+	facet_failover mds
+#define OBD_FAIL_OSC_SHUTDOWN            0x407
+	sysctl -w lustre.fail_loc=0x80000407
+	# need to wait for reconnect
+	echo -n waiting for fail_loc
+	while [ `sysctl -n lustre.fail_loc` -eq -2147482617 ]; do
+	    sleep 1
+	    echo -n .
+	done
+	facet_failover mds
+	#no crashes allowed!
+        kill -USR1 $CLIENT_PID
+	wait $CLIENT_PID 
+	true
+}
+run_test 27 "fail LOV while using OSC's"
+
+test_28() {      # bug 6086 - error adding new clients
+	do_facet client mcreate $MOUNT/$tfile        || return 1
+	drop_bl_callback "chmod 0777 $MOUNT/$tfile"  || return 2
+	#define OBD_FAIL_MDS_ADD_CLIENT 0x12f
+	do_facet mds sysctl -w lustre.fail_loc=0x8000012f
+	# fail once (evicted), reconnect fail (fail_loc), ok
+	df || (sleep 1; df) || (sleep 1; df) || error "reconnect failed"
+	rm -f $MOUNT/$tfile
+	fail mds		# verify MDS last_rcvd can be loaded
+}
+run_test 28 "handle error adding new clients (bug 6086)"
+
+test_50() {
+	mkdir -p $DIR/$tdir
+	# put a load of file creates/writes/deletes
+	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
@@ -410,42 +473,46 @@ test_25a() {
 	sleep 60
 	fail mds
 	# client process should see no problems even though MDS went down
+	sleep $TIMEOUT
+        kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	rc=$?
 	echo writemany returned $rc
+	#these may fail because of eviction due to slow AST response.
 	return $rc
 }
-run_test 25a "failover MDS under load"
+run_test 50 "failover MDS under load"
 
-test_25b() {
+test_51() {
 	mkdir -p $DIR/$tdir
 	# put a load of file creates/writes/deletes
-	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
+	writemany -q $DIR/$tdir/$tfile 0 5 &
 	CLIENT_PID=$!
-	echo writemany pid $CLIENT_PID
 	sleep 1
 	FAILURE_MODE="SOFT"
 	facet_failover mds
 	# failover at various points during recovery
-	sleep 1
-	facet_failover mds
-	sleep 5
-	facet_failover mds
-	sleep 10
-	facet_failover mds
-	sleep 20
-	facet_failover mds
+	SEQ="1 5 10 $(seq $TIMEOUT 5 $(($TIMEOUT+10)))"
+        echo will failover at $SEQ
+        for i in $SEQ
+          do
+          echo failover in $i sec
+          sleep $i
+          facet_failover mds
+        done
 	# client process should see no problems even though MDS went down
 	# and recovery was interrupted
+	sleep $TIMEOUT
+        kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID 
 	rc=$?
 	echo writemany returned $rc
 	return $rc
 }
-run_test 25b "failover MDS during recovery"
+run_test 51 "failover MDS during recovery"
 
-test_25c_guts() {
-	do_facet client "writemany -q $DIR/$tdir/$tfile 600 5" &
+test_52_guts() {
+	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
@@ -461,22 +528,23 @@ test_25c_guts() {
 	return $rc
 }
 
-test_25c() {
+test_52() {
 	mkdir -p $DIR/$tdir
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	# wait for client to reconnect to OST
 	sleep 30
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	[ $rc -ne 0 ] && { return $rc; }
 	sleep 30
-	test_25c_guts
+	test_52_guts
 	rc=$?
 	client_reconnect
-	return $rc
+	#return $rc
 }
-run_test 25c "failover OST under load"
+run_test 52 "failover OST under load"
+
 
 FORCE=--force $CLEANUP

@@ -24,6 +24,8 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo $DEBUG_LVL > /proc/sys/portals/debug"
 [ "$DEBUG_ON" ] || DEBUG_ON="eval echo -1 > /proc/sys/portals/debug"
 
+LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
+
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
 	[ -e $NAME.sh ] && sh $NAME.sh
@@ -40,7 +42,7 @@ for NAME in $CONFIGS; do
 
 	if [ "$DBENCH" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
-		SPACE=`df $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
 		DB_THREADS=`expr $SPACE / 50000`
 		[ $THREADS -lt $DB_THREADS ] && DB_THREADS=$THREADS
 
@@ -69,44 +71,45 @@ for NAME in $CONFIGS; do
 	fi
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r $RSIZE -s $SIZE"
 	if [ "$O_DIRECT" -a  "$O_DIRECT" != "no" ]; then
-	    IOZONE_OPTS="-I $IOZONE_OPTS"
+		IOZONE_OPTS="-I $IOZONE_OPTS"
 	fi
-	IOZONE_FILE="-f $MOUNT/iozone"
+	IOZFILE="-f $MOUNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		iozone $IOZONE_OPTS $IOZONE_FILE
+		iozone $IOZONE_OPTS $IOZFILE
 		$DEBUG_ON
 		sh llmountcleanup.sh
 		sh llrmount.sh
-	fi
-	if [ "$IOZONE_DIR" != "no" ]; then
-		mount | grep $MOUNT || sh llmount.sh
-		SPACE=`df $MOUNT | tail -n 1 | awk '{ print $4 }'`
-		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
-		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 
-		$DEBUG_OFF
-		iozone $IOZONE_OPTS $IOZONE_FILE.odir
-		IOZVER=`iozone -v | awk '/Revision:/ { print $3 }' | tr -d '.'`
-		$DEBUG_ON
-		sh llmountcleanup.sh
-		sh llrmount.sh
-		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
+		if [ "$IOZONE_DIR" != "no" ]; then
+			mount | grep $MOUNT || sh llmount.sh
+			SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+			IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
+			[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
+
 			$DEBUG_OFF
-			THREAD=1
-			IOZONE_FILE="-F "
-			while [ $THREAD -le $IOZ_THREADS ]; do
-				IOZONE_FILE="$IOZONE_FILE $MOUNT/iozone.$THREAD"
-				THREAD=`expr $THREAD + 1`
-			done
-			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZONE_FILE
+			iozone $IOZONE_OPTS $IOZFILE.odir
+			IOZVER=`iozone -v|awk '/Revision:/ {print $3}'|tr -d .`
 			$DEBUG_ON
 			sh llmountcleanup.sh
 			sh llrmount.sh
-		elif [ $IOZVER -lt 3145 ]; then
-			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
-			echo "iozone $VER too old for multi-threaded tests"
+			if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
+				$DEBUG_OFF
+				THREAD=1
+				IOZFILE="-F "
+				while [ $THREAD -le $IOZ_THREADS ]; do
+					IOZFILE="$IOZFILE $MOUNT/iozone.$THREAD"
+					THREAD=`expr $THREAD + 1`
+				done
+				iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
+				$DEBUG_ON
+				sh llmountcleanup.sh
+				sh llrmount.sh
+			elif [ $IOZVER -lt 3145 ]; then
+				VER=`iozone -v | awk '/Revision:/ { print $3 }'`
+				echo "iozone $VER too old for multi-thread test"
+			fi
 		fi
 	fi
 	if [ "$FSX" != "no" ]; then
@@ -118,20 +121,22 @@ for NAME in $CONFIGS; do
 		sh llmountcleanup.sh
 		sh llrmount.sh
 	fi	
+
+	mkdir -p $MOUNT2
+	case $NAME in
+	local|lov)
+		MDSNODE=`hostname`
+		MDSNAME=mds1
+		CLIENT=client
+		;;
+	*)	# we could extract this from $NAME.xml somehow
+		;;
+	esac
+
 	if [ "$SANITYN" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
 
-		mkdir -p $MOUNT2
-		case $NAME in
-		local|lov)
-			MDSNODE=`hostname`
-			MDSNAME=mds1
-			CLIENT=client
-			;;
-		*)	# we could extract this from $NAME.xml somehow
-			;;
-		esac
 		if [ "$MDSNODE" -a "$MDSNAME" -a "$CLIENT" ]; then
 			llmount $MDSNODE:/$MDSNAME/$CLIENT $MOUNT2
 			SANITYLOG=$TMP/sanity.log START=: CLEAN=: sh sanityN.sh
@@ -142,6 +147,18 @@ for NAME in $CONFIGS; do
 		fi
 
 		$DEBUG_ON
+		sh llmountcleanup.sh
+		sh llrmount.sh
+	fi
+
+	if [ "$LIBLUSTRE" != "no" ]; then
+		mount | grep $MOUNT || sh llmount.sh
+		IPADDR=`ping -c 1 $MDSNODE|head -n 1|sed -e "s/[^(]*(//" -e "s/).*//"`
+		export ENV_LUSTRE_MNTPNT=$MOUNT2
+		export ENV_LUSTRE_MNTTGT=$IPADDR:/$MDSNAME/$CLIENT
+		if [ -x $LIBLUSTRETESTS/sanity ]; then
+			$LIBLUSTRETESTS/sanity --target=$ENV_LUSTRE_MNTTGT
+		fi
 		sh llmountcleanup.sh
 		#sh llrmount.sh
 	fi

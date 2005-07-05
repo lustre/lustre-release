@@ -15,17 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define CERROR(fmt, arg...) fprintf(stderr, fmt, ## arg)
-#ifndef __u64
-#define __u64 long long
-#define cpu_to_le64(v) (v)
-#define le64_to_cpu(v) (v)
-#endif
-
-#ifndef LPU64
-#define LPU64 "%Lu"
-#define LPX64 "%#Lx"
-#endif
+#include <liblustre.h>
 
 #define READ  1
 #define WRITE 2
@@ -91,9 +81,9 @@ int main(int argc, char **argv)
 {
         int fd;
         char *buf;
-        long long count, last, offset;
+        loff_t count, last, offset;
         long pg_vec, len;
-        long long objid;
+        __u64 objid;
         struct stat st;
         int flags = 0;
         int cmd = 0;

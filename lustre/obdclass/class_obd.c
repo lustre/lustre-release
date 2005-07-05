@@ -89,7 +89,7 @@ int proc_version;
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
-unsigned int ldlm_timeout = 6;  /* seconds */
+unsigned int ldlm_timeout = 20; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
@@ -102,33 +102,9 @@ unsigned int obd_print_fail_loc(void)
         return obd_fail_loc;
 }
 
-void ll_set_rdonly(ll_sbdev_type dev)
+void obd_set_fail_loc(unsigned int fl)
 {
-        CDEBUG(D_IOCTL | D_HA, "set dev %ld rdonly\n", (long)dev);
-        ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-        dev_set_rdonly(dev, 2);
-#else
-        dev_set_rdonly(dev);
-#endif
-}
-
-void ll_clear_rdonly(ll_sbdev_type dev)
-{
-#ifndef HAVE_CLEAR_RDONLY_ON_PUT
-        CDEBUG(D_IOCTL | D_HA, "unset dev %ld rdonly\n", (long)dev);
-        if (ll_check_rdonly(dev)) {
-                ll_sbdev_sync(dev);
-#ifdef HAVE_OLD_DEV_SET_RDONLY
-                dev_clear_rdonly(2);
-#else
-                dev_clear_rdonly(dev);
-#endif
-        }
-#else 
-        CDEBUG(D_IOCTL | D_HA, "(will unset dev %ld rdonly on put)\n",
-               (long)dev);
-#endif
+        obd_fail_loc = fl;
 }
 
 /*  opening /dev/obd */
@@ -234,13 +210,12 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                                               data->ioc_plen1);
                 if (err)
                         GOTO(out, err);
-                
+
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-                if (err)
-                        GOTO(out, err);
 
-                err = class_process_config(lcfg);
+                if (!err)
+                        err = class_process_config(lcfg);
                 OBD_FREE(lcfg, data->ioc_plen1);
                 GOTO(out, err);
         }
@@ -330,7 +305,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         if (data->ioc_dev >= MAX_OBD_DEVICES) {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
-        } 
+        }
         obd = &obd_dev[data->ioc_dev];
         if (!(obd && obd->obd_set_up) || obd->obd_stopping) {
                 CERROR("OBD ioctl: device not setup %d \n", data->ioc_dev);
@@ -390,7 +365,7 @@ static struct file_operations obd_psdev_fops = {
 /* modules setup */
 static struct miscdevice obd_psdev = {
         .minor = OBD_MINOR,
-        .name  = "obd_psdev",
+        .name  = "obd",
         .fops  = &obd_psdev_fops,
 };
 #else
@@ -398,13 +373,7 @@ void *obd_psdev = NULL;
 #endif
 
 EXPORT_SYMBOL(obd_dev);
-EXPORT_SYMBOL(obdo_cachep);
-EXPORT_SYMBOL(qunit_cachep);
-EXPORT_SYMBOL(qunit_hash_lock);
-EXPORT_SYMBOL(qunit_hash);
 EXPORT_SYMBOL(obd_fail_loc);
-EXPORT_SYMBOL(ll_set_rdonly);
-EXPORT_SYMBOL(ll_clear_rdonly);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_dump_on_timeout);
@@ -414,6 +383,8 @@ EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 EXPORT_SYMBOL(ptlrpc_abort_inflight_superhack);
+
+struct proc_dir_entry *proc_lustre_root;
 EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
@@ -427,28 +398,12 @@ EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_find_client_obd);
 EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
-EXPORT_SYMBOL(__class_export_put);
-EXPORT_SYMBOL(class_new_export);
-EXPORT_SYMBOL(class_unlink_export);
-EXPORT_SYMBOL(class_import_get);
-EXPORT_SYMBOL(class_import_put);
-EXPORT_SYMBOL(class_new_import);
-EXPORT_SYMBOL(class_destroy_import);
-EXPORT_SYMBOL(class_connect);
 EXPORT_SYMBOL(class_conn2export);
 EXPORT_SYMBOL(class_exp2obd);
 EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
-EXPORT_SYMBOL(class_disconnect_exports);
-EXPORT_SYMBOL(class_disconnect_stale_exports);
-
-EXPORT_SYMBOL(oig_init);
-EXPORT_SYMBOL(oig_release);
-EXPORT_SYMBOL(oig_add_one);
-EXPORT_SYMBOL(oig_wait);
-EXPORT_SYMBOL(oig_complete_one);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);
@@ -497,15 +452,58 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
                        );
 }
 
+static int obd_proc_read_health(char *page, char **start, off_t off,
+                                int count, int *eof, void *data)
+{
+        int rc = 0; //, i;
+        *eof = 1;
+
+        if (portals_catastrophe)
+                rc += snprintf(page + rc, count - rc, "LBUG\n");
+
+#if 0
+        spin_lock(&obd_dev_lock);
+        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+                struct obd_device *obd;
+
+                obd = &obd_dev[i];
+                if (obd->obd_type == NULL)
+                        continue;
+
+                atomic_inc(&obd->obd_refcount);
+                spin_unlock(&obd_dev_lock);
+
+                if (obd_health_check(obd)) {
+                        rc += snprintf(page + rc, count - rc,
+                                       "device %s reported unhealthy\n",
+                                       obd->obd_name);
+                }
+                class_decref(obd);
+                spin_lock(&obd_dev_lock);
+        }
+        spin_unlock(&obd_dev_lock);
+#endif
+
+        if (rc == 0)
+                return snprintf(page, count, "healthy\n");
+
+        rc += snprintf(page + rc, count - rc, "NOT HEALTHY\n");
+        return rc;
+}
+
 /* Root for /proc/fs/lustre */
-struct proc_dir_entry *proc_lustre_root = NULL;
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
+        { "health_check", obd_proc_read_health, NULL, NULL },
         { 0 }
 };
+#else
+#define lprocfs_base NULL
+#endif /* LPROCFS */
 
+#ifdef __KERNEL__
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
 {
         if (*pos >= MAX_OBD_DEVICES)
@@ -590,13 +588,13 @@ int obd_init_checks(void)
         CDEBUG(D_INFO, "LPU64=%s, LPD64=%s, LPX64=%s, LPSZ=%s, LPSSZ=%s\n",
                LPU64, LPD64, LPX64, LPSZ, LPSSZ);
 
-        CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", OBD_OBJECT_EOF);
+        CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", (__u64)OBD_OBJECT_EOF);
 
         u64val = OBD_OBJECT_EOF;
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 ret = -EINVAL;
         }
         len = snprintf(buf, sizeof(buf), LPX64, u64val);
@@ -609,12 +607,12 @@ int obd_init_checks(void)
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 ret = -EOVERFLOW;
         }
         if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
-                       u64val, sizeof(u64val));
+                       u64val, (int)sizeof(u64val));
                 return -EOVERFLOW;
         }
         if (do_div(div64val, 256) != (u64val & 255)) {
@@ -659,7 +657,7 @@ int init_obdclass(void)
 #endif
 {
         struct obd_device *obd;
-#ifdef LPROCFS
+#ifdef __KERNEL__
         struct proc_dir_entry *entry;
 #endif
         int err;
@@ -696,9 +694,7 @@ int init_obdclass(void)
 
 #ifdef __KERNEL__
         obd_sysctl_init();
-#endif
 
-#ifdef LPROCFS
         proc_lustre_root = proc_mkdir("lustre", proc_root_fs);
         if (!proc_lustre_root) {
                 printk(KERN_ERR
@@ -740,12 +736,11 @@ static void cleanup_obdclass(void)
 
         obd_cleanup_caches();
         obd_sysctl_clean();
-#ifdef LPROCFS
+
         if (proc_lustre_root) {
                 lprocfs_remove(proc_lustre_root);
                 proc_lustre_root = NULL;
         }
-#endif
 
         class_handle_cleanup();
         class_exit_uuidlist();
@@ -761,7 +756,7 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #include <linux/lustre_version.h>
 #define LUSTRE_MIN_VERSION 32
-#define LUSTRE_MAX_VERSION 45
+#define LUSTRE_MAX_VERSION 46
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)

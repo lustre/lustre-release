@@ -32,7 +32,7 @@
 #include <linux/kmod.h>
 #include <linux/version.h>
 #include <linux/sched.h>
-#include <linux/quotaops.h>
+#include <linux/lustre_quota.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/mount.h>
 #endif
@@ -47,7 +47,6 @@
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
-#define MDS_MAX_CLIENT_WORDS (MDS_MAX_CLIENTS / sizeof(unsigned long))
 
 #define LAST_RCVD "last_rcvd"
 #define LOV_OBJID "lov_objid"
@@ -56,6 +55,9 @@
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset.
+ *
+ * It should not be possible to fail adding an existing client - otherwise
+ * mds_init_server_data() callsite needs to be fixed.
  */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_idx)
@@ -65,6 +67,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         ENTRY;
 
         LASSERT(bitmap != NULL);
+        LASSERTF(cl_idx > -2, "%d\n", cl_idx);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
@@ -76,9 +79,10 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         if (new_client) {
                 cl_idx = find_first_zero_bit(bitmap, MDS_MAX_CLIENTS);
         repeat:
-                if (cl_idx >= MDS_MAX_CLIENTS) {
+                if (cl_idx >= MDS_MAX_CLIENTS ||
+                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
                         CERROR("no room for clients - fix MDS_MAX_CLIENTS\n");
-                        return -ENOMEM;
+                        return -EOVERFLOW;
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
                         cl_idx = find_next_zero_bit(bitmap, MDS_MAX_CLIENTS,
@@ -96,79 +100,92 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
         CDEBUG(D_INFO, "client at idx %d with UUID '%s' added\n",
                cl_idx, med->med_mcd->mcd_uuid);
 
-        med->med_idx = cl_idx;
-        med->med_off = le32_to_cpu(mds->mds_server_data->msd_client_start) +
+        med->med_lr_idx = cl_idx;
+        med->med_lr_off = le32_to_cpu(mds->mds_server_data->msd_client_start) +
                 (cl_idx * le16_to_cpu(mds->mds_server_data->msd_client_size));
+        LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
         if (new_client) {
-                struct obd_run_ctxt saved;
-                loff_t off = med->med_off;
+                struct lvfs_run_ctxt saved;
+                loff_t off = med->med_lr_off;
                 struct file *file = mds->mds_rcvd_filp;
                 int rc;
 
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, file, med->med_mcd,
                                          sizeof(*med->med_mcd), &off, 1);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 if (rc)
                         return rc;
                 CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
-                       med->med_idx, med->med_off,
+                       med->med_lr_idx, med->med_lr_off,
                        (unsigned int)sizeof(*med->med_mcd));
         }
         return 0;
 }
 
-int mds_client_free(struct obd_export *exp, int clear_client)
+int mds_client_free(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct obd_device *obd = exp->exp_obd;
         struct mds_client_data zero_mcd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
-        unsigned long *bitmap = mds->mds_client_bitmap;
+        loff_t off;
+        ENTRY;
 
         if (!med->med_mcd)
                 RETURN(0);
 
         /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
-                GOTO(free_and_out, 0);
+                GOTO(free, 0);
 
-        CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
-               med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
+               med->med_lr_idx, med->med_lr_off, med->med_mcd->mcd_uuid);
 
-        LASSERT(bitmap);
+        LASSERT(mds->mds_client_bitmap != NULL);
+
+        off = med->med_lr_off;
+
+        /* Don't clear med_lr_idx here as it is likely also unset.  At worst
+         * we leak a client slot that will be cleaned on the next recovery. */
+        if (off <= 0) {
+                CERROR("%s: client idx %d has offset %lld\n",
+                        obd->obd_name, med->med_lr_idx, off);
+                GOTO(free, rc = -EINVAL);
+        }
 
         /* Clear the bit _after_ zeroing out the client so we don't
            race with mds_client_add and zero out new clients.*/
-        if (!test_bit(med->med_idx, bitmap)) {
+        if (!test_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
-                       med->med_idx);
+                       med->med_lr_idx);
                 LBUG();
         }
 
-        if (clear_client) {
+        if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
                 memset(&zero_mcd, 0, sizeof zero_mcd);
-                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = fsfilt_write_record(obd, mds->mds_rcvd_filp, &zero_mcd,
-                                         sizeof(zero_mcd), &med->med_off, 1);
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                                         sizeof(zero_mcd), &off, 1);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
-                       med->med_mcd->mcd_uuid, med->med_idx, LAST_RCVD, rc);
+                       med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }
 
-        if (!test_and_clear_bit(med->med_idx, bitmap)) {
+        if (!test_and_clear_bit(med->med_lr_idx, mds->mds_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
-                       med->med_idx);
+                       med->med_lr_idx);
                 LBUG();
         }
 
- free_and_out:
+        EXIT;
+free:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
         med->med_mcd = NULL;
 
@@ -177,8 +194,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
 
 static int mds_server_free_data(struct mds_obd *mds)
 {
-        OBD_FREE(mds->mds_client_bitmap,
-                 MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_FREE(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         OBD_FREE(mds->mds_server_data, sizeof(*mds->mds_server_data));
         mds->mds_server_data = NULL;
 
@@ -206,8 +222,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         if (!msd)
                 RETURN(-ENOMEM);
 
-        OBD_ALLOC_WAIT(mds->mds_client_bitmap,
-                  MDS_MAX_CLIENT_WORDS * sizeof(unsigned long));
+        OBD_ALLOC_WAIT(mds->mds_client_bitmap, MDS_MAX_CLIENTS / 8);
         if (!mds->mds_client_bitmap) {
                 OBD_FREE(msd, sizeof(*msd));
                 RETURN(-ENOMEM);
@@ -323,7 +338,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        sizeof exp->exp_client_uuid.uuid);
                 med = &exp->exp_mds_data;
                 med->med_mcd = mcd;
-                mds_client_add(obd, mds, med, cl_idx);
+                rc = mds_client_add(obd, mds, med, cl_idx);
+                LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
+
                 /* create helper if export init gets more complex */
                 INIT_LIST_HEAD(&med->med_open_head);
                 spin_lock_init(&med->med_open_lock);
@@ -338,7 +355,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        cl_idx, last_transno);
 
                 if (last_transno > mds->mds_last_transno)
-                       mds->mds_last_transno = last_transno;
+                        mds->mds_last_transno = last_transno;
         }
 
         if (mcd)
@@ -375,7 +392,7 @@ err_msd:
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct dentry *dentry;
         struct file *file;
         int rc;
@@ -390,14 +407,14 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         fsfilt_setup(obd, mds->mds_sb);
 
-        OBD_SET_CTXT_MAGIC(&obd->obd_ctxt);
-        obd->obd_ctxt.pwdmnt = mnt;
-        obd->obd_ctxt.pwd = mnt->mnt_root;
-        obd->obd_ctxt.fs = get_ds();
-        obd->obd_ctxt.cb_ops = mds_lvfs_ops;
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.pwdmnt = mnt;
+        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+        obd->obd_lvfs_ctxt.fs = get_ds();
+        obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
 
         /* setup the directory tree */
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
@@ -484,7 +501,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_lov_objid, rc = -ENOENT);
         }
 err_pop:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         return rc;
 
@@ -511,8 +528,8 @@ err_fid:
 int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_run_ctxt saved;
-        int i, rc = 0;
+        struct lvfs_run_ctxt saved;
+        int rc = 0;
 
         if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
@@ -521,7 +538,7 @@ int mds_fs_cleanup(struct obd_device *obd)
         class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (mds->mds_rcvd_filp) {
                 rc = filp_close(mds->mds_rcvd_filp, 0);
                 mds->mds_rcvd_filp = NULL;
@@ -546,21 +563,13 @@ int mds_fs_cleanup(struct obd_device *obd)
                 l_dput(mds->mds_pending_dir);
                 mds->mds_pending_dir = NULL;
         }
-        
-        /* close admin quota files */
-        down(&mds->mds_quota_info.qi_sem);
-        for (i = 0; i < MAXQUOTAS; i++) {
-		if (mds->mds_quota_info.qi_files[i]) {
-                        filp_close(mds->mds_quota_info.qi_files[i], 0);
-                        mds->mds_quota_info.qi_files[i] = NULL;
-                }
-	}
-        up(&mds->mds_quota_info.qi_sem);
 
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        mds_fs_quota_cleanup(mds);
+        
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
-        DQUOT_OFF(mds->mds_sb);
+        LL_DQUOT_OFF(mds->mds_sb);
 
         return rc;
 }
@@ -576,18 +585,18 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         unsigned int tmpname = ll_insecure_random_int();
         struct file *filp;
         struct dentry *new_child;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         char fidname[LL_FID_NAMELEN];
         void *handle;
-        struct obd_ucred ucred;
+        struct lvfs_ucred ucred;
         int rc = 0, err, namelen;
         ENTRY;
 
         /* the owner of object file should always be root */
         memset(&ucred, 0, sizeof(ucred));
-        ucred.ouc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, &ucred);
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
         filp = filp_open(fidname, O_CREAT | O_EXCL, 0666);
@@ -651,7 +660,7 @@ out_close:
                         rc = err;
         }
 out_pop:
-        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, &ucred);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);
 }
 
@@ -661,8 +670,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
-        struct obd_ucred ucred;
+        struct lvfs_run_ctxt saved;
+        struct lvfs_ucred ucred;
         char fidname[LL_FID_NAMELEN];
         struct dentry *de;
         void *handle;
@@ -670,8 +679,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         ENTRY;
         
         memset(&ucred, 0, sizeof(ucred));
-        ucred.ouc_cap = current->cap_effective | CAP_SYS_RESOURCE;
-        push_ctxt(&saved, &obd->obd_ctxt, &ucred);
+        ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
@@ -685,8 +694,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                 GOTO(out_dput, rc);
         }
         if (de->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64" %s\n",
-                       oa->o_id, fidname);
+                CERROR("destroying non-existent object "LPU64" %s: rc %d\n",
+                       oa->o_id, fidname, rc);
                 GOTO(out_dput, rc = -ENOENT);
         }
 
@@ -694,10 +703,10 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
            that is unlinked, not spanned across multiple OSTs */
         handle = fsfilt_start_log(obd, mds->mds_objects_dir->d_inode,
                                   FSFILT_OP_UNLINK, oti, 1);
-        if (IS_ERR(handle)) {
-                GOTO(out_dput, rc = PTR_ERR(handle));
-        }
 
+        if (IS_ERR(handle))
+                GOTO(out_dput, rc = PTR_ERR(handle));
+        
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
@@ -711,6 +720,6 @@ out_dput:
                 l_dput(de);
         up(&parent_inode->i_sem);
 
-        pop_ctxt(&saved, &obd->obd_ctxt, &ucred);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);
 }

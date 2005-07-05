@@ -129,10 +129,10 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         }
 
         rc = vfs_unlink(pending_dir, dchild);
-        if (rc)
+        if (rc) {
                 CERROR("error %d unlinking orphan %.*s from PENDING\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
-        else if (lmm_size) {
+        } else if (lmm_size) {
                 OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
@@ -161,7 +161,7 @@ out_free_lmm:
 int mds_cleanup_orphans(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct file *file;
         struct dentry *dchild, *dentry;
         struct vfsmount *mnt;
@@ -173,7 +173,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
         int i = 0, rc = 0, item = 0, namlen;
         ENTRY;
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = dget(mds->mds_pending_dir);
         if (IS_ERR(dentry))
                 GOTO(err_pop, rc = PTR_ERR(dentry));
@@ -219,6 +219,13 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         GOTO(next, rc = 0);
                 }
 
+                if (is_bad_inode(dchild->d_inode)) {
+                        CERROR("bad orphan inode found %lu/%u\n",
+                               dchild->d_inode->i_ino,
+                               dchild->d_inode->i_generation);
+                        GOTO(next, rc = -ENOENT);
+                }
+
                 child_inode = dchild->d_inode;
                 MDS_DOWN_READ_ORPHAN_SEM(child_inode);
                 if (mds_inode_is_orphan(child_inode) &&
@@ -248,7 +255,7 @@ err_out:
                 OBD_FREE(dirent, sizeof(*dirent));
         }
 err_pop:
-        pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc == 0)
                 rc = item;
         RETURN(rc);

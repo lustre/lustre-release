@@ -102,8 +102,8 @@ static int __init init_lustre_lite(void)
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
-        proc_lustre_fs_root = proc_lustre_root ?
-                              proc_mkdir("llite", proc_lustre_root) : NULL;
+        if (proc_lustre_root)
+                proc_lustre_fs_root = proc_mkdir("llite", proc_lustre_root);
 
         ll_register_cache(&ll_cache_definition);
 

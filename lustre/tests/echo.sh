@@ -31,6 +31,13 @@ h2gm () {
 h2elan () {
 	echo $1 | sed 's/[^0-9]*//g'
 }
+
+h2iib () {
+        case $1 in
+        client) echo '\*' ;;
+        *) echo $1 | sed "s/[^0-9]*//" ;;
+        esac
+}
         
 # FIXME: make LMC not require MDS for obdecho LOV
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}

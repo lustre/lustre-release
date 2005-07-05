@@ -1,3 +1,4 @@
+#include <linux/lustre_mds.h>
 void mdc_pack_req_body(struct ptlrpc_request *);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
@@ -66,3 +67,27 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
                 up(&lck->rpcl_sem);
         }
 }
+
+/* Quota stuff */
+#ifdef HAVE_QUOTA_SUPPORT
+int mdc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
+int mdc_poll_quotacheck(struct obd_export *exp, struct if_quotacheck *qchk);
+int mdc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
+#else
+static inline int mdc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        return -ENOTSUPP;
+}
+
+static inline int mdc_poll_quotacheck(struct obd_export *exp, struct if_quotacheck *qchk)
+{
+        return -ENOTSUPP;
+}
+
+static inline int mdc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
+{
+        return -ENOTSUPP;
+}
+#endif
+
+

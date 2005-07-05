@@ -15,21 +15,22 @@ MOUNT2=${MOUNT2:-${MOUNT}2}
 MDSSIZE=50000
 FSTYPE=${FSTYPE:-ext3}
 
+STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 OSTDEV1=${OSTDEV1:-$TMP/ost1-`hostname`}
 OSTDEV2=${OSTDEV2:-$TMP/ost2-`hostname`}
 OSTSIZE=100000
 
 MDSNODE=${MDSNODE:-uml1}
-OSTNODE=${OSTNODE:-uml1}
-CLIENT=${CLIENT:-uml2}
-CLIENT2=${CLIENT2:-uml2}
+OSTNODE=${OSTNODE:-uml2}
+CLIENT=${CLIENT:-client1}
+CLIENT2=${CLIENT2:-client2}
 
 # create nodes
 ${LMC} -o $config --add net --node $MDSNODE --nid $MDSNODE --nettype tcp || exit 1
 ${LMC} -m $config --add net --node $OSTNODE --nid $OSTNODE --nettype tcp || exit 2
-${LMC} -m $config --add net --node $CLIENT --nid $CLIENT --nettype tcp || exit 3
+${LMC} -m $config --add net --node $CLIENT --nid '*' --nettype tcp || exit 3
 if [ "$CLIENT" != "$CLIENT2" ]; then
-	${LMC} -m $config --add net --node $CLIENT2 --nid $CLIENT --nettype tcp || exit 3
+	${LMC} -m $config --add net --node $CLIENT2 --nid '*' --nettype tcp || exit 3
 fi
 
 # configure mds server
@@ -37,8 +38,8 @@ ${LMC} -m $config --add mds --node $MDSNODE --mds mds1 --group fs1 --fstype $FST
 ${LMC} -m $config --add mds --node $MDSNODE --mds mds2 --group fs2 --fstype $FSTYPE --dev $MDSDEV2 --size $MDSSIZE ||exit 10
 
 # configure ost
-${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 0 --stripe_pattern 0 || exit 20
-${LMC} -m $config --add lov --lov lov2 --mds mds2 --stripe_sz 65536 --stripe_cnt 0 --stripe_pattern 0 || exit 20
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt 0 --stripe_pattern 0 || exit 20
+${LMC} -m $config --add lov --lov lov2 --mds mds2 --stripe_sz $STRIPE_BYTES --stripe_cnt 0 --stripe_pattern 0 || exit 20
 ${LMC} -m $config --add ost --node $OSTNODE --group fs1 --lov lov1 --fstype $FSTYPE --dev $OSTDEV1 --size $OSTSIZE || exit 21
 ${LMC} -m $config --add ost --node $OSTNODE --group fs2 --lov lov2 --fstype $FSTYPE --dev $OSTDEV2 --size $OSTSIZE || exit 22
 

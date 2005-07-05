@@ -3,7 +3,7 @@
  *
  * Lustre Light name resolution
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -32,11 +32,16 @@
 #include <sys/fcntl.h>
 #include <sys/queue.h>
 
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
+#endif
 
 #undef LIST_HEAD
 
@@ -70,6 +75,7 @@ static void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
+#if 0
 /*
  * remove the stale inode from pnode
  */
@@ -94,6 +100,7 @@ void unhook_stale_inode(struct pnode *pno)
         EXIT;
         return;
 }
+#endif
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
@@ -102,14 +109,14 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 
         if (it && pnode->p_base->pb_ino != NULL) {
                 struct inode *inode = pnode->p_base->pb_ino;
-                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
-                       inode, llu_i2info(inode)->lli_st_ino,
+                CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
+                       inode, llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
 
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
+        /* drop lookup/getattr locks */
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)
                 ll_intent_release(it);
 
 }
@@ -140,23 +147,25 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = llu_inode_from_lock(lock);
                 struct llu_inode_info *lli;
+                struct intnl_stat *st;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
 
                 lli =  llu_i2info(inode);
+                st = llu_i2stat(inode);
 
                 clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
-                if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
+                if (lock->l_resource->lr_name.name[0] != st->st_ino ||
                     lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
-                        LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
-                                   lli->lli_st_ino, lli->lli_st_generation);
+                        LDLM_ERROR(lock, "data mismatch with ino %llu/%lu",
+                                   st->st_ino, lli->lli_st_generation);
                 }
-                if (S_ISDIR(lli->lli_st_mode)) {
-                        CDEBUG(D_INODE, "invalidating inode %lu\n",
-                               lli->lli_st_ino);
+                if (S_ISDIR(st->st_mode)) {
+                        CDEBUG(D_INODE, "invalidating inode %llu\n",
+                               st->st_ino);
 
                         llu_invalidate_inode_pages(inode);
                 }
@@ -215,23 +224,12 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,intent=%x\n",
-               pb->pb_name.name, it ? it->it_op : 0);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,intent=%x\n",
+               (int)pb->pb_name.len, pb->pb_name.name, it ? it->it_op : 0);
 
         /* We don't want to cache negative dentries, so return 0 immediately.
          * We believe that this is safe, that negative dentries cannot be
          * pinned by someone else */
-        if (pb->pb_ino == NULL) {
-                CDEBUG(D_INODE, "negative pb\n");
-                RETURN(0);
-        }
-
-        /* check stale inode */
-        if (llu_i2info(pb->pb_ino)->lli_stale_flag)
-                unhook_stale_inode(pnode);
-
-        /* check again because unhook_stale_inode() might generate
-         * negative pnode */
         if (pb->pb_ino == NULL) {
                 CDEBUG(D_INODE, "negative pb\n");
                 RETURN(0);
@@ -242,10 +240,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
          */
         {
                 struct llu_inode_info *lli = llu_i2info(pb->pb_ino);
+                struct intnl_stat *st = llu_i2stat(pb->pb_ino);
                 if (lli->lli_it) {
-                        CDEBUG(D_INODE, "inode %lu still have intent "
+                        CDEBUG(D_INODE, "inode %llu still have intent "
                                         "%p(opc 0x%x), release it\n",
-                                        lli->lli_st_ino, lli->lli_it,
+                                        st->st_ino, lli->lli_it,
                                         lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
                         OBD_FREE(lli->lli_it, sizeof(*lli->lli_it));
@@ -279,14 +278,19 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 GOTO(out, rc = 0);
 
         rc = pnode_revalidate_finish(req, 1, it, pnode);
+        if (rc != 0) {
+                ll_intent_release(it);
+                GOTO(out, rc = 0);
+        }
+        rc = 1;
 
         /* Note: ll_intent_lock may cause a callback, check this! */
 
-        if (it->it_op & (IT_OPEN | IT_GETATTR))
+        if (it->it_op & IT_OPEN)
                 LL_SAVE_INTENT(pb->pb_ino, it);
-        RETURN(1);
+
  out:
-        if (req)
+        if (req && rc == 1)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 LASSERT(pb->pb_ino);
@@ -294,9 +298,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 pb->pb_ino = NULL;
         } else {
                 llu_lookup_finish_locks(it, pnode);
-                llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
-                if (it->it_op & (IT_OPEN | IT_GETATTR))
-                        LL_SAVE_INTENT(pb->pb_ino, it);
         }
         RETURN(rc);
 }
@@ -311,13 +312,37 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct inode *inode = NULL;
         int rc;
 
+        /* libsysio require us generate inode right away if success.
+         * so if mds created new inode for us we need make sure it
+         * succeeded. thus for any error we can't delay to the
+         * llu_file_open() time. */
+        if (it_disposition(it, DISP_OPEN_CREATE) &&
+            it_open_error(DISP_OPEN_CREATE, it)) {
+                CDEBUG(D_INODE, "detect mds create error\n");
+                return it_open_error(DISP_OPEN_CREATE, it);
+        }
+        if (it_disposition(it, DISP_OPEN_OPEN) &&
+            it_open_error(DISP_OPEN_OPEN, it)) {
+                CDEBUG(D_INODE, "detect mds open error\n");
+                /* undo which did by mdc_intent_lock */
+                if (it_disposition(it, DISP_OPEN_CREATE) &&
+                    !it_open_error(DISP_OPEN_CREATE, it)) {
+                        LASSERT(request);
+                        LASSERT(atomic_read(&request->rq_refcount) > 1);
+                        CDEBUG(D_INODE, "dec a ref of req %p\n", request);
+                        ptlrpc_req_finished(request);
+                }
+                return it_open_error(DISP_OPEN_OPEN, it);
+        }
+
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
-         * Note: libsysio require the inode must be generated here
          */
-        if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
+        if (!it_disposition(it, DISP_LOOKUP_NEG) ||
+            (it->it_op & IT_CREAT)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
+                struct intnl_stat *st;
                 ENTRY;
 
                 rc = mdc_req2lustre_md(request, offset, sbi->ll_osc_exp, &md);
@@ -325,23 +350,23 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         RETURN(rc);
 
                 inode = llu_iget(parent->i_fs, &md);
-                if (!inode) {
+                if (!inode || IS_ERR(inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
-                        RETURN(-ENOMEM);
+                        RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
                         obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
                 }
 
                 lli = llu_i2info(inode);
+                st = llu_i2stat(inode);
 
                 /* If this is a stat, get the authoritative file size */
-                if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
+                if (it->it_op == IT_GETATTR && S_ISREG(st->st_mode) &&
                     lli->lli_smd != NULL) {
                         struct lov_stripe_md *lsm = lli->lli_smd;
-                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -360,7 +385,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         }
 
         /* intent will be further used in cases of open()/getattr() */
-        if (inode && (it->it_op & (IT_OPEN | IT_GETATTR)))
+        if (inode && (it->it_op & IT_OPEN))
                 LL_SAVE_INTENT(inode, it);
 
         child->p_base->pb_ino = inode;
@@ -517,6 +542,8 @@ int llu_iop_lookup(struct pnode *pnode,
         int rc;
         ENTRY;
 
+        liblustre_wait_event(0);
+
         *inop = NULL;
 
         /* the mount root inode have no name, so don't call
@@ -550,4 +577,3 @@ int llu_iop_lookup(struct pnode *pnode,
 
         RETURN(rc);
 }
-

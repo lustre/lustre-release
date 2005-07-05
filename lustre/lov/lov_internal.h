@@ -132,6 +132,7 @@ int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off);
 void qos_shrink_lsm(struct lov_request_set *set);
 int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set,
                     int newea);
+int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
@@ -219,5 +220,9 @@ int lov_getstripe(struct obd_export *exp,
 
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
+
+/* Quota stuff */
+int lov_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
+int lov_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
 
 #endif

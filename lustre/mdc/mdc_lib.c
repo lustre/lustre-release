@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_MDC
 #ifndef __KERNEL__
 # include <fcntl.h>
 # include <liblustre.h>
@@ -249,14 +249,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        if (in_group_p(data->ctxt.gid1))
-                rec->rn_suppgid1 = data->ctxt.gid1;
-        else
-                rec->rn_suppgid1 = -1;
-        if (in_group_p(data->ctxt.gid2))
-                rec->rn_suppgid2 = data->ctxt.gid2;
-        else
-                rec->rn_suppgid2 = -1;
+        rec->rn_suppgid1 = data->ctxt.gid1;
+        rec->rn_suppgid2 = data->ctxt.gid2;
         rec->rn_fid1 = data->fid1;
         rec->rn_fid2 = data->fid2;
         rec->rn_time = data->mod_time;

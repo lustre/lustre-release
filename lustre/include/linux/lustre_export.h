@@ -12,10 +12,10 @@ struct mds_client_data;
 
 struct mds_export_data {
         struct list_head        med_open_head;
-        spinlock_t              med_open_lock;
+        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
         struct mds_client_data *med_mcd;
-        loff_t                  med_off;
-        int                     med_idx;
+        loff_t                  med_lr_off;
+        int                     med_lr_idx;
 };
 
 struct osc_creator {
@@ -55,6 +55,7 @@ struct obd_export {
         atomic_t                  exp_refcount;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
+        struct list_head          exp_obd_chain_timed; /* for ping evictor */
         struct obd_device        *exp_obd;
         struct obd_import        *exp_imp_reverse; /* to make RPCs backwards */
         struct ptlrpc_connection *exp_connection;
@@ -67,6 +68,7 @@ struct obd_export {
         __u64                     exp_connect_flags;
         int                       exp_flags;
         unsigned int              exp_failed:1,
+                                  exp_disconnected:1,
                                   exp_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {

@@ -7,5 +7,5 @@ if MODULES
 modulefs_DATA = ost$(KMODEXT)
 endif
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
 DIST_SOURCES = $(ost-objs:%.o=%.c) ost_internal.h

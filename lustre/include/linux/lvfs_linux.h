@@ -17,8 +17,8 @@
 
 #define l_filp_open filp_open
 
-struct obd_run_ctxt;
-struct l_file *l_dentry_open(struct obd_run_ctxt *, struct l_dentry *,
+struct lvfs_run_ctxt;
+struct l_file *l_dentry_open(struct lvfs_run_ctxt *, struct l_dentry *,
                              int flags);
 
 struct l_linux_dirent {
@@ -31,5 +31,24 @@ struct l_readdir_callback {
         struct l_linux_dirent *lrc_dirent;
         struct list_head      *lrc_list;
 };
+
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
+#  define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
+#  define lvfs_sbdev(SB)       ((SB)->s_bdev)
+#  define lvfs_sbdev_type      struct block_device *
+   int fsync_bdev(struct block_device *);
+#  define lvfs_sbdev_sync      fsync_bdev
+# else
+#  define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
+#  define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(lvfs_sbdev(SB)))
+#  define lvfs_sbdev(SB)       (kdev_t_to_nr((SB)->s_dev))
+#  define lvfs_sbdev_type      kdev_t
+#  define lvfs_sbdev_sync      fsync_dev
+# endif
+
+void lvfs_set_rdonly(lvfs_sbdev_type dev);
+int lvfs_check_rdonly(lvfs_sbdev_type dev);
+void lvfs_clear_rdonly(lvfs_sbdev_type dev);
 
 #endif

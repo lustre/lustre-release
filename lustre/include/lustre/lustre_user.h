@@ -9,6 +9,14 @@
 #ifndef _LUSTRE_USER_H
 #define _LUSTRE_USER_H
 #include <asm/types.h>
+
+/*
+ * asm-x86_64/processor.h on some SLES 9 distros seems to use
+ * kernel-only typedefs.  fortunately skipping it altogether is ok
+ * (for now).
+ */
+#define __ASM_X86_64_PROCESSOR_H
+
 #include <linux/quota.h>
 #ifdef __KERNEL__
 #include <linux/string.h>
@@ -50,6 +58,7 @@
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
 #define LL_FILE_GROUP_LOCKED            0x00000002
+#define LL_FILE_READAHEAD               0x00000004
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
@@ -133,7 +142,15 @@ struct if_quotacheck {
 };
 
 #ifndef __KERNEL__
+#define NEED_QUOTA_DEFS
+#else
+# include <linux/version.h>
+# if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,21)
+#  define NEED_QUOTA_DEFS
+# endif
+#endif
 
+#ifdef NEED_QUOTA_DEFS
 #ifndef QUOTABLOCK_BITS
 #define QUOTABLOCK_BITS 10
 #endif
@@ -168,6 +185,19 @@ struct if_dqblk {
         __u64 dqb_itime;
         __u32 dqb_valid;
 };
+#endif
+
+#ifndef QIF_BLIMITS
+#define QIF_BLIMITS     1
+#define QIF_SPACE       2
+#define QIF_ILIMITS     4
+#define QIF_INODES      8
+#define QIF_BTIME       16
+#define QIF_ITIME       32
+#define QIF_LIMITS      (QIF_BLIMITS | QIF_ILIMITS)
+#define QIF_USAGE       (QIF_SPACE | QIF_INODES)
+#define QIF_TIMES       (QIF_BTIME | QIF_ITIME)
+#define QIF_ALL         (QIF_LIMITS | QIF_USAGE | QIF_TIMES)
 #endif
 
 #endif /* !__KERNEL__ */

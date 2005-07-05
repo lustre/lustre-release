@@ -93,7 +93,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         }
 
         if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-                CERROR("catalog index %u already clear?\n", index);
+                CDEBUG(D_HA, "catalog index %u already clear?\n", index);
                 RETURN(-EINVAL);
         }
 

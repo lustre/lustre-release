@@ -71,7 +71,6 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
                         if (priority) {
                                 list_del(&item->oic_item);
                                 list_add(&item->oic_item, &imp->imp_conn_list);
-                                item->oic_last_attempt = 0;
                         }
                         CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",
                                imp, imp->imp_obd->obd_name, uuid->uuid,
@@ -84,7 +83,6 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         if (create) {
                 imp_conn->oic_conn = ptlrpc_conn;
                 imp_conn->oic_uuid = *uuid;
-                imp_conn->oic_last_attempt = 0;
                 if (priority)
                         list_add(&imp_conn->oic_item, &imp->imp_conn_list);
                 else
@@ -122,13 +120,13 @@ int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 {
         struct obd_import_conn *imp_conn;
+        struct obd_import_conn *cur_conn;
         struct obd_export *dlmexp;
         int rc = -ENOENT;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
         if (list_empty(&imp->imp_conn_list)) {
-                LASSERT(!imp->imp_conn_current);
                 LASSERT(!imp->imp_connection);
                 GOTO(out, rc);
         }
@@ -138,8 +136,12 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
                         continue;
                 LASSERT(imp_conn->oic_conn);
 
+                cur_conn = list_entry(imp->imp_conn_list.next,
+                                      struct obd_import_conn,
+                                      oic_item);
+
                 /* is current conn? */
-                if (imp_conn == imp->imp_conn_current) {
+                if (imp_conn == cur_conn) {
                         LASSERT(imp_conn->oic_conn == imp->imp_connection);
 
                         if (imp->imp_state != LUSTRE_IMP_CLOSED &&
@@ -545,7 +547,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         LASSERT_REQSWAB (req, 0);
         str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
-                CERROR("bad target UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -556,14 +558,17 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         }
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
-                CERROR("UUID '%s' is not available for connect\n", str);
+                DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
+                       " for connect (%s)\n", str,
+                       !target ? "no target" : 
+                       (target->obd_stopping ? "stopping" : "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
 
         LASSERT_REQSWAB (req, 1);
         str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
         if (str == NULL) {
-                CERROR("bad client UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -597,9 +602,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         memcpy(&conn, tmp, sizeof conn);
 
         data = lustre_swab_reqbuf(req, 3, sizeof(*data), lustre_swab_connect);
-        if (data == NULL)
-                GOTO(out, rc = -EPROTO);
-
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -642,8 +644,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (export == NULL) {
                 if (target->obd_recovering) {
-                        CERROR("denying connection for new client %s: "
-                               "%d clients in recovery for %lds\n", cluuid.uuid,
+                        CERROR("%s: denying connection for new client %s: "
+                               "%d clients in recovery for %lds\n",
+                               target->obd_name, cluuid.uuid,
                                target->obd_recoverable_clients,
                                (target->obd_recovery_timer.expires-jiffies)/HZ);
                         rc = -EBUSY;
@@ -655,8 +658,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
-        memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
-               sizeof(*data));
+        if (data)
+                memcpy(lustre_msg_buf(req->rq_repmsg, 0, sizeof(*data)), data,
+                       sizeof(*data));
 
         /* If all else goes well, this is our RPC return code. */
         req->rq_status = 0;
@@ -844,6 +848,7 @@ void target_cleanup_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
+        ENTRY;
 
         LASSERT(obd->obd_stopping);
 
@@ -868,6 +873,7 @@ void target_cleanup_recovery(struct obd_device *obd)
                 list_del(&req->rq_list);
                 target_release_saved_req(req);
         }
+        EXIT;
 }
 
 void target_abort_recovery(void *data)
@@ -881,6 +887,7 @@ void target_abort_recovery(void *data)
                 return;
         }
         obd->obd_recovering = obd->obd_abort_recovery = 0;
+        obd->obd_recoverable_clients = 0;
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
@@ -897,7 +904,7 @@ void target_abort_recovery(void *data)
 static void target_recovery_expired(unsigned long castmeharder)
 {
         struct obd_device *obd = (struct obd_device *)castmeharder;
-        CERROR("recovery timed out, aborting\n");
+        CERROR("%s: recovery timed out, aborting\n", obd->obd_name);
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering)
                 obd->obd_abort_recovery = 1;
@@ -1353,60 +1360,4 @@ void target_committed_to_req(struct ptlrpc_request *req)
                obd->obd_last_committed, req->rq_xid);
 }
 
-int target_handle_qc_callback(struct ptlrpc_request *req)
-{
-        struct obd_quotactl *oqctl;
-        struct client_obd *cli = &req->rq_export->exp_obd->u.cli;
-
-        oqctl = lustre_swab_reqbuf(req, 0, sizeof(*oqctl),
-                                   lustre_swab_obd_quotactl);
-
-        spin_lock(&cli->cl_qchk_lock);
-        cli->cl_qchk_stat = oqctl->qc_stat;
-        spin_unlock(&cli->cl_qchk_lock);
-
-        return 0;
-}
-
-int target_handle_dqacq_callback(struct ptlrpc_request *req)
-{
-        struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *master_obd;
-        struct lustre_quota_ctxt *qctxt;
-        struct qunit_data *qdata, *rep;
-        int rc = 0, repsize = sizeof(struct qunit_data);
-        ENTRY;
-        
-        rc = lustre_pack_reply(req, 1, &repsize, NULL);
-        if (rc) {
-                CERROR("packing reply failed!: rc = %d\n", rc);
-                RETURN(rc);
-        }
-        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
-        LASSERT(rep);
-        
-        qdata = lustre_swab_reqbuf(req, 0, sizeof(*qdata), lustre_swab_qdata);
-        if (qdata == NULL) {
-                CERROR("unpacking request buffer failed!");
-                RETURN(-EPROTO);
-        }
-
-        /* we use the observer */
-        LASSERT(obd->obd_observer && obd->obd_observer->obd_observer);
-        master_obd = obd->obd_observer->obd_observer;
-        qctxt = &master_obd->u.mds.mds_quota_ctxt;
-        
-        LASSERT(qctxt->lqc_handler);
-        rc = qctxt->lqc_handler(master_obd, qdata, req->rq_reqmsg->opc);
-        if (rc && rc != -EDQUOT)
-                CERROR("dqacq failed! (rc:%d)\n", rc);
-        
-        /* the qd_count might be changed in lqc_handler */
-        memcpy(rep, qdata, sizeof(*rep));
-        req->rq_status = rc;
-        rc = ptlrpc_reply(req);
-        
-        RETURN(rc);	
-}
- 
 EXPORT_SYMBOL(target_committed_to_req);

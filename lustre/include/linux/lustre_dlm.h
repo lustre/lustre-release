@@ -68,6 +68,9 @@ typedef enum {
 #define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 
+#define LDLM_FL_NO_TIMEOUT    0x020000 /* Blocked by CW lock - wait
+                                           indefinitely */
+
 /* file & record locking */
 #define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
 #define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
@@ -110,6 +113,7 @@ typedef enum {
 #define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
 #define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
 #define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
+#define LCK_COMPAT_GROUP  (LCK_GROUP | LCK_NL)
 
 static ldlm_mode_t lck_compat_array[] = {
         [LCK_EX] LCK_COMPAT_EX,
@@ -117,12 +121,13 @@ static ldlm_mode_t lck_compat_array[] = {
         [LCK_PR] LCK_COMPAT_PR,
         [LCK_CW] LCK_COMPAT_CW,
         [LCK_CR] LCK_COMPAT_CR,
-        [LCK_NL] LCK_COMPAT_NL
+        [LCK_NL] LCK_COMPAT_NL,
+        [LCK_GROUP] LCK_COMPAT_GROUP
 };
 
 static inline void lockmode_verify(ldlm_mode_t mode)
 {
-       LASSERT(mode >= LCK_EX && mode <= LCK_NL);
+       LASSERT(mode > LCK_MINMODE && mode < LCK_MAXMODE);
 }
 
 static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
@@ -168,9 +173,6 @@ struct ldlm_namespace {
         struct list_head       ns_root_list; /* all root resources in ns */
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
-        /*
-        struct proc_dir_entry *ns_proc_dir;
-        */
 
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
@@ -488,7 +490,11 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags);
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force);
 int ldlm_proc_setup(void);
+#ifdef LPROCFS
 void ldlm_proc_cleanup(void);
+#else
+static inline void ldlm_proc_cleanup(void) {}
+#endif
 
 /* resource.c - internal */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,

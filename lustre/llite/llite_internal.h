@@ -6,6 +6,7 @@
 #define LLITE_INTERNAL_H
 
 #include <linux/lustre_debug.h>
+#include <linux/lustre_version.h>
 
 /*
 struct lustre_intent_data {
@@ -16,6 +17,13 @@ struct lustre_intent_data {
         }; */
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+
+#if (LUSTRE_KERNEL_VERSION < 46)
+#define LUSTRE_FPRIVATE(file) ((file)->private_data)
+#else
+#define LUSTRE_FPRIVATE(file) ((file)->fs_private)
+#endif
+
 
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
@@ -41,6 +49,7 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_INODE_DEAD                  0xdeadd00d
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
+
 struct ll_inode_info {
         int                     lli_inode_magic;
         int                     lli_size_pid;
@@ -83,7 +92,6 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 #endif
 }
 
-
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))
@@ -92,6 +100,7 @@ enum ra_stat {
         RA_STAT_MISS,
         RA_STAT_DISTANT_READPAGE,
         RA_STAT_MISS_IN_WINDOW,
+        RA_STAT_FAILED_GRAB_PAGE,
         RA_STAT_FAILED_MATCH,
         RA_STAT_DISCARDED,
         RA_STAT_ZERO_LEN,
@@ -107,6 +116,10 @@ struct ll_ra_info {
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
+/* flags for sbi->ll_flags */
+#define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
+#define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
+
 struct ll_sb_info {
         struct list_head          ll_list;
         /* this protects pglist and ra_info.  It isn't safe to
@@ -119,7 +132,6 @@ struct ll_sb_info {
         obd_id                    ll_rootino; /* number of root inode */
 
         struct lustre_mount_data *ll_lmd;
-        char                     *ll_instance;
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
@@ -152,13 +164,14 @@ struct ll_file_data {
         struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
         __u32 fd_flags;
+        struct lustre_handle fd_cwlockh;
+        unsigned long fd_gid;
 };
 
 struct lov_stripe_md;
 
 extern spinlock_t inode_lock;
 
-extern void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -206,17 +219,19 @@ extern kmem_cache_t *ll_async_page_slab;
 extern size_t ll_async_page_slab_size;
 struct ll_async_page {
         int              llap_magic;
-        void            *llap_cookie;
-        struct page     *llap_page;
-        struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
         unsigned int     llap_write_queued:1,
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1;
+        void            *llap_cookie;
+        struct page     *llap_page;
+        struct list_head llap_pending_write;
         struct list_head llap_pglist_item;
         /* user credit information for oss enforcement quota */
-        struct obd_ucred llap_ouc;
+        struct lvfs_ucred llap_ouc;
+        /* checksum for paranoid I/O debugging */
+        __u32 llap_checksum;
 };
 
 enum {
@@ -238,9 +253,16 @@ extern char *llap_origins[];
 #endif
 
 /* llite/lproc_llite.c */
+#ifdef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc);
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
+#else
+static inline int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
+                        struct super_block *sb, char *osc, char *mdc){return 0;}
+static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
+#endif
+
 
 /* llite/dir.c */
 extern struct file_operations ll_dir_operations;
@@ -394,8 +416,6 @@ int ll_tree_lock(struct ll_lock_tree *tree,
                  const char *buf, size_t count, int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
 
-
-#define LL_SBI_NOLCK            0x1
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 

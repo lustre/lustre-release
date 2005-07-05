@@ -370,8 +370,10 @@ int jt_lcfg_lov_setup(int argc, char **argv)
         }
         if (desc.ld_default_stripe_size < 4096) {
                 fprintf(stderr,
-                        "error: %s: default stripe size "LPU64" too small\n",
-                        jt_cmdname(argv[0]), desc.ld_default_stripe_size);
+                        "error: %s: default stripe size "LPU64" smaller than "
+                        "minimum %u\n",
+                        jt_cmdname(argv[0]), desc.ld_default_stripe_size,
+                        LOV_MIN_STRIPE_SIZE);
                 return -EINVAL;
         } else if ((long)desc.ld_default_stripe_size <
                    desc.ld_default_stripe_size) {

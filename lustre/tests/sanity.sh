@@ -55,14 +55,12 @@ SAVE_PWD=$PWD
 clean() {
 	echo -n "cln.."
 	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
-	I_MOUNTED=no
 }
 CLEAN=${CLEAN:-:}
 
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
-	I_MOUNTED=yes
 	echo "done"
 }
 START=${START:-:}
@@ -811,9 +809,7 @@ run_test 27a "one stripe file =================================="
 
 test_27c() {
 	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
 	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
@@ -824,9 +820,7 @@ test_27c() {
 run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
@@ -834,9 +828,7 @@ test_27d() {
 run_test 27d "create file with default settings ================"
 
 test_27e() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
 	$LSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
@@ -844,9 +836,7 @@ test_27e() {
 run_test 27e "lstripe existing file (should return error) ======"
 
 test_27f() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$LSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
 	$LFIND $DIR/d27/fbad || error "lfind failed"
@@ -854,9 +844,7 @@ test_27f() {
 run_test 27f "lstripe with bad stripe size (should return error)"
 
 test_27g() {
-	if [ ! -d $DIR/d27 ]; then
-		mkdir $DIR/d27
-	fi
+	mkdir -p $DIR/d27
 	$MCREATE $DIR/d27/fnone || error "mcreate failed"
 	pass
 	log "== test 27h: lfind with no objects ============================"
@@ -869,14 +857,13 @@ test_27g() {
 run_test 27g "test lfind ======================================="
 
 test_27j() {
-        if [ ! -d $DIR/d27 ]; then
-                mkdir $DIR/d27
-        fi
-        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
+	mkdir -p $DIR/d27
+	$LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
 test_27k() { # bug 2844
+	mkdir -p $DIR/d27
 	FILE=$DIR/d27/f27k
 	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
 	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
@@ -890,6 +877,7 @@ test_27k() { # bug 2844
 run_test 27k "limit i_blksize for broken user apps ============="
 
 test_27l() {
+	mkdir -p $DIR/d27
 	mcreate $DIR/f27l || error "creating file"
 	$RUNAS $LSTRIPE $DIR/f27l 65536 -1 1 && \
 		error "lstripe should have failed" || true
@@ -897,31 +885,128 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-        [ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
-        if [ $ORIGFREE -gt $MAXFREE ]; then
-                echo "skipping out-of-space test on OST0"
-                return
-        fi
-        mkdir -p $DIR/d27
-        $LSTRIPE $DIR/d27/f27m_1 0 0 1
-        dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
-                error "dd should fill OST0"
-        i=2
-        while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
-                i=`expr $i + 1`
-                [ $i -gt 256 ] && break
-        done
-        i=`expr $i + 1`
-        touch $DIR/d27/f27m_$i
-        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
-                error "OST0 was full but new created file still use it"
-        i=`expr $i + 1`
-        touch $DIR/d27/f27m_$i
-        [ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
-                error "OST0 was full but new created file still use it"
-        rm $DIR/d27/f27m_1
+	[ "$OSTCOUNT" -lt "2" ] && echo "skipping out-of-space test on OST0" && return
+	if [ $ORIGFREE -gt $MAXFREE ]; then
+		echo "skipping out-of-space test on OST0"
+		return
+	fi
+	mkdir -p $DIR/d27
+	$LSTRIPE $DIR/d27/f27m_1 0 0 1
+	dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
+		error "dd should fill OST0"
+	i=2
+	while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
+		i=`expr $i + 1`
+		[ $i -gt 256 ] && break
+	done
+	i=`expr $i + 1`
+	touch $DIR/d27/f27m_$i
+	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+		error "OST0 was full but new created file still use it"
+	i=`expr $i + 1`
+	touch $DIR/d27/f27m_$i
+	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+		error "OST0 was full but new created file still use it"
+	rm $DIR/d27/f27m_1
 }
 run_test 27m "create file while OST0 was full =================="
+
+# osc's keep a NOSPC stick flag that gets unset with rmdir
+reset_enospc() {
+    sysctl -w lustre.fail_loc=0
+    mkdir -p $DIR/d27/nospc
+    rmdir $DIR/d27/nospc
+}
+
+exhaust_precreations() {
+    local i
+    ostidx=$1
+    ost=$(head -n $(( ostidx + 1 )) /proc/fs/lustre/lov/${LOVNAME}/target_obd | tail -n 1 | awk '{print $2}' | sed -e 's/_UUID$//')
+    mds=$(find /proc/fs/lustre/mds/ -maxdepth 1 -type d | tail -n 1)
+    mds=$(basename $mds)
+
+    last_id=$(tail -n 1 /proc/fs/lustre/osc/OSC_*_${ost}_${mds}/prealloc_last_id)
+    next_id=$(tail -n 1 /proc/fs/lustre/osc/OSC_*_${ost}_${mds}/prealloc_next_id)
+
+    mkdir -p $DIR/d27/${ost}
+    $LSTRIPE $DIR/d27/${ost} 0 $ostidx 1
+    sysctl -w lustre.fail_loc=0x215
+    echo "Creating to objid $last_id on ost $ost..."
+    for (( i = next_id; i <= last_id; i++ )) ; do
+	touch $DIR/d27/${ost}/f$i
+    done
+    reset_enospc
+}
+
+exhaust_all_precreations() {
+    local i
+    for (( i=0; i < OSTCOUNT; i++ )) ; do
+	exhaust_precreations $i
+    done
+}
+
+test_27n() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27n
+    exhaust_precreations 0
+    sysctl -w lustre.fail_loc=0x80000215
+    touch $DIR/d27/f27n || error
+    reset_enospc
+}
+run_test 27n "creating a file while some OSTs are full (should succeed) ==="
+
+test_27o() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27o
+    exhaust_all_precreations
+    sysctl -w lustre.fail_loc=0x215
+    touch $DIR/d27/f27o && error
+    reset_enospc
+}
+run_test 27o "creating a file while all OSTs are full (should error) ==="
+
+test_27p() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27p
+    exhaust_precreations 0
+    $MCREATE $DIR/d27/f27p || error
+    $TRUNCATE $DIR/d27/f27p 80000000 || error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27p || error
+    sysctl -w lustre.fail_loc=0x80000215
+    echo foo >> $DIR/d27/f27p || error
+    $CHECKSTAT -s 80000004 $DIR/d27/f27p || error
+    reset_enospc
+}
+run_test 27p "appending to a truncated file while some OSTs are full ==="
+
+test_27q() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27q
+    exhaust_precreations 0
+    $MCREATE $DIR/d27/f27q || error
+    $TRUNCATE $DIR/d27/f27q 80000000 || error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27q || error
+    sysctl -w lustre.fail_loc=0x215
+    echo foo >> $DIR/d27/f27q && error
+    $CHECKSTAT -s 80000000 $DIR/d27/f27q || error
+    reset_enospc
+}
+run_test 27q "appending to a truncated file while all OSTs are full (should error) ==="
+
+test_27r() {
+    [ "$OSTCOUNT" -lt "2" ] && echo "" && return
+    reset_enospc
+    rm -f $DIR/d27/f27r
+    exhaust_precreations 0
+    sysctl -w lustre.fail_loc=0x80000215
+    $LSTRIPE $DIR/d27/f27r 0 0 -1 && error
+    reset_enospc
+}
+run_test 27r "creating a file while some OSTs are full with an explicit stripe count (should error) ==="
 
 test_28() {
 	mkdir $DIR/d28
@@ -1323,6 +1408,20 @@ test_34e() {
 	$CHECKSTAT -s 1000 $DIR/f34e || error
 }
 run_test 34e "create objects, some with size and some without =="
+
+test_34f() { # bug 6242, 6243
+	SIZE34F=48000
+	rm -f $DIR/f34f
+	$MCREATE $DIR/f34f || error
+	$TRUNCATE $DIR/f34f $SIZE34F || error "truncating $DIR/f3f to $SIZE34F"
+	dd if=$DIR/f34f of=$TMP/f34f
+	$CHECKSTAT -s $SIZE34F $TMP/f34f || error "$TMP/f34f not $SIZE34F bytes"
+	dd if=/dev/zero of=$TMP/f34fzero bs=$SIZE34F count=1
+	cmp $DIR/f34f $TMP/f34fzero || error "$DIR/f34f not all zero"
+	cmp $TMP/f34f $TMP/f34fzero || error "$TMP/f34f not all zero"
+	rm $TMP/f34f $TMP/f34fzero $DIR/f34f
+}
+run_test 34f "read from a file with no objects until EOF ======="
 
 test_35a() {
 	cp /bin/sh $DIR/f35a
@@ -1956,6 +2055,15 @@ test_54d() {
 }
 run_test 54d "fifo device works in lustre ======================"
 
+test_54e() {
+	check_kernel_version 46 || return 0
+	f="$DIR/f54e"
+	string="aaaaaa"
+	mknod $f c 4 0
+	echo $string > $f || error
+}
+run_test 54e "console/tty device works in lustre ======================"
+
 check_fstype() {
 	grep -q $FSTYPE /proc/filesystems && return 1
 	modprobe $FSTYPE
@@ -1998,8 +2106,7 @@ test_56() {
                 "lfs find --recursive $DIR/d56 wrong: found $FILENUM, expected $NUMFILESx2"
         FILENUM=`$LFIND $DIR/d56 | grep -c obdidx`
         [ $FILENUM -eq $NUMFILES ] || error \
-                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM,
-		expected $NUMFILES"
+                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM, expected $NUMFILES"
         echo "lfs find --recursive passed."
 
         # test lfs find with file instead of dir
@@ -2017,7 +2124,7 @@ test_56() {
 
         #test lfs find with --obd
         $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
-                error "lfs find --obd wrong_uuid should return error information"
+                error "lfs find --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
                 echo "skipping other lfs find --obd test" && return
@@ -2026,7 +2133,7 @@ test_56() {
         FOUND=`$LFIND -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
                 error "lfs find --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' | \
+        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
                 error "lfs find --obd wrong: should not show file on other obd"
         echo "lfs find --obd passed."
@@ -2069,9 +2176,10 @@ test_57b() {
 	$LFIND $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
 	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
+	sleep 1 # make sure we get new statfs data
 	MDSFREE2="`cat /proc/fs/lustre/mds/*/kbytesfree`"
 	MDCFREE2="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
-	if [ "$MDCFREE" != "$MDCFREE2" ]; then
+	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
 		if [ "$MDSFREE" != "$MDSFREE2" ]; then
 			error "MDC before $MDCFREE != after $MDCFREE2"
 		else
@@ -2108,6 +2216,13 @@ test_60() {
 	sh run-llog.sh
 }
 run_test 60 "llog sanity tests run from kernel module =========="
+
+test_60b() { # bug 6411
+	dmesg > $DIR/dmesg
+	LLOG_COUNT=`dmesg | grep -c llog_test`
+	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT broken" || true
+}
+run_test 60b "limit repeated messages from CERROR/CWARN ========"
 
 test_61() {
 	f="$DIR/f61"
@@ -2254,6 +2369,20 @@ test_65h() {
 }
 run_test 65h "directory stripe info inherit ======"
  
+test_65i() { # bug6367
+        $LSTRIPE $MOUNT 65536 -1 -1
+}
+run_test 65i "set default striping on root directory (bug 6367)="
+
+test_65j() { # bug6367
+	# if we aren't already remounting for each test, do so for this test
+	if [ "$CLEAN" = ":" ]; then
+		clean || error "failed to unmount"
+		start || error "failed to remount"
+	fi
+}
+run_test 65j "get default striping on root directory (bug 6367)="
+
 # bug 2543 - update blocks count on client
 test_66() {
 	COUNT=${COUNT:-8}
@@ -2395,6 +2524,19 @@ run_test 72 "Test that remove suid works properly (bug5695) ===="
 
 #b_cray run_test 73 "multiple MDC requests (should not deadlock)"
 
+test_74() { # bug 6149, 6184
+	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
+	#
+	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
+	# will spin in a tight reconnection loop
+	sysctl -w lustre.fail_loc=0x8000030e
+	# get any lock
+	touch $DIR/f74
+	sysctl -w lustre.fail_loc=0
+	true
+}
+run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
@@ -2475,7 +2617,7 @@ log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
 	rm -rf $DIR/[Rdfs][1-9]*
 	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error
+		sh llmountcleanup.sh || error "llmountcleanup failed"
 	fi
 fi
 

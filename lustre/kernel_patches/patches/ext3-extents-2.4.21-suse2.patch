@@ -2461,17 +2461,17 @@ Index: linux-2.4.21-suse2/fs/ext3/Makefile
  export-objs += xattr.o
 Index: linux-2.4.21-suse2/fs/ext3/super.c
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/super.c	2004-11-02 20:31:37.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/super.c	2004-11-02 20:31:39.000000000 +0300
-@@ -624,6 +624,7 @@
- 	int i;
- 
+--- linux-2.4.21-suse2.orig/fs/ext3/super.c	2005-04-04 05:44:58.000000000 -0600
++++ linux-2.4.21-suse2/fs/ext3/super.c	2005-04-04 05:45:43.000000000 -0600
+@@ -532,6 +532,7 @@
+ #ifdef EXT3_DELETE_THREAD
  	J_ASSERT(sbi->s_delete_inodes == 0);
+ #endif
 +	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -829,6 +830,10 @@
+@@ -733,6 +734,10 @@
  				return 0;
  			}
  		}
@@ -2482,7 +2482,7 @@ Index: linux-2.4.21-suse2/fs/ext3/super.c
  		else if (!strcmp (this_char, "grpid") ||
  			 !strcmp (this_char, "bsdgroups"))
  			set_opt (*mount_options, GRPID);
-@@ -1524,6 +1529,8 @@
+@@ -1428,6 +1433,8 @@
  		test_opt(sb,DATA_FLAGS) == EXT3_MOUNT_ORDERED_DATA ? "ordered":
  		"writeback");
  
@@ -2525,9 +2525,9 @@ Index: linux-2.4.21-suse2/include/linux/ext3_fs.h
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
-+#define EXT3_IOC_GET_EXTENTS		_IOR('f', 5, long)
-+#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 6, long)
-+#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_EXTENTS		_IOR('f', 7, long)
++#define EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 8, long)
++#define EXT3_IOC_GET_TREE_STATS		_IOR('f', 9, long)
  
  /*
   * Structure of an inode on the disk

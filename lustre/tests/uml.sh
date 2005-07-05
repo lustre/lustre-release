@@ -15,7 +15,7 @@ OSTDEVBASE=$TMP/ost
 #etc
 OSTSIZE=${OSTSIZE:-100000}
 STRIPECNT=${STRIPECNT:-1}
-STRIPE_BYTES=${STRIPE_BYTES:-$((1024 * 1024))}
+STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
@@ -75,6 +75,13 @@ h2elan () {
 
 h2gm () {
 	echo `gmnalnid -n$1`
+}
+
+h2iib () {
+	case $1 in
+	client) echo '\*' ;;
+	*) echo $1 | sed "s/[^0-9]*//" ;;
+	esac
 }
 
 # create nodes

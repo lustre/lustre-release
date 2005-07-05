@@ -44,7 +44,7 @@
 #include <linux/lprocfs_status.h>
 
 /* OBD Device Declarations */
-#define MAX_OBD_DEVICES 256
+#define MAX_OBD_DEVICES 520
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
 
@@ -79,6 +79,17 @@ void oig_complete_one(struct obd_io_group *oig,
                        struct oig_callback_context *occ, int rc);
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
+/* ping evictor */
+#ifdef __KERNEL__
+void ping_evictor_start(void);
+void ping_evictor_stop(void);
+#else
+#define ping_evictor_start()    do {} while (0)
+#define ping_evictor_stop()     do {} while (0)
+#endif
+
+
+char *obd_export_nid2str(struct obd_export *exp);
 
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -93,9 +104,9 @@ struct config_llog_instance {
         char * cfg_instance;
         struct obd_uuid cfg_uuid;
 };
-int class_config_parse_llog(struct llog_ctxt *ctxt, char *name, 
+int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg);
-int class_config_dump_llog(struct llog_ctxt *ctxt, char *name, 
+int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
                            struct config_llog_instance *cfg);
 
 struct lustre_profile {
@@ -129,6 +140,7 @@ do {                                                                           \
 void __class_export_put(struct obd_export *);
 struct obd_export *class_new_export(struct obd_device *obddev);
 void class_unlink_export(struct obd_export *exp);
+void class_update_export_timer(struct obd_export *exp, time_t extra_delay);
 
 struct obd_import *class_import_get(struct obd_import *);
 void class_import_put(struct obd_import *);
@@ -140,6 +152,7 @@ void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp);
+void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_disconnect_stale_exports(struct obd_device *obddev);
 /* generic operations shared by various OBD types */
@@ -157,6 +170,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
 int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
+
 
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_ops->o_ ## op
@@ -278,7 +292,7 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd)
+static inline int obd_precleanup(struct obd_device *obd, int cleanup_stage)
 {
         int rc;
         ENTRY;
@@ -286,7 +300,7 @@ static inline int obd_precleanup(struct obd_device *obd)
         OBD_CHECK_OP(obd, precleanup, 0);
         OBD_COUNTER_INCREMENT(obd, precleanup);
 
-        rc = OBP(obd, precleanup)(obd);
+        rc = OBP(obd, precleanup)(obd, cleanup_stage);
         RETURN(rc);
 }
 
@@ -294,8 +308,8 @@ static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
         ENTRY;
-        
-        OBD_CHECK_DEV(obd);                                     
+
+        OBD_CHECK_DEV(obd);
         OBD_CHECK_OP(obd, cleanup, 0);
         OBD_COUNTER_INCREMENT(obd, cleanup);
 
@@ -308,10 +322,10 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
 {
         int rc;
         ENTRY;
- 
+
         OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, process_config);
- 
+
         rc = OBP(obd, process_config)(obd, datalen, data);
         RETURN(rc);
 }
@@ -468,17 +482,17 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         RETURN(rc);
 }
 
-static inline int obd_setattr_async(struct obd_export *exp, 
+static inline int obd_setattr_async(struct obd_export *exp,
                                     struct obdo *obdo,
                                     struct lov_stripe_md *ea,
                                     struct obd_trans_info *oti)
 {
         int rc;
         ENTRY;
-                                                                                                                             
+
         EXP_CHECK_OP(exp, setattr_async);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr_async);
-                                                                                                                             
+
         rc = OBP(exp->exp_obd, setattr_async)(exp, obdo, ea, oti);
         RETURN(rc);
 }
@@ -564,7 +578,7 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 {
         LASSERT(exp->exp_obd);
 
-        return lvfs_fid2dentry(&exp->exp_obd->obd_ctxt, id_ino, gen, gr,
+        return lvfs_fid2dentry(&exp->exp_obd->obd_lvfs_ctxt, id_ino, gen, gr,
                                exp->exp_obd);
 }
 
@@ -606,7 +620,7 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 }
 
 static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *ea, obd_size start, 
+                           struct lov_stripe_md *ea, obd_size start,
                            obd_size end)
 {
         int rc;
@@ -675,11 +689,11 @@ static inline int obd_brw_async(int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline  int obd_prep_async_page(struct obd_export *exp, 
+static inline  int obd_prep_async_page(struct obd_export *exp,
                                        struct lov_stripe_md *lsm,
-                                       struct lov_oinfo *loi, 
-                                       struct page *page, obd_off offset, 
-                                       struct obd_async_page_ops *ops, 
+                                       struct lov_oinfo *loi,
+                                       struct page *page, obd_off offset,
+                                       struct obd_async_page_ops *ops,
                                        void *data, void **res)
 {
         int ret;
@@ -722,16 +736,16 @@ static inline int obd_set_async_flags(struct obd_export *exp,
         OBD_CHECK_OP(exp->exp_obd, set_async_flags, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, set_async_flags);
 
-        rc = OBP(exp->exp_obd, set_async_flags)(exp, lsm, loi, cookie, 
+        rc = OBP(exp->exp_obd, set_async_flags)(exp, lsm, loi, cookie,
                                                 async_flags);
         RETURN(rc);
 }
 
-static inline int obd_queue_group_io(struct obd_export *exp, 
-                                     struct lov_stripe_md *lsm, 
-                                     struct lov_oinfo *loi, 
-                                     struct obd_io_group *oig, 
-                                     void *cookie, int cmd, obd_off off, 
+static inline int obd_queue_group_io(struct obd_export *exp,
+                                     struct lov_stripe_md *lsm,
+                                     struct lov_oinfo *loi,
+                                     struct obd_io_group *oig,
+                                     void *cookie, int cmd, obd_off off,
                                      int count, obd_flag brw_flags,
                                      obd_flag async_flags)
 {
@@ -742,14 +756,14 @@ static inline int obd_queue_group_io(struct obd_export *exp,
         OBD_COUNTER_INCREMENT(exp->exp_obd, queue_group_io);
         LASSERT(cmd & OBD_BRW_RWMASK);
 
-        rc = OBP(exp->exp_obd, queue_group_io)(exp, lsm, loi, oig, cookie, 
+        rc = OBP(exp->exp_obd, queue_group_io)(exp, lsm, loi, oig, cookie,
                                                cmd, off, count, brw_flags,
                                                async_flags);
         RETURN(rc);
 }
 
-static inline int obd_trigger_group_io(struct obd_export *exp, 
-                                       struct lov_stripe_md *lsm, 
+static inline int obd_trigger_group_io(struct obd_export *exp,
+                                       struct lov_stripe_md *lsm,
                                        struct lov_oinfo *loi,
                                        struct obd_io_group *oig)
 {
@@ -808,6 +822,11 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                          local, oti, rc);
         RETURN(rc);
 }
+
+/* b1_4_bug5047 has changes to make this an obd_merge_lvb() method */
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms_only);
+__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
+__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 static inline int obd_adjust_kms(struct obd_export *exp,
                                  struct lov_stripe_md *lsm, obd_off size,
@@ -870,7 +889,7 @@ static inline int obd_match(struct obd_export *exp, struct lov_stripe_md *ea,
 }
 
 static inline int obd_change_cbdata(struct obd_export *exp,
-                                    struct lov_stripe_md *lsm, 
+                                    struct lov_stripe_md *lsm,
                                     ldlm_iterator_t it, void *data)
 {
         int rc;
@@ -1010,7 +1029,7 @@ static inline int obd_quotacheck(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, quotacheck)(exp, oqctl);
         RETURN(rc);
-} 
+}
 
 static inline int obd_quotactl(struct obd_export *exp,
                                struct obd_quotactl *oqctl)
@@ -1023,7 +1042,7 @@ static inline int obd_quotactl(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, quotactl)(exp, oqctl);
         RETURN(rc);
-} 
+}
 
 
 static inline int obd_register_observer(struct obd_device *obd,

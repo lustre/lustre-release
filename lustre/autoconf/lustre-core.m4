@@ -155,6 +155,25 @@ fi
 ])
 
 #
+# LC_FUNC_FILEMAP_FDATASYNC
+#
+# if filemap_fdatasync() exists
+#
+AC_DEFUN([LC_FUNC_FILEMAP_FDATAWRITE],
+[AC_MSG_CHECKING([whether filemap_fdatawrite() is defined])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	int (*foo)(struct address_space *)= filemap_fdatawrite;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_FILEMAP_FDATAWRITE, 1, [filemap_fdatawrite() found])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_FUNC_DIRECT_IO
 #
 # if direct_IO takes a struct file argument
@@ -389,7 +408,9 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 # Lustre linux kernel checks
 #
 AC_DEFUN([LC_PROG_LINUX],
-[LC_CONFIG_BACKINGFS
+[if test x$enable_server = xyes ; then
+	LC_CONFIG_BACKINGFS
+fi
 LC_CONFIG_PINGER
 
 LC_STRUCT_KIOBUF
@@ -402,7 +423,28 @@ LC_STRUCT_INODE
 LC_FUNC_REGISTER_CACHE
 LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 LC_FUNC_DEV_SET_RDONLY
+LC_FUNC_FILEMAP_FDATAWRITE
 ])
+
+#
+# LC_CONFIG_CLIENT_SERVER
+#
+# Build client/server sides of Lustre
+#
+AC_DEFUN([LC_CONFIG_CLIENT_SERVER],
+[AC_MSG_CHECKING([whether to build Lustre server support])
+AC_ARG_ENABLE([server],
+	AC_HELP_STRING([--disable-server],
+			[disable Lustre server support]),
+	[],[enable_server='yes'])
+AC_MSG_RESULT([$enable_server])
+
+AC_MSG_CHECKING([whether to build Lustre client support])
+AC_ARG_ENABLE([client],
+	AC_HELP_STRING([--disable-client],
+			[disable Lustre client support]),
+	[],[enable_client='yes'])
+AC_MSG_RESULT([$enable_client])])
 
 #
 # LC_CONFIG_LIBLUSTRE
@@ -439,8 +481,17 @@ AC_DEFUN([LC_CONFIGURE],
 AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
 
 # include/lustre/lustre_user.h
-AC_CHECK_TYPES([struct if_dqinfo],[],[],[#include <linux/quota.h>])
-AC_CHECK_TYPES([struct if_dqblk],[],[],[#include <linux/quota.h>])
+# See note there re: __ASM_X86_64_PROCESSOR_H
+
+AC_CHECK_TYPES([struct if_dqinfo],[],[],[
+#define __ASM_X86_64_PROCESSOR_H
+#include <linux/quota.h>
+])
+
+AC_CHECK_TYPES([struct if_dqblk],[],[],[
+#define __ASM_X86_64_PROCESSOR_H
+#include <linux/quota.h>
+])
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -463,9 +514,11 @@ AC_DEFUN([LC_CONDITIONALS],
 AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
-AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
+AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
+AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
+AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 ])
 
 #

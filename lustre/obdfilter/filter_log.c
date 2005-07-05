@@ -137,7 +137,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         memcpy(obdo_logcookie(oa), cookie, sizeof(*cookie));
         oid = oa->o_id;
 
-        rc = obd_destroy(exp, oa, NULL, NULL);
+        rc = filter_destroy(exp, oa, NULL, NULL);
         obdo_free(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
@@ -165,10 +165,10 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         obd_id oid;
         int rc = 0;
         ENTRY;
-                                                                                                                             
+
         lsr = (struct llog_setattr_rec *)rec;
         oa = obdo_alloc();
-                                                                                                                             
+
         oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                         OBD_MD_FLCOOKIE);
         oa->o_id = lsr->lsr_oid;
@@ -178,7 +178,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         memcpy(obdo_logcookie(oa), cookie, sizeof(*cookie));
         oid = oa->o_id;
 
-        rc = obd_setattr(exp, oa, NULL, NULL);
+        rc = filter_setattr(exp, oa, NULL, NULL);
         obdo_free(oa);
 
         if (rc == -ENOENT) {
@@ -186,10 +186,10 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
                 llog_cancel(ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
- 
+
         if (rc == 0)
                 CDEBUG(D_HA, "object: "LPU64" in record is chown/chgrp\n", oid);
-                                                                                                                             
+
         RETURN(rc);
 }
 

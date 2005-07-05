@@ -11,11 +11,12 @@ LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_extent.c		\
 	$(top_srcdir)/lustre/ldlm/ldlm_request.c	\
 	$(top_srcdir)/lustre/ldlm/ldlm_lockd.c		\
-	$(top_srcdir)/lustre/ldlm/ldlm_internal.h
+	$(top_srcdir)/lustre/ldlm/ldlm_internal.h	\
+	$(top_srcdir)/lustre/ldlm/ldlm_flock.c
 
 COMMON_SOURCES =  client.c recover.c connection.c niobuf.c pack_generic.c   \
     events.c ptlrpc_module.c service.c pinger.c recov_thread.c llog_net.c   \
-    llog_client.c llog_server.c import.c ptlrpcd.c        		    \
+    llog_client.c llog_server.c import.c ptlrpcd.c pers.c     		    \
     ptlrpc_internal.h $(LDLM_COMM_SOURCES)
 
 if LIBLUSTRE
@@ -31,5 +32,5 @@ if MODULES
 modulefs_DATA = ptlrpc$(KMODEXT)
 endif # MODULES
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c ldlm_*.c l_lock.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

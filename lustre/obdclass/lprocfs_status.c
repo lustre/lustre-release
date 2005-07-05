@@ -43,7 +43,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_fsfilt.h>
 
-#if defined(LPROCFS) && defined(__KERNEL__)
+#if defined(LPROCFS)
 
 struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name)
@@ -204,11 +204,11 @@ int lprocfs_rd_atomic(char *page, char **start, off_t off,
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
-        struct obd_device *dev = (struct obd_device*)data;
+        struct obd_device *obd = (struct obd_device*)data;
 
-        LASSERT(dev != NULL);
+        LASSERT(obd != NULL);
         *eof = 1;
-        return snprintf(page, count, "%s\n", dev->obd_uuid.uuid);
+        return snprintf(page, count, "%s\n", obd->obd_uuid.uuid);
 }
 
 int lprocfs_rd_name(char *page, char **start, off_t off, int count,
@@ -335,8 +335,9 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
         imp = obd->u.cli.cl_import;
         imp_state_name = ptlrpc_import_state_name(imp->imp_state);
         *eof = 1;
-        return snprintf(page, count, "%s\t%s\n",
-                        imp->imp_target_uuid.uuid, imp_state_name);
+        return snprintf(page, count, "%s\t%s%s\n",
+                        imp->imp_target_uuid.uuid, imp_state_name,
+                        imp->imp_deactive ? "\tDEACTIVATED" : "");
 }
 
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
@@ -873,8 +874,6 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
 
-#endif /* LPROCFS*/
-
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);
 EXPORT_SYMBOL(lprocfs_remove);
@@ -906,3 +905,4 @@ EXPORT_SYMBOL(lprocfs_rd_filesfree);
 
 EXPORT_SYMBOL(lprocfs_write_helper);
 EXPORT_SYMBOL(lprocfs_write_u64_helper);
+#endif /* LPROCFS*/

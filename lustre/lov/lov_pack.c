@@ -124,7 +124,8 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++) {
                 /* XXX LOV STACKING call down to osc_packmd() to do packing */
-                LASSERT(loi->loi_id);
+                LASSERTF(loi->loi_id, "lmm_oid "LPU64" stripe %u/%u idx %u\n",
+                         lmm->lmm_object_id, i, stripe_count, loi->loi_ost_idx);
                 lmm->lmm_objects[i].l_object_id = cpu_to_le64(loi->loi_id);
                 lmm->lmm_objects[i].l_object_gr = cpu_to_le64(loi->loi_gr);
                 lmm->lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
@@ -138,8 +139,15 @@ int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
 {
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
-        if (!stripe_count || stripe_count > lov->desc.ld_active_tgt_count)
+        if (!stripe_count)
+                stripe_count = 1;
+        if (stripe_count > lov->desc.ld_active_tgt_count)
                 stripe_count = lov->desc.ld_active_tgt_count;
+        /* for now, we limit the stripe count directly, when bug 4424 is
+         * fixed this needs to be somewhat dynamic based on whether ext3
+         * can handle larger EA sizes. */
+        if (stripe_count > LOV_MAX_STRIPE_COUNT)
+                stripe_count = LOV_MAX_STRIPE_COUNT;
 
         return stripe_count;
 }
@@ -366,10 +374,10 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         /* 64kB is the largest common page size we see (ia64), and matches the
          * check in lfs */
-        if (lum.lmm_stripe_size & (65536 - 1)) {
-                CDEBUG(D_IOCTL, "stripe size %u not multiple of 64kB\n",
-                       lum.lmm_stripe_size);
-                RETURN(-EINVAL);
+        if (lum.lmm_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
+                CDEBUG(D_IOCTL, "stripe size %u not multiple of %u, fixing\n",
+                       lum.lmm_stripe_size, LOV_MIN_STRIPE_SIZE);
+                lum.lmm_stripe_size = LOV_MIN_STRIPE_SIZE;
         }
 
         if ((lum.lmm_stripe_offset >= lov->desc.ld_active_tgt_count) &&

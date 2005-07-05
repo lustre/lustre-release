@@ -40,8 +40,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#ifdef HAVE_LINUX_TYPES_H
 #include <linux/types.h>
+#else
+#include "types.h"
+#endif
+#ifdef HAVE_LINUX_UNISTD_H
 #include <linux/unistd.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <portals/ptlctl.h>
 
@@ -84,25 +92,25 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
 
         /* 64 KB is the largest common page size I'm aware of (on ia64), but
          * check the local page size just in case. */
-        page_size = 65536;
+        page_size = LOV_MIN_STRIPE_SIZE;
         if (getpagesize() > page_size) {
                 page_size = getpagesize();
-                fprintf(stderr, "WARNING: your page size (%d) is larger than "
-                        "expected.\n", page_size);
+                fprintf(stderr, "WARNING: your page size (%u) is larger than "
+                        "expected (%u).\n", page_size, LOV_MIN_STRIPE_SIZE);
         }
-        if ((stripe_size < 0 || stripe_size % 65536) &&
+        if ((stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) &&
             !(isdir && stripe_size == -1)) {
                 rc = -EINVAL;
                 err_msg("error: stripe_size must be an even "
                         "multiple of %d bytes.\n", page_size);
                 goto out;
         }
-        if (stripe_offset < -1 || stripe_offset > 65534) {
+        if (stripe_offset < -1 || stripe_offset > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe offset %d\n", stripe_offset);
                 goto out;
         }
-        if (stripe_count < -1 || stripe_count > 65534) {
+        if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe count %d\n", stripe_count);
                 goto out;
@@ -174,8 +182,7 @@ struct find_param {
                         struct find_param *param);
 };
 
-/* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
-#define MAX_LOV_UUID_COUNT      1000
+#define MAX_LOV_UUID_COUNT      max(LOV_MAX_STRIPE_COUNT, 1000)
 #define OBD_NOT_FOUND           (-1)
 
 static int prepare_find(struct find_param *param)
@@ -210,7 +217,7 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         __u32 *obdgens;
 
         max_ost_count = (OBD_MAX_IOCTL_BUFFER - size_round(sizeof(data)) -
-                         size_round(sizeof(desc))) / 
+                         size_round(sizeof(desc))) /
                         (sizeof(*uuidp) + sizeof(*obdgens));
         if (max_ost_count > *ost_count)
                 max_ost_count = *ost_count;
@@ -259,38 +266,58 @@ out:
 
 static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 {
-        struct obd_uuid uuids[1024], *uuidp;
-        int obdcount = 1024;
-        int rc, i;
+        char uuid[sizeof(struct obd_uuid)];
+        char buf[1024];
+        FILE *fp;
+        int rc = 0, index;
 
         param->got_uuids = 1;
 
-        rc = llapi_lov_get_uuids(dirfd(dir), uuids, &obdcount);
-        if (rc != 0)
-                return (param->obduuid ? rc : 0);
-
-        if (obdcount == 0)
-                return 0;
-
-        if (param->obduuid) {
-                for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
-                        if (strncmp(param->obduuid->uuid, uuidp->uuid,
-                                    sizeof(*uuidp)) == 0) {
-                                param->obdindex = i;
-                                break;
-                        }
-                }
-                if (param->obdindex == OBD_NOT_FOUND) {
-                        printf("unknown obduuid: %s\n", param->obduuid->uuid);
-                        return EINVAL;
-                }
-        } else if (!param->quiet) {
-                printf("OBDS:\n");
-                for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
-                        printf("%4d: %s\n", i, uuidp->uuid);
+        /* Get the lov name */
+        rc = ioctl(dirfd(dir), OBD_IOC_GETNAME, (void *)uuid);
+        if (rc) {
+                fprintf(stderr, "error: can't get lov name: %s\n",
+                        strerror(rc = errno));
+                return rc;
         }
 
-        return 0;
+        /* Now get the ost uuids from /proc */
+        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
+                 uuid);
+        fp = fopen(buf, "r");
+        if (fp == NULL) {
+                fprintf(stderr, "error: %s opening %s\n",
+                        strerror(rc = errno), buf);
+                return rc;
+        }
+
+        if (!param->obduuid && !param->quiet)
+                printf("OBDS:\n");
+
+        while (fgets(buf, sizeof(buf), fp) != NULL) {
+                if (sscanf(buf, "%d: %s", &index, uuid) < 2)
+                        break;
+
+                if (param->obduuid) {
+                        if (strncmp(param->obduuid->uuid, uuid,
+                                    sizeof(uuid)) == 0) {
+                                param->obdindex = index;
+                                break;
+                        }
+                } else if (!param->quiet) {
+                        /* Print everything */
+                        printf("%s", buf);
+                }
+        }
+
+        fclose(fp);
+
+        if (param->obduuid && (param->obdindex == OBD_NOT_FOUND)) {
+                printf("unknown obduuid: %s\n", param->obduuid->uuid);
+                rc =  EINVAL;
+        }
+
+        return (rc);
 }
 
 void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
@@ -436,7 +463,8 @@ static int find_process_file(DIR *dir, char *dname, char *fname,
                         /* add fname to directory list; */
                         rc = errno;
                 } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                        err_msg("IOC_MDC_GETSTRIPE ioctl failed for '%s/%s'",
+                                dname, fname);
                         rc = errno;
                 }
                 return rc;

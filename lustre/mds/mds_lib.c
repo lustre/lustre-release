@@ -325,8 +325,7 @@ static update_unpacker mds_unpackers[REINT_MAX] = {
 int mds_update_unpack(struct ptlrpc_request *req, int offset,
                       struct mds_update_record *rec)
 {
-        __u32 *opcodep;
-        __u32  opcode;
+        mds_reint_t opcode, *opcodep;
         int rc;
         ENTRY;
 
@@ -348,5 +347,8 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
 
         rec->ur_opcode = opcode;
         rc = mds_unpackers[opcode](req, offset, rec);
+#if CRAY_PORTALS
+        rec->ur_fsuid = req->rq_uid;
+#endif
         RETURN(rc);
 }

@@ -5,6 +5,7 @@ KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=suse-2.4.21-jvn
 VERSION=${lnxmaj}
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
 RHBUILD=0
 LINUX26=0
 SUSEBUILD=1

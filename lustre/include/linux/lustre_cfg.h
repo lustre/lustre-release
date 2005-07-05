@@ -63,6 +63,7 @@ struct lustre_cfg {
         uint32_t lcfg_num; 
         uint32_t lcfg_flags;
         uint64_t lcfg_nid;
+        uint32_t lcfg_nal;                      /* not used any more */
 
         uint32_t lcfg_bufcount;
         uint32_t lcfg_buflens[0];

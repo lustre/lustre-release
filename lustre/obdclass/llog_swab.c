@@ -25,6 +25,10 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
+
 #include <linux/lustre_log.h>
 
 static void print_llogd_body(struct llogd_body *d)
@@ -119,6 +123,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
         }
 
         case OBD_CFG_REC:
+        case PTL_CFG_REC:                       /* obsolete */
                 /* these are swabbed as they are consumed */
                 break;
 
@@ -148,6 +153,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 break;
         }
 
+        case LLOG_PAD_MAGIC:
         /* ignore old pad records of type 0 */
         case 0:
                 break;

@@ -29,11 +29,7 @@
 #include <linux/obd_class.h>
 #include <linux/seq_file.h>
 
-#ifndef LPROCFS
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-#else
-
+#ifdef LPROCFS
 static int lov_rd_stripesize(char *page, char **start, off_t off, int count,
                              int *eof, void *data)
 {
@@ -205,5 +201,5 @@ struct file_operations lov_proc_target_fops = {
         .release = seq_release,
 };
 
-#endif /* LPROCFS */
 LPROCFS_INIT_VARS(lov, lprocfs_module_vars, lprocfs_obd_vars)
+#endif /* LPROCFS */

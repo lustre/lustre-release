@@ -1,5 +1,5 @@
 lnxmaj="2.6.9"
-lnxrel="5.0.3.EL"
+lnxrel="5.0.5.EL"
 
 KERNEL=linux-${lnxmaj}-${lnxrel}.tar.bz2
 SERIES=2.6-rhel4.series
@@ -7,6 +7,7 @@ VERSION=${lnxmaj}
 EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
 RHBUILD=1
 LINUX26=1
+LUSTRE_VERSION=@VERSION@
 
 BASE_ARCHS="i686 x86_64 ia64"
 BIGMEM_ARCHS=""

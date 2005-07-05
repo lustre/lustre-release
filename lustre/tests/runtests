@@ -130,5 +130,6 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 fi
 
 if [ "$I_MOUNTED" = "yes" ]; then
+	sync && sleep 2 && sync     # wait for delete thread
 	sh llmountcleanup.sh || exit 29
 fi

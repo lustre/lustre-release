@@ -35,9 +35,7 @@
 # include <linux/signal.h>
 # include <linux/types.h>
 #endif
-#include <portals/p30.h>
-#include <libcfs/portals_lib.h>
-#include <libcfs/kp30.h> /* XXX just for LASSERT! */
+#include <libcfs/kp30.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
 
@@ -54,15 +52,28 @@
 #endif
 
 #ifndef LPU64
-/* x86_64 has 64bit longs and defines u64 as long long */
-#if BITS_PER_LONG > 32 && !defined(__x86_64__)
-#define LPU64 "%lu"
-#define LPD64 "%ld"
-#define LPX64 "%#lx"
-#else
-#define LPU64 "%Lu"
-#define LPD64 "%Ld"
-#define LPX64 "%#Lx"
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
+#if defined(__x86_64__) && defined(__KERNEL__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%u"
+# define LPSSZ "%d"
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+# define LPU64 "%lu"
+# define LPD64 "%ld"
+# define LPX64 "%#lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#endif
+#ifndef LPU64
+# error "No word size defined"
 #endif
 #endif
 
@@ -84,9 +95,14 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 int target_handle_ping(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 
+#ifdef HAVE_QUOTA_SUPPORT
 /* quotacheck callback, dqacq/dqrel callback handler */
 int target_handle_qc_callback(struct ptlrpc_request *req);
 int target_handle_dqacq_callback(struct ptlrpc_request *req);
+#else
+#define target_handle_dqacq_callback(req) ldlm_callback_reply(req, -ENOTSUPP)
+#define target_handle_qc_callback(req) (0)
+#endif
 
 void target_cancel_recovery_timer(struct obd_device *obd);
 
@@ -194,59 +210,59 @@ static inline int obd_ioctl_packlen(struct obd_ioctl_data *data)
 static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {
         if (data->ioc_len > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_len larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_len larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen1 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen1 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen2 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen2 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen3 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen3 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen4 > (1<<30)) {
-                printk("LustreError: OBD ioctl: ioc_inllen4 larger than 1<<30\n");
+                CERROR("OBD ioctl: ioc_inllen4 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-                printk("LustreError: OBD ioctl: inlbuf1 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-                printk("LustreError: OBD ioctl: inlbuf2 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf3 && !data->ioc_inllen3) {
-                printk("LustreError: OBD ioctl: inlbuf3 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf3 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf4 && !data->ioc_inllen4) {
-                printk("LustreError: OBD ioctl: inlbuf4 pointer but 0 length\n");
+                CERROR("OBD ioctl: inlbuf4 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf1 && !data->ioc_plen1) {
-                printk("LustreError: OBD ioctl: pbuf1 pointer but 0 length\n");
+                CERROR("OBD ioctl: pbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf2 && !data->ioc_plen2) {
-                printk("LustreError: OBD ioctl: pbuf2 pointer but 0 length\n");
+                CERROR("OBD ioctl: pbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_plen1 && !data->ioc_pbuf1) {
-                printk("LustreError: OBD ioctl: plen1 set but NULL pointer\n");
+                CERROR("OBD ioctl: plen1 set but NULL pointer\n");
                 return 1;
         }
         if (data->ioc_plen2 && !data->ioc_pbuf2) {
-                printk("LustreError: OBD ioctl: plen2 set but NULL pointer\n");
+                CERROR("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
         if (obd_ioctl_packlen(data) != data->ioc_len) {
-                printk("LustreError: OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+                CERROR("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
                        obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }
@@ -331,25 +347,23 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err) 
+                RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
                 CERROR("Version mismatch kernel vs application\n");
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         if (hdr.ioc_len > OBD_MAX_IOCTL_BUFFER) {
                 CERROR("User buffer len %d exceeds %d max buffer\n",
                        hdr.ioc_len, OBD_MAX_IOCTL_BUFFER);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         if (hdr.ioc_len < sizeof(struct obd_ioctl_data)) {
-                printk("LustreError: OBD: user buffer too small for ioctl\n");
-                return -EINVAL;
+                CERROR("user buffer too small for ioctl (%d)\n", hdr.ioc_len);
+                RETURN(-EINVAL);
         }
 
         /* XXX allocate this more intelligently, using kmalloc when
@@ -364,14 +378,15 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         data = (struct obd_ioctl_data *)*buf;
 
         err = copy_from_user(*buf, (void *)arg, hdr.ioc_len);
-        if ( err ) {
-                EXIT;
-                return err;
+        if (err) {
+                OBD_VFREE(*buf, hdr.ioc_len);
+                RETURN(err);
         }
 
         if (obd_ioctl_is_invalid(data)) {
                 CERROR("ioctl not correctly formatted\n");
-                return -EINVAL;
+                OBD_VFREE(*buf, hdr.ioc_len);
+                RETURN(-EINVAL);
         }
 
         if (data->ioc_inllen1) {
@@ -393,8 +408,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
                 data->ioc_inlbuf4 = &data->ioc_bulk[0] + offset;
         }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 static inline void obd_ioctl_freedata(char *buf, int len)
@@ -430,6 +444,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, long)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, long)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, long)
+#define OBD_IOC_GETNAME                _IOR ('f', 131, long)
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, long)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, long)
@@ -482,25 +497,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
  * we define this to be 2T - 4k, which is the ext3 maxbytes. */
 #define LUSTRE_STRIPE_MAXBYTES 0x1fffffff000ULL
 
-#define CHECKSUM_CHUNK 4096
-#define CHECKSUM_BULK 0
 #define POISON_BULK 0
-
-#if CHECKSUM_BULK
-static inline void ost_checksum(obd_count *cksum,int *psum, void *addr, int len)
-{
-        unsigned char *ptr = (unsigned char *)addr;
-        int sum = 0;
-
-        /* very stupid, but means I don't have to think about byte order */
-        while (len-- > 0)
-                sum += *ptr++;
-
-        *cksum = (*cksum << 2) + sum;
-        if (psum)
-                *psum = sum;
-}
-#endif
 
 static inline int ll_insecure_random_int(void)
 {
@@ -675,13 +672,29 @@ do {                                                                           \
 #else /* !__KERNEL__ */
 #define __l_wait_event(wq, condition, info, ret, excl)                         \
 do {                                                                           \
+        long timeout = info->lwi_timeout, elapse, last = 0;                    \
         int __timed_out = 0;                                                   \
+                                                                               \
+        if (info->lwi_timeout == 0)                                            \
+            timeout = 1000000000;                                              \
+        else                                                                   \
+            last = time(NULL);                                                 \
                                                                                \
         for (;;) {                                                             \
             if (condition)                                                     \
                 break;                                                         \
-            if (liblustre_wait_event(info->lwi_timeout))                       \
+            if (liblustre_wait_event(timeout)) {                               \
+                if (timeout == 0 || info->lwi_timeout == 0)                    \
+                        continue;                                              \
+                elapse = time(NULL) - last;                                    \
+                if (elapse) {                                                  \
+                        last += elapse;                                        \
+                        timeout -= elapse;                                     \
+                        if (timeout < 0)                                       \
+                                timeout = 0;                                   \
+                }                                                              \
                 continue;                                                      \
+            }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
                 __timed_out = 1;                                               \
                 if (info->lwi_on_timeout == NULL ||                            \

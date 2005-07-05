@@ -42,7 +42,6 @@
 #include <linux/iobuf.h>
 #endif
 
-
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_mds.h>
@@ -68,7 +67,6 @@ struct ll_lock_tree_node {
         struct inode           *lt_inode;
 };
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int lt_get_mmap_locks(struct ll_lock_tree *tree,
                       unsigned long addr, size_t count);
 
@@ -362,7 +360,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
 #endif
 {
         struct file *filp = vma->vm_file;
-        struct ll_file_data *fd = filp->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
         struct inode *inode = filp->f_dentry->d_inode;
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
