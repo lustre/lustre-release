@@ -360,6 +360,12 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                         RETURN(-EINVAL);
                 portals_debug_mark_buffer(data->ioc_inlbuf1);
                 RETURN(0);
+        case IOC_PORTAL_DMSG:
+                if (data->ioc_inlbuf1 == NULL ||
+                    data->ioc_inlbuf1[data->ioc_inllen1 - 1] != '\0')
+                        RETURN(-EINVAL);
+                printk("%s", data->ioc_inlbuf1);
+                RETURN(0);
 #if LWT_SUPPORT
         case IOC_PORTAL_LWT_CONTROL:
                 err = lwt_control (data->ioc_flags, data->ioc_misc);
