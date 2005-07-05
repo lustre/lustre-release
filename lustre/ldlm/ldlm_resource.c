@@ -140,7 +140,8 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
         unsigned long tmp;
 
         dummy[MAX_STRING_SIZE] = '\0';
-        copy_from_user(dummy, buffer, MAX_STRING_SIZE);
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+                return -EFAULT;
 
         if (count == 6 && memcmp(dummy, "clear", 5) == 0) {
                 CDEBUG(D_DLMTRACE,
