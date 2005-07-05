@@ -365,7 +365,7 @@ typedef struct ksock_route
 typedef struct ksock_peer
 {
         struct list_head    ksnp_list;          /* stash on global peer list */
-        ptl_nid_t           ksnp_nid;           /* who's on the other end(s) */
+        ptl_process_id_t    ksnp_id;            /* who's on the other end(s) */
         atomic_t            ksnp_refcount;      /* # users */
         int                 ksnp_sharecount;    /* lconf usage counter */
         int                 ksnp_closing;       /* being closed */
@@ -499,9 +499,9 @@ ptl_err_t ksocknal_recv_pages(ptl_ni_t *ni, void *private,
                               size_t mlen, size_t rlen);
 ptl_err_t ksocknal_accept(ptl_ni_t *ni, struct socket *sock);
 
-extern int ksocknal_add_peer(ptl_ni_t *ni, ptl_nid_t nid, __u32 ip, int port);
-extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, ptl_nid_t nid);
-extern ksock_peer_t *ksocknal_find_peer (ptl_ni_t *ni, ptl_nid_t nid);
+extern int ksocknal_add_peer(ptl_ni_t *ni, ptl_process_id_t id, __u32 ip, int port);
+extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, ptl_process_id_t id);
+extern ksock_peer_t *ksocknal_find_peer (ptl_ni_t *ni, ptl_process_id_t id);
 extern int ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
@@ -509,7 +509,7 @@ extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
 extern int ksocknal_close_stale_conns_locked (ksock_peer_t *peer, __u64 incarnation);
 extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
-extern int ksocknal_close_matching_conns (ptl_nid_t nid, __u32 ipaddr);
+extern int ksocknal_close_matching_conns (ptl_process_id_t id, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch);
@@ -525,8 +525,8 @@ extern int ksocknal_reaper (void *arg);
 extern int ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
                                 __u32 *ipaddrs, int nipaddrs);
 extern int ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
-                                ptl_nid_t *nid, __u64 *incarnation, 
-                                __u32 *ipaddrs);
+                                ptl_process_id_t *id, 
+                                __u64 *incarnation, __u32 *ipaddrs);
 
 extern void ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn);
 extern void ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn);

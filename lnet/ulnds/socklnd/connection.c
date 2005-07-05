@@ -22,8 +22,7 @@
 /* connection.c:
    This file provides a simple stateful connection manager which
    builds tcp connections on demand and leaves them open for
-   future use. It also provides the machinery to allow peers
-   to connect to it
+   future use. 
 */
 
 #include <stdlib.h>
@@ -49,9 +48,40 @@
 #include <syscall.h>
 #endif
 
-/* global variable: acceptor port */
-unsigned short tcpnal_acceptor_port = 988;
+/* tunables (via environment) */
+int tcpnal_acceptor_port = 988;
+int tcpnal_buffer_size   = 2 * (PTL_MTU + sizeof(ptl_hdr_t));
+int tcpnal_nagle         = 0;
 
+int
+tcpnal_env_param (char *name, int *val) 
+{
+        char   *env = getenv(name);
+        int     n;
+        
+        if (env == NULL)
+                return 1;
+
+        n = strlen(env);                        /* scanf may not assign on EOS */
+        if (sscanf(env, "%i%n", val, &n) >= 1 &&
+            n == strlen(env))
+                return 1;
+        
+        CERROR("Can't parse environment variable '%s=%s'\n",
+               name, env);
+        return 0;
+}
+
+int
+tcpnal_set_global_params (void)
+{
+        return  tcpnal_env_param("TCPNAL_ACCEPTOR_PORT", 
+                                &tcpnal_acceptor_port) &&
+                tcpnal_env_param("TCPNAL_BUFFER_SIZE",   
+                                 &tcpnal_buffer_size) &&
+                tcpnal_env_param("TCPNAL_NAGLE",
+                                 &tcpnal_nagle);
+}
 
 /* Function:  compare_connection
  * Arguments: connection c:      a connection in the hash table
@@ -63,29 +93,21 @@ unsigned short tcpnal_acceptor_port = 988;
 static int compare_connection(void *arg1, void *arg2)
 {
     connection c = arg1;
-    unsigned int * id = arg2;
-#if 0
-    return((c->ip==id[0]) && (c->port==id[1]));
-#else
-    /* CFS specific hacking */
-    return (c->ip == id[0]);
-#endif
-}
+    ptl_nid_t *nid = arg2;
 
+    return (c->peer_nid == *nid);
+}
 
 /* Function:  connection_key
  * Arguments: ptl_process_id_t id:  an id to hash
  * Returns: a not-particularily-well-distributed hash
  *          of the id
  */
-static unsigned int connection_key(unsigned int *id)
+static unsigned int connection_key(void *arg)
 {
-#if 0
-    return(id[0]^id[1]);
-#else
-    /* CFS specific hacking */
-    return (unsigned int) id[0];
-#endif
+        ptl_nid_t *nid = arg;
+        
+        return (unsigned int)(*nid);
 }
 
 
@@ -95,11 +117,8 @@ static unsigned int connection_key(unsigned int *id)
 void remove_connection(void *arg)
 {
         connection c = arg;
-        unsigned int id[2];
         
-        id[0]=c->ip;
-        id[1]=c->port;
-        hash_table_remove(c->m->connections,id);
+        hash_table_remove(c->m->connections,&c->peer_nid);
         close(c->fd);
         free(c);
 }
@@ -149,111 +168,131 @@ static int connection_input(void *d)
 }
 
 
-/* Function:  allocate_connection
- * Arguments: t:    tcpnal the allocation is occuring in the context of
- *            dest: portal endpoint address for this connection
- *            fd:   open file descriptor for the socket
- * Returns: an allocated connection structure
- *
- * just encompasses the action common to active and passive
- *  connections of allocation and placement in the global table
- */
-static connection allocate_connection(manager m,
-                               unsigned int ip,
-                               unsigned short port,
-                               int fd)
+static connection 
+allocate_connection(manager        m,
+                    ptl_nid_t      nid,
+                    int            fd)
 {
     connection c=malloc(sizeof(struct connection));
-    unsigned int id[2];
+
     c->m=m;
     c->fd=fd;
-    c->ip=ip;
-    c->port=port;
-    id[0]=ip;
-    id[1]=port;
+    c->peer_nid = nid;
+
     register_io_handler(fd,READ_HANDLER,connection_input,c);
-    hash_table_insert(m->connections,c,id);
+    hash_table_insert(m->connections,c,&nid);
     return(c);
 }
 
-
-/* Function:  new_connection
- * Arguments: t: opaque argument holding the tcpname
- * Returns: 1 in order to reregister for new connection requests
- *
- *  called when the bound service socket recieves
- *     a new connection request, it always accepts and
- *     installs a new connection
- */
-static int new_connection(void *z)
+int
+tcpnal_write(ptl_nid_t nid, int sockfd, void *buffer, int nob)
 {
-    manager m=z;
-    struct sockaddr_in s;
-    int len=sizeof(struct sockaddr_in);
-    int fd=accept(m->bound,(struct sockaddr *)&s,&len);
-    unsigned int nid=*((unsigned int *)&s.sin_addr);
-    /* cfs specific hack */
-    //unsigned short pid=s.sin_port;
-    pthread_mutex_lock(&m->conn_lock);
-    allocate_connection(m,htonl(nid),0/*pid*/,fd);
-    pthread_mutex_unlock(&m->conn_lock);
-    return(1);
+        int rc = syscall(SYS_write, sockfd, buffer, nob);
+        
+        /* NB called on an 'empty' socket with huge buffering! */
+        if (rc == nob)
+                return 0;
+
+        if (rc < 0) {
+                CERROR("Failed to send to %s: %s\n",
+                       libcfs_nid2str(nid), strerror(errno));
+                return -1;
+        }
+        
+        CERROR("Short send to %s: %d/%d\n",
+               libcfs_nid2str(nid), rc, nob);
+        return -1;
 }
 
-extern ptl_nid_t tcpnal_mynid;
+int
+tcpnal_read(ptl_nid_t nid, int sockfd, void *buffer, int nob) 
+{
+        int       rc;
+
+        while (nob > 0) {
+                rc = syscall(SYS_read, sockfd, buffer, nob);
+                
+                if (rc == 0) {
+                        CERROR("Unexpected EOF from %s\n",
+                               libcfs_nid2str(nid));
+                        return -1;
+                }
+
+                if (rc < 0) {
+                        CERROR("Failed to receive from %s: %s\n",
+                               libcfs_nid2str(nid), strerror(errno));
+                        return -1;
+                }
+
+                nob -= rc;
+        }
+        return 0;
+}
 
 int
-tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
+tcpnal_hello (int sockfd, ptl_nid_t nid)
 {
-        int                 rc;
-        int                 nob;
-        ptl_hdr_t           hdr;
-        ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
+        struct timeval         tv;
+        __u64                  incarnation;
+        int                    rc;
+        int                    nob;
+        ptl_acceptor_connreq_t cr;
+        ptl_hdr_t              hdr;
+        ptl_magicversion_t    *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
 
-        LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
+        gettimeofday(&tv, NULL);
+        incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
+
+        memset(&cr, 0, sizeof(cr));
+        cr.acr_magic   = PTL_PROTO_ACCEPTOR_MAGIC;
+        cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
+        cr.acr_nid     = nid;
+
+        CLASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
 
         memset (&hdr, 0, sizeof (hdr));
         hmv->magic         = cpu_to_le32(PTL_PROTO_TCP_MAGIC);
         hmv->version_major = cpu_to_le32(PTL_PROTO_TCP_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le32(PTL_PROTO_TCP_VERSION_MINOR);
         
-        hdr.src_nid = cpu_to_le64(tcpnal_mynid);
-        hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
+        /* hdr.src_nid/src_pid are ignored at dest */
 
-        hdr.msg.hello.type = cpu_to_le32(type);
+        hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
+        hdr.msg.hello.type = cpu_to_le32(SOCKNAL_CONN_ANY);
         hdr.msg.hello.incarnation = cpu_to_le64(incarnation);
 
         /* I don't send any interface info */
 
-        /* Assume sufficient socket buffering for this message */
-        rc = syscall(SYS_write, sockfd, &hdr, sizeof(hdr));
-        if (rc <= 0) {
-                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, *nid);
-                return (rc);
-        }
+        /* Assume sufficient socket buffering for these messages... */
+        rc = tcpnal_write(nid, sockfd, &cr, sizeof(cr));
+        if (rc != 0)
+                return -1;
 
-        rc = syscall(SYS_read, sockfd, hmv, sizeof(*hmv));
-        if (rc <= 0) {
-                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, *nid);
-                return (rc);
-        }
+        rc = tcpnal_write(nid, sockfd, &hdr, sizeof(hdr));
+        if (rc != 0)
+                return -1;
+
+        rc = tcpnal_read(nid, sockfd, hmv, sizeof(*hmv));
+        if (rc != 0)
+                return -1;
         
         if (hmv->magic != le32_to_cpu(PTL_PROTO_TCP_MAGIC)) {
-                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
-                        cpu_to_le32(hmv->magic), PTL_PROTO_TCP_MAGIC, *nid);
-                return (-EPROTO);
+                CERROR ("Bad magic %#08x (%#08x expected) from %s\n",
+                        cpu_to_le32(hmv->magic), PTL_PROTO_TCP_MAGIC, 
+                        libcfs_nid2str(nid));
+                return -1;
         }
 
         if (hmv->version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
             hmv->version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
-                        " from "LPX64"\n",
+                        " from %s\n",
                         le16_to_cpu (hmv->version_major),
                         le16_to_cpu (hmv->version_minor),
                         PTL_PROTO_TCP_VERSION_MAJOR,
                         PTL_PROTO_TCP_VERSION_MINOR,
-                        *nid);
-                return (-EPROTO);
+                        libcfs_nid2str(nid));
+                return -1;
         }
 
 #if (PTL_PROTO_TCP_VERSION_MAJOR != 1)
@@ -262,59 +301,40 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         /* version 1 sends magic/version as the dest_nid of a 'hello' header,
          * so read the rest of it in now... */
 
-        rc = syscall(SYS_read, sockfd, hmv + 1, sizeof(hdr) - sizeof(*hmv));
-        if (rc <= 0) {
-                CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
-                        rc, *nid);
-                return (rc);
-        }
+        rc = tcpnal_read(nid, sockfd, hmv + 1, sizeof(hdr) - sizeof(*hmv));
+        if (rc != 0)
+                return -1;
 
         /* ...and check we got what we expected */
         if (hdr.type != cpu_to_le32 (PTL_MSG_HELLO)) {
                 CERROR ("Expecting a HELLO hdr "
-                        " but got type %d with %d payload from "LPX64"\n",
+                        " but got type %d with %d payload from %s\n",
                         le32_to_cpu (hdr.type),
-                        le32_to_cpu (hdr.payload_length), *nid);
-                return (-EPROTO);
+                        le32_to_cpu (hdr.payload_length), libcfs_nid2str(nid));
+                return -1;
         }
 
         if (le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
                 CERROR("Expecting a HELLO hdr with a NID, but got PTL_NID_ANY\n");
-                return (-EPROTO);
+                return -1;
         }
 
-        if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
-                *nid = le64_to_cpu(hdr.src_nid);
-        } else if (*nid != le64_to_cpu (hdr.src_nid)) {
-                CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
-                        le64_to_cpu (hdr.src_nid), *nid);
-                return (-EPROTO);
+        if (nid != le64_to_cpu (hdr.src_nid)) {
+                CERROR ("Connected to %s, but expecting %s\n",
+                        libcfs_nid2str(le64_to_cpu (hdr.src_nid)), 
+                        libcfs_nid2str(nid));
+                return -1;
         }
 
         /* Ignore any interface info in the payload */
         nob = le32_to_cpu(hdr.payload_length);
-        if (nob > getpagesize()) {
-                CERROR("Unexpected HELLO payload %d from "LPX64"\n",
-                       nob, *nid);
-                return (-EPROTO);
-        }
-        if (nob > 0) {
-                char *space = (char *)malloc(nob);
-                
-                if (space == NULL) {
-                        CERROR("Can't allocate scratch buffer %d\n", nob);
-                        return (-ENOMEM);
-                }
-                
-                rc = syscall(SYS_read, sockfd, space, nob);
-                if (rc <= 0) {
-                        CERROR("Error %d skipping HELLO payload from "
-                               LPX64"\n", rc, *nid);
-                        return (rc);
-                }
+        if (nob != 0) {
+                CERROR("Unexpected HELLO payload %d from %s\n",
+                       nob, libcfs_nid2str(nid));
+                return -1;
         }
 
-        return (0);
+        return 0;
 }
 
 /* Function:  force_tcp_connection
@@ -324,43 +344,56 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
  *          a pre-existing one, or a new connection
  */
 connection force_tcp_connection(manager m,
-                                unsigned int ip,
-                                unsigned short port,
+                                ptl_nid_t nid,
                                 procbridge pb)
 {
-    connection conn;
+    unsigned int       ip = PTL_NIDADDR(nid);
+    connection         conn;
     struct sockaddr_in addr;
     struct sockaddr_in locaddr; 
-    unsigned int id[2];
-    struct timeval tv;
-    __u64 incarnation;
-
-    int fd;
-    int option;
-    int rc;
-    int rport;
-    ptl_nid_t peernid = PTL_NID_ANY;
-
-    port = tcpnal_acceptor_port;
-
-    id[0] = ip;
-    id[1] = port;
+    int                fd;
+    int                option;
+    int                rc;
 
     pthread_mutex_lock(&m->conn_lock);
 
-    conn = hash_table_find(m->connections, id);
+    conn = hash_table_find(m->connections, &nid);
     if (conn)
             goto out;
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(ip);
-    addr.sin_port        = htons(port);
+    addr.sin_port        = htons(tcpnal_acceptor_port);
 
     memset(&locaddr, 0, sizeof(locaddr)); 
     locaddr.sin_family = AF_INET; 
     locaddr.sin_addr.s_addr = INADDR_ANY;
 
+#if 1 /* tcpnal connects from a non-privileged port */
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+            perror("tcpnal socket failed");
+            goto out;
+    } 
+
+    option = 1;
+    rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, 
+                    &option, sizeof(option));
+    if (rc != 0) {
+            perror ("Can't set SO_REUSEADDR for socket"); 
+            close(fd);
+            goto out;
+    } 
+
+    rc = connect(fd, (struct sockaddr *)&addr,
+                 sizeof(struct sockaddr_in));
+    if (rc != 0) {
+            perror("Error connecting to remote host");
+            close(fd);
+            goto out;
+    }
+#else
     for (rport = IPPORT_RESERVED - 1; rport > IPPORT_RESERVED / 2; --rport) {
             fd = socket(AF_INET, SOCK_STREAM, 0);
             if (fd < 0) {
@@ -401,24 +434,20 @@ connection force_tcp_connection(manager m,
             fprintf(stderr, "Out of ports trying to bind to a reserved port\n");
             goto out;
     }
-    
-#if 1
-    option = 1;
-    setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
-    option = 1<<20;
-    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
-    option = 1<<20;
-    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
 #endif
-   
-    gettimeofday(&tv, NULL);
-    incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
-
-    /* say hello */
-    if (tcpnal_hello(fd, &peernid, SOCKNAL_CONN_ANY, incarnation))
-            exit(-1);
     
-    conn = allocate_connection(m, ip, port, fd);
+    option = tcpnal_nagle ? 0 : 1;
+    setsockopt(fd, SOL_TCP, TCP_NODELAY, &option, sizeof(option));
+    option = tcpnal_buffer_size;
+    setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &option, sizeof(option));
+    option = tcpnal_buffer_size;
+    setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &option, sizeof(option));
+   
+    /* say hello */
+    if (tcpnal_hello(fd, nid))
+            goto out;
+    
+    conn = allocate_connection(m, nid, fd);
     
     /* let nal thread know this event right away */
     if (conn)
@@ -429,6 +458,30 @@ out:
     return (conn);
 }
 
+
+#if 0                                           /* we don't accept connections */
+/* Function:  new_connection
+ * Arguments: t: opaque argument holding the tcpname
+ * Returns: 1 in order to reregister for new connection requests
+ *
+ *  called when the bound service socket recieves
+ *     a new connection request, it always accepts and
+ *     installs a new connection
+ */
+static int new_connection(void *z)
+{
+    manager m=z;
+    struct sockaddr_in s;
+    int len=sizeof(struct sockaddr_in);
+    int fd=accept(m->bound,(struct sockaddr *)&s,&len);
+    unsigned int nid=*((unsigned int *)&s.sin_addr);
+    /* cfs specific hack */
+    //unsigned short pid=s.sin_port;
+    pthread_mutex_lock(&m->conn_lock);
+    allocate_connection(m,htonl(nid),0/*pid*/,fd);
+    pthread_mutex_unlock(&m->conn_lock);
+    return(1);
+}
 
 /* Function:  bind_socket
  * Arguments: t: the nal state for this interface
@@ -467,6 +520,7 @@ static int bind_socket(manager m,unsigned short port)
     m->port=addr.sin_port;
     return(1);
 }
+#endif
 
 
 /* Function:  shutdown_connections
@@ -476,32 +530,36 @@ static int bind_socket(manager m,unsigned short port)
  */
 void shutdown_connections(manager m)
 {
-    close(m->bound);
-    remove_io_handler(m->bound_handler);
-    hash_destroy_table(m->connections,remove_connection);
-    free(m);
+#if 0
+        /* we don't accept connections */
+        close(m->bound);
+        remove_io_handler(m->bound_handler);
+#endif
+        hash_destroy_table(m->connections,remove_connection);
+        free(m);
 }
 
 
 /* Function:  init_connections
  * Arguments: t: the nal state for this interface
- *            port: the port to attempt to bind to
  * Returns: a newly allocated manager structure, or
  *          zero if the fixed port could not be bound
  */
-manager init_connections(unsigned short pid,
-                         int (*input)(void *, void *),
-                         void *a)
+manager init_connections(int (*input)(void *, void *), void *a)
 {
     manager m = (manager)malloc(sizeof(struct manager));
+
     m->connections = hash_create_table(compare_connection,connection_key);
     m->handler = input;
     m->handler_arg = a;
     pthread_mutex_init(&m->conn_lock, 0);
 
+    return m;
+#if 0
     if (bind_socket(m,pid))
         return(m);
 
     free(m);
     return(0);
+#endif
 }

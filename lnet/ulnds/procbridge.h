@@ -12,7 +12,6 @@
 
 #include <pthread.h>
 #include <bridge.h>
-#include <ipmap.h>
 
 
 #define NAL_FLAG_RUNNING        1
@@ -39,7 +38,6 @@ typedef struct nal_init_args {
 
 extern void *nal_thread(void *);
 
-extern void set_address(bridge t,ptl_pid_t pidrequest);
 extern void procbridge_wakeup_nal(procbridge p);
 
 extern ptl_err_t procbridge_startup (ptl_ni_t *);

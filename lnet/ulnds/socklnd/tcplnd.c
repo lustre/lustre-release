@@ -80,9 +80,7 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
             return PTL_FAIL;
     }
     
-    if (!(c=force_tcp_connection((manager)b->lower,
-                                 PNAL_IP(target.nid,b),
-                                 PNAL_PORT(target.nid,target.pid),
+    if (!(c=force_tcp_connection((manager)b->lower, target.nid,
                                  b->local)))
         return(PTL_FAIL);
 
@@ -242,9 +240,7 @@ int tcpnal_init(bridge b)
 {
     manager m;
         
-    if (!(m=init_connections(PNAL_PORT(b->b_ni->ni_nid,
-                                       ptl_apini.apini_pid),
-                             from_connection,b))){
+    if (!(m=init_connections(from_connection,b))){
         /* TODO: this needs to shut down the
            newly created junk */
         return(PTL_NAL_FAILED);

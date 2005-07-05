@@ -995,7 +995,7 @@ PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
         LASSERT (ptl_apini.apini_refcount > 0);
 
         /* pretty useless; just return the NID of the first local interface,
-         * that isn't LONAL; it has the same NID on all nodes */
+         * that isn't LONAL (it has the same NID on all nodes) */
 
         PTL_LOCK(flags);
 

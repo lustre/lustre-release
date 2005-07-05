@@ -155,7 +155,7 @@ __entry_nesting(&__cdd);
 /* ENTRY_NESTING_SUPPORT */
 #endif
 
-#define LUSTRE_PTL_PID          12345
+#define LUSTRE_PTL_PID          456             /* <= 1023 (TCP reserved port) */
 
 #define _XNU_LIBCFS_H
 

@@ -38,6 +38,9 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
+/* Has there been an LBUG? */
+extern unsigned int portals_catastrophe;
+
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
  */
@@ -221,6 +224,7 @@ do {                                                                    \
 #endif /* !CDEBUG_ENTRY_EXIT */
 
 #else /* !1 */
+#define CDEBUG_LIMIT(mask, format, a...) do { } while (0)
 #define CDEBUG(mask, format, a...)      do { } while (0)
 #define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
 #define CERROR(format, a...)            printk(KERN_ERR format, ## a)
@@ -236,6 +240,7 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif /* !1 */
 #else /* !__KERNEL__ */
+#define CDEBUG_LIMIT(mask, format, a...) do { } while (0)
 #define CDEBUG(mask, format, a...)      do { } while (0)
 #define LCONSOLE(mask, format, a...)    fprintf(stderr, format, ## a)
 #define CWARN(format, a...)             fprintf(stderr, format, ## a)
@@ -274,6 +279,9 @@ int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 /* libcfs tcpip */
+#define PTL_ACCEPTOR_MIN_RESERVED_PORT    512
+#define PTL_ACCEPTOR_MAX_RESERVED_PORT    1023
+
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);
 void libcfs_ipif_free_enumeration(char **names, int n);

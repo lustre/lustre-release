@@ -36,6 +36,7 @@ extern unsigned int portal_debug;
 extern char debug_file_path[1024];
 extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_printk;
+extern unsigned int portals_catastrophe;
 extern atomic_t portal_kmemory;
 
 extern long max_debug_mb;

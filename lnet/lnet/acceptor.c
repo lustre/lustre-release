@@ -23,9 +23,6 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-#define MIN_RESERVED_PORT    512
-#define MAX_RESERVED_PORT    1023
-
 #ifdef __KERNEL__
 static int acceptor_port = 988;
 CFS_MODULE_PARM(acceptor_port, "i", int, 0444,
@@ -139,7 +136,9 @@ ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
 
         CLASSERT (sizeof(cr) <= 16);            /* not too big to be on the stack */
 
-        for (port = MAX_RESERVED_PORT; port >= MIN_RESERVED_PORT; --port) {
+        for (port = PTL_ACCEPTOR_MAX_RESERVED_PORT; 
+             port >= PTL_ACCEPTOR_MIN_RESERVED_PORT; 
+             --port) {
                 /* Iterate through reserved ports. */
 
                 rc = libcfs_sock_connect(&sock, &fatal, 
@@ -375,9 +374,10 @@ ptl_acceptor(void *arg)
 		}
 
                 if (accept_secure_only &&
-                    peer_port > MAX_RESERVED_PORT) {
+                    peer_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
                         CERROR("Refusing connection from %u.%u.%u.%u: "
-                               "insecure port %d\n", HIPQUAD(peer_ip), peer_port);
+                               "insecure port %d\n",
+                               HIPQUAD(peer_ip), peer_port);
                         goto failed;
                 }
 

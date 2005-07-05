@@ -252,7 +252,7 @@ struct portals_device_userstate
  * USER LEVEL STUFF BELOW
  */
 
-#define PORTAL_IOCTL_VERSION 0x00010009
+#define PORTAL_IOCTL_VERSION 0x0001000a
 
 struct portal_ioctl_data {
         __u32 ioc_len;
@@ -264,7 +264,7 @@ struct portal_ioctl_data {
         __u32 ioc_flags;
         __u32 ioc_count;
         __u32 ioc_net;
-        __u32 ioc_u32[6];
+        __u32 ioc_u32[7];
 
         __u32 ioc_inllen1;
         char *ioc_inlbuf1;
@@ -451,8 +451,6 @@ enum {
         VIBNAL    = 7,
         RANAL     = 8,
 };
-
-#define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
 
 enum {
         DEBUG_DAEMON_START       =  1,

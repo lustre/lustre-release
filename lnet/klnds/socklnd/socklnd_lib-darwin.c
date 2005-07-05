@@ -821,10 +821,10 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *fatal,
         if (rc != 0) { 
                 CFS_NET_EX;
                 if (rc != EADDRNOTAVAIL && rc != EADDRINUSE)
-                        CERROR ("Can't connect to nid "LPX64 
+                        CERROR ("Can't connect to %s"
                                 " local IP: %u.%u.%u.%u," 
                                 " remote IP: %u.%u.%u.%u/%d: %d\n", 
-                                route->ksnr_peer->ksnp_nid, 
+                                libcfs_id2str(route->ksnr_peer->ksnp_id, 
                                 HIPQUAD(route->ksnr_myipaddr), 
                                 HIPQUAD(route->ksnr_ipaddr), 
                                 route->ksnr_port, rc); 
@@ -842,10 +842,10 @@ ksocknal_lib_connect_sock (struct socket **sockp, int *fatal,
 
         rc = so->so_error; 
         if (rc != 0) { 
-                CERROR ("Error %d waiting for connection to nid "LPX64 
+                CERROR ("Error %d waiting for connection to %s" 
                         " local IP: %u.%u.%u.%u," 
                         " remote IP: %u.%u.%u.%u/%d: %d\n", rc,
-                        route->ksnr_peer->ksnp_nid, 
+                        libcfs_id2str(route->ksnr_peer->ksnp_id), 
                         HIPQUAD(route->ksnr_myipaddr), 
                         HIPQUAD(route->ksnr_ipaddr), 
                         route->ksnr_port, rc); 

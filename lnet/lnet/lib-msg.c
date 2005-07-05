@@ -130,3 +130,8 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
 
         PTL_UNLOCK(flags);
 }
+
+ptl_pid_t  ptl_getpid(void) 
+{
+        return ptl_apini.apini_pid;
+}

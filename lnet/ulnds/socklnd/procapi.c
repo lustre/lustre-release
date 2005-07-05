@@ -33,13 +33,18 @@
 #include <unistd.h>
 #include <string.h>
 #ifndef __CYGWIN__
-#include <syscall.h>
+# include <syscall.h>
 #endif
+#include <netdb.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <procbridge.h>
 #include <pqtimer.h>
 #include <dispatch.h>
 #include <errno.h>
+#ifdef HAVE_GETHOSTBYNAME
+# include <sys/utsname.h>
+#endif
 
 /* XXX CFS workaround, to give a chance to let nal thread wake up
  * from waiting in select
@@ -67,8 +72,6 @@ ptl_nal_t tcpnal_nal = {
         .nal_recv      = tcpnal_recv,
 };
 int       tcpnal_running;
-ptl_nid_t tcpnal_mynid;
-
 
 /* Function: shutdown
  * Arguments: ni: the instance of me
@@ -117,10 +120,15 @@ ptl_err_t
 procbridge_startup (ptl_ni_t *ni)
 {
     procbridge p;
-    bridge b;
+    bridge     b;
 
-    LASSERT(ni->ni_nal == &tcpnal_nal);
-    LASSERT (!tcpnal_running);           /* only single instance supported */
+    /* NB The local NID is not assigned.  We only ever connect to the socknal,
+     * which assigns the src nid/pid on incoming non-privileged connections
+     * (i.e. us), and we don't accept connections. */
+
+    LASSERT (ni->ni_nal == &tcpnal_nal);
+    LASSERT (!tcpnal_running);                  /* only single instance supported */
+    LASSERT (ni->ni_interfaces[0] == NULL);     /* explicit interface(s) not supported */
 
     init_unix_timer();
 
@@ -170,8 +178,6 @@ procbridge_startup (ptl_ni_t *ni)
     if (p->nal_flags & NAL_FLAG_STOPPED)
         return PTL_FAIL;
 
-    /* so what a load of bollocks set_address() is... */
-    ni->ni_nid = tcpnal_mynid;
     tcpnal_running = 1;
 
     return PTL_OK;

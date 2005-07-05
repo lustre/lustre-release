@@ -44,7 +44,10 @@
  * between getting its string and using it.
  */
 
-static char      libcfs_nidstrings[128][PTL_NALFMT_SIZE];
+#define PTL_NIDSTR_COUNT  128     /* # of nidstrings */
+#define PTL_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
+
+static char      libcfs_nidstrings[PTL_NIDSTR_COUNT][PTL_NIDSTR_SIZE];
 static int       libcfs_nidstring_idx = 0;
 
 #ifdef __KERNEL__
@@ -153,13 +156,12 @@ libcfs_ip_addr2str(__u32 addr, char *str)
         __u32           netip = htonl(addr);
         struct hostent *he = gethostbyaddr(&netip, sizeof(netip), AF_INET);
         
-        if (he != NULL && 
-            strlen(he->h_name) < PTL_NALFMT_SIZE) {
-                strcpy(str, he->h_name);
+        if (he != NULL) {
+                snprintf(str, PTL_NIDSTR_SIZE, "%s", he->h_name);
                 return;
         }
 #endif
-        snprintf(str, PTL_NALFMT_SIZE, "%u.%u.%u.%u",
+        snprintf(str, PTL_NIDSTR_SIZE, "%u.%u.%u.%u",
                  (addr >> 24) & 0xff, (addr >> 16) & 0xff,
                  (addr >> 8) & 0xff, addr & 0xff);
 }
@@ -221,7 +223,7 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
 void
 libcfs_num_addr2str(__u32 addr, char *str)
 {
-        snprintf(str, PTL_NALFMT_SIZE, "%u", addr);
+        snprintf(str, PTL_NIDSTR_SIZE, "%u", addr);
 }
 
 int
@@ -286,7 +288,7 @@ libcfs_nal2str(int nal)
                 return nf->nf_name;
         
         str = libcfs_next_nidstring();
-        snprintf(str, PTL_NALFMT_SIZE, "?%u?", nal);
+        snprintf(str, PTL_NIDSTR_SIZE, "?%u?", nal);
         return str;
 }
 
@@ -310,11 +312,11 @@ libcfs_net2str(__u32 net)
 	char           *str = libcfs_next_nidstring();
 
         if (nf == NULL) 
-                snprintf(str, PTL_NALFMT_SIZE, "<%u:%u>", nal, num);
+                snprintf(str, PTL_NIDSTR_SIZE, "<%u:%u>", nal, num);
         else if (num == 0)
-                snprintf(str, PTL_NALFMT_SIZE, "%s", nf->nf_name);
+                snprintf(str, PTL_NIDSTR_SIZE, "%s", nf->nf_name);
         else
-                snprintf(str, PTL_NALFMT_SIZE, "%s%u", nf->nf_name, num);
+                snprintf(str, PTL_NIDSTR_SIZE, "%s%u", nf->nf_name, num);
 
         return str;
 }
@@ -337,15 +339,15 @@ libcfs_nid2str(ptl_nid_t nid)
 	str = libcfs_next_nidstring();
 
         if (nf == NULL)
-                snprintf(str, PTL_NALFMT_SIZE, "%x@<%u:%u>", addr, nal, nnum);
+                snprintf(str, PTL_NIDSTR_SIZE, "%x@<%u:%u>", addr, nal, nnum);
         else {
                 nf->nf_addr2str(addr, str);
                 nob = strlen(str);
                 if (nnum == 0)
-                        snprintf(str + nob, PTL_NALFMT_SIZE - nob, "@%s",
+                        snprintf(str + nob, PTL_NIDSTR_SIZE - nob, "@%s",
                                  nf->nf_name);
                 else
-                        snprintf(str + nob, PTL_NALFMT_SIZE - nob, "@%s%u",
+                        snprintf(str + nob, PTL_NIDSTR_SIZE - nob, "@%s%u",
                                  nf->nf_name, nnum);
         }
 
@@ -460,7 +462,7 @@ libcfs_nid2str(ptl_nid_t nid)
 {
         char    *str = libcfs_next_nidstring();
         
-	snprintf(str, PTL_NALFMT_SIZE, "%llx", (unsigned long long)nid);
+	snprintf(str, PTL_NIDSTR_SIZE, "%llx", (unsigned long long)nid);
 }
 
 __u32
@@ -500,7 +502,7 @@ libcfs_id2str(ptl_process_id_t id)
         char *str = libcfs_nid2str(id.nid);
 	int   len = strlen(str);
 
-        snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
+        snprintf(str + len, PTL_NIDSTR_SIZE - len, "-%u", id.pid);
         return str;
 }
 

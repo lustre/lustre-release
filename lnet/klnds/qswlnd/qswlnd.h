@@ -290,7 +290,7 @@ kqswnal_elanid2nid (int elanid)
 static inline int
 kqswnal_nid2elanid (ptl_nid_t nid)
 {
-        int elanid = PTL_NIDADDR(nid);
+        __u32 elanid = PTL_NIDADDR(nid);
 
         /* not in this cluster? */
         return (elanid >= kqswnal_data.kqn_nnodes) ? -1 : elanid;

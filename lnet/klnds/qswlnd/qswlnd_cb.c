@@ -1513,8 +1513,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         dest_nid   = le64_to_cpu(hdr->dest_nid); /* final dest */
         src_nid    = le64_to_cpu(hdr->src_nid); /* original source */
-        sender_nid = PTL_MKNID(PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid),
-                               ep_rxd_node(krx->krx_rxd)); /* who sent it to me */
+        sender_nid = kqswnal_elanid2nid(ep_rxd_node(krx->krx_rxd)); /* who sent it to me */
 #if KQSW_CHECKSUM
         LASSERTF (0, "checksums for forwarded packets not implemented\n");
 #endif

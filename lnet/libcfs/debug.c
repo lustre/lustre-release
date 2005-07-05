@@ -44,6 +44,9 @@ EXPORT_SYMBOL(portal_printk);
 unsigned int portal_stack;
 EXPORT_SYMBOL(portal_stack);
 
+unsigned int portals_catastrophe;
+EXPORT_SYMBOL(portals_catastrophe);
+
 #ifdef __KERNEL__
 atomic_t portal_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(portal_kmemory);

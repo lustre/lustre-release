@@ -467,6 +467,8 @@ extern int ptl_extract_kiov (int dst_niov, ptl_kiov_t *dst,
                              int src_niov, ptl_kiov_t *src,
                              ptl_size_t offset, ptl_size_t len);
 
+extern ptl_pid_t ptl_getpid(void);
+
 extern ptl_err_t ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
                            ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);
 extern ptl_err_t ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,

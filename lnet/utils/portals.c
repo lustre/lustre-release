@@ -512,6 +512,7 @@ int
 jt_ptl_print_peers (int argc, char **argv)
 {
         struct portal_ioctl_data data;
+        ptl_process_id_t         id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -529,23 +530,26 @@ jt_ptl_print_peers (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                if (g_net_is_compatible(NULL, SOCKNAL, 0))
+                if (g_net_is_compatible(NULL, SOCKNAL, 0)) {
+                        id.nid = data.ioc_nid;
+                        id.pid = data.ioc_u32[4];
                         printf ("%-20s [%d]%s->%s:%d #%d\n",
-                                libcfs_nid2str(data.ioc_nid), 
+                                libcfs_id2str(id), 
                                 data.ioc_count, /* persistence */
                                 ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* my ip */
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
                                 data.ioc_u32[1], /* peer port */
                                 data.ioc_u32[3]); /* conn_count */
-                else if (g_net_is_compatible(NULL, RANAL, OPENIBNAL, VIBNAL, 0))
+                } else if (g_net_is_compatible(NULL, RANAL, OPENIBNAL, VIBNAL, 0)) {
                         printf ("%-20s [%d]@%s:%d\n",
                                 libcfs_nid2str(data.ioc_nid), 
                                 data.ioc_count,
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
                                 data.ioc_u32[1]); /* peer port */
-                else
+                } else {
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid), data.ioc_count);
+                }
         }
 
         if (index == 0) {
@@ -681,6 +685,7 @@ int
 jt_ptl_print_connections (int argc, char **argv)
 {
         struct portal_ioctl_data data;
+        ptl_process_id_t         id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -698,9 +703,11 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                if (g_net_is_compatible (NULL, SOCKNAL, 0))
+                if (g_net_is_compatible (NULL, SOCKNAL, 0)) {
+                        id.nid = data.ioc_nid;
+                        id.pid = data.ioc_u32[6];
                         printf ("%-20s %s[%d]%s->%s:%d %d/%d %s\n",
-                                libcfs_nid2str(data.ioc_nid),
+                                libcfs_id2str(id),
                                 (data.ioc_u32[3] == SOCKNAL_CONN_ANY) ? "A" :
                                 (data.ioc_u32[3] == SOCKNAL_CONN_CONTROL) ? "C" :
                                 (data.ioc_u32[3] == SOCKNAL_CONN_BULK_IN) ? "I" :
@@ -712,12 +719,13 @@ jt_ptl_print_connections (int argc, char **argv)
                                 data.ioc_count, /* tx buffer size */
                                 data.ioc_u32[5], /* rx buffer size */
                                 data.ioc_flags ? "nagle" : "nonagle");
-                else if (g_net_is_compatible (NULL, RANAL, 0))
+                } else if (g_net_is_compatible (NULL, RANAL, 0)) {
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid),
                                 data.ioc_u32[0] /* device id */);
-                else
+                } else {
                         printf ("%s\n", libcfs_nid2str(data.ioc_nid));
+                }
         }
 
         if (index == 0) {

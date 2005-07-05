@@ -480,7 +480,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                 }
                 CERROR("[%p] Error %d on write to %s"
                        " ip %d.%d.%d.%d:%d\n", conn, rc,
-                       libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
+                       libcfs_id2str(conn->ksnc_peer->ksnp_id),
                        HIPQUAD(conn->ksnc_ipaddr),
                        conn->ksnc_port);
         }
@@ -590,7 +590,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
         LASSERT(tx->tx_resid == tx->tx_nob);
         
         CDEBUG (D_NET, "Sending to %s ip %d.%d.%d.%d:%d\n", 
-                libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
+                libcfs_id2str(conn->ksnc_peer->ksnp_id),
                 HIPQUAD(conn->ksnc_ipaddr),
                 conn->ksnc_port);
 
@@ -682,7 +682,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
 }
 
 int
-ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
+ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_process_id_t id)
 {
         unsigned long     flags;
         ksock_peer_t     *peer;
@@ -716,7 +716,7 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
         for (retry = 0;; retry = 1) {
 #if !SOCKNAL_ROUND_ROBIN
                 read_lock (g_lock);
-                peer = ksocknal_find_peer_locked(ni, nid);
+                peer = ksocknal_find_peer_locked(ni, id);
                 if (peer != NULL) {
                         if (ksocknal_find_connectable_route_locked(peer) == NULL) {
                                 conn = ksocknal_find_conn_locked (tx, peer);
@@ -736,22 +736,29 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
 #endif
                 write_lock_irqsave(g_lock, flags);
 
-                peer = ksocknal_find_peer_locked(ni, nid);
+                peer = ksocknal_find_peer_locked(ni, id);
                 if (peer != NULL) 
                         break;
                 
                 write_unlock_irqrestore(g_lock, flags);
 
-                if (retry) {
-                        CERROR("Can't find peer %s\n", libcfs_nid2str(nid));
+                if (id.pid > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
+                        CERROR("Refusing to create a connection to "
+                               "userspace process %s\n", libcfs_id2str(id));
                         return -EHOSTUNREACH;
                 }
                 
-                rc = ksocknal_add_peer(ni, nid, 
-                                       PTL_NIDADDR(nid), ptl_acceptor_port());
+                if (retry) {
+                        CERROR("Can't find peer %s\n", libcfs_id2str(id));
+                        return -EHOSTUNREACH;
+                }
+                
+                rc = ksocknal_add_peer(ni, id, 
+                                       PTL_NIDADDR(id.nid),
+                                       ptl_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
-                               libcfs_nid2str(nid), rc);
+                               libcfs_id2str(id), rc);
                         return rc;
                 }
         }
@@ -784,7 +791,7 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_nid_t nid)
         
         write_unlock_irqrestore (g_lock, flags);
 
-        CERROR("Peer entry with no routes: %s\n", libcfs_nid2str(nid));
+        CERROR("Peer entry with no routes: %s\n", libcfs_id2str(id));
         return (-EHOSTUNREACH);
 }
 
@@ -876,7 +883,7 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
                                          payload_offset, payload_nob);
         }
 
-        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target.nid);
+        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target);
         if (rc == 0)
                 return (PTL_OK);
         
@@ -911,13 +918,18 @@ ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 void
 ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
 {
-        ptl_nid_t     nid = fwd->kprfd_gateway_nid;
+        ptl_process_id_t id = {.nid = fwd->kprfd_gateway_nid,
+                               .pid = LUSTRE_SRV_PTL_PID};
+        /* CAVEAT EMPTOR:
+         * LUSTRE_SRV_PTL_PID assumes my target is another socknal instance and
+         * not a tcpnal (userspace/liblustre) instance.  These can't route in
+         * any case until we sort out how to make the RPC replies use the same
+         * connections as RPC requests. */
         ksock_ftx_t  *ftx = (ksock_ftx_t *)&fwd->kprfd_scratch;
         int           rc;
         
         CDEBUG (D_NET, "Forwarding [%p] -> %s (%s))\n", fwd,
-                libcfs_nid2str(fwd->kprfd_gateway_nid), 
-                libcfs_nid2str(fwd->kprfd_target_nid));
+                libcfs_id2str(id), libcfs_nid2str(fwd->kprfd_target_nid));
 
         /* setup iov for hdr */
         ftx->ftx_iov.iov_base = fwd->kprfd_hdr;
@@ -930,7 +942,7 @@ ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
         ftx->ftx_tx.tx_nkiov = fwd->kprfd_niov;
         ftx->ftx_tx.tx_kiov  = fwd->kprfd_kiov;
 
-        rc = ksocknal_launch_packet (ni, &ftx->ftx_tx, nid);
+        rc = ksocknal_launch_packet (ni, &ftx->ftx_tx, id);
         if (rc != 0)
                 kpr_fwd_done (ni, fwd, rc);
 }
@@ -1059,7 +1071,7 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
         int       payload_nob = conn->ksnc_rx_nob_left;
         ptl_nid_t src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
         ptl_nid_t dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
-        ptl_nid_t sender_nid = conn->ksnc_peer->ksnp_nid;
+        ptl_nid_t sender_nid = conn->ksnc_peer->ksnp_id.nid;
         int       niov = 0;
         int       nob = payload_nob;
 
@@ -1260,14 +1272,14 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 if (rc == 0)
                         CDEBUG (D_NET, "[%p] EOF from %s ip %d.%d.%d.%d:%d\n",
                                 conn, 
-                                libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
+                                libcfs_id2str(conn->ksnc_peer->ksnp_id),
                                 HIPQUAD(conn->ksnc_ipaddr),
                                 conn->ksnc_port);
                 else if (!conn->ksnc_closing)
                         CERROR ("[%p] Error %d on read from %s"
                                 " ip %d.%d.%d.%d:%d\n",
                                 conn, rc, 
-                                libcfs_nid2str(conn->ksnc_peer->ksnp_nid),
+                                libcfs_id2str(conn->ksnc_peer->ksnp_id),
                                 HIPQUAD(conn->ksnc_ipaddr),
                                 conn->ksnc_port);
 
@@ -1282,6 +1294,14 @@ ksocknal_process_receive (ksock_conn_t *conn)
         
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_HEADER:
+                if (conn->ksnc_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) { 
+                        /* Userspace NAL */
+                        ptl_process_id_t *id = &conn->ksnc_peer->ksnp_id;
+                        
+                        /* Substitute process ID assigned at connection time */
+                        conn->ksnc_hdr.src_pid = cpu_to_le32(id->pid);
+                        conn->ksnc_hdr.src_nid = cpu_to_le64(id->nid);
+                }
                 rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
 
                 switch (rc) {
@@ -1681,6 +1701,7 @@ ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         hmv->version_minor = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR);
 
         hdr.src_nid        = cpu_to_le64 (ni->ni_nid);
+        hdr.src_pid        = cpu_to_le64 (ptl_getpid());
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
 
@@ -1730,7 +1751,8 @@ ksocknal_invert_type(int type)
 
 int
 ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
-                     ptl_nid_t *nid, __u64 *incarnation, __u32 *ipaddrs)
+                     ptl_process_id_t *peerid, 
+                     __u64 *incarnation, __u32 *ipaddrs)
 {
         struct socket      *sock = conn->ksnc_sock;
         int                 active;
@@ -1740,9 +1762,10 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         int                 i;
         int                 type;
         ptl_hdr_t           hdr;
+        ptl_process_id_t    recv_id;
         ptl_magicversion_t *hmv;
 
-        active = (*nid != PTL_NID_ANY);
+        active = (peerid->nid != PTL_NID_ANY);
         timeout = active ? *ksocknal_tunables.ksnd_timeout :
                             ptl_acceptor_timeout();
 
@@ -1831,21 +1854,32 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
                 return (-EPROTO);
         }
 
+        if (conn->ksnc_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {          
+                /* Userspace NAL assigns peer process ID from socket */
+                recv_id.pid = conn->ksnc_port;
+                recv_id.nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
+        } else {
+                recv_id.pid = le32_to_cpu(hdr.src_pid);
+                recv_id.nid = le64_to_cpu (hdr.src_nid);
+        }
+        
         if (!active) {                          /* don't know peer's nid yet */
-                *nid = le64_to_cpu(hdr.src_nid);
-        } else if (*nid != le64_to_cpu (hdr.src_nid)) {
-                LCONSOLE_ERROR("Connected successfully to nid %s on host "
+                *peerid = recv_id;
+        } else if (peerid->pid != recv_id.pid ||
+                   peerid->pid != recv_id.nid) {
+                LCONSOLE_ERROR("Connected successfully to %s on host "
                                "%u.%u.%u.%u, but they claimed they were "
-                               "nid %s; please check your Lustre "
+                               "%s; please check your Lustre "
                                "configuration.\n",
-                               libcfs_nid2str(*nid), HIPQUAD(conn->ksnc_ipaddr),
-                               libcfs_nid2str(le64_to_cpu(hdr.src_nid)));
+                               libcfs_id2str(*peerid),
+                               HIPQUAD(conn->ksnc_ipaddr),
+                               libcfs_id2str(recv_id));
                                
-                CERROR ("Connected to nid %s ip %u.%u.%u.%u "
+                CERROR ("Connected to %s ip %u.%u.%u.%u "
                         "but expecting %s\n",
-                        libcfs_nid2str(le64_to_cpu (hdr.src_nid)),
+                        libcfs_id2str(recv_id),
                         HIPQUAD(conn->ksnc_ipaddr),
-                        libcfs_nid2str(*nid));
+                        libcfs_id2str(*peerid));
                 return (-EPROTO);
         }
 
@@ -1856,13 +1890,13 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
                 conn->ksnc_type = ksocknal_invert_type(type);
                 if (conn->ksnc_type == SOCKNAL_CONN_NONE) {
                         CERROR ("Unexpected type %d from %s ip %u.%u.%u.%u\n",
-                                type, libcfs_nid2str(*nid), 
+                                type, libcfs_id2str(*peerid), 
                                 HIPQUAD(conn->ksnc_ipaddr));
                         return (-EPROTO);
                 }
         } else if (ksocknal_invert_type(type) != conn->ksnc_type) {
                 CERROR ("Mismatched types: me %d, %s ip %u.%u.%u.%u %d\n",
-                        conn->ksnc_type, libcfs_nid2str(*nid), 
+                        conn->ksnc_type, libcfs_id2str(*peerid), 
                         HIPQUAD(conn->ksnc_ipaddr),
                         le32_to_cpu(hdr.msg.hello.type));
                 return (-EPROTO);
@@ -1876,7 +1910,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
             nips * sizeof(__u32) != __le32_to_cpu (hdr.payload_length)) {
                 CERROR("Bad payload length %d from %s ip %u.%u.%u.%u\n",
                        __le32_to_cpu (hdr.payload_length),
-                       libcfs_nid2str(*nid), HIPQUAD(conn->ksnc_ipaddr));
+                       libcfs_id2str(*peerid), HIPQUAD(conn->ksnc_ipaddr));
         }
 
         if (nips == 0)
@@ -1885,7 +1919,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         rc = libcfs_sock_read(sock, ipaddrs, nips * sizeof(*ipaddrs), timeout);
         if (rc != 0) {
                 CERROR ("Error %d reading IPs from %s ip %u.%u.%u.%u\n",
-                        rc, libcfs_nid2str(*nid), HIPQUAD(conn->ksnc_ipaddr));
+                        rc, libcfs_id2str(*peerid), HIPQUAD(conn->ksnc_ipaddr));
                 return (rc);
         }
 
@@ -1894,7 +1928,8 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
                 
                 if (ipaddrs[i] == 0) {
                         CERROR("Zero IP[%d] from %s ip %u.%u.%u.%u\n",
-                               i, libcfs_nid2str(*nid), HIPQUAD(conn->ksnc_ipaddr));
+                               i, libcfs_id2str(*peerid),
+                               HIPQUAD(conn->ksnc_ipaddr));
                         return (-EPROTO);
                 }
         }
@@ -1934,7 +1969,7 @@ ksocknal_connect (ksock_route_t *route)
 
                 write_unlock_irqrestore(&ksocknal_data.ksnd_global_lock, flags);
 
-                rc = ptl_connect(&sock, peer->ksnp_nid,
+                rc = ptl_connect(&sock, peer->ksnp_id.nid,
                                  route->ksnr_myipaddr, 
                                  route->ksnr_ipaddr, route->ksnr_port);
                 if (rc != PTL_OK)
@@ -1942,7 +1977,7 @@ ksocknal_connect (ksock_route_t *route)
 
                 rc = ksocknal_create_conn(peer->ksnp_ni, route, sock, type);
                 if (rc != 0) {
-                        ptl_connect_console_error(rc, peer->ksnp_nid,
+                        ptl_connect_console_error(rc, peer->ksnp_id.nid,
                                                   route->ksnr_ipaddr, 
                                                   route->ksnr_port);
                         goto failed;
@@ -2129,7 +2164,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         /* Something (e.g. failed keepalive) set the socket error */
                         CERROR ("Socket error %d: %s %p %d.%d.%d.%d\n",
                                 SOCK_ERROR(conn->ksnc_sock), 
-                                libcfs_nid2str(peer->ksnp_nid),
+                                libcfs_id2str(peer->ksnp_id),
                                 conn, HIPQUAD(conn->ksnc_ipaddr));
 
                         return (conn);
@@ -2145,7 +2180,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                        "may be down.\n",
                                        HIPQUAD(conn->ksnc_ipaddr));
                         CERROR ("Timed out RX from %s %p %d.%d.%d.%d\n",
-                                libcfs_nid2str(peer->ksnp_nid),
+                                libcfs_id2str(peer->ksnp_id),
                                 conn, HIPQUAD(conn->ksnc_ipaddr));
                         return (conn);
                 }
@@ -2162,7 +2197,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                                        "may be down.\n",
                                        HIPQUAD(conn->ksnc_ipaddr));
                         CERROR ("Timed out TX to %s %s%d %p %d.%d.%d.%d\n",
-                                libcfs_nid2str(peer->ksnp_nid),
+                                libcfs_id2str(peer->ksnp_id),
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
                                 SOCK_WMEM_QUEUED(conn->ksnc_sock), conn,
                                 HIPQUAD(conn->ksnc_ipaddr));
@@ -2195,7 +2230,7 @@ ksocknal_check_peer_timeouts (int idx)
                         read_unlock (&ksocknal_data.ksnd_global_lock);
 
                         CERROR ("Timeout out conn->%s ip %d.%d.%d.%d:%d\n",
-                                libcfs_nid2str(peer->ksnp_nid),
+                                libcfs_id2str(peer->ksnp_id),
                                 HIPQUAD(conn->ksnc_ipaddr),
                                 conn->ksnc_port);
                         ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);

@@ -82,10 +82,6 @@ void *nal_thread(void *z)
     procbridge p=b->local;
     int rc;
     
-    /* _the_ NI (ptl_apini) has already been set up with a requested pid; pass
-     * that to set_address... */
-    set_address(b, ptl_apini.apini_pid);
-    
     rc = tcpnal_init(b);
 
     /*

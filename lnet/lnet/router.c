@@ -45,7 +45,7 @@ void
 kpr_do_upcall (void *arg)
 {
         kpr_upcall_t *u = (kpr_upcall_t *)arg;
-        char          nidstr[PTL_NALFMT_SIZE];
+        char          nidstr[36];
         char          whenstr[36];
         char         *argv[] = {
                 NULL,
@@ -55,7 +55,7 @@ kpr_do_upcall (void *arg)
                 whenstr,
                 NULL};
 
-        strcpy(nidstr, libcfs_nid2str(u->kpru_nid));
+        snprintf (nidstr, sizeof(nidstr), "%s", libcfs_nid2str(u->kpru_nid));
         snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
 
         portals_run_upcall (argv);
@@ -902,7 +902,8 @@ kpr_lookup (ptl_ni_t **nip, ptl_nid_t target_nid, int nob)
                 }
         }
 
-        CERROR("Nid %s is not on a local network\n", 
+        CERROR("Nid %s is not on a local network and "
+               "userspace portals does not support routing\n",
                libcfs_nid2str(target_nid));
 
         return PTL_NID_ANY;

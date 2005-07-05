@@ -110,7 +110,7 @@ unsigned int key_from_string(char *s)
  * Returns: a pointer to the new table
  */
 table hash_create_table (int (*compare_function)(void *, void *),
-                    unsigned int (*key_function)(unsigned int *))
+                    unsigned int (*key_function)(void *))
 {
     table new=(table)malloc(sizeof(struct table));
     memset(new, 0, sizeof(struct table));

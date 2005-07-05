@@ -964,7 +964,7 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                 write_unlock_irqrestore (g_lock, flags);
 
                 if (retry) {
-                        CERROR("Can't find per %s\n", libcfs_nid2str(nid));
+                        CERROR("Can't find peer %s\n", libcfs_nid2str(nid));
                         tx->tx_status = -EHOSTUNREACH;
                         kibnal_tx_done (tx);
                         return;
