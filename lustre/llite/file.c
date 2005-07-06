@@ -640,8 +640,9 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 j = min(count - (i % count), end - i + 1);
                 LASSERT(j > 0);
                 LASSERT(inode->i_mapping);
-                if (ll_teardown_mmaps(inode->i_mapping, i << PAGE_CACHE_SHIFT,
-                                      ((i+j) << PAGE_CACHE_SHIFT) - 1) )
+                if (ll_teardown_mmaps(inode->i_mapping, 
+                                      (__u64)i << PAGE_CACHE_SHIFT,
+                                      ((__u64)(i+j) << PAGE_CACHE_SHIFT) - 1) )
                         break;
         }
 

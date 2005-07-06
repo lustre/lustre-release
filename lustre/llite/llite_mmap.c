@@ -475,7 +475,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first,
         int rc = -ENOENT;
         ENTRY;
 
-        LASSERT(last > first);
+        LASSERTF(last > first, "last "LPU64" first "LPU64"\n", last, first);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         if (mapping_mapped(mapping)) {
                 rc = 0;
