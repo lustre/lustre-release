@@ -39,7 +39,7 @@ gen_config() {
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	MDS=mds1_svc
+	MDS=mds1
 
     fi
 
