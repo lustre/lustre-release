@@ -423,9 +423,6 @@ mds_create_objects(struct obd_device *obd, struct ptlrpc_request *req,
                 rc = obd_create(mds->mds_dt_exp, oa, NULL, 0, &lsm, &oti);
 
                 if (rc) {
-                        int level = D_ERROR;
-                        if (rc == -ENOSPC)
-                                level = D_INODE;
                         CDEBUG((rc == -ENOSPC ? D_INODE : D_ERROR),
                                "error creating objects for "
                                "inode %lu: rc = %d\n",

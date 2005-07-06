@@ -218,6 +218,7 @@ struct filter_obd {
         int                  fo_committed_group;
 
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid increment */
+        spinlock_t           fo_lastidlock;     /* protect last_id increment */
         spinlock_t           fo_translock;      /* protect fsd_last_rcvd increment */
         struct file         *fo_rcvd_filp;
         struct filter_server_data *fo_fsd;

@@ -181,8 +181,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         char *name = obddev->obd_type->typ_name;
         char *mgmt_name = NULL;
         int rc;
-        struct obd_device *mgmt_obd;
-        mgmtcli_register_for_events_t register_f;
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
