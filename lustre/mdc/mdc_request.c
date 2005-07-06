@@ -471,7 +471,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 
         och->och_mod = mod;
         mod->mod_och = och;
-        mod->mod_open_req = open_req;
+        mod->mod_open_req = ptlrpc_request_addref(open_req);
 
         memcpy(&rec->cr_replayid, &body->id1, sizeof rec->cr_replayid);
         open_req->rq_replay_cb = mdc_replay_open;
@@ -529,6 +529,7 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         spin_lock(&open_req->rq_lock);
         open_req->rq_replay = 0;
         spin_unlock(&open_req->rq_lock);
+        ptlrpc_req_finished(open_req);
 }
 
 int mdc_close(struct obd_export *exp, struct obdo *oa,
