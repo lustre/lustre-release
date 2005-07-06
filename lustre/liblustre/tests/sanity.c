@@ -862,7 +862,8 @@ int main(int argc, char * const argv[])
                 {0, 0, 0, 0}
         };
 
-        if (argc <= 1)
+        if (argc <= 1 && getenv(ENV_LUSTRE_MNTTGT) == NULL &&
+                         getenv(ENV_LUSTRE_DUMPFILE) == NULL)
                 usage(argv[0]);
 
         while ((c = getopt_long(argc, argv, "", long_opts, &opt_index)) != -1) {

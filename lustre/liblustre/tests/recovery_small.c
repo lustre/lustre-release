@@ -320,7 +320,7 @@ int main(int argc, char * argv[])
                 {0, 0, 0, 0}
         };
 
-        if (argc < 3)
+        if (argc < 3 - (getenv(ENV_LUSTRE_MNTTGT)||getenv(ENV_LUSTRE_DUMPFILE)))
                 usage(argv[0]);
 
         while ((c = getopt_long(argc, argv, "s:", long_opts, &opt_index)) != -1) {

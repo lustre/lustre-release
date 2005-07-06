@@ -345,7 +345,7 @@ int main(int argc, char * const argv[])
                 {0, 0, 0, 0}
         };
 
-        if (argc < 4)
+        if (argc < 4 - (getenv(ENV_LUSTRE_MNTTGT)||getenv(ENV_LUSTRE_DUMPFILE)))
                 usage(argv[0]);
 
         while ((c = getopt_long(argc, argv, "s:b:f:", long_opts, &opt_index)) != -1) {

@@ -24,7 +24,8 @@ fi
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo $DEBUG_LVL > /proc/sys/portals/debug"
 [ "$DEBUG_ON" ] || DEBUG_ON="eval echo -1 > /proc/sys/portals/debug"
 
-LIBLUSTRETESTS=${LIBLUSTRETESTS:-../liblustre/tests}
+LIBLUSTRE=${LIBLUSTRE:-../liblustre}
+LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
 
 for NAME in $CONFIGS; do
 	export NAME MOUNT START CLEAN
@@ -154,8 +155,10 @@ for NAME in $CONFIGS; do
 	if [ "$LIBLUSTRE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		IPADDR=`ping -c 1 $MDSNODE|head -n 1|sed -e "s/[^(]*(//" -e "s/).*//"`
-		export ENV_LUSTRE_MNTPNT=$MOUNT2
-		export ENV_LUSTRE_MNTTGT=$IPADDR:/$MDSNAME/$CLIENT
+		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
+		export LIBLUSTRE_MOUNT_TARGET=$IPADDR:/$MDSNAME/$CLIENT
+		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
+		export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/portals/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			$LIBLUSTRETESTS/sanity --target=$ENV_LUSTRE_MNTTGT
 		fi
