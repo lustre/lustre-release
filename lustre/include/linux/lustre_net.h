@@ -139,8 +139,8 @@
                                   OST_MAX_THREADS), 2UL)
 #define OST_NBUFS       (64 * smp_num_cpus)
 #define OST_BUFSIZE     (8 * 1024)
-/* OST_MAXREQSIZE ~= 1640 bytes =
- * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
+/* OST_MAXREQSIZE ~= 4768 bytes =
+ * lustre_msg + obdo + 16 * obd_ioobj + 256 * niobuf_remote
  *
  * - single object with 16 pages is 512 bytes
  * - OST_MAXREQSIZE must be at least 1 page of cookies plus some spillover
