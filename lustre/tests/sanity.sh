@@ -16,7 +16,7 @@ ONLY=${ONLY:-"$*"}
 #   configurations. Will be done in second phase of collibri.
 # - 71 mmap still not updated on HEAD
 
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"48a 51b 51c 65h 71"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"24n 48a 51b 51c 65h 71"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
