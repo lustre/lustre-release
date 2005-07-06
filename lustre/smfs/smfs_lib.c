@@ -278,6 +278,7 @@ static int smfs_mount_cache(struct smfs_super_info *smb, char *devstr,
         typelen = strlen(typestr);
 
         CDEBUG(D_INODE, "smfs: mounting %s at %s\n", typestr, devstr);
+        
         mnt = do_kern_mount(typestr, 0, devstr, (void *)opts);
         if (IS_ERR(mnt)) {
                 CERROR("do_kern_mount failed: rc = %ld\n", 
@@ -370,10 +371,11 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         struct inode *root_inode = NULL;
 	struct inode *back_root_inode = NULL;
         struct smfs_super_info *smb = NULL;
-        char *devstr = NULL, *typestr = NULL; 
+        char *devstr = NULL, *typestr = NULL;
+        unsigned long page = 0;
         char *opts = NULL;
-        int err = 0;
         int flags = 0;
+        int err = 0;
         
         ENTRY;
         
@@ -388,12 +390,16 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
         smb = smfs_init_smb(sb);
         if (!smb)
                 RETURN(-ENOMEM);
+        
         lock_kernel();
-        OBD_ALLOC(opts, strlen(data) + 1);
-        if (!opts) {
+
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        page = get_zeroed_page(GFP_KERNEL);
+        if (!page) {
                 err = -ENOMEM;
                 goto out_err;
         }
+        opts = (char *)page;
         
         err = smfs_options(data, &devstr, &typestr, opts, &flags);
         if (err)
@@ -413,8 +419,8 @@ int smfs_fill_super(struct super_block *sb, void *data, int silent)
                 goto out_err;
         }
 
-        OBD_FREE(opts, strlen(data) + 1);
-        opts = NULL;
+        free_page(page);
+        page = 0;
         
         duplicate_sb(sb, smb->smsi_sb);
         sb->s_bdev = smb->smsi_sb->s_bdev;
@@ -451,8 +457,8 @@ out_err:
         if (smb->smsi_mnt)
                 smfs_umount_cache(smb);
 
-        if (opts)
-                OBD_FREE(opts, strlen(data) + 1);
+        if (page)
+                free_page(page);
 
         smfs_cleanup_smb(smb);
         unlock_kernel();

@@ -3250,12 +3250,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
 
-        page = __get_free_page(GFP_KERNEL);
+        page = get_zeroed_page(GFP_KERNEL);
         if (!page)
                 RETURN(-ENOMEM);
 
         options = (char *)page;
-        memset(options, 0, PAGE_SIZE);
 
         /*
          * here we use "iopen_nopriv" hardcoded, because it affects MDS utility

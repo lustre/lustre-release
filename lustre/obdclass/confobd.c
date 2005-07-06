@@ -144,11 +144,12 @@ int confobd_detach(struct obd_device *dev)
 static int confobd_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct conf_obd *confobd = &obd->u.conf;
-        struct lustre_cfg* lcfg = buf;
         struct lvfs_obd_ctxt *lvfs_ctxt = NULL;
-        char *name = NULL;
+        struct lustre_cfg* lcfg = buf;
+        char *mountoptions = NULL;
+        unsigned long page = 0;
         char *fstype = NULL;
-        char *mountoption = NULL;
+        char *name = NULL;
         int rc = 0;
         ENTRY;
 
@@ -165,14 +166,14 @@ static int confobd_setup(struct obd_device *obd, obd_count len, void *buf)
 
         OBD_ALLOC(name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (!name) {
-                CERROR("No Memory\n");
+                CERROR("No memory\n");
                 GOTO(out, rc = -ENOMEM);
         }
         memcpy(name, lustre_cfg_string(lcfg, 1), LUSTRE_CFG_BUFLEN(lcfg, 1));
 
         OBD_ALLOC(fstype, LUSTRE_CFG_BUFLEN(lcfg, 2));
         if (!fstype) {
-                CERROR("No Memory\n");
+                CERROR("No memory\n");
                 GOTO(out, rc = -ENOMEM);
         }
         memcpy(fstype, lustre_cfg_string(lcfg, 2), 
@@ -185,19 +186,30 @@ static int confobd_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) >= 1 && lustre_cfg_buf(lcfg, 3)) {
-                OBD_ALLOC(mountoption, LUSTRE_CFG_BUFLEN(lcfg, 3));
-                if (!mountoption) {
-                        CERROR("No Memory\n");
+                /* 2.6.9 selinux wants a full option page for do_kern_mount
+                 * (bug6471) */
+                page = get_zeroed_page(GFP_KERNEL);
+                if (!page) {
+                        CERROR("No memory\n");
                         GOTO(err_ops, rc = -ENOMEM);
                 }
-                memcpy(mountoption, lustre_cfg_string(lcfg, 3), 
+                mountoptions = (char *)page;
+                
+                memcpy(mountoptions, lustre_cfg_string(lcfg, 3), 
                        LUSTRE_CFG_BUFLEN(lcfg, 3)); 
         }
-        rc = lvfs_mount_fs(name, fstype, mountoption, 0, &lvfs_ctxt);
+        
+        rc = lvfs_mount_fs(name, fstype, mountoptions, 0, &lvfs_ctxt);
+
+        if (page) {
+                free_page(page);
+                page = 0;
+        }
+
         if (rc)
                 GOTO(err_ops, rc);
-        LASSERT(lvfs_ctxt);
 
+        LASSERT(lvfs_ctxt);
         confobd->cfobd_lvfs_ctxt = lvfs_ctxt;
 
         rc = confobd_fs_setup(obd, lvfs_ctxt);
@@ -217,8 +229,6 @@ out:
                 OBD_FREE(name, LUSTRE_CFG_BUFLEN(lcfg, 1));
         if (fstype)
                 OBD_FREE(fstype, LUSTRE_CFG_BUFLEN(lcfg, 2));
-        if (mountoption)
-                OBD_FREE(mountoption, LUSTRE_CFG_BUFLEN(lcfg, 3));
 
         return rc;
 err_ops:
