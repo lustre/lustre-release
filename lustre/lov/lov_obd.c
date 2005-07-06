@@ -1339,19 +1339,11 @@ static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
 }
 
-static void lov_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
-{
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
-
-        lap->lap_caller_ops->ap_get_ucred(lap->lap_caller_data, ouc);
-}
-
 static struct obd_async_page_ops lov_async_page_ops = {
         .ap_make_ready =        lov_ap_make_ready,
         .ap_refresh_count =     lov_ap_refresh_count,
         .ap_fill_obdo =         lov_ap_fill_obdo,
         .ap_completion =        lov_ap_completion,
-        .ap_get_ucred =         lov_ap_get_ucred,
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
