@@ -2,7 +2,7 @@ Index: linux-2.4.29/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.29.orig/fs/ext3/extents.c	2005-05-03 16:52:08.723069952 +0300
 +++ linux-2.4.29/fs/ext3/extents.c	2005-05-03 16:52:08.802057944 +0300
-@@ -0,0 +1,2302 @@
+@@ -0,0 +1,2308 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -171,7 +171,9 @@ Index: linux-2.4.29/fs/ext3/extents.c
 +		goal = bg_start + colour;
 +	}
 +
++	lock_kernel();
 +	newblock = ext3_new_block(handle, inode, goal, 0, 0, err);
++	unlock_kernel();
 +	return newblock;
 +}
 +
@@ -1964,7 +1966,9 @@ Index: linux-2.4.29/fs/ext3/extents.c
 +		ex->ee_len = 1;
 +		/* allocate new block for the extent */
 +		goal = ext3_ext_find_goal(inode, path, ex->ee_block);
++		lock_kernel();
 +		ex->ee_start = ext3_new_block(handle, inode, goal, 0, 0, err);
++		unlock_kernel();
 +		if (ex->ee_start == 0) {
 +			/* error occured: restore old extent */
 +			ex->ee_start = newblock;
@@ -2070,7 +2074,9 @@ Index: linux-2.4.29/fs/ext3/extents.c
 +
 +	/* allocate new block */
 +	goal = ext3_ext_find_goal(inode, path, iblock);
++	lock_kernel();
 +	newblock = ext3_new_block(handle, inode, goal, 0, 0, &err);
++	unlock_kernel();
 +	if (!newblock)
 +		goto out2;
 +	ext_debug(&tree, "allocate new block: goal %d, found %d\n",

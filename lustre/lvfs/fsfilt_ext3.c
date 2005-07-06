@@ -812,7 +812,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         count = cex->ec_len;
         goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
         aflags |= 2; /* block have been already reserved */
+        lock_24kernel();
         pblock = ext3_mb_new_blocks(handle, inode, goal, &count, aflags, &err);
+        unlock_24kernel();
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
