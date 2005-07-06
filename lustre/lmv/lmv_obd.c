@@ -887,8 +887,9 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         obj = lmv_create_obj(exp, id, md.mea);
         if (IS_ERR(obj))
                 rc = PTR_ERR(obj);
-        
-        lmv_put_obj(obj);
+        else
+                lmv_put_obj(obj);
+
         obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
 
         EXIT;
