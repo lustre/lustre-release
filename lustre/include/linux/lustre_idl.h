@@ -820,9 +820,9 @@ struct ldlm_extent {
 struct ldlm_flock {
         __u64 start;
         __u64 end;
-        __u64 blocking_export;
-        pid_t blocking_pid;
-        pid_t pid;
+        __u64 blocking_export;  /* not actually used over the wire */
+        __u32 blocking_pid;     /* not actually used over the wire */
+        __u32 pid;
 };
 
 /* it's important that the fields of the ldlm_extent structure match

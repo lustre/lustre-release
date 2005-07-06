@@ -68,8 +68,8 @@ typedef enum {
 #define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 
-#define LDLM_FL_NO_TIMEOUT    0x020000 /* Blocked by CW lock - wait
-                                           indefinitely */
+#define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
+                                         * indefinitely */
 
 /* file & record locking */
 #define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
@@ -267,7 +267,7 @@ struct ldlm_resource {
         struct list_head       lr_converting;
         struct list_head       lr_waiting;
         ldlm_mode_t            lr_most_restr;
-        ldlm_type_t            lr_type; /* LDLM_PLAIN or LDLM_EXTENT */
+        ldlm_type_t            lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK} */
         struct ldlm_resource  *lr_root;
         struct ldlm_res_id     lr_name;
         atomic_t               lr_refcount;

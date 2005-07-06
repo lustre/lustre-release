@@ -866,8 +866,6 @@ main(int argc, char **argv)
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
 
-        CHECK_VALUE(OST_REQ_HAS_OA1);
-
         CHECK_VALUE(MDS_GETATTR);
         CHECK_VALUE(MDS_GETATTR_NAME);
         CHECK_VALUE(MDS_CLOSE);

@@ -252,6 +252,22 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
         RETURN(0);
 }
 
+/**
+ * lustre_msg_buflen - return the length of buffer @n in message @m
+ * @m - lustre_msg (request or reply) to look at
+ * @n - message index (base 0)
+ *
+ * returns zero for non-existent message indices
+ */
+int lustre_msg_buflen(struct lustre_msg *m, int n)
+{
+        if (n >= m->bufcount)
+                return 0;
+
+        return m->buflens[n];
+}
+EXPORT_SYMBOL(lustre_msg_buflen);
+
 void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
 {
         int i;
@@ -679,9 +695,10 @@ void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
         /* the lock data is a union and the first two fields are always an
          * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
          * data the same way. */
-        __swab64s (&d->l_flock.start);
-        __swab64s (&d->l_flock.end);
-        __swab32s (&d->l_flock.pid);
+        __swab64s(&d->l_extent.start);
+        __swab64s(&d->l_extent.end);
+        __swab64s(&d->l_extent.gid);
+        __swab32s(&d->l_flock.pid);
 }
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)
@@ -833,8 +850,6 @@ void lustre_assert_wire_constants(void)
                  (long long)OST_LAST_OPC);
         LASSERTF(OBD_OBJECT_EOF == 0xffffffffffffffffULL," found %lld\n",
                  (long long)OBD_OBJECT_EOF);
-        LASSERTF(OST_REQ_HAS_OA1 == 1, " found %lld\n",
-                 (long long)OST_REQ_HAS_OA1);
         LASSERTF(MDS_GETATTR == 33, " found %lld\n",
                  (long long)MDS_GETATTR);
         LASSERTF(MDS_GETATTR_NAME == 34, " found %lld\n",
@@ -1857,6 +1872,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_extent, end));
         LASSERTF((int)sizeof(((struct ldlm_extent *)0)->end) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_extent *)0)->end));
+        LASSERTF((int)offsetof(struct ldlm_extent, gid) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_extent, gid));
+        LASSERTF((int)sizeof(((struct ldlm_extent *)0)->gid) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_extent *)0)->gid));
 
         /* Checks for struct ldlm_flock */
         LASSERTF((int)sizeof(struct ldlm_flock) == 32, " found %lld\n",

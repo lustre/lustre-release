@@ -518,8 +518,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                         goto put_conn;
                 }
 
-                class_update_export_timer(request->rq_export, 
-                                          (time_t)(timediff / 1000000));
+                class_update_export_timer(request->rq_export,
+                                          (time_t)(timediff / 500000));
         }
 
         /* Discard requests queued for longer than my timeout.  If the
