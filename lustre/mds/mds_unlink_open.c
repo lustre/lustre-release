@@ -174,6 +174,8 @@ int mds_cleanup_orphans(struct obd_device *obd)
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        /* dentry and mnt ref dropped in dentry_open() on error, or
+         * in filp_close() if dentry_open() succeeds */
         dentry = dget(mds->mds_pending_dir);
         if (IS_ERR(dentry))
                 GOTO(err_pop, rc = PTR_ERR(dentry));

@@ -130,7 +130,6 @@ struct obd_async_page_ops {
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
         void (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
-        void (*ap_get_ucred)(void *data, struct lvfs_ucred *ouc);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee

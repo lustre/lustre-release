@@ -230,8 +230,6 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
         struct list_head llap_pglist_item;
-        /* user credit information for oss enforcement quota */
-        struct lvfs_ucred llap_ouc;
         /* checksum for paranoid I/O debugging */
         __u32 llap_checksum;
 };

@@ -358,29 +358,11 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         EXIT;
 }
 
-static void llu_ap_get_ucred(void *data, struct lvfs_ucred *luc)
-{
-        struct ll_async_page *llap;
-        struct ll_uctxt ctxt;
-        ENTRY; 
-        
-        llap = LLAP_FROM_COOKIE(data);
-        
-        luc->luc_fsuid = current->fsuid;
-        luc->luc_fsgid = current->fsgid;
-        luc->luc_cap = current->cap_effective;
-        ll_i2uctxt(&ctxt, llap->llap_inode, NULL);
-        luc->luc_suppgid1 = ctxt.gid1;
-        
-        EXIT;
-}
-
 static struct obd_async_page_ops llu_async_page_ops = {
         .ap_make_ready =        NULL,
         .ap_refresh_count =     NULL,
         .ap_fill_obdo =         llu_ap_fill_obdo,
         .ap_completion =        llu_ap_completion,
-        .ap_get_ucred =         llu_ap_get_ucred,
 };
 
 static int llu_queue_pio(int cmd, struct llu_io_group *group,

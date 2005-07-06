@@ -32,8 +32,8 @@ struct osc_async_page {
         void                    *oap_caller_data;
 };
 
-#define OAP_FROM_COOKIE(c)                                                      \
-        (LASSERT(((struct osc_async_page *)(c))->oap_magic == OAP_MAGIC),       \
+#define OAP_FROM_COOKIE(c)                                                    \
+        (LASSERT(((struct osc_async_page *)(c))->oap_magic == OAP_MAGIC),     \
          (struct osc_async_page *)(c))
 
 struct osc_cache_waiter {
@@ -69,15 +69,15 @@ void osc_qinfo_exit(void);
 int osc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl);
 int osc_poll_quotacheck(struct obd_export *exp, struct if_quotacheck *qchk);
 int osc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl);
-#else
+#else /* !HAVE_QUOTA_SUPPORT */
 static inline int osc_get_quota_flag(struct client_obd *cli,
-                       unsigned int uid, unsigned int gid)
+                                     unsigned int uid, unsigned int gid)
 {
        return QUOTA_OK;
 }
 static inline int osc_set_quota_flag(struct client_obd *cli,
-                       unsigned int uid, unsigned int gid,
-                       obd_flag valid, obd_flag flags)
+                                     unsigned int uid, unsigned int gid,
+                                     obd_flag valid, obd_flag flags)
 {
         return 0;
 }
@@ -90,19 +90,22 @@ static inline int osc_qinfo_init(void)
         return 0;
 }
 static inline void osc_qinfo_exit(void) {}
-static inline int osc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
+static inline int osc_quotacheck(struct obd_export *exp,
+                                 struct obd_quotactl *oqctl)
 {
         return -ENOTSUPP;
 }
-static inline int osc_poll_quotacheck(struct obd_export *exp, struct if_quotacheck *qchk)
+static inline int osc_poll_quotacheck(struct obd_export *exp,
+                                      struct if_quotacheck *qchk)
 {
         return -ENOTSUPP;
 }
-static inline int osc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
+static inline int osc_quotactl(struct obd_export *exp,
+                               struct obd_quotactl *oqctl)
 {
         return -ENOTSUPP;
 }
-#endif
+#endif /* HAVE_QUOTA_SUPPORT */
 
 #ifdef LPROCFS
 int lproc_osc_attach_seqstat(struct obd_device *dev);

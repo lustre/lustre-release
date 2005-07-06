@@ -1509,11 +1509,11 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
+        unsigned long arg;
 
         liblustre_wait_event(0);
 
         switch (request) {
-        unsigned long arg;
         case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
                 return llu_get_grouplock(ino, arg);

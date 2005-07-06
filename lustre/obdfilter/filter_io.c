@@ -649,9 +649,9 @@ cleanup:
                 if (rc)
                         filter_free_dio_pages(objcount, obj, niocount, res);
         case 3:
-                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 filter_free_iobuf(iobuf);
         case 2:
+                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 if (rc)
                         f_dput(dentry);
                 break;

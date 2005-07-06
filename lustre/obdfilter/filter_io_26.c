@@ -171,11 +171,11 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         OBD_ALLOC(dreq, sizeof(*dreq));
         if (dreq == NULL)
                 goto failed_0;
-        
+
         OBD_ALLOC(dreq->dr_pages, num_pages * sizeof(*dreq->dr_pages));
         if (dreq->dr_pages == NULL)
                 goto failed_1;
-        
+
         OBD_ALLOC(dreq->dr_blocks,
                   MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
         if (dreq->dr_blocks == NULL)
@@ -424,13 +424,6 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         if (dreq->dr_npages == 0)
                 RETURN(0);
 
-        /* If there is any page in this write rpc that comes from client
-         * cache, we write the whole rpc without quota limit */
-        if (dreq->dr_flag & OBD_BRW_FROM_GRANT) {
-                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
-                dreq->dr_flag &= ~OBD_BRW_FROM_GRANT;
-        }
-
 remap:
         rc = fsfilt_map_inode_pages(obd, inode,
                                     dreq->dr_pages, dreq->dr_npages,
@@ -528,7 +521,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         if (rc != 0)
                 GOTO(cleanup, rc);
-        
+
         rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE, obj->ioo_bufcnt,
                                 (void **)&dreq);
         if (rc)
@@ -562,10 +555,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
-                /* if one page is a write-back page from client cache,
-                 * then mark that the whole io request can be over quota */
-                if (lnb->flags & OBD_BRW_FROM_GRANT)
-                        dreq->dr_flag |= OBD_BRW_FROM_GRANT;
         }
 
         /* The client store the user credit information fsuid and fsgid
