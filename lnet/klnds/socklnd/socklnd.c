@@ -954,7 +954,6 @@ ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
                       struct socket *sock, int type)
 {
         rwlock_t          *global_lock = &ksocknal_data.ksnd_global_lock;
-        ksock_net_t       *net = (ksock_net_t *)ni->ni_data;
         __u32              ipaddrs[PTL_MAX_INTERFACES];
         int                nipaddrs;
         ptl_process_id_t   peerid;
