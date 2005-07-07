@@ -292,7 +292,7 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
                 if (lockh[1].cookie)
                         ldlm_lock_decref(lockh + 1, *mode);
 #endif
-        } if (de->d_inode && de->d_inode->i_nlink == 0) {
+        } else if (de->d_inode && de->d_inode->i_nlink == 0) {
                 /* as sometimes we lookup inode by ino/generation through
                    iopen mechanism, it's possible to find already unlinked
                    inode with nlink == 0. let's interpretate the case as
