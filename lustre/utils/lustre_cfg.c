@@ -722,7 +722,7 @@ int jt_lcfg_set_security(int argc, char **argv)
                 fprintf(stderr, "%s: please use 'cfg_device name' to set the "
                         "device name for config commands.\n",
                         jt_cmdname(argv[0]));
-               return -EINVAL;
+                return -EINVAL;
         }
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);

@@ -461,6 +461,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
         request->rq_auth_uid = -1;
         request->rq_mapped_uid = -1;
         request->rq_remote_realm = 0;
+        request->rq_auth_usr_mds = 0;
+        request->rq_auth_usr_oss = 0;
 
         secrc = svcsec_accept(request, &sec_err);
         switch(secrc) {

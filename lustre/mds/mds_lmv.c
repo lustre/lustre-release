@@ -41,6 +41,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_sec.h>
 #include <asm/div64.h>
 
 #include "mds_internal.h"
@@ -53,6 +54,7 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0};
+        unsigned long sec_flags = PTLRPC_SEC_FL_MDS;
         int rc, value;
         __u32 valsize;
         ENTRY;
@@ -124,6 +126,11 @@ int mds_md_connect(struct obd_device *obd, char *md_name)
                 if (rc)
                         GOTO(err_reg, rc);
         }
+
+        rc = obd_set_info(mds->mds_md_exp, strlen("sec_flags"), "sec_flags",
+                          sizeof(sec_flags), &sec_flags);
+        if (rc)
+                GOTO(err_reg, rc);
 
         mds->mds_md_connected = 1;
         up(&mds->mds_md_sem);

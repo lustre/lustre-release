@@ -284,7 +284,7 @@ struct client_obd {
 
         /* security flavors */
         __u32                    cl_sec_flavor;
-        __u32                    cl_sec_subflavor;
+        unsigned long            cl_sec_flags;
 
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;

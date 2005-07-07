@@ -1926,6 +1926,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
 
         /* maybe this could be default */
         if ((keylen == strlen("sec") && strcmp(key, "sec") == 0) ||
+            (keylen == strlen("sec_flags") && strcmp(key, "sec_flags") == 0) ||
             (keylen == strlen("nllu") && strcmp(key, "nllu") == 0)) {
                 struct obd_export *exp;
                 int rc = 0, err, i;

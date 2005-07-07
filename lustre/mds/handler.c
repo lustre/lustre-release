@@ -3654,31 +3654,24 @@ static int mds_cleanup(struct obd_device *obd, int flags)
                 OBD_FREE(p_deny_sec, sizeof(*p_deny_sec));
         }
         spin_unlock(&mds->mds_denylist_lock);
-        if(mds->mds_mds_sec)
-                OBD_FREE(mds->mds_mds_sec, strlen(mds->mds_mds_sec) + 1);
-        if(mds->mds_ost_sec)
-                OBD_FREE(mds->mds_ost_sec, strlen(mds->mds_ost_sec) + 1);
 
         RETURN(0);
 }
 
 static int set_security(const char *value, char **sec)
 {
-        int rc = 0;
-
-        if (!strcmp(value, "null") ||
-            !strcmp(value, "krb5i") ||
-            !strcmp(value, "krb5p")) {
-                OBD_ALLOC(*sec, strlen(value) + 1);
-                if(!*sec)
-                        RETURN(-ENOMEM);
-                memcpy(*sec, value, strlen(value) + 1);
-        } else {
-                CERROR("Unrecognized value, force use NULL\n");
-                rc = -EINVAL;
+        if (!strcmp(value, "null"))
+                *sec = "null";
+        else if (!strcmp(value, "krb5i"))
+                *sec = "krb5i";
+        else if (!strcmp(value, "krb5p"))
+                *sec = "krb5p";
+        else {
+                CERROR("Unrecognized security flavor %s\n", value);
+                return -EINVAL;
         }
 
-        return rc;
+        return 0;
 }
 
 static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
@@ -3711,11 +3704,9 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
                 }
                 break;
         }
-        default: {
+        default:
                 CERROR("Unknown command: %d\n", lcfg->lcfg_command);
                 GOTO(out, rc = -EINVAL);
-
-        }
         }
 out:
         RETURN(rc);

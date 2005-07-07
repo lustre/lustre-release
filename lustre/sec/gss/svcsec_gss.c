@@ -389,7 +389,9 @@ struct gss_svc_seq_data {
 struct rsc {
         struct cache_head       h;
         rawobj_t                handle;
-        __u32                   remote_realm;
+        __u32                   remote_realm:1,
+                                auth_usr_mds:1,
+                                auth_usr_oss:1;
         struct vfs_cred         cred;
         uid_t                   mapped_uid;
         struct gss_svc_seq_data seqdata;
@@ -484,7 +486,7 @@ static int rsc_parse(struct cache_detail *cd,
         /* contexthandle expiry [ uid gid N <n gids> mechname
          * ...mechdata... ] */
         char *buf = mesg;
-        int len, rv;
+        int len, rv, tmp_int;
         struct rsc *rsci, *res = NULL;
         time_t expiry;
         int status = -EINVAL;
@@ -510,11 +512,28 @@ static int rsc_parse(struct cache_detail *cd,
                 goto out;
 
         /* remote flag */
-        rv = get_int(&mesg, (int *)&rsci->remote_realm);
+        rv = get_int(&mesg, &tmp_int);
         if (rv) {
                 CERROR("fail to get remote flag\n");
                 goto out;
         }
+        rsci->remote_realm = (tmp_int != 0);
+
+        /* mds user flag */
+        rv = get_int(&mesg, &tmp_int);
+        if (rv) {
+                CERROR("fail to get mds user flag\n");
+                goto out;
+        }
+        rsci->auth_usr_mds = (tmp_int != 0);
+
+        /* oss user flag */
+        rv = get_int(&mesg, &tmp_int);
+        if (rv) {
+                CERROR("fail to get oss user flag\n");
+                goto out;
+        }
+        rsci->auth_usr_oss = (tmp_int != 0);
 
         /* mapped uid */
         rv = get_int(&mesg, (int *)&rsci->mapped_uid);
@@ -803,7 +822,7 @@ static int
 gss_pack_err_notify(struct ptlrpc_request *req,
                     __u32 major, __u32 minor)
 {
-        struct gss_svc_data *svcdata = req->rq_sec_svcdata;
+        struct gss_svc_data *svcdata = req->rq_svcsec_data;
         __u32 reslen, *resp, *reslenp;
         char  nidstr[PTL_NALFMT_SIZE];
         const __u32 secdata_len = 7 * 4;
@@ -828,8 +847,8 @@ gss_pack_err_notify(struct ptlrpc_request *req,
         resp = (__u32 *) req->rq_reply_state->rs_repbuf;
 
         /* header */
-        *resp++ = cpu_to_le32(PTLRPC_SEC_GSS);
-        *resp++ = cpu_to_le32(PTLRPC_SEC_TYPE_NONE);
+        *resp++ = cpu_to_le32(PTLRPCS_FLVR_GSS_NONE);
+        *resp++ = cpu_to_le32(PTLRPCS_SVC_NONE);
         *resp++ = cpu_to_le32(req->rq_replen);
         reslenp = resp++;
 
@@ -842,8 +861,8 @@ gss_pack_err_notify(struct ptlrpc_request *req,
          * obj1(fake), obj2(fake)
          */
         *resp++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);
-        *resp++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5I);
-        *resp++ = cpu_to_le32(PTLRPC_GSS_PROC_ERR);
+        *resp++ = cpu_to_le32(PTLRPCS_FLVR_KRB5I);
+        *resp++ = cpu_to_le32(PTLRPCS_GSS_PROC_ERR);
         *resp++ = cpu_to_le32(major);
         *resp++ = cpu_to_le32(minor);
         *resp++ = 0;
@@ -883,7 +902,7 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
                        __u32 *secdata, __u32 seclen,
                        enum ptlrpcs_error *res)
 {
-        struct gss_svc_data *svcdata = req->rq_sec_svcdata;
+        struct gss_svc_data *svcdata = req->rq_svcsec_data;
         struct rsc          *rsci;
         struct rsi          *rsikey, *rsip;
         rawobj_t             tmpobj;
@@ -984,8 +1003,8 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
 
         /* header */
         resp = (__u32 *) req->rq_reply_state->rs_repbuf;
-        *resp++ = cpu_to_le32(PTLRPC_SEC_GSS);
-        *resp++ = cpu_to_le32(PTLRPC_SEC_TYPE_NONE);
+        *resp++ = cpu_to_le32(PTLRPCS_FLVR_GSS_NONE);
+        *resp++ = cpu_to_le32(PTLRPCS_SVC_NONE);
         *resp++ = cpu_to_le32(req->rq_replen);
         reslenp = resp++;
 
@@ -1023,9 +1042,22 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
 
         *res = PTLRPCS_OK;
 
-        req->rq_auth_uid = rsci->cred.vc_uid;
         req->rq_remote_realm = rsci->remote_realm;
+        req->rq_auth_usr_mds = rsci->auth_usr_mds;
+        req->rq_auth_usr_oss = rsci->auth_usr_oss;
+        req->rq_auth_uid = rsci->cred.vc_uid;
         req->rq_mapped_uid = rsci->mapped_uid;
+
+        if (req->rq_auth_usr_mds) {
+                CWARN("usr from %s authenticated as mds svc cred\n",
+                portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                req->rq_peer.peer_id.nid, nidstr));
+        }
+        if (req->rq_auth_usr_oss) {
+                CWARN("usr from %s authenticated as oss svc cred\n",
+                portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                req->rq_peer.peer_id.nid, nidstr));
+        }
 
         /* This is simplified since right now we doesn't support
          * INIT_CONTINUE yet.
@@ -1075,7 +1107,7 @@ gss_svcsec_handle_data(struct ptlrpc_request *req,
         }
 
         switch (gc->gc_svc) {
-        case PTLRPC_GSS_SVC_INTEGRITY:
+        case PTLRPCS_GSS_SVC_INTEGRITY:
                 major = gss_svc_verify_request(req, rsci, gc, secdata, seclen);
                 if (major == GSS_S_COMPLETE)
                         break;
@@ -1084,7 +1116,7 @@ gss_svcsec_handle_data(struct ptlrpc_request *req,
                        portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                        req->rq_peer.peer_id.nid, nidstr));
                 goto notify_err;
-        case PTLRPC_GSS_SVC_PRIVACY:
+        case PTLRPCS_GSS_SVC_PRIVACY:
                 major = gss_svc_unseal_request(req, rsci, gc, secdata, seclen);
                 if (major == GSS_S_COMPLETE)
                         break;
@@ -1098,8 +1130,10 @@ gss_svcsec_handle_data(struct ptlrpc_request *req,
                 GOTO(out, rc = SVC_DROP);
         }
 
-        req->rq_auth_uid = rsci->cred.vc_uid;
         req->rq_remote_realm = rsci->remote_realm;
+        req->rq_auth_usr_mds = rsci->auth_usr_mds;
+        req->rq_auth_usr_oss = rsci->auth_usr_oss;
+        req->rq_auth_uid = rsci->cred.vc_uid;
         req->rq_mapped_uid = rsci->mapped_uid;
 
         *res = PTLRPCS_OK;
@@ -1122,7 +1156,7 @@ gss_svcsec_handle_destroy(struct ptlrpc_request *req,
                           __u32 *secdata, __u32 seclen,
                           enum ptlrpcs_error *res)
 {
-        struct gss_svc_data *svcdata = req->rq_sec_svcdata;
+        struct gss_svc_data *svcdata = req->rq_svcsec_data;
         struct rsc          *rsci;
         char                 nidstr[PTL_NALFMT_SIZE];
         int                  rc;
@@ -1137,7 +1171,7 @@ gss_svcsec_handle_destroy(struct ptlrpc_request *req,
                 RETURN(SVC_DROP);
         }
 
-        if (gc->gc_svc != PTLRPC_GSS_SVC_INTEGRITY) {
+        if (gc->gc_svc != PTLRPCS_GSS_SVC_INTEGRITY) {
                 CERROR("service %d is not supported in destroy.\n",
                         gc->gc_svc);
                 GOTO(out, rc = SVC_DROP);
@@ -1179,7 +1213,7 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         struct gss_svc_data *svcdata;
         struct rpc_gss_wire_cred *gc;
         struct ptlrpcs_wire_hdr *sec_hdr;
-        __u32 seclen, *secdata, version;
+        __u32 subflavor, seclen, *secdata, version;
         int rc;
         ENTRY;
 
@@ -1190,7 +1224,7 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         *res = PTLRPCS_BADCRED;
 
         sec_hdr = buf_to_sec_hdr(req->rq_reqbuf);
-        LASSERT(sec_hdr->flavor == PTLRPC_SEC_GSS);
+        LASSERT(SEC_FLAVOR_MAJOR(sec_hdr->flavor) == PTLRPCS_FLVR_MAJOR_GSS);
 
         seclen = req->rq_reqbuf_len - sizeof(*sec_hdr) - sec_hdr->msg_len;
         secdata = (__u32 *) buf_to_sec_data(req->rq_reqbuf);
@@ -1206,26 +1240,26 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
                 RETURN(SVC_DROP);
         }
 
-        LASSERT(!req->rq_sec_svcdata);
+        LASSERT(!req->rq_svcsec_data);
         OBD_ALLOC(svcdata, sizeof(*svcdata));
         if (!svcdata) {
                 CERROR("fail to alloc svcdata\n");
                 RETURN(SVC_DROP);
         }
-        req->rq_sec_svcdata = svcdata;
+        req->rq_svcsec_data = svcdata;
         gc = &svcdata->clcred;
 
         /* Now secdata/seclen is what we want to parse
          */
         version = le32_to_cpu(*secdata++);      /* version */
-        svcdata->subflavor = le32_to_cpu(*secdata++);    /* subflavor */
+        subflavor = le32_to_cpu(*secdata++);    /* subflavor */
         gc->gc_proc = le32_to_cpu(*secdata++);  /* proc */
         gc->gc_seq = le32_to_cpu(*secdata++);   /* seq */
         gc->gc_svc = le32_to_cpu(*secdata++);   /* service */
         seclen -= 5 * 4;
 
         CDEBUG(D_SEC, "wire gss_hdr: %u/%u/%u/%u/%u\n",
-               version, svcdata->subflavor, gc->gc_proc,
+               version, subflavor, gc->gc_proc,
                gc->gc_seq, gc->gc_svc);
 
         if (version != PTLRPC_SEC_GSS_VERSION) {
@@ -1257,9 +1291,9 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         }
 
 err_free:
-        if (rc == SVC_DROP && req->rq_sec_svcdata) {
-                OBD_FREE(req->rq_sec_svcdata, sizeof(struct gss_svc_data));
-                req->rq_sec_svcdata = NULL;
+        if (rc == SVC_DROP && req->rq_svcsec_data) {
+                OBD_FREE(req->rq_svcsec_data, sizeof(struct gss_svc_data));
+                req->rq_svcsec_data = NULL;
         }
 
         RETURN(rc);
@@ -1269,7 +1303,7 @@ static int
 gss_svcsec_authorize(struct ptlrpc_request *req)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
-        struct gss_svc_data *gsd = (struct gss_svc_data *)req->rq_sec_svcdata;
+        struct gss_svc_data *gsd = (struct gss_svc_data *)req->rq_svcsec_data;
         struct rpc_gss_wire_cred  *gc = &gsd->clcred;
         struct rsc                *rscp;
         struct ptlrpcs_wire_hdr   *sec_hdr;
@@ -1304,7 +1338,7 @@ gss_svcsec_authorize(struct ptlrpc_request *req)
 
         sec_hdr = (struct ptlrpcs_wire_hdr *) rs->rs_repbuf;
         switch (gc->gc_svc) {
-        case  PTLRPC_GSS_SVC_INTEGRITY:
+        case  PTLRPCS_GSS_SVC_INTEGRITY:
                 /* prepare various pointers */
                 lmsg.len = req->rq_replen;
                 lmsg.data = (__u8 *) (rs->rs_repbuf + sizeof(*sec_hdr));
@@ -1312,17 +1346,16 @@ gss_svcsec_authorize(struct ptlrpc_request *req)
                 vlen = rs->rs_repbuf_len - sizeof(*sec_hdr) - lmsg.len;
                 seclen = vlen;
 
-                sec_hdr->flavor = cpu_to_le32(PTLRPC_SEC_GSS);
-                sec_hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_AUTH);
+                sec_hdr->flavor = cpu_to_le32(PTLRPCS_FLVR_GSS_AUTH);
                 sec_hdr->msg_len = cpu_to_le32(req->rq_replen);
 
                 /* standard gss hdr */
                 LASSERT(vlen >= 7 * 4);
                 *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);
-                *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5I);
+                *vp++ = cpu_to_le32(PTLRPCS_FLVR_KRB5I);
                 *vp++ = cpu_to_le32(RPC_GSS_PROC_DATA);
                 *vp++ = cpu_to_le32(gc->gc_seq);
-                *vp++ = cpu_to_le32(PTLRPC_GSS_SVC_INTEGRITY);
+                *vp++ = cpu_to_le32(PTLRPCS_GSS_SVC_INTEGRITY);
                 *vp++ = 0;      /* fake ctx handle */
                 vpsave = vp++;  /* reserve size */
                 vlen -= 7 * 4;
@@ -1340,22 +1373,21 @@ gss_svcsec_authorize(struct ptlrpc_request *req)
                 sec_hdr->sec_len = cpu_to_le32(seclen);
                 rs->rs_repdata_len += size_round(seclen);
                 break;
-        case  PTLRPC_GSS_SVC_PRIVACY:
+        case  PTLRPCS_GSS_SVC_PRIVACY:
                 vp = (__u32 *) (rs->rs_repbuf + sizeof(*sec_hdr));
                 vlen = rs->rs_repbuf_len - sizeof(*sec_hdr);
                 seclen = vlen;
 
-                sec_hdr->flavor = cpu_to_le32(PTLRPC_SEC_GSS);
-                sec_hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_PRIV);
+                sec_hdr->flavor = cpu_to_le32(PTLRPCS_FLVR_GSS_PRIV);
                 sec_hdr->msg_len = cpu_to_le32(0);
 
                 /* standard gss hdr */
                 LASSERT(vlen >= 7 * 4);
                 *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);
-                *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5I);
+                *vp++ = cpu_to_le32(PTLRPCS_FLVR_KRB5I);
                 *vp++ = cpu_to_le32(RPC_GSS_PROC_DATA);
                 *vp++ = cpu_to_le32(gc->gc_seq);
-                *vp++ = cpu_to_le32(PTLRPC_GSS_SVC_PRIVACY);
+                *vp++ = cpu_to_le32(PTLRPCS_GSS_SVC_PRIVACY);
                 *vp++ = 0;      /* fake ctx handle */
                 vpsave = vp++;  /* reserve size */
                 vlen -= 7 * 4;
@@ -1396,7 +1428,7 @@ static
 void gss_svcsec_cleanup_req(struct ptlrpc_svcsec *svcsec,
                             struct ptlrpc_request *req)
 {
-        struct gss_svc_data *gsd = (struct gss_svc_data *) req->rq_sec_svcdata;
+        struct gss_svc_data *gsd = (struct gss_svc_data *) req->rq_svcsec_data;
 
         if (!gsd) {
                 CDEBUG(D_SEC, "no svc_data present. do nothing\n");
@@ -1407,7 +1439,7 @@ void gss_svcsec_cleanup_req(struct ptlrpc_svcsec *svcsec,
          * to the incoming packet buffer, so don't need free it
          */
         OBD_FREE(gsd, sizeof(*gsd));
-        req->rq_sec_svcdata = NULL;
+        req->rq_svcsec_data = NULL;
         return;
 }
 
@@ -1416,7 +1448,7 @@ int gss_svcsec_est_payload(struct ptlrpc_svcsec *svcsec,
                            struct ptlrpc_request *req,
                            int msgsize)
 {
-        struct gss_svc_data *svcdata = req->rq_sec_svcdata;
+        struct gss_svc_data *svcdata = req->rq_svcsec_data;
         ENTRY;
 
         /* just return the pre-set reserve_len for init/fini/err cases.
@@ -1438,10 +1470,10 @@ int gss_svcsec_est_payload(struct ptlrpc_svcsec *svcsec,
                 CDEBUG(D_SEC, "is_fini, reserver size 0\n");
                 RETURN(0);
         } else {
-                if (svcdata->clcred.gc_svc == PTLRPC_GSS_SVC_NONE ||
-                    svcdata->clcred.gc_svc == PTLRPC_GSS_SVC_INTEGRITY)
+                if (svcdata->clcred.gc_svc == PTLRPCS_GSS_SVC_NONE ||
+                    svcdata->clcred.gc_svc == PTLRPCS_GSS_SVC_INTEGRITY)
                         RETURN(size_round(GSS_MAX_AUTH_PAYLOAD));
-                else if (svcdata->clcred.gc_svc == PTLRPC_GSS_SVC_PRIVACY)
+                else if (svcdata->clcred.gc_svc == PTLRPCS_GSS_SVC_PRIVACY)
                         RETURN(size_round16(GSS_MAX_AUTH_PAYLOAD + msgsize +
                                             GSS_PRIVBUF_PREFIX_LEN +
                                             GSS_PRIVBUF_SUFFIX_LEN));
@@ -1458,7 +1490,7 @@ int gss_svcsec_alloc_repbuf(struct ptlrpc_svcsec *svcsec,
                             struct ptlrpc_request *req,
                             int msgsize)
 {
-        struct gss_svc_data *gsd = (struct gss_svc_data *) req->rq_sec_svcdata;
+        struct gss_svc_data *gsd = (struct gss_svc_data *) req->rq_svcsec_data;
         struct ptlrpc_reply_state *rs;
         int msg_payload, sec_payload;
         int privacy, rc;
@@ -1471,7 +1503,7 @@ int gss_svcsec_alloc_repbuf(struct ptlrpc_svcsec *svcsec,
         LASSERT(gsd);
         if (!gsd->is_init && !gsd->is_init_continue &&
             !gsd->is_fini && !gsd->is_err_notify &&
-            gsd->clcred.gc_svc == PTLRPC_GSS_SVC_PRIVACY)
+            gsd->clcred.gc_svc == PTLRPCS_GSS_SVC_PRIVACY)
                 privacy = 1;
         else
                 privacy = 0;
@@ -1542,8 +1574,8 @@ void gss_svcsec_free_repbuf(struct ptlrpc_svcsec *svcsec,
 
 struct ptlrpc_svcsec svcsec_gss = {
         .pss_owner              = THIS_MODULE,
-        .pss_name               = "GSS_SVCSEC",
-        .pss_flavor             = {PTLRPC_SEC_GSS, 0},
+        .pss_name               = "svcsec.gss",
+        .pss_flavor             = PTLRPCS_FLVR_MAJOR_GSS,
         .accept                 = gss_svcsec_accept,
         .authorize              = gss_svcsec_authorize,
         .alloc_repbuf           = gss_svcsec_alloc_repbuf,

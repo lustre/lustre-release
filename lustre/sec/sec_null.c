@@ -92,22 +92,21 @@ static struct ptlrpc_credops null_credops = {
 };
 
 static
-struct ptlrpc_sec* null_create_sec(ptlrpcs_flavor_t *flavor,
+struct ptlrpc_sec* null_create_sec(__u32 flavor,
                                    const char *pipe_dir,
                                    void *pipe_data)
 {
         struct ptlrpc_sec *sec;
         ENTRY;
 
-        LASSERT(flavor->flavor == PTLRPC_SEC_NULL);
+        LASSERT(SEC_FLAVOR_MAJOR(flavor) == PTLRPCS_FLVR_MAJOR_NULL);
 
         OBD_ALLOC(sec, sizeof(*sec));
         if (!sec)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        sec->ps_sectype = PTLRPC_SEC_TYPE_NONE;
-        sec->ps_expire = (-1UL >> 1); /* never expire */
-        sec->ps_nextgc = (-1UL >> 1);
+        sec->ps_expire = 0; /* never expire */
+        sec->ps_nextgc = 0; /* never do gc */
         sec->ps_flags = 0;
 
         CDEBUG(D_SEC, "Create NULL security module at %p\n", sec);
@@ -159,9 +158,9 @@ static struct ptlrpc_secops null_secops = {
 
 static struct ptlrpc_sec_type null_type = {
         .pst_owner      = THIS_MODULE,
-        .pst_name       = "NULL_SEC",
+        .pst_name       = "sec.null",
         .pst_inst       = ATOMIC_INIT(0),
-        .pst_flavor     = {PTLRPC_SEC_NULL, 0},
+        .pst_flavor     = PTLRPCS_FLVR_MAJOR_NULL,
         .pst_ops        = &null_secops,
 };
 

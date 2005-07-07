@@ -41,18 +41,18 @@
 #include <linux/lustre_sec.h>
 
 static spinlock_t sectypes_lock = SPIN_LOCK_UNLOCKED;
-static struct ptlrpc_sec_type *sectypes[PTLRPC_SEC_MAX_FLAVORS] = {
+static struct ptlrpc_sec_type *sectypes[PTLRPCS_FLVR_MAJOR_MAX] = {
         NULL,
 };
 
 int ptlrpcs_register(struct ptlrpc_sec_type *type)
 {
-        __u32 flavor = type->pst_flavor.flavor;
+        __u32 flavor = type->pst_flavor;
 
         LASSERT(type->pst_name);
         LASSERT(type->pst_ops);
 
-        if (flavor >= PTLRPC_SEC_MAX_FLAVORS)
+        if (flavor >= PTLRPCS_FLVR_MAJOR_MAX)
                 return -EINVAL;
 
         spin_lock(&sectypes_lock);
@@ -64,49 +64,46 @@ int ptlrpcs_register(struct ptlrpc_sec_type *type)
         atomic_set(&type->pst_inst, 0);
         spin_unlock(&sectypes_lock);
 
-        CWARN("Security module %s registered\n", type->pst_name);
+        CDEBUG(D_SEC, "%s: registered\n", type->pst_name);
         return 0;
 }
 
 int ptlrpcs_unregister(struct ptlrpc_sec_type *type)
 {
-        __u32 flavor = type->pst_flavor.flavor;
+        __u32 major = type->pst_flavor;
 
-        if (flavor >= PTLRPC_SEC_MAX_FLAVORS)
-                return -EINVAL;
+        LASSERT(major < PTLRPCS_FLVR_MAJOR_MAX);
 
         spin_lock(&sectypes_lock);
-        if (!sectypes[flavor]) {
+        if (!sectypes[major]) {
                 spin_unlock(&sectypes_lock);
+                CERROR("%s: already unregistered?\n", type->pst_name);
                 return -EINVAL;
         }
 
-        if (sectypes[flavor] != type) {
-                CERROR("invalid unregister\n");
-                return -EINVAL;
-        }
+        LASSERT(sectypes[major] == type);
 
         if (atomic_read(&type->pst_inst)) {
-                CERROR("sec module %s still have instance %d\n",
+                CERROR("%s: still have %d, instances\n",
                        type->pst_name, atomic_read(&type->pst_inst));
                 spin_unlock(&sectypes_lock);
                 return -EINVAL;
         }
 
-        CDEBUG(D_SEC, "Security module %s unregistered\n", type->pst_name);
-        sectypes[flavor] = NULL;
+        sectypes[major] = NULL;
         spin_unlock(&sectypes_lock);
 
+        CDEBUG(D_SEC, "%s: unregistered\n", type->pst_name);
         return 0;
 }
 
 static
-struct ptlrpc_sec_type * ptlrpcs_flavor2type(ptlrpcs_flavor_t *flavor)
+struct ptlrpc_sec_type * ptlrpcs_flavor2type(__u32 flavor)
 {
         struct ptlrpc_sec_type *type;
-        __u32 major = flavor->flavor;
+        __u32 major = SEC_FLAVOR_MAJOR(flavor);
 
-        if (major >= PTLRPC_SEC_MAX_FLAVORS)
+        if (major >= PTLRPCS_FLVR_MAJOR_MAX)
                 return NULL;
 
         spin_lock(&sectypes_lock);
@@ -123,6 +120,37 @@ void ptlrpcs_type_put(struct ptlrpc_sec_type *type)
         module_put(type->pst_owner);
 }
 
+__u32 ptlrpcs_name2flavor(const char *name)
+{
+        if (!strcmp(name, "null"))
+                return PTLRPCS_FLVR_NULL;
+        if (!strcmp(name, "krb5"))
+                return PTLRPCS_FLVR_KRB5;
+        if (!strcmp(name, "krb5i"))
+                return PTLRPCS_FLVR_KRB5I;
+        if (!strcmp(name, "krb5p"))
+                return PTLRPCS_FLVR_KRB5P;
+
+        return PTLRPCS_FLVR_INVALID;
+}
+
+char *ptlrpcs_flavor2name(__u32 flavor)
+{
+        switch (flavor) {
+        case PTLRPCS_FLVR_NULL:
+                return "null";
+        case PTLRPCS_FLVR_KRB5:
+                return "krb5";
+        case PTLRPCS_FLVR_KRB5I:
+                return "krb5i";
+        case PTLRPCS_FLVR_KRB5P:
+                return "krb5p";
+        default:
+                CERROR("invalid flavor 0x%x\n", flavor);
+        }
+        return "unknown";
+}
+
 /***********************************************
  * credential cache helpers                    *
  ***********************************************/
@@ -132,7 +160,10 @@ void ptlrpcs_init_credcache(struct ptlrpc_sec *sec)
         int i;
         for (i = 0; i < PTLRPC_CREDCACHE_NR; i++)
                 INIT_LIST_HEAD(&sec->ps_credcache[i]);
-        sec->ps_nextgc = get_seconds() + (sec->ps_expire >> 1);
+
+        /* ps_nextgc == 0 means never do gc */
+        if (sec->ps_nextgc)
+                sec->ps_nextgc = get_seconds() + (sec->ps_expire >> 1);
 }
 
 /*
@@ -319,7 +350,8 @@ retry:
         spin_lock(&sec->ps_lock);
 
         /* do gc if expired */
-        if (remove_dead && time_after(get_seconds(), sec->ps_nextgc))
+        if (remove_dead &&
+            sec->ps_nextgc && time_after(get_seconds(), sec->ps_nextgc))
                 ptlrpcs_credcache_gc(sec, &freelist);
 
         list_for_each_entry_safe(cred, n, &sec->ps_credcache[hash], pc_hash) {
@@ -380,8 +412,13 @@ static struct ptlrpc_cred *get_cred(struct ptlrpc_sec *sec)
         /* XXX
          * for now we simply let PAG == real uid
          */
-        vcred.vc_pag = (__u64) current->uid;
-        vcred.vc_uid = current->uid;
+        if (sec->ps_flags & (PTLRPC_SEC_FL_MDS | PTLRPC_SEC_FL_REVERSE)) {
+                vcred.vc_pag = 0;
+                vcred.vc_uid = 0;
+        } else {
+                vcred.vc_pag = (__u64) current->uid;
+                vcred.vc_uid = current->uid;
+        }
 
         return cred_cache_lookup(sec, &vcred, 1, 1);
 }
@@ -616,9 +653,9 @@ int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req)
         CDEBUG(D_SEC, "wrap req %p\n", req);
         cred = req->rq_cred;
 
-        switch (cred->pc_sec->ps_sectype) {
-        case PTLRPC_SEC_TYPE_NONE:
-        case PTLRPC_SEC_TYPE_AUTH:
+        switch (SEC_FLAVOR_SVC(req->rq_req_secflvr)) {
+        case PTLRPCS_SVC_NONE:
+        case PTLRPCS_SVC_AUTH:
                 if (req->rq_req_wrapped) {
                         CDEBUG(D_SEC, "req %p(o%u,x"LPU64",t"LPU64") "
                                "already signed, resend?\n", req,
@@ -635,7 +672,7 @@ int ptlrpcs_cli_wrap_request(struct ptlrpc_request *req)
                 if (!rc)
                         req->rq_req_wrapped = 1;
                 break;
-        case PTLRPC_SEC_TYPE_PRIV:
+        case PTLRPCS_SVC_PRIV:
                 if (req->rq_req_wrapped) {
                         CDEBUG(D_SEC, "req %p(o%u,x"LPU64",t"LPU64") "
                                "already encrypted, resend?\n", req,
@@ -684,17 +721,21 @@ int ptlrpcs_cli_unwrap_reply(struct ptlrpc_request *req)
 
         sec_hdr = (struct ptlrpcs_wire_hdr *) req->rq_repbuf;
         sec_hdr->flavor = le32_to_cpu(sec_hdr->flavor);
-        sec_hdr->sectype = le32_to_cpu(sec_hdr->sectype);
         sec_hdr->msg_len = le32_to_cpu(sec_hdr->msg_len);
         sec_hdr->sec_len = le32_to_cpu(sec_hdr->sec_len);
 
-        CDEBUG(D_SEC, "req %p, cred %p, flavor %u, sectype %u\n",
-               req, cred, sec_hdr->flavor, sec_hdr->sectype);
+        CDEBUG(D_SEC, "req %p, cred %p, flavor 0x%x\n",
+               req, cred, sec_hdr->flavor);
 
         sec = cred->pc_sec;
-        if (sec_hdr->flavor != sec->ps_flavor.flavor) {
-                CERROR("unmatched flavor %u while expect %u\n",
-                       sec_hdr->flavor, sec->ps_flavor.flavor);
+
+        /* only compare major flavor, reply might use different subflavor.
+         */
+        if (SEC_FLAVOR_MAJOR(sec_hdr->flavor) !=
+            SEC_FLAVOR_MAJOR(req->rq_req_secflvr)) {
+                CERROR("got major flavor %u while expect %u\n",
+                       SEC_FLAVOR_MAJOR(sec_hdr->flavor),
+                       SEC_FLAVOR_MAJOR(req->rq_req_secflvr));
                 RETURN(-EPROTO);
         }
 
@@ -706,14 +747,14 @@ int ptlrpcs_cli_unwrap_reply(struct ptlrpc_request *req)
                 RETURN(-EPROTO);
         }
 
-        switch (sec_hdr->sectype) {
-        case PTLRPC_SEC_TYPE_NONE:
-        case PTLRPC_SEC_TYPE_AUTH: {
+        switch (SEC_FLAVOR_SVC(sec_hdr->flavor)) {
+        case PTLRPCS_SVC_NONE:
+        case PTLRPCS_SVC_AUTH: {
                 LASSERT(cred->pc_ops->verify);
                 rc = cred->pc_ops->verify(cred, req);
                 LASSERT(rc || req->rq_repmsg || req->rq_ptlrpcs_restart);
                 break;
-        case PTLRPC_SEC_TYPE_PRIV:
+        case PTLRPCS_SVC_PRIV:
                 LASSERT(cred->pc_ops->unseal);
                 rc = cred->pc_ops->unseal(cred, req);
                 LASSERT(rc || req->rq_repmsg || req->rq_ptlrpcs_restart);
@@ -730,7 +771,8 @@ int ptlrpcs_cli_unwrap_reply(struct ptlrpc_request *req)
  * security APIs                                  *
  **************************************************/
 
-struct ptlrpc_sec * ptlrpcs_sec_create(ptlrpcs_flavor_t *flavor,
+struct ptlrpc_sec * ptlrpcs_sec_create(__u32 flavor,
+                                       unsigned long flags,
                                        struct obd_import *import,
                                        const char *pipe_dir,
                                        void *pipe_data)
@@ -741,7 +783,7 @@ struct ptlrpc_sec * ptlrpcs_sec_create(ptlrpcs_flavor_t *flavor,
 
         type = ptlrpcs_flavor2type(flavor);
         if (!type) {
-                CDEBUG(D_SEC, "invalid major flavor %u\n", flavor->flavor);
+                CERROR("invalid flavor 0x%x\n", flavor);
                 RETURN(NULL);
         }
 
@@ -750,7 +792,8 @@ struct ptlrpc_sec * ptlrpcs_sec_create(ptlrpcs_flavor_t *flavor,
                 spin_lock_init(&sec->ps_lock);
                 ptlrpcs_init_credcache(sec);
                 sec->ps_type = type;
-                sec->ps_flavor = *flavor;
+                sec->ps_flavor = flavor;
+                sec->ps_flags = flags;
                 sec->ps_import = class_import_get(import);
                 atomic_set(&sec->ps_refcount, 1);
                 atomic_set(&sec->ps_credcount, 0);
@@ -790,9 +833,9 @@ void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
                 if (ncred == 0) {
                         ptlrpcs_sec_destroy(sec);
                 } else {
-                        CWARN("sec %p(%s) is no usage while %d cred still "
+                        CWARN("%s %p is no usage while %d cred still "
                               "holded, destroy delayed\n",
-                               sec, sec->ps_type->pst_name,
+                               sec->ps_type->pst_name, sec,
                                atomic_read(&sec->ps_credcount));
                 }
         }
@@ -821,8 +864,7 @@ int sec_alloc_reqbuf(struct ptlrpc_sec *sec,
         }
 
         hdr = buf_to_sec_hdr(req->rq_reqbuf);
-        hdr->flavor = cpu_to_le32(sec->ps_flavor.flavor);
-        hdr->sectype = cpu_to_le32(sec->ps_sectype);
+        hdr->flavor = cpu_to_le32(req->rq_req_secflvr);
         hdr->msg_len = msgsize;
         /* security length will be filled later */
 
@@ -926,8 +968,9 @@ int ptlrpcs_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize)
                 RETURN(ops->alloc_repbuf(sec, req, msgsize));
 
         /* default allocation scheme */
-        msg_payload = sec->ps_sectype == PTLRPC_SEC_TYPE_PRIV ? 0 : msgsize;
-        sec_payload = size_round(ptlrpcs_est_rep_payload(sec, msgsize));
+        msg_payload = SEC_FLAVOR_SVC(req->rq_req_secflvr) == PTLRPCS_SVC_PRIV ?
+                      0 : msgsize;
+        sec_payload = size_round(ptlrpcs_est_rep_payload(req, msgsize));
 
         req->rq_repbuf_len = sizeof(struct ptlrpcs_wire_hdr) +
                              msg_payload + sec_payload;
@@ -970,7 +1013,8 @@ void ptlrpcs_cli_free_repbuf(struct ptlrpc_request *req)
 
 int ptlrpcs_import_get_sec(struct obd_import *imp)
 {
-        ptlrpcs_flavor_t flavor = {PTLRPC_SEC_NULL, 0};
+        __u32 flavor = PTLRPCS_FLVR_NULL;
+        unsigned long flags = 0;
         char *pipedir = NULL;
         ENTRY;
 
@@ -988,26 +1032,30 @@ int ptlrpcs_import_get_sec(struct obd_import *imp)
             !strcmp(imp->imp_obd->obd_type->typ_name, "osc")) {
                 struct client_obd *cli = &imp->imp_obd->u.cli;
 
-                if (cli->cl_sec_flavor == PTLRPC_SEC_GSS) {
-                        CWARN("select security gss/%s for %s(%s)\n",
-                               cli->cl_sec_subflavor == PTLRPC_SEC_GSS_KRB5I ?
-                               "krb5i" : "krb5p",
-                               imp->imp_obd->obd_type->typ_name,
-                               imp->imp_obd->obd_name);
-                        flavor.flavor = cli->cl_sec_flavor;
-                        flavor.subflavor = cli->cl_sec_subflavor;
-                        pipedir = imp->imp_obd->obd_name;
-                } else if (cli->cl_sec_flavor == PTLRPC_SEC_NULL) {
+                switch (SEC_FLAVOR_MAJOR(cli->cl_sec_flavor)) {
+                case PTLRPCS_FLVR_MAJOR_NULL:
                         CWARN("select security null for %s(%s)\n",
-                               imp->imp_obd->obd_type->typ_name,
-                               imp->imp_obd->obd_name);
-                } else {
-                        CWARN("unknown security flavor for mdc(%s), "
-                              "use 'null'\n", imp->imp_obd->obd_name);
+                              imp->imp_obd->obd_type->typ_name,
+                              imp->imp_obd->obd_name);
+                        break;
+                case PTLRPCS_FLVR_MAJOR_GSS:
+                        CWARN("select security %s for %s(%s)\n",
+                              ptlrpcs_flavor2name(cli->cl_sec_flavor),
+                              imp->imp_obd->obd_type->typ_name,
+                              imp->imp_obd->obd_name);
+                        flavor = cli->cl_sec_flavor;
+                        pipedir = imp->imp_obd->obd_name;
+                        break;
+                default:
+                        CWARN("unknown security flavor for %s(%s), use null\n",
+                              imp->imp_obd->obd_type->typ_name,
+                              imp->imp_obd->obd_name);
                 }
+
+                flags = cli->cl_sec_flags;
         }
 
-        imp->imp_sec = ptlrpcs_sec_create(&flavor, imp, pipedir, imp);
+        imp->imp_sec = ptlrpcs_sec_create(flavor, flags, imp, pipedir, imp);
         if (!imp->imp_sec)
                 RETURN(-EINVAL);
         else
@@ -1095,6 +1143,9 @@ EXPORT_SYMBOL(svcsec_get);
 EXPORT_SYMBOL(svcsec_put);
 EXPORT_SYMBOL(svcsec_alloc_reply_state);
 EXPORT_SYMBOL(svcsec_free_reply_state);
+
+EXPORT_SYMBOL(ptlrpcs_name2flavor);
+EXPORT_SYMBOL(ptlrpcs_flavor2name);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Security Support");

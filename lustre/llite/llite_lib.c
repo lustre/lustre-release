@@ -27,6 +27,7 @@
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/version.h>
+#include <linux/seq_file.h>
 
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
@@ -1769,6 +1770,23 @@ int ll_prep_inode(struct obd_export *dt_exp, struct obd_export *md_exp,
         }
 
         RETURN(rc);
+}
+
+int ll_show_options(struct seq_file *m, struct vfsmount *mnt)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(mnt->mnt_sb);
+        struct lustre_mount_data *lmd = sbi->ll_lmd;
+
+        if (lmd) {
+                seq_printf(m, ",mds_sec=%s,oss_sec=%s",
+                           lmd->lmd_mds_security, lmd->lmd_oss_security);
+        }
+        seq_printf(m, ",%s", sbi->ll_remote ? "remote" : "local");
+        if (sbi->ll_remote && lmd) {
+                seq_printf(m, ",nllu=%u:%u", lmd->lmd_nllu, lmd->lmd_nllg);
+        }
+
+        return 0;
 }
 
 int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,

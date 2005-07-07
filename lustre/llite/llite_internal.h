@@ -73,7 +73,7 @@ struct ll_sb_info {
 
         struct ll_ra_info         ll_ra_info;
 
-        unsigned int              ll_remote;    /* remote client? */
+        unsigned int              ll_remote;      /* remote client? */
 
         /* times spent waiting for locks in each call site.  These are
          * all protected by the ll_lock */
@@ -331,6 +331,7 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 int null_if_equal(struct ldlm_lock *lock, void *data);
 int ll_process_config_update(struct ll_sb_info *sbi, int clean);
+int ll_show_options(struct seq_file *m, struct vfsmount *mnt);
 int ll_flush_cred(struct inode *inode);
 
 /* llite/special.c */

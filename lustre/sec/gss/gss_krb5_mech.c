@@ -263,21 +263,21 @@ static struct gss_api_ops gss_kerberos_ops = {
 
 static struct subflavor_desc gss_kerberos_sfs[] = {
         {
-                .subflavor      = PTLRPC_SEC_GSS_KRB5,
+                .subflavor      = PTLRPCS_SUBFLVR_KRB5,
                 .qop            = 0,
-                .service        = PTLRPC_SEC_TYPE_NONE,
+                .service        = PTLRPCS_SVC_NONE,
                 .name           = "krb5"
         },
         {
-                .subflavor      = PTLRPC_SEC_GSS_KRB5I,
+                .subflavor      = PTLRPCS_SUBFLVR_KRB5I,
                 .qop            = 0,
-                .service        = PTLRPC_SEC_TYPE_AUTH,
+                .service        = PTLRPCS_SVC_AUTH,
                 .name           = "krb5i"
         },
         {
-                .subflavor      = PTLRPC_SEC_GSS_KRB5P,
+                .subflavor      = PTLRPCS_SUBFLVR_KRB5P,
                 .qop            = 0,
-                .service        = PTLRPC_SEC_TYPE_PRIV,
+                .service        = PTLRPCS_SVC_PRIV,
                 .name           = "krb5p"
         }
 };

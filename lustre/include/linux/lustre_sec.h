@@ -22,6 +22,112 @@
 #ifndef __LINUX_SEC_H_
 #define __LINUX_SEC_H_
 
+enum ptlrpcs_major_flavors {
+        PTLRPCS_FLVR_MAJOR_NULL         = 0,
+        PTLRPCS_FLVR_MAJOR_GSS          = 1,
+        PTLRPCS_FLVR_MAJOR_MAX,
+};
+
+enum ptlrpcs_null_minor_flavors {
+        PTLRPCS_FLVR_MINOR_NULL         = 0,
+        PTLRPCS_FLVR_MINOR_NULL_MAX,
+};
+enum ptlrpcs_gss_minor_flavors {
+        PTLRPCS_FLVR_MINOR_GSS_NONE     = 0,
+        PTLRPCS_FLVR_MINOR_GSS_KRB5     = 1,
+        PTLRPCS_FLVR_MINOR_GSS_MAX,
+};
+
+enum ptlrpcs_security_type {
+        PTLRPCS_SVC_NONE                = 0,    /* no security */
+        PTLRPCS_SVC_AUTH                = 1,    /* authentication */
+        PTLRPCS_SVC_PRIV                = 2,    /* privacy */
+        PTLRPCS_SVC_MAX,
+};
+
+/*
+ * flavor compose/extract
+ */
+#define SEC_FLAVOR_MAJOR_OFFSET         (24)
+#define SEC_FLAVOR_RESERVE_OFFSET       (16)
+#define SEC_FLAVOR_SVC_OFFSET           (8)
+#define SEC_FLAVOR_MINOR_OFFSET         (0)
+
+#define SEC_MAKE_FLAVOR(major, minor, svc)                      \
+        (((__u32)(major) << SEC_FLAVOR_MAJOR_OFFSET) |          \
+         ((__u32)(svc) << SEC_FLAVOR_SVC_OFFSET) |              \
+         ((__u32)(minor) << SEC_FLAVOR_MINOR_OFFSET))
+
+#define SEC_MAKE_SUBFLAVOR(minor, svc)                          \
+        (((__u32)(svc) << SEC_FLAVOR_SVC_OFFSET) |              \
+         ((__u32)(minor) << SEC_FLAVOR_MINOR_OFFSET))
+
+#define SEC_FLAVOR_MAJOR(flavor)                                        \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_MAJOR_OFFSET) & 0xFF)
+#define SEC_FLAVOR_MINOR(flavor)                                        \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_MINOR_OFFSET) & 0xFF)
+#define SEC_FLAVOR_SVC(flavor)                                          \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_SVC_OFFSET) & 0xFF)
+#define SEC_FLAVOR_SUB(flavor)                                          \
+        ((((__u32)(flavor)) >> SEC_FLAVOR_MINOR_OFFSET) & 0xFFFF)
+
+/*
+ * general gss flavors
+ */
+#define PTLRPCS_FLVR_GSS_NONE                           \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_NONE,    \
+                        PTLRPCS_SVC_NONE)
+#define PTLRPCS_FLVR_GSS_AUTH                           \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_NONE,    \
+                        PTLRPCS_SVC_AUTH)
+#define PTLRPCS_FLVR_GSS_PRIV                           \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_NONE,    \
+                        PTLRPCS_SVC_PRIV)
+
+/*
+ * gss subflavors
+ */
+#define PTLRPCS_SUBFLVR_KRB5                            \
+        SEC_MAKE_SUBFLAVOR(PTLRPCS_FLVR_MINOR_GSS_KRB5, \
+                           PTLRPCS_SVC_NONE)
+#define PTLRPCS_SUBFLVR_KRB5I                           \
+        SEC_MAKE_SUBFLAVOR(PTLRPCS_FLVR_MINOR_GSS_KRB5, \
+                           PTLRPCS_SVC_AUTH)
+#define PTLRPCS_SUBFLVR_KRB5P                           \
+        SEC_MAKE_SUBFLAVOR(PTLRPCS_FLVR_MINOR_GSS_KRB5, \
+                           PTLRPCS_SVC_PRIV)
+
+/*
+ * "end user" flavors
+ */
+#define PTLRPCS_FLVR_NULL                               \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_NULL,        \
+                        PTLRPCS_FLVR_MINOR_NULL,        \
+                        PTLRPCS_SVC_NONE)
+#define PTLRPCS_FLVR_KRB5                               \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_KRB5,    \
+                        PTLRPCS_SVC_NONE)
+#define PTLRPCS_FLVR_KRB5I                              \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_KRB5,    \
+                        PTLRPCS_SVC_AUTH)
+#define PTLRPCS_FLVR_KRB5P                              \
+        SEC_MAKE_FLAVOR(PTLRPCS_FLVR_MAJOR_GSS,         \
+                        PTLRPCS_FLVR_MINOR_GSS_KRB5,    \
+                        PTLRPCS_SVC_PRIV)
+
+#define PTLRPCS_FLVR_INVALID    (-1)
+
+__u32 ptlrpcs_name2flavor(const char *name);
+char *ptlrpcs_flavor2name(__u32 flavor);
+
+
+#ifdef __KERNEL__
+
 /* forward declaration */
 struct obd_import;
 struct ptlrpc_request;
@@ -30,30 +136,18 @@ struct ptlrpc_credops;
 struct ptlrpc_sec;
 struct ptlrpc_secops;
 
-#define PTLRPC_SEC_MAX_FLAVORS   (4)
-
-typedef struct ptlrpcs_flavor_s {
-        __u32   flavor;
-        __u32   subflavor;
-} ptlrpcs_flavor_t;
 
 typedef struct {
         struct list_head        list;
-        ptlrpcs_flavor_t        sec;
+        __u32                   flavor;
 } deny_sec_t;
-
-enum ptlrpcs_security_type {
-        PTLRPC_SEC_TYPE_NONE    = 0,    /* no security */
-        PTLRPC_SEC_TYPE_AUTH    = 1,    /* authentication */
-        PTLRPC_SEC_TYPE_PRIV    = 2,    /* privacy */
-};
 
 /*
  * This header is prepended at any on-wire ptlrpc packets
  */
 struct ptlrpcs_wire_hdr {
         __u32   flavor;
-        __u32   sectype;
+        __u32   unused;
         __u32   msg_len;
         __u32   sec_len;
 };
@@ -78,50 +172,39 @@ __u8 *buf_to_sec_data(void *buf)
         return (__u8 *) (buf + sizeof(*hdr) + hdr->msg_len);
 }
 
-enum ptlrpcs_flavors {
-        PTLRPC_SEC_NULL = 0,
-        PTLRPC_SEC_GSS  = 1,
-};
-
 #define PTLRPC_SEC_GSS_VERSION (1)
 
-enum ptlrpcs_gss_subflavors {
-        PTLRPC_SEC_GSS_KRB5  = 0,
-        PTLRPC_SEC_GSS_KRB5I = 1,
-        PTLRPC_SEC_GSS_KRB5P = 2,
-};
-
 enum ptlrpcs_gss_proc {
-        PTLRPC_GSS_PROC_DATA =          0,
-        PTLRPC_GSS_PROC_INIT =          1,
-        PTLRPC_GSS_PROC_CONTINUE_INIT = 2,
-        PTLRPC_GSS_PROC_DESTROY =       3,
-        PTLRPC_GSS_PROC_ERR =           4,
+        PTLRPCS_GSS_PROC_DATA           = 0,
+        PTLRPCS_GSS_PROC_INIT           = 1,
+        PTLRPCS_GSS_PROC_CONTINUE_INIT  = 2,
+        PTLRPCS_GSS_PROC_DESTROY        = 3,
+        PTLRPCS_GSS_PROC_ERR            = 4,
 };
                                                                                                                         
 enum ptlrpcs_gss_svc {
-        PTLRPC_GSS_SVC_NONE =           1,
-        PTLRPC_GSS_SVC_INTEGRITY =      2,
-        PTLRPC_GSS_SVC_PRIVACY =        3,
+        PTLRPCS_GSS_SVC_NONE            = 1,
+        PTLRPCS_GSS_SVC_INTEGRITY       = 2,
+        PTLRPCS_GSS_SVC_PRIVACY         = 3,
 };
 
 enum ptlrpcs_error {
-        PTLRPCS_OK =                    0,
-        PTLRPCS_BADCRED =               1,
-        PTLRPCS_REJECTEDCRED =          2,
-        PTLRPCS_BADVERF =               3,
-        PTLRPCS_REJECTEDVERF =          4,
-        PTLRPCS_TOOWEAK =               5,
+        PTLRPCS_OK                      = 0,
+        PTLRPCS_BADCRED                 = 1,
+        PTLRPCS_REJECTEDCRED            = 2,
+        PTLRPCS_BADVERF                 = 3,
+        PTLRPCS_REJECTEDVERF            = 4,
+        PTLRPCS_TOOWEAK                 = 5,
         /* GSS errors */
-        PTLRPCS_GSS_CREDPROBLEM =       13,
-        PTLRPCS_GSS_CTXPROBLEM =        14,
+        PTLRPCS_GSS_CREDPROBLEM         = 13,
+        PTLRPCS_GSS_CTXPROBLEM          = 14,
 };
 
 struct vfs_cred {
-        __u64   vc_pag;
-        uid_t   vc_uid;
-        gid_t   vc_gid;
-        struct group_info *vc_ginfo;
+        __u64                   vc_pag;
+        uid_t                   vc_uid;
+        gid_t                   vc_gid;
+        struct group_info      *vc_ginfo;
 };
 
 struct ptlrpc_credops {
@@ -163,7 +246,7 @@ struct ptlrpc_cred {
 };
 
 struct ptlrpc_secops {
-        struct ptlrpc_sec *   (*create_sec)    (ptlrpcs_flavor_t *flavor,
+        struct ptlrpc_sec *   (*create_sec)    (__u32 flavor,
                                                 const char *pipe_dir,
                                                 void *pipe_data);
         void                  (*destroy_sec)   (struct ptlrpc_sec *sec);
@@ -182,8 +265,10 @@ struct ptlrpc_secops {
                                                 struct ptlrpc_request *req);
         /* security payload size estimation */
         int                   (*est_req_payload)(struct ptlrpc_sec *sec,
+                                                 struct ptlrpc_request *req,
                                                  int msgsize);
         int                   (*est_rep_payload)(struct ptlrpc_sec *sec,
+                                                 struct ptlrpc_request *req,
                                                  int msgsize);
 };
 
@@ -191,9 +276,12 @@ struct ptlrpc_sec_type {
         struct module          *pst_owner;
         char                   *pst_name;
         atomic_t                pst_inst;       /* instance, debug only */
-        ptlrpcs_flavor_t        pst_flavor;
+        __u32                   pst_flavor;     /* major flavor */
         struct ptlrpc_secops   *pst_ops;
 };
+
+#define PTLRPC_SEC_FL_MDS               0x0001 /* outgoing from MDS */
+#define PTLRPC_SEC_FL_REVERSE           0x0002 /* reverse sec */
 
 #define PTLRPC_CREDCACHE_NR     8
 #define PTLRPC_CREDCACHE_MASK   (PTLRPC_CREDCACHE_NR - 1)
@@ -202,22 +290,22 @@ struct ptlrpc_sec {
         struct ptlrpc_sec_type *ps_type;
         struct list_head        ps_credcache[PTLRPC_CREDCACHE_NR];
         spinlock_t              ps_lock;        /* protect cred cache */
-        __u32                   ps_sectype;
-        ptlrpcs_flavor_t        ps_flavor;
+        __u32                   ps_flavor;
         atomic_t                ps_refcount;
         atomic_t                ps_credcount;
         struct obd_import      *ps_import;
         /* actual security model need initialize following fields */
         unsigned long           ps_expire;      /* cache expire interval */
         unsigned long           ps_nextgc;      /* next gc time */
-        unsigned int            ps_flags;
+        unsigned long           ps_flags;
 };
 
 /* sec.c */
 int  ptlrpcs_register(struct ptlrpc_sec_type *type);
 int  ptlrpcs_unregister(struct ptlrpc_sec_type *type);
 
-struct ptlrpc_sec * ptlrpcs_sec_create(ptlrpcs_flavor_t *flavor,
+struct ptlrpc_sec * ptlrpcs_sec_create(__u32 flavor,
+                                       unsigned long flags,
                                        struct obd_import *import,
                                        const char *pipe_dir,
                                        void *pipe_data);
@@ -277,9 +365,10 @@ static inline int ptlrpcs_cred_check_uptodate(struct ptlrpc_cred *cred)
         return 1;
 }
 
-static inline int ptlrpcs_est_req_payload(struct ptlrpc_sec *sec,
+static inline int ptlrpcs_est_req_payload(struct ptlrpc_request *req,
                                           int datasize)
 {
+        struct ptlrpc_sec *sec = req->rq_cred->pc_sec;
         struct ptlrpc_secops *ops;
 
         LASSERT(sec);
@@ -288,14 +377,15 @@ static inline int ptlrpcs_est_req_payload(struct ptlrpc_sec *sec,
 
         ops = sec->ps_type->pst_ops;
         if (ops->est_req_payload)
-                return ops->est_req_payload(sec, datasize);
+                return ops->est_req_payload(sec, req, datasize);
         else
                 return 0;
 }
 
-static inline int ptlrpcs_est_rep_payload(struct ptlrpc_sec *sec,
+static inline int ptlrpcs_est_rep_payload(struct ptlrpc_request *req,
                                           int datasize)
 {
+        struct ptlrpc_sec *sec = req->rq_cred->pc_sec;
         struct ptlrpc_secops *ops;
 
         LASSERT(sec);
@@ -304,33 +394,27 @@ static inline int ptlrpcs_est_rep_payload(struct ptlrpc_sec *sec,
 
         ops = sec->ps_type->pst_ops;
         if (ops->est_rep_payload)
-                return ops->est_rep_payload(sec, datasize);
+                return ops->est_rep_payload(sec, req, datasize);
         else
                 return 0;
 }
 
 static inline int add_deny_security(char *sec, struct list_head *head)
 {
-        int rc = 0;
-        deny_sec_t      *p_deny_sec = NULL;
+        deny_sec_t     *p_deny_sec = NULL;
+        int             rc = 0;
 
         LASSERT(sec != NULL);
 
         OBD_ALLOC(p_deny_sec, sizeof(*p_deny_sec));
-        if (p_deny_sec == NULL) return -ENOMEM;
+        if (p_deny_sec == NULL)
+                return -ENOMEM;
 
-        if (strcmp(sec, "null") == 0) {
-                p_deny_sec->sec.flavor = PTLRPC_SEC_NULL;
-                p_deny_sec->sec.subflavor = PTLRPC_SEC_NULL;
-        }else if (strcmp(sec, "krb5i") == 0) {
-               p_deny_sec->sec.flavor = PTLRPC_SEC_GSS;
-               p_deny_sec->sec.subflavor = PTLRPC_SEC_GSS_KRB5I;
-        }else if (strcmp(sec, "krb5p") == 0) {
-               p_deny_sec->sec.flavor = PTLRPC_SEC_GSS;
-               p_deny_sec->sec.subflavor = PTLRPC_SEC_GSS_KRB5P;
-        }else{
-               CERROR("unrecognized security type %s\n", (char*) sec);
-               GOTO(out, rc = -EINVAL);
+        p_deny_sec->flavor = ptlrpcs_name2flavor(sec);
+        if (p_deny_sec->flavor == PTLRPCS_FLVR_INVALID) {
+                CERROR("unrecognized security type %s\n", (char*) sec);
+                rc = -EINVAL;
+                goto out;
         }
 
         list_add_tail(&p_deny_sec->list, head);
@@ -377,7 +461,7 @@ struct ptlrpc_reply_state;
 struct ptlrpc_svcsec {
         struct module           *pss_owner;
         char                    *pss_name;
-        ptlrpcs_flavor_t         pss_flavor;
+        __u32                    pss_flavor;    /* major flavor */
         int                      pss_sec_size;
 
         int                    (*accept)      (struct ptlrpc_request *req,
@@ -398,37 +482,6 @@ struct ptlrpc_svcsec {
 #define SVC_LOGIN       4
 #define SVC_LOGOUT      5
 
-/* FIXME
- * this should be a gss internal structure. fix these when we
- * sort out the flavor issues.
- */
-
-typedef struct rawobj_s {
-        __u32           len;
-        __u8           *data;
-} rawobj_t;
-
-/* on-the-wire gss cred: */
-struct rpc_gss_wire_cred {
-        __u32                   gc_v;           /* version */
-        __u32                   gc_proc;        /* control procedure */
-        __u32                   gc_seq;         /* sequence number */
-        __u32                   gc_svc;         /* service */
-        rawobj_t                gc_ctx;         /* context handle */
-};
-
-struct gss_svc_data {
-        __u32                           subflavor; /* XXX */
-        /* decoded gss client cred: */
-        struct rpc_gss_wire_cred        clcred;
-        /* internal used status */
-        unsigned int                    is_init:1,
-                                        is_init_continue:1,
-                                        is_err_notify:1,
-                                        is_fini:1;
-        int                             reserve_len;
-};
-
 int svcsec_register(struct ptlrpc_svcsec *ss);
 int svcsec_unregister(struct ptlrpc_svcsec *ss);
 int svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res);
@@ -448,5 +501,7 @@ void svcsec_free_reply_state(struct ptlrpc_reply_state *rs);
 /* svcsec_null.c */
 int svcsec_null_init(void);
 int svcsec_null_exit(void);
+
+#endif /* __KERNEL__ */
 
 #endif /* __LINUX_SEC_H_ */

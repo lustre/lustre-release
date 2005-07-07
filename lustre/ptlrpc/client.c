@@ -217,6 +217,11 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
         if (request->rq_ptlrpcs_err)
                 GOTO(out_cred, rc = -EPERM);
 
+        /* set default sec flavor for this req. in the future we might need
+         * increase security strengh, e.g. AUTH -> PRIV
+         */
+        request->rq_req_secflvr = imp->imp_sec->ps_flavor;
+
         rc = lustre_pack_request(request, count, lengths, bufs);
         if (rc) {
                 CERROR("cannot pack request %d\n", rc);

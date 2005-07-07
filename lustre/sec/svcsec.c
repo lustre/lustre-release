@@ -38,48 +38,47 @@
 #include <linux/lustre_sec.h>
 
 static spinlock_t svcsecs_lock = SPIN_LOCK_UNLOCKED;
-static struct ptlrpc_svcsec *svcsecs[PTLRPC_SEC_MAX_FLAVORS] = {
+static struct ptlrpc_svcsec *svcsecs[PTLRPCS_FLVR_MAJOR_MAX] = {
         NULL,
 };
 
 int svcsec_register(struct ptlrpc_svcsec *sec)
 {
-        __u32 flavor = sec->pss_flavor.flavor;
+        __u32 major = sec->pss_flavor;
 
-        if (flavor >= PTLRPC_SEC_MAX_FLAVORS)
+        if (major >= PTLRPCS_FLVR_MAJOR_MAX)
                 return -EINVAL;
 
         spin_lock(&svcsecs_lock);
-        if (svcsecs[flavor]) {
+        if (svcsecs[major]) {
                 spin_unlock(&svcsecs_lock);
                 return -EALREADY;
         }
-        svcsecs[flavor] = sec;
+        svcsecs[major] = sec;
         spin_unlock(&svcsecs_lock);
 
-        CDEBUG(D_SEC, "Registered svc security module %s\n", sec->pss_name);
+        CWARN("%s: registered\n", sec->pss_name);
         return 0;
 }
 
 int svcsec_unregister(struct ptlrpc_svcsec *sec)
 {
-        __u32 flavor = sec->pss_flavor.flavor;
+        __u32 major = sec->pss_flavor;
 
-        if (flavor >= PTLRPC_SEC_MAX_FLAVORS)
-                return -EINVAL;
+        LASSERT(major < PTLRPCS_FLVR_MAJOR_MAX);
 
         spin_lock(&svcsecs_lock);
-        if (!svcsecs[flavor]) {
+        if (!svcsecs[major]) {
                 spin_unlock(&svcsecs_lock);
                 return -EINVAL;
         }
 
-        LASSERT(svcsecs[flavor] == sec);
+        LASSERT(svcsecs[major] == sec);
 
-        CDEBUG(D_SEC, "Unregistered svc security module %s\n", sec->pss_name);
-        svcsecs[flavor] = NULL;
+        svcsecs[major] = NULL;
         spin_unlock(&svcsecs_lock);
 
+        CWARN("%s: unregistered\n", sec->pss_name);
         return 0;
 }
 
@@ -87,12 +86,13 @@ static
 struct ptlrpc_svcsec * flavor2svcsec(__u32 flavor)
 {
         struct ptlrpc_svcsec *sec;
+        __u32 major = SEC_FLAVOR_MAJOR(flavor);
 
-        if (flavor >= PTLRPC_SEC_MAX_FLAVORS)
+        if (major >= PTLRPCS_FLVR_MAJOR_MAX)
                 return NULL;
 
         spin_lock(&svcsecs_lock);
-        sec = svcsecs[flavor];
+        sec = svcsecs[major];
         if (sec && !try_module_get(sec->pss_owner))
                 sec = NULL;
         spin_unlock(&svcsecs_lock);
@@ -201,18 +201,18 @@ int svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
 
         sec_hdr = (struct ptlrpcs_wire_hdr *) req->rq_reqbuf;
         sec_hdr->flavor = le32_to_cpu(sec_hdr->flavor);
-        sec_hdr->sectype = le32_to_cpu(sec_hdr->sectype);
         sec_hdr->msg_len = le32_to_cpu(sec_hdr->msg_len);
         sec_hdr->sec_len = le32_to_cpu(sec_hdr->sec_len);
 
         /* sanity check */
-        switch (sec_hdr->sectype) {
-        case PTLRPC_SEC_TYPE_NONE:
-        case PTLRPC_SEC_TYPE_AUTH:
-        case PTLRPC_SEC_TYPE_PRIV:
+        switch (SEC_FLAVOR_SVC(sec_hdr->flavor)) {
+        case PTLRPCS_SVC_NONE:
+        case PTLRPCS_SVC_AUTH:
+        case PTLRPCS_SVC_PRIV:
                 break;
         default:
-                CERROR("unknown security type %d\n", sec_hdr->sectype);
+                CERROR("unknown security svc %d\n",
+                       SEC_FLAVOR_SVC(sec_hdr->flavor));
                 RETURN(SVC_DROP);
         }
 
@@ -228,8 +228,14 @@ int svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
                 CERROR("drop msg: unsupported flavor %d\n", sec_hdr->flavor);
                 RETURN(SVC_DROP);
         }
-        LASSERT(sec->accept);
 
+        /* flavor in the wire header might not be the real "end user" flavor,
+         * we set it here anyway, later accept() might override with correct
+         * value.
+         */
+        req->rq_req_secflvr = sec_hdr->flavor;
+
+        LASSERT(sec->accept);
         rc = sec->accept(req, res);
 
         switch (rc) {
@@ -261,7 +267,7 @@ void svcsec_cleanup_req(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(svcsec);
-        LASSERT(svcsec->cleanup_req || !req->rq_sec_svcdata);
+        LASSERT(svcsec->cleanup_req || !req->rq_svcsec_data);
 
         if (svcsec->cleanup_req)
                 svcsec->cleanup_req(svcsec, req);

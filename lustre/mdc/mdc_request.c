@@ -806,26 +806,19 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                    memcmp(key, "sec", keylen) == 0) {
                 struct client_obd *cli = &exp->exp_obd->u.cli;
 
-                if (vallen == strlen("null") &&
-                    memcmp(val, "null", vallen) == 0) {
-                        cli->cl_sec_flavor = PTLRPC_SEC_NULL;
-                        cli->cl_sec_subflavor = 0;
-                        RETURN(0);
+                cli->cl_sec_flavor = ptlrpcs_name2flavor(val);
+                if (cli->cl_sec_flavor == PTLRPCS_FLVR_INVALID) {
+                        CERROR("unrecognized security type %s\n", (char*) val);
+                        RETURN(-EINVAL);
                 }
-                if (vallen == strlen("krb5i") &&
-                    memcmp(val, "krb5i", vallen) == 0) {
-                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
-                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5I;
-                        RETURN(0);
-                }
-                if (vallen == strlen("krb5p") &&
-                    memcmp(val, "krb5p", vallen) == 0) {
-                        cli->cl_sec_flavor = PTLRPC_SEC_GSS;
-                        cli->cl_sec_subflavor = PTLRPC_SEC_GSS_KRB5P;
-                        RETURN(0);
-                }
-                CERROR("unrecognized security type %s\n", (char*) val);
-                rc = -EINVAL;
+
+                RETURN(0);
+        } else if (keylen == strlen("sec_flags") &&
+                   memcmp(key, "sec_flags", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                cli->cl_sec_flags = *((unsigned long *) val);
+                RETURN(0);
         } else if (keylen == strlen("flush_cred") &&
                    memcmp(key, "flush_cred", keylen) == 0) {
                 struct client_obd *cli = &exp->exp_obd->u.cli;
@@ -833,7 +826,7 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 if (cli->cl_import)
                         ptlrpcs_import_flush_creds(cli->cl_import,
                                                    *((uid_t *) val));
-                rc = 0;
+                RETURN(0);
         } else if (keylen == strlen("async") && memcmp(key, "async", keylen) == 0) {
                 struct client_obd *cl = &exp->exp_obd->u.cli;
                 if (vallen != sizeof(int))

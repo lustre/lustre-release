@@ -36,6 +36,7 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_sec.h>
 
 #include "mds_internal.h"
 
@@ -239,6 +240,7 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = { 0 };
+        unsigned long sec_flags = PTLRPC_SEC_FL_MDS;
         int i, rc = 0;
         ENTRY;
 
@@ -259,12 +261,19 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
         if (mds->mds_ost_sec) {
                 rc = obd_set_info(mds->mds_dt_obd->obd_self_export,
                                   strlen("sec"), "sec",
-                                  strlen(mds->mds_ost_sec),
-                                  mds->mds_ost_sec);
+                                  strlen(mds->mds_ost_sec), mds->mds_ost_sec);
                 if (rc) {
                         mds->mds_dt_obd = ERR_PTR(rc);
                         RETURN(rc);
                 }
+        }
+
+        rc = obd_set_info(mds->mds_dt_obd->obd_self_export,
+                          strlen("sec_flags"), "sec_flags",
+                          sizeof(sec_flags), &sec_flags);
+        if (rc) {
+                mds->mds_dt_obd = ERR_PTR(rc);
+                RETURN(rc);
         }
 
         CDEBUG(D_HA, "obd: %s osc: %s lov_name: %s\n",

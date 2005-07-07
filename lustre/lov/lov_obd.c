@@ -2091,7 +2091,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         } else if (KEY_IS("unlinked") || KEY_IS("unrecovery")) {
                 if (vallen != 0)
                         RETURN(-EINVAL);
-        } else if (KEY_IS("sec")) {
+        } else if (KEY_IS("sec") || KEY_IS("sec_flags")) {
                 struct lov_tgt_desc *tgt;
                 struct obd_export *exp;
                 int rc = 0, err, i;

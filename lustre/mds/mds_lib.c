@@ -47,6 +47,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_sec.h>
 #include <linux/lustre_ucache.h>
 #include "mds_internal.h"
 
@@ -876,6 +877,9 @@ static inline void drop_ucred_lsd(struct lvfs_ucred *ucred)
  * root could set any group_info if we allowed setgroups, while
  * normal user only could 'reduce' their group members -- which
  * is somewhat expensive.
+ *
+ * authenticated as mds user (using mds service credential) could
+ * bypass all checkings.
  */
 int mds_init_ucred(struct lvfs_ucred *ucred,
                    struct ptlrpc_request *req,
@@ -894,46 +898,56 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
         LASSERT(rsd);
         LASSERT(rsd->rsd_ngroups <= LUSTRE_MAX_GROUPS);
 
-        /* XXX We'v no dedicated bits indicating whether GSS is used,
-         * and authenticated/mapped uid is valid. currently we suppose
-         * gss must initialize rq_sec_svcdata.
-         */
-        if (req->rq_sec_svcdata && req->rq_auth_uid == -1) {
+        if (SEC_FLAVOR_MAJOR(req->rq_req_secflvr) == PTLRPCS_FLVR_MAJOR_GSS &&
+            (SEC_FLAVOR_SVC(req->rq_req_secflvr) == PTLRPCS_SVC_AUTH ||
+             SEC_FLAVOR_SVC(req->rq_req_secflvr) == PTLRPCS_SVC_PRIV))
+                strong_sec = 1;
+        else
+                strong_sec = 0;
+
+        LASSERT(!(req->rq_remote_realm && !strong_sec));
+
+        if (strong_sec && req->rq_auth_uid == -1) {
                 CWARN("user not authenticated, deny access\n");
                 RETURN(-EPERM);
         }
 
-        strong_sec = (req->rq_auth_uid != -1);
-        LASSERT(!(req->rq_remote_realm && !strong_sec));
+        if (req->rq_auth_usr_mds)
+                goto get_lsd;
 
-        /* if we use strong authentication for a local client, we
-         * expect the uid which client claimed is true.
+        /* if we use strong authentication, we expect the uid which
+         * client claimed is true.
          */
-        if (!med->med_remote && strong_sec &&
-            req->rq_auth_uid != rsd->rsd_uid) {
-                CWARN("nid "LPX64": UID %u was authenticated while client "
-                      "claimed %u, enforce to be %u\n",
-                      peernid, req->rq_auth_uid, rsd->rsd_uid,
-                      req->rq_auth_uid);
-                if (rsd->rsd_uid != rsd->rsd_fsuid)
-                        rsd->rsd_uid = req->rq_auth_uid;
-                else
-                        rsd->rsd_uid = rsd->rsd_fsuid = req->rq_auth_uid;
-        }
+        if (strong_sec) {
+                if (!med->med_remote) {
+                        if (req->rq_auth_uid != rsd->rsd_uid) {
+                                CERROR("local client "LPU64": auth uid %u "
+                                       "while client claim %u:%u/%u:%u\n",
+                                       peernid, req->rq_auth_uid,
+                                       rsd->rsd_uid, rsd->rsd_gid,
+                                       rsd->rsd_fsuid, rsd->rsd_fsgid);
+                                RETURN(-EPERM);
+                        }
+                } else {
+                        if (req->rq_mapped_uid == MDS_IDMAP_NOTFOUND) {
+                                CWARN("no mapping found, deny\n");
+                                RETURN(-EPERM);
+                        }
 
-        if (med->med_remote) {
-                int rc;
+                        if (mds_req_secdesc_do_map(med, rsd))
+                                RETURN(-EPERM);
 
-                if (req->rq_mapped_uid == MDS_IDMAP_NOTFOUND) {
-                        CWARN("no mapping found, deny\n");
-                        RETURN(-EPERM);
+                        if (req->rq_mapped_uid != rsd->rsd_uid) {
+                                CERROR("remote client "LPU64": auth uid %u "
+                                       "while client claim %u:%u/%u:%u\n",
+                                       peernid, req->rq_auth_uid,
+                                       rsd->rsd_uid, rsd->rsd_gid,
+                                       rsd->rsd_fsuid, rsd->rsd_fsgid);
+                        }
                 }
-
-                rc = mds_req_secdesc_do_map(med, rsd);
-                if (rc)
-                        RETURN(rc);
         }
 
+get_lsd:
         /* now lsd come into play */
         ucred->luc_ginfo = NULL;
         ucred->luc_lsd = lsd = mds_get_lsd(rsd->rsd_uid);
@@ -943,12 +957,15 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                 RETURN(-EPERM);
         }
 
+        lsd_perms = mds_lsd_get_perms(lsd, med->med_remote, 0, peernid);
+
+        if (req->rq_auth_usr_mds)
+                goto squash_root;
+
         /* find out the setuid/setgid attempt */
         setuid = (rsd->rsd_uid != rsd->rsd_fsuid);
         setgid = (rsd->rsd_gid != rsd->rsd_fsgid ||
                   rsd->rsd_gid != lsd->lsd_gid);
-
-        lsd_perms = mds_lsd_get_perms(lsd, med->med_remote, 0, peernid);
 
         /* check permission of setuid */
         if (setuid && !(lsd_perms & LSD_PERM_SETUID)) {
@@ -959,11 +976,13 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
 
         /* check permission of setgid */
         if (setgid && !(lsd_perms & LSD_PERM_SETGID)) {
-                CWARN("mds blocked setgid attempt (%u/%u -> %u) from "LPU64"\n",
-                      rsd->rsd_gid, rsd->rsd_fsgid, lsd->lsd_gid, peernid);
+                CWARN("mds blocked setgid attempt (%u:%u/%u:%u -> %u) from "
+                      LPU64"\n", rsd->rsd_uid, rsd->rsd_gid,
+                      rsd->rsd_fsuid, rsd->rsd_fsgid, lsd->lsd_gid, peernid);
                 RETURN(-EPERM);
         }
 
+squash_root:
         root_squashed = mds_squash_root(mds, rsd, &peernid); 
 
         /* remove privilege for non-root user */

@@ -313,13 +313,17 @@ struct ptlrpc_request {
         __u64 rq_xid;
         struct list_head rq_replay_list;
 
-        struct ptlrpc_cred   *rq_cred;        /* client side credit */
-        struct ptlrpc_svcsec *rq_svcsec;      /* server side security */
-        /* XXX temporarily put here XXX */
-        void                 *rq_sec_svcdata; /* server security data */
-        unsigned int          rq_remote_realm;/* from remote realm */
-        uid_t                 rq_auth_uid;
-        uid_t                 rq_mapped_uid;
+        struct ptlrpc_cred     *rq_cred;           /* client side */
+        struct ptlrpc_svcsec   *rq_svcsec;         /* server side */
+        /* flavor of request, on both client & server */
+        __u32                   rq_req_secflvr;   
+        /* server side security tracking data, need cleanup */
+        void                   *rq_svcsec_data;    /* server security data */
+        unsigned int            rq_remote_realm:1, /* from remote realm */
+                                rq_auth_usr_mds:1, /* auth as mds svc cred */
+                                rq_auth_usr_oss:1; /* auth as oss svc cred */
+        uid_t                   rq_auth_uid;
+        uid_t                   rq_mapped_uid;
 
         char *rq_reqbuf;       /* backend request buffer */
         int   rq_reqbuf_len;   /* backend request buffer length */

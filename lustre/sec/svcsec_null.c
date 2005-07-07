@@ -43,13 +43,15 @@ int null_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
         struct ptlrpcs_wire_hdr *hdr = buf_to_sec_hdr(req->rq_reqbuf);
         ENTRY;
 
-        LASSERT(hdr->flavor == PTLRPC_SEC_NULL);
+        LASSERT(SEC_FLAVOR_MAJOR(hdr->flavor) == PTLRPCS_FLVR_MAJOR_NULL);
 
         if (hdr->sec_len != 0) {
                 CERROR("security payload %d not zero\n", hdr->sec_len);
                 *res = PTLRPCS_REJECTEDCRED;
                 RETURN(SVC_DROP);
         }
+
+        req->rq_req_secflvr = PTLRPCS_FLVR_NULL;
 
         req->rq_reqmsg = (struct lustre_msg *)(hdr + 1);
         req->rq_reqlen = hdr->msg_len;
@@ -70,8 +72,7 @@ int null_svcsec_authorize(struct ptlrpc_request *req)
         LASSERT(rs->rs_repbuf_len >= 4 * 4);
 
         hdr = buf_to_sec_hdr(rs->rs_repbuf);
-        hdr->flavor = cpu_to_le32(PTLRPC_SEC_NULL);
-        hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_AUTH);
+        hdr->flavor = cpu_to_le32(PTLRPCS_FLVR_NULL);
         hdr->msg_len = cpu_to_le32(req->rq_replen);
         hdr->sec_len = cpu_to_le32(0);
 
@@ -81,8 +82,8 @@ int null_svcsec_authorize(struct ptlrpc_request *req)
 
 static struct ptlrpc_svcsec null_svcsec = {
         .pss_owner      = THIS_MODULE,
-        .pss_name       = "NULL_SVCSEC",
-        .pss_flavor     = {PTLRPC_SEC_NULL, 0},
+        .pss_name       = "svcsec.null",
+        .pss_flavor     = PTLRPCS_FLVR_MAJOR_NULL,
         .accept         = null_svcsec_accept,
         .authorize      = null_svcsec_authorize,
 };

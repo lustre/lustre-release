@@ -113,7 +113,8 @@ struct super_operations lustre_super_operations =
         .put_super     = lustre_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
-        .umount_lustre = ll_umount_lustre
+        .umount_lustre = ll_umount_lustre,
+        .show_options  = ll_show_options,
 };
 
 struct file_system_type lustre_lite_fs_type = {

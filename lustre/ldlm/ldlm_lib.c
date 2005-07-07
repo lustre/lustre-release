@@ -542,14 +542,13 @@ static inline int ptlrpc_peer_is_local(struct ptlrpc_peer *peer)
  *      EPERM       found, refuse
  */
 
-static int check_deny_list(struct list_head *head, ptlrpcs_flavor_t *p_flavor)
+static int check_deny_list(struct list_head *head, __u32 flavor)
 {
         deny_sec_t *p_deny_sec = NULL;
         deny_sec_t *n_deny_sec = NULL;
 
         list_for_each_entry_safe(p_deny_sec, n_deny_sec, head, list) {
-                if ((p_deny_sec->sec.flavor == p_flavor->flavor) &&
-                    (p_deny_sec->sec.subflavor == p_flavor->subflavor))
+                if (p_deny_sec->flavor == flavor)
                         return -EPERM;
         }
         return 0;
@@ -557,27 +556,18 @@ static int check_deny_list(struct list_head *head, ptlrpcs_flavor_t *p_flavor)
 
 int target_check_deny_sec(struct obd_device *target, struct ptlrpc_request *req)
 {
-        struct gss_svc_data *svcdata;
-        ptlrpcs_flavor_t flavor;
+        __u32 flavor;
         int rc = 0;
 
-        /* XXX hacking */
-        svcdata = (struct gss_svc_data *) req->rq_sec_svcdata;
-        if (svcdata == NULL) {
-                flavor.flavor = PTLRPC_SEC_NULL;
-                flavor.subflavor = 0;
-        } else {
-                flavor.flavor = PTLRPC_SEC_GSS;
-                flavor.subflavor = svcdata->subflavor;
-        }
+        flavor = req->rq_req_secflvr;
 
         if (!strcmp(target->obd_type->typ_name, LUSTRE_MDS_NAME)) {
                 spin_lock(&target->u.mds.mds_denylist_lock);
-                rc = check_deny_list(&target->u.mds.mds_denylist, &flavor);
+                rc = check_deny_list(&target->u.mds.mds_denylist, flavor);
                 spin_unlock(&target->u.mds.mds_denylist_lock);
         } else if (!strcmp(target->obd_type->typ_name, "obdfilter")) {
                 spin_lock(&target->u.filter.fo_denylist_lock);
-                rc = check_deny_list(&target->u.filter.fo_denylist, &flavor);
+                rc = check_deny_list(&target->u.filter.fo_denylist, flavor);
                 spin_unlock(&target->u.filter.fo_denylist_lock);
         }
 
@@ -931,7 +921,7 @@ ptlrpc_clone_req( struct ptlrpc_request *orig_req)
         memcpy(copy_reqmsg, orig_req->rq_reqmsg, orig_req->rq_reqlen);
         /* the copied req takes over the reply state and security data */
         orig_req->rq_reply_state = NULL;
-        orig_req->rq_sec_svcdata = NULL;
+        orig_req->rq_svcsec_data = NULL;
 
         copy_req->rq_reqmsg = copy_reqmsg;
         class_export_get(copy_req->rq_export);

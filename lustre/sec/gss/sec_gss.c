@@ -76,10 +76,13 @@ struct rpc_clnt;
 #include "gss_internal.h"
 #include "gss_api.h"
 
-#define GSS_CREDCACHE_EXPIRE    (60)               /* 1 minute */
+#define GSS_CREDCACHE_EXPIRE    (30 * 60)          /* 30 minute */
+/* not used now */
+#if 0
 #define GSS_CRED_EXPIRE         (8 * 60 * 60)      /* 8 hours */
 #define GSS_CRED_SIGN_SIZE      (1024)
 #define GSS_CRED_VERIFY_SIZE    (56)
+#endif
 
 #define LUSTRE_PIPEDIR          "/lustre"
 
@@ -113,8 +116,7 @@ static int secinit_compose_request(struct obd_import *imp,
 
         /* security wire hdr */
         hdr = buf_to_sec_hdr(buf);
-        hdr->flavor  = cpu_to_le32(PTLRPC_SEC_GSS);
-        hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_NONE);
+        hdr->flavor  = cpu_to_le32(PTLRPCS_FLVR_GSS_NONE);
         hdr->msg_len = cpu_to_le32(lmsg_size);
         hdr->sec_len = cpu_to_le32(8 * 4 + token_size);
 
@@ -137,10 +139,10 @@ static int secinit_compose_request(struct obd_import *imp,
 
         /* gss hdr */
         *p++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);     /* gss version */
-        *p++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5I);       /* subflavor */
-        *p++ = cpu_to_le32(PTLRPC_GSS_PROC_INIT);       /* proc */
+        *p++ = cpu_to_le32(PTLRPCS_FLVR_KRB5I);         /* subflavor */
+        *p++ = cpu_to_le32(PTLRPCS_GSS_PROC_INIT);      /* proc */
         *p++ = cpu_to_le32(0);                          /* seq */
-        *p++ = cpu_to_le32(PTLRPC_GSS_SVC_NONE);        /* service */
+        *p++ = cpu_to_le32(PTLRPCS_GSS_SVC_NONE);       /* service */
         *p++ = cpu_to_le32(0);                          /* context handle */
 
         /* plus lustre svc type */
@@ -175,7 +177,6 @@ static int secinit_parse_reply(char *repbuf, int replen,
         }
 
         hdr->flavor = le32_to_cpu(hdr->flavor);
-        hdr->sectype = le32_to_cpu(hdr->sectype);
         hdr->msg_len = le32_to_cpu(hdr->msg_len);
         hdr->sec_len = le32_to_cpu(hdr->sec_len);
 
@@ -183,8 +184,7 @@ static int secinit_parse_reply(char *repbuf, int replen,
         sec_len = le32_to_cpu(p[3]);
 
         /* sanity checks */
-        if (hdr->flavor != PTLRPC_SEC_GSS ||
-            hdr->sectype != PTLRPC_SEC_TYPE_NONE) {
+        if (hdr->flavor != PTLRPCS_FLVR_GSS_NONE) {
                 CERROR("unexpected reply\n");
                 return -EINVAL;
         }
@@ -972,10 +972,10 @@ static int gss_cred_sign(struct ptlrpc_cred *cred,
         spin_unlock(&ctx->gc_seq_lock);
 
         *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);    /* version */
-        *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5I);      /* subflavor */
+        *vp++ = cpu_to_le32(PTLRPCS_FLVR_KRB5I);        /* subflavor */
         *vp++ = cpu_to_le32(ctx->gc_proc);              /* proc */
         *vp++ = cpu_to_le32(seqnum);                    /* seq */
-        *vp++ = cpu_to_le32(PTLRPC_GSS_SVC_INTEGRITY);  /* service */
+        *vp++ = cpu_to_le32(PTLRPCS_GSS_SVC_INTEGRITY); /* service */
         vlen -= 5 * 4;
 
         if (rawobj_serialize(&ctx->gc_wire_ctx, &vp, &vlen)) {
@@ -1044,10 +1044,10 @@ static int gss_cred_verify(struct ptlrpc_cred *cred,
         vlen -= 3 * 4;
 
         switch (proc) {
-        case PTLRPC_GSS_PROC_DATA:
+        case PTLRPCS_GSS_PROC_DATA:
                 seq = le32_to_cpu(*vp++);
                 svc = le32_to_cpu(*vp++);
-                if (svc != PTLRPC_GSS_SVC_INTEGRITY) {
+                if (svc != PTLRPCS_GSS_SVC_INTEGRITY) {
                         CERROR("Unknown svc %d\n", svc);
                         RETURN(-EPROTO);
                 }
@@ -1097,7 +1097,7 @@ static int gss_cred_verify(struct ptlrpc_cred *cred,
 proc_data_out:
                 gss_put_ctx(ctx);
                 break;
-        case PTLRPC_GSS_PROC_ERR:
+        case PTLRPCS_GSS_PROC_ERR:
                 major = le32_to_cpu(*vp++);
                 minor = le32_to_cpu(*vp++);
                 /* server return NO_CONTEXT might be caused by context expire
@@ -1172,10 +1172,10 @@ static int gss_cred_seal(struct ptlrpc_cred *cred,
         spin_unlock(&ctx->gc_seq_lock);
 
         *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_VERSION);    /* version */
-        *vp++ = cpu_to_le32(PTLRPC_SEC_GSS_KRB5P);      /* subflavor */
+        *vp++ = cpu_to_le32(PTLRPCS_FLVR_KRB5P);        /* subflavor */
         *vp++ = cpu_to_le32(ctx->gc_proc);              /* proc */
         *vp++ = cpu_to_le32(seqnum);                    /* seq */
-        *vp++ = cpu_to_le32(PTLRPC_GSS_SVC_PRIVACY);    /* service */
+        *vp++ = cpu_to_le32(PTLRPCS_GSS_SVC_PRIVACY);   /* service */
         vlen -= 5 * 4;
 
         if (rawobj_serialize(&ctx->gc_wire_ctx, &vp, &vlen)) {
@@ -1256,8 +1256,8 @@ static int gss_cred_unseal(struct ptlrpc_cred *cred,
         vlen -= 5 * 4;
 
         switch (proc) {
-        case PTLRPC_GSS_PROC_DATA:
-                if (svc != PTLRPC_GSS_SVC_PRIVACY) {
+        case PTLRPCS_GSS_PROC_DATA:
+                if (svc != PTLRPCS_GSS_SVC_PRIVACY) {
                         CERROR("Unknown svc %d\n", svc);
                         RETURN(-EPROTO);
                 }
@@ -1346,14 +1346,16 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
         atomic_inc(&cred->pc_refcount);
 
         gcred = container_of(cred, struct gss_cred, gc_base);
-        gcred->gc_ctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
+        gcred->gc_ctx->gc_proc = PTLRPCS_GSS_PROC_DESTROY;
 
         CDEBUG(D_SEC, "client destroy gss cred %p(%u@%s)\n",
                gcred, cred->pc_uid, imp->imp_target_uuid.uuid);
 
         lmsg_size = lustre_msg_size(0, NULL);
+        req.rq_req_secflvr = cred->pc_sec->ps_flavor;
+        req.rq_cred = cred;
         req.rq_reqbuf_len = sizeof(*hdr) + lmsg_size +
-                            ptlrpcs_est_req_payload(cred->pc_sec, lmsg_size);
+                            ptlrpcs_est_req_payload(&req, lmsg_size);
 
         OBD_ALLOC(req.rq_reqbuf, req.rq_reqbuf_len);
         if (!req.rq_reqbuf) {
@@ -1365,8 +1367,7 @@ static void destroy_gss_context(struct ptlrpc_cred *cred)
 
         /* wire hdr */
         hdr = buf_to_sec_hdr(req.rq_reqbuf);
-        hdr->flavor  = cpu_to_le32(PTLRPC_SEC_GSS);
-        hdr->sectype = cpu_to_le32(PTLRPC_SEC_TYPE_AUTH);
+        hdr->flavor  = cpu_to_le32(PTLRPCS_FLVR_GSS_AUTH);
         hdr->msg_len = cpu_to_le32(lmsg_size);
         hdr->sec_len = cpu_to_le32(0);
 
@@ -1633,7 +1634,7 @@ static struct rpc_pipe_ops gss_upcall_ops = {
  *********************************************/
 
 static
-struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
+struct ptlrpc_sec* gss_create_sec(__u32 flavor,
                                   const char *pipe_dir,
                                   void *pipe_data)
 {
@@ -1642,10 +1643,11 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
 #ifdef __KERNEL__
         char *pos;
         int   pipepath_len;
+        uid_t save_uid;
 #endif
         ENTRY;
 
-        LASSERT(flavor->flavor == PTLRPC_SEC_GSS);
+        LASSERT(SEC_FLAVOR_MAJOR(flavor) == PTLRPCS_FLVR_MAJOR_GSS);
 
         OBD_ALLOC(gsec, sizeof(*gsec));
         if (!gsec) {
@@ -1653,9 +1655,9 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
                 RETURN(NULL);
         }
 
-        gsec->gs_mech = kgss_subflavor_to_mech(flavor->subflavor);
+        gsec->gs_mech = kgss_subflavor_to_mech(SEC_FLAVOR_SUB(flavor));
         if (!gsec->gs_mech) {
-                CERROR("subflavor %d not found\n", flavor->subflavor);
+                CERROR("subflavor 0x%x not found\n", flavor);
                 goto err_free;
         }
 
@@ -1669,6 +1671,10 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
         OBD_ALLOC(gsec->gs_pipepath, pipepath_len);
         if (!gsec->gs_pipepath)
                 goto err_mech_put;
+
+        /* pipe rpc require root permission */
+        save_uid = current->fsuid;
+        current->fsuid = 0;
 
         sprintf(gsec->gs_pipepath, LUSTRE_PIPEDIR"/%s", pipe_dir);
         if (IS_ERR(rpc_mkdir(gsec->gs_pipepath, NULL))) {
@@ -1689,21 +1695,11 @@ struct ptlrpc_sec* gss_create_sec(ptlrpcs_flavor_t *flavor,
 #endif
 
         sec = &gsec->gs_base;
-
-        switch (flavor->subflavor) {
-        case PTLRPC_SEC_GSS_KRB5I:
-                sec->ps_sectype = PTLRPC_SEC_TYPE_AUTH;
-                break;
-        case PTLRPC_SEC_GSS_KRB5P:
-                sec->ps_sectype = PTLRPC_SEC_TYPE_PRIV;
-                break;
-        default:
-                LBUG();
-        }
-
         sec->ps_expire = GSS_CREDCACHE_EXPIRE;
         sec->ps_nextgc = get_seconds() + sec->ps_expire;
         sec->ps_flags = 0;
+
+        current->fsuid = save_uid;
 
         CDEBUG(D_SEC, "Create GSS security instance at %p(external %p)\n",
                gsec, sec);
@@ -1716,6 +1712,7 @@ err_rmdir:
         *pos = 0;
         rpc_rmdir(gsec->gs_pipepath);
 err_free_path:
+        current->fsuid = save_uid;
         OBD_FREE(gsec->gs_pipepath, pipepath_len);
 err_mech_put:
 #endif
@@ -1783,12 +1780,14 @@ struct ptlrpc_cred * gss_create_cred(struct ptlrpc_sec *sec,
         RETURN(cred);
 }
 
-static int gss_estimate_payload(struct ptlrpc_sec *sec, int msgsize)
+static int gss_estimate_payload(struct ptlrpc_sec *sec,
+                                struct ptlrpc_request *req,
+                                int msgsize)
 {
-        switch (sec->ps_sectype) {
-        case PTLRPC_SEC_TYPE_AUTH:
+        switch (SEC_FLAVOR_SVC(req->rq_req_secflvr)) {
+        case PTLRPCS_SVC_AUTH:
                 return GSS_MAX_AUTH_PAYLOAD;
-        case PTLRPC_SEC_TYPE_PRIV:
+        case PTLRPCS_SVC_PRIV:
                 return size_round16(GSS_MAX_AUTH_PAYLOAD + msgsize +
                                     GSS_PRIVBUF_PREFIX_LEN +
                                     GSS_PRIVBUF_SUFFIX_LEN);
@@ -1809,9 +1808,9 @@ static int gss_alloc_reqbuf(struct ptlrpc_sec *sec,
         /* In PRIVACY mode, lustre message is always 0 (already encoded into
          * security payload).
          */
-        privacy = sec->ps_sectype == PTLRPC_SEC_TYPE_PRIV;
+        privacy = (SEC_FLAVOR_SVC(req->rq_req_secflvr) == PTLRPCS_SVC_PRIV);
         msg_payload = privacy ? 0 : lmsg_size;
-        sec_payload = gss_estimate_payload(sec, lmsg_size);
+        sec_payload = gss_estimate_payload(sec, req, lmsg_size);
 
         rc = sec_alloc_reqbuf(sec, req, msg_payload, sec_payload);
         if (rc)
@@ -1845,7 +1844,7 @@ static void gss_free_reqbuf(struct ptlrpc_sec *sec,
         LASSERT(req->rq_reqmsg);
         LASSERT(req->rq_reqlen);
 
-        privacy = sec->ps_sectype == PTLRPC_SEC_TYPE_PRIV;
+        privacy = SEC_FLAVOR_SVC(req->rq_req_secflvr) == PTLRPCS_SVC_PRIV;
         if (privacy) {
                 buf = (char *) req->rq_reqmsg - GSS_PRIVBUF_PREFIX_LEN;
                 LASSERT(buf < req->rq_reqbuf ||
@@ -1870,9 +1869,9 @@ static struct ptlrpc_secops gss_secops = {
 
 static struct ptlrpc_sec_type gss_type = {
         .pst_owner      = THIS_MODULE,
-        .pst_name       = "GSS_SEC",
+        .pst_name       = "sec.gss",
         .pst_inst       = ATOMIC_INIT(0),
-        .pst_flavor     = {PTLRPC_SEC_GSS, 0},
+        .pst_flavor     = PTLRPCS_FLVR_MAJOR_GSS,
         .pst_ops        = &gss_secops,
 };
 

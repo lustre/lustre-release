@@ -89,14 +89,13 @@ crypto_tfm_alg_ivsize(struct crypto_tfm *tfm)
 struct ptlrpc_sec;
 struct ptlrpc_cred;
 
-/* rawobj stuff */
-int rawobj_alloc(rawobj_t *obj, char *buf, int len);
-void rawobj_free(rawobj_t *obj);
-int rawobj_equal(rawobj_t *a, rawobj_t *b);
-int rawobj_dup(rawobj_t *dest, rawobj_t *src);
-int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen);
-int rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen);
-int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen);
+/*
+ * rawobj stuff
+ */
+typedef struct rawobj_s {
+        __u32           len;
+        __u8           *data;
+} rawobj_t;
 
 typedef struct rawobj_buf_s {
         __u32           dataoff;
@@ -104,6 +103,14 @@ typedef struct rawobj_buf_s {
         __u32           buflen;
         __u8           *buf;
 } rawobj_buf_t;
+
+int rawobj_alloc(rawobj_t *obj, char *buf, int len);
+void rawobj_free(rawobj_t *obj);
+int rawobj_equal(rawobj_t *a, rawobj_t *b);
+int rawobj_dup(rawobj_t *dest, rawobj_t *src);
+int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen);
+int rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen);
+int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 
 /*
  * mark of the interface between kernel and lgssd/lsvcgssd
@@ -115,6 +122,27 @@ typedef struct rawobj_buf_s {
  */
 #define LUSTRE_GSS_SVC_MDS      0
 #define LUSTRE_GSS_SVC_OSS      1
+
+
+/* on-the-wire gss cred: */
+struct rpc_gss_wire_cred {
+        __u32                   gc_v;           /* version */
+        __u32                   gc_proc;        /* control procedure */
+        __u32                   gc_seq;         /* sequence number */
+        __u32                   gc_svc;         /* service */
+        rawobj_t                gc_ctx;         /* context handle */
+};
+
+struct gss_svc_data {
+        /* decoded gss client cred: */
+        struct rpc_gss_wire_cred        clcred;
+        /* internal used status */
+        unsigned int                    is_init:1,
+                                        is_init_continue:1,
+                                        is_err_notify:1,
+                                        is_fini:1;
+        int                             reserve_len;
+};
 
 /*
  * data types in gss header
@@ -152,7 +180,7 @@ struct gss_cl_ctx {
 
 struct gss_cred {
         struct ptlrpc_cred      gc_base;
-        ptlrpcs_flavor_t        gc_flavor;
+        __u32                   gc_flavor;
         struct gss_cl_ctx      *gc_ctx;
 };
 
