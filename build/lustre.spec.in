@@ -170,6 +170,27 @@ if [ -f /boot/System.map-%{kversion} ]; then
 else
 	depmod -ae %{kversion} || exit 0
 fi
+for ext in .local "" ; do
+	f=/etc/modprobe.conf$ext
+	if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
+		cat >> $f <<EOF
+install kptlrouter modprobe portals ; modprobe --ignore-install kptlrouter
+install ptlrpc modprobe ksocknal ; modprobe --ignore-install ptlrpc
+install llite modprobe lov osc ; modprobe --ignore-install llite
+alias lustre llite
+EOF
+		break
+	fi
+done
+f=/etc/modules.conf
+if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
+	cat >> $f <<EOF
+add below kptlrouter portals
+add below ptlrpc ksocknal
+add below llite lov osc
+alias lustre llite
+EOF
+fi
 
 %postun modules
 if [ -f /boot/System.map-%{kversion} ]; then
