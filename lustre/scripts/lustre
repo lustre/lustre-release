@@ -10,10 +10,10 @@
 # pidfile: /var/run/lustre.pid
 ### BEGIN INIT INFO
 # Provides: lustre
-# Required-Start:
-# Required-Stop: 
-# Should-Start: scance
-# Should-Stop: scance
+# Required-Start: $network
+# Required-Stop: $network
+# Should-Start:
+# Should-Stop:
 # Default-Start: 
 # Default-Stop: 0 1 2 6
 # Short-Description: Lustre Lite network File System.
