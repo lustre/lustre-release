@@ -499,10 +499,9 @@ libcfs_str2nid(char *str)
 char *
 libcfs_id2str(ptl_process_id_t id)
 {
-        char *str = libcfs_nid2str(id.nid);
-	int   len = strlen(str);
-
-        snprintf(str + len, PTL_NIDSTR_SIZE - len, "-%u", id.pid);
+        char *str = libcfs_next_nidstring();
+        
+        snprintf(str, PTL_NIDSTR_SIZE, "%u-%s", id.pid, libcfs_nid2str(id.nid));
         return str;
 }
 

@@ -1866,7 +1866,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         if (!active) {                          /* don't know peer's nid yet */
                 *peerid = recv_id;
         } else if (peerid->pid != recv_id.pid ||
-                   peerid->pid != recv_id.nid) {
+                   peerid->nid != recv_id.nid) {
                 LCONSOLE_ERROR("Connected successfully to %s on host "
                                "%u.%u.%u.%u, but they claimed they were "
                                "%s; please check your Lustre "
