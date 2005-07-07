@@ -91,7 +91,8 @@ static int connect_echo_client(void)
 	}
 
 	/* attach osc */
-        lustre_cfg_bufs_reset(&bufs, LUSTRE_OSC_NAME);
+        lustre_cfg_bufs_reset(&bufs, osc_dev_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_OSC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, osc_uuid_str.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         err = class_process_config(lcfg);

@@ -176,8 +176,10 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         int err = 0, len = 0;
         ENTRY;
 
+#ifdef __KERNEL__
         if (current->fsuid != 0)
                 RETURN(err = -EACCES);
+#endif
 
         if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
                 RETURN(err = -ENOTTY);
