@@ -375,7 +375,11 @@ test_6g() {
         $RUNAS mkdir $DIR/d6g/d || error
         chmod g+s $DIR/d6g/d || error
         mkdir $DIR/d6g/d/subdir
-	$CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
+        if [ -z "$RUNAS_GID" ]; then
+	    $CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
+        else
+	    $CHECKSTAT -g \#$RUNAS_GID $DIR/d6g/d/subdir || error
+        fi
 }
 run_test 6g "Is new dir in sgid dir inheriting group?"
 
