@@ -2310,8 +2310,8 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         RETURN(rc);
 }
 
-int filter_create_object(struct obd_device *obd, obd_gr group, obd_id id,
-                         obd_uid uid, obd_gid gid)
+int filter_create_object(struct obd_device *obd, obd_gr group,
+                         obd_id id, obd_uid uid, obd_gid gid)
 {
         struct dentry *dparent = NULL;
         struct dentry *dchild = NULL;
@@ -2320,6 +2320,8 @@ int filter_create_object(struct obd_device *obd, obd_gr group, obd_id id,
         int err = 0, rc = 0;
         void *handle = NULL;
         void *lock = NULL;
+        obd_uid ouid;
+        obd_gid ogid;
         ENTRY;
 
         filter = &obd->u.filter;
@@ -2353,20 +2355,26 @@ int filter_create_object(struct obd_device *obd, obd_gr group, obd_id id,
                 GOTO(cleanup, rc = PTR_ERR(handle));
         cleanup_phase = 3;
 
+        /* making ll_vfs_create() to use passed @uid and @gid */
+        if (uid) {
+                ouid = current->fsuid;
+                current->fsuid = uid;
+        }
+        if (gid) {
+                ogid = current->fsgid;
+                current->fsgid = gid;
+        }
+
         rc = ll_vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
+
+        if (uid)
+                current->fsuid = ouid;
+        if (gid)
+                current->fsgid = ogid;
+        
         if (rc) {
                 CERROR("create failed rc = %d\n", rc);
                 GOTO(cleanup, rc);
-        }
-
-        /* setting passed uid and gid */
-        if (dchild->d_inode != NULL) {
-                if (uid)
-                        dchild->d_inode->i_uid = uid;
-                if (gid)
-                        dchild->d_inode->i_gid = gid;
-                if (uid || gid)
-                        mark_inode_dirty(dchild->d_inode);
         }
 
         fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC);

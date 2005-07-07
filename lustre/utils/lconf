@@ -2906,11 +2906,11 @@ def getServiceLevel(self):
         ret = 6
     elif type in ('ldlm',):
         ret = 20
-    elif type in ('osd', 'cobd'):
+    elif type in ('osd',):
         ret = 30
     elif type in ('mdsdev',):
         ret = 40
-    elif type in ('lmv',):
+    elif type in ('lmv', 'cobd',):
         ret = 45
     elif type in ('mountpoint', 'echoclient'):
         ret = 60
