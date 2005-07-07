@@ -11,7 +11,7 @@ if LIBLUSTRE
 noinst_LIBRARIES = libuptlctl.a
 endif
 
-libuptlctl_a_SOURCES = portals.c debug.c l_ioctl.c
+libuptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c
 libuptlctl_a_CPPFLAGS = $(LLCPPFLAGS)
 libuptlctl_a_CFLAGS = $(LLCFLAGS)
 

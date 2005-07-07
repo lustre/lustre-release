@@ -213,13 +213,22 @@ finalize:
 static int from_connection(void *a, void *d)
 {
     connection c = d;
-    bridge b = a;
-    ptl_hdr_t hdr;
+    bridge     b = a;
+    ptl_hdr_t  hdr;
+    ptl_err_t  rc;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-        ptl_parse(b->b_ni, &hdr, c);
-        /*TODO: check error status*/
-        return(1);
+            /* replace dest_nid,pid (socknal sets its own) */
+            hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
+            hdr.dest_pid = cpu_to_le32(ptl_getpid());
+            
+            rc = ptl_parse(b->b_ni, &hdr, c);
+            if (rc != PTL_OK) {
+                    CERROR("Error %d from ptl_parse\n", rc);
+                    return 0;
+            }
+
+            return(1);
     }
     return(0);
 }

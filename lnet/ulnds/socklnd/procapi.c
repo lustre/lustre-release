@@ -121,6 +121,7 @@ procbridge_startup (ptl_ni_t *ni)
 {
     procbridge p;
     bridge     b;
+    int        rc;
 
     /* NB The local NID is not assigned.  We only ever connect to the socknal,
      * which assigns the src nid/pid on incoming non-privileged connections
@@ -160,7 +161,8 @@ procbridge_startup (ptl_ni_t *ni)
 #endif
 
     /* create nal thread */
-    if (pthread_create(&p->t, NULL, nal_thread, b)) {
+    rc = pthread_create(&p->t, NULL, nal_thread, b);
+    if (rc != 0) {
         perror("nal_init: pthread_create");
         return PTL_FAIL;
     }

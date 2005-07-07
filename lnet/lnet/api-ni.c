@@ -644,8 +644,10 @@ ptl_shutdown_nalnis (void)
         }
 
         /* Drop the cached loopback NI. */
-        ptl_ni_decref_locked(ptl_loni);
-        ptl_loni = NULL;
+        if (ptl_loni != NULL) {
+                ptl_ni_decref_locked(ptl_loni);
+                ptl_loni = NULL;
+        }
 
         /* Now wait for the NI's I just nuked to show up on apini_zombie_nis
          * and shut them down in guaranteed thread context */
