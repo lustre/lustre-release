@@ -57,8 +57,10 @@ static void smfs_init_inode_info(struct inode *inode, void *opaque)
         LASSERT(inode->u.generic_ip);
               
         I2CI(inode) = cache_inode;
-        CDEBUG(D_INODE,"Init inode info #%lu (%p) icount %u\n", inode->i_ino, inode, 
-                        atomic_read(&cache_inode->i_count));
+        CDEBUG(D_INODE,"Init inode #%lu (%p) icount %u, i_nlink %u\n",
+                        inode->i_ino, inode, 
+                        atomic_read(&cache_inode->i_count),
+                        cache_inode->i_nlink);
         
         post_smfs_inode(inode, cache_inode);
         inode->i_nlink = cache_inode->i_nlink;

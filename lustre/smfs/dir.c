@@ -61,7 +61,11 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         int rc = 0;
         
         ENTRY;
-
+        
+        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+               dentry->d_name.len, dentry->d_name.name, dentry,
+               dir->i_ino, dir->i_generation);
+        
         LASSERT(cache_dir);
         LASSERT(cache_dir->i_op->create);
         
@@ -180,6 +184,10 @@ static int smfs_do_lookup (struct inode * dir,
 
         ENTRY;
         
+        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+               dentry->d_name.len, dentry->d_name.name, dentry,
+               dir->i_ino, dir->i_generation);
+
         if (!cache_dir)
                 RETURN(-ENOENT);
 
@@ -428,6 +436,10 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         LASSERT(cache_dir->i_op->unlink);
         LASSERT(parent);
         
+        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+               dentry->d_name.len, dentry->d_name.name, dentry,
+               dir->i_ino, dir->i_generation);
+
         cache_parent = pre_smfs_dentry(NULL, parent, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
         if (!cache_dentry || !cache_parent) {
@@ -541,6 +553,11 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         LASSERT(cache_dir);
         LASSERT(parent);
         
+        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+               dentry->d_name.len, dentry->d_name.name, dentry,
+               dir->i_ino, dir->i_generation);
+
+        
         cache_parent = pre_smfs_dentry(NULL, parent, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
         if (!cache_parent || !cache_dentry) {
@@ -596,6 +613,10 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
 
         ENTRY;
         
+        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+               dentry->d_name.len, dentry->d_name.name, dentry,
+               dir->i_ino, dir->i_generation);
+
         LASSERT(cache_dir);
         LASSERT(cache_dir->i_op->rmdir);
         LASSERT(parent);
