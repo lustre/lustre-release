@@ -2629,7 +2629,8 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         if (dchild->d_inode == NULL) {
                 CDEBUG(D_INODE, "destroying non-existent object "LPU64"\n",
                        oa->o_id);
-                GOTO(cleanup, rc = -ENOENT);
+                if (have_prepared)
+                        GOTO(cleanup, rc = -ENOENT);
         }
 
         if (!have_prepared) {
