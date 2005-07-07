@@ -99,6 +99,12 @@ Details    : OSTs now allocate memory needed to write out data at
              memory, it would be unable to do so and the node would
              become unresponsive.
 
+Severity   : enhancement
+Bugzilla   : 7015
+Description: Addition of lconf --service command line option
+Details    : lconf now accepts a '--service <arg>' option, which is
+             shorthand for 'lconf --group <arg> --select <arg>=<hostname>'
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

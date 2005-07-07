@@ -2716,11 +2716,14 @@ def doUnloadModules(services):
 #
 # Load profile for
 def doHost(lustreDB, hosts):
-    global is_router, local_node_name
+    global is_router, local_node_name, tgt_select
     node_db = None
     for h in hosts:
         node_db = lustreDB.lookup_name(h, 'node')
         if node_db:
+            if config.service:
+                tgt_select[config.service] = h
+                config.group = config.service
             break
     if not node_db:
         panic('No host entry found.')
@@ -2995,6 +2998,9 @@ def sanitise_path():
 tgt_select = {}
 def init_select(args):
     # args = [service=nodeA,service2=nodeB service3=nodeC]
+    # --service <service> is analagous to:
+    #     --group <service> --select <service>=<node>
+    # this is handled in doHost()
     global tgt_select
     for arg in args:
         list = string.split(arg, ',')
@@ -3017,6 +3023,7 @@ lconf_options = [
     ('ldapurl',"LDAP server URL, eg. ldap://localhost", PARAM),
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
+    ('service', "shorthand for --group <service> --select <service>=<node>", PARAM),
     ('node',   "Load config for <nodename>", PARAM),
     ('cleanup,d', "Cleans up config. (Shutdown)"),
     ('force,f', "Forced unmounting and/or obd detach during cleanup",
