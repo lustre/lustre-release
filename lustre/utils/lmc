@@ -21,7 +21,7 @@
 """
 lmc - lustre configuration data manager
 
-  See Lustre book (http://www.lustre.org/docs/lustre.pdf) for documentation on lmc.
+  See the man page, or the Lustre Operations Manual, for documentation on lmc.
 
 """
 
