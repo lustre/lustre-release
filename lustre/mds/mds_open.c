@@ -332,6 +332,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (*ids == NULL)
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
+        oti.oti_thread = req->rq_svc_thread;
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
@@ -1296,6 +1297,7 @@ int mds_close(struct ptlrpc_request *req)
         if (rc) {
                 CERROR("lustre_pack_reply: rc = %d\n", rc);
                 req->rq_status = rc;
+                /* Continue on to drop local open count even if we can't send the reply */
         } else {
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }

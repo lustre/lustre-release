@@ -201,10 +201,9 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         RETURN(-ENOMEM);
 }
 
-void filter_free_iobuf(void *iobuf)
+void filter_iobuf_put(void *iobuf)
 {
         struct dio_request *dreq = iobuf;
-        int                 num_pages = dreq->dr_max_pages;
 
         /* free all bios */
         while (dreq->dr_bios) {
@@ -212,12 +211,22 @@ void filter_free_iobuf(void *iobuf)
                 dreq->dr_bios = bio->bi_private;
                 bio_put(bio);
         }
+        dreq->dr_npages = 0;
+        atomic_set(&dreq->dr_numreqs, 0);
+}
+
+void filter_free_iobuf(void *iobuf)
+{
+        struct dio_request *dreq = iobuf;
+        int                 num_pages = dreq->dr_max_pages;
+
+        filter_iobuf_put(dreq);
 
         OBD_FREE(dreq->dr_blocks,
                  MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
         OBD_FREE(dreq->dr_pages,
                  num_pages * sizeof(*dreq->dr_pages));
-        OBD_FREE(dreq, sizeof(*dreq));
+        OBD_FREE_PTR(dreq);
 }
 
 int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
@@ -522,10 +531,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE, obj->ioo_bufcnt,
-                                (void **)&dreq);
-        if (rc)
-                GOTO(cleanup, rc);
+        dreq = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -617,9 +623,12 @@ cleanup:
                         OBD_FREE(uc, sizeof(*uc));
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_free_iobuf(dreq);
+                filter_iobuf_put(dreq);
         case 0:
-                filter_free_dio_pages(objcount, obj, niocount, res);
+                /*
+                 * lnb->page automatically returns back into per-thread page
+                 * pool (bug 5137)
+                 */
                 f_dput(res->dentry);
         }
 

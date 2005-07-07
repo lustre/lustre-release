@@ -433,7 +433,8 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
 }
 
 static int
-ptlrpc_server_handle_request (struct ptlrpc_service *svc)
+ptlrpc_server_handle_request(struct ptlrpc_service *svc,
+                             struct ptlrpc_thread *thread)
 {
         struct ptlrpc_request *request;
         unsigned long          flags;
@@ -496,6 +497,7 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
 
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
+        request->rq_svc_thread = thread;
         request->rq_export = class_conn2export(&request->rq_reqmsg->handle);
 
         if (request->rq_export) {
@@ -716,7 +718,7 @@ liblustre_check_services (void *arg)
 
                 do {
                         rc = ptlrpc_server_handle_reply(svc);
-                        rc |= ptlrpc_server_handle_request(svc);
+                        rc |= ptlrpc_server_handle_request(svc, NULL);
                         rc |= (ptlrpc_server_post_idle_rqbds(svc) > 0);
                         did_something |= rc;
                 } while (rc);
@@ -813,6 +815,10 @@ static int ptlrpc_main(void *arg)
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
+        /*
+         * wake up our creator. Note: @data is invalid after this point,
+         * because it's allocated on ptlrpc_start_thread() stack.
+         */
         wake_up(&thread->t_ctl_waitq);
 
         watchdog = lc_watchdog_add(svc->srv_watchdog_timeout,
@@ -857,7 +863,7 @@ static int ptlrpc_main(void *arg)
                 if (!list_empty (&svc->srv_request_queue) &&
                     (svc->srv_n_difficult_replies == 0 ||
                      svc->srv_n_active_reqs < (svc->srv_nthreads - 1)))
-                        ptlrpc_server_handle_request (svc);
+                        ptlrpc_server_handle_request(svc, thread);
 
                 if (!list_empty(&svc->srv_idle_rqbds) &&
                     ptlrpc_server_post_idle_rqbds(svc) < 0) {
@@ -867,6 +873,12 @@ static int ptlrpc_main(void *arg)
                         svc->srv_rqbd_timeout = HZ/10;
                 }
         }
+
+        /*
+         * deconstruct service specific state created by ptlrpc_start_thread()
+         */
+        if (svc->srv_done != NULL)
+                svc->srv_done(thread);
 
         spin_lock_irqsave(&svc->srv_lock, flags);
 
@@ -931,7 +943,7 @@ int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
         for (i = 0; i < num_threads; i++) {
                 char name[32];
                 sprintf(name, "%s_%02d", base_name, i);
-                rc = ptlrpc_start_thread(dev, svc, name);
+                rc = ptlrpc_start_thread(dev, svc, name, i);
                 if (rc) {
                         CERROR("cannot start %s thread #%d: rc %d\n", base_name,
                                i, rc);
@@ -942,7 +954,7 @@ int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
 }
 
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
-                        char *name)
+                        char *name, int id)
 {
         struct l_wait_info lwi = { 0 };
         struct ptlrpc_svc_data d;
@@ -955,15 +967,22 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         if (thread == NULL)
                 RETURN(-ENOMEM);
         init_waitqueue_head(&thread->t_ctl_waitq);
+        thread->t_id = id;
+          
+        if (svc->srv_init != NULL) {
+                rc = svc->srv_init(thread);
+                if (rc != 0)
+                        RETURN(rc);
+        }
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        list_add(&thread->t_link, &svc->srv_threads);
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
 
         d.dev = dev;
         d.svc = svc;
         d.name = name;
         d.thread = thread;
-
-        spin_lock_irqsave(&svc->srv_lock, flags);
-        list_add(&thread->t_link, &svc->srv_threads);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
 
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in ptlrpc_daemonize() right away.
@@ -975,6 +994,10 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                 spin_lock_irqsave(&svc->srv_lock, flags);
                 list_del(&thread->t_link);
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
+
+                if (svc->srv_done != NULL)
+                        svc->srv_done(thread);
+
                 OBD_FREE(thread, sizeof(*thread));
                 RETURN(rc);
         }

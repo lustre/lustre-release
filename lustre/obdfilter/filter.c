@@ -1195,6 +1195,104 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         RETURN(ELDLM_LOCK_ABORTED);
 }
 
+/*
+ * per-obd_device iobuf pool.
+ *
+ * To avoid memory deadlocks in low-memory setups, amount of dynamic
+ * allocations in write-path has to be minimized (see bug 5137).
+ *
+ * Pages, niobuf_local's and niobuf_remote's are pre-allocated and attached to
+ * OST threads (see ost_thread_{init,done}()).
+ *
+ * "iobuf's" used by filter cannot be attached to OST thread, however, because
+ * at the OST layer there are only (potentially) multiple obd_device of type
+ * unknown at the time of OST thread creation.
+ *
+ * Instead array of iobuf's is attached to struct filter_obd (->fo_iobuf_pool
+ * field). This array has size OST_NUM_THREADS, so that each OST thread uses
+ * it's very own iobuf.
+ *
+ * Functions below
+ *
+ *     filter_kiobuf_pool_init()
+ *
+ *     filter_kiobuf_pool_done()
+ *
+ *     filter_iobuf_get()
+ *
+ * operate on this array. They are "generic" in a sense that they don't depend
+ * on actual type of iobuf's (the latter depending on Linux kernel version).
+ */
+
+/*
+ * destroy pool created by filter_iobuf_pool_init
+ */
+static void filter_iobuf_pool_done(struct filter_obd *filter)
+{
+        void **pool;
+        int i;
+
+        ENTRY;
+
+        pool = filter->fo_iobuf_pool;
+        if (pool != NULL) {
+                for (i = 0; i < OST_NUM_THREADS; ++ i) {
+                        if (pool[i] != NULL)
+                                filter_free_iobuf(pool[i]);
+                }
+                OBD_FREE(pool, OST_NUM_THREADS * sizeof pool[0]);
+                filter->fo_iobuf_pool = NULL;
+        }
+        EXIT;
+}
+
+/*
+ * pre-allocate pool of iobuf's to be used by filter_{prep,commit}rw_write().
+ */
+static int filter_iobuf_pool_init(struct filter_obd *filter, int count)
+{
+        void **pool;
+        int i;
+        int result;
+
+        ENTRY;
+
+        LASSERT(count <= OST_NUM_THREADS);
+
+        OBD_ALLOC_GFP(pool, OST_NUM_THREADS * sizeof pool[0], GFP_KERNEL);
+        if (pool == NULL)
+                RETURN(-ENOMEM);
+
+        filter->fo_iobuf_pool = pool;
+        filter->fo_iobuf_count = count;
+        for (i = 0; i < count; ++ i) {
+                /*
+                 * allocate kiobuf to be used by i-th OST thread.
+                 */
+                result = filter_alloc_iobuf(filter, OBD_BRW_WRITE,
+                                            PTLRPC_MAX_BRW_PAGES,
+                                            &pool[i]);
+                if (result != 0) {
+                        filter_iobuf_pool_done(filter);
+                        break;
+                }
+        }
+        RETURN(result);
+}
+
+/*
+ * return iobuf preallocated by filter_iobuf_pool_init() for @thread.
+ */
+void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter)
+{
+        void *kio;
+
+        LASSERT(thread->t_id < filter->fo_iobuf_count);
+        kio = filter->fo_iobuf_pool[thread->t_id];
+        LASSERT(kio != NULL);
+        return kio;
+}
+
 /* mount the file system (secretly) */
 int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                         void *option)
@@ -1204,7 +1302,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct vfsmount *mnt;
         char *str;
         char ns_name[48];
-        int rc = 0;
+        int rc;
         ENTRY;
 
         if (lcfg->lcfg_bufcount < 3 ||
@@ -1215,6 +1313,10 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
+
+        rc = filter_iobuf_pool_init(filter, OST_NUM_THREADS);
+        if (rc != 0)
+                GOTO(err_ops, rc);
 
         mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),MS_NOATIME|MS_NODIRATIME,
                             lustre_cfg_string(lcfg, 1), option);
@@ -1332,6 +1434,7 @@ err_mntput:
         lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
+        filter_iobuf_pool_done(filter);
         return rc;
 }
 
@@ -1502,6 +1605,8 @@ static int filter_cleanup(struct obd_device *obd)
                 lock_kernel();
 
         fsfilt_put_ops(obd->obd_fsops);
+
+        filter_iobuf_pool_done(filter);
 
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
 

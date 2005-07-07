@@ -312,13 +312,15 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode);
-int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_local_open(struct file *file,
+                  struct lookup_intent *it, struct ll_file_data *fd);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
+struct ll_file_data *ll_file_data_get(void);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);

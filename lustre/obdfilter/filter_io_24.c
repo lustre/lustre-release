@@ -306,6 +306,11 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
+void filter_iobuf_put(void *iobuf)
+{
+        clear_kiobuf(iobuf);
+}
+
 int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
                        void **ret)
 {
@@ -375,10 +380,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE,
-                                obj->ioo_bufcnt, &iobuf);
-        if (rc)
-                GOTO(cleanup, rc);
+        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -450,9 +452,12 @@ cleanup:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_free_iobuf(iobuf);
+                filter_iobuf_put(iobuf);
         case 0:
-                filter_free_dio_pages(objcount, obj, niocount, res);
+                /*
+                 * lnb->page automatically returns back into per-thread page
+                 * pool (bug 5137)
+                 */
                 f_dput(res->dentry);
         }
 

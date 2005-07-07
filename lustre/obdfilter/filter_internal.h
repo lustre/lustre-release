@@ -131,8 +131,6 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
-void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
-                           int niocount, struct niobuf_local *res);
 
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
@@ -148,6 +146,8 @@ int filter_alloc_iobuf(struct filter_obd *, int rw, int num_pages, void **ret);
 void filter_free_iobuf(void *iobuf);
 int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
                           struct inode *inode, struct page *page);
+void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter);
+void filter_iobuf_put(void *iobuf);
 int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle);

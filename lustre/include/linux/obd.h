@@ -211,6 +211,24 @@ struct filter_obd {
         int fo_r_in_flight; /* protected by fo_stats_lock */
         int fo_w_in_flight; /* protected by fo_stats_lock */
 
+        /*
+         * per-filter pool of kiobuf's allocated by filter_common_setup() and
+         * torn down by filter_cleanup(). Contains OST_NUM_THREADS elements of
+         * which ->fo_iobuf_count were allocated.
+         *
+         * This pool contains kiobuf used by
+         * filter_{prep,commit}rw_{read,write}() and is shared by all OST
+         * threads.
+         *
+         * Locking: none, each OST thread uses only one element, determined by
+         * its "ordinal number", ->t_id.
+         *
+         * This is (void *) array, because 2.4 and 2.6 use different iobuf
+         * structures.
+         */
+        void                   **fo_iobuf_pool;
+        int                      fo_iobuf_count;
+
         struct obd_histogram     fo_r_pages;
         struct obd_histogram     fo_w_pages;
         struct obd_histogram     fo_read_rpc_hist;
@@ -448,6 +466,9 @@ struct obd_trans_info {
         struct llog_cookie       oti_onecookie;
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
+
+        /* initial thread handling transaction */
+        struct ptlrpc_thread    *oti_thread; 
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)

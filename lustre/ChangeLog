@@ -84,7 +84,21 @@ Details    : The b_committed_data struct is protected by the big kernel lock
 	     access to this struct.  In 2.6 kernels there is finer grained
 	     locking to improve SMP performance of the JBD layer.
 
-	
+Severity   : major
+Frequency  : rare (only unsupported configurations with a node running as an 
+             OST and a client)
+Bugzilla   : 6514, 5137
+Description: Mounting a Lustre file system on a node running as an OST could
+             lead to deadlocks
+Details    : OSTs now allocate memory needed to write out data at
+             startup, instead of when needed, to avoid having to
+             allocate memory in possibly low memory situations.
+             Specifically, if the file system is mounted on on OST,
+             memory pressure could force it to try to write out data,
+             which it needed to allocate memory to do.  Due to the low
+             memory, it would be unable to do so and the node would
+             become unresponsive.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

@@ -42,12 +42,9 @@ static int filter_alloc_dio_page(struct obd_device *obd, struct inode *inode,
 {
         struct page *page;
 
-        page = alloc_pages(GFP_HIGHUSER, 0);
-        if (page == NULL) {
-                CERROR("no memory for a temp page\n");
-                lnb->rc = -ENOMEM;
-                RETURN(-ENOMEM);
-        }
+        LASSERT(lnb->page != NULL);
+
+        page = lnb->page;
 #if 0
         POISON_PAGE(page, 0xf1);
         if (lnb->len != PAGE_SIZE) {
@@ -56,24 +53,19 @@ static int filter_alloc_dio_page(struct obd_device *obd, struct inode *inode,
         }
 #endif
         page->index = lnb->offset >> PAGE_SHIFT;
-        lnb->page = page;
 
         RETURN(0);
 }
 
-void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
+static void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
                            int niocount, struct niobuf_local *res)
 {
         int i, j;
 
         for (i = 0; i < objcount; i++, obj++) {
-                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++) {
-                        if (res->page != NULL) {
-                                __free_page(res->page);
+                for (j = 0 ; j < obj->ioo_bufcnt ; j++, res++)
                                 res->page = NULL;
                         }
-                }
-        }
 }
 
 /* Grab the dirty and seen grant announcements from the incoming obdo.
@@ -295,14 +287,9 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&obd->obd_osfs_lock);
         }
 
-        memset(res, 0, niocount * sizeof(*res));
-
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
-        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_READ, obj->ioo_bufcnt,
-                                &iobuf);
-        if (rc)
-                GOTO(cleanup, rc);
+        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
 
         dentry = filter_oa2dentry(obd, oa);
         if (IS_ERR(dentry)) {
@@ -325,21 +312,19 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 lnb->len    = rnb->len;
                 lnb->flags  = rnb->flags;
 
+                /*
+                 * ost_brw_write()->ost_nio_pages_get() already initialized
+                 * lnb->page to point to the page from the per-thread page
+                 * pool (bug 5137), initialize page.
+                 */
+                LASSERT(lnb->page != NULL);
+
                 if (inode->i_size <= rnb->offset)
-                      /* If there's no more data, abort early.
-                       * lnb->page == NULL and lnb->rc == 0, so it's
-                       * easy to detect later. */
+                        /* If there's no more data, abort early.  lnb->rc == 0,
+                         * so it's easy to detect later. */
                         break;
                 else
-                        rc = filter_alloc_dio_page(obd, inode, lnb);
-
-                if (rc) {
-                        CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                             "page err %u@"LPU64" %u/%u %p: rc %d\n",
-                              lnb->len, lnb->offset, i, obj->ioo_bufcnt,
-                              dentry, rc);
-                        GOTO(cleanup, rc);
-                }
+                        filter_alloc_dio_page(obd, inode, lnb);
 
                 if (inode->i_size < lnb->offset + lnb->len - 1)
                         lnb->rc = inode->i_size - lnb->offset;
@@ -372,8 +357,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         f_dput(dentry);
         }
 
-        if (iobuf != NULL)
-                filter_free_iobuf(iobuf);
+        filter_iobuf_put(iobuf);
 
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         if (rc)
@@ -525,13 +509,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        memset(res, 0, niocount * sizeof(*res));
-
-        /* This iobuf is for reading any partial pages from disk */
-        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_READ,
-                                obj->ioo_bufcnt, &iobuf);
-        if (rc)
-                GOTO(cleanup, rc);
+        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
@@ -589,13 +567,19 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 lnb->len    = rnb->len;
                 lnb->flags  = rnb->flags;
 
-                rc = filter_alloc_dio_page(exp->exp_obd, dentry->d_inode,lnb);
-                if (rc) {
-                        CERROR("page err %u@"LPU64" %u/%u %p: rc %d\n",
-                               lnb->len, lnb->offset,
-                               i, obj->ioo_bufcnt, dentry, rc);
-                        GOTO(cleanup, rc);
+                /*
+                 * ost_brw_write()->ost_nio_pages_get() already initialized
+                 * lnb->page to point to the page from the per-thread page
+                 * pool (bug 5137), initialize page.
+                 */
+                LASSERT(lnb->page != NULL);
+                if (lnb->len != PAGE_SIZE) {
+                        memset(kmap(lnb->page) + lnb->len,
+                               0, PAGE_SIZE - lnb->len);
+                        kunmap(lnb->page);
                 }
+                lnb->page->index = lnb->offset >> PAGE_SHIFT;
+
                 cleanup_phase = 4;
 
                 /* If the filter writes a partial page, then has the file
@@ -630,7 +614,6 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                 kunmap(lnb->page);
                         }
                 }
-
                 if (lnb->rc == 0)
                         tot_bytes += lnb->len;
         }
@@ -646,10 +629,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 cleanup:
         switch(cleanup_phase) {
         case 4:
-                if (rc)
-                        filter_free_dio_pages(objcount, obj, niocount, res);
         case 3:
-                filter_free_iobuf(iobuf);
+                filter_iobuf_put(iobuf);
         case 2:
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 if (rc)
@@ -661,7 +642,7 @@ cleanup:
                         filter_grant_incoming(exp, oa);
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-                filter_free_iobuf(iobuf);
+                filter_iobuf_put(iobuf);
                 break;
         default:;
         }

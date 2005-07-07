@@ -722,6 +722,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         int rc;
         ENTRY;
 
+        oti.oti_thread = request->rq_svc_thread;
+
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
 

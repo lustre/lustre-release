@@ -326,6 +326,8 @@ do {                                                                          \
 
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
+#define OBD_ALLOC_PTR(ptr) OBD_ALLOC(ptr, sizeof *(ptr))
+#define OBD_ALLOC_PTR_WAIT(ptr) OBD_ALLOC_WAIT(ptr, sizeof *(ptr))
 
 #ifdef __arch_um__
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
@@ -413,6 +415,8 @@ do {                                                                          \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
 } while (0)
+
+#define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
 do {                                                                          \

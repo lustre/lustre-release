@@ -279,6 +279,8 @@ struct ptlrpc_reply_state {
         struct lustre_msg     rs_msg;
 };
 
+struct ptlrpc_thread;
+
 enum rq_phase {
         RQ_PHASE_NEW         = 0xebc0de00,
         RQ_PHASE_RPC         = 0xebc0de01,
@@ -301,6 +303,8 @@ struct ptlrpc_request {
                 rq_no_delay:1, rq_net_err:1;
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         atomic_t rq_refcount;   /* client-side refcount for SENT race */
+
+        struct ptlrpc_thread *rq_svc_thread; /* initial thread servicing req */
 
         int rq_request_portal;  /* XXX FIXME bug 249 */
         int rq_reply_portal;    /* XXX FIXME bug 249 */
@@ -464,9 +468,14 @@ struct ptlrpc_bulk_desc {
 };
 
 struct ptlrpc_thread {
-        struct list_head t_link;
+
+        struct list_head t_link; /* active threads for service, from svc->srv_threads */
 
         __u32 t_flags;
+
+        void *t_data; /* thread-private data (preallocated memory) */
+
+        unsigned int t_id; /* service thread index, from ptlrpc_start_n_threads */
         wait_queue_head_t t_ctl_waitq;
 };
 
@@ -548,6 +557,17 @@ struct ptlrpc_service {
         struct proc_dir_entry   *srv_procroot;
         struct lprocfs_stats    *srv_stats;
         
+        /*
+         * if non-NULL called during thread creation (ptlrpc_start_thread())
+         * to initialize service specific per-thread state.
+         */
+        int (*srv_init)(struct ptlrpc_thread *thread);
+        /*
+         * if non-NULL called during thread shutdown (ptlrpc_main()) to
+         * destruct state created by ->srv_init().
+         */
+        void (*srv_done)(struct ptlrpc_thread *thread);
+
         struct ptlrpc_srv_ni srv_interfaces[0];
 };
 
@@ -698,10 +718,11 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        struct proc_dir_entry *proc_entry,
                                        svcreq_printfn_t);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
+
 int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
                            int cnt, char *base_name);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
-                        char *name);
+                        char *name, int id);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
 void ptlrpc_daemonize(void);
