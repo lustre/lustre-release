@@ -1293,7 +1293,6 @@ got_child:
 		GOTO(cleanup, rc = -EAGAIN);
 	}
 
-#warning "disable opencache lock for CMD2"
 #if 0
         /* We cannot use acc_mode here, because it is zeroed in case of
            creating a file, so we get wrong lockmode */
@@ -1329,6 +1328,9 @@ got_child:
 
                 cleanup_phase = 3;
         }
+#else
+/* re-enable test 24n in sanity.sh: it needs LOOKUP lock on open */
+#warning "disable opencache lock for CMD2"
 #endif
 
         /* Step 5: mds_open it */
