@@ -914,7 +914,7 @@ int main(int argc, char * const argv[])
         t22();
         t50();
 
-	printf("liblustre is about shutdown\n");
+	printf("liblustre is about to shutdown\n");
         __liblustre_cleanup_();
 
 	printf("complete successfully\n");
