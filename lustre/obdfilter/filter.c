@@ -2315,13 +2315,13 @@ int filter_create_object(struct obd_device *obd, obd_gr group,
 {
         struct dentry *dparent = NULL;
         struct dentry *dchild = NULL;
+        struct lvfs_ucred uc = {0,};
+        struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
         int cleanup_phase = 0;
         int err = 0, rc = 0;
         void *handle = NULL;
         void *lock = NULL;
-        obd_uid ouid;
-        obd_gid ogid;
         ENTRY;
 
         filter = &obd->u.filter;
@@ -2355,23 +2355,15 @@ int filter_create_object(struct obd_device *obd, obd_gr group,
                 GOTO(cleanup, rc = PTR_ERR(handle));
         cleanup_phase = 3;
 
-        /* making ll_vfs_create() to use passed @uid and @gid */
-        if (uid) {
-                ouid = current->fsuid;
-                current->fsuid = uid;
-        }
-        if (gid) {
-                ogid = current->fsgid;
-                current->fsgid = gid;
-        }
+        uc.luc_uid = uid;
+        uc.luc_gid = gid;
+        uc.luc_fsuid = uid;
+        uc.luc_fsgid = gid;
 
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         rc = ll_vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 
-        if (uid)
-                current->fsuid = ouid;
-        if (gid)
-                current->fsgid = ogid;
-        
         if (rc) {
                 CERROR("create failed rc = %d\n", rc);
                 GOTO(cleanup, rc);
