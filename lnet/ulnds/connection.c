@@ -110,6 +110,14 @@ static unsigned int connection_key(void *arg)
         return (unsigned int)(*nid);
 }
 
+void
+close_connection(void *arg)
+{
+        connection c = arg;
+        
+        close(c->fd);
+        free(c);
+}
 
 /* Function:  remove_connection
  * Arguments: c: the connection to remove
@@ -119,8 +127,7 @@ void remove_connection(void *arg)
         connection c = arg;
         
         hash_table_remove(c->m->connections,&c->peer_nid);
-        close(c->fd);
-        free(c);
+        close_connection(c);
 }
 
 
@@ -535,7 +542,7 @@ void shutdown_connections(manager m)
         close(m->bound);
         remove_io_handler(m->bound_handler);
 #endif
-        hash_destroy_table(m->connections,remove_connection);
+        hash_destroy_table(m->connections,close_connection);
         free(m);
 }
 

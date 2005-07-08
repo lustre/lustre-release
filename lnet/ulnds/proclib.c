@@ -53,12 +53,13 @@ static void check_stopping(void *z)
     if ((p->nal_flags & NAL_FLAG_STOPPING) == 0)
             return;
     
+    tcpnal_shutdown(b);
+
     pthread_mutex_lock(&p->mutex);
     p->nal_flags |= NAL_FLAG_STOPPED;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    tcpnal_shutdown(b);
     pthread_exit(0);
 }
 
