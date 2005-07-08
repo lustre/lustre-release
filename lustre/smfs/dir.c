@@ -62,7 +62,7 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         
         ENTRY;
         
-        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
         
@@ -184,7 +184,7 @@ static int smfs_do_lookup (struct inode * dir,
 
         ENTRY;
         
-        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
 
@@ -239,7 +239,6 @@ static int smfs_do_lookup (struct inode * dir,
                                               dir->i_ino, tmp->d_parent->d_name.len,
                                               tmp->d_parent->d_name.name,
                                               cache_dir->i_nlink);
-                                        LBUG();
                                 }
                         }
                 }
@@ -436,7 +435,7 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         LASSERT(cache_dir->i_op->unlink);
         LASSERT(parent);
         
-        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
 
@@ -553,7 +552,7 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         LASSERT(cache_dir);
         LASSERT(parent);
         
-        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
 
@@ -613,7 +612,7 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
 
         ENTRY;
         
-        CDEBUG(D_INODE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
 
