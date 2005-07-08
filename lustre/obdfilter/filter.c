@@ -2448,6 +2448,9 @@ filter_crow_object(struct obd_device *obd, __u64 ogr,
                        LPU64"/"LPU64" err = %d\n", oid,
                        ogr, (int)PTR_ERR(dentry));
                 RETURN(dentry);
+        } else {
+                /* XXX: here should be storing fid from client into OSS object
+                 * EA to use it for quota later.  --umka */
         }
 
         RETURN(dentry);

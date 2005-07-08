@@ -1072,6 +1072,7 @@ void ll_clear_inode(struct inode *inode)
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data *op_data;
@@ -1206,7 +1207,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
                                                            OBD_OBJECT_EOF } };
                 struct lustre_handle lockh = { 0 };
-                struct ll_inode_info *lli = ll_i2info(inode);
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
@@ -1249,6 +1249,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 oa->o_gr = lsm->lsm_object_gr;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
+                /* adding uid and gid, needed for quota */
                 if (ia_valid & ATTR_UID) {
                         oa->o_uid = inode->i_uid;
                         oa->o_valid |= OBD_MD_FLUID;
@@ -1258,6 +1259,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         oa->o_gid = inode->i_gid;
                         oa->o_valid |= OBD_MD_FLGID;
                 }
+
+                /* putting there also fid, needed for quota too. */
+                memcpy(obdo_id(oa), &lli->lli_id, sizeof(lli->lli_id));
+                oa->o_valid |= OBD_MD_FLINLINE;
 
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME);

@@ -327,7 +327,7 @@ struct obdo {
         __u32                   o_mds;
         __u64                   o_fid;
         __u32                   o_padding;
-        char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
+        char                    o_inline[OBD_INLINESZ];
 };
 
 #define o_dirty   o_blocks

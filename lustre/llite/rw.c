@@ -225,6 +225,10 @@ int ll_prepare_write(struct file *file, struct page *page,
 
         oa->o_gid = inode->i_gid;
         oa->o_valid |= OBD_MD_FLGID;
+
+        /* putting there also fid, needed for quota too. */
+        memcpy(obdo_id(oa), &lli->lli_id, sizeof(lli->lli_id));
+        oa->o_valid |= OBD_MD_FLINLINE;
         
         rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode),
                      oa, lsm, 1, &pga, NULL);
