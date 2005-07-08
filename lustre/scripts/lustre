@@ -26,6 +26,7 @@ LOCK=/var/lock/subsys/$SERVICE
 
 : ${LUSTRE_CFG:=/etc/lustre/lustre.cfg}
 [ -f ${LUSTRE_CFG} ] && . ${LUSTRE_CFG}
+[ -f /etc/sysconfig/lustre ] && . /etc/sysconfig/lustre
 
 : ${LUSTRE_CONFIG_XML:=/etc/lustre/config.xml}
 : ${LCONF:=/usr/sbin/lconf}
