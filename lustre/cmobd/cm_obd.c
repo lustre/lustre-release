@@ -294,12 +294,12 @@ static int cmobd_iocontrol(unsigned int cmd, struct obd_export *exp,
 }
 
 static struct obd_ops cmobd_ops = {
-        o_owner:                THIS_MODULE,
-        o_attach:               cmobd_attach,
-        o_detach:               cmobd_detach,
-        o_setup:                cmobd_setup,
-        o_cleanup:              cmobd_cleanup,
-        o_iocontrol:            cmobd_iocontrol,
+        .o_owner     = THIS_MODULE,
+        .o_attach    = cmobd_attach,
+        .o_detach    = cmobd_detach,
+        .o_setup     = cmobd_setup,
+        .o_cleanup   = cmobd_cleanup,
+        .o_iocontrol = cmobd_iocontrol,
 };
 
 kmem_cache_t *cmobd_extent_slab;

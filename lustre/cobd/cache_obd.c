@@ -50,14 +50,15 @@ static int cobd_detach(struct obd_device *obd)
 static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
-        struct cache_obd  *cobd = &obd->u.cobd;
+        int inst_len = 0, mname_len = 0, cname_len = 0;
         struct obd_device *master_obd, *cache_obd;
+        struct cache_obd  *cobd = &obd->u.cobd;
         struct lustre_handle conn = { 0 };
-        int    inst_len = 0, mname_len = 0, cname_len = 0;
-        
         int rc = 0;
         ENTRY;
 
+        sema_init(&cobd->sem, 1);
+        
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1 ||
             lustre_cfg_buf(lcfg, 1) == NULL) {
                 CERROR("%s: setup requires master device name\n", 
@@ -82,7 +83,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 cname_len = LUSTRE_CFG_BUFLEN(lcfg, 2);
         } 
        
-        /*get the cache obd name and master name */
+        /* get the cache obd name and master name */
         OBD_ALLOC(cobd->master_name, mname_len);
         if (!cobd->master_name) 
                 RETURN(-ENOMEM);
@@ -91,7 +92,6 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                         lustre_cfg_string(lcfg, 3));
         else 
                 sprintf(cobd->master_name, "%s", lustre_cfg_string(lcfg, 1));
-
         
         OBD_ALLOC(cobd->cache_name, cname_len);
         if (!cobd->cache_name) {
@@ -122,6 +122,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                GOTO(put_names, rc);
         
         cobd->master_exp = class_conn2export(&conn);
+
         /* getting cache obd */
         cache_obd = class_name2obd(cobd->cache_name);
         if (!cache_obd) {
@@ -139,8 +140,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_names, rc);
         }
         cobd->cache_exp = class_conn2export(&conn);
-       
-        sema_init(&cobd->sem, 1);
+        
         /* default set cache on */
         cobd->cache_on = 1;
         EXIT;
@@ -154,9 +154,8 @@ put_names:
                         OBD_FREE(cobd->cache_name, LUSTRE_CFG_BUFLEN(lcfg, 2));
                         cobd->cache_name = NULL;
                 }
-        
         }
-        RETURN(rc);
+        return rc;
 }
 
 static int cobd_cleanup(struct obd_device *obd, int flags)

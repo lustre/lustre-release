@@ -2910,12 +2910,12 @@ def getServiceLevel(self):
         ret = 30
     elif type in ('mdsdev',):
         ret = 40
-    elif type in ('lmv', 'cobd',):
+    elif type in ('lmv',):
         ret = 45
+    elif type in ('cmobd', 'cobd',):
+        ret = 60 
     elif type in ('mountpoint', 'echoclient'):
-        ret = 60
-    elif type in ('cmobd',):
-        ret = 70 
+        ret = 70
     else:
         panic("Unknown type: ", type)
 
@@ -2930,8 +2930,8 @@ def getServices(self):
     list = []
     for ref_class, ref_uuid in self.get_all_refs():
             servdb = self.lookup(ref_uuid)
-            if  servdb:
-                level = getServiceLevel(servdb)
+            if servdb:
+        	level = getServiceLevel(servdb)
                 if level > 0:
                     list.append((level, servdb))
             else:
