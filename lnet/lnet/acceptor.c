@@ -24,25 +24,24 @@
 #include <portals/lib-p30.h>
 
 #ifdef __KERNEL__
-static int acceptor_port = 988;
-CFS_MODULE_PARM(acceptor_port, "i", int, 0444,
+static char *accept = "secure";
+CFS_MODULE_PARM(accept, "s", charp, 0444,
+                "Accept connections (secure|all|none)");
+
+static int accept_port = 988;
+CFS_MODULE_PARM(accept_port, "i", int, 0444,
                 "Acceptor's port (same on all nodes)");
 
-static int acceptor_backlog = 127;
-CFS_MODULE_PARM(acceptor_backlog, "i", int, 0444,
-                "Acceptor's listen backlog "
-                "(set to 0 to refuse incoming connections)");
+static int accept_backlog = 127;
+CFS_MODULE_PARM(accept_backlog, "i", int, 0444,
+                "Acceptor's listen backlog");
 
-static int acceptor_timeout = 5;
-CFS_MODULE_PARM(acceptor_timeout, "i", int, 0644,
+static int accept_timeout = 5;
+CFS_MODULE_PARM(accept_timeout, "i", int, 0644,
 		"Acceptor's timeout (seconds)");
 
-static int accept_secure_only = 1;
-CFS_MODULE_PARM(accept_secure_only, "i", int, 0644,
-                "Accept connection requests only from secure ports?");
-
-static int acceptor_proto_version = PTL_PROTO_ACCEPTOR_VERSION;
-CFS_MODULE_PARM(acceptor_proto_version, "i", int, 0444,
+static int accept_proto_version = PTL_PROTO_ACCEPTOR_VERSION;
+CFS_MODULE_PARM(accept_proto_version, "i", int, 0444,
                 "Acceptor protocol version (outgoing connection requests)");
 
 struct {
@@ -54,14 +53,14 @@ struct {
 int
 ptl_acceptor_timeout(void)
 {
-        return acceptor_timeout;
+        return accept_timeout;
 }
 EXPORT_SYMBOL(ptl_acceptor_timeout);
 
 int
 ptl_acceptor_port(void)
 {
-        return acceptor_port;
+        return accept_port;
 }
 EXPORT_SYMBOL(ptl_acceptor_port);
 
@@ -160,7 +159,7 @@ ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
 
                 CLASSERT (PTL_PROTO_ACCEPTOR_VERSION == 1);
 
-                if (acceptor_proto_version == PTL_PROTO_ACCEPTOR_VERSION) {
+                if (accept_proto_version == PTL_PROTO_ACCEPTOR_VERSION) {
                                 
                         cr.acr_magic   = PTL_PROTO_ACCEPTOR_MAGIC;
                         cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
@@ -238,7 +237,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         rc = libcfs_sock_read(sock, &cr.acr_version, 
                               sizeof(cr) - 
                               offsetof(ptl_acceptor_connreq_t, acr_version),
-                              acceptor_timeout);
+                              accept_timeout);
         if (rc != 0) {
                 CERROR("Error %d reading connection request from "
                        "%u.%u.%u.%u\n", rc, HIPQUAD(peer_ip));
@@ -311,6 +310,7 @@ ptl_acceptor(void *arg)
 	__u32          peer_ip;
 	int            peer_port;
         ptl_ni_t      *blind_ni;
+        int            secure = (int)arg;
 
 	LASSERT (ptl_acceptor_state.pta_sock == NULL);
 
@@ -325,24 +325,27 @@ ptl_acceptor(void *arg)
                 blind_ni = NULL;
         }
 
-	snprintf(name, sizeof(name), "acceptor_%03d", acceptor_port);
+	snprintf(name, sizeof(name), "acceptor_%03d", accept_port);
 	kportal_daemonize(name);
 	kportal_blockallsigs();
 
-	LASSERT (acceptor_backlog > 0);
 	rc = libcfs_sock_listen(&ptl_acceptor_state.pta_sock,
-				0, acceptor_port, acceptor_backlog);
+				0, accept_port, accept_backlog);
 	if (rc != 0) {
                 if (rc == -EADDRINUSE)
                         LCONSOLE_ERROR("Can't start acceptor on port %d: "
                                        "port already in use\n",
-                                       acceptor_port);
+                                       accept_port);
                 else
                         LCONSOLE_ERROR("Can't start acceptor on port %d: "
                                        "unexpected error %d\n",
-                                       acceptor_port, rc);
+                                       accept_port, rc);
 
 		ptl_acceptor_state.pta_sock = NULL;
+        } else {
+                LCONSOLE(0, "Accept %s, port %d%s\n", 
+                         accept, accept_port,
+                         blind_ni == NULL ? "" : " (proto compatible)");
         }
         
 	/* set init status and unblock parent */
@@ -351,11 +354,7 @@ ptl_acceptor(void *arg)
 	
 	if (rc != 0)
 		return rc;
-	
-        CDEBUG(D_WARNING, "Acceptor starting (%d nets: blind_ni %s)\n", 
-               n_acceptor_nis,
-               blind_ni == NULL ? "NULL" : libcfs_nid2str(blind_ni->ni_nid));
-        
+
 	while (ptl_acceptor_state.pta_shutdown == 0) {
 		
 		rc = libcfs_sock_accept(&newsock, ptl_acceptor_state.pta_sock);
@@ -373,8 +372,7 @@ ptl_acceptor(void *arg)
 			goto failed;
 		}
 
-                if (accept_secure_only &&
-                    peer_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
+                if (secure && peer_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
                         CERROR("Refusing connection from %u.%u.%u.%u: "
                                "insecure port %d\n",
                                HIPQUAD(peer_ip), peer_port);
@@ -404,7 +402,7 @@ ptl_acceptor(void *arg)
                 }
                 
 		rc = libcfs_sock_read(newsock, &magic, sizeof(magic),
-				      acceptor_timeout);
+				      accept_timeout);
 		if (rc != 0) {
                         CERROR("Error %d reading connection request from "
                                "%u.%u.%u.%u\n", rc, HIPQUAD(peer_ip));
@@ -424,6 +422,8 @@ ptl_acceptor(void *arg)
 	libcfs_sock_release(ptl_acceptor_state.pta_sock);
         if (blind_ni != NULL)
                 ptl_ni_decref(blind_ni);
+
+        LCONSOLE(0,"Acceptor stopping\n");
 	
 	/* unblock ptl_acceptor_stop() */
 	mutex_up(&ptl_acceptor_state.pta_signal);
@@ -434,17 +434,29 @@ ptl_err_t
 ptl_acceptor_start(void)
 {
 	long   pid;
+        long   secure;
 
 	LASSERT (ptl_acceptor_state.pta_sock == NULL);
 	init_mutex_locked(&ptl_acceptor_state.pta_signal);
+
+        if (!strcmp(accept, "secure")) {
+                secure = 1;
+        } else if (!strcmp(accept, "all")) {
+                secure = 0;
+        } else if (!strcmp(accept, "none")) {
+                return PTL_OK;
+        } else {
+                LCONSOLE_ERROR ("Can't parse 'accept=\"%s\"'\n",
+                                accept);
+                return PTL_FAIL;
+        }
 	
-	if (acceptor_backlog <= 0 ||            /* disabled */
-            ptl_count_acceptor_nis(NULL) == 0)  /* not required */
+	if (ptl_count_acceptor_nis(NULL) == 0)  /* not required */
 		return PTL_OK;
 	
-	pid = cfs_kernel_thread (ptl_acceptor, NULL, 0);
+	pid = cfs_kernel_thread(ptl_acceptor, (void *)secure, 0);
 	if (pid < 0) {
-		CERROR ("Can't start acceptor: %ld\n", pid);
+		CERROR("Can't start acceptor thread: %ld\n", pid);
 		return PTL_FAIL;
 	}
 
@@ -456,7 +468,6 @@ ptl_acceptor_start(void)
 		return PTL_OK;
         }
 
-	CERROR ("Can't start acceptor: %d\n", ptl_acceptor_state.pta_shutdown);
         LASSERT (ptl_acceptor_state.pta_sock == NULL);
 	return PTL_FAIL;
 }
