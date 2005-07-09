@@ -130,7 +130,7 @@ test_1a() {
         echo "ln $DIR/1a0/f01 $DIR/1a0/f01h"
         ln $DIR/1a0/f01 $DIR/1a0/f01h || error
         echo "cache flush on $NAME"
-        lsync $CMOBD_NAMEN >/dev/null || error
+        lsync $CMOBD_NAME >/dev/null || error
         
         echo "ln -s $DIR/1a0/f01 $DIR/1a0/f01s"
         ln -s $DIR/1a0/f01 $DIR/1a0/f01s || error
