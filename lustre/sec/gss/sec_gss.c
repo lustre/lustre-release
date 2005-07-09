@@ -76,22 +76,33 @@ struct rpc_clnt;
 #include "gss_internal.h"
 #include "gss_api.h"
 
-#define GSS_CREDCACHE_EXPIRE    (30 * 60)          /* 30 minute */
-/* not used now */
-#if 0
-#define GSS_CRED_EXPIRE         (8 * 60 * 60)      /* 8 hours */
-#define GSS_CRED_SIGN_SIZE      (1024)
-#define GSS_CRED_VERIFY_SIZE    (56)
-#endif
-
 #define LUSTRE_PIPEDIR          "/lustre"
+
+#define GSS_CREDCACHE_EXPIRE    (30 * 60)          /* 30 minute */
+
+#define GSS_TIMEOUT_DELTA       (5)
+#define CRED_REFRESH_UPCALL_TIMEOUT                             \
+        ({                                                      \
+                int timeout = obd_timeout - GSS_TIMEOUT_DELTA;  \
+                                                                \
+                if (timeout < GSS_TIMEOUT_DELTA * 2)            \
+                        timeout = GSS_TIMEOUT_DELTA * 2;        \
+                timeout;                                        \
+        })
+#define SECINIT_RPC_TIMEOUT                                     \
+        ({                                                      \
+                int timeout = CRED_REFRESH_UPCALL_TIMEOUT -     \
+                              GSS_TIMEOUT_DELTA;                \
+                if (timeout < GSS_TIMEOUT_DELTA)                \
+                        timeout = GSS_TIMEOUT_DELTA;            \
+                timeout;                                        \
+        })
+#define SECFINI_RPC_TIMEOUT     (GSS_TIMEOUT_DELTA)
+
 
 /**********************************************
  * gss security init/fini helper              *
  **********************************************/
-
-#define SECINIT_RPC_TIMEOUT     (30)
-#define SECFINI_RPC_TIMEOUT     (10)
 
 static int secinit_compose_request(struct obd_import *imp,
                                    char *buf, int bufsize,
@@ -701,7 +712,6 @@ err_free_ctx:
  * cred APIs                           *
  ***************************************/
 #ifdef __KERNEL__
-#define CRED_REFRESH_UPCALL_TIMEOUT     (50)
 static int gss_cred_refresh(struct ptlrpc_cred *cred)
 {
         struct obd_import          *import;
