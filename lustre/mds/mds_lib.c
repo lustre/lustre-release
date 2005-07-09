@@ -912,13 +912,11 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                 RETURN(-EPERM);
         }
 
-        if (req->rq_auth_usr_mds)
-                goto get_lsd;
-
-        /* if we use strong authentication, we expect the uid which
-         * client claimed is true.
+        /* sanity check: if we use strong authentication, we expect the
+         * uid which client claimed is true.
+         * not apply to special mds user .
          */
-        if (strong_sec) {
+        if (!req->rq_auth_usr_mds && strong_sec) {
                 if (!med->med_remote) {
                         if (req->rq_auth_uid != rsd->rsd_uid) {
                                 CERROR("local client "LPU64": auth uid %u "
@@ -943,12 +941,12 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                                        peernid, req->rq_auth_uid,
                                        rsd->rsd_uid, rsd->rsd_gid,
                                        rsd->rsd_fsuid, rsd->rsd_fsgid);
+                                RETURN(-EPERM);
                         }
                 }
         }
 
-get_lsd:
-        /* now lsd come into play */
+        /* now LSD come into play */
         ucred->luc_ginfo = NULL;
         ucred->luc_lsd = lsd = mds_get_lsd(rsd->rsd_uid);
 
@@ -959,30 +957,33 @@ get_lsd:
 
         lsd_perms = mds_lsd_get_perms(lsd, med->med_remote, 0, peernid);
 
-        if (req->rq_auth_usr_mds)
-                goto squash_root;
+        /* check setuid/setgid permissions.
+         * again not apply to special mds user.
+         */
+        if (!req->rq_auth_usr_mds) {
+                /* find out the setuid/setgid attempt */
+                setuid = (rsd->rsd_uid != rsd->rsd_fsuid);
+                setgid = (rsd->rsd_gid != rsd->rsd_fsgid ||
+                          rsd->rsd_gid != lsd->lsd_gid);
 
-        /* find out the setuid/setgid attempt */
-        setuid = (rsd->rsd_uid != rsd->rsd_fsuid);
-        setgid = (rsd->rsd_gid != rsd->rsd_fsgid ||
-                  rsd->rsd_gid != lsd->lsd_gid);
+                /* check permission of setuid */
+                if (setuid && !(lsd_perms & LSD_PERM_SETUID)) {
+                        CWARN("mds blocked setuid attempt (%u -> %u) "
+                              "from "LPU64"\n", rsd->rsd_uid, rsd->rsd_fsuid,
+                              peernid);
+                        RETURN(-EPERM);
+                }
 
-        /* check permission of setuid */
-        if (setuid && !(lsd_perms & LSD_PERM_SETUID)) {
-                CWARN("mds blocked setuid attempt (%u -> %u) from "LPU64"\n",
-                      rsd->rsd_uid, rsd->rsd_fsuid, peernid);
-                RETURN(-EPERM);
+                /* check permission of setgid */
+                if (setgid && !(lsd_perms & LSD_PERM_SETGID)) {
+                        CWARN("mds blocked setgid attempt (%u:%u/%u:%u -> %u) "
+                              "from "LPU64"\n", rsd->rsd_uid, rsd->rsd_gid,
+                              rsd->rsd_fsuid, rsd->rsd_fsgid, lsd->lsd_gid,
+                              peernid);
+                        RETURN(-EPERM);
+                }
         }
 
-        /* check permission of setgid */
-        if (setgid && !(lsd_perms & LSD_PERM_SETGID)) {
-                CWARN("mds blocked setgid attempt (%u:%u/%u:%u -> %u) from "
-                      LPU64"\n", rsd->rsd_uid, rsd->rsd_gid,
-                      rsd->rsd_fsuid, rsd->rsd_fsgid, lsd->lsd_gid, peernid);
-                RETURN(-EPERM);
-        }
-
-squash_root:
         root_squashed = mds_squash_root(mds, rsd, &peernid); 
 
         /* remove privilege for non-root user */
@@ -996,9 +997,10 @@ squash_root:
         ucred->luc_fsgid = rsd->rsd_fsgid;
         ucred->luc_cap = rsd->rsd_cap;
 
-        /* don't use any supplementary group for remote client or
-         * we squashed root */
-        if (med->med_remote || root_squashed)
+        /* don't use any supplementary group if we squashed root.
+         * XXX The exact behavior of root_squash is not defined, we just
+         * keep the reminder here */
+        if (root_squashed)
                 RETURN(0);
 
         /* install groups from LSD */
@@ -1007,8 +1009,14 @@ squash_root:
                 get_group_info(ucred->luc_ginfo);
         }
 
-        /* everything is done if we don't allow setgroups */
-        if (!(lsd_perms & LSD_PERM_SETGRP))
+        /* everything is done if we don't allow setgroups, or it is
+         * from remote client (which implies forced to be no-setgroups).
+         *
+         * Note: remote user's supplementary groups sent along the request
+         * (if any) are all ignored, but we make the mapped local user's
+         * supplementary groups take effect.
+         */
+        if (med->med_remote || !(lsd_perms & LSD_PERM_SETGRP))
                 RETURN(0);
 
         /* root could set any groups as he want (if allowed), normal
