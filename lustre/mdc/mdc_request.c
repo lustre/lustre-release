@@ -396,6 +396,8 @@ static void mdc_commit_open(struct ptlrpc_request *req)
 
         OBD_FREE(mod, sizeof(*mod));
         req->rq_cb_data = NULL;
+        LASSERT(atomic_read(&req->rq_refcount) > 1);
+        ptlrpc_req_finished(req);
 }
 
 static void mdc_replay_open(struct ptlrpc_request *req)
@@ -529,7 +531,6 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         spin_lock(&open_req->rq_lock);
         open_req->rq_replay = 0;
         spin_unlock(&open_req->rq_lock);
-        ptlrpc_req_finished(open_req);
 }
 
 int mdc_close(struct obd_export *exp, struct obdo *oa,
