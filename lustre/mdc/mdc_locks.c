@@ -390,7 +390,7 @@ int mdc_enqueue(struct obd_export *exp,
         if (LUSTRE_IT(it)->it_status < 0 && req->rq_replay)
                 mdc_clear_replay_flag(req, LUSTRE_IT(it)->it_status);
 
-        DEBUG_REQ(D_RPCTRACE, req, "disposition: %x, status: %d",
+        DEBUG_REQ(D_DLMTRACE, req, "disposition: %x, status: %d",
                   LUSTRE_IT(it)->it_disposition, LUSTRE_IT(it)->it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
