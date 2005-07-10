@@ -797,6 +797,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
                 LDLM_DEBUG(lock, "server-side convert handler START");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
+                do_gettimeofday(&lock->l_enqueued_time);
                 res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                         (int *)&dlm_rep->lock_flags);
                 if (res) {
