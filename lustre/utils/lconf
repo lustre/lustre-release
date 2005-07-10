@@ -1837,10 +1837,10 @@ class CONFDEV(Module):
                     inode_size = 2048
                 elif stripe_count > 13:
                     inode_size = 1024
-                elif stripe_count > 3:
-                    inode_size = 512
+                #elif stripe_count > 3:
+                #    inode_size = 512
                 else:
-                    inode_size = 256
+                    inode_size = 512
 		    
 	return inode_size
 	    
