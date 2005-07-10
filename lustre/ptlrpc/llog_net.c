@@ -107,7 +107,6 @@ int llog_handle_connect(struct ptlrpc_request *req)
 
         req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
 
-#warning "FIXME: shouldn't llogs be passed directly?"
         ctxt = llog_get_context(&obd->obd_llogs, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid,
                           &req_body->lgdc_gen, NULL);
