@@ -243,7 +243,7 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
         struct dentry *de = mds_id2dentry(obd, id, mnt), *retval = de;
         ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         struct ldlm_res_id res_id = { .name = {0} };
-        int flags = 0, rc;
+        int flags = LDLM_FL_ATOMIC_CB, rc;
         ENTRY;
 
         if (IS_ERR(de))
@@ -271,7 +271,7 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
                                 RETURN(ERR_PTR(-ENOLCK));
                         }
                 }
-                flags = 0;
+                flags = LDLM_FL_ATOMIC_CB;
 
                 res_id.name[2] = full_name_hash((unsigned char *)name, namelen);
 
@@ -804,7 +804,7 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
 
         /* XXX layering violation!  -phil */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res(lock->l_resource);
         
         /*
          * get this: if mds_blocking_ast is racing with mds_intent_policy, such
@@ -813,13 +813,13 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
          * blocking function anymore.  So check, and return early, if so.
          */
         if (lock->l_blocking_ast != mds_blocking_ast) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                unlock_res(lock->l_resource);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
 
         if (do_ast) {
                 struct lustre_handle lockh;
@@ -2229,8 +2229,9 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                 if (!IS_ERR(new) && new->d_inode) {
                         struct lustre_id sid;
                                 
-                        CWARN("mkdir() repairing is on its way: %lu/%lu\n",
-                              (unsigned long)id_ino(&id), (unsigned long)id_gen(&id));
+                        CDEBUG(D_OTHER, "mkdir repairing %lu/%lu\n",
+                               (unsigned long)id_ino(&id),
+                               (unsigned long)id_gen(&id));
                         
                         obdo_from_inode(&repbody->oa, new->d_inode,
                                         FILTER_VALID_FLAGS);
@@ -2571,6 +2572,7 @@ static void mds_revoke_export_locks(struct obd_export *exp)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
+        struct list_head work;
         struct ldlm_lock *lock, *next;
         struct ldlm_lock_desc desc;
 
@@ -2578,20 +2580,31 @@ static void mds_revoke_export_locks(struct obd_export *exp)
                 return;
 
         ENTRY;
-        l_lock(&ns->ns_lock);
+        CERROR("implement right locking here! -bzzz\n");
+        INIT_LIST_HEAD(&work);
+        spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each_entry_safe(lock, next, locklist, l_export_chain) {
-                if (lock->l_req_mode != lock->l_granted_mode)
+
+                lock_res(lock->l_resource);
+                if (lock->l_req_mode != lock->l_granted_mode) {
+                        unlock_res(lock->l_resource);
                         continue;
+                }
 
                 LASSERT(lock->l_resource);
                 if (lock->l_resource->lr_type != LDLM_IBITS &&
-                    lock->l_resource->lr_type != LDLM_PLAIN)
+                    lock->l_resource->lr_type != LDLM_PLAIN) {
+                        unlock_res(lock->l_resource);
                         continue;
+                }
 
-                if (lock->l_flags & LDLM_FL_AST_SENT)
+                if (lock->l_flags & LDLM_FL_AST_SENT) {
+                        unlock_res(lock->l_resource);
                         continue;
+                }
 
                 lock->l_flags |= LDLM_FL_AST_SENT;
+                unlock_res(lock->l_resource);
 
                 /* the desc just pretend to exclusive */
                 ldlm_lock2desc(lock, &desc);
@@ -2600,7 +2613,8 @@ static void mds_revoke_export_locks(struct obd_export *exp)
 
                 lock->l_blocking_ast(lock, &desc, NULL, LDLM_CB_BLOCKING);
         }
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&exp->exp_ldlm_data.led_lock);
+
         EXIT;
 }
 
@@ -3766,7 +3780,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
                 return;
 
-        l_lock(&obd->obd_namespace->ns_lock);
+        spin_lock(&obd->obd_namespace->ns_hash_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
@@ -3779,11 +3793,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
                                   lockh->cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        l_unlock(&obd->obd_namespace->ns_lock);
+                        spin_unlock(&obd->obd_namespace->ns_hash_lock);
                         return;
                 }
         }
-        l_unlock(&obd->obd_namespace->ns_lock);
+        spin_unlock(&obd->obd_namespace->ns_hash_lock);
 
         /* If the xid matches, then we know this is a resent request,
          * and allow it. (It's probably an OPEN, for which we don't
@@ -3981,13 +3995,16 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         }
 
         /* Fixup the lock to be given to the client */
-        l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
+        lock_res(new_lock->l_resource);
         new_lock->l_readers = 0;
         new_lock->l_writers = 0;
 
         new_lock->l_export = class_export_get(req->rq_export);
+
+        spin_lock(&new_lock->l_export->exp_ldlm_data.led_lock);
         list_add(&new_lock->l_export_chain,
                  &new_lock->l_export->exp_ldlm_data.led_held_locks);
+        spin_unlock(&new_lock->l_export->exp_ldlm_data.led_lock);
 
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
@@ -3997,8 +4014,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
+        unlock_res(new_lock->l_resource);
         LDLM_LOCK_PUT(new_lock);
-        l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);
 }

@@ -1068,20 +1068,20 @@ static int filter_blocking_ast(struct ldlm_lock *lock,
         }
 
         /* XXX layering violation!  -phil */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res(lock->l_resource);
         /* Get this: if filter_blocking_ast is racing with ldlm_intent_policy,
          * such that filter_blocking_ast is called just before l_i_p takes the
          * ns_lock, then by the time we get the lock, we might not be the
          * correct blocking function anymore.  So check, and return early, if
          * so. */
         if (lock->l_blocking_ast != filter_blocking_ast) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                unlock_res(lock->l_resource);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
 
         if (do_ast) {
                 struct lustre_handle lockh;
@@ -1308,25 +1308,24 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
         lock->l_req_mode = LCK_PR;
 
-        l_lock(&res->lr_namespace->ns_lock);
-
-        res->lr_tmp = &rpc_list;
-        rc = policy(lock, &tmpflags, 0, &err);
-        res->lr_tmp = NULL;
+        lock_res(res);
+        rc = policy(lock, &tmpflags, 0, &err, &rpc_list);
 
         /* FIXME: we should change the policy function slightly, to not make
          * this list at all, since we just turn around and free it */
         while (!list_empty(&rpc_list)) {
-                struct ldlm_ast_work *w =
-                        list_entry(rpc_list.next, struct ldlm_ast_work, w_list);
-                list_del(&w->w_list);
-                LDLM_LOCK_PUT(w->w_lock);
-                OBD_FREE(w, sizeof(*w));
+                struct ldlm_lock *wlock =
+                        list_entry(rpc_list.next, struct ldlm_lock, l_cp_ast);
+                LASSERT((lock->l_flags & LDLM_FL_AST_SENT) == 0);
+                LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
+                lock->l_flags &= ~LDLM_FL_CP_REQD;
+                list_del_init(&wlock->l_cp_ast);
+                LDLM_LOCK_PUT(wlock);
         }
 
         if (rc == LDLM_ITER_CONTINUE) {
                 /* The lock met with no resistance; we're finished. */
-                l_unlock(&res->lr_namespace->ns_lock);
+                unlock_res(res);
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
@@ -1334,11 +1333,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * policy nicely created a list of all PW locks for us.  We will choose
          * the highest of those which are larger than the size in the LVB, if
          * any, and perform a glimpse callback. */
-        down(&res->lr_lvb_sem);
         res_lvb = res->lr_lvb_data;
         LASSERT(res_lvb != NULL);
         *reply_lvb = *res_lvb;
-        up(&res->lr_lvb_sem);
 
         list_for_each(tmp, &res->lr_granted) {
                 struct ldlm_lock *tmplock =
@@ -1362,7 +1359,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 LDLM_LOCK_PUT(l);
                 l = LDLM_LOCK_GET(tmplock);
         }
-        l_unlock(&res->lr_namespace->ns_lock);
+        unlock_res(res);
 
         /* There were no PW locks beyond the size in the LVB; finished. */
         if (l == NULL)
@@ -1382,9 +1379,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
         }
 
-        down(&res->lr_lvb_sem);
+        lock_res(res);
         *reply_lvb = *res_lvb;
-        up(&res->lr_lvb_sem);
+        unlock_res(res);
 out:
         LDLM_LOCK_PUT(l);
 

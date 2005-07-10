@@ -42,7 +42,6 @@
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
-extern struct lustre_lock ldlm_handle_lock;
 extern struct list_head ldlm_namespace_list;
 
 static DECLARE_MUTEX(ldlm_ref_sem);
@@ -361,9 +360,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
                 } else {
-                        l_lock(&lock->l_resource->lr_namespace->ns_lock);
                         ldlm_del_waiting_lock(lock);
-                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                         ldlm_failed_ast(lock, rc, ast_type);
                 }
         } else if (rc) {
@@ -405,21 +402,6 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LASSERT(lock);
 
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_granted_mode != lock->l_req_mode) {
-                /* this blocking AST will be communicated as part of the
-                 * completion AST instead */
-                LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                RETURN(0);
-        }
-
-        if (lock->l_destroyed) {
-                /* What's the point? */
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                RETURN(0);
-        }
-
 #if 0
         if (LTIME_S(CURRENT_TIME) - lock->l_export->exp_last_request_time > 30){
                 ldlm_failed_ast(lock, -ETIMEDOUT, "Not-attempted blocking");
@@ -431,9 +413,24 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK,
                               1, &size, NULL);
-        if (req == NULL) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        if (req == NULL)
                 RETURN(-ENOMEM);
+
+        lock_res(lock->l_resource);
+        if (lock->l_granted_mode != lock->l_req_mode) {
+                /* this blocking AST will be communicated as part of the
+                 * completion AST instead */
+                unlock_res(lock->l_resource);
+                LDLM_DEBUG(lock, "lock not granted, not sending blocking AST");
+                ptlrpc_req_finished(req);
+                RETURN(0);
+        }
+
+        if (lock->l_destroyed) {
+                /* What's the point? */
+                unlock_res(lock->l_resource);
+                ptlrpc_req_finished(req);
+                RETURN(0);
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
@@ -447,7 +444,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         if (lock->l_granted_mode == lock->l_req_mode)
                 ldlm_add_waiting_lock(lock);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
@@ -484,12 +481,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (total_enqueue_wait / 1000000 > obd_timeout)
                 LDLM_ERROR(lock, "enqueue wait took %ldus", total_enqueue_wait);
 
-        down(&lock->l_resource->lr_lvb_sem);
+        lock_res(lock->l_resource);
         if (lock->l_resource->lr_lvb_len) {
                 buffers = 2;
                 size[1] = lock->l_resource->lr_lvb_len;
         }
-        up(&lock->l_resource->lr_lvb_sem);
+        unlock_res(lock->l_resource);
         
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK,
@@ -506,13 +503,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (buffers == 2) {
                 void *lvb;
                 
-                down(&lock->l_resource->lr_lvb_sem);
                 lvb = lustre_msg_buf(req->rq_reqmsg, 1,
                                      lock->l_resource->lr_lvb_len);
-
+                lock_res(lock->l_resource);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                        lock->l_resource->lr_lvb_len);
-                up(&lock->l_resource->lr_lvb_sem);
+                unlock_res(lock->l_resource);
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
@@ -523,12 +519,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
 
         /* We only send real blocking ASTs after the lock is granted */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res(lock->l_resource);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
                 ldlm_add_waiting_lock(lock); /* start the lock-timeout clock */
         }
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
 
         rc = ptlrpc_queue_wait(req);
         if (rc != 0)
@@ -560,9 +556,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
                sizeof(body->lock_handle1));
         ldlm_lock2desc(lock, &body->lock_desc);
 
-	down(&lock->l_resource->lr_lvb_sem);
+	lock_res(lock->l_resource);
         size = lock->l_resource->lr_lvb_len;
-	up(&lock->l_resource->lr_lvb_sem);
+	unlock_res(lock->l_resource);
         req->rq_replen = lustre_msg_size(1, &size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -583,20 +579,19 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 static struct ldlm_lock *
 find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
 {
-        struct obd_device *obd = exp->exp_obd;
         struct list_head *iter;
 
-        l_lock(&obd->obd_namespace->ns_lock);
+        spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
                 if (lock->l_remote_handle.cookie == remote_hdl->cookie) {
                         LDLM_LOCK_GET(lock);
-                        l_unlock(&obd->obd_namespace->ns_lock);
+                        spin_unlock(&exp->exp_ldlm_data.led_lock);
                         return lock;
                 }
         }
-        l_unlock(&obd->obd_namespace->ns_lock);
+        spin_unlock(&exp->exp_ldlm_data.led_lock);
         return NULL;
 }
 
@@ -657,17 +652,16 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LASSERT(req->rq_export);
         OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_ENQUEUE_BLOCKED, obd_timeout * 2);
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (req->rq_export->exp_failed) {
                 LDLM_ERROR(lock,"lock on destroyed export %p\n",req->rq_export);
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 GOTO(out, err = -ENOTCONN);
         }
-        lock->l_export = class_export_get(req->rq_export);
 
+        lock->l_export = class_export_get(req->rq_export);
+        spin_lock(&lock->l_export->exp_ldlm_data.led_lock);
         list_add(&lock->l_export_chain,
                  &lock->l_export->exp_ldlm_data.led_held_locks);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        spin_unlock(&lock->l_export->exp_ldlm_data.led_lock);
 
 existing_lock:
 
@@ -677,12 +671,12 @@ existing_lock:
                 cookie = req;
         } else {
                 int buffers = 1;
-                down(&lock->l_resource->lr_lvb_sem);
+                lock_res(lock->l_resource);
                 if (lock->l_resource->lr_lvb_len) {
                         size[1] = lock->l_resource->lr_lvb_len;
                         buffers = 2;
                 }
-                up(&lock->l_resource->lr_lvb_sem);
+                unlock_res(lock->l_resource);
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
                         GOTO(out, rc = -ENOMEM);
 
@@ -711,13 +705,13 @@ existing_lock:
 
         /* We never send a blocking AST until the lock is granted, but
          * we can tell it right now */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res(lock->l_resource);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
                 if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
 
         EXIT;
  out:
@@ -732,13 +726,11 @@ existing_lock:
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
          * ldlm_reprocess_all.  If this moves, revisit that code. -phil */
         if (lock) {
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 if (rc == 0) {
-                        down(&lock->l_resource->lr_lvb_sem);
+                        lock_res(lock->l_resource);
                         size[1] = lock->l_resource->lr_lvb_len;
                         if (size[1] > 0) {
                                 void *lvb = lustre_msg_buf(req->rq_repmsg,
@@ -749,7 +741,7 @@ existing_lock:
                                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                                        size[1]);
                         }
-                        up(&lock->l_resource->lr_lvb_sem);
+                        unlock_res(lock->l_resource);
                 } else {
                         ldlm_lock_destroy(lock);
                 }
@@ -793,18 +785,14 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         } else {
                 void *res = NULL;
 
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 do_gettimeofday(&lock->l_enqueued_time);
                 res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                         (int *)&dlm_rep->lock_flags);
                 if (res) {
-                        l_lock(&lock->l_resource->lr_namespace->ns_lock);
                         if (ldlm_del_waiting_lock(lock))
-                                CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
-                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                                LDLM_DEBUG(lock, "converted waiting lock");
                         req->rq_status = 0;
                 } else {
                         req->rq_status = EDEADLOCK;
@@ -814,9 +802,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (lock) {
                 if (!req->rq_status)
                         ldlm_reprocess_all(lock->l_resource);
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler END");
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_LOCK_PUT(lock);
         } else
                 LDLM_DEBUG_NOLOCK("server-side convert handler END");
@@ -866,11 +852,9 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                 //(res, req->rq_reqmsg, 1);
                 }
 
-                l_lock(&res->lr_namespace->ns_lock);
                 ldlm_lock_cancel(lock);
                 if (ldlm_del_waiting_lock(lock))
                         CDEBUG(D_DLMTRACE, "cancelled waiting lock %p\n", lock);
-                l_unlock(&res->lr_namespace->ns_lock);
                 req->rq_status = rc;
         }
 
@@ -879,9 +863,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side cancel handler END");
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_LOCK_PUT(lock);
         }
 
@@ -894,29 +876,25 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         int do_ast;
         ENTRY;
 
-        l_lock(&ns->ns_lock);
         LDLM_DEBUG(lock, "client blocking AST callback handler START");
-
+        
+        lock_res(lock->l_resource);
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
+        unlock_res(lock->l_resource);
 
         if (do_ast) {
                 LDLM_DEBUG(lock, "already unused, calling "
                            "callback (%p)", lock->l_blocking_ast);
-                if (lock->l_blocking_ast != NULL) {
-                        l_unlock(&ns->ns_lock);
-                        l_check_no_ns_lock(ns);
+                if (lock->l_blocking_ast != NULL)
                         lock->l_blocking_ast(lock, ld, lock->l_ast_data,
                                              LDLM_CB_BLOCKING);
-                        l_lock(&ns->ns_lock);
-                }
         } else {
                 LDLM_DEBUG(lock, "Lock still has references, will be"
                            " cancelled later");
         }
 
         LDLM_DEBUG(lock, "client blocking callback handler END");
-        l_unlock(&ns->ns_lock);
         LDLM_LOCK_PUT(lock);
         EXIT;
 }
@@ -926,11 +904,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                                     struct ldlm_request *dlm_req,
                                     struct ldlm_lock *lock)
 {
+        struct ldlm_resource *res = lock->l_resource;
         LIST_HEAD(ast_list);
         ENTRY;
 
-        l_lock(&ns->ns_lock);
         LDLM_DEBUG(lock, "client completion callback handler START");
+
+        lock_res(res);
 
         /* If we receive the completion AST before the actual enqueue returned,
          * then we might need to switch lock modes, resources, or extents. */
@@ -949,9 +929,11 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         if (memcmp(&dlm_req->lock_desc.l_resource.lr_name,
                    &lock->l_resource->lr_name,
                    sizeof(lock->l_resource->lr_name)) != 0) {
+                unlock_res(res);
                 ldlm_lock_change_resource(ns, lock,
                                          dlm_req->lock_desc.l_resource.lr_name);
                 LDLM_DEBUG(lock, "completion AST, new resource");
+                lock_res(res);
         }
 
         if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
@@ -971,14 +953,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 }
         }
 
-        lock->l_resource->lr_tmp = &ast_list;
-        ldlm_grant_lock(lock, req, sizeof(*req), 1);
-        lock->l_resource->lr_tmp = NULL;
+        ldlm_grant_lock(lock, &ast_list);
+        unlock_res(res);
+
         LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
-        l_unlock(&ns->ns_lock);
         LDLM_LOCK_PUT(lock);
 
-        ldlm_run_ast_work(ns, &ast_list);
+        ldlm_run_cp_ast_work(&ast_list);
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
                           lock);
@@ -993,15 +974,10 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         int rc = -ENOSYS;
         ENTRY;
 
-        l_lock(&ns->ns_lock);
         LDLM_DEBUG(lock, "client glimpse AST callback handler");
 
-        if (lock->l_glimpse_ast != NULL) {
-                l_unlock(&ns->ns_lock);
-                l_check_no_ns_lock(ns);
+        if (lock->l_glimpse_ast != NULL)
                 rc = lock->l_glimpse_ast(lock, req);
-                l_lock(&ns->ns_lock);
-        }
 
         if (req->rq_repmsg != NULL) {
                 ptlrpc_reply(req);
@@ -1010,16 +986,18 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                 ptlrpc_error(req);
         }
 
-        l_unlock(&ns->ns_lock);
+        lock_res(lock->l_resource);
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             time_after(jiffies, lock->l_last_used + 10 * HZ)) {
+                unlock_res(lock->l_resource);
                 if (ldlm_bl_to_thread(ns, NULL, lock))
                         ldlm_handle_bl_callback(ns, NULL, lock);
 
                 EXIT;
                 return;
         }
+        unlock_res(lock->l_resource);
         LDLM_LOCK_PUT(lock);
         EXIT;
 }
@@ -1575,8 +1553,6 @@ int __init ldlm_init(void)
                 return -ENOMEM;
         }
 
-        l_lock_init(&ldlm_handle_lock);
-
         return 0;
 }
 
@@ -1660,10 +1636,6 @@ EXPORT_SYMBOL(ldlm_namespace_dump);
 EXPORT_SYMBOL(ldlm_dump_all_namespaces);
 EXPORT_SYMBOL(ldlm_resource_get);
 EXPORT_SYMBOL(ldlm_resource_putref);
-
-/* l_lock.c */
-EXPORT_SYMBOL(l_lock);
-EXPORT_SYMBOL(l_unlock);
 
 /* ldlm_lib.c */
 EXPORT_SYMBOL(client_import_add_conn);

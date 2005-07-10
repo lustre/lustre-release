@@ -138,7 +138,7 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
         lock = ldlm_handle2lock(lockh);
 
         LASSERT(lock != NULL);
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res(lock->l_resource);
 #ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
@@ -152,7 +152,7 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
         }
 #endif
         lock->l_ast_data = data;
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res(lock->l_resource);
         LDLM_LOCK_PUT(lock);
 
         EXIT;

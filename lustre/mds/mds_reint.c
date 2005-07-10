@@ -1263,7 +1263,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
         CDEBUG(D_DLMTRACE, "lock order: "LPU64"/"LPU64"\n",
                res_id[0]->name[0], res_id[1]->name[0]);
 
-        flags = LDLM_FL_LOCAL_ONLY;
+        flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, *res_id[0],
                               LDLM_IBITS, policies[0], lock_modes[0], &flags,
                               mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
@@ -1277,7 +1277,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                 memcpy(handles[1], handles[0], sizeof(*(handles[1])));
                 ldlm_lock_addref(handles[1], lock_modes[1]);
         } else if (res_id[1]->name[0] != 0) {
-                flags = LDLM_FL_LOCAL_ONLY;
+                flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                       *res_id[1], LDLM_IBITS, policies[1],
                                       lock_modes[1], &flags, mds_blocking_ast,
@@ -1469,7 +1469,7 @@ changed:
         *dchildp = dchild = vchild;
 
         if (dchild->d_inode || (dchild->d_flags & DCACHE_CROSS_REF)) {
-                int flags = 0;
+                int flags = LDLM_FL_ATOMIC_CB;
                 
                 if (dchild->d_inode) {
                         down(&dchild->d_inode->i_sem);
@@ -1560,7 +1560,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
         if (name && IS_PDIROPS((*dparentp)->d_inode)) {
                 struct ldlm_res_id res_id = { .name = {0} };
                 ldlm_policy_data_t policy;
-                int flags = 0;
+                int flags = LDLM_FL_ATOMIC_CB;
 
                 *update_mode = mds_lock_mode_for_dir(obd, *dparentp, parent_mode);
                 if (*update_mode) {
@@ -2341,7 +2341,7 @@ static int mds_reint_link_acquire(struct mds_update_record *rec,
         int rc = 0, cleanup_phase = 0;
         struct dentry *de_src = NULL;
         ldlm_policy_data_t policy;
-        int flags = 0;
+        int flags = LDLM_FL_ATOMIC_CB;
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "%s: request to acquire i_nlinks "DLID4"\n",
@@ -2585,7 +2585,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         
 #ifdef S_PDIROPS
         if (IS_PDIROPS(de_tgt_dir->d_inode)) {
-                int flags = 0;
+                int flags = LDLM_FL_ATOMIC_CB;
                 update_mode = mds_lock_mode_for_dir(obd, de_tgt_dir, LCK_EX);
                 if (update_mode) {
                         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,

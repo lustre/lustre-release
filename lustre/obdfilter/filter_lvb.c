@@ -142,6 +142,8 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                         //GOTO(out, rc = -EPROTO);
                         GOTO(out, rc = 0);
                 }
+
+                lock_res(res);
                 if (new->lvb_size > lvb->lvb_size || !increase) {
                         CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
                                LPU64" -> "LPU64"\n", res->lr_name.name[0],
@@ -166,6 +168,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                                lvb->lvb_ctime, new->lvb_ctime);
                         lvb->lvb_ctime = new->lvb_ctime;
                 }
+                unlock_res(res);
         }
 
         /* Update the LVB from the disk inode */
@@ -187,6 +190,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         obdo_from_inode(oa, dentry->d_inode, FILTER_VALID_FLAGS);
 
+        lock_res(res);
         if (dentry->d_inode->i_size > lvb->lvb_size || !increase) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
@@ -216,6 +220,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                LPU64" -> %lu\n", res->lr_name.name[0],
                lvb->lvb_blocks, dentry->d_inode->i_blocks);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
+        unlock_res(res);
 
         f_dput(dentry);
 out:

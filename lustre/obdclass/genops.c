@@ -490,6 +490,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
         INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
+        spin_lock_init(&export->exp_ldlm_data.led_lock);
 
         INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);

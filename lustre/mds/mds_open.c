@@ -874,7 +874,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
 {
         struct ldlm_res_id child_res_id = { .name = { inode->i_ino, 0, 1, 0 } };
         struct lustre_handle lockh;
-        int lock_flags = 0;
+        int lock_flags = LDLM_FL_ATOMIC_CB;
         int rc;
         ENTRY;
 
@@ -1311,7 +1311,7 @@ got_child:
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
                 struct ldlm_res_id child_res_id = { .name = {0}};
                 ldlm_policy_data_t policy;
-                int lock_flags = 0;
+                int lock_flags = LDLM_FL_ATOMIC_CB;
                 
                 /* LOOKUP lock will protect dentry on client -bzzz */
                 policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP |

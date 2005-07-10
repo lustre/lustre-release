@@ -177,6 +177,8 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
+        if (*flags & LDLM_FL_ATOMIC_CB)
+                lock->l_flags |= LDLM_FL_ATOMIC_CB;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
                 memcpy(&lock->l_policy_data, policy, sizeof(*policy));
@@ -212,10 +214,10 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
                                 struct lustre_handle *lockh, int mode)
 {
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
-        l_lock(&ns->ns_lock);
+        lock_res(lock->l_resource);
         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+        unlock_res(lock->l_resource);
         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
-        l_unlock(&ns->ns_lock);
 
         ldlm_lock_decref_and_cancel(lockh, mode);
 
@@ -400,9 +402,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         }
 
         if ((*flags) & LDLM_FL_AST_SENT) {
-                l_lock(&ns->ns_lock);
+                lock_res(lock->l_resource);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                l_unlock(&ns->ns_lock);
+                unlock_res(lock->l_resource);
                 LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
         }
 
@@ -571,11 +573,11 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                lock_res(lock->l_resource);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 local_only = lock->l_flags & LDLM_FL_LOCAL_ONLY;
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 ldlm_cancel_callback(lock);
+                unlock_res(lock->l_resource);
 
                 if (local_only) {
                         CDEBUG(D_INFO, "not sending request (at caller's "
@@ -658,16 +660,24 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         sync = LDLM_SYNC; /* force to be sync in user space */
 #endif
 
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_unused_lock);
         count = ns->ns_nr_unused - ns->ns_max_unused;
 
         if (count <= 0) {
-                l_unlock(&ns->ns_lock);
+                spin_unlock(&ns->ns_unused_lock);
                 RETURN(0);
         }
 
-        list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru) {
+        while (!list_empty(&ns->ns_unused_list)) {
+                struct list_head *tmp = ns->ns_unused_list.next;
+                lock = list_entry(tmp, struct ldlm_lock, l_lru);
                 LASSERT(!lock->l_readers && !lock->l_writers);
+
+                LDLM_LOCK_GET(lock); /* dropped by bl thread */
+                spin_unlock(&ns->ns_unused_lock);
+
+                lock_res(lock->l_resource);
+                ldlm_lock_remove_from_lru(lock);
 
                 /* Setting the CBPENDING flag is a little misleading, but
                  * prevents an important race; namely, once CBPENDING is set,
@@ -675,9 +685,6 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                  * readers and writers are already zero here, ldlm_lock_decref
                  * won't see this flag and call l_blocking_ast */
                 lock->l_flags |= LDLM_FL_CBPENDING;
-
-                LDLM_LOCK_GET(lock); /* dropped by bl thread */
-                ldlm_lock_remove_from_lru(lock);
 
                 /* We can't re-add to l_lru as it confuses the refcounting in
                  * ldlm_lock_remove_from_lru() if an AST arrives after we drop
@@ -687,10 +694,14 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                 if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))                        
                         list_add(&lock->l_tmp, &cblist);
 
+                unlock_res(lock->l_resource);
+
+                spin_lock(&ns->ns_unused_lock);
+
                 if (--count == 0)
                         break;
         }
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_unused_lock);
 
         list_for_each_entry_safe(lock, next, &cblist, l_tmp) {
                 list_del_init(&lock->l_tmp);
@@ -704,9 +715,9 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                            struct ldlm_res_id res_id, int flags,
                                            void *opaque)
 {
-        struct ldlm_resource *res;
         struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
-        struct ldlm_ast_work *w;
+        struct ldlm_resource *res;
+        struct ldlm_lock *lock;
         ENTRY;
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
@@ -716,9 +727,8 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 RETURN(0);
         }
 
-        l_lock(&ns->ns_lock);
+        lock_res(res);
         list_for_each(tmp, &res->lr_granted) {
-                struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (opaque != NULL && lock->l_ast_data != opaque) {
@@ -738,31 +748,27 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 /* See CBPENDING comment in ldlm_cancel_lru */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                OBD_ALLOC(w, sizeof(*w));
-                LASSERT(w);
-
-                w->w_lock = LDLM_LOCK_GET(lock);
-
-                list_add(&w->w_list, &list);
+                LASSERT(list_empty(&lock->l_bl_ast));
+                list_add(&lock->l_bl_ast, &list);
+                LDLM_LOCK_GET(lock);
         }
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
 
         list_for_each_safe(tmp, next, &list) {
                 struct lustre_handle lockh;
                 int rc;
-                w = list_entry(tmp, struct ldlm_ast_work, w_list);
+                lock = list_entry(tmp, struct ldlm_lock, l_bl_ast);
 
                 if (flags & LDLM_FL_LOCAL_ONLY) {
-                        ldlm_lock_cancel(w->w_lock);
+                        ldlm_lock_cancel(lock);
                 } else {
-                        ldlm_lock2handle(w->w_lock, &lockh);
+                        ldlm_lock2handle(lock, &lockh);
                         rc = ldlm_cli_cancel(&lockh);
                         if (rc != ELDLM_OK)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 }
-                list_del(&w->w_list);
-                LDLM_LOCK_PUT(w->w_lock);
-                OBD_FREE(w, sizeof(*w));
+                list_del_init(&lock->l_bl_ast);
+                LDLM_LOCK_PUT(lock);
         }
 
         ldlm_resource_putref(res);
@@ -774,10 +780,10 @@ static inline int have_no_nsresource(struct ldlm_namespace *ns)
 {
         int no_resource = 0;
 
-        spin_lock(&ns->ns_counter_lock);
+        spin_lock(&ns->ns_hash_lock);
         if (ns->ns_resources == 0)
                 no_resource = 1;
-        spin_unlock(&ns->ns_counter_lock);
+        spin_unlock(&ns->ns_hash_lock);
 
         RETURN(no_resource);
 }
@@ -805,15 +811,17 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                 RETURN(ldlm_cli_cancel_unused_resource(ns, *res_id, flags,
                                                        opaque));
 
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_hash_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
-                struct list_head *tmp, *next;
-                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
-                        int rc;
+                struct list_head *tmp;
+                tmp = ns->ns_hash[i].next;
+                while (tmp != &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
+                        int rc;
+
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
-                        l_unlock(&ns->ns_lock);
+                        spin_unlock(&ns->ns_hash_lock);
 
                         rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
                                                              flags, opaque);
@@ -821,12 +829,13 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                                 CERROR("cancel_unused_res ("LPU64"): %d\n",
                                        res->lr_name.name[0], rc);
 
-                        l_lock(&ns->ns_lock);
-                        next = tmp->next;
-                        ldlm_resource_putref(res);
+                        spin_lock(&ns->ns_hash_lock);
+                        tmp = tmp->next;
+                        ldlm_resource_putref_locked(res);
                 }
         }
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_hash_lock);
+
         if (flags & LDLM_FL_CONFIG_CHANGE)
                 l_wait_event(ns->ns_waitq, have_no_nsresource(ns), &lwi);
 
@@ -841,14 +850,13 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
         struct list_head *tmp, *next;
         struct ldlm_lock *lock;
         int rc = LDLM_ITER_CONTINUE;
-        struct ldlm_namespace *ns = res->lr_namespace;
 
         ENTRY;
 
         if (!res)
                 RETURN(LDLM_ITER_CONTINUE);
 
-        l_lock(&ns->ns_lock);
+        lock_res(res);
         list_for_each_safe(tmp, next, &res->lr_granted) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
@@ -870,7 +878,7 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
                         GOTO(out, rc = LDLM_ITER_STOP);
         }
  out:
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
         RETURN(rc);
 }
 
@@ -901,23 +909,28 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure)
 {
         int i, rc = LDLM_ITER_CONTINUE;
+        struct ldlm_resource *res;
+        struct list_head *tmp;
 
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_hash_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
-                struct list_head *tmp, *next;
-                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
-                        struct ldlm_resource *res =
-                                list_entry(tmp, struct ldlm_resource, lr_hash);
-
+                tmp = ns->ns_hash[i].next;
+                while (tmp != &(ns->ns_hash[i])) {
+                        res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
+                        spin_unlock(&ns->ns_hash_lock);
+
                         rc = iter(res, closure);
-                        ldlm_resource_putref(res);
+
+                        spin_lock(&ns->ns_hash_lock);
+                        tmp = tmp->next;
+                        ldlm_resource_putref_locked(res);
                         if (rc == LDLM_ITER_STOP)
                                 GOTO(out, rc);
                 }
         }
  out:
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_hash_lock);
         RETURN(rc);
 }
 
@@ -941,9 +954,7 @@ void ldlm_change_cbdata(struct ldlm_namespace *ns,
                 return;
         }
 
-        l_lock(&ns->ns_lock);
         ldlm_resource_foreach(res, iter, data);
-        l_unlock(&ns->ns_lock);
         ldlm_resource_putref(res);
         EXIT;
 }
@@ -1074,7 +1085,6 @@ int ldlm_replay_locks(struct obd_import *imp)
         /* ensure this doesn't fall to 0 before all have been queued */
         atomic_inc(&imp->imp_replay_inflight);
 
-        l_lock(&ns->ns_lock);
         (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
 
         list_for_each_safe(pos, next, &list) {
@@ -1083,7 +1093,6 @@ int ldlm_replay_locks(struct obd_import *imp)
                 if (rc)
                         break; /* or try to do the rest? */
         }
-        l_unlock(&ns->ns_lock);
 
         atomic_dec(&imp->imp_replay_inflight);
 
