@@ -1306,6 +1306,36 @@ int mds_check_mds_num(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
+int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
+                     struct ptlrpc_request *req, struct mds_body *body)
+{
+        struct inode *inode = dentry->d_inode;
+        ENTRY;
+
+        LASSERT(body != NULL);
+
+        if (dentry->d_inode == NULL || !S_ISREG(inode->i_mode))
+                RETURN(0);
+        
+        if (obd->obd_recovering) {
+                CDEBUG(D_ERROR, "size for "DLID4" is unknown yet (recovering)\n",
+                       OLID4(&body->id1));
+                RETURN(0);
+        }
+
+        if (atomic_read(&inode->i_writecount)) {
+                /* some one has opened the file for write.
+                 * mds doesn't know actual size */
+                CDEBUG(D_OTHER, "MDS doesn't know actual size for "DLID4"\n",
+                       OLID4(&body->id1));
+                RETURN(0);
+        }
+        CDEBUG(D_OTHER, "MDS returns "LPD64"/"LPD64" for"DLID4"\n",
+               body->size, body->blocks, OLID4(&body->id1));
+        body->valid |= OBD_MD_FLSIZE;
+        RETURN(0);
+}
+
 static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                             struct lustre_handle *child_lockh, int child_part)
 {
@@ -1499,8 +1529,16 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 }
         }
 
-        rc = mds_getattr_internal(obd, dchild, req, offset, body, reply_offset);        
-        GOTO(cleanup, rc); /* returns the lock to the client */
+        rc = mds_getattr_internal(obd, dchild, req, offset, body, reply_offset);
+        if (rc)
+                GOTO(cleanup, rc); /* returns the lock to the client */
+
+        /* probably MDS knows actual size? */
+        body = lustre_msg_buf(req->rq_repmsg, reply_offset, sizeof(*body));
+        LASSERT(body != NULL);
+        mds_getattr_size(obd, dchild, req, body);
+
+        GOTO(cleanup, rc);
 
  cleanup:
         switch (cleanup_phase) {

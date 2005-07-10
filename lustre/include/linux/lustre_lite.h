@@ -124,6 +124,9 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 #endif
 }
 
+#define LLI_HAVE_FLSIZE(inode)  \
+        test_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &ll_i2info(inode)->lli_flags)
+
 /* lprocfs.c */
 enum {
          LPROC_LL_DIRTY_HITS = 0,

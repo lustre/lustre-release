@@ -15,7 +15,7 @@ struct mds_filter_data {
         __u64 io_epoch;
 };
 
-#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
+#define MDS_FILTERDATA(inode) ((struct mds_filter_data *)LUSTRE_FILTERDATA(inode))
 #define DENTRY_VALID(dentry)    \
         ((dentry)->d_inode || ((dentry)->d_flags & DCACHE_CROSS_REF))
 
@@ -183,6 +183,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti);
 
 /* mds/handler.c */
+int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
+                     struct ptlrpc_request *req, struct mds_body *body);
 int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
                     ptl_nid_t *peernid);
 int mds_handle(struct ptlrpc_request *req);

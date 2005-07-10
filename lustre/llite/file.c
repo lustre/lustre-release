@@ -34,6 +34,43 @@
 #include "llite_internal.h"
 #include <linux/obd_lov.h>
 
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
+__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
+__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
+
+int ll_validate_size(struct inode *inode, __u64 *size, __u64 *blocks)
+{
+        ldlm_policy_data_t extent = { .l_extent = { 0, OBD_OBJECT_EOF } };
+        struct obd_export *exp = ll_i2sbi(inode)->ll_dt_exp;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lustre_handle match_lockh = {0};
+        int rc, flags;
+        ENTRY;
+
+        if (lli->lli_smd == NULL)
+                RETURN(0);
+
+        LASSERT(size != NULL && blocks != NULL);
+
+        flags = LDLM_FL_TEST_LOCK | LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        rc = obd_match(exp, lli->lli_smd, LDLM_EXTENT, &extent,
+                       LCK_PR | LCK_PW, &flags, inode, &match_lockh);
+        if (rc == 0) {
+                /* we have no all needed locks,
+                 * so we don't know actual size */
+                GOTO(finish, rc);
+        }
+
+        /* we know actual size! */
+        down(&lli->lli_size_sem);
+        *size = lov_merge_size(lli->lli_smd, 0);
+        *blocks = lov_merge_blocks(lli->lli_smd);
+        up(&lli->lli_size_sem);
+
+finish:
+        RETURN(rc);
+}
+
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                     struct obd_client_handle *och)
 {
@@ -67,7 +104,6 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         obdo->o_id = inode->i_ino;
         obdo->o_valid = OBD_MD_FLID;
         obdo_from_inode(obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                       OBD_MD_FLATIME | OBD_MD_FLMTIME |
                                       OBD_MD_FLCTIME));
         if (0 /* ll_is_inode_dirty(inode) */) {
@@ -76,6 +112,14 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         }
         obdo->o_fid = id_fid(&ll_i2info(inode)->lli_id);
         obdo->o_mds = id_group(&ll_i2info(inode)->lli_id);
+
+
+        obdo->o_valid |= OBD_MD_FLEPOCH;
+        obdo->o_easize = ll_i2info(inode)->lli_io_epoch;
+
+        if (ll_validate_size(inode, &obdo->o_size, &obdo->o_blocks))
+                obdo->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+
         rc = md_close(md_exp, obdo, och, &req);
         obdo_free(obdo);
 
@@ -892,10 +936,6 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
-__u64 lov_merge_blocks(struct lov_stripe_md *lsm);
-__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
-
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
 int ll_glimpse_size(struct inode *inode)
@@ -1701,15 +1741,15 @@ int ll_inode_revalidate_it(struct dentry *dentry)
 
         ll_lookup_finish_locks(&oit, dentry);
 
-        lsm = lli->lli_smd;
-        if (lsm == NULL) /* object not yet allocated, don't validate size */
-                GOTO(out, rc = 0);
-
-        /*
-         * ll_glimpse_size() will prefer locally cached writes if they extend
-         * the file.
-         */
-        rc = ll_glimpse_size(inode);
+        if (!LLI_HAVE_FLSIZE(inode)) {
+                /* if object not yet allocated, don't validate size */
+                lsm = lli->lli_smd;
+                if (lsm != NULL) {
+                        /* ll_glimpse_size() will prefer locally cached
+                         * writes if they extend the file */
+                        rc = ll_glimpse_size(inode);
+                }
+        }
         EXIT;
 out:
         ll_intent_release(&oit);

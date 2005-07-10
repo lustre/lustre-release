@@ -2997,8 +2997,13 @@ static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         ctxt = llog_get_context(llogs, LLOG_UNLINK_REPL_CTXT);
         ctxt->llog_proc_cb = filter_recov_log_unlink_cb;
 
-        /* FIXME - count should be 1 to setup size log */
-        rc = obd_llog_setup(obd, llogs, LLOG_SIZE_ORIG_CTXT, tgt, 0, 
+        filter_size_orig_logops = llog_lvfs_ops;
+#if 0
+        filter_size_orig_logops.lop_setup = llog_obd_origin_setup;
+        filter_size_orig_logops.lop_cleanup = llog_catalog_cleanup;
+        filter_size_orig_logops.lop_add = llog_catalog_add;
+#endif
+        rc = obd_llog_setup(obd, llogs, LLOG_SIZE_ORIG_CTXT, tgt, 1, 
                             &catid->lci_logid, &filter_size_orig_logops);
         RETURN(rc);
 }

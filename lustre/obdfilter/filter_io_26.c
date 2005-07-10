@@ -444,6 +444,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
         int   total_size = 0;
+        loff_t old_size;
         ENTRY;
 
         LASSERT(oti != NULL);
@@ -496,6 +497,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         down(&inode->i_sem);
+        old_size = inode->i_size;
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -514,6 +516,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
                               oti, NULL);
+
+#if 0
+        if (inode->i_size != old_size) {
+                struct llog_cookie *cookie = obdo_logcookie(oa);
+                struct lustre_id *id = obdo_id(oa);
+                filter_log_sz_change(obd, id, oa->o_easize, cookie, inode);
+        }
+#endif
+
         if (rc == 0)
                 obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
 

@@ -106,6 +106,8 @@ static inline int cleanup_group_info(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+#define LUSTRE_FILTERDATA(inode)        ((inode)->i_pipe)
+
 /* New (actually old) intent naming */
 #define lookup_intent open_intent
 
@@ -189,6 +191,8 @@ static inline void lustre_daemonize_helper(void)
 #include <linux/proc_fs.h>
 
 #else /* 2.4.. */
+
+#error "first, find storage for filterdata -bzzz"
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
 #define ll_permission(inode,mask,nd)        permission(inode,mask)

@@ -171,10 +171,11 @@ struct ost_filterdata {
         __u32  ofd_epoch;
 };
 
-int filter_log_sz_change(struct llog_handle *cathandle,
+int filter_log_sz_change(struct obd_device *obd,
                          struct lustre_id *id, __u32 io_epoch,
-                         struct llog_cookie *logcookie,
+                         struct llog_cookie *logcookie, 
                          struct inode *inode);
+
 //int filter_get_catalog(struct obd_device *);
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error);
@@ -202,6 +203,5 @@ static inline void  filter_tally_read(struct filter_obd *filter,
                                       {}
 static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
-
 
 #endif

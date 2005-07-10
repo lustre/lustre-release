@@ -151,6 +151,10 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
                 body->flags = oa->o_flags;
                 body->valid |= OBD_MD_FLFLAGS;
         }
+        if (oa->o_valid & OBD_MD_FLEPOCH) {
+                body->io_epoch = oa->o_easize;
+                body->valid |= OBD_MD_FLEPOCH;
+        }
 }
 
 /* 

@@ -37,21 +37,19 @@
 
 #include "filter_internal.h"
 
-int filter_log_sz_change(struct llog_handle *cathandle, 
+int filter_log_sz_change(struct obd_device *obd,
                          struct lustre_id *id, __u32 io_epoch,
                          struct llog_cookie *logcookie, 
                          struct inode *inode)
 {
         struct llog_size_change_rec *lsc;
-#ifdef IFILTERDATA_ACTUALLY_USED
         struct ost_filterdata *ofd;
-#endif
+        struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
 
         down(&inode->i_sem);
-#ifdef IFILTERDATA_ACTUALLY_USED
-        ofd = inode->i_filterdata;
+        ofd = (struct ost_filterdata *) LUSTRE_FILTERDATA(inode);
         
         if (ofd && ofd->ofd_epoch >= io_epoch) {
                 if (ofd->ofd_epoch > io_epoch)
@@ -68,10 +66,9 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 if (!ofd)
                         GOTO(out, rc = -ENOMEM);
                 igrab(inode);
-                inode->i_filterdata = ofd;
+                LUSTRE_FILTERDATA(inode) = (void *) ofd;
                 ofd->ofd_epoch = io_epoch;
         }
-#endif
         /* the decision to write a record is now made, unlock */
         up(&inode->i_sem);
 
@@ -83,8 +80,11 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_id = *id;
         lsc->lsc_io_epoch = io_epoch;
 
-        rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie,
-                              NULL, NULL, NULL);
+        CDEBUG(D_ERROR, "new epoch %lu for "DLID4"\n",
+               (unsigned long) io_epoch, OLID4(id));
+
+        ctxt = llog_get_context(&obd->obd_llogs, LLOG_SIZE_ORIG_CTXT);
+        rc = llog_add(ctxt, &lsc->lsc_hdr, NULL, logcookie, 1, NULL,NULL,NULL);
         OBD_FREE(lsc, sizeof(*lsc));
 
         if (rc > 0) {
@@ -92,11 +92,10 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 rc = 0;
         }
 
-#ifdef IFILTERDATA_ACTUALLY_USED
 out:
-#endif
         RETURN(rc);
 }
+
 struct obd_llogs * filter_grab_llog_for_group(struct obd_device *,
                                               int, struct obd_export *);
 

@@ -198,9 +198,13 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_md_real_close(ll_i2mdexp(inode), inode, flags);
                 }
 
-                if (bits & MDS_INODELOCK_UPDATE)
+                if ((bits & MDS_INODELOCK_UPDATE) && LLI_HAVE_FLSIZE(inode)) {
+                        CDEBUG(D_OTHER, "isize for %lu/%u(%p) from mds "
+                               "is not actual\n", inode->i_ino,
+                               inode->i_generation, inode);
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
                                   &(ll_i2info(inode)->lli_flags));
+                }
 
 
                 /* If lookup lock is cancelled, we just drop the dentry and
@@ -314,10 +318,13 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = ll_glimpse_size(inode);
-                        if (rc) {
-                                iput(inode);
-                                RETURN(rc);
+                        if (!LLI_HAVE_FLSIZE(inode)) {
+                                CDEBUG(D_INODE, "retrieve size from OSS\n");
+                                rc = ll_glimpse_size(inode);
+                                if (rc) {
+                                        iput(inode);
+                                        RETURN(rc);
+                                }
                         }
                 }
 
