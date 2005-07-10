@@ -1287,7 +1287,17 @@ got_child:
         if ((rec->ur_flags & MDS_OPEN_DIRECTORY) &&
             !S_ISDIR(dchild->d_inode->i_mode))
                 GOTO(cleanup, rc = -ENOTDIR);
-		
+
+        /* check permission even it's special files */
+        if (S_ISCHR(dchild->d_inode->i_mode) ||
+            S_ISBLK(dchild->d_inode->i_mode) ||
+            S_ISFIFO(dchild->d_inode->i_mode) ||
+            S_ISSOCK(dchild->d_inode->i_mode)) {
+                rc = ll_permission(dchild->d_inode, acc_mode, NULL);
+                if (rc != 0)
+                        GOTO(cleanup, rc);
+        }
+
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
 		obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
 		GOTO(cleanup, rc = -EAGAIN);
