@@ -26,13 +26,19 @@
 
 #include <portals/lib-p30.h>
 
+#if 1
+/* Enforce the rule that the target NID must be that of the receiving NI */
+const int allow_destination_aliases = 0;
+#else
+/* Allow NID aliasing experiments */
 static int allow_destination_aliases = 0;
 CFS_MODULE_PARM(allow_destination_aliases, "i", int, 0644,
                 "Boolean: don't require strict destination NIDs");
+#endif
 
 static int implicit_loopback = 1;
 CFS_MODULE_PARM(implicit_loopback, "i", int, 0644,
-                "Boolean: allow destination aliases when sending to yourself");
+                "Boolean: substitute 0@lo when sending to any local NID");
 
 /* forward ref */
 static void ptl_commit_md (ptl_libmd_t *md, ptl_msg_t *msg);
@@ -600,9 +606,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         if (ni->ni_nal->nal_type != LONAL) {
                 if (gw_nid != ni->ni_nid) {         /* it's not for me */
                         routing = gw_nid != target.nid; /* will gateway have to forward? */
-                } else if (allow_destination_aliases || /* force lonal? */
-                           implicit_loopback) {
-
+                } else if (implicit_loopback) {    /* force lonal? */
                         PTL_LOCK(flags);
                         ptl_ni_decref_locked(ni);
                         ni = ptl_loni;
@@ -613,14 +617,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                         if (ni == NULL)         /* shutdown in progress */
                                 return PTL_FAIL;
 
-                        if (implicit_loopback)
-                                target.nid = ni->ni_nid;
-
-                } else {                        /* barf */
-                        ptl_ni_decref(ni);
-                        CERROR("Attempt to send to self via %s, not LONAL\n",
-                               libcfs_nid2str(target.nid));
-                        return PTL_FAIL;
+                        target.nid = ni->ni_nid;
                 }
         }
         

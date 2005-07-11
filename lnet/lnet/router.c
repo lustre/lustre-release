@@ -632,7 +632,7 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
                 }
         }
         
-        if (!dup) {
+        if (!dup) { /* Adding a new network? */
                 list_add_tail(&ne->kpne_list, &kpr_state.kpr_nets);
         } else {
                 dup = 0;
@@ -645,12 +645,12 @@ kpr_add_route (__u32 net, ptl_nid_t gateway_nid)
                                 break;
                 }
                 
-                if (dup) {
+                if (dup) { /* Ignore duplicate route entry */
                         write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
                         PORTAL_FREE(re, sizeof(*re));
                         PORTAL_FREE(ge, sizeof(*ge));
-                        return -EINVAL;
+                        return 0;
                 }
         }
 

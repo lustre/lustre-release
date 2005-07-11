@@ -733,6 +733,9 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
         }
 
         for (i = 0; i < n; i++) {
+                if (!strcmp(names[i], "lo")) /* skip the loopback IF */
+                        continue;
+                
                 rc = libcfs_ipif_query(names[i], &up, &ip, &netmask);
                 
                 if (rc != 0) {

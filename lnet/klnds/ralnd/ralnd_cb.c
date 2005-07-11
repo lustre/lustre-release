@@ -1380,7 +1380,8 @@ kranal_check_fma_cq (kra_device_t *dev)
                 }
 
                 /* FMA CQ has overflowed: check ALL conns */
-                CWARN("Scheduling ALL conns on device %d\n", dev->rad_id);
+                CWARN("FMA CQ overflow: scheduling ALL conns on device %d\n", 
+                      dev->rad_id);
 
                 for (i = 0; i < kranal_data.kra_conn_hash_size; i++) {
 

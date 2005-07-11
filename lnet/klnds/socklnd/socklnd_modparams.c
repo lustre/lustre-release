@@ -25,7 +25,7 @@ CFS_MODULE_PARM(timeout, "i", int, 0644,
                 "dead socket timeout (seconds)");
 
 static int nconnds = SOCKNAL_NCONND;
-CFS_MODULE_PARM(nconnds, "i", int, 0644,
+CFS_MODULE_PARM(nconnds, "i", int, 0444,
                 "# connection daemons");
 
 static int min_reconnectms = SOCKNAL_MIN_RECONNECTMS;
