@@ -1444,7 +1444,12 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 }
 
 
-/* mount the file system (secretly) */
+/* mount the file system (secretly).  lustre_cfg parameters are:
+ * 1 = device
+ * 2 = fstype
+ * 3 = flags: failover=f, failout=n, ignored for an MDS
+ * 4 = mount options
+ */
 static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;

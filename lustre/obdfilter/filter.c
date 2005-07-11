@@ -1293,7 +1293,12 @@ void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter)
         return kio;
 }
 
-/* mount the file system (secretly) */
+/* mount the file system (secretly).  lustre_cfg parameters are:
+ * 1 = device
+ * 2 = fstype
+ * 3 = flags: failover=f, failout=n
+ * 4 = mount options
+ */
 int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                         void *option)
 {
