@@ -367,7 +367,7 @@ mds_create_objects(struct obd_device *obd, struct ptlrpc_request *req,
         }
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
-                RETURN(-ENOMEM);
+                GOTO(out_ids, rc = -ENOMEM);
 
         oa = obdo_alloc();
         if (oa == NULL)
@@ -489,7 +489,11 @@ mds_create_objects(struct obd_device *obd, struct ptlrpc_request *req,
 out_oa:
         oti_free_cookies(&oti);
         obdo_free(oa);
-
+out_ids:
+        if (rc) {
+                OBD_FREE(*ids, mds->mds_dt_desc.ld_tgt_count * sizeof(**ids));
+                *ids = NULL;
+        }
         if (lsm)
                 obd_free_memmd(mds->mds_dt_exp, &lsm);
         RETURN(rc);
