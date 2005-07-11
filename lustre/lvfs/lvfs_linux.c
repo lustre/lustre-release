@@ -604,6 +604,8 @@ void lvfs_memdbg_show(void)
                 }
                 spin_unlock(&obd_memlist_lock);
 #endif
+                /* remove for production */
+                portals_debug_dumplog();
         }
 }
 EXPORT_SYMBOL(lvfs_memdbg_show);
