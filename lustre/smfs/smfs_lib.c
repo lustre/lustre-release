@@ -588,7 +588,8 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
         down_read(&smb->plg_sem);
         list_for_each_entry_safe(plg, tmp, hlist, plg_list) {
                 //check that plugin is active
-                if(!SMFS_IS(smb->plg_flags, plg->plg_type) && (op != PLG_START))
+                if(!SMFS_IS(smb->plg_flags, plg->plg_type) && 
+                   !(op == PLG_START || op == PLG_EXIT))
                         continue;
                
                 if (plg->plg_helper)
