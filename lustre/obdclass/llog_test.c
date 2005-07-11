@@ -458,7 +458,7 @@ static int llog_test_6(struct obd_device *obd, char *name)
         mds_uuid = &ctxt->loc_exp->exp_obd->obd_uuid;
 
         CWARN("6a: re-open log %s using client API\n", name);
-        mdc_obd = class_find_client_obd(mds_uuid, LUSTRE_MDC_NAME, NULL);
+        mdc_obd = class_find_client_obd(mds_uuid, OBD_MDC_DEVICENAME, NULL);
         if (mdc_obd == NULL) {
                 CERROR("6: no MDC devices connected to %s found.\n",
                        mds_uuid->uuid);

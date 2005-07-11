@@ -98,7 +98,7 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 OBD_FREE(cobd->master_name, mname_len);
                 RETURN(-ENOMEM);
         } 
-        if(inst_len)
+        if (inst_len)
                 sprintf(cobd->cache_name, "%s-%s", lustre_cfg_string(lcfg, 2), 
                         lustre_cfg_string(lcfg, 3));
         else 

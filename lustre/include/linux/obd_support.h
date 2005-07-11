@@ -324,11 +324,14 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 extern atomic_t portal_kmemory;
 
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+
+#define MT_FLAGS_WRONG_SIZE (1 << 0)
 #define MEM_LOC_LEN 128
 
 struct mem_track {
         struct hlist_node m_hash;
         char m_loc[MEM_LOC_LEN];
+        int m_flags;
         void *m_ptr;
         int m_size;
 };
@@ -356,6 +359,7 @@ __new_mem_track(void *ptr, int size,
 
         mt->m_size = size;
         mt->m_ptr = ptr;
+        mt->m_flags = 0;
         return mt;
 }
 
@@ -396,11 +400,13 @@ __put_mem_track(void *ptr, int size,
                 return 0;
         } else {
                 if (mt->m_size != size) {
+                        mt->m_flags |= MT_FLAGS_WRONG_SIZE;
                         CWARN("freeing memory chunk of different size "
                               "than allocated (%d != %d) at %s:%d\n",
                               mt->m_size, size, file, line);
+                } else {
+                        __free_mem_track(mt);
                 }
-                __free_mem_track(mt);
                 return 1;
         }
 }

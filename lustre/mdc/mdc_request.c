@@ -1480,15 +1480,16 @@ struct md_ops mdc_md_ops = {
 int __init mdc_init(void)
 {
         struct lprocfs_static_vars lvars;
+        
         lprocfs_init_vars(mdc, &lvars);
-        return class_register_type(&mdc_obd_ops, &mdc_md_ops, lvars.module_vars,
-                                   LUSTRE_MDC_NAME);
+        return class_register_type(&mdc_obd_ops, &mdc_md_ops,
+                                   lvars.module_vars, OBD_MDC_DEVICENAME);
 }
 
 #ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
-        class_unregister_type(LUSTRE_MDC_NAME);
+        class_unregister_type(OBD_MDC_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

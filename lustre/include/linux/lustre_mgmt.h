@@ -10,7 +10,7 @@
 #ifndef LUSTRE_MGMT_H
 #define LUSTRE_MGMT_H
 
-#define LUSTRE_MGMTCLI_NAME "mgmt_cli"
+#define OBD_MGMTCLI_DEVICENAME "mgmt_cli"
 
 /* For the convenience and type-safety of inter_module_getters. */
 

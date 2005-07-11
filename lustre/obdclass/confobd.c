@@ -34,8 +34,6 @@
 #include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
-#define LUSTRE_CONFOBD_NAME "confobd"
-
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 
@@ -420,13 +418,14 @@ static int __init confobd_init(void)
         ENTRY;
 
         lprocfs_init_vars(confobd, &lvars);
-        RETURN(class_register_type(&conf_obd_ops, NULL, lvars.module_vars,
-                                   LUSTRE_CONFOBD_NAME));
+        RETURN(class_register_type(&conf_obd_ops, NULL,
+                                   lvars.module_vars,
+                                   OBD_CONF_DEVICENAME));
 }
 
 static void __exit confobd_exit(void)
 {
-        class_unregister_type(LUSTRE_CONFOBD_NAME);
+        class_unregister_type(OBD_CONF_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

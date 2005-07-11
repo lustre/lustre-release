@@ -69,7 +69,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         int rc;
         ENTRY;
 
-        tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
+        tgt_obd = class_find_client_obd(tgt_uuid, OBD_OSC_DEVICENAME,
                                         &obd->obd_uuid);
 
         if (!tgt_obd) {
@@ -374,7 +374,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         int rc;
         ENTRY;
 
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+        if (strcmp(watched->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
@@ -2064,7 +2064,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         struct obd_device *tgt_obd;
 
                         tgt_obd = class_find_client_obd(tgt_uuid,
-                                                        LUSTRE_OSC_NAME,
+                                                        OBD_OSC_DEVICENAME,
                                                         &obddev->obd_uuid);
                         if (!tgt_obd) {
                                 CERROR("Target %s not attached\n",
@@ -2108,7 +2108,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                                 struct obd_device *tgt_obd;
 
                                 tgt_obd = class_find_client_obd(&tgt->uuid,
-                                                                LUSTRE_OSC_NAME,
+                                                                OBD_OSC_DEVICENAME,
                                                                 &obddev->obd_uuid);
                                 if (!tgt_obd) {
                                         CERROR("can't set security flavor, "

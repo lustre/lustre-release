@@ -748,10 +748,10 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
         if (!active)
                 RETURN(0);
 
-        if (!strcmp(watched->obd_type->typ_name, LUSTRE_MDC_NAME))
+        if (!strcmp(watched->obd_type->typ_name, OBD_MDC_DEVICENAME))
                 RETURN(0);
 
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+        if (strcmp(watched->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name, watched->obd_name);
                 RETURN(-EINVAL);

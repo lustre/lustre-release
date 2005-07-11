@@ -185,15 +185,15 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
          * obd_type and just use the values from there. */
-        if (!strcmp(name, LUSTRE_OSC_NAME)) {
+        if (!strcmp(name, OBD_OSC_DEVICENAME)) {
                 rq_portal = OST_REQUEST_PORTAL;
                 rp_portal = OSC_REPLY_PORTAL;
                 connect_op = OST_CONNECT;
-        } else if (!strcmp(name, LUSTRE_MDC_NAME)) {
+        } else if (!strcmp(name, OBD_MDC_DEVICENAME)) {
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
-        } else if (!strcmp(name, LUSTRE_MGMTCLI_NAME)) {
+        } else if (!strcmp(name, OBD_MGMTCLI_DEVICENAME)) {
                 rq_portal = MGMT_REQUEST_PORTAL;
                 rp_portal = MGMT_REPLY_PORTAL;
                 connect_op = MGMT_CONNECT;
@@ -561,7 +561,7 @@ int target_check_deny_sec(struct obd_device *target, struct ptlrpc_request *req)
 
         flavor = req->rq_req_secflvr;
 
-        if (!strcmp(target->obd_type->typ_name, LUSTRE_MDS_NAME)) {
+        if (!strcmp(target->obd_type->typ_name, OBD_MDS_DEVICENAME)) {
                 spin_lock(&target->u.mds.mds_denylist_lock);
                 rc = check_deny_list(&target->u.mds.mds_denylist, flavor);
                 spin_unlock(&target->u.mds.mds_denylist_lock);

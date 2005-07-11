@@ -44,6 +44,8 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
 
+#define OBD_CONF_DEVICENAME "confobd"
+
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 256
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];

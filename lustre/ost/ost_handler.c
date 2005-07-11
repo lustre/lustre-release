@@ -363,7 +363,7 @@ static void ost_stime_record(struct ptlrpc_request *req, struct timeval *start,
         int ind = rw *3 + phase;
          
         if (obd && obd->obd_type && obd->obd_type->typ_name) {
-                if (!strcmp(obd->obd_type->typ_name, LUSTRE_OST_NAME)) {
+                if (!strcmp(obd->obd_type->typ_name, OBD_OST_DEVICENAME)) {
                         struct ost_obd *ost = NULL;
                         
                         ost = &obd->u.ost;
@@ -1360,12 +1360,12 @@ static int __init ost_init(void)
 
         lprocfs_init_vars(ost,&lvars);
         RETURN(class_register_type(&ost_obd_ops, NULL, lvars.module_vars,
-                                   LUSTRE_OST_NAME));
+                                   OBD_OST_DEVICENAME));
 }
 
 static void /*__exit*/ ost_exit(void)
 {
-        class_unregister_type(LUSTRE_OST_NAME);
+        class_unregister_type(OBD_OST_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

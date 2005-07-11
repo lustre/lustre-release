@@ -110,7 +110,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
         CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LMV idx %d\n",
                obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
                obd->obd_type->typ_name, i);
-        LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0);
+        LASSERT(strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) == 0);
 
         if (tgt->active == activate) {
                 CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
@@ -137,7 +137,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
         int rc;
         ENTRY;
 
-        if (strcmp(watched->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+        if (strcmp(watched->obd_type->typ_name, OBD_MDC_DEVICENAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
@@ -316,7 +316,7 @@ int lmv_check_connect(struct obd_device *obd)
 
                 LASSERT(tgts != NULL);
 
-                tgt_obd = class_find_client_obd(&tgts->uuid, LUSTRE_MDC_NAME, 
+                tgt_obd = class_find_client_obd(&tgts->uuid, OBD_MDC_DEVICENAME, 
                                                 &obd->obd_uuid);
                 if (!tgt_obd) {
                         CERROR("target %s not attached\n", tgts->uuid.uuid);
@@ -601,7 +601,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 OBD_FREE(lmv->tgts, lmv->tgts_size);
         }
 
-        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, LUSTRE_MDC_NAME,
+        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, OBD_MDC_DEVICENAME,
                                         &obd->obd_uuid);
         if (!tgt_obd) {
                 CERROR("Target %s not attached\n", lmv->tgts->uuid.uuid);
@@ -1942,7 +1942,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                                 struct obd_device *tgt_obd;
 
                                 tgt_obd = class_find_client_obd(&tgt->uuid,
-                                                                LUSTRE_MDC_NAME,
+                                                                OBD_MDC_DEVICENAME,
                                                                 &obd->obd_uuid);
                                 if (!tgt_obd) {
                                         CERROR("can't set info %s, "

@@ -3260,15 +3260,15 @@ int __init osc_init(void)
 #endif
 
         rc = class_register_type(&osc_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_OSC_NAME);
+                                 OBD_OSC_DEVICENAME);
         if (rc)
                 RETURN(rc);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = class_register_type(&sanosc_obd_ops, NULL, sanlvars.module_vars,
-                                 LUSTRE_SANOSC_NAME);
+                                 OBD_SANOSC_DEVICENAME);
         if (rc)
-                class_unregister_type(LUSTRE_OSC_NAME);
+                class_unregister_type(OBD_OSC_DEVICENAME);
 #endif
 
         RETURN(rc);
@@ -3278,9 +3278,9 @@ int __init osc_init(void)
 static void /*__exit*/ osc_exit(void)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        class_unregister_type(LUSTRE_SANOSC_NAME);
+        class_unregister_type(OBD_SANOSC_DEVICENAME);
 #endif
-        class_unregister_type(LUSTRE_OSC_NAME);
+        class_unregister_type(OBD_OSC_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

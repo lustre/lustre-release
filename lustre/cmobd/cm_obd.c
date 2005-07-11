@@ -32,6 +32,7 @@
 #include <linux/lustre_cmobd.h>
 #include <linux/lprocfs_status.h>
 #include <linux/obd_lov.h>
+#include <linux/obd_ost.h>
 #include <linux/obd_lmv.h>
 
 #include "cm_internal.h"
@@ -50,18 +51,19 @@ static int cmobd_detach(struct obd_device *obd)
         return lprocfs_obd_detach(obd);
 }
 
-static inline int cmobd_lmv_obd(struct obd_device *obd)
+static inline int cmobd_md_obd(struct obd_device *obd)
 {
-        if (!strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) ||
+        if (!strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) ||
             !strcmp(obd->obd_type->typ_name, OBD_LMV_DEVICENAME))
                 return 1;
 
         return 0;
 }
 
-static inline int cmobd_lov_obd(struct obd_device *obd)
+static inline int cmobd_dt_obd(struct obd_device *obd)
 {
-        if (!strcmp(obd->obd_type->typ_name, OBD_LOV_DEVICENAME))
+        if (!strcmp(obd->obd_type->typ_name, OBD_LOV_DEVICENAME) ||
+            !strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME))
                 return 1;
 
         return 0;
@@ -88,26 +90,28 @@ static void cmobd_init_ea_size(struct obd_device *obd)
         EXIT;
 }
 
+static char *types[] = {
+        OBD_LMV_DEVICENAME, OBD_MDC_DEVICENAME,
+        OBD_LOV_DEVICENAME, OBD_OSC_DEVICENAME
+};
+
 static struct obd_device *
-find_master_obd(struct obd_device *obd, struct obd_uuid *uuid)
+cmobd_find_obd(struct obd_device *obd, struct obd_uuid *uuid)
 {
-        struct obd_device *master;
+        struct obd_device *res;
+        int i = 0;
+        ENTRY;
 
         CWARN("%s: looking for client obd %s\n",
               obd->obd_uuid.uuid, uuid->uuid);
 
-        master = class_find_client_obd(NULL, OBD_LOV_DEVICENAME,
-                                       uuid);
-        if (master)
-                return master;
-
-        master = class_find_client_obd(NULL, OBD_LMV_DEVICENAME,
-                                       uuid);
-        if (master)
-                return master;
-
-        return class_find_client_obd(NULL, LUSTRE_MDC_NAME,
-                                     uuid);
+        for (i = 0; i < sizeof(types); i++) {
+                res = class_find_client_obd(NULL, types[i],
+                                            uuid);
+                if (res)
+                        RETURN(res);
+        }
+        RETURN(NULL);
 }
 
 static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -137,9 +141,9 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         obd_str2uuid(&cache_uuid, lustre_cfg_string(lcfg, 2));
 
         /* getting master obd */
-        cmobd->master_obd = find_master_obd(obd, &master_uuid);
+        cmobd->master_obd = cmobd_find_obd(obd, &master_uuid);
         if (!cmobd->master_obd) {
-                CERROR("can't find master obd by uuid %s\n",
+                CERROR("can't find master client obd by uuid %s\n",
                        master_uuid.uuid);
                 RETURN(-EINVAL);
         }
@@ -167,8 +171,8 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_master, rc);
         cmobd->cache_exp = class_conn2export(&conn);
         
-        if (cmobd_lov_obd(cmobd->master_exp->exp_obd)) {
-                /* for master osc remove the recovery flag. */
+        if (cmobd_dt_obd(cmobd->master_exp->exp_obd)) {
+                /* for master dt device remove the recovery flag. */
                 rc = obd_set_info(cmobd->master_exp, strlen("unrecovery"),
                                   "unrecovery", 0, NULL); 
                 if (rc)
@@ -182,7 +186,7 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 cmobd->write_srv = NULL;
         }
 
-        if (cmobd_lmv_obd(cmobd->master_exp->exp_obd)) {
+        if (cmobd_md_obd(cmobd->master_exp->exp_obd)) {
                 /*
                  * making sure, that both obds are ready. This is especially
                  * important in the case of using LMV as master.
@@ -314,14 +318,14 @@ static int __init cmobd_init(void)
 
         lprocfs_init_vars(cmobd, &lvars);
         rc = class_register_type(&cmobd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_CMOBD_NAME);
+                                 OBD_CMOBD_DEVICENAME);
         if (rc)
                 RETURN(rc);
         cmobd_extent_slab = kmem_cache_create("cmobd_extents",
                                                sizeof(struct cmobd_extent_info), 0,
                                                SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (cmobd_extent_slab == NULL) {
-                class_unregister_type(LUSTRE_CMOBD_NAME);
+                class_unregister_type(OBD_CMOBD_DEVICENAME);
                 RETURN(-ENOMEM);
         }
         RETURN(0);
@@ -329,7 +333,7 @@ static int __init cmobd_init(void)
 
 static void __exit cmobd_exit(void)
 {
-        class_unregister_type(LUSTRE_CMOBD_NAME);
+        class_unregister_type(OBD_CMOBD_DEVICENAME);
         if (kmem_cache_destroy(cmobd_extent_slab) != 0)
                 CERROR("couldn't free cmobd extent slab\n");
 }

@@ -27,7 +27,7 @@
 
 #include <linux/obd_class.h>
 
-#define LUSTRE_CMOBD_NAME       "cmobd"
+#define OBD_CMOBD_DEVICENAME    "cmobd"
 
 #define CMOBD_MAX_THREADS       32UL
 

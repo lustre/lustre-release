@@ -599,7 +599,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                 GOTO(out_del_conn, err);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 1, OBD_MDC_DEVICENAME);
         lustre_cfg_bufs_set_string(&bufs, 2, (char *)lmv_uuid.uuid);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);

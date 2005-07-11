@@ -598,7 +598,9 @@ void lvfs_memdbg_show(void)
                 for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
                         hlist_for_each(node, head) {
                                 mt = hlist_entry(node, struct mem_track, m_hash);
-                                CWARN("  ptr: 0x%p, size: %d, src at \"%s\"\n",
+                                CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
+                                      ((mt->m_flags & MT_FLAGS_WRONG_SIZE) ?
+                                       "wrong ck size" : "leaked memory"),
                                       mt->m_ptr, mt->m_size, mt->m_loc);
                         }
                 }

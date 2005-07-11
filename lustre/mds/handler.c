@@ -1353,7 +1353,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         char *name = NULL;
         ENTRY;
 
-        LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
+        LASSERT(!strcmp(obd->obd_type->typ_name, OBD_MDS_DEVICENAME));
         MD_COUNTER_INCREMENT(obd, getattr_lock);
 
         rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
@@ -2570,7 +2570,6 @@ static int mdt_set_info(struct ptlrpc_request *req)
 
 static void mds_revoke_export_locks(struct obd_export *exp)
 {
-        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
         struct list_head work;
         struct ldlm_lock *lock, *next;
@@ -4266,10 +4265,10 @@ static int __init mds_init(void)
 
         lprocfs_init_multi_vars(0, &lvars);
         class_register_type(&mds_obd_ops, NULL, lvars.module_vars,
-                            LUSTRE_MDS_NAME);
+                            OBD_MDS_DEVICENAME);
         lprocfs_init_multi_vars(1, &lvars);
         class_register_type(&mdt_obd_ops, NULL, lvars.module_vars,
-                            LUSTRE_MDT_NAME);
+                            OBD_MDT_DEVICENAME);
 
         return 0;
 }
@@ -4278,8 +4277,8 @@ static void /*__exit*/ mds_exit(void)
 {
         mds_cleanup_lsd_cache();
 
-        class_unregister_type(LUSTRE_MDS_NAME);
-        class_unregister_type(LUSTRE_MDT_NAME);
+        class_unregister_type(OBD_MDS_DEVICENAME);
+        class_unregister_type(OBD_MDT_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

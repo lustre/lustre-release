@@ -49,9 +49,9 @@ struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
 
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
-#define LUSTRE_MDC_NAME "mdc"
+#define OBD_MDS_DEVICENAME "mds"
+#define OBD_MDT_DEVICENAME "mdt"
+#define OBD_MDC_DEVICENAME "mdc"
 
 struct mds_update_record {
         __u32               ur_opcode;

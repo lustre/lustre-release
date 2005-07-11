@@ -2552,24 +2552,27 @@ class CMOBD(Module):
 
 	if master_class == 'ost' or master_class == 'lov':
 	    client_uuid = "%s_lov_master_UUID" % (self.name)
-            self.master = LOV(master_obd, client_uuid, self.name);
+            self.master = LOV(master_obd, client_uuid, self.name,
+			      "master_%s" % (self.name));
         elif master_class == 'mds':
 	    self.master = get_mdc(db, self.name, self.master_uuid) 
         elif master_class == 'lmv':
-	    #tmp fix: cobd and cmobd will use same uuid, so use const name here
-	    client_uuid = "%s_lmv_master_UUID" % "master" 
-            self.master = LMV(master_obd, client_uuid, self.name);
+	    client_uuid = "%s_lmv_master_UUID" % (self.name)
+            self.master = LMV(master_obd, client_uuid, self.name, 
+			      "master_%s" % (self.name));
 	else:
 	    panic("unknown master obd class '%s'" %(master_class))
 	    
 	if cache_class == 'ost' or cache_class == 'lov':
 	    client_uuid = "%s_lov_cache_UUID" % (self.name)
-            self.cache = LOV(cache_obd, client_uuid, self.name);
+            self.cache = LOV(cache_obd, client_uuid, self.name,
+			     "cache_%s" % (self.name));
         elif cache_class == 'mds':
 	    self.cache = get_mdc(db, self.name, self.cache_uuid)
         elif cache_class == 'lmv':
 	    client_uuid = "%s_lmv_cache_UUID" % (self.name) 
-            self.cache = LMV(cache_obd, client_uuid, self.name);
+            self.cache = LMV(cache_obd, client_uuid, self.name, 
+			     "cache_%s" % (self.name));
 	else:
 	    panic("unknown cache obd class '%s'" %(cache_class))
 
@@ -2632,24 +2635,27 @@ class COBD(Module):
 
 	if master_class == 'ost' or master_class == 'lov':
 	    client_uuid = "%s_lov_master_UUID" % (self.name)
-            self.master = LOV(master_obd, client_uuid, name);
+            self.master = LOV(master_obd, client_uuid, name,
+			      "master_%s" % (self.name));
         elif master_class == 'mds':
             self.master = get_mdc(db, name, self.master_uuid) 
         elif master_class == 'lmv':
-	    #tmp fix: cobd and cmobd will use same uuid, so use const name here
-	    client_uuid = "%s_lmv_master_UUID" % "master" 
-            self.master = LMV(master_obd, client_uuid, self.name);
+	    client_uuid = "%s_lmv_master_UUID" % (self.name)
+            self.master = LMV(master_obd, client_uuid, self.name, 
+			      "master_%s" % (self.name));
 	else:
 	    panic("unknown master obd class '%s'" %(master_class))
 	    
 	if cache_class == 'ost' or cache_class == 'lov':
 	    client_uuid = "%s_lov_cache_UUID" % (self.name)
-            self.cache = LOV(cache_obd, client_uuid, name);
+            self.cache = LOV(cache_obd, client_uuid, name,
+			     "cache_%s" % (self.name));
         elif cache_class == 'mds':
             self.cache = get_mdc(db, name, self.cache_uuid)
         elif cache_class == 'lmv':
-	    client_uuid = "%s_lmv_cache_UUID" % "cache" 
-            self.cache = LMV(cache_obd, client_uuid, self.name);
+	    client_uuid = "%s_lmv_cache_UUID" % (self.name)
+            self.cache = LMV(cache_obd, client_uuid, self.name, 
+			     "cache_%s" % (self.name));
 	else:
 	    panic("unknown cache obd class '%s'" %(cache_class))
 	    
