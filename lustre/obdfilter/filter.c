@@ -1521,6 +1521,9 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
+        spin_lock_init(&filter->fo_denylist_lock);
+        INIT_LIST_HEAD(&filter->fo_denylist);
+
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
 
@@ -1583,14 +1586,10 @@ static int filter_detach(struct obd_device *dev)
 
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        struct filter_obd *filter = &obd->u.filter;
         struct lustre_cfg *lcfg = buf;
         unsigned long page;
         int rc;
         ENTRY;
-
-        spin_lock_init(&filter->fo_denylist_lock);
-        INIT_LIST_HEAD(&filter->fo_denylist);
 
         /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
         page = get_zeroed_page(GFP_KERNEL);
