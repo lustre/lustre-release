@@ -175,7 +175,7 @@ int lov_update_enqueue_set(struct lov_request_set *set,
         RETURN(rc);
 }
 
-static int enqueue_done(struct lov_request_set *set, __u32 mode)
+static int enqueue_done(struct lov_request_set *set, __u32 mode, int flags)
 {
         struct list_head *pos;
         struct lov_request *req;
@@ -186,14 +186,19 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
 
         LASSERT(set->set_completes);
         /* enqueue/match success, just return */
-        if (set->set_completes == set->set_success)
+        if (set->set_completes == set->set_success) {
+                if (flags & LDLM_FL_TEST_LOCK)
+                        lov_llh_put(set->set_lockh);
                 RETURN(0);
+        }
 
         /* cancel enqueued/matched locks */
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
 
                 if (!req->rq_complete || req->rq_rc)
+                        continue;
+                if (flags & LDLM_FL_TEST_LOCK)
                         continue;
 
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
@@ -221,7 +226,7 @@ int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode)
         if (set == NULL)
                 RETURN(0);
         if (set->set_completes)
-                rc = enqueue_done(set, mode);
+                rc = enqueue_done(set, mode, 0);
         else
                 lov_llh_put(set->set_lockh);
 
@@ -308,12 +313,8 @@ out_set:
 int lov_update_match_set(struct lov_request_set *set, struct lov_request *req,
                          int rc)
 {
-        int ret = rc;
         ENTRY;
-
-        if (rc == 1)
-                ret = 0;
-        lov_update_set(set, req, ret);
+        lov_update_set(set, req, !rc);
         RETURN(rc);
 }
 
@@ -325,14 +326,10 @@ int lov_fini_match_set(struct lov_request_set *set, __u32 mode, int flags)
         LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
-        if (set->set_completes) {
-                if (set->set_count == set->set_success &&
-                    flags & LDLM_FL_TEST_LOCK)
-                        lov_llh_put(set->set_lockh);
-                rc = enqueue_done(set, mode);
-        } else {
+        if (set->set_completes)
+                rc = enqueue_done(set, mode, flags);
+        else
                 lov_llh_put(set->set_lockh);
-        }
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
