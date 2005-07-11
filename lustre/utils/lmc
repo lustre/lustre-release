@@ -104,6 +104,7 @@ Object creation command summary:
 --add ost
   --node node_name
   --ost ost_name 
+  --failout
   --failover
   --lov lov_name 
   --dev path
@@ -183,7 +184,8 @@ lmc_options = [
     ('mds', "Specify MDS name.", PARAM),
     ('ost', "Specify the OST name.", PARAM,""),
     ('osdtype', "This could obdfilter or obdecho.", PARAM, "obdfilter"),
-    ('failover', "Enable failover support on OSTs or MDS?"),
+    ('failout', "Disable failover support on OST"),
+    ('failover', "Enable failover support on OST"),
     ('group', "", PARAM),
     ('dev', "Path of the device on local system.", PARAM,""),
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
@@ -720,6 +722,8 @@ def add_mds(gen, lustre, options):
         mds = lookup(lustre, mds_uuid)
     if options.failover:
         mds.setAttribute('failover', "1")
+    if options.failout:
+        mds.setAttribute('failover,',"0")
 
     devname = get_option(options, 'dev')
     size = get_option(options, 'size')
@@ -817,6 +821,8 @@ def add_ost(gen, lustre, options):
 
     if options.failover:
         ost.setAttribute('failover', "1")
+    if options.failout:
+        ost.setAttribute('failover', "0")
     
 
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,

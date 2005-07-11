@@ -1326,19 +1326,15 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
+        obd->obd_replayable = 1;
+        obd_sync_filter = 1;
+
         if (lcfg->lcfg_bufcount > 3 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 str = lustre_cfg_string(lcfg, 3);
-                if (*str == 'f') {
-                        obd->obd_replayable = 1;
-                        obd_sync_filter = 1;
-                        CWARN("%s: recovery enabled\n", obd->obd_name);
-                } else {
-                        if (*str != 'n') {
-                                CERROR("unrecognised flag '%c'\n",
-                                       *str);
-                        }
-                        // XXX Robert? Why do we get errors here
-                        // GOTO(err_mntput, rc = -EINVAL);
+                if (strchr(str, 'n')) {
+                        CWARN("%s: recovery disabled\n", obd->obd_name);
+                        obd->obd_replayable = 0;
+                        obd_sync_filter = 0;
                 }
         }
 

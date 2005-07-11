@@ -102,9 +102,6 @@ Common name of the MDS.
 .TP
 --mdsuuid <uuid>
 Specify MDS uuid.
-.TP
---failover
-Enable failover support on MDS.
 .TP 
 --dev <pathname> 
 Path of device on local system. If the is a file, then a loop device is created and used as the block device.
@@ -160,7 +157,10 @@ Assign a name to the OST device.
 --node <nodename> 
 Node on which the OST service is run, can not be a profile node.
 .TP
---failover 
+--failout
+Disable failover support on OST.
+.TP
+--failover
 Enable failover support on OST.
 .TP
 --dev <pathname> 

@@ -1963,7 +1963,7 @@ class OSD(Module):
         ost = self.db.lookup(target_uuid)
         self.name = ost.getName()
         self.format = self.db.get_val('autoformat', 'yes')
-        if ost.get_val('failover', 0):
+        if ost.get_val('failover', 1):
             self.failover_ost = 'f'
         else:
             self.failover_ost = 'n'

@@ -105,6 +105,12 @@ Description: Addition of lconf --service command line option
 Details    : lconf now accepts a '--service <arg>' option, which is
              shorthand for 'lconf --group <arg> --select <arg>=<hostname>'
 
+Severity   : enhancement
+Bugzilla   : 6101
+Description: Failover mode is now the default for OSTs.
+Details    : By default, OSTs will now run in failover mode.  To return to
+	     the old behaviour, add '--failout' to the lmc line for OSTs.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>
