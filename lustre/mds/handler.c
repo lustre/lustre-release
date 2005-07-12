@@ -4197,8 +4197,15 @@ static int mds_get_info(struct obd_export *exp, __u32 keylen,
 
         if (keylen >= strlen("rootid") && strcmp(key, "rootid") == 0) {
                 struct lustre_id *rootid = val;
-                *valsize = sizeof(struct lustre_id);
+                *valsize = sizeof(*rootid);
                 *rootid = mds->mds_rootid;
+                RETURN(0);
+        }
+
+        if (keylen >= strlen("lovdesc") && strcmp(key, "lovdesc") == 0) {
+                struct lov_desc *desc = val;
+                *valsize = sizeof(*desc);
+                *desc = mds->mds_dt_desc;
                 RETURN(0);
         }
 

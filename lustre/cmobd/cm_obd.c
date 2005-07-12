@@ -69,25 +69,45 @@ static inline int cmobd_dt_obd(struct obd_device *obd)
         return 0;
 }
 
-static void cmobd_init_ea_size(struct obd_device *obd)
+static int cmobd_init_dt_desc(struct obd_device *obd)
 {
-        int ost_count = 1, easize, cookiesize;
+        struct cm_obd *cmobd = &obd->u.cm;
+        __u32 valsize;
+        int rc = 0;
+        ENTRY;
+        
+        /* as CMOBD is stand alone device, that is has not to be connected, we
+         * have no other way to init EAs correctly but ask master device about
+         * it. Thus both, DT and MD layers should be able to answer with correct
+         * lov_desc. LOV knows it explicitly and LMV/MDC have to ask MDS server
+         * of it. */
+        valsize = sizeof(cmobd->master_desc);
+        memset(&cmobd->master_desc, 0, sizeof(cmobd->master_desc));
+
+        rc = obd_get_info(cmobd->master_exp, strlen("lovdesc") + 1,
+                          "lovdesc", &valsize, &cmobd->master_desc);
+        RETURN(rc);
+}
+        
+static int cmobd_init_ea_size(struct obd_device *obd)
+{
+        int rc = 0, tgt_count, easize, cookiesize;
         struct cm_obd *cmobd = &obd->u.cm;
         ENTRY;
 
-        /*
-         * here we should also take into account that there is possible to have
-         * few OSTs. --umka
-         */
-        easize = lov_mds_md_size(ost_count);
-        cookiesize = ost_count * sizeof(struct llog_cookie);
+        if (!cmobd->master_exp)
+                RETURN(-EINVAL);
 
-        obd_init_ea_size(cmobd->master_exp, easize, cookiesize);
+        tgt_count = cmobd->master_desc.ld_tgt_count;
 
-        cmobd->master_exp->exp_obd->u.cli.cl_max_mds_easize = easize;
-        cmobd->master_exp->exp_obd->u.cli.cl_max_mds_cookiesize = cookiesize;
-        
-        EXIT;
+        /* no EA setup is needed as there is single OST with no LOV */
+        if (tgt_count == 0)
+                RETURN(0);
+
+        easize = lov_mds_md_size(tgt_count);
+        cookiesize = tgt_count * sizeof(struct llog_cookie);
+        rc = obd_init_ea_size(cmobd->master_exp, easize, cookiesize);
+        RETURN(rc);
 }
 
 static char *types[] = {
@@ -169,6 +189,16 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(put_master, rc);
         cmobd->cache_exp = class_conn2export(&conn);
+
+        /* initialing DT desc. Both, data and metadata layers should be able to
+         * serve this call. */
+        rc = cmobd_init_dt_desc(obd);
+        if (rc != 0 && rc != -EPROTO) {
+                CERROR("cannot get DT layer desc from master device %s, "
+                       "err %d.\n", cmobd->master_exp->exp_obd->obd_name,
+                       rc);
+                GOTO(put_cache, rc);
+        }
         
         if (cmobd_dt_obd(cmobd->master_exp->exp_obd)) {
                 /* for master dt device remove the recovery flag. */
@@ -180,34 +210,19 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 rc = cmobd_init_write_srv(obd);
                 if (rc)
                         GOTO(put_cache, rc);
-        } else {
-                cmobd_init_ea_size(obd);
-                cmobd->write_srv = NULL;
         }
 
         if (cmobd_md_obd(cmobd->master_exp->exp_obd)) {
-                /*
-                 * making sure, that both obds are ready. This is especially
-                 * important in the case of using LMV as master.
-                 */
-                rc = obd_getready(cmobd->master_exp);
+                rc = cmobd_init_ea_size(obd);
                 if (rc) {
-                        CERROR("can't get %s obd ready.\n",
-                               master_uuid.uuid);
+                        CERROR("can't init MD layer EA size, "
+                               "err %d\n", rc);
                         GOTO(put_cache, rc);
                 }
-        
-                rc = obd_getready(cmobd->cache_exp);
-                if (rc) {
-                        CERROR("can't get %s obd ready.\n",
-                               cache_uuid.uuid);
-                        GOTO(put_cache, rc);
-                }
-        
-                /*
-                 * requesting master obd to have its root inode store cookie to
-                 * be able to save it to local root inode EA.
-                 */
+                cmobd->write_srv = NULL;
+
+                /* requesting master obd to have its root inode store cookie to
+                 * be able to save it to local root inode EA. */
                 valsize = sizeof(struct lustre_id);
         
                 rc = obd_get_info(cmobd->master_exp, strlen("rootid"),
@@ -218,10 +233,8 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                         GOTO(put_cache, rc);
                 }
 
-                /*
-                 * getting rootid from cache MDS. It is needed to update local
-                 * (cache) root inode by rootid value from master obd.
-                 */
+                /* getting rootid from cache MDS. It is needed to update local
+                 * (cache) root inode by rootid value from master obd. */
                 rc = obd_get_info(cmobd->cache_exp, strlen("rootid"),
                                   "rootid", &valsize, &lid);
                 if (rc) {
@@ -263,14 +276,14 @@ static int cmobd_cleanup(struct obd_device *obd, int flags)
 
         rc = obd_disconnect(cmobd->master_exp, flags);
         if (rc) {
-                CERROR("error disconnecting master, err %d\n",
-                       rc);
+                CERROR("error disconnecting master %s, err %d\n",
+                       cmobd->master_exp->exp_obd->obd_name, rc);
         }
         
         rc = class_disconnect(cmobd->cache_exp, flags);
         if (rc) {
-                CERROR("error disconnecting cache, err %d\n",
-                       rc);
+                CERROR("error disconnecting cache %s, err %d\n",
+                       cmobd->cache_exp->exp_obd->obd_name, rc);
         }
         
         RETURN(0);

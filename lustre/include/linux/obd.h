@@ -484,6 +484,7 @@ struct cm_obd {
         struct obd_device      *master_obd;
         int                     master_group;
         struct cmobd_write_service *write_srv;
+        struct lov_desc         master_desc; /* master device lovdesc */
 };
 
 struct conf_obd {
@@ -872,10 +873,6 @@ struct obd_ops {
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active, void *data);
 
-        /* this method is needed for cmobd to make say to LMV "get ready" when
-         * master obd is LMV. This is needed, because LMV is initialized in
-         * "defered" manner to let all MDSs to be set up first. */
-        int (*o_getready)(struct obd_export *exp);
         int (*o_init_ea_size)(struct obd_export *, int, int);
 
         /* 

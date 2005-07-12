@@ -641,17 +641,6 @@ static inline int obd_disconnect(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_getready(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        if (!OBP(exp->exp_obd, getready))
-                RETURN(0);
-        rc = OBP(exp->exp_obd, getready)(exp);
-        RETURN(rc);
-}
-
 static inline int obd_init_export(struct obd_export *exp)
 {
         int rc = 0;

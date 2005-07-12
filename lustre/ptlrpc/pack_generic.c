@@ -53,7 +53,8 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
         return (__swab32(msg->version) & LUSTRE_VERSION_MASK) != version;
 }
 
-void lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
+void lustre_init_msg(struct lustre_msg *msg, int count,
+                     int *lens, char **bufs)
 {
         char *ptr;
         int   i;
@@ -126,8 +127,8 @@ void lustre_pack_secdesc(struct ptlrpc_request *req, int size)
 #endif
 }
 
-int lustre_pack_request (struct ptlrpc_request *req,
-                         int count, int *lens, char **bufs)
+int lustre_pack_request(struct ptlrpc_request *req,
+                        int count, int *lens, char **bufs)
 {
         int rc;
         ENTRY;
@@ -167,8 +168,8 @@ do {                                                                    \
 # define PTLRPC_RS_DEBUG_LRU_DEL(rs) do {} while(0)
 #endif
 
-int lustre_pack_reply (struct ptlrpc_request *req,
-                       int count, int *lens, char **bufs)
+int lustre_pack_reply(struct ptlrpc_request *req,
+                      int count, int *lens, char **bufs)
 {
         struct ptlrpc_reply_state *rs;
         int                        rc;
@@ -200,20 +201,20 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         RETURN (0);
 }
 
-void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
+void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
 {
         struct ptlrpc_svcsec *svcsec = rs->rs_svcsec;
 
         PTLRPC_RS_DEBUG_LRU_DEL(rs);
 
-        LASSERT (!rs->rs_difficult || rs->rs_handled);
-        LASSERT (!rs->rs_on_net);
-        LASSERT (!rs->rs_scheduled);
-        LASSERT (rs->rs_export == NULL);
-        LASSERT (rs->rs_nlocks == 0);
-        LASSERT (list_empty(&rs->rs_exp_list));
-        LASSERT (list_empty(&rs->rs_obd_list));
-        LASSERT (svcsec);
+        LASSERT(!rs->rs_difficult || rs->rs_handled);
+        LASSERT(!rs->rs_on_net);
+        LASSERT(!rs->rs_scheduled);
+        LASSERT(rs->rs_export == NULL);
+        LASSERT(rs->rs_nlocks == 0);
+        LASSERT(list_empty(&rs->rs_exp_list));
+        LASSERT(list_empty(&rs->rs_obd_list));
+        LASSERT(svcsec);
 
         if (svcsec->free_repbuf)
                 svcsec->free_repbuf(svcsec, rs);
@@ -250,10 +251,10 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
          * rather than a short message.
          *
          */
-        required_len = MAX (offsetof (struct lustre_msg, version) +
-                            sizeof (m->version),
-                            offsetof (struct lustre_msg, magic) +
-                            sizeof (m->magic));
+        required_len = MAX(offsetof(struct lustre_msg, version) +
+                           sizeof(m->version),
+                           offsetof(struct lustre_msg, magic) +
+                           sizeof(m->magic));
         if (len < required_len) {
                 /* can't even look inside the message */
                 CERROR ("message length %d too small for magic/version check\n",
@@ -263,34 +264,34 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
 
         flipped = lustre_msg_swabbed(m);
         if (flipped)
-                __swab32s (&m->version);
+                __swab32s(&m->version);
         else if (m->magic != PTLRPC_MSG_MAGIC) {
                 CERROR("wrong lustre_msg magic %#08x\n", m->magic);
-                RETURN (-EINVAL);
+                RETURN(-EINVAL);
         }
 
         if ((m->version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                 CERROR("wrong lustre_msg version %#08x\n", m->version);
-                RETURN (-EINVAL);
+                RETURN(-EINVAL);
         }
 
         /* Now we know the sender speaks my language (but possibly flipped)...*/
         required_len = HDR_SIZE(0);
         if (len < required_len) {
                 /* can't even look inside the message */
-                CERROR ("message length %d too small for lustre_msg\n", len);
-                RETURN (-EINVAL);
+                CERROR("message length %d too small for lustre_msg\n", len);
+                RETURN(-EINVAL);
         }
 
         if (flipped) {
-                __swab32s (&m->type);
-                __swab32s (&m->opc);
-                __swab64s (&m->last_xid);
-                __swab64s (&m->last_committed);
-                __swab64s (&m->transno);
-                __swab32s (&m->status);
-                __swab32s (&m->bufcount);
-                __swab32s (&m->flags);
+                __swab32s(&m->type);
+                __swab32s(&m->opc);
+                __swab64s(&m->last_xid);
+                __swab64s(&m->last_committed);
+                __swab64s(&m->transno);
+                __swab32s(&m->status);
+                __swab32s(&m->bufcount);
+                __swab32s(&m->flags);
         }
 
         required_len = HDR_SIZE(m->bufcount);
@@ -350,10 +351,10 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
         return (char *)m + offset;
 }
 
-char *lustre_msg_string (struct lustre_msg *m, int index, int max_len)
+char *lustre_msg_string(struct lustre_msg *m, int index, int max_len)
 {
         /* max_len == 0 means the string should fill the buffer */
-        char *str = lustre_msg_buf (m, index, 0);
+        char *str = lustre_msg_buf(m, index, 0);
         int   slen;
         int   blen;
 
@@ -363,7 +364,7 @@ char *lustre_msg_string (struct lustre_msg *m, int index, int max_len)
         }
 
         blen = m->buflens[index];
-        slen = strnlen (str, blen);
+        slen = strnlen(str, blen);
 
         if (slen == blen) {                     /* not NULL terminated */
                 CERROR ("can't unpack non-NULL terminated string in "
@@ -424,33 +425,33 @@ void *lustre_swab_repbuf(struct ptlrpc_request *req, int index, int min_size,
 
 void lustre_swab_connect(struct obd_connect_data *ocd)
 {
-        __swab64s (&ocd->ocd_connect_flags);
-        __swab32s (&ocd->ocd_nllu[0]);
-        __swab32s (&ocd->ocd_nllu[1]);
+        __swab64s(&ocd->ocd_connect_flags);
+        __swab32s(&ocd->ocd_nllu[0]);
+        __swab32s(&ocd->ocd_nllu[1]);
 }
 
-void lustre_swab_obdo (struct obdo  *o)
+void lustre_swab_obdo(struct obdo  *o)
 {
-        __swab64s (&o->o_id);
-        __swab64s (&o->o_gr);
-        __swab64s (&o->o_atime);
-        __swab64s (&o->o_mtime);
-        __swab64s (&o->o_ctime);
-        __swab64s (&o->o_size);
-        __swab64s (&o->o_blocks);
-        __swab64s (&o->o_grant);
-        __swab32s (&o->o_blksize);
-        __swab32s (&o->o_mode);
-        __swab32s (&o->o_uid);
-        __swab32s (&o->o_gid);
-        __swab32s (&o->o_flags);
-        __swab32s (&o->o_nlink);
-        __swab32s (&o->o_generation);
-        __swab64s (&o->o_valid);
-        __swab32s (&o->o_misc);
-        __swab32s (&o->o_easize);
-        __swab32s (&o->o_mds);
-        __swab64s (&o->o_fid);
+        __swab64s(&o->o_id);
+        __swab64s(&o->o_gr);
+        __swab64s(&o->o_atime);
+        __swab64s(&o->o_mtime);
+        __swab64s(&o->o_ctime);
+        __swab64s(&o->o_size);
+        __swab64s(&o->o_blocks);
+        __swab64s(&o->o_grant);
+        __swab32s(&o->o_blksize);
+        __swab32s(&o->o_mode);
+        __swab32s(&o->o_uid);
+        __swab32s(&o->o_gid);
+        __swab32s(&o->o_flags);
+        __swab32s(&o->o_nlink);
+        __swab32s(&o->o_generation);
+        __swab64s(&o->o_valid);
+        __swab32s(&o->o_misc);
+        __swab32s(&o->o_easize);
+        __swab32s(&o->o_mds);
+        __swab64s(&o->o_fid);
         /* o_inline is opaque */
 }
 
@@ -583,37 +584,37 @@ void *mdc_rename_pack(struct lustre_msg *msg, int offset,
         return (void*)tmp;
 }
 
-void lustre_swab_obd_statfs (struct obd_statfs *os)
+void lustre_swab_obd_statfs(struct obd_statfs *os)
 {
-        __swab64s (&os->os_type);
-        __swab64s (&os->os_blocks);
-        __swab64s (&os->os_bfree);
-        __swab64s (&os->os_bavail);
-        __swab64s (&os->os_ffree);
+        __swab64s(&os->os_type);
+        __swab64s(&os->os_blocks);
+        __swab64s(&os->os_bfree);
+        __swab64s(&os->os_bavail);
+        __swab64s(&os->os_ffree);
         /* no need to swap os_fsid */
-        __swab32s (&os->os_bsize);
-        __swab32s (&os->os_namelen);
+        __swab32s(&os->os_bsize);
+        __swab32s(&os->os_namelen);
         /* no need to swap os_spare */
 }
 
-void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
+void lustre_swab_obd_ioobj(struct obd_ioobj *ioo)
 {
-        __swab64s (&ioo->ioo_id);
-        __swab64s (&ioo->ioo_gr);
-        __swab32s (&ioo->ioo_type);
-        __swab32s (&ioo->ioo_bufcnt);
+        __swab64s(&ioo->ioo_id);
+        __swab64s(&ioo->ioo_gr);
+        __swab32s(&ioo->ioo_type);
+        __swab32s(&ioo->ioo_bufcnt);
 }
 
-void lustre_swab_niobuf_remote (struct niobuf_remote *nbr)
+void lustre_swab_niobuf_remote(struct niobuf_remote *nbr)
 {
-        __swab64s (&nbr->offset);
-        __swab32s (&nbr->len);
-        __swab32s (&nbr->flags);
+        __swab64s(&nbr->offset);
+        __swab32s(&nbr->len);
+        __swab32s(&nbr->flags);
 }
 
-void lustre_swab_ost_body (struct ost_body *b)
+void lustre_swab_ost_body(struct ost_body *b)
 {
-        lustre_swab_obdo (&b->oa);
+        lustre_swab_obdo(&b->oa);
 }
 
 void lustre_swab_ost_last_id(obd_id *id)
@@ -637,28 +638,28 @@ void lustre_swab_ost_lvb(struct ost_lvb *lvb)
 
 void lustre_swab_lustre_stc (struct lustre_stc *stc)
 {
-        __swab64s (&stc->u.e3s.l3s_ino);
-        __swab32s (&stc->u.e3s.l3s_gen);
-        __swab32s (&stc->u.e3s.l3s_type);
+        __swab64s(&stc->u.e3s.l3s_ino);
+        __swab32s(&stc->u.e3s.l3s_gen);
+        __swab32s(&stc->u.e3s.l3s_type);
 }
 
 void lustre_swab_lustre_fid(struct lustre_fid *fid)
 {
-        __swab64s (&fid->lf_id);
-        __swab64s (&fid->lf_group);
+        __swab64s(&fid->lf_id);
+        __swab64s(&fid->lf_group);
         /*__swab32s (&fid->lf_version);*/
 }
 
-void lustre_swab_lustre_id (struct lustre_id *id)
+void lustre_swab_lustre_id(struct lustre_id *id)
 {
         lustre_swab_lustre_stc(&id->li_stc);
         lustre_swab_lustre_fid(&id->li_fid);
 }
 
-void lustre_swab_mds_status_req (struct mds_status_req *r)
+void lustre_swab_mds_status_req(struct mds_status_req *r)
 {
-        __swab32s (&r->flags);
-        __swab32s (&r->repbuf);
+        __swab32s(&r->flags);
+        __swab32s(&r->repbuf);
 }
 
 /* 
@@ -707,159 +708,159 @@ struct mds_req_sec_desc *lustre_swab_mds_secdesc(struct ptlrpc_request *req,
         return rsd;
 }
 
-void lustre_swab_mds_body (struct mds_body *b)
+void lustre_swab_mds_body(struct mds_body *b)
 {
-        lustre_swab_lustre_id (&b->id1);
-        lustre_swab_lustre_id (&b->id2);
+        lustre_swab_lustre_id(&b->id1);
+        lustre_swab_lustre_id(&b->id2);
         /* handle is opaque */
-        __swab64s (&b->size);
-        __swab64s (&b->blocks);
-        __swab64s (&b->valid);
-        __swab32s (&b->mode);
-        __swab32s (&b->uid);
-        __swab32s (&b->gid);
-        __swab32s (&b->mtime);
-        __swab32s (&b->ctime);
-        __swab32s (&b->atime);
-        __swab32s (&b->flags);
-        __swab32s (&b->rdev);
-        __swab32s (&b->nlink);
-        __swab32s (&b->eadatasize);
+        __swab64s(&b->size);
+        __swab64s(&b->blocks);
+        __swab64s(&b->valid);
+        __swab32s(&b->mode);
+        __swab32s(&b->uid);
+        __swab32s(&b->gid);
+        __swab32s(&b->mtime);
+        __swab32s(&b->ctime);
+        __swab32s(&b->atime);
+        __swab32s(&b->flags);
+        __swab32s(&b->rdev);
+        __swab32s(&b->nlink);
+        __swab32s(&b->eadatasize);
 }
-void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
+void lustre_swab_mds_rec_setattr(struct mds_rec_setattr *sa)
 {
-        __swab32s (&sa->sa_opcode);
-        __swab32s (&sa->sa_valid);
-        lustre_swab_lustre_id (&sa->sa_id);
-        __swab32s (&sa->sa_mode);
-        __swab32s (&sa->sa_uid);
-        __swab32s (&sa->sa_gid);
-        __swab32s (&sa->sa_attr_flags);
-        __swab64s (&sa->sa_size);
-        __swab64s (&sa->sa_atime);
-        __swab64s (&sa->sa_mtime);
-        __swab64s (&sa->sa_ctime);
-}
-
-void lustre_swab_mds_rec_create (struct mds_rec_create *cr)
-{
-        __swab32s (&cr->cr_opcode);
-        __swab32s (&cr->cr_flags); /* for use with open */
-        __swab32s (&cr->cr_mode);
-        lustre_swab_lustre_id (&cr->cr_id);
-        lustre_swab_lustre_id (&cr->cr_replayid);
-        __swab64s (&cr->cr_time);
-        __swab64s (&cr->cr_rdev);
+        __swab32s(&sa->sa_opcode);
+        __swab32s(&sa->sa_valid);
+        lustre_swab_lustre_id(&sa->sa_id);
+        __swab32s(&sa->sa_mode);
+        __swab32s(&sa->sa_uid);
+        __swab32s(&sa->sa_gid);
+        __swab32s(&sa->sa_attr_flags);
+        __swab64s(&sa->sa_size);
+        __swab64s(&sa->sa_atime);
+        __swab64s(&sa->sa_mtime);
+        __swab64s(&sa->sa_ctime);
 }
 
-void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
+void lustre_swab_mds_rec_create(struct mds_rec_create *cr)
 {
-        __swab32s (&lk->lk_opcode);
-        lustre_swab_lustre_id (&lk->lk_id1);
-        lustre_swab_lustre_id (&lk->lk_id2);
+        __swab32s(&cr->cr_opcode);
+        __swab32s(&cr->cr_flags); /* for use with open */
+        __swab32s(&cr->cr_mode);
+        lustre_swab_lustre_id(&cr->cr_id);
+        lustre_swab_lustre_id(&cr->cr_replayid);
+        __swab64s(&cr->cr_time);
+        __swab64s(&cr->cr_rdev);
 }
 
-void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul)
+void lustre_swab_mds_rec_link(struct mds_rec_link *lk)
 {
-        __swab32s (&ul->ul_opcode);
-        __swab32s (&ul->ul_mode);
-        lustre_swab_lustre_id (&ul->ul_id1);
-        lustre_swab_lustre_id (&ul->ul_id2);
+        __swab32s(&lk->lk_opcode);
+        lustre_swab_lustre_id(&lk->lk_id1);
+        lustre_swab_lustre_id(&lk->lk_id2);
+}
+
+void lustre_swab_mds_rec_unlink(struct mds_rec_unlink *ul)
+{
+        __swab32s(&ul->ul_opcode);
+        __swab32s(&ul->ul_mode);
+        lustre_swab_lustre_id(&ul->ul_id1);
+        lustre_swab_lustre_id(&ul->ul_id2);
 }
 
 void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
 {
-        __swab32s (&rn->rn_opcode);
-        lustre_swab_lustre_id (&rn->rn_id1);
-        lustre_swab_lustre_id (&rn->rn_id2);
+        __swab32s(&rn->rn_opcode);
+        lustre_swab_lustre_id(&rn->rn_id1);
+        lustre_swab_lustre_id(&rn->rn_id2);
 }
 
-void lustre_swab_lov_desc (struct lov_desc *ld)
+void lustre_swab_lov_desc(struct lov_desc *ld)
 {
-        __swab32s (&ld->ld_tgt_count);
-        __swab32s (&ld->ld_active_tgt_count);
-        __swab32s (&ld->ld_default_stripe_count);
-        __swab64s (&ld->ld_default_stripe_size);
-        __swab64s (&ld->ld_default_stripe_offset);
-        __swab32s (&ld->ld_pattern);
+        __swab32s(&ld->ld_tgt_count);
+        __swab32s(&ld->ld_active_tgt_count);
+        __swab32s(&ld->ld_default_stripe_count);
+        __swab64s(&ld->ld_default_stripe_size);
+        __swab64s(&ld->ld_default_stripe_offset);
+        __swab32s(&ld->ld_pattern);
         /* uuid endian insensitive */
 }
 
-void lustre_swab_ldlm_res_id (struct ldlm_res_id *id)
+void lustre_swab_ldlm_res_id(struct ldlm_res_id *id)
 {
         int  i;
 
         for (i = 0; i < RES_NAME_SIZE; i++)
-                __swab64s (&id->name[i]);
+                __swab64s(&id->name[i]);
 }
 
-void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
+void lustre_swab_ldlm_policy_data(ldlm_policy_data_t *d)
 {
         /* the lock data is a union and the first three fields of both EXTENT
          * and FLOCK types are __u64, so it's ok to swab them in the same way */
-        __swab64s (&d->l_flock.start);
-        __swab64s (&d->l_flock.end);
-        __swab64s (&d->l_flock.pid);
-        __swab64s (&d->l_flock.blocking_pid);
+        __swab64s(&d->l_flock.start);
+        __swab64s(&d->l_flock.end);
+        __swab64s(&d->l_flock.pid);
+        __swab64s(&d->l_flock.blocking_pid);
 }
 
-void lustre_swab_ldlm_intent (struct ldlm_intent *i)
+void lustre_swab_ldlm_intent(struct ldlm_intent *i)
 {
-        __swab64s (&i->opc);
+        __swab64s(&i->opc);
 }
 
-void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r)
+void lustre_swab_ldlm_resource_desc(struct ldlm_resource_desc *r)
 {
-        __swab32s (&r->lr_type);
-        lustre_swab_ldlm_res_id (&r->lr_name);
+        __swab32s(&r->lr_type);
+        lustre_swab_ldlm_res_id(&r->lr_name);
 }
 
-void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l)
+void lustre_swab_ldlm_lock_desc(struct ldlm_lock_desc *l)
 {
-        lustre_swab_ldlm_resource_desc (&l->l_resource);
-        __swab32s (&l->l_req_mode);
-        __swab32s (&l->l_granted_mode);
-        lustre_swab_ldlm_policy_data (&l->l_policy_data);
+        lustre_swab_ldlm_resource_desc(&l->l_resource);
+        __swab32s(&l->l_req_mode);
+        __swab32s(&l->l_granted_mode);
+        lustre_swab_ldlm_policy_data(&l->l_policy_data);
 }
 
-void lustre_swab_ldlm_request (struct ldlm_request *rq)
+void lustre_swab_ldlm_request(struct ldlm_request *rq)
 {
-        __swab32s (&rq->lock_flags);
-        lustre_swab_ldlm_lock_desc (&rq->lock_desc);
+        __swab32s(&rq->lock_flags);
+        lustre_swab_ldlm_lock_desc(&rq->lock_desc);
         /* lock_handle1 opaque */
         /* lock_handle2 opaque */
 }
 
-void lustre_swab_ldlm_reply (struct ldlm_reply *r)
+void lustre_swab_ldlm_reply(struct ldlm_reply *r)
 {
-        __swab32s (&r->lock_flags);
-        lustre_swab_ldlm_lock_desc (&r->lock_desc);
+        __swab32s(&r->lock_flags);
+        lustre_swab_ldlm_lock_desc(&r->lock_desc);
         /* lock_handle opaque */
-        __swab64s (&r->lock_policy_res1);
-        __swab64s (&r->lock_policy_res2);
+        __swab64s(&r->lock_policy_res1);
+        __swab64s(&r->lock_policy_res2);
 }
 
-void lustre_swab_ptlbd_op (struct ptlbd_op *op)
+void lustre_swab_ptlbd_op(struct ptlbd_op *op)
 {
-        __swab16s (&op->op_cmd);
-        __swab16s (&op->op_lun);
-        __swab16s (&op->op_niob_cnt);
+        __swab16s(&op->op_cmd);
+        __swab16s(&op->op_lun);
+        __swab16s(&op->op_niob_cnt);
         /* ignore op__padding */
-        __swab32s (&op->op_block_cnt);
+        __swab32s(&op->op_block_cnt);
 }
 
-void lustre_swab_ptlbd_niob (struct ptlbd_niob *n)
+void lustre_swab_ptlbd_niob(struct ptlbd_niob *n)
 {
-        __swab64s (&n->n_xid);
-        __swab64s (&n->n_block_nr);
-        __swab32s (&n->n_offset);
-        __swab32s (&n->n_length);
+        __swab64s(&n->n_xid);
+        __swab64s(&n->n_block_nr);
+        __swab32s(&n->n_offset);
+        __swab32s(&n->n_length);
 }
 
-void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r)
+void lustre_swab_ptlbd_rsp(struct ptlbd_rsp *r)
 {
-        __swab16s (&r->r_status);
-        __swab16s (&r->r_error_cnt);
+        __swab16s(&r->r_status);
+        __swab16s(&r->r_error_cnt);
 }
 
 /* no one calls this */
@@ -871,6 +872,7 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
                 return 0;
         return -1;
 }
+
 void lustre_assert_wire_constants(void)
 {
 }

@@ -1242,6 +1242,18 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
                 }
 
                 *(struct lustre_id *)val = *reply;
+        } else if (keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) {
+                struct lov_desc *reply;
+                
+                reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
+                                           lustre_swab_lov_desc);
+                if (reply == NULL) {
+                        CERROR("Can't unpack %s\n", (char *)key);
+                        GOTO(out_req, rc = -EPROTO);
+                }
+
+                *(struct lov_desc *)val = *reply;
+                RETURN(0);
         } else {
                 __u32 *reply;
                 

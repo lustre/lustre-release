@@ -644,11 +644,6 @@ struct mds_status_req {
         __u32  repbuf;
 };
 
-extern void lustre_swab_lustre_id(struct lustre_id *id);
-extern void lustre_swab_lustre_stc(struct lustre_stc *stc);
-extern void lustre_swab_lustre_fid(struct lustre_fid *fid);
-extern void lustre_swab_mds_status_req (struct mds_status_req *r);
-
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 
 struct mds_body {
@@ -811,8 +806,6 @@ struct lmv_desc {
         __u32 ld_active_tgt_count;         /* how many active */
         struct obd_uuid ld_uuid;
 };
-
-extern void lustre_swab_lov_desc (struct lov_desc *ld);
 
 /*
  *   LDLM requests:
@@ -1180,5 +1173,11 @@ typedef enum {
         SEC_LAST_OPC
 } sec_cmd_t;
 #define SEC_FIRST_OPC SEC_INIT
+
+extern void lustre_swab_lustre_id(struct lustre_id *id);
+extern void lustre_swab_lov_desc(struct lov_desc *desc);
+extern void lustre_swab_lustre_stc(struct lustre_stc *stc);
+extern void lustre_swab_lustre_fid(struct lustre_fid *fid);
+extern void lustre_swab_mds_status_req(struct mds_status_req *r);
 
 #endif
