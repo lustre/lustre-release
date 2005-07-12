@@ -105,9 +105,8 @@ cmobd_find_obd(struct obd_device *obd, struct obd_uuid *uuid)
         CWARN("%s: looking for client obd %s\n",
               obd->obd_uuid.uuid, uuid->uuid);
 
-        for (i = 0; i < sizeof(types); i++) {
-                res = class_find_client_obd(NULL, types[i],
-                                            uuid);
+        for (i = 0; i < sizeof(types) / sizeof(char *); i++) {
+                res = class_find_client_obd(NULL, types[i], uuid);
                 if (res)
                         RETURN(res);
         }
