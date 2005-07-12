@@ -135,6 +135,7 @@ EXPORT_SYMBOL(ptlrpc_start_n_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(ptlrpc_daemonize);
+EXPORT_SYMBOL(ptlrpc_service_health_check);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);

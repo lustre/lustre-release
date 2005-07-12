@@ -90,6 +90,7 @@ unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
 unsigned int ldlm_timeout = 20; /* seconds */
+unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
@@ -379,6 +380,7 @@ EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
+EXPORT_SYMBOL(obd_health_check_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
@@ -455,13 +457,12 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        int rc = 0; //, i;
+        int rc = 0 , i;
         *eof = 1;
 
         if (portals_catastrophe)
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
-#if 0
         spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd;
@@ -482,7 +483,6 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 spin_lock(&obd_dev_lock);
         }
         spin_unlock(&obd_dev_lock);
-#endif
 
         if (rc == 0)
                 return snprintf(page, count, "healthy\n");
@@ -491,12 +491,35 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         return rc;
 }
 
+static int obd_proc_rd_health_timeout(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%d\n", obd_health_check_timeout);
+}
+
+static int obd_proc_wr_health_timeout(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd_health_check_timeout = val;
+
+        return count;
+}
+
 /* Root for /proc/fs/lustre */
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { "health_check", obd_proc_read_health, NULL, NULL },
+        { "health_check_timeout", obd_proc_rd_health_timeout,
+          obd_proc_wr_health_timeout, NULL },        
         { 0 }
 };
 #else

@@ -1294,6 +1294,8 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_init_vars(ost, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
+        sema_init(&ost->ost_health_sem, 1);
+
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
@@ -1330,8 +1332,10 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
+        ost->ost_create_service = NULL;
 out_service:
         ptlrpc_unregister_service(ost->ost_service);
+        ost->ost_service = NULL;
 out_lprocfs:
         lprocfs_obd_cleanup(obd);
         RETURN(rc);
@@ -1350,12 +1354,36 @@ static int ost_cleanup(struct obd_device *obd)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        down(&ost->ost_health_sem);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
+        ost->ost_service = NULL;
+        ost->ost_create_service = NULL;
+        up(&ost->ost_health_sem);
 
         lprocfs_obd_cleanup(obd);
 
         RETURN(err);
+}
+
+static int ost_health_check(struct obd_device *obd)
+{
+        struct ost_obd *ost = &obd->u.ost;
+        int rc = 0;
+
+        down(&ost->ost_health_sem);
+        rc |= ptlrpc_service_health_check(ost->ost_service);
+        rc |= ptlrpc_service_health_check(ost->ost_create_service);
+        up(&ost->ost_health_sem);
+
+        /*
+         * health_check to return 0 on healthy
+         * and 1 on unhealthy.
+         */
+        if( rc != 0)
+                rc = 1;
+
+        return rc;
 }
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r)
@@ -1368,6 +1396,7 @@ static struct obd_ops ost_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = ost_setup,
         .o_cleanup      = ost_cleanup,
+        .o_health_check = ost_health_check,
 };
 
 static int __init ost_init(void)

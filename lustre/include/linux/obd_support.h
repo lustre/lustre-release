@@ -40,6 +40,7 @@ extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 extern unsigned int ldlm_timeout;
+extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 extern wait_queue_head_t obd_race_waitq;

@@ -111,6 +111,12 @@ Description: Failover mode is now the default for OSTs.
 Details    : By default, OSTs will now run in failover mode.  To return to
 	     the old behaviour, add '--failout' to the lmc line for OSTs.
 
+Severity   : enhancement
+Bugzilla   : 1693
+Description: Health checks are now provided for MDS and OSTs
+Details    : Additional detailed health check information on MSD and OSTs   
+	     is now provided through the procfs health_check value.
+
 ------------------------------------------------------------------------------
 
 2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>

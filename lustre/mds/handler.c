@@ -2047,6 +2047,8 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 
         lprocfs_init_vars(mdt, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
+        
+        sema_init(&mds->mds_health_sem, 1);
 
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
@@ -2101,10 +2103,13 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 
 err_thread3:
         ptlrpc_unregister_service(mds->mds_readpage_service);
+        mds->mds_readpage_service = NULL;
 err_thread2:
         ptlrpc_unregister_service(mds->mds_setattr_service);
+        mds->mds_setattr_service = NULL;
 err_thread:
         ptlrpc_unregister_service(mds->mds_service);
+        mds->mds_service = NULL;
 err_lprocfs:
         lprocfs_obd_cleanup(obd);
         return rc;
@@ -2115,14 +2120,41 @@ static int mdt_cleanup(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
+        down(&mds->mds_health_sem);
         ptlrpc_unregister_service(mds->mds_readpage_service);
         ptlrpc_unregister_service(mds->mds_setattr_service);
         ptlrpc_unregister_service(mds->mds_service);
+        mds->mds_readpage_service = NULL;
+        mds->mds_setattr_service = NULL;
+        mds->mds_service = NULL;
+        up(&mds->mds_health_sem);
 
         lprocfs_obd_cleanup(obd);
 
         RETURN(0);
 }
+
+static int mdt_health_check(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
+        
+        down(&mds->mds_health_sem);
+        rc |= ptlrpc_service_health_check(mds->mds_readpage_service);
+        rc |= ptlrpc_service_health_check(mds->mds_setattr_service);
+        rc |= ptlrpc_service_health_check(mds->mds_service);
+        up(&mds->mds_health_sem);
+
+        /*
+         * health_check to return 0 on healthy
+         * and 1 on unhealthy.
+         */
+        if(rc != 0)
+                rc = 1;
+        
+        return rc;
+}
+
 
 static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                           void *data)
@@ -2162,6 +2194,7 @@ static struct obd_ops mdt_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_setup           = mdt_setup,
         .o_cleanup         = mdt_cleanup,
+        .o_health_check    = mdt_health_check,        
 };
 
 static int __init mds_init(void)

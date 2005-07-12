@@ -368,6 +368,7 @@ struct mds_obd {
         struct lustre_quota_info         mds_quota_info;
         struct lustre_quota_ctxt         mds_quota_ctxt;
         atomic_t                         mds_quotachecking;
+        struct semaphore                 mds_health_sem;
 };
 
 struct echo_obd {
@@ -409,6 +410,7 @@ struct recovd_obd {
 struct ost_obd {
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
+        struct semaphore       ost_health_sem;
 };
 
 struct echo_client_obd {
@@ -737,6 +739,8 @@ struct obd_ops {
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active);
 
+        int (*o_health_check)(struct obd_device *);
+
         /* quota methods */
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
@@ -745,6 +749,10 @@ struct obd_ops {
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h.
+         *
+         * Also note that if you add it to the END, you also have to change
+         * the num_stats calculation.
+         *
          */
 };
 

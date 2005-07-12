@@ -1046,6 +1046,31 @@ static inline int obd_quotactl(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_health_check(struct obd_device *obd)
+{
+        /* returns: 0 on healthy
+         *         >0 on unhealthy + reason code/flag
+         *            however the only suppored reason == 1 right now
+         *            We'll need to define some better reasons
+         *            or flags in the future.
+         *         <0 on error
+         */
+        int rc;
+        ENTRY;
+
+        /* don't use EXP_CHECK_OP, because NULL method is normal here */
+        if (obd == NULL || !OBT(obd)) {
+                CERROR("cleaned up obd\n");
+                RETURN(-EOPNOTSUPP);
+        }
+        if (!obd->obd_set_up || obd->obd_stopping)
+                RETURN(0);
+        if (!OBP(obd, health_check))
+                RETURN(0);
+
+        rc = OBP(obd, health_check)(obd);
+        RETURN(rc);
+}
 
 static inline int obd_register_observer(struct obd_device *obd,
                                         struct obd_device *observer)

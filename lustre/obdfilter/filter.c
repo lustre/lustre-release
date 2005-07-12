@@ -2722,6 +2722,21 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(0);
 }
 
+static int filter_health_check(struct obd_device *obd)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        int rc = 0;
+       
+        /*
+         * health_check to return 0 on healthy
+         * and 1 on unhealthy.
+         */
+        if(filter->fo_sb->s_flags & MS_RDONLY)
+                rc = 1;
+
+        return rc;
+}
+
 static struct dentry *filter_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                              void *data)
 {
@@ -2758,6 +2773,7 @@ static struct obd_ops filter_obd_ops = {
         .o_iocontrol      = filter_iocontrol,
         .o_quotacheck     = filter_quotacheck,
         .o_quotactl       = filter_quotactl,
+        .o_health_check   = filter_health_check,
 };
 
 static struct obd_ops filter_sanobd_ops = {

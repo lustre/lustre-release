@@ -1136,3 +1136,43 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                           srv_interfaces[ptlrpc_ninterfaces]));
         return 0;
 }
+
+/* Returns 0 if the service is healthy.
+ *
+ * Right now, it just checks to make sure that requests aren't languishing
+ * in the queue.  We'll use this health check to govern whether a node needs
+ * to be shot, so it's intentionally non-aggressive. */
+int ptlrpc_service_health_check(struct ptlrpc_service *svc)
+{
+        struct ptlrpc_request *request;
+        struct timeval         right_now;
+        long                   timediff, cutoff;
+        unsigned long          flags;
+        int                    rc;
+
+        if (svc == NULL)
+                return 0;
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        if (list_empty(&svc->srv_request_queue)) {
+                rc = 0;
+                goto out;
+        }
+
+        request = list_entry(svc->srv_request_queue.next,
+                             struct ptlrpc_request, rq_list);
+
+        do_gettimeofday(&right_now);
+        timediff = timeval_sub(&right_now, &request->rq_arrival_time);
+
+        cutoff = obd_health_check_timeout;
+
+        if (timediff / 1000000 > cutoff) {
+                rc = -1;
+                goto out;
+        }
+
+ out:
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        return rc;
+}
