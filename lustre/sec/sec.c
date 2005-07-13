@@ -64,7 +64,7 @@ int ptlrpcs_register(struct ptlrpc_sec_type *type)
         atomic_set(&type->pst_inst, 0);
         spin_unlock(&sectypes_lock);
 
-        CDEBUG(D_SEC, "%s: registered\n", type->pst_name);
+        CWARN("%s: registered\n", type->pst_name);
         return 0;
 }
 
