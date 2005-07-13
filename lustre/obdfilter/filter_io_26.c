@@ -36,8 +36,6 @@
 #include <linux/lustre_fsfilt.h>
 #include "filter_internal.h"
 
-#warning "implement writeback mode -bzzz"
-
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct dio_request {
