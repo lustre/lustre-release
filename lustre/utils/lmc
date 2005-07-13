@@ -1255,12 +1255,10 @@ def add_cobd(gen, lustre, options):
     master_name = get_option(options, 'master_obd')
     cache_name = get_option(options, 'cache_obd')
 
+    # init master
     master_uuid = name2uuid(lustre, master_name, tag='lov', fatal=0)
-    cache_uuid = name2uuid(lustre, cache_name, tag='lov', fatal=0)
-
-    if not master_uuid or not cache_uuid:
+    if not master_uuid:
         master_uuid = name2uuid(lustre, master_name, tag='ost', fatal=0)
-        cache_uuid = name2uuid(lustre, cache_name, tag='ost', fatal=0)
 
     if master_uuid:
         node = lookup(lustre, master_uuid)
@@ -1274,6 +1272,11 @@ def add_cobd(gen, lustre, options):
                 osd_node = lookup(lustre, osd_uuid)
                 if not osd_node.getElementsByTagName('obdtype'):
                     gen.addElement(osd_node, 'obdtype', 'master')
+
+    # init cache
+    cache_uuid = name2uuid(lustre, cache_name, tag='lov', fatal=0)
+    if not not cache_uuid:
+        cache_uuid = name2uuid(lustre, cache_name, tag='ost', fatal=0)
 
     if cache_uuid:
         node = lookup(lustre, cache_uuid)
@@ -1289,8 +1292,10 @@ def add_cobd(gen, lustre, options):
                     gen.addElement(osd_node, 'obdtype', 'cache')
 
     if not master_uuid or not cache_uuid:
-        master_uuid = name2uuid(lustre,master_name, tag='lmv')
-        cache_uuid = name2uuid(lustre,cache_name, tag='lmv')
+        master_uuid = name2uuid(lustre, master_name, tag='lmv', fatal=0)
+        if not master_uuid:
+            master_uuid = name2uuid(lustre, master_name, tag='mds', fatal=0)
+            
         if master_uuid:
             mds_node = lookup(lustre, master_uuid)
             ret = mds_node.getElementsByTagName('active_ref')
@@ -1299,6 +1304,11 @@ def add_cobd(gen, lustre, options):
                 mdsdev_node = lookup(lustre, mdsdev_uuid)
                 if not mdsdev_node.getElementsByTagName('obdtype'):
                     gen.addElement(mdsdev_node, 'obdtype', 'master')
+
+        cache_uuid = name2uuid(lustre, cache_name, tag='lmv', fatal=0)
+        if not cache_uuid:
+            cache_uuid = name2uuid(lustre, cache_name, tag='mds', fatal=0)
+            
         if cache_uuid:
             mds_node = lookup(lustre, cache_uuid)
             ret = mds_node.getElementsByTagName('active_ref')
@@ -1308,6 +1318,10 @@ def add_cobd(gen, lustre, options):
                 if not mdsdev_node.getElementsByTagName('obdtype'):
                     gen.addElement(mdsdev_node, 'obdtype', 'cache')
 
+    if not master_uuid or not cache_uuid:
+	panic("add_cobd", "cannot find master or cache by names '" + 
+              master_name + "' and '" + cache_name + "'")
+        
     node = findByName(lustre, node_name, "node")
     cobd = gen.cobd(name, uuid, master_uuid, cache_uuid)
     lustre.appendChild(cobd)
@@ -1368,22 +1382,29 @@ def add_lov(gen, lustre, options):
     lovconfig_uuid = new_uuid(lovconfig_name)
     if mds_name:
         mds = findByName(lustre, mds_name, "mds")
+        if not mds:
+            panic("add_lov", "can't find MDS '" + mds_name + "'")
         mds.appendChild(gen.ref("lovconfig", lovconfig_uuid))
         mds.appendChild(gen.ref("client", uuid))
 
     if lmv_name:
         lmv = findByName(lustre, lmv_name, "lmv")
+        if not lmv:
+            panic("add_lov", "can't find LMV '" + lmv_name + "'")
         lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
         lmv.appendChild(gen.ref("client", uuid))
 	
-
     if cache_lmv_name:
         lmv = findByName(lustre, cache_lmv_name, "lmv")
+        if not lmv:
+            panic("add_lov", "can't find LMV '" + cache_lmv_name + "'")
         lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
         lmv.appendChild(gen.ref("client", uuid))
     
     if master_lmv_name:
         lmv = findByName(lustre, master_lmv_name, "lmv")
+        if not lmv:
+            panic("add_lov", "can't find LMV '" + master_lmv_name + "'")
         lmv.appendChild(gen.ref("lovconfig", lovconfig_uuid))
         lmv.appendChild(gen.ref("client", uuid))
 

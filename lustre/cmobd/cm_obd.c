@@ -199,7 +199,7 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                        rc);
                 GOTO(put_cache, rc);
         }
-        
+
         if (cmobd_dt_obd(cmobd->master_exp->exp_obd)) {
                 /* for master dt device remove the recovery flag. */
                 rc = obd_set_info(cmobd->master_exp, strlen("unrecovery"),

@@ -296,8 +296,8 @@ cobd_disconnect(struct obd_export *exp, unsigned long flags)
         LASSERT(exp != NULL);
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
+                CDEBUG(D_IOCTL, "invalid client cookie "
+                       LPX64"\n", exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
