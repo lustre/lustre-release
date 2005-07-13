@@ -76,7 +76,6 @@ static int echo_disconnect(struct obd_export *exp, unsigned long flags)
         spin_lock_irqsave(&exp->exp_lock, irqflags);
         exp->exp_flags = flags;
         /* complete all outstanding replies */
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
         while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
