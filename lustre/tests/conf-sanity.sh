@@ -279,7 +279,7 @@ test_5d() {
        [ -d $MOUNT ] || mkdir -p $MOUNT
        $LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
        start_lgssd || return 1
-       llmount $mds_HOST://mds1_svc/client_facet $MOUNT  || return 1
+       llmount -o nettype=$NETTYPE $mds_HOST://mds1_svc/client_facet $MOUNT  || return 1
 
        umount $MOUNT || return 2
        # cleanup client modules
