@@ -1008,6 +1008,8 @@ int null_if_equal(struct ldlm_lock *lock, void *data)
         return LDLM_ITER_CONTINUE;
 }
 
+static void remote_acl_free(struct remote_acl *racl);
+
 void ll_clear_inode(struct inode *inode)
 {
         struct lustre_id id;
@@ -1053,6 +1055,19 @@ void ll_clear_inode(struct inode *inode)
                          strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
         }
+
+        if (lli->lli_posix_acl) {
+                LASSERT(lli->lli_remote_acl == NULL);
+                posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = NULL;
+        }
+
+        if (lli->lli_remote_acl) {
+                LASSERT(lli->lli_posix_acl == NULL);
+                remote_acl_free(lli->lli_remote_acl);
+                lli->lli_remote_acl = NULL;
+        }
+
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
         EXIT;
@@ -1363,13 +1378,419 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         return 0;
 }
 
+
+/********************************
+ * remote acl                   *
+ ********************************/
+
+static struct remote_acl *remote_acl_alloc(void)
+{
+        struct remote_acl *racl;
+        int i;
+
+        OBD_ALLOC(racl, sizeof(*racl));
+        if (!racl)
+                return NULL;
+
+        spin_lock_init(&racl->ra_lock);
+        init_MUTEX(&racl->ra_update_sem);
+
+        for (i = 0; i < REMOTE_ACL_HASHSIZE; i++)
+                INIT_LIST_HEAD(&racl->ra_perm_cache[i]);
+
+        return racl;
+}
+
+/*
+ * caller should guarantee no race here.
+ */
+static void remote_perm_flush_xperms(struct lustre_remote_perm *perm)
+{
+        struct remote_perm_setxid *xperm;
+
+        while (!list_empty(&perm->lrp_setxid_perms)) {
+                xperm = list_entry(perm->lrp_setxid_perms.next,
+                                   struct remote_perm_setxid,
+                                   list);
+                list_del(&xperm->list);
+                OBD_FREE(xperm, sizeof(*xperm));
+        }
+}
+
+/*
+ * caller should guarantee no race here.
+ */
+static void remote_acl_flush(struct remote_acl *racl)
+{
+        struct list_head *head;
+        struct lustre_remote_perm *perm, *tmp;
+        int i;
+
+        for (i = 0; i < REMOTE_ACL_HASHSIZE; i++) {
+                head = &racl->ra_perm_cache[i];
+
+                list_for_each_entry_safe(perm, tmp, head, lrp_list) {
+                        remote_perm_flush_xperms(perm);
+                        list_del(&perm->lrp_list);
+                        OBD_FREE(perm, sizeof(*perm));
+                }
+        }
+}
+
+static void remote_acl_free(struct remote_acl *racl)
+{
+        if (!racl)
+                return;
+
+        down(&racl->ra_update_sem);
+        spin_lock(&racl->ra_lock);
+        remote_acl_flush(racl);
+        spin_unlock(&racl->ra_lock);
+        up(&racl->ra_update_sem);
+
+        OBD_FREE(racl, sizeof(*racl));
+}
+
+static inline int remote_acl_hashfunc(__u32 id)
+{
+        return (id & (REMOTE_ACL_HASHSIZE - 1));
+}
+
+static
+int __remote_acl_check(struct remote_acl *racl, unsigned int *perm)
+{
+        struct list_head *head;
+        struct lustre_remote_perm *lperm;
+        struct remote_perm_setxid *xperm;
+        int found = 0, rc = -ENOENT;
+
+        LASSERT(racl);
+        head = &racl->ra_perm_cache[remote_acl_hashfunc(current->uid)];
+        spin_lock(&racl->ra_lock);
+
+        list_for_each_entry(lperm, head, lrp_list) {
+                if (lperm->lrp_auth_uid == current->uid) {
+                        found = 1;
+                        break;
+                }
+        }
+
+        if (!found)
+                goto out;
+
+        if (lperm->lrp_auth_uid == current->fsuid &&
+            lperm->lrp_auth_gid == current->fsgid) {
+                if (lperm->lrp_valid) {
+                        *perm = lperm->lrp_perm;
+                        rc = 0;
+                }
+                goto out;
+        } else if ((!lperm->lrp_setuid &&
+                    lperm->lrp_auth_uid != current->fsuid) ||
+                   (!lperm->lrp_setgid &&
+                    lperm->lrp_auth_gid != current->fsgid))  {
+                *perm = 0;
+                rc = 0;
+                goto out;
+        }
+
+        list_for_each_entry(xperm, &lperm->lrp_setxid_perms, list) {
+                if (xperm->uid == current->fsuid &&
+                    xperm->gid == current->fsgid) {
+                        *perm = xperm->perm;
+                        rc = 0;
+                        goto out;
+                }
+        }
+
+out:
+        spin_unlock(&racl->ra_lock);
+        return rc;
+}
+
+static
+int __remote_acl_update(struct remote_acl *racl,
+                        struct mds_remote_perm *mperm,
+                        struct lustre_remote_perm *lperm,
+                        struct remote_perm_setxid *xperm)
+{
+        struct list_head *head;
+        struct lustre_remote_perm *lp;
+        struct remote_perm_setxid *xp;
+        int found = 0, setuid = 0, setgid = 0;
+
+        LASSERT(racl);
+        LASSERT(mperm);
+        LASSERT(lperm);
+        LASSERT(current->uid == mperm->mrp_auth_uid);
+
+        if (current->fsuid != mperm->mrp_auth_uid)
+                setuid = 1;
+        if (current->fsgid != mperm->mrp_auth_gid)
+                setgid = 1;
+
+        head = &racl->ra_perm_cache[remote_acl_hashfunc(current->uid)];
+        spin_lock(&racl->ra_lock);
+
+        list_for_each_entry(lp, head, lrp_list) {
+                if (lp->lrp_auth_uid == current->uid) {
+                        found = 1;
+                        break;
+                }
+        }
+
+        if (found) {
+                OBD_FREE(lperm, sizeof(*lperm));
+
+                if (!lp->lrp_valid && !setuid && !setgid) {
+                        lp->lrp_perm = mperm->mrp_perm;
+                        lp->lrp_valid = 1;
+                }
+
+                /* sanity check for changes of setxid rules */
+                if ((lp->lrp_setuid != 0) != (mperm->mrp_allow_setuid != 0)) {
+                        CWARN("setuid changes: %d => %d\n",
+                              (lp->lrp_setuid != 0),
+                              (mperm->mrp_allow_setuid != 0));
+                        lp->lrp_setuid = (mperm->mrp_allow_setuid != 0);
+                }
+
+                if ((lp->lrp_setgid != 0) != (mperm->mrp_allow_setgid != 0)) {
+                        CWARN("setgid changes: %d => %d\n",
+                              (lp->lrp_setgid != 0),
+                              (mperm->mrp_allow_setgid != 0));
+                        lp->lrp_setgid = (mperm->mrp_allow_setgid != 0);
+                }
+
+                if (!lp->lrp_setuid && !lp->lrp_setgid &&
+                    !list_empty(&lp->lrp_setxid_perms)) {
+                        remote_perm_flush_xperms(lp);
+                }
+        } else {
+                /* initialize lperm and linked into hashtable
+                 */
+                INIT_LIST_HEAD(&lperm->lrp_setxid_perms);
+                lperm->lrp_auth_uid = mperm->mrp_auth_uid;
+                lperm->lrp_auth_gid = mperm->mrp_auth_gid;
+                lperm->lrp_setuid = (mperm->mrp_allow_setuid != 0);
+                lperm->lrp_setgid = (mperm->mrp_allow_setgid != 0);
+                list_add(&lperm->lrp_list, head);
+
+                if (!setuid && !setgid) {
+                        /* in this case, i'm the authenticated user,
+                         * and mrp_perm is for me.
+                         */
+                        lperm->lrp_perm = mperm->mrp_perm;
+                        lperm->lrp_valid = 1;
+                        spin_unlock(&racl->ra_lock);
+
+                        if (xperm)
+                                OBD_FREE(xperm, sizeof(*xperm));
+                        return 0;
+                }
+
+                lp = lperm;
+                /* fall through */
+        }
+
+        LASSERT(lp->lrp_setuid || lp->lrp_setgid ||
+                list_empty(&lp->lrp_setxid_perms));
+
+        /* if no xperm supplied, we are all done here */
+        if (!xperm) {
+                spin_unlock(&racl->ra_lock);
+                return 0;
+        }
+
+        /* whether we allow setuid/setgid */
+        if ((!lp->lrp_setuid && setuid) || (!lp->lrp_setgid && setgid)) {
+                OBD_FREE(xperm, sizeof(*xperm));
+                spin_unlock(&racl->ra_lock);
+                return 0;
+        }
+
+        /* traverse xperm list */
+        list_for_each_entry(xp, &lp->lrp_setxid_perms, list) {
+                if (xp->uid == current->fsuid &&
+                    xp->gid == current->fsgid) {
+                        if (xp->perm != mperm->mrp_perm) {
+                                /* actually this should not happen */
+                                CWARN("perm changed: %o => %o\n",
+                                      xp->perm, mperm->mrp_perm);
+                                xp->perm = mperm->mrp_perm;
+                        }
+                        OBD_FREE(xperm, sizeof(*xperm));
+                        spin_unlock(&racl->ra_lock);
+                        return 0;
+                }
+        }
+
+        /* finally insert this xperm */
+        xperm->uid = current->fsuid;
+        xperm->gid = current->fsgid;
+        xperm->perm = mperm->mrp_perm;
+        list_add(&xperm->list, &lp->lrp_setxid_perms);
+
+        spin_unlock(&racl->ra_lock);
+        return 0;
+}
+
+/*
+ * remote_acl semaphore must be held by caller
+ */
+static
+int remote_acl_update_locked(struct remote_acl *racl,
+                             struct mds_remote_perm *mperm)
+{
+        struct lustre_remote_perm *lperm;
+        struct remote_perm_setxid *xperm;
+        int setuid = 0, setgid = 0;
+
+        might_sleep();
+
+        if (current->uid != mperm->mrp_auth_uid) {
+                CERROR("current uid %u while authenticated as %u\n",
+                       current->uid, mperm->mrp_auth_uid);
+                return -EINVAL;
+        }
+
+        if (current->fsuid != mperm->mrp_auth_uid)
+                setuid = 1;
+        if (current->fsgid == mperm->mrp_auth_gid)
+                setgid = 1;
+
+        OBD_ALLOC(lperm, sizeof(*lperm));
+        if (!lperm)
+                return -ENOMEM;
+
+        if ((setuid || setgid) &&
+            !(setuid && !mperm->mrp_allow_setuid) &&
+            !(setgid && !mperm->mrp_allow_setgid)) {
+                OBD_ALLOC(xperm, sizeof(*xperm));
+                if (!xperm) {
+                        OBD_FREE(lperm, sizeof(*lperm));
+                        return -ENOMEM;
+                }
+        } else
+                xperm = NULL;
+
+        return __remote_acl_update(racl, mperm, lperm, xperm);
+}
+
+/*
+ * return -EACCES at any error cases
+ */
+int ll_remote_acl_permission(struct inode *inode, int mode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct remote_acl *racl = ll_i2info(inode)->lli_remote_acl;
+        struct ptlrpc_request *req = NULL;
+        struct lustre_id id;
+        struct mds_remote_perm *mperm;
+        int rc = -EACCES, perm;
+
+        if (!racl)
+                return -EACCES;
+
+        if (__remote_acl_check(racl, &perm) == 0) {
+                return ((perm & mode) == mode ? 0 : -EACCES);
+        }
+
+        might_sleep();
+
+        /* doing update
+         */
+        down(&racl->ra_update_sem);
+
+        /* we might lose the race when obtain semaphore,
+         * so check again.
+         */
+        if (__remote_acl_check(racl, &perm) == 0) {
+                if ((perm & mode) == mode)
+                        rc = 0;
+                goto out;
+        }
+
+        /* really fetch from mds
+         */
+        ll_inode2id(&id, inode);
+        if (md_access_check(sbi->ll_md_exp, &id, &req))
+                goto out;
+
+        /* status non-zero indicate there's more apparent error
+         * detected by mds, e.g. didn't allow this user at all.
+         * we simply ignore and didn't cache it.
+         */
+        if (req->rq_repmsg->status)
+                goto out;
+
+        mperm = lustre_swab_repbuf(req, 1, sizeof(*mperm),
+                                   lustre_swab_remote_perm);
+        LASSERT(mperm);
+        LASSERT_REPSWABBED(req, 1);
+
+        if ((mperm->mrp_perm & mode) == mode)
+                rc = 0;
+
+        remote_acl_update_locked(racl, mperm);
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+
+        up(&racl->ra_update_sem);
+        return rc;
+}
+
+int ll_remote_acl_update(struct inode *inode, struct mds_remote_perm *perm)
+{
+        struct remote_acl *racl = ll_i2info(inode)->lli_remote_acl;
+        int rc;
+
+        LASSERT(perm);
+
+        if (!racl)
+                return -EACCES;
+
+        down(&racl->ra_update_sem);
+        rc = remote_acl_update_locked(racl, perm);
+        up(&racl->ra_update_sem);
+
+        return rc;
+}
+
+void ll_inode_invalidate_acl(struct inode *inode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+
+        if (sbi->ll_remote) {
+                struct remote_acl *racl = lli->lli_remote_acl;
+
+                LASSERT(!lli->lli_posix_acl);
+                if (racl) {
+                        down(&racl->ra_update_sem);
+                        spin_lock(&racl->ra_lock);
+                        remote_acl_flush(lli->lli_remote_acl);
+                        spin_unlock(&racl->ra_lock);
+                        up(&racl->ra_update_sem);
+                }
+        } else {
+                LASSERT(!lli->lli_remote_acl);
+                spin_lock(&lli->lli_lock);
+                posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = NULL;
+                spin_unlock(&lli->lli_lock);
+        }
+}
+
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = md->lsm;
         struct mds_body *body = md->body;
         struct mea *mea = md->mea;
-        struct posix_acl *ll_acl_access = md->acl_access;
+        struct posix_acl *posix_acl = md->posix_acl;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
 
         LASSERT((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
@@ -1441,14 +1862,25 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 	if (body->valid & OBD_MD_FLGENER)
 		id_gen(&lli->lli_id) = id_gen(&body->id1);
 
-        spin_lock(&lli->lli_lock);
-        if (ll_acl_access != NULL) {
-                if (lli->lli_acl_access != NULL)
-                        posix_acl_release(lli->lli_acl_access);
-                lli->lli_acl_access = ll_acl_access;
+        /* local/remote ACL */
+        if (sbi->ll_remote) {
+                LASSERT(md->posix_acl == NULL);
+                if (md->remote_perm) {
+                        ll_remote_acl_update(inode, md->remote_perm);
+                        OBD_FREE(md->remote_perm, sizeof(*md->remote_perm));
+                        md->remote_perm = NULL;
+                }
+        } else {
+                LASSERT(md->remote_perm == NULL);
+                spin_lock(&lli->lli_lock);
+                if (posix_acl != NULL) {
+                        if (lli->lli_posix_acl != NULL)
+                                posix_acl_release(lli->lli_posix_acl);
+                        lli->lli_posix_acl = posix_acl;
+                }
+                spin_unlock(&lli->lli_lock);
         }
-        spin_unlock(&lli->lli_lock);
- 
+
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = id_ino(&body->id1);
         if (body->valid & OBD_MD_FLGENER)
@@ -1519,6 +1951,11 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         ll_lli_init(lli);
 
         LASSERT(!lli->lli_smd);
+
+        if (ll_i2sbi(inode)->ll_remote) {
+                lli->lli_remote_acl = remote_acl_alloc();
+                /* if failed alloc, nobody will be able to access this inode */
+        }
 
         /* Core attributes from the MDS first.  This is a new inode, and
          * the VFS doesn't zero times in the core inode so we have to do

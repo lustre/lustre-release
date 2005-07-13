@@ -84,7 +84,7 @@ int ptlrpcs_unregister(struct ptlrpc_sec_type *type)
         LASSERT(sectypes[major] == type);
 
         if (atomic_read(&type->pst_inst)) {
-                CERROR("%s: still have %d, instances\n",
+                CERROR("%s: still have %d instances\n",
                        type->pst_name, atomic_read(&type->pst_inst));
                 spin_unlock(&sectypes_lock);
                 return -EINVAL;
@@ -303,6 +303,9 @@ int flush_credcache(struct ptlrpc_sec *sec, uid_t uid,
                                 if (!force)
                                         continue;
                                 list_del_init(&cred->pc_hash);
+                                CDEBUG(D_SEC, "sec %p: flush busy(%d) cred %p "
+                                       "by force\n", sec,
+                                       atomic_read(&cred->pc_refcount), cred);
                         } else
                                 list_move(&cred->pc_hash, &freelist);
 

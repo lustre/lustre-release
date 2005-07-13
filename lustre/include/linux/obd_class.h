@@ -1190,6 +1190,17 @@ static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
         RETURN(rc);
 }
 
+static inline int md_access_check(struct obd_export *exp, struct lustre_id *id,
+                                  struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, access_check);
+        MD_COUNTER_INCREMENT(exp->exp_obd, access_check);
+        rc = MDP(exp->exp_obd, access_check)(exp, id, request);
+        RETURN(rc);
+}
+
 static inline int md_change_cbdata(struct obd_export *exp, struct lustre_id *id,
                                    ldlm_iterator_t it, void *data)
 {

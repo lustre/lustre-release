@@ -236,7 +236,7 @@ gssd_upcall(struct rsi *item, struct cache_req *chandle)
                 }
         }
         cache_get(&item->h);
-        //set_bit(CACHE_HASHED, &item->h.flags);
+        set_bit(CACHE_HASHED, &item->h.flags);
         item->h.next = *head;
         *head = &item->h;
         rsi_cache.entries++;

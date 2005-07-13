@@ -752,6 +752,24 @@ static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
         RETURN(rc);
 }
 
+static int lmv_access_check(struct obd_export *exp,
+                            struct lustre_id *id,
+                            struct ptlrpc_request **request)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int rc, i = id_group(id);
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        LASSERT(i < lmv->desc.ld_tgt_count);
+        rc = md_access_check(lmv->tgts[i].ltd_exp, id, request);
+        RETURN(rc);
+}
+
 static int lmv_change_cbdata(struct obd_export *exp,
                              struct lustre_id *id, 
                              ldlm_iterator_t it,
@@ -2198,6 +2216,7 @@ struct md_ops lmv_md_ops = {
         .m_get_real_obd        = lmv_get_real_obd,
         .m_valid_attrs         = lmv_valid_attrs,
         .m_delete_inode        = lmv_delete_inode,
+        .m_access_check        = lmv_access_check,
 };
 
 int __init lmv_init(void)

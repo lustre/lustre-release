@@ -79,7 +79,7 @@ static void null_cred_destroy(struct ptlrpc_cred *cred)
 {
         LASSERT(!atomic_read(&cred->pc_refcount));
 
-        CDEBUG(D_SEC, "NULL_SEC: destroy cred %p\n", cred);
+        CDEBUG(D_SEC, "sec.null %p: destroy cred %p\n", cred->pc_sec, cred);
         OBD_FREE(cred, sizeof(*cred));
 }
 
@@ -109,7 +109,7 @@ struct ptlrpc_sec* null_create_sec(__u32 flavor,
         sec->ps_nextgc = 0; /* never do gc */
         sec->ps_flags = 0;
 
-        CDEBUG(D_SEC, "Create NULL security module at %p\n", sec);
+        CDEBUG(D_SEC, "Create sec.null module at %p\n", sec);
         RETURN(sec);
 }
 
@@ -118,7 +118,7 @@ void null_destroy_sec(struct ptlrpc_sec *sec)
 {
         ENTRY;
 
-        CDEBUG(D_SEC, "Destroy NULL security module at %p\n", sec);
+        CDEBUG(D_SEC, "Destroy sec.null %p\n", sec);
 
         LASSERT(!atomic_read(&sec->ps_refcount));
         OBD_FREE(sec, sizeof(*sec));
@@ -170,7 +170,7 @@ int ptlrpcs_null_init(void)
 
         rc = ptlrpcs_register(&null_type);
         if (rc)
-                CERROR("failed to register NULL security: %d\n", rc);
+                CERROR("failed to register sec.null: %d\n", rc);
 
         return rc;
 }
@@ -181,7 +181,7 @@ int ptlrpcs_null_exit(void)
 
         rc = ptlrpcs_unregister(&null_type);
         if (rc)
-                CERROR("cannot unregister NULL security: %d\n", rc);
+                CERROR("cannot unregister sec.null: %d\n", rc);
 
         return rc;
 }

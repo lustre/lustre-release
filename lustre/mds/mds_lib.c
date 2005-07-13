@@ -514,6 +514,43 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         RETURN(rc);
 }
 
+/* 
+ * here we take simple rule: once uid/fsuid is root, we also squash
+ * the gid/fsgid, don't care setuid/setgid attributes.
+ */
+static
+int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
+                    ptl_nid_t *peernid)
+{
+        if (!mds->mds_squash_uid || *peernid == mds->mds_nosquash_nid)
+                return 0;
+
+        if (rsd->rsd_uid && rsd->rsd_fsuid)
+                return 0;
+
+        CDEBUG(D_SEC, "squash req from "LPX64":"
+               "(%u:%u-%u:%u/%x)=>(%u:%u-%u:%u/%x)\n", *peernid,
+                rsd->rsd_uid, rsd->rsd_gid,
+                rsd->rsd_fsuid, rsd->rsd_fsgid, rsd->rsd_cap,
+                rsd->rsd_uid ? rsd->rsd_uid : mds->mds_squash_uid,
+                rsd->rsd_uid ? rsd->rsd_gid : mds->mds_squash_gid,
+                rsd->rsd_fsuid ? rsd->rsd_fsuid : mds->mds_squash_uid,
+                rsd->rsd_fsuid ? rsd->rsd_fsgid : mds->mds_squash_gid,
+                rsd->rsd_cap & ~CAP_FS_MASK);
+
+        if (rsd->rsd_uid == 0) {
+                rsd->rsd_uid = mds->mds_squash_uid;
+                rsd->rsd_gid = mds->mds_squash_gid;
+        }
+        if (rsd->rsd_fsuid == 0) {
+                rsd->rsd_fsuid = mds->mds_squash_uid;
+                rsd->rsd_fsgid = mds->mds_squash_gid;
+        }
+        rsd->rsd_cap &= ~CAP_FS_MASK;
+
+        return 1;
+}
+
 /********************************
  * MDS uid/gid mapping handling *
  ********************************/

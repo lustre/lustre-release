@@ -903,6 +903,8 @@ struct md_ops {
         int (*m_getattr)(struct obd_export *, struct lustre_id *,
                          __u64, const char *, int,
                          unsigned int, struct ptlrpc_request **);
+        int (*m_access_check)(struct obd_export *, struct lustre_id *,
+                              struct ptlrpc_request **);
         int (*m_getattr_lock)(struct obd_export *, struct lustre_id *,
                               char *, int, __u64,
                               unsigned int, struct ptlrpc_request **);

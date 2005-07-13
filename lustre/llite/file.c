@@ -1859,9 +1859,9 @@ int ll_setxattr(struct dentry *dentry, const char *name, const void *value,
                                         
                 lli = ll_i2info(dentry->d_inode);
                 spin_lock(&lli->lli_lock);
-                if (lli->lli_acl_access != NULL)
-                        posix_acl_release(lli->lli_acl_access);
-                lli->lli_acl_access = acl;
+                if (lli->lli_posix_acl != NULL)
+                        posix_acl_release(lli->lli_posix_acl);
+                lli->lli_posix_acl = acl;
                 spin_unlock(&lli->lli_lock);
         }
         EXIT;
@@ -1947,7 +1947,7 @@ lustre_check_acl(struct inode *inode, int mask)
         struct ptlrpc_request *req = NULL;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct posix_acl *acl;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         sbi = ll_i2sbi(inode);
@@ -1969,18 +1969,23 @@ lustre_check_acl(struct inode *inode, int mask)
                 GOTO(out, rc);
         }
 
+        if (sbi->ll_remote) {
+                rc = ll_remote_acl_permission(inode, mask);
+        } else {
+                spin_lock(&lli->lli_lock);
+                acl = posix_acl_dup(ll_i2info(inode)->lli_posix_acl);
+                spin_unlock(&lli->lli_lock);
+
+                if (!acl)
+                        rc = -EAGAIN;
+                else {
+                        rc = posix_acl_permission(inode, acl, mask);
+                        posix_acl_release(acl);
+                }
+        }
+
         ll_lookup_finish_locks(&it, &de);
         ll_intent_free(&it);
-
-        spin_lock(&lli->lli_lock);
-        acl = posix_acl_dup(ll_i2info(inode)->lli_acl_access);
-        spin_unlock(&lli->lli_lock);
-
-        if (!acl)
-                GOTO(out, rc = -EAGAIN);
-
-        rc = posix_acl_permission(inode, acl, mask);
-        posix_acl_release(acl);
 
 out:
         if (req)

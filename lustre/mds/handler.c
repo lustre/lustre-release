@@ -1022,8 +1022,9 @@ int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-int mds_pack_acl(struct obd_device *obd, struct lustre_msg *repmsg, int offset,
-                 struct mds_body *body, struct inode *inode)
+static
+int mds_pack_posix_acl(struct lustre_msg *repmsg, int offset,
+                       struct mds_body *body, struct inode *inode)
 {
         struct dentry de = { .d_inode = inode };
         __u32 buflen, *sizep;
@@ -1056,45 +1057,77 @@ int mds_pack_acl(struct obd_device *obd, struct lustre_msg *repmsg, int offset,
         RETURN(0);
 }
 
-/* 
- * here we take simple rule: once uid/fsuid is root, we also squash
- * the gid/fsgid, don't care setuid/setgid attributes.
- */
-int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
-                    ptl_nid_t *peernid)
+static
+int mds_pack_remote_perm(struct ptlrpc_request *req, int reply_off,
+                         struct mds_body *body, struct inode *inode)
 {
-        if (!mds->mds_squash_uid || *peernid == mds->mds_nosquash_nid)
-                return 0;
+        struct lustre_sec_desc *lsd;
+        struct mds_remote_perm *perm;
+        __u32 lsd_perms;
 
-        if (rsd->rsd_uid && rsd->rsd_fsuid)
-                return 0;
+        LASSERT(inode->i_op);
+        LASSERT(inode->i_op->permission);
+        LASSERT(req->rq_export->exp_mds_data.med_remote);
 
-        CDEBUG(D_SEC, "squash req from "LPX64":"
-               "(%u:%u-%u:%u/%x)=>(%u:%u-%u:%u/%x)\n", *peernid,
-                rsd->rsd_uid, rsd->rsd_gid,
-                rsd->rsd_fsuid, rsd->rsd_fsgid, rsd->rsd_cap,
-                rsd->rsd_uid ? rsd->rsd_uid : mds->mds_squash_uid,
-                rsd->rsd_uid ? rsd->rsd_gid : mds->mds_squash_gid,
-                rsd->rsd_fsuid ? rsd->rsd_fsuid : mds->mds_squash_uid,
-                rsd->rsd_fsuid ? rsd->rsd_fsgid : mds->mds_squash_gid,
-                rsd->rsd_cap & ~CAP_FS_MASK);
+        perm = (struct mds_remote_perm *)
+                        lustre_msg_buf(req->rq_repmsg, reply_off, sizeof(perm));
+        if (!perm)
+                return -EINVAL;
 
-        if (rsd->rsd_uid == 0) {
-                rsd->rsd_uid = mds->mds_squash_uid;
-                rsd->rsd_gid = mds->mds_squash_gid;
+        memset(perm, 0, sizeof(*perm));
+
+        /* obtain authenticated uid/gid and LSD permissions, which
+         * might be different from current process context, from LSD
+         */
+        lsd = mds_get_lsd(current->uid);
+        if (!lsd) {
+                CWARN("can't LSD of uid %u\n", current->uid);
+                RETURN(-EPERM);
         }
-        if (rsd->rsd_fsuid == 0) {
-                rsd->rsd_fsuid = mds->mds_squash_uid;
-                rsd->rsd_fsgid = mds->mds_squash_gid;
-        }
-        rsd->rsd_cap &= ~CAP_FS_MASK;
 
-        return 1;
+        perm->mrp_auth_uid = lsd->lsd_uid;
+        perm->mrp_auth_gid = lsd->lsd_gid;
+
+        lsd_perms = mds_lsd_get_perms(lsd, 1, 0, req->rq_peer.peer_id.nid);
+        if (lsd_perms & LSD_PERM_SETUID)
+                perm->mrp_allow_setuid = 1;
+        if (lsd_perms & LSD_PERM_SETGID)
+                perm->mrp_allow_setgid = 1;
+
+        mds_put_lsd(lsd);
+
+        /* permission bits of current user
+         * XXX this is low efficient, could we do it in one blow?
+         */
+        if (inode->i_op->permission(inode, MAY_EXEC, NULL) == 0)
+                perm->mrp_perm |= MAY_EXEC;
+        if (inode->i_op->permission(inode, MAY_WRITE, NULL) == 0)
+                perm->mrp_perm |= MAY_WRITE;
+        if (inode->i_op->permission(inode, MAY_READ, NULL) == 0)
+                perm->mrp_perm |= MAY_READ;
+
+        body->valid |= (OBD_MD_FLACL_ACCESS | OBD_MD_RACL);
+
+        RETURN(0);
+}
+
+int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
+                 struct mds_body *body, struct inode *inode)
+{
+        int rc;
+
+        if (!req->rq_export->exp_mds_data.med_remote)
+                rc = mds_pack_posix_acl(req->rq_repmsg, reply_off, body, inode);
+        else
+                rc = mds_pack_remote_perm(req, reply_off, body, inode);
+
+        return rc;
 }
 
 static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                                 struct ptlrpc_request *req, int req_off,
-                                struct mds_body *reqbody, int reply_off)
+                                struct mds_body *reqbody, int reply_off,
+                                struct mds_req_sec_desc *rsd)
 {
         struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct inode *inode = dentry->d_inode;
@@ -1145,9 +1178,8 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         
         if (reqbody->valid & OBD_MD_FLACL_ACCESS) {
                 int inc = (reqbody->valid & OBD_MD_FLEASIZE) ? 2 : 1;
-                rc = mds_pack_acl(obd, req->rq_repmsg, reply_off + inc, 
-                                  body, inode);
-        }                
+                rc = mds_pack_acl(req, reply_off + inc, body, inode);
+        }
 
         if (rc == 0)
                 mds_body_do_reverse_map(med, body);
@@ -1255,8 +1287,12 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
         
         /* may co-exist with OBD_MD_FLEASIZE */
         if (body->valid & OBD_MD_FLACL_ACCESS) {
-                size[bufcount++] = 4;
-                size[bufcount++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                if (req->rq_export->exp_mds_data.med_remote) {
+                        size[bufcount++] = sizeof(struct mds_remote_perm);
+                } else {
+                        size[bufcount++] = 4;
+                        size[bufcount++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                }
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
@@ -1529,7 +1565,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 }
         }
 
-        rc = mds_getattr_internal(obd, dchild, req, offset, body, reply_offset);
+        rc = mds_getattr_internal(obd, dchild, req, offset, body,
+                                  reply_offset, rsd);
         if (rc)
                 GOTO(cleanup, rc); /* returns the lock to the client */
 
@@ -1609,10 +1646,78 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
                 GOTO(out_pop, rc);
         }
 
-        req->rq_status = mds_getattr_internal(obd, de, req, offset, body, 0);
+        req->rq_status = mds_getattr_internal(obd, de, req, offset, body,
+                                              0, rsd);
         l_dput(de);
 
         EXIT;
+out_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+        mds_exit_ucred(&uc);
+        return rc;
+}
+
+static int mds_access_check(struct ptlrpc_request *req, int offset)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        struct lvfs_run_ctxt saved;
+        struct dentry *de;
+        struct mds_req_sec_desc *rsd;
+        struct mds_body *body;
+        struct lvfs_ucred uc;
+        int rep_size[2] = {sizeof(*body),
+                           sizeof(struct mds_remote_perm)};
+        int rc = 0;
+        ENTRY;
+
+        if (!req->rq_export->exp_mds_data.med_remote) {
+                CERROR("from local client "LPU64"\n", req->rq_peer.peer_id.nid);
+                RETURN(-EINVAL);
+        }
+
+        rsd = lustre_swab_mds_secdesc(req, MDS_REQ_SECDESC_OFF);
+        if (!rsd) {
+                CERROR("Can't unpack security desc\n");
+                RETURN(-EFAULT);
+        }
+
+        body = lustre_swab_reqbuf(req, offset, sizeof(*body),
+                                  lustre_swab_mds_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack body\n");
+                RETURN (-EFAULT);
+        }
+
+        MD_COUNTER_INCREMENT(obd, access_check);
+
+        rc = mds_init_ucred(&uc, req, rsd);
+        if (rc) {
+                CERROR("init ucred error: %d\n", rc);
+                RETURN(rc);
+        }
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+
+        de = mds_id2dentry(obd, &body->id1, NULL);
+        if (IS_ERR(de)) {
+                CERROR("grab ino "LPU64": err %ld\n",
+                       body->id1.li_stc.u.e3s.l3s_ino, PTR_ERR(de));
+                GOTO(out_pop, rc = PTR_ERR(de));
+        }
+
+        rc = lustre_pack_reply(req, 2, rep_size, NULL);
+        if (rc) {
+                CERROR("pack reply error: %d\n", rc);
+                GOTO(out_dput, rc = -EINVAL);
+        }
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        LASSERT(body);
+
+        rc = mds_pack_remote_perm(req, 1, body, de->d_inode);
+        EXIT;
+
+out_dput:
+        l_dput(de);
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         mds_exit_ucred(&uc);
@@ -2634,6 +2739,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
         case MDS_GETSTATUS:
         case MDS_GETATTR:
         case MDS_GETATTR_LOCK:
+        case MDS_ACCESS_CHECK:
         case MDS_READPAGE:
         case MDS_REINT:
         case MDS_CLOSE:
@@ -2810,6 +2916,12 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "getattr");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
                 rc = mds_getattr(req, MDS_REQ_REC_OFF);
+                break;
+
+        case MDS_ACCESS_CHECK:
+                DEBUG_REQ(D_INODE, req, "access_check");
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_ACCESS_CHECK_NET, 0);
+                rc = mds_access_check(req, MDS_REQ_REC_OFF);
                 break;
 
         case MDS_GETATTR_LOCK: {
@@ -3875,9 +3987,14 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         reply_buffers = 3;
         if (it->opc & ( IT_OPEN | IT_GETATTR | IT_LOOKUP | IT_CHDIR )) {
-                reply_buffers = 5;
-                repsize[3] = 4;
-                repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                if (req->rq_export->exp_mds_data.med_remote) {
+                        reply_buffers = 4;
+                        repsize[3] = sizeof(struct mds_remote_perm);
+                } else {
+                        reply_buffers = 5;
+                        repsize[3] = 4;
+                        repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                }
         }
 
         rc = lustre_pack_reply(req, reply_buffers, repsize, NULL);

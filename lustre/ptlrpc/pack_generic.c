@@ -863,6 +863,13 @@ void lustre_swab_ptlbd_rsp(struct ptlbd_rsp *r)
         __swab16s(&r->r_error_cnt);
 }
 
+void lustre_swab_remote_perm(struct mds_remote_perm *p)
+{
+        __swab32s(&p->mrp_auth_uid);
+        __swab32s(&p->mrp_auth_gid);
+        __swab16s(&p->mrp_perm);
+}
+
 /* no one calls this */
 int llog_log_swabbed(struct llog_log_hdr *hdr)
 {

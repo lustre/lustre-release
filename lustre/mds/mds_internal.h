@@ -185,8 +185,6 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 /* mds/handler.c */
 int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
                      struct ptlrpc_request *req, struct mds_body *body);
-int mds_squash_root(struct mds_obd *mds, struct mds_req_sec_desc *rsd,
-                    ptl_nid_t *peernid);
 int mds_handle(struct ptlrpc_request *req);
 extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_dt_clean(struct obd_device *obd);
@@ -242,8 +240,8 @@ int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
                 struct mds_body *repbody, int req_off, int reply_off);
 int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
                     struct mds_body *repbody, int reply_off);
-int mds_pack_acl(struct obd_device *, struct lustre_msg *, int offset,
-                 struct mds_body *, struct inode *);
+int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
+                 struct mds_body *body, struct inode *inode);
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
                       struct inode *, int);
 

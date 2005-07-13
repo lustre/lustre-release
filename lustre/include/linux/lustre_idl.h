@@ -415,7 +415,8 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FID      (0x0000000080000000LL)    /* lustre_id data */
 #define OBD_MD_MEA      (0x0000000100000000LL)    /* shows we are interested in MEA */
 #define OBD_MD_FLEALIST (0x0000000200000000LL)    /* list extended attributes */
-#define OBD_MD_FLACL_ACCESS (0x0000000400000000LL) /*access acl*/
+#define OBD_MD_FLACL_ACCESS (0x0000000400000000LL) /* access acl */
+#define OBD_MD_RACL     (0x0000000800000000LL)    /* remote acl */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
@@ -554,6 +555,7 @@ typedef enum {
         MDS_UNPIN        = 43,
         MDS_SYNC         = 44,
         MDS_DONE_WRITING = 45,
+        MDS_ACCESS_CHECK = 46,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -668,12 +670,23 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
-struct lustre_md {
-        struct mds_body *body;
-        struct lov_stripe_md *lsm;
-        struct mea *mea;
-        struct posix_acl *acl_access;
+struct mds_remote_perm {
+        __u32           mrp_auth_uid;
+        __u32           mrp_auth_gid;
+        __u16           mrp_perm;
+        __u8            mrp_allow_setuid;
+        __u8            mrp_allow_setgid;
 };
+
+struct lustre_md {
+        struct mds_body        *body;
+        struct lov_stripe_md   *lsm;
+        struct mea             *mea;
+        struct posix_acl       *posix_acl;
+        struct mds_remote_perm *remote_perm;
+};
+
+void lustre_swab_remote_perm(struct mds_remote_perm *p);
 
 struct mdc_op_data {
         struct lustre_id id1;

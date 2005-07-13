@@ -178,6 +178,7 @@ EXPORT_SYMBOL(lustre_swab_lustre_stc);
 EXPORT_SYMBOL(lustre_swab_lustre_fid);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_secdesc);
+EXPORT_SYMBOL(lustre_swab_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);

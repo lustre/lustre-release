@@ -748,10 +748,9 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         }
                 }
         }
-        
-        rc = mds_pack_acl(obd, req->rq_repmsg, 3, body, dchild->d_inode);
+        rc = mds_pack_acl(req, 3, body, dchild->d_inode);
         if (rc < 0) {
-                CERROR("mds_pack_acl: rc = %d\n", rc);
+                CERROR("pack posix acl: rc = %d\n", rc);
                 up(&dchild->d_inode->i_sem);
                 RETURN(rc);
         }

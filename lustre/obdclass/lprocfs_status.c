@@ -729,6 +729,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, done_writing);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, enqueue);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, access_check);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, getattr_lock);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, intent_lock);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, link);

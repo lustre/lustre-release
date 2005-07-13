@@ -430,7 +430,19 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
                 return;
         }
         LASSERT(list_empty(&gmsg->gum_list));
+#if 0
         LASSERT(list_empty(&gmsg->gum_base.list));
+#else
+        /* XXX */
+        if (!list_empty(&gmsg->gum_base.list)) {
+                CWARN("msg %p: list: %p/%p/%p, copied %d, err %d, wq %d\n",
+                      gmsg, &gmsg->gum_base.list,
+                      gmsg->gum_base.list.prev, gmsg->gum_base.list.next,
+                      gmsg->gum_base.copied, gmsg->gum_base.errno,
+                      list_empty(&gmsg->gum_waitq.task_list));
+                LBUG();
+        }
+#endif
         OBD_FREE(gmsg, sizeof(*gmsg));
         EXIT;
 }
@@ -438,19 +450,15 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
 static void
 gss_unhash_msg_nolock(struct gss_upcall_msg *gmsg)
 {
-        ENTRY;
-        if (list_empty(&gmsg->gum_list)) {
-                EXIT;
+        LASSERT(spin_is_locked(&gmsg->gum_gsec->gs_lock));
+
+        if (list_empty(&gmsg->gum_list))
                 return;
-        }
 
         list_del_init(&gmsg->gum_list);
         wake_up(&gmsg->gum_waitq);
+        LASSERT(atomic_read(&gmsg->gum_refcount) > 1);
         atomic_dec(&gmsg->gum_refcount);
-        CDEBUG(D_SEC, "gmsg %p refcount now %d\n",
-               gmsg, atomic_read(&gmsg->gum_refcount));
-        LASSERT(atomic_read(&gmsg->gum_refcount) > 0);
-        EXIT;
 }
 
 static void
@@ -471,11 +479,14 @@ struct gss_upcall_msg * gss_find_upcall(struct gss_sec *gsec,
         struct gss_upcall_msg *gmsg;
         ENTRY;
 
+        LASSERT(spin_is_locked(&gsec->gs_lock));
+
         list_for_each_entry(gmsg, &gsec->gs_upcalls, gum_list) {
                 if (memcmp(&gmsg->gum_data, gmd, sizeof(*gmd)))
                         continue;
                 if (strcmp(gmsg->gum_obdname, obdname))
                         continue;
+                LASSERT(atomic_read(&gmsg->gum_refcount) > 0);
                 atomic_inc(&gmsg->gum_refcount);
                 CDEBUG(D_SEC, "found gmsg at %p: obdname %s, uid %d, ref %d\n",
                        gmsg, obdname, gmd->gum_uid,
@@ -501,8 +512,11 @@ static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
         memcpy(&gmsg->gum_data, gmd, sizeof(*gmd));
 
         rpcmsg = &gmsg->gum_base;
+        INIT_LIST_HEAD(&rpcmsg->list);
         rpcmsg->data = &gmsg->gum_data;
         rpcmsg->len = sizeof(gmsg->gum_data);
+        rpcmsg->copied = 0;
+        rpcmsg->errno = 0;
         EXIT;
 }
 #endif /* __KERNEL__ */
@@ -1439,7 +1453,7 @@ static void gss_cred_destroy(struct ptlrpc_cred *cred)
                 gss_put_ctx(gcred->gc_ctx);
         }
 
-        CDEBUG(D_SEC, "GSS_SEC: destroy cred %p\n", gcred);
+        CDEBUG(D_SEC, "sec.gss %p: destroy cred %p\n", cred->pc_sec, gcred);
 
         OBD_FREE(gcred, sizeof(*gcred));
         EXIT;
@@ -1585,6 +1599,8 @@ void gss_pipe_destroy_msg(struct rpc_pipe_msg *msg)
         static unsigned long ratelimit;
         ENTRY;
 
+        LASSERT(list_empty(&msg->list));
+
         if (msg->errno >= 0) {
                 EXIT;
                 return;
@@ -1592,12 +1608,13 @@ void gss_pipe_destroy_msg(struct rpc_pipe_msg *msg)
 
         gmsg = container_of(msg, struct gss_upcall_msg, gum_base);
         CDEBUG(D_SEC, "destroy gmsg %p\n", gmsg);
+        LASSERT(atomic_read(&gmsg->gum_refcount) > 0);
         atomic_inc(&gmsg->gum_refcount);
         gss_unhash_msg(gmsg);
         if (msg->errno == -ETIMEDOUT || msg->errno == -EPIPE) {
                 unsigned long now = get_seconds();
                 if (time_after(now, ratelimit)) {
-                        CWARN("GSS_SEC upcall timed out.\n"
+                        CWARN("sec.gss upcall timed out.\n"
                               "Please check user daemon is running!\n");
                         ratelimit = now + 15;
                 }
@@ -1622,6 +1639,7 @@ void gss_pipe_release(struct inode *inode)
 
                 gmsg = list_entry(gsec->gs_upcalls.next,
                                   struct gss_upcall_msg, gum_list);
+                LASSERT(list_empty(&gmsg->gum_base.list));
                 gmsg->gum_base.errno = -EPIPE;
                 atomic_inc(&gmsg->gum_refcount);
                 gss_unhash_msg_nolock(gmsg);
@@ -1711,8 +1729,7 @@ struct ptlrpc_sec* gss_create_sec(__u32 flavor,
 
         current->fsuid = save_uid;
 
-        CDEBUG(D_SEC, "Create GSS security instance at %p(external %p)\n",
-               gsec, sec);
+        CDEBUG(D_SEC, "Create sec.gss %p\n", gsec);
         RETURN(sec);
 
 #ifdef __KERNEL__
@@ -1743,7 +1760,7 @@ void gss_destroy_sec(struct ptlrpc_sec *sec)
         ENTRY;
 
         gsec = container_of(sec, struct gss_sec, gs_base);
-        CDEBUG(D_SEC, "Destroy GSS security instance at %p\n", gsec);
+        CDEBUG(D_SEC, "Destroy sec.gss %p\n", gsec);
 
         LASSERT(gsec->gs_mech);
         LASSERT(!atomic_read(&sec->ps_refcount));

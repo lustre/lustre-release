@@ -196,6 +196,39 @@ enum {
         LLAP__ORIGIN_MAX,
 };
 
+/*
+ * remote ACL stuff
+ */
+#define REMOTE_ACL_HASHSIZE     16
+
+struct remote_acl {
+        struct list_head        ra_perm_cache[REMOTE_ACL_HASHSIZE];
+        spinlock_t              ra_lock;
+        /* we use one sem per inode, it's kind of coarse: one user must
+         * wait if another user is updating the perm on this inode. but
+         * I guess this is fine is real world usage.
+         */
+        struct semaphore        ra_update_sem;
+};
+
+struct lustre_remote_perm {
+        struct list_head        lrp_list;
+        uid_t                   lrp_auth_uid;       /* authenticated uid */
+        gid_t                   lrp_auth_gid;       /* authenticated gid */
+        uint16_t                lrp_perm;           /* permission bits */
+        uint16_t                lrp_valid:1,        /* lrp_perm is valid */
+                                lrp_setuid:1,       /* allow setuid */
+                                lrp_setgid:1;       /* allow setgid */
+        struct list_head        lrp_setxid_perms;   /* setxid perms list */
+};
+
+struct remote_perm_setxid {
+        struct list_head        list; /* permission list */
+        uid_t                   uid;
+        gid_t                   gid;
+        uint16_t                perm;
+};
+
 /* llite/lproc_llite.c */
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *lov,
@@ -316,6 +349,8 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                        unsigned long maxage);
 void ll_update_inode(struct inode *inode, struct lustre_md *);
+int ll_fetch_remote_perm(struct inode *inode, struct ptlrpc_request *req,
+                         uint16_t *perm);
 int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
@@ -333,6 +368,10 @@ int null_if_equal(struct ldlm_lock *lock, void *data);
 int ll_process_config_update(struct ll_sb_info *sbi, int clean);
 int ll_show_options(struct seq_file *m, struct vfsmount *mnt);
 int ll_flush_cred(struct inode *inode);
+
+int ll_remote_acl_permission(struct inode *inode, int mode);
+int ll_remote_acl_update(struct inode *inode, struct mds_remote_perm *perm);
+void ll_inode_invalidate_acl(struct inode *inode);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;

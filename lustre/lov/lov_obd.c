@@ -2000,7 +2000,6 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 }
                 LDLM_ERROR(data->lock, "lock on inode without such object\n");
                 dump_lsm(D_ERROR, data->lsm);
-                portals_debug_dumpstack(NULL);
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {

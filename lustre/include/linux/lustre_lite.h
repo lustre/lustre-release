@@ -39,6 +39,9 @@
 #include <linux/namei.h>
 
 
+/* forward declarations */
+struct remote_acl;
+
 /* careful, this is easy to screw up */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
 
@@ -110,7 +113,9 @@ struct ll_inode_info {
         __u64                   lli_open_fd_write_count;
         struct obd_client_handle *lli_mds_exec_och;
         __u64                   lli_open_fd_exec_count;
-        struct posix_acl       *lli_acl_access;
+
+        struct posix_acl       *lli_posix_acl;
+        struct remote_acl      *lli_remote_acl;
 };
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff

@@ -223,6 +223,47 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
         RETURN (rc);
 }
 
+int mdc_access_check(struct obd_export *exp, struct lustre_id *id,
+                     struct ptlrpc_request **request)
+
+{
+        struct ptlrpc_request *req;
+        struct mds_body *body;
+        int size[2] = {0, sizeof(*body)};
+        int rc;
+        ENTRY;
+
+        size[0] = lustre_secdesc_size();
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              MDS_ACCESS_CHECK, 2, size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        lustre_pack_secdesc(req, size[0]);
+        body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF, sizeof (*body));
+        memcpy(&body->id1, id, sizeof(*id));
+
+        req->rq_replen = lustre_msg_size(2, size);
+        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+        rc = ptlrpc_queue_wait(req);
+        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+        if (rc != 0) {
+                ptlrpc_req_finished (req);
+                req = NULL;
+        } else {
+                body = lustre_swab_repbuf (req, 0, sizeof (*body),
+                                           lustre_swab_mds_body);
+                if (body == NULL) {
+                        CERROR ("Can't unpack mds_body\n");
+                        RETURN (-EPROTO);
+                }
+        }
+
+ out:
+        *request = req;
+        RETURN (rc);
+}
+
 int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request)
@@ -287,11 +328,12 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                       unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md)
 {
-        void *buf;
-        int rc = 0;
-        int size, acl_off;
-        struct posix_acl *acl;
         struct lov_mds_md *lmm;
+        struct posix_acl *acl;
+        struct mds_remote_perm *perm;
+        void *buf;
+        int size, acl_off;
+        int rc = 0;
         ENTRY;
 
         LASSERT(md != NULL);
@@ -304,7 +346,7 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
 
         LASSERT_REPSWABBED(req, offset);
 
-        if (!(md->body->valid & OBD_MD_FLEASIZE) && 
+        if (!(md->body->valid & OBD_MD_FLEASIZE) &&
             !(md->body->valid & OBD_MD_FLDIREA))
                 RETURN(0);
 
@@ -355,30 +397,54 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                         S_ISSOCK(md->body->mode));
         }
 
-        acl_off = (md->body->valid & OBD_MD_FLEASIZE) ? (offset + 2) :
-                  (offset + 1);
+        /* if anything wrong when unpacking md, we don't check acl
+         * stuff, for simplicity
+         */
+        if (rc)
+                RETURN(rc);
 
         if (md->body->valid & OBD_MD_FLACL_ACCESS) {
-                size = le32_to_cpu(*(__u32 *) lustre_msg_buf(req->rq_repmsg, 
-                                   acl_off, 4));
-                buf = lustre_msg_buf(req->rq_repmsg, acl_off + 1, size);
+                acl_off = (md->body->valid & OBD_MD_FLEASIZE) ?
+                                (offset + 2) : (offset + 1);
 
-                acl = posix_acl_from_xattr(buf, size);
-                if (IS_ERR(acl)) {
-                        rc = PTR_ERR(acl);
-                        CERROR("convert xattr to acl failed: %d\n", rc);
-                        RETURN(rc);
-                } else if (acl) {
-                        rc = posix_acl_valid(acl);
-                        if (rc) {
-                                CERROR("acl valid error: %d\n", rc);
-                                posix_acl_release(acl);
-                                RETURN(rc);
+                if (md->body->valid & OBD_MD_RACL) {
+
+                        buf = lustre_swab_repbuf(req, acl_off, sizeof(*perm),
+                                                 lustre_swab_remote_perm);
+                        if (buf == NULL) {
+                                CERROR("Can't unpack remote perm\n");
+                                RETURN(0);
                         }
-                }
 
-                md->acl_access = acl;
+                        OBD_ALLOC(perm, sizeof(*perm));
+                        if (!perm)
+                                RETURN(0);
+                        memcpy(perm, buf, sizeof(*perm));
+
+                        md->remote_perm = perm;
+                } else {
+                        size = le32_to_cpu(*(__u32 *) lustre_msg_buf(
+                                           req->rq_repmsg, acl_off, 4));
+                        buf = lustre_msg_buf(req->rq_repmsg, acl_off + 1, size);
+
+                        acl = posix_acl_from_xattr(buf, size);
+                        if (IS_ERR(acl)) {
+                                rc = PTR_ERR(acl);
+                                CERROR("convert xattr to acl failed: %d\n", rc);
+                                RETURN(0);
+                        } else if (acl) {
+                                rc = posix_acl_valid(acl);
+                                if (rc) {
+                                        CERROR("acl valid error: %d\n", rc);
+                                        posix_acl_release(acl);
+                                        RETURN(0);
+                                }
+                        }
+
+                        md->posix_acl = acl;
+                }
         }
+
         RETURN(rc);
 }
 
@@ -1487,6 +1553,7 @@ struct md_ops mdc_md_ops = {
         .m_get_real_obd  = mdc_get_real_obd,
         .m_change_cbdata_name = mdc_change_cbdata_name,
         .m_change_cbdata = mdc_change_cbdata,
+        .m_access_check  = mdc_access_check,
 };
 
 int __init mdc_init(void)
