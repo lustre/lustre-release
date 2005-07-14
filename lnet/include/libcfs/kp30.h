@@ -149,6 +149,18 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #define PROF_FINISH(FOO) do {} while(0)
 #endif /* PORTALS_PROFILING */
 
+/* htonl hack - either this, or compile with -O2 */
+#if defined(__GNUC__) && (__GNUC__ >= 2)
+#define ___htonl(x) __cpu_to_be32(x)
+#define ___htons(x) __cpu_to_be16(x)
+#define ___ntohl(x) __be32_to_cpu(x)
+#define ___ntohs(x) __be16_to_cpu(x)
+#define htonl(x) ___htonl(x)
+#define ntohl(x) ___ntohl(x)
+#define htons(x) ___htons(x)
+#define ntohs(x) ___ntohs(x)
+#endif
+
 /* debug.c */
 extern spinlock_t stack_backtrace_lock;
 
