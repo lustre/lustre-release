@@ -109,7 +109,7 @@ cat >lustre.files <<EOF
 %attr(-, root, root) /usr/sbin/*
 %attr(-, root, root) /usr/bin/*
 %attr(-, root, root) %{_libdir}/lustre/python
-%attr(-, root, root) /usr/share/lustre/examples
+%attr(-, root, root) /usr/share/lustre/*
 
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs
@@ -123,8 +123,6 @@ cat >lustre.files <<EOF
 
 %attr(-, root, root) /etc/openldap/slapd-lustre.conf
 %attr(-, root, root) /etc/openldap/schema/lustre.schema
-%attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
-%attr(-, root, root) /usr/share/lustre/top.ldif
 EOF
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
