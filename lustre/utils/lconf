@@ -587,8 +587,7 @@ class LCTLInterface:
 
     # add a route to a host
     def add_route_host(self, net, uuid, gw, tgt):
-        """ noop """
-#         self.add_uuid(net, uuid, tgt)
+        self.add_uuid(net, uuid, tgt)
 #         cmds =  """
 #   network %s
 #   add_route %s %s
@@ -602,8 +601,7 @@ class LCTLInterface:
 
     # add a route to a range
     def del_route_host(self, net, uuid, gw, tgt):
-        """ noop """
-#         self.del_uuid(uuid)
+        self.del_uuid(uuid)
 #         cmds =  """
 #   ignore_errors
 #   network %s
@@ -632,8 +630,8 @@ class LCTLInterface:
 #                 self.run(cmds)
 
     # disconnect one connection
-#     def disconnect(self, srv):
-#         self.del_uuid(srv.nid_uuid)
+    def disconnect(self, srv):
+        self.del_uuid(srv.nid_uuid)
 #         if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
 #             if srv.hostaddr[0]:
 #                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
