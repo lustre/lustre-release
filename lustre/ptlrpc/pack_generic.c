@@ -105,6 +105,42 @@ do {                                                                    \
 # define PTLRPC_RS_DEBUG_LRU_DEL(rs) do {} while(0)
 #endif
 
+static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc,
+                                                      int size)
+{
+        unsigned long flags;
+        struct ptlrpc_reply_state *rs = NULL;
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        /* See if we have anything in a pool, and wait if nothing */
+        while (list_empty(&svc->srv_free_rs_list)) {
+                struct l_wait_info lwi;
+                int rc;
+                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                /* If we cannot get anything for some long time, we better
+                   bail out instead of waiting infinitely */
+                lwi = LWI_TIMEOUT(10 * HZ, NULL, NULL);
+                rc = l_wait_event(svc->srv_free_rs_waitq,
+                                  !list_empty(&svc->srv_free_rs_list), &lwi);
+                if (rc)
+                        goto out;
+                spin_lock_irqsave(&svc->srv_lock, flags);
+        }
+        
+        rs = list_entry(svc->srv_free_rs_list.next, struct ptlrpc_reply_state,
+                        rs_list);
+        list_del(&rs->rs_list);
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        LASSERT(rs);
+        LASSERTF(svc->srv_max_reply_size > size, "Want %d, prealloc %d\n", size,
+                 svc->srv_max_reply_size);
+        memset(rs, 0, size);
+        rs->rs_prealloc = 1;
+out:
+        return rs;
+}
+
+
 int lustre_pack_reply (struct ptlrpc_request *req,
                        int count, int *lens, char **bufs)
 {
@@ -118,9 +154,12 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         msg_len = lustre_msg_size (count, lens);
         size = offsetof (struct ptlrpc_reply_state, rs_msg) + msg_len;
         OBD_ALLOC (rs, size);
-        if (rs == NULL)
-                RETURN (-ENOMEM);
-
+        if (unlikely(rs == NULL)) {
+                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_srv_ni->sni_service,
+                                         size);
+                if (!rs)
+                        RETURN (-ENOMEM);
+        }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
@@ -152,7 +191,18 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
         LASSERT (list_empty(&rs->rs_exp_list));
         LASSERT (list_empty(&rs->rs_obd_list));
 
-        OBD_FREE (rs, rs->rs_size);
+        if (unlikely(rs->rs_prealloc)) {
+                unsigned long flags;
+                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+
+                spin_lock_irqsave(&svc->srv_lock, flags);
+                list_add(&rs->rs_list,
+                         &svc->srv_free_rs_list);
+                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                wake_up(&svc->srv_free_rs_waitq);
+        } else {
+                OBD_FREE(rs, rs->rs_size);
+        }
 }
 
 /* This returns the size of the buffer that is required to hold a lustre_msg

@@ -1298,9 +1298,11 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                OST_MAXREPSIZE, OST_REQUEST_PORTAL,
+                                OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost",
-                                obd->obd_proc_entry, ost_print_req);
+                                obd->obd_proc_entry, ost_print_req,
+                                OST_NUM_THREADS);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1308,23 +1310,23 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service->srv_init = ost_thread_init;
         ost->ost_service->srv_done = ost_thread_done;
-        rc = ptlrpc_start_n_threads(obd, ost->ost_service,
-                                    OST_NUM_THREADS, "ll_ost");
+        rc = ptlrpc_start_threads(obd, ost->ost_service, "ll_ost");
         if (rc)
                 GOTO(out_service, rc = -EINVAL);
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                OST_MAXREPSIZE, OST_CREATE_PORTAL,
+                                OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_create",
-                                obd->obd_proc_entry, ost_print_req);
+                                obd->obd_proc_entry, ost_print_req, 1);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, ost->ost_create_service,
-                                    1, "ll_ost_creat");
+        rc = ptlrpc_start_threads(obd, ost->ost_create_service,
+                                  "ll_ost_creat");
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 

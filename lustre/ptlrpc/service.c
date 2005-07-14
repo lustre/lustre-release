@@ -267,11 +267,11 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
 }
 
 struct ptlrpc_service *
-ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
+ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
                 struct proc_dir_entry *proc_entry,
-                svcreq_printfn_t svcreq_printfn)
+                svcreq_printfn_t svcreq_printfn, int num_threads)
 {
         int                                i;
         int                                rc;
@@ -305,12 +305,15 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
         service->srv_request_history_print_fn = svcreq_printfn;
         service->srv_request_seq = 1;           /* valid seq #s start at 1 */
         service->srv_request_max_cull_seq = 0;
+        service->srv_num_threads = num_threads;
 
         INIT_LIST_HEAD(&service->srv_request_queue);
         INIT_LIST_HEAD(&service->srv_idle_rqbds);
         INIT_LIST_HEAD(&service->srv_history_rqbds);
         INIT_LIST_HEAD(&service->srv_request_history);
         INIT_LIST_HEAD(&service->srv_reply_queue);
+        INIT_LIST_HEAD(&service->srv_free_rs_list);
+        init_waitqueue_head(&service->srv_free_rs_waitq);
 
         /* First initialise enough for early teardown */
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
@@ -340,6 +343,12 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                         GOTO(failed, NULL);
         }
 
+        /* Now allocate pool of reply buffers */
+        /* Increase max reply size to next power of two */
+        service->srv_max_reply_size = 1;
+        while(service->srv_max_reply_size < max_reply_size)
+                service->srv_max_reply_size <<= 1;
+
         if (proc_entry != NULL)
                 ptlrpc_lprocfs_register_service(proc_entry, service);
 
@@ -350,6 +359,25 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
 failed:
         ptlrpc_unregister_service(service);
         return NULL;
+}
+
+static int __ptlrpc_server_free_request(struct ptlrpc_request *req)
+{
+        struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
+
+        list_del(&req->rq_list);
+
+        if (req->rq_reply_state != NULL) {
+                ptlrpc_rs_decref(req->rq_reply_state);
+                req->rq_reply_state = NULL;
+        }
+
+        if (req != &rqbd->rqbd_req) {
+                /* NB request buffers use an embedded
+                 * req if the incoming req unlinked the
+                 * MD; this isn't one of them! */
+                OBD_FREE(req, sizeof(*req));
+        }
 }
 
 static void
@@ -404,20 +432,7 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
                                 req = list_entry(rqbd->rqbd_reqs.next,
                                                  struct ptlrpc_request,
                                                  rq_list);
-
-                                list_del(&req->rq_list);
-
-                                if (req->rq_reply_state != NULL) {
-                                        ptlrpc_rs_decref(req->rq_reply_state);
-                                        req->rq_reply_state = NULL;
-                                }
-
-                                if (req != &rqbd->rqbd_req) {
-                                        /* NB request buffers use an embedded
-                                         * req if the incoming req unlinked the
-                                         * MD; this isn't one of them! */
-                                        OBD_FREE(req, sizeof(*req));
-                                }
+                                __ptlrpc_server_free_request(req);
                         }
 
                         spin_lock_irqsave(&svc->srv_lock, flags);
@@ -427,9 +442,15 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
                          * reqs; particularly the embedded req */
                         list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
                 }
+        } else if (req->rq_reply_state->rs_prealloc) {
+                 /* If we are low on memory, we are not interested in
+                    history */
+                list_del(&req->rq_history_list);
+                __ptlrpc_server_free_request(req);
         }
-        
+       
         spin_unlock_irqrestore(&svc->srv_lock, flags);
+
 }
 
 static int
@@ -934,13 +955,13 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 }
 
 /* @base_name should be 12 characters or less - 3 will be added on */
-int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
-                           int num_threads, char *base_name)
+int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc,
+                         char *base_name)
 {
         int i, rc = 0;
         ENTRY;
 
-        for (i = 0; i < num_threads; i++) {
+        for (i = 0; i < svc->srv_num_threads; i++) {
                 char name[32];
                 sprintf(name, "%s_%02d", base_name, i);
                 rc = ptlrpc_start_thread(dev, svc, name, i);
@@ -960,6 +981,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         struct ptlrpc_svc_data d;
         struct ptlrpc_thread *thread;
         unsigned long flags;
+        struct ptlrpc_reply_state *rs;
         int rc;
         ENTRY;
 
@@ -975,9 +997,15 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         RETURN(rc);
         }
 
+        /* Alloc reply state structure for this one */
+        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
+        if (!rs)
+                RETURN(-ENOMEM);
         spin_lock_irqsave(&svc->srv_lock, flags);
+        list_add(&rs->rs_list, &svc->srv_free_rs_list);
         list_add(&thread->t_link, &svc->srv_threads);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
+        wake_up(&svc->srv_free_rs_waitq);
 
         d.dev = dev;
         d.svc = svc;
@@ -1015,6 +1043,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         struct ptlrpc_srv_ni *srv_ni;
         struct l_wait_info    lwi;
         struct list_head     *tmp;
+        struct ptlrpc_reply_state *rs, *t;
 
         ptlrpc_stop_all_threads(service);
         LASSERT(list_empty(&service->srv_threads));
@@ -1129,6 +1158,11 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                         continue;
                 }
                 CWARN("Unexpectedly long timeout %p\n", service);
+        }
+
+        list_for_each_entry_safe(rs, t, &service->srv_free_rs_list, rs_list) {
+                list_del(&rs->rs_list);
+                OBD_FREE(rs, service->srv_max_reply_size);
         }
 
         OBD_FREE(service,

@@ -112,6 +112,7 @@
 #define LDLM_NBUFS       64
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
+#define LDLM_MAXREPSIZE (1024)
 
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
@@ -133,6 +134,7 @@
  * except in the open case where there are a large number of OSTs in a LOV.
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
+#define MDS_MAXREPSIZE  (9 * 1024)
 
 #define OST_MAX_THREADS 36UL
 #define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
@@ -146,6 +148,7 @@
  * - OST_MAXREQSIZE must be at least 1 page of cookies plus some spillover
  */
 #define OST_MAXREQSIZE  (5 * 1024)
+#define OST_MAXREPSIZE  (9 * 1024)
 
 #define PTLBD_NUM_THREADS        4
 #define PTLBD_NBUFS      64
@@ -262,6 +265,7 @@ struct ptlrpc_reply_state {
         unsigned int          rs_scheduled_ever:1; /* any schedule attempts? */
         unsigned int          rs_handled:1;     /* been handled yet? */
         unsigned int          rs_on_net:1;      /* reply_out_callback pending? */
+        unsigned int          rs_prealloc:1;      /* rs from prealloc list */
 
         int                   rs_size;
         __u64                 rs_transno;
@@ -475,7 +479,7 @@ struct ptlrpc_thread {
 
         void *t_data; /* thread-private data (preallocated memory) */
 
-        unsigned int t_id; /* service thread index, from ptlrpc_start_n_threads */
+        unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         wait_queue_head_t t_ctl_waitq;
 };
 
@@ -516,6 +520,7 @@ typedef void (*svcreq_printfn_t)(void *, struct ptlrpc_request *);
 struct ptlrpc_service {
         struct list_head srv_list;              /* chain thru all services */
         int              srv_max_req_size;      /* biggest request to receive */
+        int              srv_max_reply_size;    /* biggest reply to send */
         int              srv_buf_size;          /* size of individual buffers */
         int              srv_nbuf_per_group;    /* # buffers to allocate in 1 group */
         int              srv_nbufs;             /* total # req buffer descs allocated */
@@ -524,6 +529,7 @@ struct ptlrpc_service {
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
         int              srv_watchdog_timeout; /* soft watchdog timeout, in ms */
+        int              srv_num_threads;      /*# of threads to start/started*/
 
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
@@ -556,6 +562,11 @@ struct ptlrpc_service {
 
         struct proc_dir_entry   *srv_procroot;
         struct lprocfs_stats    *srv_stats;
+
+        /* List of free reply_states */
+        struct list_head srv_free_rs_list;
+        /* waitq to run, when adding stuff to srv_free_rs_list */
+        wait_queue_head_t srv_free_rs_waitq;
         
         /*
          * if non-NULL called during thread creation (ptlrpc_start_thread())
@@ -712,15 +723,16 @@ void ptlrpc_save_lock (struct ptlrpc_request *req,
 void ptlrpc_commit_replies (struct obd_device *obd);
 void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
+                                       int max_reply_size,
                                        int req_portal, int rep_portal,
                                        int watchdog_timeout, /* in ms */
                                        svc_handler_t, char *name,
                                        struct proc_dir_entry *proc_entry,
-                                       svcreq_printfn_t);
+                                       svcreq_printfn_t, int num_threads);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
-int ptlrpc_start_n_threads(struct obd_device *dev, struct ptlrpc_service *svc,
-                           int cnt, char *base_name);
+int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc,
+                         char *base_name);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name, int id);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);

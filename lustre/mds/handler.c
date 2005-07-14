@@ -2052,49 +2052,49 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                MDS_SERVICE_WATCHDOG_TIMEOUT,
-                                mds_handle, "mds", obd->obd_proc_entry, NULL);
+                                MDS_MAXREPSIZE, MDS_REQUEST_PORTAL,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                mds_handle, "mds", obd->obd_proc_entry, NULL,
+                                MDT_NUM_THREADS);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
                 GOTO(err_lprocfs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, mds->mds_service, MDT_NUM_THREADS,
-                                    "ll_mdt");
+        rc = ptlrpc_start_threads(obd, mds->mds_service, "ll_mdt");
         if (rc)
                 GOTO(err_thread, rc);
 
         mds->mds_setattr_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                MDS_SETATTR_PORTAL, MDC_REPLY_PORTAL,
-                                MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                MDS_MAXREPSIZE, MDS_SETATTR_PORTAL,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_setattr",
-                                obd->obd_proc_entry, NULL);
+                                obd->obd_proc_entry, NULL, MDT_NUM_THREADS);
         if (!mds->mds_setattr_service) {
                 CERROR("failed to start getattr service\n");
                 GOTO(err_thread, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, mds->mds_setattr_service,
-                                    MDT_NUM_THREADS, "ll_mdt_attr");
+        rc = ptlrpc_start_threads(obd, mds->mds_setattr_service,
+                                  "ll_mdt_attr");
         if (rc)
                 GOTO(err_thread2, rc);
 
         mds->mds_readpage_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                MDS_READPAGE_PORTAL, MDC_REPLY_PORTAL,
-                                MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
+                                MDC_REPLY_PORTAL, MDS_SERVICE_WATCHDOG_TIMEOUT,
                                 mds_handle, "mds_readpage",
-                                obd->obd_proc_entry, NULL);
+                                obd->obd_proc_entry, NULL, MDT_NUM_THREADS);
         if (!mds->mds_readpage_service) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_thread2, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, mds->mds_readpage_service,
-                                    MDT_NUM_THREADS, "ll_mdt_rdpg");
+        rc = ptlrpc_start_threads(obd, mds->mds_readpage_service,
+                                  "ll_mdt_rdpg");
 
         if (rc)
                 GOTO(err_thread3, rc);
