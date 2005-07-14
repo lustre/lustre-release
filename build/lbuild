@@ -6,7 +6,6 @@ TOPDIR=$PWD
 KERNELDIR=
 LINUX=
 LUSTRE=
-PUBLISH=0
 RELEASE=0
 DO_SRC=0
 DOWNLOAD=1
@@ -16,6 +15,7 @@ TARGET_ARCHS=
 CONFIGURE_FLAGS=
 EXTERNAL_PATCHES=
 EXTRA_VERSION=
+STAGEDIR=
 
 # from target file
 KERNEL=
@@ -73,11 +73,6 @@ fatal()
     exit $1
 }
 
-publishing()
-{
-    (( $PUBLISH )) || return 0
-}
-
 is_release()
 {
     (( $RELEASE )) || return 0
@@ -131,7 +126,7 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     tarball.
 
   --publish
-    Publish the packages, patches, and tarballs on the ftp server.
+    Unused.
 
   --release
     Specifies that the files generated do not include timestamps, and
@@ -139,6 +134,11 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
   --src
     Build a .src.rpm, a full kernel patch, and a patched kernel tarball.
+
+  --stage=DIR
+    Directory used to stage packages for release.  RPMs will be placed
+    more or less in DIR/<target>-<arch>, and the tarball will be
+    placed in DIR.
 
   --tag=TAG
     A CVS branch/tag name to build from when pulling from CVS.
@@ -199,6 +199,25 @@ check_options()
 #       	usage 1 "Target '$TARGET' was not found."
     fi
 
+    case $TARGET in
+	2.6-rhel4)
+	    CANONICAL_TARGET="rhel-2.6"
+	    ;;
+	2.6-suse)
+	    CANONICAL_TARGET="suse-2.6"
+	    ;;
+	hp_pnnl-2.4)
+	    CANONICAL_TARGET="hp-pnnl-2.4"
+	    ;;
+	2.6-vanilla \
+	    | suse-2.4.21-2 \
+	    | rh-2.4 \
+	    | rhel-2.4 \
+	    | sles-2.4)
+		CANONICAL_TARGET="$TARGET"
+		;;
+    esac
+
     TIMESTAMP=$(date -d "$DATE" "+%Y%m%d%H%M")
 
     RPMBUILD=$(which rpmbuild 2>/dev/null | head -1)
@@ -237,27 +256,9 @@ load_target()
     if [ "$KERNELDIR" ] ; then
 	KERNEL_FILE="$KERNELDIR/$KERNEL"
 	if [ ! -r "$KERNELDIR/$KERNEL" ] ; then
-	    case $TARGET in
-		2.6-rhel4)
-		    dldir="rhel-2.6"
-		    ;;
-		2.6-suse)
-		    dldir="suse-2.6"
-		    ;;
-		hp_pnnl-2.4)
-		    dldir="hp-pnnl-2.4"
-		    ;;
-		2.6-vanilla \
-		| suse-2.4.21-2 \
-		| rh-2.4 \
-		| rhel-2.4 \
-		| sles-2.4)
-		    dldir="$TARGET"
-		    ;;
-	    esac
 	    if (( $DOWNLOAD )) ; then
-		echo "Downloading http://ftp.lustre.org/kernels/$dldir/old/$KERNEL..."
-		if ! wget -nv "http://ftp.lustre.org/kernels/$dldir/old/$KERNEL" \
+		echo "Downloading http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL..."
+		if ! wget -nv "http://ftp.lustre.org/kernels/$CANONICAL_TARGET/old/$KERNEL" \
 		    -O "$KERNELDIR/$KERNEL" ; then
 		    fatal 1 "Could not download target $TARGET's kernel file $KERNEL from ftp.lustre.org."
 		fi
@@ -519,14 +520,26 @@ build_lustre()
     popd >/dev/null
 }
 
-publish()
+stage()
 {
-    publishing || return 0
+    [ "$STAGEDIR" ] || return
+
+    for arch in $BUILD_ARCHS ; do
+	rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${arch}"
+	echo "${0##*/}: Copying RPMs into ${rpmdir}"
+	mkdir -p "${rpmdir}"
+	cp -v RPMS/${arch}/*.rpm "${rpmdir}"
+	if [ -d RPMS/noarch ] ; then
+	    cp -v RPMS/noarch/*.rpm "${rpmdir}"
+	fi
+    done
+
+    cp -v "$LUSTRE" "$STAGEDIR"
 }
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l disable-datestamp,external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,tag:,target:,target-archs:,with-linux: -- "$@")
+options=$(getopt -o d:D:h -l disable-datestamp,external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,stage:,tag:,target:,target-archs:,with-linux: -- "$@")
 
 if [ $? != 0 ] ; then
     usage 1
@@ -579,7 +592,6 @@ while [ "$1" ] ; do
 	    shift 1
 	    ;;
 	--publish)
-	    PUBLISH=1
 	    shift
 	    ;;
 	--release)
@@ -589,6 +601,10 @@ while [ "$1" ] ; do
 	--src)
 	    DO_SRC=1
 	    shift 1
+	    ;;
+	--stage)
+	    STAGEDIR=$2
+	    shift 2
 	    ;;
 	--tag)
 	    TAG=$2
@@ -640,4 +656,4 @@ else
     build_lustre
 fi
 
-publish
+stage
