@@ -78,6 +78,7 @@ check_version() {
 }
 
 echo "Checking for a complete tree..."
+# required directories
 for dir in build portals lustre ; do
     if [ ! -d "$dir" ] ; then
 	cat >&2 <<EOF
@@ -87,6 +88,12 @@ EOF
 	exit 1
     fi
     ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
+done
+# some are optional
+for dir in snmp ; do
+    if [ -d "$dir" ] ; then
+	ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/$dir/autoconf"
+    fi
 done
 
 check_version automake automake-1.7 "1.7.8"

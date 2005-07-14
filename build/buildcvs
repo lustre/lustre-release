@@ -2,7 +2,7 @@
 
 portalstag="HEAD"
 libsysiotag="HEAD"
-snmptag=""
+snmptag="HEAD"
 
 export LC_COLLATE=C
 
@@ -78,4 +78,5 @@ esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
 cvs_cmd portals portals "$portalstag"
+cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"

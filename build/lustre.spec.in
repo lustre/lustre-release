@@ -126,9 +126,14 @@ cat >lustre.files <<EOF
 %attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
 %attr(-, root, root) /usr/share/lustre/top.ldif
 EOF
-if [ -f $RPM_BUILD_ROOT/usr/lib/liblustre.so ] ; then
+if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
   echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
+fi
+
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
+  echo '%attr(-, root, root) %{_libdir}/lustre/snmp' >>lustre.files
+  echo '%attr(-, root, root) %{_datadir}/lustre/snmp/mibs' >>lustre.files
 fi
 
 %files -f lustre.files
