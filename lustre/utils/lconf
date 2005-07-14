@@ -2613,17 +2613,17 @@ def local_interface(net_type, cluster_id, nid):
 
 def find_route(srv_list):
     result = []
-    frm_type = local_clusters[0][0]
-    for srv in srv_list:
-        debug("find_route: srv:", srv.nid, "type: ", srv.net_type)
-        to_type = srv.net_type
-        to = srv.nid
-        cluster_id = srv.cluster_id
-        debug ('looking for route to', to_type, to)
-        for r in local_routes:
-            debug("find_route: ", r)
-            if  (r[3] <= to and to <= r[4]) and cluster_id == r[2]:
-                result.append((srv, r))
+#    frm_type = local_clusters[0][0]
+#    for srv in srv_list:
+#        debug("find_route: srv:", srv.nid, "type: ", srv.net_type)
+#        to_type = srv.net_type
+#        to = srv.nid
+#        cluster_id = srv.cluster_id
+#        debug ('looking for route to', to_type, to)
+#        for r in local_routes:
+#            debug("find_route: ", r)
+#            if  (r[3] <= to and to <= r[4]) and cluster_id == r[2]:
+#                result.append((srv, r))
     return result
 
 def get_active_target(db):
