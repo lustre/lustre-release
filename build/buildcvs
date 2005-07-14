@@ -2,7 +2,7 @@
 
 portalstag="HEAD"
 libsysiotag="HEAD"
-snmptag="HEAD"
+snmptag=""
 
 export LC_COLLATE=C
 
@@ -21,6 +21,10 @@ case "$lustretag" in
     # keep this list sorted alphabetically!
     b1_2)
 	portalstag="b1_2"
+	;;
+
+    b1_4)
+	snmptag="HEAD"
 	;;
 
     b1_4_newconfig)	
