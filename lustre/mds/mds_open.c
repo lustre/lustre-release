@@ -914,6 +914,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mea *mea = NULL;
         int mea_size, update_mode;
         int child_mode = LCK_PR;
+        __u64 fid = 0;
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "parent "DLID4" name %*s mode %o",
@@ -1147,9 +1148,12 @@ got_child:
                         handle = NULL;
                         GOTO(cleanup, rc);
                 }
+                fid = mds_alloc_fid(obd);
                 dchild->d_fsdata = (void *) &dp;
                 dp.p_ptr = req;
                 dp.p_inum = ino;
+                dp.p_fid = fid;
+                dp.p_group = mds->mds_num; 
 
                 rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode, NULL);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
@@ -1210,10 +1214,10 @@ got_child:
                          */
                         mds_set_last_fid(obd, id_fid(rec->ur_id2));
                 } else {
-                        rc = mds_alloc_inode_sid(obd, dchild->d_inode,
-                                                 handle, &body->id1);
+                        rc = mds_set_inode_sid(obd, dchild->d_inode,
+                                               handle, &body->id1, fid);
                         if (rc) {
-                                CERROR("mds_alloc_inode_sid() failed, "
+                                CERROR("mds_set_inode_sid() failed, "
                                        "rc = %d\n", rc);
                         }
                 }
