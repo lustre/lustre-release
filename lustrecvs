@@ -95,7 +95,7 @@ cvs_cmd ()
     fi
 }
 
-cvs_cmd build lustre-build "" "$buildtag"
+cvs_cmd build lustre-build "$buildtag"
 
 if [ -f build/buildcvs ] ; then
     . build/buildcvs
