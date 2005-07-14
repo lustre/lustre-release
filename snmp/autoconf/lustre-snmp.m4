@@ -12,7 +12,7 @@ AC_ARG_ENABLE([snmp],
 AC_MSG_RESULT([$enable_snmp])
 
 if test x$enable_snmp != xno ; then
-	AC_CHECK_PROG([NET_SNMP_CONFIG], [net-snmp-config], [net-snmp-config], [])
+	AC_CHECK_PROG([NET_SNMP_CONFIG], [net-snmp-config])
 	if test "$NET_SNMP_CONFIG" ; then
 		NET_SNMP_CFLAGS=$($NET_SNMP_CONFIG --base-cflags)
 		NET_SNMP_LIBS=$($NET_SNMP_CONFIG --agent-libs)
@@ -55,15 +55,6 @@ AC_SUBST(NET_SNMP_CFLAGS)
 AC_SUBST(NET_SNMP_LIBS)
 AC_SUBST(agentdir)
 AC_SUBST(mibdir)
-])
-
-#
-# LS_CONDITIONALS
-#
-# AM_CONDITIONALs for lustre-snmp
-#
-AC_DEFUN([LS_CONDITIONALS],
-[
 ])
 
 #
