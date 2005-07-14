@@ -467,6 +467,9 @@ AC_ARG_ENABLE([mpitests],
 			[build liblustre mpi tests]),
 	[],[enable_mpitests=no])
 AC_MSG_RESULT([$enable_mpitests])
+
+AC_MSG_NOTICE([Enabling Lustre configure options for libsysio])
+ac_configure_args="$ac_configure_args --with-lustre-hack --with-sockets"
 ])
 
 #
