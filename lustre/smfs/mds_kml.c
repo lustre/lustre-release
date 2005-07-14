@@ -27,7 +27,6 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
-#include <linux/dcache.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
@@ -135,8 +134,6 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
         struct lustre_msg *msg = NULL;
         struct mdc_op_data *op_data;
         struct mds_rec_create *rec;
-        struct dentry_params *param = 
-                (struct dentry_params *) dentry->d_fsdata;
         int rc = 0, tgt_len = 0;
         void *tmp = NULL;
 
@@ -150,8 +147,6 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
                              (char *)dentry->d_name.name,
                              dentry->d_name.len, 0);
 
-        id_fid(&op_data->id1) = param->p_fid;
-        id_group(&op_data->id1) = param->p_group;
         PACK_KML_REC_INIT(buffer, MDS_REINT);
         mkpi = (struct mds_kml_pack_info *)buffer;
 

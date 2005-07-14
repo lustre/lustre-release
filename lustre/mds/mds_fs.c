@@ -460,7 +460,6 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         struct inode *inode;
         struct dentry *dentry;
         struct mds_obd *mds = &obd->u.mds;
-        __u64 fid;
         ENTRY;
 
         /* getting root directory and setup its fid. */
@@ -499,13 +498,12 @@ int mds_fs_setup_rootid(struct obd_device *obd)
                 GOTO(out_dentry, rc);
         }
         
-        fid = mds_alloc_fid(obd);
         down(&inode->i_sem);
-        rc = mds_set_inode_sid(obd, inode, handle, &mds->mds_rootid, fid);
+        rc = mds_alloc_inode_sid(obd, inode, handle, &mds->mds_rootid);
         up(&inode->i_sem);
         
         if (rc) {
-                CERROR("mds_set_inode_sid() failed, rc = %d\n",
+                CERROR("mds_alloc_inode_sid() failed, rc = %d\n",
                        rc);
                 GOTO(out_dentry, rc);
         }

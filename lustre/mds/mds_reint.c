@@ -693,7 +693,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct dentry_params dp;
         struct mea *mea = NULL;
         int mea_size;
-        __u64 fid;
         ENTRY;
 
         LASSERT(offset == 1);
@@ -782,12 +781,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
          * needed to check if object already created in the case of creating
          * remote inode.
          */
-        fid = mds_alloc_fid(obd);
         dchild->d_fsdata = (void *)&dp;
         dp.p_inum = (unsigned long)id_ino(rec->ur_id2);
         dp.p_ptr = req;
-        dp.p_fid = fid;
-        dp.p_group = mds->mds_num;
 
         switch (type) {
         case S_IFREG: {
@@ -846,10 +842,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                  */
                                 mds_set_last_fid(obd, id_fid(rec->ur_id2));
                         } else {
-                                rc = mds_set_inode_sid(obd, dchild->d_inode,
-                                                       handle, NULL, fid);
+                                rc = mds_alloc_inode_sid(obd, dchild->d_inode,
+                                                         handle, NULL);
                                 if (rc) {
-                                        CERROR("mds_set_inode_sid() failed, inode %lu, "
+                                        CERROR("mds_alloc_inode_sid() failed, inode %lu, "
                                                "rc %d\n", dchild->d_inode->i_ino, rc);
                                 }
                         }
@@ -1083,11 +1079,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                  * because for dir it was already done.
                                  */
                                 down(&inode->i_sem);
-                                rc = mds_set_inode_sid(obd, inode,
-                                                         handle, NULL, fid);
+                                rc = mds_alloc_inode_sid(obd, inode,
+                                                         handle, NULL);
                                 up(&inode->i_sem);
                                 if (rc) {
-                                        CERROR("mds_set_inode_sid() failed, "
+                                        CERROR("mds_alloc_inode_sid() failed, "
                                                "inode %lu, rc %d\n", inode->i_ino,
                                                rc);
                                 }

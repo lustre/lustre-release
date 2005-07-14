@@ -205,8 +205,8 @@ int mds_fs_setup_virtid(struct obd_device *obd);
 
 __u64 mds_alloc_fid(struct obd_device *obd);
 
-int mds_set_inode_sid(struct obd_device *, struct inode *,
-                      void *, struct lustre_id *, __u64 fid);
+int mds_alloc_inode_sid(struct obd_device *, struct inode *,
+                        void *, struct lustre_id *);
 
 int mds_update_inode_sid(struct obd_device *, struct inode *,
                          void *, struct lustre_id *);
