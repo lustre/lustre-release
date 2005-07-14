@@ -63,6 +63,7 @@ case "$lustretag" in
 
 esac
 
+error_modules=
 cvs_cmd ()
 {
     dir="$1"
@@ -74,9 +75,12 @@ cvs_cmd ()
     if [ "$tag" = "HEAD" ] ; then
 	cotag=""
 	uptag="-A"
-    else
+    elif [ "$tag" ] ; then
 	cotag="-r $tag"
 	uptag="-r $tag"
+    else
+	# silently skip if no tag was specified
+	return
     fi
 
     if [ -d "$dir" ] ; then
@@ -86,12 +90,19 @@ cvs_cmd ()
 	echo "$progname: Checking out $dir from $tag"
 	cvs co -P $cotag -d "$dir" "$module"
     fi
+    if [ $? != 0 ] ; then
+	error_modules="$dir $error_modules"
+    fi
 }
 
-cvs_cmd build lustre-build "$buildtag"
+cvs_cmd build lustre-build "" "$buildtag"
 
 if [ -f build/buildcvs ] ; then
     . build/buildcvs
 else
     fatal 1 "build/buildcvs does not exist; not updating other modules."
+fi
+
+if [ "$error_modules" ] ; then
+    fatal 1 "There were errors checking out the following directories: $error_modules"
 fi
