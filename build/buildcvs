@@ -2,6 +2,7 @@
 
 portalstag="HEAD"
 libsysiotag="HEAD"
+snmptag=""
 
 export LC_COLLATE=C
 
@@ -22,12 +23,12 @@ case "$lustretag" in
 	portalstag="b1_2"
 	;;
 
-    b_cmd*)
-    	portalstag="$lustretag"
-	;;
-
     b1_4_newconfig)	
         portalstag="b_hd_newconfig"
+	;;
+
+    b_cmd*)
+    	portalstag="$lustretag"
 	;;
 
     b_port_ahead)
