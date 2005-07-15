@@ -50,7 +50,6 @@ fi
 agentdir='${pkglibdir}/snmp'
 mibdir='${pkgdatadir}/snmp/mibs'
 
-AC_SUBST(SNMP_SUBDIR)
 AC_SUBST(NET_SNMP_CFLAGS)
 AC_SUBST(NET_SNMP_LIBS)
 AC_SUBST(agentdir)

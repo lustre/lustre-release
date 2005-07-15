@@ -198,6 +198,7 @@ fi
 AC_DEFUN([LB_PATH_SNMP],
 [LB_CHECK_FILE([$srcdir/snmp/lustre-snmp.c],[SNMP_DIST_SUBDIR="snmp"])
 AC_SUBST(SNMP_DIST_SUBDIR)
+AC_SUBST(SNMP_SUBDIR)
 ])
 
 #
