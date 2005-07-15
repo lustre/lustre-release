@@ -317,6 +317,7 @@ struct client_obd {
         /* used by quotacheck */
         spinlock_t               cl_qchk_lock;
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
+        struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we

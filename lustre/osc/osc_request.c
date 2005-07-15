@@ -758,8 +758,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         int                      requested_nob;
         int                      opc;
         int                      rc;
+        struct ptlrpc_request_pool *pool;
 
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
+        pool = ((cmd & OBD_BRW_WRITE) != 0) ? cli->cl_rq_pool : NULL;
 
         for (niocount = i = 1; i < page_count; i++)
                 if (!can_merge_pages(&pga[i - 1], &pga[i]))
@@ -770,7 +772,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         size[2] = niocount * sizeof(*niobuf);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
-        req = ptlrpc_prep_req(imp, opc, 3, size, NULL);
+        req = ptlrpc_prep_req_pool(imp, opc, 3, size, NULL, pool);
         if (req == NULL)
                 return (-ENOMEM);
 
@@ -1584,6 +1586,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 RETURN(0);
 
         loi_list_maint(cli, loi);
+
         spin_unlock(&cli->cl_loi_list_lock);
 
         request = osc_build_req(cli, &rpc_list, page_count, cmd);
@@ -1645,6 +1648,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 cli->cl_r_in_flight++;
         else
                 cli->cl_w_in_flight++;
+
         /* queued sync pages can be torn down while the pages
          * were between the pending list and the rpc */
         list_for_each(pos, &aa->aa_oaps) {
@@ -2397,6 +2401,7 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
                             struct lov_stripe_md *lsm, obd_count page_count,
                             struct brw_page *pga)
 {
+        struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *request = NULL;
         struct ost_body *body;
         struct niobuf_remote *nioptr;
@@ -2408,8 +2413,8 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         size[1] = sizeof(struct obd_ioobj);
         size[2] = page_count * sizeof(*nioptr);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SAN_WRITE,
-                                  3, size, NULL);
+        request = ptlrpc_prep_req_pool(class_exp2cliimp(exp), OST_SAN_WRITE,
+                                       3, size, NULL, cli->cl_rq_pool);
         if (!request)
                 RETURN(-ENOMEM);
 
@@ -3186,6 +3191,7 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 ptlrpcd_decref();
         } else {
                 struct lprocfs_static_vars lvars;
+                struct client_obd *cli = &obd->u.cli;
 
                 lprocfs_init_vars(osc, &lvars);
                 if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
@@ -3194,6 +3200,14 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 }
 
                 oscc_init(obd);
+                /* We need to allocate a few requests more, because
+                   brw_interpret_oap tries to create new requests before freeing
+                   previous ones. Ideally we want to have 2x max_rpcs_in_flight
+                   reserved, but I afraid that might be too much wasted RAM
+                   in fact, so 2 is just my guess and still should work. */
+                cli->cl_rq_pool = ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
+                                                      OST_MAXREQSIZE,
+                                                      ptlrpc_add_rqs_to_pool);
         }
 
         RETURN(rc);
@@ -3230,6 +3244,8 @@ int osc_cleanup(struct obd_device *obd)
         
         /* free memory of osc quota cache */
         osc_qinfo_cleanup(cli);
+
+        ptlrpc_free_rq_pool(cli->cl_rq_pool);
 
         rc = client_obd_cleanup(obd);
         ptlrpcd_decref();

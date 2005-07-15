@@ -293,6 +293,13 @@ enum rq_phase {
         RQ_PHASE_COMPLETE    = 0xebc0de04,
 };
 
+struct ptlrpc_request_pool {
+        spinlock_t prp_lock;
+        struct list_head prp_req_list;    /* list of ptlrpc_request structs */
+        int prp_rq_size;
+        void (*prp_populate)(struct ptlrpc_request_pool *, int);
+};
+        
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -368,6 +375,8 @@ struct ptlrpc_request {
         void *rq_interpret_reply;               /* Async completion handler */
         union ptlrpc_async_args rq_async_args;  /* Async completion context */
         void *rq_ptlrpcd_data;
+        struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
+                                                   preallocated list */
 };
 
 static inline const char *
@@ -698,8 +707,16 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
 void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
                             struct ptlrpc_request *);
 
+void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
+void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
+struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
+                                                void (*populate_pool)(struct ptlrpc_request_pool *, int));
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs);
+struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
+                                            int count, int *lengths,
+                                            char **bufs,
+                                            struct ptlrpc_request_pool *pool);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);

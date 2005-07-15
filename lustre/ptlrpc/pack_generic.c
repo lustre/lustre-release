@@ -68,12 +68,27 @@ lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 int lustre_pack_request (struct ptlrpc_request *req,
                          int count, int *lens, char **bufs)
 {
+        int reqlen;
         ENTRY;
 
-        req->rq_reqlen = lustre_msg_size (count, lens);
-        OBD_ALLOC(req->rq_reqmsg, req->rq_reqlen);
-        if (req->rq_reqmsg == NULL)
-                RETURN(-ENOMEM);
+        reqlen = lustre_msg_size (count, lens);
+        /* See if we got it from prealloc pool */
+        if (req->rq_reqmsg) {
+                /* Cannot return error here, that would create
+                   infinite loop in ptlrpc_prep_req_pool */
+                /* In this case ptlrpc_prep_req_from_pool sets req->rq_reqlen
+                   to maximum size that would fit into this preallocated
+                   request */
+                LASSERTF(req->rq_reqlen >= reqlen, "req->rq_reqlen %d, "
+                                                   "reqlen %d\n",req->rq_reqlen,
+                                                    reqlen);
+                memset(req->rq_reqmsg, 0, reqlen);
+        } else {
+                OBD_ALLOC(req->rq_reqmsg, reqlen);
+                if (req->rq_reqmsg == NULL)
+                        RETURN(-ENOMEM);
+        }
+        req->rq_reqlen = reqlen;
 
         lustre_init_msg (req->rq_reqmsg, count, lens, bufs);
         RETURN (0);

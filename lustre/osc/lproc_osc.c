@@ -92,6 +92,10 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (val < 1 || val > OSC_MAX_RIF_MAX)
                 return -ERANGE;
 
+        if (cli->cl_rq_pool && val > cli->cl_max_rpcs_in_flight)
+                cli->cl_rq_pool->prp_populate(cli->cl_rq_pool,
+                                              val - cli->cl_max_rpcs_in_flight);
+
         spin_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
         spin_unlock(&cli->cl_loi_list_lock);
