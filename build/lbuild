@@ -522,7 +522,7 @@ build_lustre()
 
 stage()
 {
-    [ -z "$STAGEDIR" ] && return
+    [ "$STAGEDIR" ] || return
 
     for arch in $BUILD_ARCHS ; do
 	rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${arch}"
@@ -657,3 +657,4 @@ else
 fi
 
 stage
+exit 0
