@@ -62,8 +62,8 @@ check_start_stop() {
 	#    status online/offline/online pending/offline pending.
 
 	[ -d ${STATUS_DIR:=/var/lustre} ] || mkdir -p $STATUS_DIR
+	STATUS=${STATUS_DIR}/sysStatus
 }
-STATUS=${STATUS_DIR}/sysStatus
 
 start() {
 	check_start_stop
