@@ -233,12 +233,21 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 }
 
 /* Passed by mount */
+#define LMD_FLG_FLOCK  0x0001  /* Enable flock */
+#define LMD_FLG_MNTCNF 0x1000  /* MountConf compat */
+#define LMD_FLG_CLIENT 0x2000  /* Mounting a client only; no real device */
+
 struct lustre_mount_data {
         uint32_t lmd_magic;
-        uint32_t lmd_version;
-        uint64_t lmd_nid;
-        char     lmd_mds[64];
-        char     lmd_profile[64];
+        uint32_t lmd_flags;         /* mount flags */
+        uint64_t lmd_nid;           /* local nid */
+        char     lmd_mds[64];       /* FIXME to become lmd_mgmt, alt_mgmt */
+        char     lmd_profile[64];   /* FIXME to go away */
+        char     lmd_sv_source[128]; /* server source device */
+/* FIXME below must be determined in the kernel, not passed in from mount */
+        uint32_t lmd_sv_disk_type;  /* server disk type (MDT, OST, MGMT) */
+        char     lmd_sv_fstype[64];    /* server device fs type (ext3, ldiskfs) */
+        char     lmd_sv_fsopts[128];   /* server fs mount opts */
 };
 
 
