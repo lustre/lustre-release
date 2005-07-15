@@ -2281,6 +2281,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct mea *mea;
         void *handle = NULL;
         unsigned long cr_inum = 0;
+        __u64 fid = 0;
         ENTRY;
        
         DEBUG_REQ(D_HA, req, "create remote object");
@@ -2392,10 +2393,17 @@ repeat:
                 CERROR("%s: name exists. repeat\n", obd->obd_name);
                 goto repeat;
         }
-
+        if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
+             lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                fid = body->oa.o_fid;
+        } else { 
+                fid = mds_alloc_fid(obd);
+        }
         new->d_fsdata = (void *)&dp;
         dp.p_inum = 0;
         dp.p_ptr = req;
+        dp.p_fid = fid;
+        dp.p_group = mds->mds_num;
 
         if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) ||
             (body->oa.o_flags & OBD_FL_RECREATE_OBJS)) {
@@ -2471,7 +2479,7 @@ repeat:
                          * and this is not replay.
                          */
                         down(&new->d_inode->i_sem);
-                        rc = mds_alloc_inode_sid(obd, new->d_inode, handle, &id);
+                        rc = mds_set_inode_sid(obd, new->d_inode, handle, &id, fid);
                         up(&new->d_inode->i_sem);
                 }
                 if (rc) {
@@ -3258,12 +3266,11 @@ __u64 mds_alloc_fid(struct obd_device *obd)
 
         return fid;
 }
-
 /*
- * allocates new lustre_id on passed @inode and saves it to inode EA.
+ * update new lustre_id on passed @inode and saves it to inode EA.
  */
-int mds_alloc_inode_sid(struct obd_device *obd, struct inode *inode,
-                        void *handle, struct lustre_id *id)
+int mds_set_inode_sid(struct obd_device *obd, struct inode *inode,
+                      void *handle, struct lustre_id *id, __u64 fid)
 {
         struct mds_obd *mds = &obd->u.mds;
         int alloc = 0, rc = 0;
@@ -3278,9 +3285,8 @@ int mds_alloc_inode_sid(struct obd_device *obd, struct inode *inode,
                         RETURN(-ENOMEM);
                 alloc = 1;
         }
-
         id_group(id) = mds->mds_num;
-        id_fid(id) = mds_alloc_fid(obd);
+        id_fid(id) = fid;
         id_ino(id) = inode->i_ino;
         id_gen(id) = inode->i_generation;
         id_type(id) = (S_IFMT & inode->i_mode);
