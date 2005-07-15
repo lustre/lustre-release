@@ -207,8 +207,8 @@ lmc_options = [
 
     # lov
     ('lov', "Specify LOV name.", PARAM,""),
-    ('stripe_sz', "Specify the stripe size in bytes.", PARAM),
-    ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, 0),
+    ('stripe_sz', "Specify the stripe size in bytes.", PARAM, DEFAULT_STRIPE_SZ),
+    ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, DEFAULT_STRIPE_CNT),
     ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
 
     # cobd
