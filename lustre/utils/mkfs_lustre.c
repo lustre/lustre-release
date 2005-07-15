@@ -287,7 +287,7 @@ int write_local_files(struct lustre_disk_data *data)
                 return errno;
         }
 
-        if (data->flags & FSFLG_IS_LOOP)
+        if (data->flags & MO_IS_LOOP)
                 sprintf(cmd, "mount -o loop %s %s", data->device, mntpt);
         else
                 sprintf(cmd, "mount -t ext3 %s %s", data->device, mntpt);
@@ -891,7 +891,7 @@ int main(int argc , char *const argv[])
                 return ENOSYS;
 
         if ((data.fs_type == FS_SMFS) || !is_block(data.device)) {
-                data.flags |= FSFLG_IS_LOOP;
+                data.flags |= MO_IS_LOOP;
                 ret = setup_loop_device(&data);
                 if (ret) 
                         return ret;
@@ -916,7 +916,7 @@ int main(int argc , char *const argv[])
         }
 
 out:
-        if (data.flags & FSFLG_IS_LOOP) {
+        if (data.flags & MO_IS_LOOP) {
                 sprintf(cmd, "losetup -d %s", data.device);
                 ret = run_command(cmd, cmd_out);
         }

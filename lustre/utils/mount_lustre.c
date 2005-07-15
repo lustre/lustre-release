@@ -187,28 +187,26 @@ init_options(struct lustre_mount_data *lmd)
         //lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
         //lmd->lmd_nal = SOCKNAL;
         //ptl_parse_ipaddr(&lmd->lmd_ipaddr, lmd->lmd_hostname); 
-        //lmd->u.cli.lmd_async = 0;
         lmd->lmd_magic = LMD_MAGIC;
-        lmd->lmd_nid = PTL_NID_ANY;
+        lmd->lmd_flags = LMD_FLG_MNTCNF;
+        lmd->lmd_mgmt.primary = PTL_NID_ANY;
+        lmd->lmd_mgmt.backup  = PTL_NID_ANY;
         return 0;
 }
 
 int
 print_options(struct lustre_mount_data *lmd)
 {
-        printf("nid:             %s\n", libcfs_nid2str(lmd->lmd_nid));
-        
-        if (lmd_is_client(lmd)) {
+        printf("mgmt primary nid: %s\n", libcfs_nid2str(lmd->lmd_mgmt.primary);
+        printf("mgmt backup nid:  %s\n", libcfs_nid2str(lmd->lmd_mgmt.backup);
+        printf("device:           %s\n", lmd->lmd_dev);
+        printf("mount point:      %s\n", lmd->lmd_mtpt);
+        printf("options:          %s\n", lmd->lmd_opts);
+        printf("flags:            %x\n", lmd->lmd_flags);
+        if (lmd_is_client(lmd)) 
                 printf("CLIENT\n");
-                printf("mds:             %s\n", lmd->u.cli.lmd_mds);
-                printf("profile:         %s\n", lmd->u.cli.lmd_profile);
-        } else {
+        else 
                 printf("SERVER\n");
-                printf("service type:    %x\n", lmd->u.srv.disk_type);
-                printf("device:          %s\n", lmd->u.srv.lmd_source);
-                printf("fs type:         %s\n", lmd->u.srv.lmd_fstype);
-                printf("fs opts:         %s\n", lmd->u.srv.lmd_fsopts);
-        }
 
         return 0;
 }
@@ -294,6 +292,7 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
         return 0;
 }
 
+#if 0
 int read_mount_options(char *source, char *target, 
                        struct lustre_mount_data *lmd)
 {
@@ -349,6 +348,7 @@ out_umnt:
         system(cmd);
         return ret;
 }
+#endif
 
 int
 build_data(char *source, char *target, char *options, 
@@ -356,7 +356,7 @@ build_data(char *source, char *target, char *options,
 {
         char  buf[1024];
         char *nid = NULL;
-        char *mgmt = NULL;
+        char *devname = NULL;
         char *s;
         int   rc;
 
@@ -364,7 +364,7 @@ build_data(char *source, char *target, char *options,
                 return 4;
 
         if (strlen(source) >= sizeof(buf)) {
-                fprintf(stderr, "%s: nid:/fsname argument too long\n",
+                fprintf(stderr, "%s: device name too long\n",
                         progname);
                 return 1;
         }
@@ -374,41 +374,33 @@ build_data(char *source, char *target, char *options,
                 /* Client */
                 if (verbose)
                         printf("CLIENT\n");
-                lmd->lmd_type = 
+                lmd->lmd_flags |= LMD_FLG_CLIENT;
 
+                /* <mgmtnid>[,<alt mgmtnid>]:/fsname[/fsetname[/subdir/]]
+                   nid=mgmtnid, devname=fsname */
                 nid = buf;
                 *s = '\0';
-
-                while (*++s == '/')
-                        ;
-                mgmt = s;
+                while (*++s == '/') ;
+                devname = s;
 
                 rc = parse_options(options, lmd, flagp);
                 if (rc)
                         return rc;
 
-                lmd->lmd_nid = libcfs_str2nid(nid);
-                if (lmd->lmd_nid == PTL_NID_ANY) {
+                if (lmd->lmd_nid != PTL_NID_ANY)
+                        /* In case it was defined as -o mgmtnode= */
+                        lmd->lmd_mgmt.primary = libcfs_str2nid(nid);
+                if (lmd->lmd_mgmt.primary == PTL_NID_ANY) {
                         fprintf(stderr, "%s: can't parse nid '%s'\n",
-                                progname, libcfs_nid2str(lmd->lmd_nid));
+                                progname, nid);
                         return 1;
                 }
-
-                if (strlen(mgmt) + 4 > sizeof(lmd->lmd_mgmt)) {
-                        fprintf(stderr, "%s: mgmt name too long\n", progname);
-                        return(1);
-                }
-                strcpy(lmd->lmd_mds, mgmt);
         } else {
                 /* Server */
                 if (verbose)
                         printf("SERVER\n");
-                lmd->lmd_magic = LMD_SERVER_MAGIC;
 
-                if (strlen(source) + 1 > sizeof(lmd->u.srv.lmd_source)) {
-                        fprintf(stderr, "%s: source name too long\n", progname);
-                        return(1);
-                }
+                devname = source;
 
                 /* We have to keep the loop= option in the mtab file
                    in order for umount to free the loop device. The strtok
@@ -416,17 +408,25 @@ build_data(char *source, char *target, char *options,
                    comma, so we're saving a local copy here. */
                 strcpy(buf, options);
                 rc = parse_options(options, lmd, flagp); 
-                fprintf(stderr, "source = %s \n",lmd->u.srv.lmd_source);
-                print_options(lmd);
                 if (rc)
                         return rc;
                 strcpy(options, buf);
 
-                rc = read_mount_options(source, target, lmd);
-                if (rc)
-                        return rc;
+                // move into lustre: rc = read_mount_options(source, target, lmd);
         }
 
+        if (strlen(devname) + 1 > sizeof(lmd->lmd_dev)) {
+                fprintf(stderr, "%s: device name too long\n", progname);
+                return(1);
+        }
+        strcpy(lmd->lmd_dev, devname);
+
+        if (strlen(target) + 1 > sizeof(lmd->lmd_mtpt)) {
+                fprintf(stderr, "%s: mount point too long\n", progname);
+                return(1);
+        }
+        strcpy(lmd->lmd_mtpt, target);
+        
         if (verbose)
                 print_options(lmd);
         return 0;
@@ -519,11 +519,15 @@ int main(int argc, char *const argv[])
                 return 1;
         }
 
+        /* FIXME remove */
         if ((rc = load_modules(&lmd))) {
                 return rc;
         }
 
         if (!fake)
+                /* flags and target get to lustre_get_sb, but not 
+                   lustre_fill_super.  Lustre ignores the flags, but mount 
+                   does not. */
                 rc = mount(source, target, "lustre", flags, (void *)&lmd);
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
