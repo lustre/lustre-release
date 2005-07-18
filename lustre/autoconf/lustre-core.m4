@@ -65,7 +65,7 @@ LB_LINUX_CONFIG([EXT3_FS_XATTR],[$1],[$3])
 # If we have (and can build) fshooks.h
 #
 AC_DEFUN([LC_FSHOOKS],
-[AC_CHECK_FILE([$LINUX/include/linux/fshooks.h],[
+[LB_CHECK_FILE([$LINUX/include/linux/fshooks.h],[
 	AC_MSG_CHECKING([if fshooks.h can be compiled])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/fshooks.h>
@@ -447,6 +447,26 @@ AC_ARG_ENABLE([client],
 AC_MSG_RESULT([$enable_client])])
 
 #
+# LC_CONFIG_CLIENT_SERVER
+#
+# Build client/server sides of Lustre
+#
+AC_DEFUN([LC_CONFIG_CLIENT_SERVER],
+[AC_MSG_CHECKING([whether to build Lustre server support])
+AC_ARG_ENABLE([server],
+	AC_HELP_STRING([--disable-server],
+			[disable Lustre server support]),
+	[],[enable_server='yes'])
+AC_MSG_RESULT([$enable_server])
+
+AC_MSG_CHECKING([whether to build Lustre client support])
+AC_ARG_ENABLE([client],
+	AC_HELP_STRING([--disable-client],
+			[disable Lustre client support]),
+	[],[enable_client='yes'])
+AC_MSG_RESULT([$enable_client])])
+
+#
 # LC_CONFIG_LIBLUSTRE
 #
 # whether to build liblustre
@@ -456,10 +476,20 @@ AC_DEFUN([LC_CONFIG_LIBLUSTRE],
 AC_ARG_ENABLE([liblustre],
 	AC_HELP_STRING([--disable-liblustre],
 			[disable building of Lustre library]),
-	[],[enable_liblustre="no"])
+	[],[enable_liblustre=$with_sysio])
 AC_MSG_RESULT([$enable_liblustre])
 # only build sysio if liblustre is built
 with_sysio="$enable_liblustre"
+
+AC_MSG_CHECKING([whether to build liblustre tests])
+AC_ARG_ENABLE([liblustre-tests],
+	AC_HELP_STRING([--enable-liblustre-tests],
+			[enable liblustre tests, if --disable-tests is used]),
+	[],[enable_liblustre_tests=$enable_tests])
+if test x$enable_liblustre != xyes ; then
+   enable_liblustre_tests='no'
+fi
+AC_MSG_RESULT([$enable_liblustre_tests])
 
 AC_MSG_CHECKING([whether to build mpitests])
 AC_ARG_ENABLE([mpitests],
@@ -518,7 +548,6 @@ AC_DEFUN([LC_CONDITIONALS],
 AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
-AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
 AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
