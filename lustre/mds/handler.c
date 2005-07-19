@@ -606,6 +606,7 @@ static int mds_connect_post(struct obd_export *exp, unsigned initial,
                         CDEBUG(D_HA, "initial reconnect to existing export\n");
                 mcd->mcd_last_transno = 0;
                 mcd->mcd_last_xid = 0;
+                mcd->mcd_last_close_xid = 0;
                 mcd->mcd_last_result = 0;
                 mcd->mcd_last_data = 0;
         }
