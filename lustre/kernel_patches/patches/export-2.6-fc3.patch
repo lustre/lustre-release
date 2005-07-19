@@ -1,7 +1,7 @@
 Index: linux-2.6.10/mm/truncate.c
 ===================================================================
---- linux-2.6.10.orig/mm/truncate.c	2005-04-06 23:38:35.000000000 +0800
-+++ linux-2.6.10/mm/truncate.c	2005-04-07 14:55:03.019979256 +0800
+--- linux-2.6.10.orig/mm/truncate.c	2005-04-06 19:38:35.000000000 +0400
++++ linux-2.6.10/mm/truncate.c	2005-07-18 01:55:37.000000000 +0400
 @@ -42,7 +42,7 @@
   * its lock, b) when a concurrent invalidate_inode_pages got there first and
   * c) when tmpfs swizzles a page between a tmpfs inode and swapper_space.
@@ -20,10 +20,40 @@ Index: linux-2.6.10/mm/truncate.c
  /*
   * This is for invalidate_inode_pages().  That function can be called at
   * any time, and is not supposed to throw away dirty pages.  But pages can
+Index: linux-2.6.10/mm/swap.c
+===================================================================
+--- linux-2.6.10.orig/mm/swap.c	2004-12-25 00:34:31.000000000 +0300
++++ linux-2.6.10/mm/swap.c	2005-07-19 12:23:36.000000000 +0400
+@@ -259,6 +259,8 @@
+ 	pagevec_reinit(pvec);
+ }
+ 
++EXPORT_SYMBOL(__pagevec_release);
++
+ /*
+  * pagevec_release() for pages which are known to not be on the LRU
+  *
+@@ -380,6 +382,8 @@
+ 	return pagevec_count(pvec);
+ }
+ 
++EXPORT_SYMBOL(pagevec_lookup);
++
+ unsigned pagevec_lookup_tag(struct pagevec *pvec, struct address_space *mapping,
+ 		pgoff_t *index, int tag, unsigned nr_pages)
+ {
+@@ -388,6 +392,7 @@
+ 	return pagevec_count(pvec);
+ }
+ 
++EXPORT_SYMBOL(pagevec_lookup_tag);
+ 
+ #ifdef CONFIG_SMP
+ /*
 Index: linux-2.6.10/net/core/sock.c
 ===================================================================
---- linux-2.6.10.orig/net/core/sock.c	2004-12-25 05:35:23.000000000 +0800
-+++ linux-2.6.10/net/core/sock.c	2005-04-07 14:55:03.020979104 +0800
+--- linux-2.6.10.orig/net/core/sock.c	2004-12-25 00:35:23.000000000 +0300
++++ linux-2.6.10/net/core/sock.c	2005-07-18 01:55:37.000000000 +0400
 @@ -1359,6 +1359,7 @@
  EXPORT_SYMBOL(sk_alloc);
  EXPORT_SYMBOL(sk_free);
@@ -34,8 +64,8 @@ Index: linux-2.6.10/net/core/sock.c
  EXPORT_SYMBOL(sock_init_data);
 Index: linux-2.6.10/fs/dcache.c
 ===================================================================
---- linux-2.6.10.orig/fs/dcache.c	2005-04-07 00:35:35.000000000 +0800
-+++ linux-2.6.10/fs/dcache.c	2005-04-07 14:55:03.003981688 +0800
+--- linux-2.6.10.orig/fs/dcache.c	2005-07-18 01:55:36.000000000 +0400
++++ linux-2.6.10/fs/dcache.c	2005-07-18 01:55:37.000000000 +0400
 @@ -1737,6 +1737,7 @@
  
  EXPORT_SYMBOL(d_alloc);
@@ -46,8 +76,8 @@ Index: linux-2.6.10/fs/dcache.c
  EXPORT_SYMBOL(d_find_alias);
 Index: linux-2.6.10/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.10.orig/fs/jbd/journal.c	2004-12-25 05:34:01.000000000 +0800
-+++ linux-2.6.10/fs/jbd/journal.c	2005-04-07 14:55:03.006981232 +0800
+--- linux-2.6.10.orig/fs/jbd/journal.c	2004-12-25 00:34:01.000000000 +0300
++++ linux-2.6.10/fs/jbd/journal.c	2005-07-18 01:55:37.000000000 +0400
 @@ -71,6 +71,7 @@
  EXPORT_SYMBOL(journal_errno);
  EXPORT_SYMBOL(journal_ack_err);
@@ -58,8 +88,8 @@ Index: linux-2.6.10/fs/jbd/journal.c
  EXPORT_SYMBOL(journal_force_commit_nested);
 Index: linux-2.6.10/fs/namespace.c
 ===================================================================
---- linux-2.6.10.orig/fs/namespace.c	2005-04-07 00:35:35.000000000 +0800
-+++ linux-2.6.10/fs/namespace.c	2005-04-07 14:55:03.007981080 +0800
+--- linux-2.6.10.orig/fs/namespace.c	2005-07-18 01:55:37.000000000 +0400
++++ linux-2.6.10/fs/namespace.c	2005-07-18 01:55:37.000000000 +0400
 @@ -1233,6 +1233,7 @@
  		mntput(old_pwdmnt);
  	}
@@ -70,8 +100,8 @@ Index: linux-2.6.10/fs/namespace.c
  {
 Index: linux-2.6.10/fs/file_table.c
 ===================================================================
---- linux-2.6.10.orig/fs/file_table.c	2004-12-25 05:33:50.000000000 +0800
-+++ linux-2.6.10/fs/file_table.c	2005-04-07 14:55:03.004981536 +0800
+--- linux-2.6.10.orig/fs/file_table.c	2004-12-25 00:33:50.000000000 +0300
++++ linux-2.6.10/fs/file_table.c	2005-07-18 01:55:37.000000000 +0400
 @@ -196,6 +196,7 @@
  		file_free(file);
  	}
@@ -82,8 +112,8 @@ Index: linux-2.6.10/fs/file_table.c
  {
 Index: linux-2.6.10/kernel/sched.c
 ===================================================================
---- linux-2.6.10.orig/kernel/sched.c	2005-04-07 00:35:34.000000000 +0800
-+++ linux-2.6.10/kernel/sched.c	2005-04-07 14:55:03.018979408 +0800
+--- linux-2.6.10.orig/kernel/sched.c	2005-07-18 01:55:36.000000000 +0400
++++ linux-2.6.10/kernel/sched.c	2005-07-18 01:55:37.000000000 +0400
 @@ -2942,6 +2942,19 @@
  
  EXPORT_SYMBOL(sleep_on_timeout);
@@ -106,8 +136,8 @@ Index: linux-2.6.10/kernel/sched.c
  	unsigned long flags;
 Index: linux-2.6.10/kernel/exit.c
 ===================================================================
---- linux-2.6.10.orig/kernel/exit.c	2005-04-06 23:44:29.000000000 +0800
-+++ linux-2.6.10/kernel/exit.c	2005-04-07 14:55:03.014980016 +0800
+--- linux-2.6.10.orig/kernel/exit.c	2005-07-18 01:55:35.000000000 +0400
++++ linux-2.6.10/kernel/exit.c	2005-07-18 01:55:37.000000000 +0400
 @@ -246,6 +246,8 @@
  	switch_uid(INIT_USER);
  }
@@ -135,9 +165,9 @@ Index: linux-2.6.10/kernel/exit.c
  {
 Index: linux-2.6.10/include/linux/fs.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/fs.h	2005-04-07 14:54:24.454842048 +0800
-+++ linux-2.6.10/include/linux/fs.h	2005-04-07 14:55:03.010980624 +0800
-@@ -1183,6 +1183,7 @@
+--- linux-2.6.10.orig/include/linux/fs.h	2005-07-18 01:55:37.000000000 +0400
++++ linux-2.6.10/include/linux/fs.h	2005-07-18 01:55:37.000000000 +0400
+@@ -1184,6 +1184,7 @@
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount_tree(struct vfsmount *);
  extern int may_umount(struct vfsmount *);
@@ -147,8 +177,8 @@ Index: linux-2.6.10/include/linux/fs.h
  extern int vfs_statfs(struct super_block *, struct kstatfs *);
 Index: linux-2.6.10/include/linux/mm.h
 ===================================================================
---- linux-2.6.10.orig/include/linux/mm.h	2005-04-07 00:22:23.000000000 +0800
-+++ linux-2.6.10/include/linux/mm.h	2005-04-07 14:55:03.012980320 +0800
+--- linux-2.6.10.orig/include/linux/mm.h	2005-07-18 01:55:36.000000000 +0400
++++ linux-2.6.10/include/linux/mm.h	2005-07-18 01:55:37.000000000 +0400
 @@ -715,6 +715,9 @@
  extern unsigned long __do_brk(unsigned long, unsigned long);
  extern unsigned long do_brk(unsigned long, unsigned long);
