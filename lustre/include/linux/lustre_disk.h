@@ -51,7 +51,7 @@ struct lr_server_data {
         __u64 lsd_catalog_oid;     /* recovery catalog object id */
         __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 lsd_index;           /* stripe index */
+        __u32 lsd_index;           /* target index (stripe index for ost)*/
         __u8  lsd_padding[LR_SERVER_SIZE - 144];
 };
 
@@ -90,9 +90,9 @@ struct lustre_mount_data {
 
 #define LDD_MAGIC 0xbabb0001
 
-#define LDD_SV_TYPE_MDT 0x0001
-#define LDD_SV_TYPE_OST 0x0002
-#define LDD_SV_TYPE_MGT 0x0004
+#define LDD_SV_TYPE_MDT  0x0001
+#define LDD_SV_TYPE_OST  0x0002
+#define LDD_SV_TYPE_MGMT 0x0004
 
 #define LDD_FS_TYPE_EXT3     1
 #define LDD_FS_TYPE_LDISKFS  2
@@ -109,9 +109,9 @@ struct lustre_disk_data {
         char      ldd_mount_opts[128]; /* target fs mount opts */
 };
         
-#define IS_MDT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MDT)
-#define IS_OST(data)  ((data)->ldd_flags & LDD_SV_TYPE_OST)
-#define IS_MGT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MGT)
+#define IS_MDT(data)   ((data)->ldd_flags & LDD_SV_TYPE_MDT)
+#define IS_OST(data)   ((data)->ldd_flags & LDD_SV_TYPE_OST)
+#define IS_MGMT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MGMT)
 
 
 /****************** mkfs command *********************/
@@ -121,17 +121,18 @@ struct lustre_disk_data {
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
         struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
+        long  mo_device_sz;
         int   mo_flags; 
-        int   mo_device_sz;
-        int   mo_journal_sz;
-        int   mo_inode_sz;
         char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
         char  mo_device[128];           /* disk device name */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
+        ptl_nid_t mo_failover_nid;
         int   mo_stripe_sz;
         int   mo_stripe_count;
         int   mo_stripe_pattern;
-        /* stripe index will be in lr_server_data for ost's */
+        int   mo_index;                 /* stripe index for osts, pool index
+                                           for pooled mdts.  index will be put
+                                           in lr_server_data */
 };
 
 
