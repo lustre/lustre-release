@@ -361,7 +361,7 @@ failed:
         return NULL;
 }
 
-static int __ptlrpc_server_free_request(struct ptlrpc_request *req)
+static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
 {
         struct ptlrpc_request_buffer_desc *rqbd = req->rq_rqbd;
 
