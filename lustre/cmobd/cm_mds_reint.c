@@ -173,13 +173,6 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         data = (char *)lustre_msg_buf(msg, 2, 0);
         datalen = data ? msg->buflens[2] : 0;       
 
-        if (datalen == 0 && S_ISREG(rec->cr_mode)) {
-                /*Get lov md from inode*/
-                mds_read_md(cmobd->cache_exp->exp_obd, &rec->cr_replayid, 
-                            &data, &datalen);
-                if (datalen > 0)
-                       alloc = 1; 
-        } 
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL) 
                 GOTO(exit, rc = -ENOMEM);
