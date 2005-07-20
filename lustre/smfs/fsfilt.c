@@ -681,14 +681,19 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
         post_smfs_dentry(cache_dentry);
         RETURN(rc);
 }
-
 static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
                                  void *buffer, int buffer_size)
 {
         struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
+        struct hook_setxattr_msg msg = {
+                .inode = inode,
+                .name = name,
+                .buffer = buffer,
+                .buffer_size = buffer_size
+        };
         int     rc = -EIO;
-
+        
         ENTRY;
         
         if (!cache_fsfilt)
@@ -697,12 +702,15 @@ static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
         cache_inode = I2CI(inode);
         if (!cache_inode)
                 RETURN(rc);
-
+        
         pre_smfs_inode(inode, cache_inode);
 
+        SMFS_PRE_HOOK(inode, HOOK_F_SETXATTR, &msg);
         if (cache_fsfilt->fs_set_xattr)
                 rc = cache_fsfilt->fs_set_xattr(cache_inode, handle, name,
                                                 buffer, buffer_size);
+         
+        SMFS_POST_HOOK(inode, HOOK_F_SETXATTR, &msg, rc);
         post_smfs_inode(inode, cache_inode);
 
         RETURN(rc);

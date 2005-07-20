@@ -3600,6 +3600,26 @@ err_ops:
         return rc;
 }
 
+static int mds_fs_post_setup(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct dentry *dentry;
+        int rc = 0;
+        ENTRY;
+       
+        dentry = mds_id2dentry(obd, &mds->mds_rootid, NULL);
+        if (IS_ERR(dentry)) {
+                CERROR("Can't find ROOT, err = %d\n",
+                       (int)PTR_ERR(dentry));
+                RETURN(PTR_ERR(dentry));
+        }
+        
+        rc = fsfilt_post_setup(obd, dentry);
+
+        l_dput(dentry);
+        RETURN(rc); 
+}
+
 static int mds_postsetup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -3646,7 +3666,9 @@ static int mds_postsetup(struct obd_device *obd)
                 if (rc)
                         GOTO(err_cleanup, rc);
         }
-
+        rc = mds_fs_post_setup(obd);
+        if (rc)
+                CERROR("can not post setup fsfilt\n");        
         RETURN(rc);
 err_cleanup:
         mds_dt_clean(obd);

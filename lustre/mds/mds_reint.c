@@ -394,7 +394,25 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
         l_dput(de);
 }
+/*This is a tmp fix for cmobd setattr reint*/
 
+#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
+#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
+#define XATTR_LUSTRE_MDS_MID_EA         "mid"
+#define XATTR_LUSTRE_MDS_SID_EA         "sid"
+
+static int mds_get_md_type(char *name)
+{
+        if (!strcmp(name, XATTR_LUSTRE_MDS_LOV_EA)) 
+                RETURN(EA_LOV);
+        if (!strcmp(name, XATTR_LUSTRE_MDS_MEA_EA))
+                RETURN(EA_MEA);
+        if (!strcmp(name, XATTR_LUSTRE_MDS_MID_EA))
+                RETURN(EA_MID);
+        if (!strcmp(name, XATTR_LUSTRE_MDS_SID_EA))
+                RETURN(EA_SID);
+        RETURN(0);
+}
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open, the client holds a lock
  * already.
@@ -501,6 +519,21 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         rc = -EOPNOTSUPP;
                         if (inode->i_op && inode->i_op->removexattr) 
                                 rc = inode->i_op->removexattr(de, rec->ur_eadata);
+                } else if (rec->ur_iattr.ia_valid & ATTR_EA_CMOBD) {
+                        char *name;
+                        int type;
+                        /*tmp fix for cmobd set md reint*/
+                        LASSERT(rec->ur_eadata != NULL);
+                        LASSERT(rec->ur_ea2data != NULL);
+                        name = rec->ur_eadata;
+                        CDEBUG(D_INFO, "set %s EA for cmobd \n", name);
+                        type = mds_get_md_type(name);
+                        if (type != 0) 
+                                rc = fsfilt_set_md(obd, inode, handle, 
+                                                   rec->ur_ea2data,
+                                                   rec->ur_ea2datalen, type);
+                        if (rc)
+                                GOTO(cleanup, rc);               
                 } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
                         struct lov_stripe_md *lsm = NULL;
                         struct lov_user_md *lum = NULL;
@@ -798,7 +831,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
-                
+#if 0                
                 if (rc == 0 && rec->ur_eadata) {
                         /*for CMOBD to set lov md info when cmobd reint create*/
                         CDEBUG(D_INFO, "set lsm %p, len %d to inode %lu \n", 
@@ -807,6 +840,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         fsfilt_set_md(obd, dchild->d_inode, handle, rec->ur_eadata,
                                       rec->ur_eadatalen, EA_LOV);  
                 }
+#endif
                 EXIT;
                 break;
         }

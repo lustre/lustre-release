@@ -99,6 +99,13 @@ struct hook_setattr_msg {
         struct iattr *attr;
 };
 
+struct hook_setxattr_msg {
+        struct inode * inode;
+        char *name;
+        char *buffer;
+	int  buffer_size;
+};
+
 void smfs_pre_hook (struct inode*, int, void*);
 void smfs_post_hook(struct inode*,int, void*, int);
 

@@ -594,6 +594,47 @@ exit:
                 OBD_FREE(buffer, PAGE_SIZE);        
         RETURN(rc);
 }
+
+static int kml_setxattr(struct inode *inode, void *arg, struct kml_priv *priv) 
+{
+        struct hook_setxattr_msg *msg = arg;
+        struct kml_buffer kbuf;
+        int rc = 0, length = 0;
+        char *buffer = NULL;
+        ENTRY;
+
+        OBD_ALLOC(buffer, PAGE_SIZE);
+        if (!buffer)
+                GOTO(exit, rc = -ENOMEM);        
+
+        kbuf.buf = msg->buffer;
+        kbuf.buf_size = msg->buffer_size;
+
+        rc = priv->pack_fn(REINT_SETXATTR, buffer, NULL, msg->inode, msg->name, 
+                           &kbuf);
+        if (rc <= 0) 
+                GOTO(exit, rc);
+        
+        length += rc;
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+        /*
+        if (!rc) {
+                if (attr && attr->ia_valid & ATTR_SIZE) {
+                        smfs_remove_extents_ea(inode, attr->ia_size,
+                                               0xffffffff);                                
+                        if (attr->ia_size == 0)
+                                smfs_set_dirty_flags(inode, SMFS_OVER_WRITE);
+                        else
+                                smfs_set_dirty_flags(inode, SMFS_DIRTY_WRITE);
+                }
+        }
+        */
+exit:
+        if (buffer)
+                OBD_FREE(buffer, PAGE_SIZE);        
+        RETURN(rc);
+}
+
 /*
 static int kml_write(struct inode * inode, void *arg, struct kml_priv * priv) 
 {
@@ -676,6 +717,7 @@ static post_kml_op smfs_kml_post[HOOK_MAX] = {
         [HOOK_SETATTR] kml_setattr,
         [HOOK_WRITE]   NULL,
         [HOOK_READDIR] NULL,
+        [HOOK_F_SETXATTR] kml_setxattr,
 };
 
 static int smfs_kml_post_op(int code, struct inode * inode,

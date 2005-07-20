@@ -75,6 +75,50 @@ static int mds_rec_link_pack(char *buffer, struct dentry *dentry,
         return rc;
 }
 
+static int mds_rec_setxattr_pack(char *buffer, struct dentry *dentry,
+                                struct inode *dir, void *data1, void *data2)
+{
+        struct mds_rec_setattr *rec = NULL;
+        struct mds_kml_pack_info *mkpi;
+        struct lustre_msg *msg = NULL;
+        char *name = (char *)data1;
+        struct kml_buffer *kbuf = (struct kml_buffer*)data2;
+        struct mdc_op_data *op_data;
+        int rc = 0;
+        void *tmp = NULL;
+        ENTRY;
+
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                return -ENOMEM;
+        mdc_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
+
+        PACK_KML_REC_INIT(buffer, MDS_REINT);
+        mkpi = (struct mds_kml_pack_info*)buffer;
+
+        mkpi->mpi_bufcount = 3;
+        mkpi->mpi_size[0] = sizeof(struct mds_rec_setattr);
+        mkpi->mpi_size[1] = strlen(name);
+        mkpi->mpi_size[2] = kbuf->buf_size;       
+ 
+        msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
+        lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
+
+        LASSERT(kbuf && name);
+
+        tmp = mdc_setattr_pack(msg, 0, op_data, NULL, name, strlen(name), 
+                               kbuf->buf, kbuf->buf_size);
+        OBD_FREE(op_data, sizeof(*op_data));
+
+        rec = (struct mds_rec_setattr *)lustre_msg_buf(msg, 0, 0);
+        
+        rec->sa_valid = ATTR_EA_CMOBD;
+        
+        mkpi->mpi_total_size = tmp - (void *)msg;
+        rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
+
+        RETURN(rc);
+}
 /* FIXME-WANGDI: did not think about EA situation. */
 static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
                                 struct inode *dir, void *data1, void *data2)
@@ -271,6 +315,7 @@ static mds_pack_rec_func mds_kml_pack[REINT_MAX + 1] = {
         [REINT_CREATE]  mds_rec_create_pack,
         [REINT_UNLINK]  mds_rec_unlink_pack,
         [REINT_RENAME]  mds_rec_rename_pack,
+        [REINT_SETXATTR] mds_rec_setxattr_pack,
 };
 
 int mds_rec_pack(int op, char *buffer, struct dentry *dentry, 

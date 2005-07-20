@@ -570,10 +570,11 @@ typedef enum {
 #define REINT_LINK         3
 #define REINT_UNLINK       4
 #define REINT_RENAME       5
-#define REINT_OPEN         6
-#define REINT_CLOSE        7
-#define REINT_WRITE        8
-#define REINT_MAX          8
+#define REINT_SETXATTR     6 
+#define REINT_OPEN         7 
+#define REINT_CLOSE        8 
+#define REINT_WRITE        9 
+#define REINT_MAX          9 
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD     (1 << 0)
@@ -731,7 +732,7 @@ struct mds_rec_setattr {
 #define ATTR_CTIME_SET  0x00002000
 #define ATTR_EA         0x00040000
 #define ATTR_EA_RM      0x00080000
-
+#define ATTR_EA_CMOBD   0x00100000
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 #ifndef FMODE_READ

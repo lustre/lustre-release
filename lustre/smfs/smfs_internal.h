@@ -235,6 +235,10 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
         RETURN(rc);
 }
 
+struct kml_buffer {
+        char *buf;
+        int   buf_size;
+}; 
 #if CONFIG_SNAPFS
 int smfs_cow_init(struct super_block *sb);
 int smfs_cow_cleanup(struct smfs_super_info *smb);
