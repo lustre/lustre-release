@@ -447,26 +447,6 @@ AC_ARG_ENABLE([client],
 AC_MSG_RESULT([$enable_client])])
 
 #
-# LC_CONFIG_CLIENT_SERVER
-#
-# Build client/server sides of Lustre
-#
-AC_DEFUN([LC_CONFIG_CLIENT_SERVER],
-[AC_MSG_CHECKING([whether to build Lustre server support])
-AC_ARG_ENABLE([server],
-	AC_HELP_STRING([--disable-server],
-			[disable Lustre server support]),
-	[],[enable_server='yes'])
-AC_MSG_RESULT([$enable_server])
-
-AC_MSG_CHECKING([whether to build Lustre client support])
-AC_ARG_ENABLE([client],
-	AC_HELP_STRING([--disable-client],
-			[disable Lustre client support]),
-	[],[enable_client='yes'])
-AC_MSG_RESULT([$enable_client])])
-
-#
 # LC_CONFIG_LIBLUSTRE
 #
 # whether to build liblustre
