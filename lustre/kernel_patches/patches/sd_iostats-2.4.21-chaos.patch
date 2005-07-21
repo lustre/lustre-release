@@ -74,7 +74,7 @@ diff -u -p -r1.1.1.1 sd.c
 +static inline void sd_iostats_init(void) {}
 +static inline void sd_iostats_init_disk(int disk) {}
 +static inline void sd_iostats_fini(void) {}
-+static inline void sd_iostats_bump(kdev_t dev, unsigned int nsect, int iswrite) {}
++static inline void sd_iostats_bump(int dev, unsigned int nsect, int iswrite) {}
 +#endif
 +
  /* device number --> sd_gendisks index */
