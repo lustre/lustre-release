@@ -2946,8 +2946,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 struct client_obd *cli = &exp->exp_obd->u.cli;
 
                 if (cli->cl_import)
-                        ptlrpcs_import_flush_creds(cli->cl_import,
-                                                   *((uid_t *) val));
+                        ptlrpcs_import_flush_current_creds(cli->cl_import);
                 RETURN(0);
         }
 

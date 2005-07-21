@@ -282,6 +282,7 @@ struct ptlrpc_sec_type {
 
 #define PTLRPC_SEC_FL_MDS               0x0001 /* outgoing from MDS */
 #define PTLRPC_SEC_FL_REVERSE           0x0002 /* reverse sec */
+#define PTLRPC_SEC_FL_PAG               0x0004 /* enable PAG */
 
 #define PTLRPC_CREDCACHE_NR     8
 #define PTLRPC_CREDCACHE_MASK   (PTLRPC_CREDCACHE_NR - 1)
@@ -436,7 +437,7 @@ void ptlrpcs_cli_free_repbuf(struct ptlrpc_request *req);
 /* higher interface */
 int  ptlrpcs_import_get_sec(struct obd_import *imp);
 void ptlrpcs_import_drop_sec(struct obd_import *imp);
-void ptlrpcs_import_flush_creds(struct obd_import *imp, uid_t uid);
+void ptlrpcs_import_flush_current_creds(struct obd_import *imp);
 int  ptlrpcs_req_get_cred(struct ptlrpc_request *req);
 void ptlrpcs_req_drop_cred(struct ptlrpc_request *req);
 int  ptlrpcs_req_replace_dead_cred(struct ptlrpc_request *req);

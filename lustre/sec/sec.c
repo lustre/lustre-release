@@ -280,7 +280,7 @@ void ptlrpcs_credcache_gc(struct ptlrpc_sec *sec,
  * @force: flush all entries, otherwise only free ones be flushed.
  */
 static
-int flush_credcache(struct ptlrpc_sec *sec, uid_t uid,
+int flush_credcache(struct ptlrpc_sec *sec, unsigned long pag, uid_t uid,
                     int grace, int force)
 {
         struct ptlrpc_cred *cred, *n;
@@ -296,8 +296,14 @@ int flush_credcache(struct ptlrpc_sec *sec, uid_t uid,
                                          pc_hash) {
                         LASSERT(atomic_read(&cred->pc_refcount) >= 0);
 
-                        if (uid != -1 && uid != cred->pc_uid)
-                                continue;
+                        if (sec->ps_flags & PTLRPC_SEC_FL_PAG) {
+                                if (pag != -1 && pag != cred->pc_pag)
+                                        continue;
+                        } else {
+                                if (uid != -1 && uid != cred->pc_uid)
+                                        continue;
+                        }
+
                         if (atomic_read(&cred->pc_refcount)) {
                                 busy = 1;
                                 if (!force)
@@ -412,14 +418,15 @@ static struct ptlrpc_cred *get_cred(struct ptlrpc_sec *sec)
         struct vfs_cred vcred;
 
         LASSERT(sec);
-        /* XXX
-         * for now we simply let PAG == real uid
-         */
+
         if (sec->ps_flags & (PTLRPC_SEC_FL_MDS | PTLRPC_SEC_FL_REVERSE)) {
                 vcred.vc_pag = 0;
                 vcred.vc_uid = 0;
         } else {
-                vcred.vc_pag = (__u64) current->uid;
+                if (sec->ps_flags & PTLRPC_SEC_FL_PAG)
+                        vcred.vc_pag = (__u64) current->pag;
+                else
+                        vcred.vc_pag = (__u64) current->uid;
                 vcred.vc_uid = current->uid;
         }
 
@@ -826,7 +833,7 @@ void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
         int ncred;
 
         if (atomic_dec_and_test(&sec->ps_refcount)) {
-                flush_credcache(sec, -1, 1, 1);
+                flush_credcache(sec, -1, -1, 1, 1);
 
                 /* this spinlock is protect against ptlrpcs_cred_destroy() */
                 spin_lock(&sec->ps_lock);
@@ -846,7 +853,7 @@ void ptlrpcs_sec_put(struct ptlrpc_sec *sec)
 
 void ptlrpcs_sec_invalidate_cache(struct ptlrpc_sec *sec)
 {
-        flush_credcache(sec, -1, 0, 1);
+        flush_credcache(sec, -1, -1, 0, 1);
 }
 
 int sec_alloc_reqbuf(struct ptlrpc_sec *sec,
@@ -1075,13 +1082,13 @@ void ptlrpcs_import_drop_sec(struct obd_import *imp)
         EXIT;
 }
 
-void ptlrpcs_import_flush_creds(struct obd_import *imp, uid_t uid)
+void ptlrpcs_import_flush_current_creds(struct obd_import *imp)
 {
         LASSERT(imp);
 
         class_import_get(imp);
         if (imp->imp_sec)
-                flush_credcache(imp->imp_sec, uid, 1, 1);
+                flush_credcache(imp->imp_sec, current->pag, current->uid, 1, 1);
         class_import_put(imp);
 }
 
@@ -1119,7 +1126,7 @@ EXPORT_SYMBOL(ptlrpcs_sec_put);
 EXPORT_SYMBOL(ptlrpcs_sec_invalidate_cache);
 EXPORT_SYMBOL(ptlrpcs_import_get_sec);
 EXPORT_SYMBOL(ptlrpcs_import_drop_sec);
-EXPORT_SYMBOL(ptlrpcs_import_flush_creds);
+EXPORT_SYMBOL(ptlrpcs_import_flush_current_creds);
 EXPORT_SYMBOL(ptlrpcs_cred_lookup);
 EXPORT_SYMBOL(ptlrpcs_cred_put);
 EXPORT_SYMBOL(ptlrpcs_req_get_cred);

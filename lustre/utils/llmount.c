@@ -124,6 +124,7 @@ init_options(struct lustre_mount_data *lmd)
         lmd->lmd_remote_flag = 0;
         lmd->lmd_nllu = NOBODY_UID;
         lmd->lmd_nllg = NOBODY_GID;
+        lmd->lmd_pag = 0;
         strncpy(lmd->lmd_mds_security, "null", sizeof(lmd->lmd_mds_security));
         strncpy(lmd->lmd_oss_security, "null", sizeof(lmd->lmd_oss_security));
         return 0;
@@ -357,6 +358,8 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                                 lmd->lmd_remote_flag = OBD_CONNECT_LOCAL;
                         } else if (!strcmp(opt, "async")) {
                                 lmd->lmd_async = 1;
+                        } else if (!strcmp(opt, "pag")) {
+                                lmd->lmd_pag = 1;
                         } else {
                                 val = 1;
                                 if (!strncmp(opt, "no", 2)) {

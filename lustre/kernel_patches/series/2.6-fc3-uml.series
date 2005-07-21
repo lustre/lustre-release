@@ -25,3 +25,4 @@ jbd-2.6.10-jcberr.patch
 hostfs_readdir_large.patch
 vfs-intent_release_umount-vanilla-2.6.10-fc3.patch
 vfs-umount_lustre-vanilla-2.6.10-fc3.patch
+pag-basic-2.6.10-fc3.patch

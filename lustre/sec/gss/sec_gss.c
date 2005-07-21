@@ -397,6 +397,7 @@ struct gss_sec {
 static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
 
 struct gss_upcall_msg_data {
+        __u64                           gum_pag;
         __u32                           gum_uid;
         __u32                           gum_svc;
         __u32                           gum_nal;
@@ -662,6 +663,8 @@ int gss_parse_init_downcall(struct gss_api_mech *gm, rawobj_t *buf,
         spin_lock_init(&ctx->gc_seq_lock);
         atomic_set(&ctx->gc_refcount,1);
 
+        if (simple_get_bytes(&p, &len, &gmd->gum_pag, sizeof(gmd->gum_pag)))
+                goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_uid, sizeof(gmd->gum_uid)))
                 goto err_free_ctx;
         if (simple_get_bytes(&p, &len, &gmd->gum_svc, sizeof(gmd->gum_svc)))
@@ -739,7 +742,6 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         struct dentry              *dentry;
         char                       *obdname, *obdtype;
         wait_queue_t                wait;
-        uid_t                       uid = cred->pc_uid;
         int                         res;
         ENTRY;
 
@@ -759,7 +761,8 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
                 RETURN(-EINVAL);
         }
 
-        gmd.gum_uid = uid;
+        gmd.gum_pag = cred->pc_pag;
+        gmd.gum_uid = cred->pc_uid;
         gmd.gum_nal = import->imp_connection->c_peer.peer_ni->pni_number;
         gmd.gum_netid = 0;
         gmd.gum_nid = import->imp_connection->c_peer.peer_id.nid;
@@ -782,7 +785,7 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
 
         CDEBUG(D_SEC, "Initiate gss context %p(%u@%s)\n",
                container_of(cred, struct gss_cred, gc_base),
-               uid, import->imp_target_uuid.uuid);
+               cred->pc_uid, import->imp_target_uuid.uuid);
 
 again:
         spin_lock(&gsec->gs_lock);
@@ -1552,8 +1555,8 @@ gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
         if (err)
                 CERROR("parse init downcall err %d\n", err);
 
+        vcred.vc_pag = gmd.gum_pag;
         vcred.vc_uid = gmd.gum_uid;
-        vcred.vc_pag = vcred.vc_uid; /* FIXME */
 
         cred = ptlrpcs_cred_lookup(sec, &vcred);
         if (!cred) {

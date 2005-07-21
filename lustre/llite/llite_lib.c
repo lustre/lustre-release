@@ -34,6 +34,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_acl.h>
+#include <linux/lustre_sec.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;
@@ -131,7 +132,7 @@ extern struct dentry_operations ll_d_ops;
 
 int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                              int async,  char *mds_security,  char *oss_security,
-                             __u32 *nllu, __u64 *remote)
+                             __u32 *nllu, int pag, __u64 *remote)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *request = NULL;
@@ -142,6 +143,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         struct obd_device *obd;
         struct obd_statfs osfs;
         struct lustre_md md;
+        unsigned long sec_flags;
         __u32 valsize;
         int err;
         ENTRY;
@@ -178,6 +180,17 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                         lmv, mds_security, err);
                 OBD_FREE(data, sizeof(*data));
                 RETURN(err);
+        }
+
+        if (pag) {
+                sec_flags = PTLRPC_SEC_FL_PAG;
+                err = obd_set_info(obd->obd_self_export,
+                                   strlen("sec_flags"), "sec_flags",
+                                   sizeof(sec_flags), &sec_flags);
+                if (err) {
+                        OBD_FREE(data, sizeof(*data));
+                        RETURN(err);
+                }
         }
 
         if (proc_lustre_fs_root) {
@@ -254,6 +267,17 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
                         lov, oss_security, err);
                 OBD_FREE(data, sizeof(*data));
                 RETURN(err);
+        }
+
+        if (pag) {
+                sec_flags = PTLRPC_SEC_FL_PAG;
+                err = obd_set_info(obd->obd_self_export,
+                                   strlen("sec_flags"), "sec_flags",
+                                   sizeof(sec_flags), &sec_flags);
+                if (err) {
+                        OBD_FREE(data, sizeof(*data));
+                        RETURN(err);
+                }
         }
 
         err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data, 0);
@@ -521,7 +545,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
         
         err = lustre_common_fill_super(sb, lmv, lov, async, mds_sec, oss_sec,
-                                       nllu, &remote_flag);
+                                       nllu, 0, &remote_flag);
         EXIT;
 out:
         if (err)
@@ -626,6 +650,15 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                           strlen(lmd->lmd_mds_security), lmd->lmd_mds_security);
         if (rc)
                 GOTO(out_cleanup, rc);
+
+        if (lmd->lmd_pag) {
+                unsigned long sec_flags = PTLRPC_SEC_FL_PAG;
+                rc = obd_set_info(obd->obd_self_export,
+                                  strlen("sec_flags"), "sec_flags",
+                                  sizeof(sec_flags), &sec_flags);
+                if (rc)
+                        GOTO(out_cleanup, rc);
+        }
 
         /* Disable initial recovery on this import */
         rc = obd_set_info(obd->obd_self_export,
@@ -812,7 +845,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         err = lustre_common_fill_super(sb, lmv, lov, lmd->lmd_async,
                                        lmd->lmd_mds_security,
                                        lmd->lmd_oss_security,
-                                       &lmd->lmd_nllu, &lmd->lmd_remote_flag);
+                                       &lmd->lmd_nllu, lmd->lmd_pag,
+                                       &lmd->lmd_remote_flag);
 
         if (err)
                 GOTO(out_free, err);
@@ -2226,9 +2260,11 @@ int ll_show_options(struct seq_file *m, struct vfsmount *mnt)
                            lmd->lmd_mds_security, lmd->lmd_oss_security);
         }
         seq_printf(m, ",%s", sbi->ll_remote ? "remote" : "local");
-        if (sbi->ll_remote && lmd) {
+        if (sbi->ll_remote && lmd)
                 seq_printf(m, ",nllu=%u:%u", lmd->lmd_nllu, lmd->lmd_nllg);
-        }
+
+        if (lmd && lmd->lmd_pag)
+                seq_printf(m, ",pag");
 
         return 0;
 }
@@ -2261,8 +2297,7 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 int ll_flush_cred(struct inode *inode)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        uid_t   uid = current->fsuid;
-        int     rc = 0;
+        int rc = 0;
 
         /* XXX to avoid adding api, we simply use set_info() interface
          * to notify underlying obds. set_info() is more like a ioctl() now...
@@ -2270,7 +2305,7 @@ int ll_flush_cred(struct inode *inode)
         if (sbi->ll_md_exp) {
                 rc = obd_set_info(sbi->ll_md_exp,
                                   strlen("flush_cred"), "flush_cred",
-                                  sizeof(uid), &uid);
+                                  0, NULL);
                 if (rc)
                         return rc;
         }
@@ -2278,7 +2313,7 @@ int ll_flush_cred(struct inode *inode)
         if (sbi->ll_dt_exp) {
                 rc = obd_set_info(sbi->ll_dt_exp,
                                   strlen("flush_cred"), "flush_cred",
-                                  sizeof(uid), &uid);
+                                  0, NULL);
                 if (rc)
                         return rc;
         }

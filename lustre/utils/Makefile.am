@@ -15,7 +15,7 @@ bin_scripts = lfind lstripe
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount lsd_upcall
-bin_PROGRAMS = lfs
+bin_PROGRAMS = lfs lkinit
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
@@ -38,6 +38,7 @@ lload_SOURCES = lload.c
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c parser.c obd.c
+lkinit_SOURCES = lkinit.c
 
 llmount_SOURCES = llmount.c 
 llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL)

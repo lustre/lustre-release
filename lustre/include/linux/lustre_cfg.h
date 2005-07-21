@@ -245,6 +245,8 @@ struct lustre_mount_data {
         uint64_t lmd_remote_flag;
         uint32_t lmd_nllu;
         uint32_t lmd_nllg;
+        uint32_t lmd_pag;
+        uint32_t lmd_padding;
         char     lmd_mds_security[16];
         char     lmd_oss_security[16];
         char     lmd_mds[64];
