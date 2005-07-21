@@ -6,7 +6,7 @@ Summary: Lustre File System
 Name: lustre
 Version: %{version}
 Release: @RELEASE@
-Copyright: GPL
+License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
