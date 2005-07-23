@@ -607,20 +607,11 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
         return res;
 }
 
-int __ldlm_resource_putref_final(struct ldlm_resource *res, int locked)
+void __ldlm_resource_putref_final(struct ldlm_resource *res)
 {
         struct ldlm_namespace *ns = res->lr_namespace;
-        ENTRY;
 
-        if (!locked)
-                spin_lock(&ns->ns_hash_lock);
-
-        if (atomic_read(&res->lr_refcount) != 0) {
-                /* We lost the race. */
-                if (!locked)
-                        spin_unlock(&ns->ns_hash_lock);
-                RETURN(0);
-        }
+        LASSERT_SPIN_LOCKED(&ns->ns_hash_lock);
 
         if (!list_empty(&res->lr_granted)) {
                 ldlm_resource_dump(D_ERROR, res);
@@ -649,21 +640,12 @@ int __ldlm_resource_putref_final(struct ldlm_resource *res, int locked)
         ns->ns_resources--;
         if (ns->ns_resources == 0)
                 wake_up(&ns->ns_waitq);
-
-        if (!locked)
-                spin_unlock(&ns->ns_hash_lock);
-
-        /* we just unhashed the resource, nobody should find it */
-        LASSERT(atomic_read(&res->lr_refcount) == 0);
-        if (res->lr_lvb_data)
-                OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
-        OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
-        RETURN(1);
 }
 
 /* Returns 1 if the resource was freed, 0 if it remains. */
 int ldlm_resource_putref(struct ldlm_resource *res)
 {
+        struct ldlm_namespace *ns = res->lr_namespace;
         int rc = 0;
         ENTRY;
 
@@ -673,8 +655,14 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
 
         LASSERT(atomic_read(&res->lr_refcount) >= 0);
-        if (atomic_dec_and_test(&res->lr_refcount))
-                rc = __ldlm_resource_putref_final(res, 0);
+        if (atomic_dec_and_lock(&res->lr_refcount, &ns->ns_hash_lock)) {
+                __ldlm_resource_putref_final(res);
+                spin_unlock(&ns->ns_hash_lock);
+                if (res->lr_lvb_data)
+                        OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+                rc = 1;
+        }
 
         RETURN(rc);
 }
@@ -691,8 +679,13 @@ int ldlm_resource_putref_locked(struct ldlm_resource *res)
         LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
 
         LASSERT(atomic_read(&res->lr_refcount) >= 0);
-        if (atomic_dec_and_test(&res->lr_refcount))
-                rc = __ldlm_resource_putref_final(res, 1);
+        if (atomic_dec_and_test(&res->lr_refcount)) {
+                __ldlm_resource_putref_final(res);
+                if (res->lr_lvb_data)
+                        OBD_FREE(res->lr_lvb_data, res->lr_lvb_len);
+                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+                rc = 1;
+        }
 
         RETURN(rc);
 }
