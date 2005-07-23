@@ -38,9 +38,8 @@
 
 #include <linux/types.h>
 #include <linux/lustre_disk.h>
-
-#include "obdctl.h"
 #include <portals/ptlctl.h>
+#include "obdctl.h"
 
 /* So obd.o will link */
 #include "parser.h"
@@ -83,8 +82,9 @@ void usage(FILE *out)
                 "\t\t--stripe_count=#N:number of stripe\n"
                 "\t\t--stripe_size=#N(KB):stripe size\n"
                 "\t\t--index=#N:target index\n"
-                "\t\t--smfsopts <smfs options>\n"
-                "\t\t--ext3opts <ext3 options>\n"
+                "\t\t--mountopts=<opts>: permanent mount options\n"
+                "\t\t--smfsopts=<opts>: smfs format options\n"
+                "\t\t--ext3opts=<opts>: ext3 format options\n"
                 "\t\t--timeout=<secs>: system timeout period\n"
                 "\t\t--maxwait=<secs>: time to wait for other servers to join\n"
                 "\t\t--forceformat: overwrite an existing disk\n"
@@ -269,6 +269,7 @@ int write_local_files(struct mkfs_opts *mop)
         struct lr_server_data lsd;
         char mntpt[] = "/tmp/mntXXXXXX";
         char filepnm[sizeof(mntpt) + 15];
+        char local_mount_opts[sizeof(mop->mo_ldd.ldd_mount_opts)] = "";
         FILE *filep;
         int ret = 0;
 
@@ -279,10 +280,15 @@ int write_local_files(struct mkfs_opts *mop)
                 return errno;
         }
 
-        if (mop->mo_flags & MO_IS_LOOP)
-                sprintf(cmd, "mount -o loop %s %s", mop->mo_device, mntpt);
-        else
-                sprintf(cmd, "mount -t ext3 %s %s", mop->mo_device, mntpt);
+        if (mop->mo_flags & MO_IS_LOOP) {
+                if (strlen(mop->mo_ldd.ldd_mount_opts)) 
+                        snprintf(local_mount_opts, sizeof(local_mount_opts),
+                                 "loop,%s", mop->mo_ldd.ldd_mount_opts);
+                else sprintf(local_mount_opts, "loop");
+        }
+        sprintf(cmd, "mount -t ext3 %s%s %s %s",
+                strlen(local_mount_opts) ? "-o ": "", 
+                local_mount_opts, mop->mo_device, mntpt);
         ret = run_command(cmd, cmd_out);
         if (ret) {
                 fprintf(stderr, "Unable to mount %s\n", mop->mo_device);
@@ -327,7 +333,7 @@ out_rmdir:
 /* Build fs according to type */
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
-        int i,ret=0;
+        int i, ret = 0;
         int block_count = 0;
         char mkfs_cmd[256];
         char buf[40];
@@ -342,8 +348,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 block_count = mop->mo_device_sz / 4; /* block size is 4096 */
         }       
         
-        if ((mop->ldd.ldd_fs_type == LDD_FS_TYPE_EXT3) ||
-            (mop->ldd.ldd_fs_type == LDD_FS_TYPE_LDISKFS)) { 
+        if ((mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
+            (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) { 
                 long device_sz = mop->mo_device_sz;
 
                 /* we really need the size */
@@ -356,7 +362,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 device_sz = device_size_proc(mop->mo_device);
                 }           
 
-                if (strstr(mop->mo_mkfsopts, "-J" == NULL) {
+                if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
                         long journal_sz = 0;
                         if (device_sz > 1024 * 1024) 
                                 journal_sz = (device_sz / 102400) * 4;
@@ -368,7 +374,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
 
-                if (strstr(mop->mo_mkfsopts, "-i" == NULL) {
+                if (strstr(mop->mo_mkfsopts, "-i") == NULL) {
                         long inode_sz = 0;
                         
                        /* The larger the bytes-per-inode ratio, the fewer
@@ -377,30 +383,30 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 inode_sz = 4096;
                         else if (mop->mo_stripe_count > 35)
                                 inode_sz = 2048;
-                        else if (IS_MDT(mop->mo_ldd)) 
+                        else if (IS_MDT(&mop->mo_ldd)) 
                                 inode_sz = 1024;
-                        else if ((IS_OST(mop->mo_ldd) && (device_sz > 1000000) 
+                        else if ((IS_OST(&mop->mo_ldd) && (device_sz > 1000000))) 
                                   inode_sz = 16384;
                         if (inode_sz > 0) {
                                 sprintf(buf, " -i %d", inode_sz);
-                                strcat(mop->mkfsopts, buf);
+                                strcat(mop->mo_mkfsopts, buf);
                         }
                 }
 
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b 4096 -L %s ",
                         mop->mo_ldd.ldd_svname);
 
-        } else if (mop->ldd.ldd_fs_type == LDD_FS_TYPE_REISERFS) {
+        } else if (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_REISERFS) {
                 long journal_sz = 0;
                 if (journal_sz > 0) { /* FIXME */
                         sprintf(buf, " --journal_size %d", journal_sz);
-                        strcat(mop->mkfsopts, buf);
+                        strcat(mop->mo_mkfsopts, buf);
                 }
                 sprintf(mkfs_cmd, "mkreiserfs -ff ");
 
         } else {
                 fprintf(stderr,"unsupported fs type: %s\n",
-                        mop->fs_type_string);
+                        mop->mo_mount_type_string);
                 return EINVAL;
         }
 
@@ -433,13 +439,13 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
         /* Enable hashed b-tree directory lookup in large dirs 
            FIXME MDT only? */
-        if ((mop->ldd.ldd_fs_type == LDD_FS_TYPE_EXT3) ||
-            (mop->ldd.ldd_fs_type == LDD_FS_TYPE_LDISKFS)) { 
+        if ((mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
+            (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) { 
                 sprintf(cmd, "tune2fs -O dir_index %s", mop->mo_device);
                 ret = run_command(cmd, cmd_out);
                 if (ret) {
                         fprintf(stderr,"Unable to enable htree: %s\n",
-                                mop->device);
+                                mop->mo_device);
                         exit(4);
                 }
         }
@@ -476,6 +482,7 @@ int create_loop_device(struct mkfs_opts *mop)
 static int jt_setup()
 {
         int ret;
+        /* FIXME uneeded? */
         ret = access("/dev/portals", F_OK);
         if (ret) 
                 system("mknod /dev/portals c 10 240");
@@ -484,11 +491,7 @@ static int jt_setup()
                 system("mknod /dev/obd c 10 241");
 
         ptl_initialize(0, NULL);
-        ret = obd_initialize(0, NULL);
-        if (ret) {
-                fprintf(stderr,"Can't obd initialize\n");
-                return 2;
-        }
+        obd_initialize(0, NULL);
         return 0; 
 }
 
@@ -542,39 +545,46 @@ static int _do_jt(int (*cmd)(int argc, char **argv), char *cmd_name, ...)
 
 int lustre_log_setup(struct mkfs_opts *mop)
 {
-        char confname[] = "confobd";
+        char confname[] = "llog_writer";
         char name[128];
         int  ret = 0;
 
         vprint("Creating Lustre logs\n"); 
 
-        if (jt_setup())
-                return 2;
+        if ((ret = jt_setup()))
+                return ret;
 
-        /* Set up our confobd for writing logs */
-        ret = do_jt_noret(jt_lcfg_attach, "attach", "confobd", confname,
+        /* FIXME can't we just write these log files ourselves? Why do we 
+           have to go through an obd at all? */
+        /* FIXME use mgmt server obd to write logs. Can start it by mounting
+           I think. */
+        /* Set up a temporary obd for writing logs. 
+           mds and confobd can handle OBD_IOC_DORECORD */
+        ret = do_jt_noret(jt_lcfg_attach, "attach", "mds"/*confobd*/, confname,
                           "conf_uuid", 0);
         if (ret)
                 return ENODEV;
         ret = do_jt_noret(jt_lcfg_device, "cfg_device", confname, 0);
         if (ret)
                 return ENODEV;
-        do_jt(jt_lcfg_setup,  "setup", mop->device,  mop->fs_type_string,
-              mop->mountfsopts, 0);
-        do_jt(jt_obd_device,  "device", "confobd", 0);
+        do_jt(jt_lcfg_setup,  "setup", mop->mo_device,  
+              mop->mo_mount_type_string, mop->mo_ldd.ldd_mount_opts, 0);
+        /* Record on this device. */
+        do_jt(jt_obd_device,  "device", confname, 0);
 
-        sprintf(name, "%s-conf", mop->mo_ldd.ldd_svname);
+        snprintf(name, sizeof(name), "%s-conf", mop->mo_ldd.ldd_svname);
 
-        if (IS_OST(mop->mo_ldd)) {
+        if (IS_OST(&mop->mo_ldd)) {
                 do_jt(jt_cfg_clear_log, "clear_log", name, 0);
                 do_jt(jt_cfg_record,    "record", name, 0);
-                do_jt(jt_lcfg_attach, "attach", "obdfilter", 
+                do_jt(jt_lcfg_attach,   "attach", "obdfilter", 
                       mop->mo_ldd.ldd_svname, mop->mo_ldd.ldd_svname/*uuid*/, 0);
-                do_jt(jt_lcfg_device, "cfg_device", mop->mo_ldd.ldd_svname, 0);
-                do_jt(jt_lcfg_setup,  "setup", mop->mo_device, 
+                do_jt(jt_lcfg_device,   "cfg_device", mop->mo_ldd.ldd_svname, 0);
+                /* FIXME setup needs to change - no disk info */
+                do_jt(jt_lcfg_setup,    "setup", mop->mo_device, 
                       mop->mo_mount_type_string,
                       "f", /* f=recovery enabled, n=disabled */
-                      mop->mo_ldd.ldd_mountopts, 0);
+                      mop->mo_ldd.ldd_mount_opts, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
                 do_jt(jt_cfg_dump_log,  "dump_log", name, 0);
 
@@ -583,11 +593,15 @@ int lustre_log_setup(struct mkfs_opts *mop)
                 do_jt(jt_lcfg_attach,   "attach", "ost", "OSS", "OSS_UUID", 0);
                 do_jt(jt_lcfg_device,   "cfg_device", "OSS", 0);
                 do_jt(jt_lcfg_setup,    "setup", 0);
+                if (mop->mo_timeout)
+                        do_jt(jt_lcfg_set_timeout, "set_timeout", 
+                              mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
         }
-
-        if (IS_MDT(mop->mo_ldd)) {
+        
+        if (IS_MDT(&mop->mo_ldd)) {
                 char scnt[20], ssz[20], soff[20], spat[20];
+                char cliname[sizeof(mop->mo_ldd.ldd_fsname)];
 
                 /* Write mds-conf log */
                 do_jt(jt_cfg_clear_log, "clear_log", name, 0);
@@ -596,13 +610,16 @@ int lustre_log_setup(struct mkfs_opts *mop)
                 do_jt(jt_lcfg_device,   "cfg_device", "MDT", 0);
                 do_jt(jt_lcfg_setup,    "setup", 0);
                 do_jt(jt_lcfg_attach,   "attach", "mds", mop->mo_ldd.ldd_svname,
-                      mop->obduuid, 0);
+                      mop->mo_ldd.ldd_svname/*uuid*/, 0);
                 do_jt(jt_lcfg_device,   "cfg_device", mop->mo_ldd.ldd_svname, 0);
                 do_jt(jt_lcfg_setup,    "setup", mop->mo_device,
-                      mop->fs_type_string,
-                      mop->mo_ldd.ldd_svname, mop->mountfsopts, 0);
+                      mop->mo_mount_type_string, mop->mo_ldd.ldd_svname, 
+                      mop->mo_ldd.ldd_mount_opts, 0);
+                if (mop->mo_timeout)
+                        do_jt(jt_lcfg_set_timeout, "set_timeout", 
+                              mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
-                
+
                 /* Write mds startup log */
                 do_jt(jt_cfg_clear_log,  "clear_log", mop->mo_ldd.ldd_svname, 0);
                 do_jt(jt_cfg_record,     "record", mop->mo_ldd.ldd_svname, 0);
@@ -610,7 +627,7 @@ int lustre_log_setup(struct mkfs_opts *mop)
                   lov_setup lovA_UUID 0 1048576 0 0 ost1_UUID
                   mount_option mdsA lov_conf_mdsA
                 */
-                sprintf(name, "lov-%s", mop->mo_ldd.ldd_svname);
+                snprintf(name, sizeof(name), "lov-%s", mop->mo_ldd.ldd_svname);
                 do_jt(jt_lcfg_attach,    "attach", "lov", name, 
                       name/*uuid*/, 0);
                 snprintf(scnt, sizeof(scnt), "%d", mop->mo_stripe_count);
@@ -631,14 +648,20 @@ int lustre_log_setup(struct mkfs_opts *mop)
                    mds_postsetup calls class_get_profile
                    to lookup the lov name: (profile=mds,osc=lov,mdc=0);
                    This command was originally intended for clients: 
-                   class_add_profile(profile,osc,mdc) */
+                   class_add_profile(profile,osc,mdc).  
+                   FIXME if we always make lovname=f(mdsname), we probably
+                   don't need this. */
                 do_jt(jt_lcfg_mount_option, "mount_option", 
-                      mop->mo_ldd.ldd_svname, name, 0);
+                      mop->mo_ldd.ldd_svname/*mds*/, name/*lov*/, 0);
+                if (mop->mo_timeout)
+                        do_jt(jt_lcfg_set_timeout, "set_timeout", 
+                              mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
+
 
                 /* Write client startup log */
                 do_jt(jt_cfg_clear_log,  "clear_log", "client", 0);
-                do_jt(jt_cfg_record,     "record", "client, 0);
+                do_jt(jt_cfg_record,     "record", "client", 0);
                 do_jt(jt_lcfg_attach,    "attach", "lov", name, 
                       name/*uuid*/, 0);
                 do_jt(jt_lcfg_lov_setup, "lov_setup", name/*uuid*/,
@@ -651,15 +674,29 @@ int lustre_log_setup(struct mkfs_opts *mop)
 #12 L add_uuid nid=c0a80202 nal_type=0 0:(null) 1:NID_uml2_UUID
 #13 L add_conn 0:MDC_uml1_mdsA_MNT_client 1:NID_uml2_UUID
                 */
-                do_jt(jt_lcfg_add_uuid, "add_uuid", uuid=mdshostname,
+                //FIXME use gethostname for nid uuid? 
+                do_jt(jt_lcfg_add_uuid, "add_uuid",
+                      libcfs_nid2str(mop->mo_hostnid.primary),
                       mop->mo_hostnid.primary, 0);
-                do_jt(jt_lcfg_add_uuid, "add_uuid", uuid,
-                      mop->mo_hostnid.secondary, 0);
-
+                snprintf(cliname, sizeof(cliname), "%s-mdc", 
+                         mop->mo_ldd.ldd_fsname);
+                do_jt(jt_lcfg_attach,   "attach", "mdc", cliname, 
+                      cliname/*uuid*/, 0);
+                do_jt(jt_lcfg_device,   "cfg_device", cliname, 0);
+                do_jt(jt_lcfg_setup,    "setup", mop->mo_ldd.ldd_svname,
+                      libcfs_nid2str(mop->mo_hostnid.primary), 0);
+                if (mop->mo_hostnid.backup != PTL_NID_ANY) {
+                        do_jt(jt_lcfg_add_uuid, "add_uuid", 
+                              libcfs_nid2str(mop->mo_hostnid.backup),
+                              mop->mo_hostnid.backup, 0);
+                        do_jt(jt_lcfg_add_conn, "add_conn", 
+                              libcfs_nid2str(mop->mo_hostnid.backup)/*uuid*/, 0);
+                }
                 do_jt(jt_lcfg_mount_option, "mount_option", 
-                      "client", name, mdcname, 0);
-
-
+                      "client", name/*osc(lov)*/, cliname, 0);
+                if (mop->mo_timeout)
+                        do_jt(jt_lcfg_set_timeout, "set_timeout", 
+                              mop->mo_timeout, 0);
         }
 
 out:        
@@ -671,7 +708,7 @@ out:
         do_jt_noret(jt_obd_cleanup, "cleanup", 0);
         do_jt_noret(jt_obd_detach,  "detach", 0);
 
-        do_jt_noret(obd_finalize,   "finalize", 0);
+        obd_finalize(1, (char **)&name /*dummy*/);
         
         return ret;
 }
@@ -700,12 +737,12 @@ static void make_sv_name(struct mkfs_opts *mop)
            So rewrite ost log, last_rcvd, and disk label, or we need to talk
            to MGMT now to get index # */
 
-        if (IS_MGMT(mop->mo_ldd)) {
+        if (IS_MGMT(&mop->mo_ldd)) {
                 sprintf(mop->mo_ldd.ldd_svname, "MGMT");
         } else {
                 sprintf(mop->mo_ldd.ldd_svname, "%.8s-%s%04x",
                         mop->mo_ldd.ldd_fsname,
-                        IS_MDT(mop->mo_ldd) ? "MDT" : "OST",  
+                        IS_MDT(&mop->mo_ldd) ? "MDT" : "OST",  
                         mop->mo_index);
         }
         vprint("Server name: %s\n", mop->mo_ldd.ldd_svname);
@@ -713,18 +750,22 @@ static void make_sv_name(struct mkfs_opts *mop)
 
 void set_defaults(struct mkfs_opts *mop)
 {
+        char hostname[120];
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
 
         if (get_os_version() == 24) { 
-                mop->ldd.ldd_fs_type = LDD_FS_TYPE_EXT3;
-                strcpy(mop->fs_type_string, "ext3");
+                mop->mo_ldd.ldd_mount_type = LDD_FS_TYPE_EXT3;
+                strcpy(mop->mo_mount_type_string, "ext3");
         } else {
-                mop->ldd.ldd_fs_type = LDD_FS_TYPE_LDISKFS;
-                strcpy(mop->fs_type_string, "ldiskfs");
+                mop->mo_ldd.ldd_mount_type = LDD_FS_TYPE_LDISKFS;
+                strcpy(mop->mo_mount_type_string, "ldiskfs");
         }
         
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         mop->mo_index = -1;
+
+        gethostname(hostname, sizeof(hostname));
+        mop->mo_hostnid.primary = libcfs_str2nid(hostname);
 }
 
 static inline badopt(char opt, char *type)
@@ -751,6 +792,7 @@ int main(int argc , char *const argv[])
                 {"mdt", 0, 0, 'M'},
                 {"mgmt", 0, 0, 'G'},
                 {"mgmtnode", 1, 0, 'm'},
+                {"mountopts", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
                 {"smfsopts", 1, 0, 'S'},
                 {"stripe_count", 1, 0, 'c'},
@@ -760,8 +802,9 @@ int main(int argc , char *const argv[])
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "C:d:e:n:f:FhI:w:MGm:OS:c:s:i:t:v";
+        char *optstring = "C:d:e:n:f:FhI:w:MGm:o:OS:c:s:i:t:v";
         char opt;
+        char *mountopts = NULL;
         int  ret = 0;
 
         progname = argv[0];
@@ -775,7 +818,7 @@ int main(int argc , char *const argv[])
                 switch (opt) {
                 case 'C':
                         //FIXME
-                        exit 2;
+                        exit(2);
                 case 'c':
                         if (IS_MDT(&mop.mo_ldd)) {
                                 int stripe_count = atol(optarg);
@@ -788,15 +831,15 @@ int main(int argc , char *const argv[])
                         mop.mo_device_sz = atol(optarg); 
                         break;
                 case 'e':
-                        if ((mop.mo_ldd.ldd_fs_type == LDD_FS_TYPE_LDISKFS) ||
-                            (mop.mo_ldd.ldd_fs_type == LDD_FS_TYPE_EXT3))
-                                strncpy(mop.mkfsopts, optarg, 
-                                        sizeof(mop.mkfsopts) - 1);
+                        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS) ||
+                            (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3))
+                                strncpy(mop.mo_mkfsopts, optarg, 
+                                        sizeof(mop.mo_mkfsopts) - 1);
                         else
                                 badopt(opt, "ext3,ldiskfs");
                         break;
                 case 'f':
-                        mop.mo_failover_nid = libcfs_str2nid(optarg);
+                        mop.mo_hostnid.backup = libcfs_str2nid(optarg);
                         break;
                 case 'F':
                         mop.mo_flags |= MO_FORCEFORMAT;
@@ -816,7 +859,7 @@ int main(int argc , char *const argv[])
                 case 'm':
                         if (IS_MGMT(&mop.mo_ldd))
                                 badopt(opt, "non-MGMT MDT,OST");
-                        set_nid_pair(&mo.mo_ldd->ldd.mgmt, optarg);
+                        set_nid_pair(&mop.mo_ldd.ldd_mgmtnid, optarg);
                         break;
                 case 'M':
                         mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MDT;
@@ -833,6 +876,9 @@ int main(int argc , char *const argv[])
                                 strncpy(mop.mo_ldd.ldd_fsname, optarg, 
                                         sizeof(mop.mo_ldd.ldd_fsname) - 1);
                         break;
+                case 'o':
+                        mountopts = optarg;
+                        break;
                 case 'O':
                         mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_OST;
                         break;
@@ -843,9 +889,12 @@ int main(int argc , char *const argv[])
                                 badopt(opt, "MDT");
                         break;
                 case 'S':
-                        mop.mo_ldd.ldd_fs_type = LDD_FS_TYPE_SMFS;
-                        strcpy(mop.fs_type_string, "smfs");
-                        strncpy(mop.mkfsopts, optarg, sizeof(mop.mkfsopts) - 1);
+                        mop.mo_ldd.ldd_mount_type = LDD_FS_TYPE_SMFS;
+                        strcpy(mop.mo_mount_type_string, "smfs");
+                        strncpy(mop.mo_mkfsopts, optarg, sizeof(mop.mo_mkfsopts) - 1);
+                        break;
+                case 't':
+                        mop.mo_timeout = atol(optarg);
                         break;
                 case 'v':
                         verbose++;
@@ -866,13 +915,13 @@ int main(int argc , char *const argv[])
         }
 
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
-            mop.mo_ldd.ldd_mgmt.primary == PTL_NID_ANY) {
+            mop.mo_ldd.ldd_mgmtnid.primary == PTL_NID_ANY) {
                 vprint("No MGMT specified, adding to this MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MGMT;
                 //FIXME mop.mo_ldd.ldd_mgmt.primary == libcfs_str2nid(localhost);
         }
 
-        if (mop.mo_ldd.ldd_mgmt.primary == PTL_NID_ANY) {
+        if (mop.mo_ldd.ldd_mgmtnid.primary == PTL_NID_ANY) {
                 printf("Must specify either --mgmt or --mgmtnode\n");
                 usage(stderr);
         }
@@ -883,28 +932,32 @@ int main(int argc , char *const argv[])
                 mop.mo_stripe_sz = 1024 * 1024;
         
         /* These are the permanent mount options. */ 
-        if ((mop.mo_ldd.ldd_fs_type == LDD_FS_TYPE_EXT3) ||
-            (mop.mo_ldd.ldd_fs_type == LDD_FS_TYPE_LDISKFS)) {
-                sprintf(mop.mo_ldd.ldd_mountfsopts, "errors=remount-ro");
+        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
+            (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) {
+                sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd))
-                        strcat(mop.mo_ldd.ldd_mountfsopts, ",iopen_nopriv");
+                        strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
                 if ((IS_OST(&mop.mo_ldd)) && (get_os_version() == 24))
-                        strcat(mmop.mo_ldd.ldd_mountfsopts, ",asyncdel");
-        } else if (mop.mo_ldd.ldd_fs_type == LDD_FS_TYPE_SMFS) {
-                sprintf(mop.mo_ldd.ldd_mountfsopts, "type=ext3,dev=%s",
+                        strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
+        } else if (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_SMFS) {
+                sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",
                         mop.mo_device);
         } else {
                 fprintf(stderr, "%s: unknown fs type %d '%s'\n",
-                        progname, mop.mo_ldd.ldd_fs_type,
+                        progname, mop.mo_ldd.ldd_mount_type,
                         mop.mo_mount_type_string);
                 return EINVAL;
         }
-    
+        if (mountopts) {
+                strcat(mop.mo_ldd.ldd_mount_opts, ",");
+                strcat(mop.mo_ldd.ldd_mount_opts, mountopts);
+        }
+
         make_sv_name(&mop);
 
-        if ((mop->mo_ldd.ldd_fs_type == LDD_FS_TYPE_SMFS) ||
-            !is_block(mop.device)) {
-                mop.flags |= MO_IS_LOOP;
+        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_SMFS) ||
+            !is_block(mop.mo_device)) {
+                mop.mo_flags |= MO_IS_LOOP;
                 ret = create_loop_device(&mop);
                 if (ret) 
                         return ret;

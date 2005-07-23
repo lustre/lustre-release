@@ -35,9 +35,9 @@
 #include <getopt.h>
 #include <sys/utsname.h>
 
-#include "obdctl.h"
-#include <portals/ptlctl.h>
 #include <linux/lustre_disk.h>
+#include <portals/ptlctl.h>
+#include "obdctl.h"
 
 int          verbose;
 int          nomtab;
@@ -109,11 +109,9 @@ static int load_modules(struct lustre_mount_data *lmd)
         if (lmd_is_client(lmd)) {
                 rc = load_module("lustre");
         } else {
-                if (lmd->u.srv.disk_type & MDS_DISK_TYPE)
-                        rc = load_module("mds");
+                rc = load_module("mds");
                 if (rc) return rc;
-                if (lmd->u.srv.disk_type & OST_DISK_TYPE) 
-                        rc = load_module("oss");
+                rc = load_module("oss");
         }
         return rc;
 }
@@ -189,16 +187,16 @@ init_options(struct lustre_mount_data *lmd)
         //ptl_parse_ipaddr(&lmd->lmd_ipaddr, lmd->lmd_hostname); 
         lmd->lmd_magic = LMD_MAGIC;
         lmd->lmd_flags = LMD_FLG_MNTCNF;
-        lmd->lmd_mgmt.primary = PTL_NID_ANY;
-        lmd->lmd_mgmt.backup  = PTL_NID_ANY;
+        lmd->lmd_mgmtnid.primary = PTL_NID_ANY;
+        lmd->lmd_mgmtnid.backup  = PTL_NID_ANY;
         return 0;
 }
 
 int
 print_options(struct lustre_mount_data *lmd)
 {
-        printf("mgmt primary nid: %s\n", libcfs_nid2str(lmd->lmd_mgmt.primary);
-        printf("mgmt backup nid:  %s\n", libcfs_nid2str(lmd->lmd_mgmt.backup);
+        printf("mgmt primary nid: %x\n", /*libcfs_nid2str*/(lmd->lmd_mgmtnid.primary));
+        printf("mgmt backup nid:  %x\n", /*libcfs_nid2str*/(lmd->lmd_mgmtnid.backup));
         printf("device:           %s\n", lmd->lmd_dev);
         printf("mount point:      %s\n", lmd->lmd_mtpt);
         printf("options:          %s\n", lmd->lmd_opts);
@@ -292,64 +290,6 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
         return 0;
 }
 
-#if 0
-int read_mount_options(char *source, char *target, 
-                       struct lustre_mount_data *lmd)
-{
-        char cmd[512];
-        char opfilenm[255];
-        FILE *opfile;
-        __u32 lddmagic;
-        int ret;
-        
-        if ( strlen(lmd->u.srv.lmd_source) == 0) {
-                strcpy(lmd->u.srv.lmd_source, source);
-                sprintf(cmd, "mount -t ext3  %s %s", lmd->u.srv.lmd_source, target);
-        }
-        else
-                sprintf(cmd, "mount -o loop  %s %s", lmd->u.srv.lmd_source, target);
-           
-        ret = system(cmd);
-        if (ret) {
-                fprintf(stderr, "Unable to mount %s\n", lmd->u.srv.lmd_source);
-                return errno;
-        }
-
-        /* mounted, now read the options file */
-        sprintf(opfilenm, "%s/%s", target, MOUNTOPTS_FILE_NAME);
-        opfile = fopen(opfilenm, "r");
-        if (!opfile) {
-                fprintf(stderr,"Unable to open options file %s: %s\n", 
-                        opfilenm, strerror(errno));
-                ret = errno;
-                goto out_umnt;
-        }
-
-        ret = fscanf(opfile, "%x\n", &lddmagic);
-        if (ret < 1) {
-                fprintf(stderr, "Can't read options file %s\n", opfilenm);
-                goto out_close;
-        }
-        if (lddmagic != LDD_MAGIC) {
-                fprintf(stderr, "Bad magic in options file %s\n", opfilenm);
-                goto out_close;
-        }
-
-        fscanf(opfile, "%s\n", lmd->u.srv.lmd_fstype);
-        fscanf(opfile, "%s\n", lmd->u.srv.lmd_fsopts);
-        fscanf(opfile, "%x\n", &lmd->u.srv.disk_type);
-        //fread(&data->mgt.host, sizeof(data->mgt.host), 1, opfile);
-        ret = 0;
-
-out_close:
-        fclose(opfile);
-out_umnt:
-        sprintf(cmd, "umount %s", target);
-        system(cmd);
-        return ret;
-}
-#endif
-
 int
 build_data(char *source, char *target, char *options, 
            struct lustre_mount_data *lmd, int *flagp)
@@ -380,17 +320,17 @@ build_data(char *source, char *target, char *options,
                    nid=mgmtnid, devname=fsname */
                 nid = buf;
                 *s = '\0';
-                while (*++s == '/') ;
+                while (*++s == '/') /*spin*/;
                 devname = s;
 
                 rc = parse_options(options, lmd, flagp);
                 if (rc)
                         return rc;
 
-                if (lmd->lmd_nid != PTL_NID_ANY)
+                if (lmd->lmd_mgmtnid.primary != PTL_NID_ANY)
                         /* In case it was defined as -o mgmtnode= */
-                        lmd->lmd_mgmt.primary = libcfs_str2nid(nid);
-                if (lmd->lmd_mgmt.primary == PTL_NID_ANY) {
+                        //FIXME set_nid_pair(&lmd->lmd_mgmtnid, nid);
+                if (lmd->lmd_mgmtnid.primary == PTL_NID_ANY) {
                         fprintf(stderr, "%s: can't parse nid '%s'\n",
                                 progname, nid);
                         return 1;

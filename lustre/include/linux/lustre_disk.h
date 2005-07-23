@@ -28,6 +28,7 @@
 #define _LUSTRE_DISK_H
 
 #include <linux/types.h>
+#include <portals/types.h>
 
 /****************** last_rcvd file *********************/
 
@@ -67,7 +68,7 @@ struct host_desc {
 struct lustre_mount_data {
         __u32     lmd_magic;
         __u32     lmd_flags;          /* lustre mount flags */
-        host_desc lmd_mgmt;           /* mgmt nid */
+        struct host_desc lmd_mgmtnid; /* mgmt nid */
         char      lmd_dev[128];       /* device or file system name */
         char      lmd_mtpt[128];      /* mount point (for client overmount) */
         char      lmd_opts[256];      /* lustre mount options (as opposed to 
@@ -78,8 +79,8 @@ struct lustre_mount_data {
 #define LMD_FLG_MNTCNF 0x1000  /* MountConf compat */
 #define LMD_FLG_CLIENT 0x2000  /* Mounting a client only; no real device */
 
-#define lmd_is_client(x) \ 
-        ((x->lmd_flags & LMD_FLG_CLIENT) || (!(x->lmd_flags & LMD_FLG_MNTCNF)) 
+#define lmd_is_client(x) \
+        (((x)->lmd_flags & LMD_FLG_CLIENT) || (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
 
 
 /****************** persistent mount data *********************/
@@ -102,7 +103,7 @@ struct lustre_mount_data {
 struct lustre_disk_data {
         __u32     ldd_magic;
         __u32     ldd_flags;
-        host_desc ldd_mgmt;            /* mgmt nid; lmd can override */
+        struct host_desc ldd_mgmtnid;  /* mgmt nid; lmd can override */
         char      ldd_fsname[64];      /* filesystem this server is part of */
         char      ldd_svname[64];      /* this server's name (lustre-mdt0001) */
         __u8      ldd_mount_type;      /* target fs type LDD_FS_TYPE_* */
@@ -116,23 +117,27 @@ struct lustre_disk_data {
 
 /****************** mkfs command *********************/
 
-#define MO_IS_LOOP 0x01
+#define MO_IS_LOOP     0x01
+#define MO_FORCEFORMAT 0x02
 
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
         struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
-        long  mo_device_sz;
-        int   mo_flags; 
         char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
         char  mo_device[128];           /* disk device name */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
-        ptl_nid_t mo_failover_nid;
+        long  mo_device_sz;
+        int   mo_flags; 
+        /* Below here is required for mdt,ost,or client logs */
+        struct host_desc mo_hostnid;    /* server nid + failover - need to know
+                                           for client log */
         int   mo_stripe_sz;
         int   mo_stripe_count;
         int   mo_stripe_pattern;
         int   mo_index;                 /* stripe index for osts, pool index
                                            for pooled mdts.  index will be put
                                            in lr_server_data */
+        int   mo_timeout;               /* obd timeout */
 };
 
 
