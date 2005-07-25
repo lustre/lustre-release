@@ -348,8 +348,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 block_count = mop->mo_device_sz / 4; /* block size is 4096 */
         }       
         
-        if ((mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
-            (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) { 
+        if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
+            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) { 
                 long device_sz = mop->mo_device_sz;
 
                 /* we really need the size */
@@ -396,7 +396,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b 4096 -L %s ",
                         mop->mo_ldd.ldd_svname);
 
-        } else if (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_REISERFS) {
+        } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
                 long journal_sz = 0;
                 if (journal_sz > 0) { /* FIXME */
                         sprintf(buf, " --journal_size %d", journal_sz);
@@ -405,13 +405,14 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 sprintf(mkfs_cmd, "mkreiserfs -ff ");
 
         } else {
-                fprintf(stderr,"unsupported fs type: %s\n",
-                        mop->mo_mount_type_string);
+                fprintf(stderr,"unsupported fs type: %d (%s)\n",
+                        mop->mo_ldd.ldd_mount_type, 
+                        MT_STR(mop->mo_ldd));
                 return EINVAL;
         }
 
         vprint("formatting backing filesystem %s on %s\n",
-               mop->mo_mount_type_string, mop->mo_device);
+               MT_STR(&mop->mo_ldd), mop->mo_device);
         vprint("\tdevice name  %s\n", mop->mo_ldd.ldd_svname);
         vprint("\t4k blocks    %d\n", block_count);
         vprint("\toptions      %s\n", mop->mo_mkfsopts);
@@ -439,8 +440,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
         /* Enable hashed b-tree directory lookup in large dirs 
            FIXME MDT only? */
-        if ((mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
-            (mop->mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) { 
+        if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
+            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) { 
                 sprintf(cmd, "tune2fs -O dir_index %s", mop->mo_device);
                 ret = run_command(cmd, cmd_out);
                 if (ret) {
@@ -568,7 +569,7 @@ int lustre_log_setup(struct mkfs_opts *mop)
         if (ret)
                 return ENODEV;
         do_jt(jt_lcfg_setup,  "setup", mop->mo_device,  
-              mop->mo_mount_type_string, mop->mo_ldd.ldd_mount_opts, 0);
+              MT_STR(&mop->mo_ldd), mop->mo_ldd.ldd_mount_opts, 0);
         /* Record on this device. */
         do_jt(jt_obd_device,  "device", confname, 0);
 
@@ -582,7 +583,7 @@ int lustre_log_setup(struct mkfs_opts *mop)
                 do_jt(jt_lcfg_device,   "cfg_device", mop->mo_ldd.ldd_svname, 0);
                 /* FIXME setup needs to change - no disk info */
                 do_jt(jt_lcfg_setup,    "setup", mop->mo_device, 
-                      mop->mo_mount_type_string,
+                      MT_STR(&mop->mo_ldd),
                       "f", /* f=recovery enabled, n=disabled */
                       mop->mo_ldd.ldd_mount_opts, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
@@ -613,7 +614,7 @@ int lustre_log_setup(struct mkfs_opts *mop)
                       mop->mo_ldd.ldd_svname/*uuid*/, 0);
                 do_jt(jt_lcfg_device,   "cfg_device", mop->mo_ldd.ldd_svname, 0);
                 do_jt(jt_lcfg_setup,    "setup", mop->mo_device,
-                      mop->mo_mount_type_string, mop->mo_ldd.ldd_svname, 
+                      MT_STR(&mop->mo_ldd), mop->mo_ldd.ldd_svname, 
                       mop->mo_ldd.ldd_mount_opts, 0);
                 if (mop->mo_timeout)
                         do_jt(jt_lcfg_set_timeout, "set_timeout", 
@@ -753,13 +754,10 @@ void set_defaults(struct mkfs_opts *mop)
         char hostname[120];
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
 
-        if (get_os_version() == 24) { 
-                mop->mo_ldd.ldd_mount_type = LDD_FS_TYPE_EXT3;
-                strcpy(mop->mo_mount_type_string, "ext3");
-        } else {
-                mop->mo_ldd.ldd_mount_type = LDD_FS_TYPE_LDISKFS;
-                strcpy(mop->mo_mount_type_string, "ldiskfs");
-        }
+        if (get_os_version() == 24) 
+                mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
+        else 
+                mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
         mop->mo_index = -1;
@@ -831,8 +829,8 @@ int main(int argc , char *const argv[])
                         mop.mo_device_sz = atol(optarg); 
                         break;
                 case 'e':
-                        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS) ||
-                            (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3))
+                        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
+                            (mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3))
                                 strncpy(mop.mo_mkfsopts, optarg, 
                                         sizeof(mop.mo_mkfsopts) - 1);
                         else
@@ -889,8 +887,7 @@ int main(int argc , char *const argv[])
                                 badopt(opt, "MDT");
                         break;
                 case 'S':
-                        mop.mo_ldd.ldd_mount_type = LDD_FS_TYPE_SMFS;
-                        strcpy(mop.mo_mount_type_string, "smfs");
+                        mop.mo_ldd.ldd_mount_type = LDD_MT_SMFS;
                         strncpy(mop.mo_mkfsopts, optarg, sizeof(mop.mo_mkfsopts) - 1);
                         break;
                 case 't':
@@ -932,20 +929,20 @@ int main(int argc , char *const argv[])
                 mop.mo_stripe_sz = 1024 * 1024;
         
         /* These are the permanent mount options. */ 
-        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_EXT3) ||
-            (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_LDISKFS)) {
+        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
+            (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
                 if ((IS_OST(&mop.mo_ldd)) && (get_os_version() == 24))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
-        } else if (mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_SMFS) {
+        } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",
                         mop.mo_device);
         } else {
                 fprintf(stderr, "%s: unknown fs type %d '%s'\n",
                         progname, mop.mo_ldd.ldd_mount_type,
-                        mop.mo_mount_type_string);
+                        MT_STR(&mop.mo_ldd));
                 return EINVAL;
         }
         if (mountopts) {
@@ -955,7 +952,7 @@ int main(int argc , char *const argv[])
 
         make_sv_name(&mop);
 
-        if ((mop.mo_ldd.ldd_mount_type == LDD_FS_TYPE_SMFS) ||
+        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) ||
             !is_block(mop.mo_device)) {
                 mop.mo_flags |= MO_IS_LOOP;
                 ret = create_loop_device(&mop);

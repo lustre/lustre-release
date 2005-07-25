@@ -56,33 +56,6 @@ struct lr_server_data {
         __u8  lsd_padding[LR_SERVER_SIZE - 144];
 };
 
-
-/****************** mount command *********************/
-
-struct host_desc {
-        ptl_nid_t primary; 
-        ptl_nid_t backup;
-};
-
-/* Passed by mount - no persistent info here */
-struct lustre_mount_data {
-        __u32     lmd_magic;
-        __u32     lmd_flags;          /* lustre mount flags */
-        struct host_desc lmd_mgmtnid; /* mgmt nid */
-        char      lmd_dev[128];       /* device or file system name */
-        char      lmd_mtpt[128];      /* mount point (for client overmount) */
-        char      lmd_opts[256];      /* lustre mount options (as opposed to 
-                                         _device_ mount options) */
-};
-
-#define LMD_FLG_FLOCK  0x0001  /* Enable flock */
-#define LMD_FLG_MNTCNF 0x1000  /* MountConf compat */
-#define LMD_FLG_CLIENT 0x2000  /* Mounting a client only; no real device */
-
-#define lmd_is_client(x) \
-        (((x)->lmd_flags & LMD_FLG_CLIENT) || (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
-
-
 /****************** persistent mount data *********************/
 
 /* Persistent mount data are stored on the disk in this file.
@@ -95,11 +68,20 @@ struct lustre_mount_data {
 #define LDD_SV_TYPE_OST  0x0002
 #define LDD_SV_TYPE_MGMT 0x0004
 
-#define LDD_FS_TYPE_EXT3     1
-#define LDD_FS_TYPE_LDISKFS  2
-#define LDD_FS_TYPE_SMFS     3
-#define LDD_FS_TYPE_REISERFS 4
-        
+enum {
+        LDD_MT_EXT3 = 0, 
+        LDD_MT_LDISKFS,
+        LDD_MT_SMFS,   
+        LDD_MT_REISERFS
+};
+       
+static char mount_type_string[4][] = {
+        "ext3",
+        "ldiskfs",
+        "smfs",
+        "reiserfs"
+}
+
 struct lustre_disk_data {
         __u32     ldd_magic;
         __u32     ldd_flags;
@@ -113,6 +95,33 @@ struct lustre_disk_data {
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_SV_TYPE_MDT)
 #define IS_OST(data)   ((data)->ldd_flags & LDD_SV_TYPE_OST)
 #define IS_MGMT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MGMT)
+#define MT_STR(data)   mount_type_string[(data)->ldd_mount_type]
+
+/****************** mount command *********************/
+
+struct host_desc {
+        ptl_nid_t primary; 
+        ptl_nid_t backup;
+};
+
+/* Passed by mount - no persistent info here */
+struct lustre_mount_data {
+        __u32     lmd_magic;
+        __u32     lmd_flags;          /* lustre mount flags */
+        struct host_desc lmd_mgmtnid; /* mgmt nid */
+        //struct lustre_disk_data *lmd_ldd; /* in-mem copy of ldd */
+        char      lmd_dev[128];       /* device or file system name */
+        char      lmd_mtpt[128];      /* mount point (for client overmount) */
+        char      lmd_opts[256];      /* lustre mount options (as opposed to 
+                                         _device_ mount options) */
+};
+
+#define LMD_FLG_FLOCK  0x0001  /* Enable flock */
+#define LMD_FLG_MNTCNF 0x1000  /* MountConf compat */
+#define LMD_FLG_CLIENT 0x2000  /* Mounting a client only; no real device */
+
+#define lmd_is_client(x) \
+        (((x)->lmd_flags & LMD_FLG_CLIENT) || (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
 
 
 /****************** mkfs command *********************/

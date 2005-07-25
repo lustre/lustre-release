@@ -45,13 +45,13 @@ obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c parser.c obd.c
 
-mount_lustre_SOURCES = mount_lustre.c 
 mount_lustre_LDADD = $(LIBREADLINE) $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
+mount_lustre_SOURCES = mount_lustre.c 
 
-mkfs_lustre_SOURCES = mkfs_lustre.c lustre_cfg.c obd.c obdctl.h
 mkfs_lustre_LDADD = $(LIBREADLINE) $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
+mkfs_lustre_SOURCES = mkfs_lustre.c lustre_cfg.c obd.c obdctl.h
 
 llog_reader_SOURCES = llog_reader.c
 

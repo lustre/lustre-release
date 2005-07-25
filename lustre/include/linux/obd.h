@@ -177,7 +177,7 @@ struct filter_obd {
         spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
         spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
         struct file         *fo_rcvd_filp;
-        struct filter_server_data *fo_fsd;
+        struct lr_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
 

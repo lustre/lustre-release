@@ -321,7 +321,7 @@ build_data(char *source, char *target, char *options,
                 nid = buf;
                 *s = '\0';
                 while (*++s == '/') /*spin*/;
-                devname = s;
+                devname = s; /* for clients, devname=fsname */
 
                 rc = parse_options(options, lmd, flagp);
                 if (rc)

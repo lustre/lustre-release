@@ -32,6 +32,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_disk.h>
 #include "llite_internal.h"
 
 kmem_cache_t *ll_file_data_slab;
@@ -46,82 +47,8 @@ extern struct address_space_operations ll_dir_aops;
 #define log2(n) ffz(~(n))
 #endif
 
-/* We need to have some extra twiddling here because some systems have
- * no random state when they start up. */
-static void
-lustre_generate_random_uuid(class_uuid_t uuid)
-{
-        struct timeval t;
-        int *i, j, k;
 
-        ENTRY;
-        LASSERT(sizeof(class_uuid_t) % sizeof(*i) == 0);
-
-        j = jiffies;
-        do_gettimeofday(&t);
-        k = t.tv_usec;
-
-        generate_random_uuid(uuid);
-
-        for (i = (int *)uuid; (char *)i < (char *)uuid + sizeof(class_uuid_t); i++) {
-                *i ^= j ^ k;
-                j = ((j << 8) & 0xffffff00) | ((j >> 24) & 0x000000ff);
-                k = ((k >> 8) & 0x00ffffff) | ((k << 24) & 0xff000000);
-        }
-
-        EXIT;
-}
-
-struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
-{
-        struct ll_sb_info *sbi = NULL;
-        class_uuid_t uuid;
-        ENTRY;
-
-        OBD_ALLOC(sbi, sizeof(*sbi));
-        if (!sbi)
-                RETURN(NULL);
-
-        spin_lock_init(&sbi->ll_lock);
-        INIT_LIST_HEAD(&sbi->ll_pglist);
-        sbi->ll_pglist_gen = 0;
-        if (num_physpages >> (20 - PAGE_SHIFT) < 512)
-                sbi->ll_async_page_max = num_physpages / 2;
-        else
-                sbi->ll_async_page_max = (num_physpages / 4) * 3;
-        sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
-                                           SBI_DEFAULT_READAHEAD_MAX);
-
-        INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
-        ll_s2sbi_nocast(sb) = sbi;
-
-        lustre_generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
-        CDEBUG(D_HA, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
-
-        spin_lock(&ll_sb_lock);
-        list_add_tail(&sbi->ll_list, &ll_super_blocks);
-        spin_unlock(&ll_sb_lock);
-        RETURN(sbi);
-}
-
-void lustre_free_sbi(struct super_block *sb)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        ENTRY;
-
-        if (sbi != NULL) {
-                spin_lock(&ll_sb_lock);
-                list_del(&sbi->ll_list);
-                spin_unlock(&ll_sb_lock);
-                OBD_FREE(sbi, sizeof(*sbi));
-        }
-        ll_s2sbi_nocast(sb) = NULL;
-        EXIT;
-}
-
-int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
+int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -159,7 +86,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
-                CERROR("An MDS (mdc %s) is performing recovery, of which this"
+                CERROR("An MDT (mdc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
                        "complete, abort, or time out.\n", mdc);
                 GOTO(out, err);
@@ -332,7 +259,7 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         }
 }
 
-void lustre_common_put_super(struct super_block *sb)
+void client_common_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct hlist_node *tmp, *next;
@@ -472,7 +399,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out, err = -EINVAL);
         }
 
-        err = lustre_common_fill_super(sb, mdc, osc);
+        err = client_common_fill_super(sb, mdc, osc);
 out:
         if (err)
                 lustre_free_sbi(sb);
@@ -485,266 +412,52 @@ out:
         RETURN(err);
 } /* ll_read_super */
 
-int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
-                       struct config_llog_instance *cfg, int allow_recov)
+int client_fill_super(struct super_block *sb,
+                      struct lustre_mount_data * lmd)
 {
-        struct lustre_cfg *lcfg = NULL;
-        struct lustre_cfg_bufs bufs;
-        char * peer = "MDS_PEER_UUID";
-        struct obd_device *obd;
-        struct lustre_handle mdc_conn = {0, };
-        struct obd_export *exp;
-        char * name = "mdc_dev";
-        class_uuid_t uuid;
-        struct obd_uuid mdc_uuid;
-        struct llog_ctxt *ctxt;
-        int rc = 0;
-        int err;
+        struct lustre_profile *lprof;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        char * osc = NULL;
+        char * mdc = NULL;
+        char   ll_instance[sizeof(sb) * 2 + 1];
+        int    err;
         ENTRY;
-
-        if (lmd_bad_magic(lmd))
+                                                                                 
+        /* get the osc and mdc names for l_c_f_s */
+        lprof = class_get_profile(lmd->lmd_dev);
+        if (lprof == NULL) {
+                CERROR("No profile found: %s\n", lmd->lmd_dev);
                 RETURN(-EINVAL);
-
-        lustre_generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &mdc_uuid);
-        CDEBUG(D_HA, "generated uuid: %s\n", mdc_uuid.uuid);
-
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, peer);
-
-        lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
-        lcfg->lcfg_nid = lmd->lmd_nid;
-        LASSERT(lcfg->lcfg_nid != PTL_NID_ANY);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
-
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
-        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
-
-        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_del_uuid, err);
-
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, lmd->lmd_mds);
-        lustre_cfg_bufs_set_string(&bufs, 2, peer);
-
-        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_detach, err);
-
-        obd = class_name2obd(name);
-        if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
-
-        /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
-        if (err)
-                GOTO(out_cleanup, err);
-
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
-                GOTO(out_cleanup, err);
         }
-
-        exp = class_conn2export(&mdc_conn);
-
-        ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
-#if 1
-        rc = class_config_parse_llog(ctxt, profile, cfg);
-#else
-        /*
-         * For debugging, it's useful to just dump the log
-         */
-        rc = class_config_dump_llog(ctxt, profile, cfg);
-#endif
-        switch (rc) {
-        case 0:
-                break;
-        case -EINVAL:
-                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
-                               "from the MDS.  Make sure this client and the "
-                               "MDS are running compatible versions of "
-                               "Lustre.\n",
-                               obd->obd_name, profile);
-                /* fall through */
-        default:
-                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
-                break;
-        }
-
-        err = obd_disconnect(exp);
-
-out_cleanup:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
-
-out_detach:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
-
-out_del_uuid:
-        lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, peer);
-        lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
-        err = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-
-out:
-        if (rc == 0)
-                rc = err;
-
-        RETURN(rc);
-}
-
-static void lustre_manual_cleanup(struct ll_sb_info *sbi)
-{
-        struct lustre_cfg *lcfg;
-        struct lustre_cfg_bufs bufs;
-        struct obd_device *obd;
-        int next = 0;
-
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL){
-                int err;
-
-                /* the lcfg is almost the same for both ops */
-                lustre_cfg_bufs_reset(&bufs, obd->obd_name);
-                lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-
-                err = class_process_config(lcfg);
-                if (err) {
-                        CERROR("cleanup failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-
-                lcfg->lcfg_command = LCFG_DETACH;
-                err = class_process_config(lcfg);
-                lustre_cfg_free(lcfg);
-                if (err) {
-                        CERROR("detach failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-        }
-
-        if (sbi->ll_lmd != NULL)
-                class_del_profile(sbi->ll_lmd->lmd_profile);
-}
-
-int lustre_fill_super(struct super_block *sb, void *data, int silent)
-{
-        struct lustre_mount_data * lmd = data;
-        struct ll_sb_info *sbi;
-        char *osc = NULL;
-        char *mdc = NULL;
-        int err;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        if (lmd_bad_magic(lmd))
-                RETURN(-EINVAL);
-
-        sbi = lustre_init_sbi(sb);
-        if (!sbi)
-                RETURN(-ENOMEM);
-
-        if (lmd->lmd_profile) {
-                struct lustre_profile *lprof;
-                struct config_llog_instance cfg;
-                char ll_instance[sizeof(sb) * 2 + 1];
-
-                if (lmd->lmd_mds[0] == '\0') {
-                        CERROR("no mds name\n");
-                        GOTO(out_free, err = -EINVAL);
-                }
-
-                OBD_ALLOC(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
-                if (sbi->ll_lmd == NULL)
-                        GOTO(out_free, err = -ENOMEM);
-                memcpy(sbi->ll_lmd, lmd, sizeof(*lmd));
-
-                /* generate a string unique to this super, let's try
-                 the address of the super itself.*/
-                sprintf(ll_instance, "%p", sb);
-
-                cfg.cfg_instance = ll_instance;
-                cfg.cfg_uuid = sbi->ll_sb_uuid;
-                err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 0);
-                if (err < 0) {
-                        CERROR("Unable to process log: %s\n", lmd->lmd_profile);
-
-                        GOTO(out_free, err);
-                }
-
-                lprof = class_get_profile(lmd->lmd_profile);
-                if (lprof == NULL) {
-                        CERROR("No profile found: %s\n", lmd->lmd_profile);
-                        GOTO(out_free, err = -EINVAL);
-                }
-                if (osc)
-                        OBD_FREE(osc, strlen(osc) + 1);
-                OBD_ALLOC(osc, strlen(lprof->lp_osc) +
-                          strlen(ll_instance) + 2);
-                sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
-
-                if (mdc)
-                        OBD_FREE(mdc, strlen(mdc) + 1);
-                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
-                          strlen(ll_instance) + 2);
-                sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
-        }
-
+                                                                                 
+        /* see lustre_fill_super */
+        sprintf(ll_instance, "%p", sb);
+        OBD_ALLOC(osc, strlen(lprof->lp_osc) + strlen(ll_instance) + 2);
+        sprintf(osc, "%s-%s", lprof->lp_osc, ll_instance);
         if (!osc) {
                 CERROR("no osc\n");
                 GOTO(out_free, err = -EINVAL);
         }
-
+ 
+        OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + strlen(ll_instance) + 2);
+        sprintf(mdc, "%s-%s", lprof->lp_mdc, ll_instance);
         if (!mdc) {
                 CERROR("no mdc\n");
                 GOTO(out_free, err = -EINVAL);
         }
-
-        err = lustre_common_fill_super(sb, mdc, osc);
-
-        if (err)
-                GOTO(out_free, err);
-
-out_dev:
+  
+        err = client_common_fill_super(sb, mdc, osc);
+  
+out_free:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
-
+  
         RETURN(err);
-
-out_free:
-        if (sbi->ll_lmd) {
-                lustre_manual_cleanup(sbi);
-                OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
-        }
-        lustre_free_sbi(sb);
-
-        goto out_dev;
-} /* lustre_fill_super */
-
-void lustre_put_super(struct super_block *sb)
+}
+                                                                                       
+void client_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -757,7 +470,7 @@ void lustre_put_super(struct super_block *sb)
                 force_umount = obd->obd_no_recov;
         obd = NULL;
 
-        lustre_common_put_super(sb);
+        client_common_put_super(sb);
 
         if (sbi->ll_lmd != NULL) {
                 lustre_manual_cleanup(sbi);
@@ -767,7 +480,7 @@ void lustre_put_super(struct super_block *sb)
         lustre_free_sbi(sb);
 
         EXIT;
-} /* lustre_put_super */
+} /* client_put_super */
 
 #ifdef HAVE_REGISTER_CACHE
 #include <linux/cache_def.h>
@@ -1421,30 +1134,6 @@ void ll_umount_begin(struct super_block *sb)
         schedule();
 
         EXIT;
-}
-
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data)
-{
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int err;
-        __u32 read_only;
-
-        if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
-                read_only = *flags & MS_RDONLY;
-                err = obd_set_info(sbi->ll_mdc_exp, strlen("read-only"),
-                                   "read-only", sizeof(read_only), &read_only);
-                if (err) {
-                        CERROR("Failed to change the read-only flag during "
-                               "remount: %d\n", err);
-                        return err;
-                }
-
-                if (read_only)
-                        sb->s_flags |= MS_RDONLY;
-                else
-                        sb->s_flags &= ~MS_RDONLY;
-        }
-        return 0;
 }
 
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
