@@ -39,3 +39,4 @@ grab_cache_page_nowait_gfp-2.4.21-suse2.patch
 remove-suid-2.4-rhel.patch
 fsprivate-2.4-suse.patch
 nfsd_iallocsem.patch
+linux-2.4.24-jbd-handle-EIO.patch

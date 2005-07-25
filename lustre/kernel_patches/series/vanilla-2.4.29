@@ -41,3 +41,4 @@ remove-suid-2.4-rhel.patch
 kallsyms-2.4.29.patch
 fsprivate-2.4.patch
 nfsd_iallocsem.patch
+linux-2.4.24-jbd-handle-EIO.patch
