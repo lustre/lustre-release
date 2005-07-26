@@ -119,7 +119,7 @@
                                   MDT_MAX_THREADS), 2UL)
 #define MDS_NBUFS       (64 * smp_num_cpus)
 #define MDS_BUFSIZE     (8 * 1024)
-/* Assume file name length = FNAME_MAX = 256 (true for extN).
+/* Assume file name length = FNAME_MAX = 256 (true for ext3).
  *        path name length = PATH_MAX = 4096
  *        LOV MD size max  = EA_MAX = 4000
  * symlink:  FNAME_MAX + PATH_MAX  <- largest

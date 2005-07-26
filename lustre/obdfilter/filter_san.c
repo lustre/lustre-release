@@ -49,7 +49,7 @@ int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!page)
                 RETURN(-ENOMEM);
 
-        /* for extN/ext3 filesystem, we must mount it with 'writeback' mode */
+        /* for ext3/ldiskfs filesystem, we must mount in 'writeback' mode */
         if (!strcmp(lustre_cfg_string(lcfg, 2), "ldiskfs"))
                 strcpy((void *)page, "data=writeback");
         else if (!strcmp(lustre_cfg_string(lcfg, 2), "ext3"))

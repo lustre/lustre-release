@@ -303,21 +303,13 @@ fi
 #
 # LC_CONFIG_BACKINGFS
 #
-# whether to use extN or ldiskfs instead of ext3
+# whether to use ldiskfs instead of ext3
 #
 AC_DEFUN([LC_CONFIG_BACKINGFS],
 [
 BACKINGFS='ext3'
 
-# LLNL patches their ext3 and calls it extN
-AC_MSG_CHECKING([whether to use extN])
-AC_ARG_ENABLE([extN],
-	AC_HELP_STRING([--enable-extN],
-			[use extN instead of ext3 for lustre backend]),
-	[BACKINGFS='extN'],[enable_extN='no'])
-AC_MSG_RESULT([$enable_extN])
-
-# SuSE gets ldiskfs
+# 2.6 gets ldiskfs
 AC_MSG_CHECKING([whether to enable ldiskfs])
 AC_ARG_ENABLE([ldiskfs],
 	AC_HELP_STRING([--enable-ldiskfs],
@@ -525,7 +517,6 @@ AC_CHECK_FUNCS([inet_ntoa])
 #
 AC_DEFUN([LC_CONDITIONALS],
 [AM_CONDITIONAL(LIBLUSTRE, test x$enable_liblustre = xyes)
-AM_CONDITIONAL(EXTN, test x$enable_extN = xyes)
 AM_CONDITIONAL(LDISKFS, test x$enable_ldiskfs = xyes)
 AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)

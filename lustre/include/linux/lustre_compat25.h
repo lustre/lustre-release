@@ -142,7 +142,6 @@ static inline int cleanup_group_info(void)
 #endif
 #define KDEVT_INIT(val)                 (val)
 #define ext3_xattr_set_handle           ext3_xattr_set
-#define extN_xattr_set_handle           extN_xattr_set
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
