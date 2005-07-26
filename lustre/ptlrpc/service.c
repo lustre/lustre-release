@@ -442,7 +442,7 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
                          * reqs; particularly the embedded req */
                         list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
                 }
-        } else if (req->rq_reply_state->rs_prealloc) {
+        } else if (req->rq_reply_state && req->rq_reply_state->rs_prealloc) {
                  /* If we are low on memory, we are not interested in
                     history */
                 list_del(&req->rq_history_list);
@@ -1182,14 +1182,13 @@ int ptlrpc_service_health_check(struct ptlrpc_service *svc)
         struct timeval         right_now;
         long                   timediff, cutoff;
         unsigned long          flags;
-        int                    rc;
+        int                    rc = 0;
 
         if (svc == NULL)
                 return 0;
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         if (list_empty(&svc->srv_request_queue)) {
-                rc = 0;
                 goto out;
         }
 
