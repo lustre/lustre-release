@@ -118,6 +118,7 @@ Details    : Additional detailed health check information on MSD and OSTs
              is now provided through the procfs health_check value.
 
 Severity   : minor
+Frequency  : occasional, depends on IO load
 Bugzilla   : 4466
 Description: Disk fragmentation on the OSTs could eventually cause slowdowns
              after numerous create/delete cycles
@@ -125,6 +126,15 @@ Details    : The ext3 inode allocation policy would not allocate new inodes
              very well on the OSTs because there are no new directories
              being created.  Instead we look for groups with free space if
              the parent directories are nearly full.
+
+Severity   : major
+Bugzilla   : 6302
+Frequency  : rare
+Description: Network or server problems during mount may cause partially
+             mounted clients instead of returning an error.
+Details    : The config llog parsing code may overwrite the error return
+             code during mount error handling, returning success instead
+             of an error.
 
 ------------------------------------------------------------------------------
 

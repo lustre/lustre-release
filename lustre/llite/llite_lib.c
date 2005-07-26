@@ -531,9 +531,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_MYNID);
                 pcfg.pcfg_nal = lmd->lmd_nal;
                 pcfg.pcfg_nid = lmd->lmd_local_nid;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
+                rc = libcfs_nal_cmd(&pcfg);
+                if (rc < 0)
+                        GOTO(out, rc);
         }
 
         if (lmd->lmd_nal == SOCKNAL ||
@@ -547,9 +547,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 LASSERT(pcfg.pcfg_nid);
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_misc    = lmd->lmd_port;
-                err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
+                rc = libcfs_nal_cmd(&pcfg);
+                if (rc < 0)
+                        GOTO(out, rc);
         }
 
         lustre_cfg_bufs_reset(&bufs, name);
@@ -559,46 +559,46 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         lcfg->lcfg_nal = lmd->lmd_nal;
         lcfg->lcfg_nid = lmd->lmd_server_nid;
         LASSERT(lcfg->lcfg_nal);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_del_conn, err);
+        if (rc < 0)
+                GOTO(out_del_conn, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_del_uuid, err);
+        if (rc < 0)
+                GOTO(out_del_uuid, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, lmd->lmd_mds);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
 
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_detach, err);
+        if (rc < 0)
+                GOTO(out_detach, rc);
 
         obd = class_name2obd(name);
         if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
+                GOTO(out_cleanup, rc = -EINVAL);
 
         /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
-        if (err)
-                GOTO(out_cleanup, err);
+        rc = obd_set_info(obd->obd_self_export,
+                          strlen("initial_recov"), "initial_recov",
+                          sizeof(allow_recov), &allow_recov);
+        if (rc)
+                GOTO(out_cleanup, rc);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
-                GOTO(out_cleanup, err);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /* ocd */);
+        if (rc) {
+                CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
+                GOTO(out_cleanup, rc);
         }
 
         exp = class_conn2export(&mdc_conn);
@@ -627,23 +627,27 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 break;
         }
 
+        /* We don't so much care about errors in cleaning up the config llog
+         * connection, as we have already read the config by this point. */
         err = obd_disconnect(exp);
+        if (err)
+                CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
         lustre_cfg_bufs_reset(&bufs, name);
@@ -651,6 +655,8 @@ out_del_uuid:
         lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
+        if (err)
+                CERROR("del MDC UUID failed: rc = %d\n", err);
 
 out_del_conn:
         if (lmd->lmd_nal == SOCKNAL ||
@@ -663,12 +669,10 @@ out_del_conn:
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_flags   = 1;          /* single_share */
                 err = libcfs_nal_cmd(&pcfg);
-                if (err <0)
-                        GOTO(out, err);
+                if (err)
+                        CERROR("del MDS peer failed: rc = %d\n", err);
         }
 out:
-        if (rc == 0)
-                rc = err;
 
         RETURN(rc);
 }
