@@ -371,14 +371,12 @@ void __liblustre_cleanup_(void)
         /* we can't call umount here, because libsysio will not cleanup
          * opening files for us. _sysio_shutdown() will cleanup fds at
          * first but which will also close the sockets we need for umount
-         * liblutre. this delima lead to another hack in
+         * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
 #ifdef INIT_SYSIO
         _sysio_shutdown();
         cleanup_lib_portals();
         PtlFini();
-#else
-        _sysio_shutdown();
 #endif
 }
