@@ -70,7 +70,7 @@ for NAME in $CONFIGS; do
 		sh llmountcleanup.sh
 		sh llrmount.sh
 	fi
-	IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r $RSIZE -s $SIZE"
+	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
 	if [ "$O_DIRECT" -a  "$O_DIRECT" != "no" ]; then
 		IOZONE_OPTS="-I $IOZONE_OPTS"
 	fi
