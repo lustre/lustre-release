@@ -160,7 +160,7 @@ for NAME in $CONFIGS; do
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
 		export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/portals/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
-			$LIBLUSTRETESTS/sanity --target=$ENV_LUSTRE_MNTTGT
+			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
 		sh llmountcleanup.sh
 		#sh llrmount.sh
