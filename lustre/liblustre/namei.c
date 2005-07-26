@@ -110,7 +110,7 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
         if (it && pnode->p_base->pb_ino != NULL) {
                 struct inode *inode = pnode->p_base->pb_ino;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
-                       inode, llu_i2stat(inode)->st_ino,
+                       inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
@@ -159,13 +159,13 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                 clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != st->st_ino ||
-                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
+                    lock->l_resource->lr_name.name[1] !=lli->lli_st_generation){
                         LDLM_ERROR(lock, "data mismatch with ino %llu/%lu",
-                                   st->st_ino, lli->lli_st_generation);
+                                  (long long)st->st_ino,lli->lli_st_generation);
                 }
                 if (S_ISDIR(st->st_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %llu\n",
-                               st->st_ino);
+                               (long long)st->st_ino);
 
                         llu_invalidate_inode_pages(inode);
                 }
@@ -244,7 +244,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 if (lli->lli_it) {
                         CDEBUG(D_INODE, "inode %llu still have intent "
                                         "%p(opc 0x%x), release it\n",
-                                        st->st_ino, lli->lli_it,
+                                        (long long) st->st_ino, lli->lli_it,
                                         lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
                         OBD_FREE(lli->lli_it, sizeof(*lli->lli_it));

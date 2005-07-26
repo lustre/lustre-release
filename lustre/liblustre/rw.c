@@ -244,7 +244,7 @@ int llu_glimpse_size(struct inode *inode)
         st->st_mtime = lov_merge_mtime(lli->lli_smd, st->st_mtime);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
-               (long long)st->st_size, st->st_blocks);
+               (long long)st->st_size, (long long)st->st_blocks);
 
         obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 

@@ -128,7 +128,7 @@ do {                                                                           \
         LASSERT(it);                                                           \
         llu_i2info(inode)->lli_it = NULL;                                      \
         CDEBUG(D_DENTRY, "dettach intent %p from inode %p(ino %llu)\n",        \
-                        it, inode, llu_i2stat(inode)->st_ino);                 \
+                        it, inode, (long long)llu_i2stat(inode)->st_ino);      \
 } while(0)
 
 /* interpet return codes from intent lookup */

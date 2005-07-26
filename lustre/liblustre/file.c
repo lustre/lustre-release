@@ -314,12 +314,13 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 //ll_queue_done_writing(inode);
                 rc = 0;
         } else if (rc) {
-                CERROR("inode %llu close failed: rc %d\n", st->st_ino, rc);
+                CERROR("inode %llu close failed: rc %d\n",
+                       (long long)st->st_ino, rc);
         } else {
                 rc = llu_objects_destroy(req, inode);
                 if (rc)
                         CERROR("inode %llu ll_objects destroy: rc = %d\n",
-                                st->st_ino, rc);
+                               (long long)st->st_ino, rc);
         }
 
         mdc_clear_open_replay_data(och);
@@ -339,8 +340,8 @@ int llu_file_release(struct inode *inode)
         int rc = 0, rc2;
 
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu\n", llu_i2stat(inode)->st_ino,
-               lli->lli_st_generation);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu\n",
+               (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation);
 
         if (llu_is_root_inode(inode))
                 RETURN(0);
@@ -401,12 +402,13 @@ static void llu_truncate(struct inode *inode)
         struct obdo oa = {0};
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n", st->st_ino,
-               lli->lli_st_generation, inode, st->st_size);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n",
+               (long long)st->st_ino, lli->lli_st_generation, inode,
+               (long long)st->st_size);
 
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %llu with no objects\n",
-                       st->st_ino);
+                       (long long)st->st_ino);
                 EXIT;
                 return;
         }
@@ -419,13 +421,14 @@ static void llu_truncate(struct inode *inode)
         obd_adjust_kms(llu_i2obdexp(inode), lsm, st->st_size, 1);
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa.o_id, st->st_size);
+               oa.o_id, (long long)st->st_size);
 
         /* truncate == punch from new size to absolute end of file */
         rc = obd_punch(llu_i2obdexp(inode), &oa, lsm, st->st_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
-                CERROR("obd_truncate fails (%d) ino %llu\n", rc, st->st_ino);
+                CERROR("obd_truncate fails (%d) ino %llu\n",
+                       rc, (long long)st->st_ino);
         else
                 obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                           OBD_MD_FLATIME | OBD_MD_FLMTIME |
