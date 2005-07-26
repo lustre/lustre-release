@@ -18,7 +18,11 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
 
 TMP=${TMP:-/tmp}
-FSTYPE=${FSTYPE:-ext3}
+case `uname -r` in
+2.4*) FSTYPE=${FSTYPE:-ext3} ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
+*) error "unsupported kernel" ;;
+esac
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
