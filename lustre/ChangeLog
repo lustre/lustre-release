@@ -109,13 +109,22 @@ Severity   : enhancement
 Bugzilla   : 6101
 Description: Failover mode is now the default for OSTs.
 Details    : By default, OSTs will now run in failover mode.  To return to
-	     the old behaviour, add '--failout' to the lmc line for OSTs.
+             the old behaviour, add '--failout' to the lmc line for OSTs.
 
 Severity   : enhancement
 Bugzilla   : 1693
 Description: Health checks are now provided for MDS and OSTs
 Details    : Additional detailed health check information on MSD and OSTs   
-	     is now provided through the procfs health_check value.
+             is now provided through the procfs health_check value.
+
+Severity   : minor
+Bugzilla   : 4466
+Description: Disk fragmentation on the OSTs could eventually cause slowdowns
+             after numerous create/delete cycles
+Details    : The ext3 inode allocation policy would not allocate new inodes
+             very well on the OSTs because there are no new directories
+             being created.  Instead we look for groups with free space if
+             the parent directories are nearly full.
 
 ------------------------------------------------------------------------------
 
