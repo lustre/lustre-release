@@ -75,6 +75,7 @@ extern unsigned int portals_catastrophe;
 #define S_CMOBD       0x01000000
 #define S_SEC         0x02000000
 #define S_GSS         0x04000000
+#define S_GKS         0x08000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
