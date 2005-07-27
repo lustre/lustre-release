@@ -168,6 +168,9 @@ restart:
                                dentry->d_inode);
                         dget_locked(dentry);
                         __d_drop(dentry);
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                        INIT_HLIST_NODE(&dentry->d_hash);
+#endif
                         spin_unlock(&dcache_lock);
                         dput(dentry);
                         goto restart;
