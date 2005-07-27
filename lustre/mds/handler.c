@@ -805,7 +805,7 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
 
         /* XXX layering violation!  -phil */
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
         
         /*
          * get this: if mds_blocking_ast is racing with mds_intent_policy, such
@@ -814,13 +814,13 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
          * blocking function anymore.  So check, and return early, if so.
          */
         if (lock->l_blocking_ast != mds_blocking_ast) {
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;
@@ -2698,26 +2698,26 @@ static void mds_revoke_export_locks(struct obd_export *exp)
         spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each_entry_safe(lock, next, locklist, l_export_chain) {
 
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 if (lock->l_req_mode != lock->l_granted_mode) {
-                        unlock_res(lock->l_resource);
+                        unlock_res_and_lock(lock);
                         continue;
                 }
 
                 LASSERT(lock->l_resource);
                 if (lock->l_resource->lr_type != LDLM_IBITS &&
                     lock->l_resource->lr_type != LDLM_PLAIN) {
-                        unlock_res(lock->l_resource);
+                        unlock_res_and_lock(lock);
                         continue;
                 }
 
                 if (lock->l_flags & LDLM_FL_AST_SENT) {
-                        unlock_res(lock->l_resource);
+                        unlock_res_and_lock(lock);
                         continue;
                 }
 
                 lock->l_flags |= LDLM_FL_AST_SENT;
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
 
                 /* the desc just pretend to exclusive */
                 ldlm_lock2desc(lock, &desc);
@@ -4140,7 +4140,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         }
 
         /* Fixup the lock to be given to the client */
-        lock_res(new_lock->l_resource);
+        lock_res_and_lock(new_lock);
         new_lock->l_readers = 0;
         new_lock->l_writers = 0;
 
@@ -4159,7 +4159,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
-        unlock_res(new_lock->l_resource);
+        unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);

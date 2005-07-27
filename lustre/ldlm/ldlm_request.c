@@ -214,9 +214,9 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
                                 struct lustre_handle *lockh, int mode)
 {
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
 
         ldlm_lock_decref_and_cancel(lockh, mode);
@@ -402,9 +402,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         }
 
         if ((*flags) & LDLM_FL_AST_SENT) {
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
         }
 
@@ -573,11 +573,11 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 local_only = lock->l_flags & LDLM_FL_LOCAL_ONLY;
                 ldlm_cancel_callback(lock);
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
 
                 if (local_only) {
                         CDEBUG(D_INFO, "not sending request (at caller's "
@@ -676,7 +676,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 spin_unlock(&ns->ns_unused_lock);
 
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 ldlm_lock_remove_from_lru(lock);
 
                 /* Setting the CBPENDING flag is a little misleading, but
@@ -694,7 +694,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                 if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))                        
                         list_add(&lock->l_tmp, &cblist);
 
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
 
                 spin_lock(&ns->ns_unused_lock);
 

@@ -2377,7 +2377,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
                 return;
         }
 
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
 #ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
@@ -2393,7 +2393,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
         }
 #endif
         lock->l_ast_data = data;
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 }
 

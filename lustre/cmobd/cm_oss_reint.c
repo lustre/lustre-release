@@ -141,7 +141,7 @@ static int cache_blocking_ast(struct ldlm_lock *lock,
         }
 
         /* XXX layering violation!  -phil */
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
         
         /* Get this: if filter_blocking_ast is racing with ldlm_intent_policy,
          * such that filter_blocking_ast is called just before l_i_p takes the
@@ -149,13 +149,13 @@ static int cache_blocking_ast(struct ldlm_lock *lock,
          * correct blocking function anymore.  So check, and return early, if
          * so. */
         if (lock->l_blocking_ast != cache_blocking_ast) {
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;

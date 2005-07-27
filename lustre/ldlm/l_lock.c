@@ -48,3 +48,48 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_lib.h>
 
+/*
+ * ldlm locking uses resource to serialize access to locks
+ * but there is a case when we change resource of lock upon
+ * enqueue reply. we rely on that lock->l_resource = new_res
+ * is atomic
+ */
+struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
+{
+        struct ldlm_resource *res = lock->l_resource;
+
+        if (!res->lr_namespace->ns_client) {
+                /* on server-side resource of lock doesn't change */
+                lock_res(res);
+                return res;
+        } 
+
+        bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
+        LASSERT(lock->l_pidb == 0);
+        res = lock->l_resource;
+        lock->l_pidb = current->pid;
+        lock_res(res);
+        return res;
+}
+
+void unlock_bitlock(struct ldlm_lock *lock)
+{
+        LASSERT(lock->l_pidb == current->pid);
+        lock->l_pidb = 0;
+        bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
+}
+
+void unlock_res_and_lock(struct ldlm_lock *lock)
+{
+        struct ldlm_resource *res = lock->l_resource;
+
+        if (!res->lr_namespace->ns_client) {
+                /* on server-side resource of lock doesn't change */
+                unlock_res(res);
+                return;
+        }
+
+        unlock_res(res);
+        unlock_bitlock(lock);
+}
+

@@ -106,9 +106,12 @@ typedef enum {
 #define LDLM_FL_CLEANED        0x800000
 
 /* optimization hint: LDLM can run blocking callback from current context
- * w/o involving separate thread. in order to decrease cs rate -bzzz */
+ * w/o involving separate thread. in order to decrease cs rate */
 #define LDLM_FL_ATOMIC_CB      0x1000000
 
+/* while this flag is set, the lock can't change resource */
+#define LDLM_FL_LOCK_PROTECT   0x4000000
+#define LDLM_FL_LOCK_PROTECT_BIT  26
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -307,6 +310,7 @@ struct ldlm_lock {
         unsigned long         l_callback_timeout;
 
         __u32                 l_pid;            /* pid which created this lock */
+        __u32                 l_pidb;           /* who holds LOCK_PROTECT_BIT */
 
         struct list_head      l_tmp;
 
@@ -681,5 +685,7 @@ static inline void check_res_locked(struct ldlm_resource *res)
         LASSERT_SPIN_LOCKED(&res->lr_lock);
 }
 
+struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
+void unlock_res_and_lock(struct ldlm_lock *lock);
 
 #endif

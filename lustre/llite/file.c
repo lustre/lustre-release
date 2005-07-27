@@ -806,7 +806,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
                 down(&lli->lli_size_sem);
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
 		
@@ -814,7 +814,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 up(&lli->lli_size_sem);
                 //ll_try_done_writing(inode);
         iput:
@@ -862,14 +862,14 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
                 down(&inode->i_sem);
-                lock_res(lock->l_resource);
+                lock_res_and_lock(lock);
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 up(&inode->i_sem);
         }
 

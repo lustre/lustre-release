@@ -1068,20 +1068,20 @@ static int filter_blocking_ast(struct ldlm_lock *lock,
         }
 
         /* XXX layering violation!  -phil */
-        lock_res(lock->l_resource);
+        lock_res_and_lock(lock);
         /* Get this: if filter_blocking_ast is racing with ldlm_intent_policy,
          * such that filter_blocking_ast is called just before l_i_p takes the
          * ns_lock, then by the time we get the lock, we might not be the
          * correct blocking function anymore.  So check, and return early, if
          * so. */
         if (lock->l_blocking_ast != filter_blocking_ast) {
-                unlock_res(lock->l_resource);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        unlock_res(lock->l_resource);
+        unlock_res_and_lock(lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;
@@ -1308,7 +1308,8 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         lock->l_policy_data.l_extent.end = OBD_OBJECT_EOF;
         lock->l_req_mode = LCK_PR;
 
-        lock_res(res);
+        lock_res_and_lock(lock);
+        res = lock->l_resource;
         rc = policy(lock, &tmpflags, 0, &err, &rpc_list);
 
         /* FIXME: we should change the policy function slightly, to not make
@@ -1325,7 +1326,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         if (rc == LDLM_ITER_CONTINUE) {
                 /* The lock met with no resistance; we're finished. */
-                unlock_res(res);
+                unlock_res_and_lock(lock);
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
