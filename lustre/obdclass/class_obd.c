@@ -5,20 +5,23 @@
  *
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
@@ -457,7 +460,7 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        int rc = 0 , i;
+        int rc = 0, i;
         *eof = 1;
 
         if (portals_catastrophe)
@@ -686,8 +689,10 @@ int init_obdclass(void)
         int err;
         int i;
 
+#ifdef __KERNEL__
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
+#endif
 
         err = obd_init_checks();
         if (err == -EOVERFLOW)

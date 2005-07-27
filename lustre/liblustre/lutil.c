@@ -239,8 +239,8 @@ void liblustre_set_nal_nid()
         tcpnal_mynid = ((uint64_t)ip << 32) | pid;
 
         in.s_addr = htonl(ip);
-        printf("LibLustre: TCPNAL NID: %016llx (%s:%u)\n", 
-               tcpnal_mynid, inet_ntoa(in), pid);
+        CDEBUG(D_RPCTRACE | D_VFSTRACE, "TCPNAL NID: %016Lx (%s:%u)\n",
+               (long long)tcpnal_mynid, inet_ntoa(in), pid);
 #else
         pid_t pid;
         uint32_t ip;
@@ -250,7 +250,7 @@ void liblustre_set_nal_nid()
                 ip <<= 8;
         pid = getpid() & 0xFF;
         tcpnal_mynid = ip | pid;
-        printf("LibLustre: NAL NID: %08x (%u)\n", 
+        CDEBUG(D_RPCTRACE | D_VFSTRACE, "NAL NID: %08x (%u)\n",
                tcpnal_mynid, pid);
 #endif
 }

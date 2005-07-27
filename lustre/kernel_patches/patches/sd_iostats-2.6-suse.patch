@@ -2,13 +2,14 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891_lustre.1.4.0-phik/drivers/s
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891_lustre.1.4.0-phik.orig/drivers/scsi/Kconfig	2004-11-11 07:28:52.000000000 -0800
 +++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891_lustre.1.4.0-phik/drivers/scsi/Kconfig	2005-01-06 22:58:42.338770968 -0800
-@@ -55,6 +55,13 @@
+@@ -55,6 +55,14 @@
  	  In this case, do not compile the driver for your SCSI host adapter
  	  (below) as a module either.
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
 +   depends on BLK_DEV_SD
++   default y
 +   ---help---
 +     This enables SCSI disk I/O stats collection.  You must also enable
 +     /proc file system support if you want this feature.

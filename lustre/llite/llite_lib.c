@@ -1212,6 +1212,12 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
+                        if (lsm->lsm_magic != LOV_MAGIC) {
+                                dump_lsm(D_ERROR, lsm);
+                                LBUG();
+                        }
+                        CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
+                               lsm, inode->i_ino, inode->i_generation, inode);
                         lli->lli_smd = lsm;
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
