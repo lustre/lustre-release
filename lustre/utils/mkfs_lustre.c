@@ -32,7 +32,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-
 #include <string.h>
 #include <getopt.h>
 
@@ -78,16 +77,16 @@ void usage(FILE *out)
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
                 "\t\t--failover=<failover-address>\n"
+                "\t\t--backfstype=<fstype>: backing fs type (ext3, ldiskfs)\n"
                 "\t\t--device_size=#N(KB):device size \n"
                 "\t\t--stripe_count=#N:number of stripe\n"
                 "\t\t--stripe_size=#N(KB):stripe size\n"
                 "\t\t--index=#N:target index\n"
-                "\t\t--mountopts=<opts>: permanent mount options\n"
-                "\t\t--smfsopts=<opts>: smfs format options\n"
-                "\t\t--ext3opts=<opts>: ext3 format options\n"
+                "\t\t--mountfsoptions=<opts>: permanent mount options\n"
+                "\t\t--mkfsoptions=<opts>: format options\n"
                 "\t\t--timeout=<secs>: system timeout period\n"
-                "\t\t--maxwait=<secs>: time to wait for other servers to join\n"
-                "\t\t--forceformat: overwrite an existing disk\n"
+                "\t\t--startupwait=<secs>: time to wait for other servers to join\n"
+                "\t\t--reformat: overwrite an existing disk\n"
                 "\t\t--verbose\n");
         exit(out != stdout);
 }
@@ -319,8 +318,6 @@ int write_local_files(struct mkfs_opts *mop)
         lsd.lsd_index = mop->mo_index;
         fwrite(&lsd, sizeof(lsd), 1, filep);
         ret = 0;
-
-out_close:
         fclose(filep);
 out_umnt:
         sprintf(cmd, "umount %s", mntpt);
@@ -341,7 +338,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
                         fprintf(stderr, "size of filesystem must be larger "
-                                "than 8MB, but is set to %dKB\n",
+                                "than 8MB, but is set to %ldKB\n",
                                 mop->mo_device_sz);
                         return EINVAL;
                 }
@@ -369,7 +366,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         if (journal_sz > 400)
                                 journal_sz = 400;
                         if (journal_sz) {
-                                sprintf(buf, " -J size=%d", journal_sz);
+                                sprintf(buf, " -J size=%ld", journal_sz);
                                 strcat(mop->mo_mkfsopts, buf);
                         }
                 }
@@ -388,7 +385,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         else if ((IS_OST(&mop->mo_ldd) && (device_sz > 1000000))) 
                                   inode_sz = 16384;
                         if (inode_sz > 0) {
-                                sprintf(buf, " -i %d", inode_sz);
+                                sprintf(buf, " -i %ld", inode_sz);
                                 strcat(mop->mo_mkfsopts, buf);
                         }
                 }
@@ -399,7 +396,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
                 long journal_sz = 0;
                 if (journal_sz > 0) { /* FIXME */
-                        sprintf(buf, " --journal_size %d", journal_sz);
+                        sprintf(buf, " --journal_size %ld", journal_sz);
                         strcat(mop->mo_mkfsopts, buf);
                 }
                 sprintf(mkfs_cmd, "mkreiserfs -ff ");
@@ -407,7 +404,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         } else {
                 fprintf(stderr,"unsupported fs type: %d (%s)\n",
                         mop->mo_ldd.ldd_mount_type, 
-                        MT_STR(mop->mo_ldd));
+                        MT_STR(&mop->mo_ldd));
                 return EINVAL;
         }
 
@@ -461,7 +458,7 @@ int create_loop_device(struct mkfs_opts *mop)
        
         init_loop_base();
 
-        sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%d of=%s", 
+        sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%ld of=%s", 
                 mop->mo_device_sz, mop->mo_device);
         ret = run_command(cmd, cmd_out);
         if (ret != 0){
@@ -766,7 +763,7 @@ void set_defaults(struct mkfs_opts *mop)
         mop->mo_hostnid.primary = libcfs_str2nid(hostname);
 }
 
-static inline badopt(char opt, char *type)
+static inline void badopt(char opt, char *type)
 {
         fprintf(stderr, "%s: '%c' only valid for %s\n",
                 progname, opt, type);
@@ -778,21 +775,21 @@ int main(int argc , char *const argv[])
 {
         struct mkfs_opts mop;
         static struct option long_opt[] = {
+                {"backfstype", 1, 0, 'b'},
                 {"configdev", 1, 0, 'C'},
                 {"device_size", 1, 0, 'd'},
-                {"ext3opts", 1, 0, 'e'},
                 {"fsname",1, 0, 'n'},
                 {"failover", 1, 0, 'f'},
-                {"forceformat", 0, 0, 'F'},
                 {"help", 0, 0, 'h'},
                 {"index", 1, 0, 'I'},
-                {"maxwait", 1, 0, 'w'},
                 {"mdt", 0, 0, 'M'},
                 {"mgmt", 0, 0, 'G'},
                 {"mgmtnode", 1, 0, 'm'},
-                {"mountopts", 1, 0, 'o'},
+                {"mkfsoptions", 1, 0, 'k'},
+                {"mountfsoptions", 1, 0, 'o'},
                 {"ost", 0, 0, 'O'},
-                {"smfsopts", 1, 0, 'S'},
+                {"reformat", 0, 0, 'r'},
+                {"startupwait", 1, 0, 'w'},
                 {"stripe_count", 1, 0, 'c'},
                 {"stripe_size", 1, 0, 's'},
                 {"stripe_index", 1, 0, 'i'},
@@ -800,7 +797,7 @@ int main(int argc , char *const argv[])
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "C:d:e:n:f:FhI:w:MGm:o:OS:c:s:i:t:v";
+        char *optstring = "b:C:d:n:f:hI:MGm:k:o:Orw:c:s:i:t:v";
         char opt;
         char *mountopts = NULL;
         int  ret = 0;
@@ -814,6 +811,17 @@ int main(int argc , char *const argv[])
 
         while ((opt = getopt_long(argc,argv,optstring,long_opt,NULL)) != EOF) {
                 switch (opt) {
+                case 'b': {
+                        int i = 0;
+                        while (i < LDD_MT_LAST) {
+                                if (strcmp(optarg, mt_str(i)) == 0) {
+                                        mop.mo_ldd.ldd_mount_type = i;
+                                        break;
+                                }
+                                i++;
+                        }
+                        break;
+                }
                 case 'C':
                         //FIXME
                         exit(2);
@@ -828,19 +836,12 @@ int main(int argc , char *const argv[])
                 case 'd':
                         mop.mo_device_sz = atol(optarg); 
                         break;
-                case 'e':
-                        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) ||
-                            (mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3))
-                                strncpy(mop.mo_mkfsopts, optarg, 
-                                        sizeof(mop.mo_mkfsopts) - 1);
-                        else
-                                badopt(opt, "ext3,ldiskfs");
+                case 'k':
+                        strncpy(mop.mo_mkfsopts, optarg, 
+                                sizeof(mop.mo_mkfsopts) - 1);
                         break;
                 case 'f':
                         mop.mo_hostnid.backup = libcfs_str2nid(optarg);
-                        break;
-                case 'F':
-                        mop.mo_flags |= MO_FORCEFORMAT;
                         break;
                 case 'G':
                         mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MGMT;
@@ -880,15 +881,14 @@ int main(int argc , char *const argv[])
                 case 'O':
                         mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_OST;
                         break;
+                case 'r':
+                        mop.mo_flags |= MO_FORCEFORMAT;
+                        break;
                 case 's':
                         if (IS_MDT(&mop.mo_ldd)) 
                                 mop.mo_stripe_sz = atol(optarg) * 1024;
                         else 
                                 badopt(opt, "MDT");
-                        break;
-                case 'S':
-                        mop.mo_ldd.ldd_mount_type = LDD_MT_SMFS;
-                        strncpy(mop.mo_mkfsopts, optarg, sizeof(mop.mo_mkfsopts) - 1);
                         break;
                 case 't':
                         mop.mo_timeout = atol(optarg);

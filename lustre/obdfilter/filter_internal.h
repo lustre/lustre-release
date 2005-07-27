@@ -45,26 +45,6 @@
 
 #define FILTER_GRANT_CHUNK (2ULL*1024*1024)
 
-/* Data stored per server at the head of the last_rcvd file.  In le32 order.
- * Try to keep this the same as mds_server_data so we might one day merge. */
-struct filter_server_data {
-        __u8  fsd_uuid[40];        /* server UUID */
-        __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
-        __u64 fsd_last_transno;    /* last completed transaction ID */
-        __u64 fsd_mount_count;     /* FILTER incarnation number */
-        __u32 fsd_feature_compat;  /* compatible feature flags */
-        __u32 fsd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 fsd_feature_incompat;/* incompatible feature flags */
-        __u32 fsd_server_size;     /* size of server data area */
-        __u32 fsd_client_start;    /* start of per-client data area */
-        __u16 fsd_client_size;     /* size of per-client data area */
-        __u16 fsd_subdir_count;    /* number of subdirectories for objects */
-        __u64 fsd_catalog_oid;     /* recovery catalog object id */
-        __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  fsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
-};
-
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
@@ -107,7 +87,7 @@ int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, struct obdo *);
 int filter_update_server_data(struct obd_device *, struct file *,
-                              struct filter_server_data *, int force_sync);
+                              struct lr_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         void *option);
@@ -128,8 +108,8 @@ int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
 int filter_brw(int cmd, struct obd_export *, struct obdo *,
-	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
-	       struct obd_trans_info *);
+               struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
+               struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
                            int niocount, struct niobuf_local *res);

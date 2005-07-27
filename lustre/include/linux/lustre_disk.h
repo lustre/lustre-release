@@ -68,41 +68,47 @@ struct lr_server_data {
 #define LDD_SV_TYPE_OST  0x0002
 #define LDD_SV_TYPE_MGMT 0x0004
 
-enum {
+enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 
         LDD_MT_LDISKFS,
         LDD_MT_SMFS,   
-        LDD_MT_REISERFS
+        LDD_MT_REISERFS,
+        LDD_MT_LAST
 };
        
-static char mount_type_string[4][] = {
-        "ext3",
-        "ldiskfs",
-        "smfs",
-        "reiserfs"
+static inline char *mt_str(enum ldd_mount_type mt)
+{
+        static char *mount_type_string[] = {
+                "ext3",
+                "ldiskfs",
+                "smfs",
+                "reiserfs",
+        };
+        //LASSERT(mt < LDD_MT_LAST);
+        return mount_type_string[mt];
 }
+
+struct host_desc {
+        ptl_nid_t primary; 
+        ptl_nid_t backup;
+};
 
 struct lustre_disk_data {
         __u32     ldd_magic;
-        __u32     ldd_flags;
+        __u32     ldd_flags;           /* LDD_SV_TYPE */
         struct host_desc ldd_mgmtnid;  /* mgmt nid; lmd can override */
         char      ldd_fsname[64];      /* filesystem this server is part of */
         char      ldd_svname[64];      /* this server's name (lustre-mdt0001) */
-        __u8      ldd_mount_type;      /* target fs type LDD_FS_TYPE_* */
+        enum ldd_mount_type ldd_mount_type; /* target fs type LDD_MT_* */
         char      ldd_mount_opts[128]; /* target fs mount opts */
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_SV_TYPE_MDT)
 #define IS_OST(data)   ((data)->ldd_flags & LDD_SV_TYPE_OST)
 #define IS_MGMT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MGMT)
-#define MT_STR(data)   mount_type_string[(data)->ldd_mount_type]
+#define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /****************** mount command *********************/
-
-struct host_desc {
-        ptl_nid_t primary; 
-        ptl_nid_t backup;
-};
 
 /* Passed by mount - no persistent info here */
 struct lustre_mount_data {
@@ -116,12 +122,15 @@ struct lustre_mount_data {
                                          _device_ mount options) */
 };
 
-#define LMD_FLG_FLOCK  0x0001  /* Enable flock */
-#define LMD_FLG_MNTCNF 0x1000  /* MountConf compat */
-#define LMD_FLG_CLIENT 0x2000  /* Mounting a client only; no real device */
+#define LMD_FLG_FLOCK   0x0001  /* Enable flock */
+#define LMD_FLG_RECOVER 0x0002  /* Allow recovery */
+#define LMD_FLG_MNTCNF  0x1000  /* MountConf compat */
+#define LMD_FLG_CLIENT  0x2000  /* Mounting a client only; no real device */
 
+/* 2nd half is for old clients */
 #define lmd_is_client(x) \
-        (((x)->lmd_flags & LMD_FLG_CLIENT) || (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
+        (((x)->lmd_flags & LMD_FLG_CLIENT) || \
+        (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
 
 
 /****************** mkfs command *********************/

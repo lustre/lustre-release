@@ -1456,6 +1456,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
+        /* setup 1:/dev/loop/0 2:ext3 3:mdsA 4:errors=remount-ro,iopen_nopriv*/
+
         if (lcfg->lcfg_bufcount < 3)
                 RETURN(rc = -EINVAL);
 
@@ -1482,6 +1484,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 sprintf(options + strlen(options), ",%s",
                         lustre_cfg_string(lcfg, 4));
 
+        //FIXME mount was already done in lustre_fill_super,
+        //we just need to access it
         mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
                             lustre_cfg_string(lcfg, 1), (void *)options);
         free_page(page);

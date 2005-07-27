@@ -412,11 +412,11 @@ out:
         RETURN(err);
 } /* ll_read_super */
 
-int client_fill_super(struct super_block *sb,
-                      struct lustre_mount_data * lmd)
+int client_fill_super(struct super_block *sb)
 {
         struct lustre_profile *lprof;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct lustre_mount_data *lmd = sbi->ll_lmd;
         char * osc = NULL;
         char * mdc = NULL;
         char   ll_instance[sizeof(sb) * 2 + 1];

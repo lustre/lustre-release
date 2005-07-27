@@ -195,8 +195,10 @@ init_options(struct lustre_mount_data *lmd)
 int
 print_options(struct lustre_mount_data *lmd)
 {
-        printf("mgmt primary nid: %x\n", /*libcfs_nid2str*/(lmd->lmd_mgmtnid.primary));
-        printf("mgmt backup nid:  %x\n", /*libcfs_nid2str*/(lmd->lmd_mgmtnid.backup));
+        printf("mgmt primary nid: %s\n",
+               libcfs_nid2str(lmd->lmd_mgmtnid.primary));
+        printf("mgmt backup nid:  %s\n",
+               libcfs_nid2str(lmd->lmd_mgmtnid.backup));
         printf("device:           %s\n", lmd->lmd_dev);
         printf("mount point:      %s\n", lmd->lmd_mtpt);
         printf("options:          %s\n", lmd->lmd_opts);

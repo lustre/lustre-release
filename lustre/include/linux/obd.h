@@ -499,35 +499,36 @@ enum llog_ctxt_id {
 
 /* corresponds to one of the obd's */
 struct obd_device {
-        struct obd_type *obd_type;
+        struct obd_type        *obd_type;
 
         /* common and UUID name of this device */
-        char *obd_name;
-        struct obd_uuid obd_uuid;
+        char                   *obd_name;
+        struct obd_uuid         obd_uuid;
+        struct obd_uuid         obd_grp_uuid;    /* for manual cleanup */
 
-        int obd_minor;
+        int                     obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
                 obd_no_recov:1, obd_stopping:1, obd_starting:1, 
                 obd_force:1, obd_fail:1;
-        atomic_t obd_refcount;
-        wait_queue_head_t obd_refcount_waitq;
-        struct proc_dir_entry *obd_proc_entry;
-        struct list_head       obd_exports;
-        int                    obd_num_exports;
-        struct ldlm_namespace *obd_namespace;
-        struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
+        atomic_t                obd_refcount;
+        wait_queue_head_t       obd_refcount_waitq;
+        struct proc_dir_entry  *obd_proc_entry;
+        struct list_head        obd_exports;
+        int                     obd_num_exports;
+        struct ldlm_namespace  *obd_namespace;
+        struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
-        spinlock_t             obd_dev_lock;
-        __u64                  obd_last_committed;
+        spinlock_t              obd_dev_lock;
+        __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;
-        unsigned long           obd_osfs_age;   /* jiffies */
+        unsigned long           obd_osfs_age;    /* jiffies */
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
-        struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
-        struct obd_device       *obd_observer;
-        struct obd_export       *obd_self_export;
+        struct llog_ctxt       *obd_llog_ctxt[LLOG_MAX_CTXTS];
+        struct obd_device      *obd_observer;
+        struct obd_export      *obd_self_export;
         struct list_head        obd_exports_timed;  /* for ping evictor */
         time_t                  obd_eviction_timer; /* for ping evictor */
 
