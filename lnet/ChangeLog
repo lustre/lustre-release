@@ -1,3 +1,15 @@
+tba  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.4
+       * bug fixes
+
+Severity   : major
+Frequency  : rare (large Voltaire clusters only)
+Bugzilla   : 6993
+Description: the default number of reserved transmit descriptors was too low
+             for some large clusters
+Details    : As a workaround, the number was increased.  A proper fix includes
+             a run-time tunable.
+
 2005-06-02  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
