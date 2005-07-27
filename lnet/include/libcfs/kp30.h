@@ -424,6 +424,9 @@ enum {
 };
 
 #define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
+#ifndef CRAY_PORTALS
+#define NALID_FROM_IFACE(nal) (nal)
+#endif
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 

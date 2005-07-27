@@ -202,7 +202,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
                 return str;
         }
 
-        switch(nal){
+        switch(NALID_FROM_IFACE(nal)){
 /* XXX this could be a nal method of some sort, 'cept it's config
  * dependent whether (say) socknal NIDs are actually IP addresses... */
 #if !CRAY_PORTALS
@@ -229,6 +229,11 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case LONAL:
                 snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
+                break;
+#else
+        case PTL_IFACE_SS:
+        case PTL_IFACE_SS_ACCEL:
+                snprintf(str, PTL_NALFMT_SIZE, "%u", (__u32)nid);
                 break;
 #endif
         default:
