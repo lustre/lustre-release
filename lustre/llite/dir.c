@@ -538,7 +538,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 valid |= OBD_MD_FLDIREA;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, 0,
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL,
                                 obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                 &request);
                 if (rc < 0) {

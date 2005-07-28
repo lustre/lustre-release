@@ -301,8 +301,8 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                __u64 valid, const char *ea_name, int ea_namelen,
-                unsigned int ea_size, struct ptlrpc_request **request);
+                __u64 valid, const char *xattr_name, unsigned int ea_size,
+                struct ptlrpc_request **request);
 int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request);

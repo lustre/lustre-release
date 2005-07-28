@@ -683,7 +683,7 @@ static int lmv_getstatus(struct obd_export *exp, struct lustre_id *id)
 }
 
 static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
-                       __u64 valid, const char *ea_name, int ea_namelen,
+                       __u64 valid, const char *xattr_name,
                        unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -699,8 +699,8 @@ static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
         LASSERT(i < lmv->desc.ld_tgt_count);
 
 
-        rc = md_getattr(lmv->tgts[i].ltd_exp, id, valid,
-                        ea_name, ea_namelen, ea_size, request);
+        rc = md_getattr(lmv->tgts[i].ltd_exp, id, valid, xattr_name,
+                        ea_size, request);
         if (rc)
                 RETURN(rc);
         
@@ -887,7 +887,7 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
 
         /* time to update mea of parent id */
         rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
-                        id, valid, NULL, 0, mealen, &req);
+                        id, valid, NULL, mealen, &req);
         if (rc) {
                 CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);

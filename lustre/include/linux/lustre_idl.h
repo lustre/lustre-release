@@ -393,7 +393,7 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLUID    (0x0000000000000200LL)    /* user ID */
 #define OBD_MD_FLGID    (0x0000000000000400LL)    /* group ID */
 #define OBD_MD_FLFLAGS  (0x0000000000000800LL)    /* flags word */
-#define OBD_MD_FLEA     (0x0000000000001000LL)    /* extended attributes */
+#define OBD_MD_FLXATTR  (0x0000000000001000LL)    /* user xattr */
 #define OBD_MD_FLNLINK  (0x0000000000002000LL)    /* link count */
 #define OBD_MD_FLGENER  (0x0000000000004000LL)    /* generation number */
 #define OBD_MD_FLINLINE (0x0000000000008000LL)    /* inline data */
@@ -414,16 +414,16 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_REINT    (0x0000000040000000LL)    /* reintegrate oa */
 #define OBD_MD_FID      (0x0000000080000000LL)    /* lustre_id data */
 #define OBD_MD_MEA      (0x0000000100000000LL)    /* shows we are interested in MEA */
-#define OBD_MD_FLEALIST (0x0000000200000000LL)    /* list extended attributes */
-#define OBD_MD_FLACL_ACCESS (0x0000000400000000LL) /* access acl */
-#define OBD_MD_RACL     (0x0000000800000000LL)    /* remote acl */
+#define OBD_MD_FLXATTRLIST (0x0000000200000000LL) /* user xattr list */
+#define OBD_MD_FLACL    (0x0000000400000000LL)    /* acl */
+#define OBD_MD_FLRMTACL (0x0000000800000000LL)    /* remote acl */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
                            OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
                            OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
-                           OBD_MD_FLEA | OBD_MD_FLEALIST |              \
-                           OBD_MD_FLACL_ACCESS | OBD_MD_MDS))
+                           OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST |        \
+                           OBD_MD_FLACL | OBD_MD_MDS))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {

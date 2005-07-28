@@ -989,7 +989,7 @@ int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
                 if (rc != -ENODATA && rc != -EOPNOTSUPP)
                         CERROR("getxattr failed: %d", rc);
         } else {
-                repbody->valid |= OBD_MD_FLEA;
+                repbody->valid |= OBD_MD_FLXATTR;
                 repbody->eadatasize = rc;
                 rc = 0;
         }
@@ -1016,7 +1016,7 @@ int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
         if (rc < 0) {
                 CERROR("listxattr failed: %d", rc);
         } else {
-                repbody->valid |= OBD_MD_FLEALIST;
+                repbody->valid |= OBD_MD_FLXATTRLIST;
                 repbody->eadatasize = rc;
                 rc = 0;
         }
@@ -1053,7 +1053,7 @@ int mds_pack_posix_acl(struct lustre_msg *repmsg, int offset,
         }
 
         *sizep = cpu_to_le32(size);
-        body->valid |= OBD_MD_FLACL_ACCESS;
+        body->valid |= OBD_MD_FLACL;
 
         RETURN(0);
 }
@@ -1107,7 +1107,7 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int reply_off,
         if (inode->i_op->permission(inode, MAY_READ, NULL) == 0)
                 perm->mrp_perm |= MAY_READ;
 
-        body->valid |= (OBD_MD_FLACL_ACCESS | OBD_MD_RACL);
+        body->valid |= (OBD_MD_FLACL | OBD_MD_FLRMTACL);
 
         RETURN(0);
 }
@@ -1171,13 +1171,13 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         } else if (S_ISLNK(inode->i_mode) &&
                    (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 rc = mds_pack_link(dentry, req, body, reply_off);
-        } else if (reqbody->valid & OBD_MD_FLEA) {
+        } else if (reqbody->valid & OBD_MD_FLXATTR) {
                 rc = mds_pack_ea(dentry, req, body, req_off, reply_off);
-        } else if (reqbody->valid & OBD_MD_FLEALIST) {
+        } else if (reqbody->valid & OBD_MD_FLXATTRLIST) {
                 rc = mds_pack_ealist(dentry, req, body, reply_off);
         }
         
-        if (reqbody->valid & OBD_MD_FLACL_ACCESS) {
+        if (reqbody->valid & OBD_MD_FLACL) {
                 int inc = (reqbody->valid & OBD_MD_FLEASIZE) ? 2 : 1;
                 rc = mds_pack_acl(req, reply_off + inc, body, inode);
         }
@@ -1254,7 +1254,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
                 bufcount++;
                 CDEBUG(D_INODE, "symlink size: %Lu, reply space: %d\n",
                        inode->i_size + 1, body->eadatasize);
-        } else if ((body->valid & OBD_MD_FLEA)) {
+        } else if ((body->valid & OBD_MD_FLXATTR)) {
                 char *ea_name = lustre_msg_string(req->rq_reqmsg, 
                                                   offset + 1, 0);
                 rc = -EOPNOTSUPP;
@@ -1270,7 +1270,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
                         size[bufcount] = min_t(int, body->eadatasize, rc);
                 }
                 bufcount++;
-        } else if (body->valid & OBD_MD_FLEALIST) {
+        } else if (body->valid & OBD_MD_FLXATTRLIST) {
                 rc = -EOPNOTSUPP;
                 if (inode->i_op && inode->i_op->getxattr) 
                         rc = inode->i_op->listxattr(de, NULL, 0);
@@ -1287,7 +1287,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
         }
         
         /* may co-exist with OBD_MD_FLEASIZE */
-        if (body->valid & OBD_MD_FLACL_ACCESS) {
+        if (body->valid & OBD_MD_FLACL) {
                 if (req->rq_export->exp_mds_data.med_remote) {
                         size[bufcount++] = sizeof(struct mds_remote_perm);
                 } else {

@@ -106,7 +106,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         struct mds_body *body, *reqbody;
         void            *eadata;
         int              rc;
-        int              repsize[4] = {sizeof(*body)};
+        int              repsize[2] = {sizeof(*body)};
         int              bufcount = 1;
         ENTRY;
 
@@ -119,11 +119,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         }
 
         reqbody = lustre_msg_buf(req->rq_reqmsg, 1, sizeof(*reqbody));
-
-        if (reqbody->valid & OBD_MD_FLACL_ACCESS) {
-                repsize[bufcount++] = 4;
-                repsize[bufcount++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
-        }
+        LASSERT(!(reqbody->valid & OBD_MD_FLACL));
 
         req->rq_replen = lustre_msg_size(bufcount, repsize);
 
@@ -145,17 +141,15 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         LASSERT_REPSWAB (req, 1);
 
         /* Skip the check if getxattr/listxattr are called with no buffers */
-        if ((reqbody->valid & (OBD_MD_FLEA | OBD_MD_FLEALIST)) &&
-            (reqbody->eadatasize != 0)){
-                if (body->eadatasize != 0) {
+        if ((reqbody->eadatasize != 0) &&
+            !(reqbody->valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST))) {
                 /* reply indicates presence of eadata; check it's there... */
-                        eadata = lustre_msg_buf (req->rq_repmsg, 1,
-                                                 body->eadatasize);
-                        if (eadata == NULL) {
-                                CERROR ("Missing/short eadata\n");
-                                RETURN (-EPROTO);
-                        }
-                 }
+                eadata = lustre_msg_buf (req->rq_repmsg, 1,
+                                         body->eadatasize);
+                if (eadata == NULL) {
+                        CERROR ("Missing/short eadata\n");
+                        RETURN (-EPROTO);
+                }
          }
 
         RETURN (0);
@@ -173,26 +167,21 @@ static int mdc_cancel_unused(struct obd_export *exp,
 }
 
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                __u64 valid, const char *ea_name, int ea_namelen,
+                __u64 valid, const char *xattr_name,
                 unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
+        int xattr_namelen = xattr_name ? strlen(xattr_name) + 1 : 0;
         int bufcount = 2;
         int size[3] = {0, sizeof(*body)};
         int rc;
         ENTRY;
 
-        /* XXX do we need to make another request here?  We just did a getattr
-         *     to do the lookup in the first place.
-         */
         size[0] = lustre_secdesc_size();
 
-        LASSERT((ea_name != NULL) == (ea_namelen != 0));
-        if (valid & (OBD_MD_FLEA | OBD_MD_FLEALIST)) {
-                size[bufcount] = ea_namelen;
-                bufcount++;
-        }
+        if (valid & OBD_MD_FLXATTR)
+                size[bufcount++] = xattr_namelen;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_GETATTR, bufcount, size, NULL);
@@ -207,11 +196,9 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
         body->eadatasize = ea_size;
 
 
-        if (valid & OBD_MD_FLEA) {
-                LASSERT(strnlen(ea_name, ea_namelen) == (ea_namelen - 1));
-                memcpy(lustre_msg_buf(req->rq_reqmsg, 2, ea_namelen),
-                       ea_name, ea_namelen);
-        }
+        if (valid & OBD_MD_FLXATTR)
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 2, xattr_namelen),
+                       xattr_name, xattr_namelen);
 
         rc = mdc_getattr_common(exp, ea_size, req);
         if (rc != 0) {
@@ -403,11 +390,11 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
         if (rc)
                 RETURN(rc);
 
-        if (md->body->valid & OBD_MD_FLACL_ACCESS) {
+        if (md->body->valid & OBD_MD_FLACL) {
                 acl_off = (md->body->valid & OBD_MD_FLEASIZE) ?
                                 (offset + 2) : (offset + 1);
 
-                if (md->body->valid & OBD_MD_RACL) {
+                if (md->body->valid & OBD_MD_FLRMTACL) {
 
                         buf = lustre_swab_repbuf(req, acl_off, sizeof(*perm),
                                                  lustre_swab_remote_perm);

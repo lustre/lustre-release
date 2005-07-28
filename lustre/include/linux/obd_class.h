@@ -1179,14 +1179,16 @@ static inline int md_delete_inode(struct obd_export *exp,
 }
 
 static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
-                             __u64 valid, const char *ea_name, int ea_namelen,
-                             unsigned int ea_size, struct ptlrpc_request **request)
+                             __u64 valid, const char *xattr_name,
+                             unsigned int ea_size,
+                             struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, getattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
-        rc = MDP(exp->exp_obd, getattr)(exp, id, valid, ea_name, ea_namelen, ea_size, request);
+        rc = MDP(exp->exp_obd, getattr)(exp, id, valid, xattr_name,
+                                        ea_size, request);
         RETURN(rc);
 }
 

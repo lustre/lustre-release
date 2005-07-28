@@ -264,7 +264,10 @@ int mdc_enqueue(struct obd_export *exp,
                 req->rq_replen = lustre_msg_size(5, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
                 __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE |
-                            OBD_MD_FLACL_ACCESS;
+                              OBD_MD_FLACL;
+
+                /* we don't expect xattr retrieve could reach here */
+                LASSERT(!(valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST)));
 
                 reqsize[req_buffers++] = sizeof(struct mds_body);
                 reqsize[req_buffers++] = data->namelen + 1;

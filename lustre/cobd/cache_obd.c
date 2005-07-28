@@ -966,7 +966,7 @@ static int cobd_md_getstatus(struct obd_export *exp,
 }
 
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
-                           __u64 valid, const char *ea_name, int ea_namelen,
+                           __u64 valid, const char *xattr_name,
                            unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -978,8 +978,7 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                 return -EINVAL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, id, valid, ea_name, ea_namelen,
-                          ea_size, request);
+        return md_getattr(cobd_exp, id, valid, xattr_name, ea_size, request);
 }
 
 static int cobd_md_req2lustre_md(struct obd_export *mdc_exp, 

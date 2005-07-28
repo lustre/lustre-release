@@ -1876,7 +1876,7 @@ int ll_removexattr(struct dentry *dentry, const char *name)
 }
 
 static
-int ll_getxattr_internal(struct inode *inode, const char *name, int namelen,
+int ll_getxattr_internal(struct inode *inode, const char *name,
                          void *value, size_t size, __u64 valid)
 {
         struct ptlrpc_request *request = NULL;
@@ -1890,8 +1890,8 @@ int ll_getxattr_internal(struct inode *inode, const char *name, int namelen,
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETXATTR);
 
         ll_inode2id(&id, inode);
-        rc = md_getattr(sbi->ll_md_exp, &id, valid, name, namelen,
-                         size, &request);
+        rc = md_getattr(sbi->ll_md_exp, &id, valid, name,
+                        size, &request);
         if (rc) {
                 if (rc != -ENODATA && rc != -EOPNOTSUPP)
                         CERROR("md_getattr fails: rc = %d\n", rc);
@@ -1923,14 +1923,14 @@ int ll_getxattr_internal(struct inode *inode, const char *name, int namelen,
 int ll_getxattr(struct dentry *dentry, const char *name, void *value,
                 size_t size)
 {
-        return ll_getxattr_internal(dentry->d_inode, name, strlen(name) + 1, 
-                                    value, size, OBD_MD_FLEA);
+        return ll_getxattr_internal(dentry->d_inode, name,
+                                    value, size, OBD_MD_FLXATTR);
 }
 
 int ll_listxattr(struct dentry *dentry, char *list, size_t size)
 {
-        return ll_getxattr_internal(dentry->d_inode, NULL, 0, list, size,
-                                    OBD_MD_FLEALIST);
+        return ll_getxattr_internal(dentry->d_inode, NULL, list, size,
+                                    OBD_MD_FLXATTRLIST);
 }
 
 /*
