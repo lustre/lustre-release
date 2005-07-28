@@ -226,11 +226,13 @@ Details    : Processes doing readahead might match a lock that hasn't been
 
 Severity   : enhancement
 Bugzilla   : 6931
-Description: Provide flock support for clients
-Details    : Implement fcntl advisory locking and file status functions.
-             This feature is provided as an optional mount flag (default
-             off), and is not supported for all types of record locking.
-             mount -t lustre -o [flock|noflock] ...
+Description: Initial enabling of flock support for clients
+Details    : Implements fcntl advisory locking and file status functions.
+	     This feature is provided as an optional mount flag (default
+	     off), and is NOT CURRENTLY SUPPORTED.  Not all types of record
+	     locking are implemented yet, and those that are are not guaranteed
+	     to be completely correct in production environments.
+	     mount -t lustre -o [flock|noflock] ...
 
 Severity   : major
 Frequency  : occasional
