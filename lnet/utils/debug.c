@@ -673,6 +673,8 @@ static struct mod_paths {
         {"llog_test", "lustre/obdclass"},
         {"ptlrpcs", "lustre/sec"},
         {"ptlrpcs_gss", "lustre/sec/gss"},
+        {"gks", "lustre/sec/gks"},
+        {"gkc", "lustre/sec/gks"},
         {"ptlrpc", "lustre/ptlrpc"},
         {"obdext2", "lustre/obdext2"},
         {"ost", "lustre/ost"},
