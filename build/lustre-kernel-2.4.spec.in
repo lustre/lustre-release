@@ -402,6 +402,9 @@ for flavor in "" smp bigmem bigsmp pseries64 BOOT jensen ; do
 				echo "fi" >> ${script}
 				;;
 			post)
+				# /sbin/update-modules.dep compares when the modules were built, rather
+				# than installed, so force modules.dep to be recreated
+				echo "rm -f /lib/modules/%{KVERREL}${flavor}/modules.dep" >> ${script}
 				echo "if [ -f /etc/modprobe.conf ] ; then" >> ${script}			
 				sed -e "s^%ver_str^%{KVERREL}${flavor}^g" %{SOURCE26} >> ${script}
 

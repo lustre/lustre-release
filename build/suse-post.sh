@@ -9,28 +9,40 @@ else
     exit 0
 fi
 
-# If we have old symlinks, rename them to *.previous
-if [ -L /boot/$image -a -L /boot/initrd -a \
-     "$(readlink /boot/$image)" != $image-%ver_str -a \
-     "$(readlink /boot/initrd)" != initrd-%ver_str ]; then
-    mv /boot/$image /boot/$image.previous
-    mv /boot/initrd /boot/initrd.previous
-fi
+case %ver_str in
+    (*xen*|*um*)
+	NOBOOTSPLASH="-s off"
+	SHORTNM=%ver_str
+	SHORTNM=-${SHORTNM##*-}
+	;;
+    (*)
+	unset NOBOOTSPLASH
+	unset SHORTNM
+	;;
+esac	
 
-# update /boot/vmlinuz symlink
-relink $image-%ver_str /boot/$image
+# If we have old symlinks, rename them to *.previous
+if [ -L /boot/$image$SHORTNM -a \
+    "$(readlink /boot/$image$SHORTNM)" != $image-%ver_str ]; then
+	mv /boot/$image$SHORTNM /boot/$image$SHORTNM.previous
+fi
+relink $image-%ver_str /boot/$image$SHORTNM
 
 if test "$YAST_IS_RUNNING" != instsys ; then
     if [ -f /etc/fstab ]; then
 	echo Setting up /lib/modules/%ver_str
 	/sbin/update-modules.dep -v %ver_str
 	cd /boot
-	/sbin/mkinitrd -k $image-%ver_str -i initrd-%ver_str
+	/sbin/mkinitrd -k $image-%ver_str -i initrd-%ver_str $NOBOOTSPLASH
 
+	if [ -L /boot/initrd$SHORTNM -a \
+	     "$(readlink /boot/initrd)" != initrd-%ver_str ]; then
+	    mv /boot/initrd$SHORTNM /boot/initrd$SHORTNM.previous
+	fi  
 	if [ -e /boot/initrd-%ver_str ]; then
-	    relink initrd-%ver_str /boot/initrd
+	    relink initrd-%ver_str /boot/initrd$SHORTNM
 	else
-	    rm -f /boot/initrd
+	    rm -f /boot/initrd$SHORTNM
 	fi
     else
 	echo "please run mkinitrd as soon as your system is complete"
