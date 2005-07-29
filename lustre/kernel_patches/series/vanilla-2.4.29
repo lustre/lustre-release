@@ -35,6 +35,7 @@ inode-max-readahead-2.4.24.patch
 ext3-extents-2.4.29.patch
 ext3-extents-asyncdel-2.4.24.patch
 ext3-nlinks-2.4.24.patch
+ext3-ialloc-2.4.24.patch
 export-show_task-2.4-vanilla.patch 
 export-zap-page-range.patch
 remove-suid-2.4-rhel.patch
