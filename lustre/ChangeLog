@@ -54,6 +54,14 @@ Details    : The config llog parsing code may overwrite the error return
              code during mount error handling, returning success instead
              of an error.
 
+Severity   : minor
+Bugzilla   : 6266
+Frequency  : rare (liblustre)
+Description: fsx running with liblustre complained that using truncate() to
+             extend the file doesn't work.  This patch corrects that issue.
+Details    : This is the liblustre equivalent of the fix for bug 6196.  Fixes
+             ATTR_SIZE and lsm use in llu_setattr_raw.
+
 ------------------------------------------------------------------------------
 
 2005-07-07  Cluster File Systems, Inc. <info@clusterfs.com>

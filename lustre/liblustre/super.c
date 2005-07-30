@@ -685,17 +685,16 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                /* We call inode_setattr to adjust timestamps, but we first
-                 * clear ATTR_SIZE to avoid invoking vmtruncate.
-                 *
-                 * NB: ATTR_SIZE will only be set at this point if the size
-                 * resides on the MDS, ie, this file has no objects. */
-                attr->ia_valid &= ~ATTR_SIZE;
+                /* We call inode_setattr to adjust timestamps.
+                 * If there is at least some data in file, we cleared ATTR_SIZE
+                 * above to avoid invoking vmtruncate, otherwise it is important
+                 * to call vmtruncate in inode_setattr to update inode->i_size
+                 * (bug 6196) */
                 inode_setattr(inode, attr);
                 llu_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
-                if (!md.lsm || !S_ISREG(st->st_mode)) {
+                if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         RETURN(0);
                 }
