@@ -305,11 +305,13 @@ struct client_obd {
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
  * can reuse the various client setup/connect functions. */
 struct mgmtcli_obd {
-        struct client_obd        mc_client_obd; /* nested */
-        struct ptlrpc_thread    *mc_ping_thread;
-        struct obd_export       *mc_ping_exp; /* XXX single-target */
-        struct list_head         mc_registered;
-        void                    *mc_hammer;
+        /* from confobd */
+        struct super_block      *mc_sb;           /* from mount */
+        struct vfsmount         *mc_vfsmnt;       /* local mount */
+        struct dentry           *mc_configs_dir;
+        struct llog_handle      *mc_cfg_llh;
+        //struct logs_info         mc_logs_info;
+        struct list_head         mc_registered;   /* chain of mgc's */
 };
 
 #define mc_import mc_client_obd.cl_import

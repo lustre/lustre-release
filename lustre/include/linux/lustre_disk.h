@@ -30,37 +30,13 @@
 #include <linux/types.h>
 #include <portals/types.h>
 
-/****************** last_rcvd file *********************/
-
-#define LAST_RCVD "last_rcvd"
-#define LR_SERVER_SIZE    512
-
-/* Data stored per server at the head of the last_rcvd file.  In le32 order.
-   This should be common to filter_internal.h, lustre_mds.h */
-struct lr_server_data {
-        __u8  lsd_uuid[40];        /* server UUID */
-        __u64 lsd_unused;          /* was lsd_last_objid - don't use for now */
-        __u64 lsd_last_transno;    /* last completed transaction ID */
-        __u64 lsd_mount_count;     /* FILTER incarnation number */
-        __u32 lsd_feature_compat;  /* compatible feature flags */
-        __u32 lsd_feature_rocompat;/* read-only compatible feature flags */
-        __u32 lsd_feature_incompat;/* incompatible feature flags */
-        __u32 lsd_server_size;     /* size of server data area */
-        __u32 lsd_client_start;    /* start of per-client data area */
-        __u16 lsd_client_size;     /* size of per-client data area */
-        __u16 lsd_subdir_count;    /* number of subdirectories for objects */
-        __u64 lsd_catalog_oid;     /* recovery catalog object id */
-        __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
-        __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
-        __u32 lsd_index;           /* target index (stripe index for ost)*/
-        __u8  lsd_padding[LR_SERVER_SIZE - 144];
-};
 
 /****************** persistent mount data *********************/
 
 /* Persistent mount data are stored on the disk in this file.
    Used before the setup llog can be read. */
-#define MOUNT_DATA_FILE "CONFIGS/mountdata"
+#define MOUNT_CONFIGS_DIR "CONFIGS/"
+#define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"mountdata"
 
 #define LDD_MAGIC 0xbabb0001
 
@@ -152,12 +128,64 @@ struct mkfs_opts {
         int   mo_stripe_sz;
         int   mo_stripe_count;
         int   mo_stripe_pattern;
-        int   mo_index;                 /* stripe index for osts, pool index
+        __u16 mo_index;                 /* stripe index for osts, pool index
                                            for pooled mdts.  index will be put
                                            in lr_server_data */
         int   mo_timeout;               /* obd timeout */
 };
 
+/****************** last_rcvd file *********************/
 
+#define LAST_RCVD "last_rcvd"
+#define LR_SERVER_SIZE    512
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order.
+   This should be common to filter_internal.h, lustre_mds.h */
+struct lr_server_data {
+        __u8  lsd_uuid[40];        /* server UUID */
+        __u64 lsd_unused;          /* was lsd_last_objid - don't use for now */
+        __u64 lsd_last_transno;    /* last completed transaction ID */
+        __u64 lsd_mount_count;     /* FILTER incarnation number */
+        __u32 lsd_feature_compat;  /* compatible feature flags */
+        __u32 lsd_feature_rocompat;/* read-only compatible feature flags */
+        __u32 lsd_feature_incompat;/* incompatible feature flags */
+        __u32 lsd_server_size;     /* size of server data area */
+        __u32 lsd_client_start;    /* start of per-client data area */
+        __u16 lsd_client_size;     /* size of per-client data area */
+        __u16 lsd_subdir_count;    /* number of subdirectories for objects */
+        __u64 lsd_catalog_oid;     /* recovery catalog object id */
+        __u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
+        __u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
+        __u32 lsd_index;           /* target index (stripe index for ost)*/
+        __u8  lsd_padding[LR_SERVER_SIZE - 144];
+};
+
+#ifdef __KERNEL__
+/****************** superblock additional info *********************/
+struct ll_sb_info;
+
+struct lustre_sb_info {
+        int                       lsi_flags;
+        //struct lvfs_run_ctxt      lsi_ctxt;    /* mount context */
+        struct obd_device        *lsi_mgc;     /* mgmt cli obd */
+        struct lustre_mount_data *lsi_lmd;     /* mount command info */
+        struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
+        //struct fsfilt_operations *lsi_fsops;
+        struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
+};
+
+#define LSI_SERVER                       0x00000001
+#define LSI_UMOUNT_FORCE                 0x00000010
+#define LSI_UMOUNT_FAILOVER              0x00000020
+
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+# define    s2sbi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
+# define    s2sbi_nocast(sb) ((sb)->s_fs_info)
+#else  /* 2.4 here */
+# define    s2sbi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
+# define    s2sbi_nocast(sb) ((sb)->u.generic_sbp)
+#endif
+
+#endif /* __KERNEL__ */
 
 #endif // _LUSTRE_DISK_H

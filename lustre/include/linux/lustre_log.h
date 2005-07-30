@@ -38,6 +38,7 @@
 #include <linux/obd.h>
 #include <linux/lustre_idl.h>
 
+#define LOG_NAME_MAX 256 /* 2.4 limit */
 #define LOG_NAME_LIMIT(logname, name)                   \
         snprintf(logname, sizeof(logname), "LOGS/%s", name)
 #define LLOG_EEMPTY 4711

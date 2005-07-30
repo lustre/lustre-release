@@ -7,7 +7,8 @@
 
 #include <linux/lustre_debug.h>
 #include <linux/lustre_version.h>
-
+#include <linux/lustre_disk.h>  /* for s2sbi */
+ 
 /*
 struct lustre_intent_data {
         __u64 it_lock_handle[2];
@@ -130,11 +131,6 @@ struct ll_sb_info {
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
         obd_id                    ll_rootino; /* number of root inode */
-
-        struct lvfs_run_ctxt      ll_ctxt;    /* mount context */
-        struct lustre_mount_data *ll_lmd;     /* mount command info */
-        struct lustre_disk_data  *ll_ldd;     /* mount info on-disk */
-        struct fsfilt_operations *ll_fsops;
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
@@ -338,9 +334,8 @@ char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
 void ll_options(char *options, char **ost, char **mds, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
-int ll_fill_super(struct super_block *sb, void *data, int silent);
-int client_fill_super(struct super_block *sb);
-void client_put_super(struct super_block *sb);
+int client_fill_super(struct super_block *sb, char *profilenm);
+void client_put_super(struct super_block *sb, char *profilenm);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -421,9 +416,9 @@ int ll_tree_unlock(struct ll_lock_tree *tree);
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
+#define    ll_s2sbi(sb)        (s2sbi(sb)->lsi_llsbi)
+
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->s_fs_info))
-#define    ll_s2sbi_nocast(sb) ((sb)->s_fs_info)
 void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
@@ -431,8 +426,6 @@ static inline __u64 ll_ts2u64(struct timespec *time)
         return t;
 }
 #else  /* 2.4 here */
-#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->u.generic_sbp))
-#define    ll_s2sbi_nocast(sb) ((sb)->u.generic_sbp)
 static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;

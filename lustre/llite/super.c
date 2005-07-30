@@ -40,17 +40,6 @@
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
-static struct super_block *ll_read_super(struct super_block *sb,
-                                         void *data, int silent)
-{
-        int err;
-        ENTRY;
-        err = ll_fill_super(sb, data, silent);
-        if (err)
-                RETURN(NULL);
-        RETURN(sb);
-}
-
 static struct super_block *lustre_read_super(struct super_block *sb,
                                              void *data, int silent)
 {
@@ -61,13 +50,6 @@ static struct super_block *lustre_read_super(struct super_block *sb,
                 RETURN(NULL);
         RETURN(sb);
 }
-
-static struct file_system_type lustre_lite_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre_lite",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = ll_read_super,
-};
 
 /* exported operations */
 struct super_operations lustre_super_operations =
@@ -107,12 +89,8 @@ static int __init init_lustre_lite(void)
 
         ll_register_cache(&ll_cache_definition);
 
-        rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc == 0)
-                rc = register_filesystem(&lustre_fs_type);
+        rc = register_filesystem(&lustre_fs_type);
         if (rc) {
-                /* This is safe even if lustre_lite_fs_type isn't registered */
-                unregister_filesystem(&lustre_lite_fs_type);
                 ll_unregister_cache(&ll_cache_definition);
         }
 
@@ -121,7 +99,6 @@ static int __init init_lustre_lite(void)
 
 static void __exit exit_lustre_lite(void)
 {
-        unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
 
         ll_unregister_cache(&ll_cache_definition);

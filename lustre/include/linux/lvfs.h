@@ -79,16 +79,15 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *cred);
 
 #ifdef __KERNEL__
+struct obd_device;
 
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
 
-struct ll_sb_info *lustre_init_sbi(struct super_block *sb);
-void lustre_free_sbi(struct super_block *sb);
-void lustre_manual_cleanup(struct ll_sb_info *sbi);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);
 void lustre_put_super(struct super_block *sb);
 int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
+int class_manual_cleanup(struct obd_device *obd, char *flags);
 
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);

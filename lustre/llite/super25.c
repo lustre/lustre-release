@@ -35,13 +35,6 @@
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
 
-struct super_block * ll_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, ll_fill_super);
-}
-
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
@@ -109,15 +102,6 @@ struct super_operations lustre_super_operations =
         .remount_fs    = lustre_remount_fs,
 };
 
-
-struct file_system_type lustre_lite_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre_lite",
-        .get_sb       = ll_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
-};
-
 struct file_system_type lustre_fs_type = {
         .owner        = THIS_MODULE,
         .name         = "lustre",
@@ -147,12 +131,8 @@ static int __init init_lustre_lite(void)
 
         ll_register_cache(&ll_cache_definition);
 
-        rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc == 0)
-                rc = register_filesystem(&lustre_fs_type);
+        rc = register_filesystem(&lustre_fs_type);
         if (rc) {
-                /* This is safe even if lustre_lite_fs_type isn't registered */
-                unregister_filesystem(&lustre_lite_fs_type);
                 ll_unregister_cache(&ll_cache_definition);
         }
 
@@ -162,7 +142,6 @@ static int __init init_lustre_lite(void)
 static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_fs_type);
-        unregister_filesystem(&lustre_lite_fs_type);
 
         ll_unregister_cache(&ll_cache_definition);
 
