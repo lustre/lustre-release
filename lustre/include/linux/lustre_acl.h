@@ -23,7 +23,9 @@
 #ifndef _LUSTRE_ACL_H_
 #define _LUSTRE_ACL_H_
 
+#ifdef __KERNEL__
 #include <linux/xattr_acl.h>
+#endif
 
 /*
 * the value of LL_ACL_MAX_ENTRIES and LL_ACL_NOT_CACHED should be 
@@ -32,5 +34,9 @@
 */
 #define LL_ACL_MAX_ENTRIES      32      // EXT3_ACL_MAX_ENTRIES
 #define LL_ACL_NOT_CACHED       ((void *)-1) //EXT3_ACL_NOT_CACHED
+
+/* remote acl */
+#define XATTR_NAME_LUSTRE_ACL   "system.lustre_acl"
+#define LUSTRE_ACL_SIZE_MAX     (4096)
 
 #endif

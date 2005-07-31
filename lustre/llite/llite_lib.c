@@ -312,7 +312,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         /* make root inode */
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_rootid,
                          (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID),
-                         NULL, 0, &request);
+                         NULL, NULL, 0, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lov, err);
@@ -2085,7 +2085,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 struct mds_body *body;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, 0, &req);
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL, 0, 0,
+                                &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

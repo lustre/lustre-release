@@ -150,7 +150,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                         CERROR ("Missing/short eadata\n");
                         RETURN (-EPROTO);
                 }
-         }
+        }
 
         RETURN (0);
 }
@@ -168,20 +168,28 @@ static int mdc_cancel_unused(struct obd_export *exp,
 
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 __u64 valid, const char *xattr_name,
+                const void *xattr_data, unsigned int xattr_datalen,
                 unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
         int xattr_namelen = xattr_name ? strlen(xattr_name) + 1 : 0;
+        int size[4] = {0, sizeof(*body)};
         int bufcount = 2;
-        int size[3] = {0, sizeof(*body)};
         int rc;
         ENTRY;
 
         size[0] = lustre_secdesc_size();
 
-        if (valid & OBD_MD_FLXATTR)
+        if (valid & OBD_MD_FLXATTR) {
                 size[bufcount++] = xattr_namelen;
+
+                if (xattr_datalen > 0) {
+                        LASSERT(xattr_data);
+                        size[bufcount++] = xattr_datalen;
+                }
+        } else
+                LASSERT(!xattr_data && !xattr_datalen);
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_GETATTR, bufcount, size, NULL);
@@ -195,10 +203,13 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
         body->valid = valid;
         body->eadatasize = ea_size;
 
-
-        if (valid & OBD_MD_FLXATTR)
+        if (valid & OBD_MD_FLXATTR) {
                 memcpy(lustre_msg_buf(req->rq_reqmsg, 2, xattr_namelen),
                        xattr_name, xattr_namelen);
+                if (xattr_datalen)
+                        memcpy(lustre_msg_buf(req->rq_reqmsg, 3, xattr_datalen),
+                               xattr_data, xattr_datalen);
+        }
 
         rc = mdc_getattr_common(exp, ea_size, req);
         if (rc != 0) {

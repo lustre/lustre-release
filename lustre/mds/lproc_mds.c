@@ -294,6 +294,55 @@ static int lprocfs_wr_lsd_flush(struct file *file, const char *buffer,
         return count;
 }
 
+/*
+ * remote acl proc handling
+ */
+static int lprocfs_rd_lacl_upcall(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct upcall_cache *cache = __mds_get_global_rmtacl_upcall_cache();
+
+        *eof = 1;
+        return snprintf(page, count, "%s\n", cache->uc_upcall);
+}
+
+static int lprocfs_wr_lacl_upcall(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct upcall_cache *cache = __mds_get_global_rmtacl_upcall_cache();
+
+        if (count < UC_CACHE_UPCALL_MAXPATH) {
+                sscanf(buffer, "%1024s", cache->uc_upcall);
+                cache->uc_upcall[UC_CACHE_UPCALL_MAXPATH - 1] = 0;
+        }
+        return count;
+}
+
+static int lprocfs_wr_lacl_downcall(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{
+        struct upcall_cache *cache = __mds_get_global_rmtacl_upcall_cache();
+        struct rmtacl_downcall_args param;
+
+        if (count != sizeof(param)) {
+                CERROR("invalid data size %lu\n", count);
+                goto do_err_downcall;
+        }
+        if (copy_from_user(&param, buffer, count)) {
+                CERROR("broken downcall\n");
+                goto do_err_downcall;
+        }
+
+do_downcall:
+        upcall_cache_downcall(cache, param.key, &param);
+        return count;
+
+do_err_downcall:
+        memset(&param, 0, sizeof(param));
+        param.status = -EINVAL;
+        goto do_downcall;
+}
+
 struct lprocfs_vars lprocfs_mds_module_vars[] = {
         { "num_refs",                   lprocfs_rd_numrefs, 0, 0 },
         /* LSD stuff */
@@ -305,6 +354,10 @@ struct lprocfs_vars lprocfs_mds_module_vars[] = {
                                         lprocfs_wr_lsd_upcall, 0},
         { "lsd_flush",                  0, lprocfs_wr_lsd_flush, 0},
         { "lsd_downcall",               0, lprocfs_wr_lsd_downcall, 0},
+        /* remote acl */
+        { "lacl_upcall",                lprocfs_rd_lacl_upcall,
+                                        lprocfs_wr_lacl_upcall, 0},
+        { "lacl_downcall",              0, lprocfs_wr_lacl_downcall, 0},
         { 0 }
 };
 

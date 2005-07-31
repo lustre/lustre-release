@@ -236,10 +236,10 @@ int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock, int mea);
 int mds_pack_link(struct dentry *dentry, struct ptlrpc_request *req,
                   struct mds_body *repbody, int reply_off);
-int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
-                struct mds_body *repbody, int req_off, int reply_off);
-int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
-                    struct mds_body *repbody, int reply_off);
+int mds_pack_xattr(struct dentry *dentry, struct ptlrpc_request *req,
+                   struct mds_body *repbody, int req_off, int reply_off);
+int mds_pack_xattr_list(struct dentry *dentry, struct ptlrpc_request *req,
+                        struct mds_body *repbody, int reply_off);
 int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
                  struct mds_body *body, struct inode *inode);
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
@@ -282,5 +282,11 @@ void mds_cleanup_lsd_cache(void);
 struct lustre_sec_desc * mds_get_lsd(__u32 uid);
 void mds_put_lsd(struct lustre_sec_desc *lsd);
 void mds_flush_lsd(__u32 id);
+
+/* mds_acl.c */
+struct upcall_cache *__mds_get_global_rmtacl_upcall_cache(void);
+int mds_init_rmtacl_upcall_cache(void);
+void mds_cleanup_rmtacl_upcall_cache(void);
+void mds_do_remote_acl_upcall(struct rmtacl_upcall_desc *desc);
 
 #endif /* _MDS_INTERNAL_H */

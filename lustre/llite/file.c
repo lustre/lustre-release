@@ -1807,6 +1807,9 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETXATTR);
 
+        if (sbi->ll_remote && !strcmp(name, XATTR_NAME_ACL_ACCESS))
+                RETURN(-EOPNOTSUPP);
+
         memset(&attr, 0x0, sizeof(attr));
         attr.ia_valid |= valid;
         attr.ia_attr_flags = flags;
@@ -1814,12 +1817,10 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
 
         rc = md_setattr(sbi->ll_md_exp, &op_data, &attr,
-                        (void*) name, strnlen(name, XATTR_NAME_MAX)+1, 
+                        (void*) name, strnlen(name, XATTR_NAME_MAX) + 1,
                         (void*) value, size, &request);
-        if (rc) {
-                CERROR("md_setattr fails: rc = %d\n", rc);
+        if (rc)
                 GOTO(out, rc);
-        }
 
  out:
         ptlrpc_req_finished(request);
@@ -1836,7 +1837,7 @@ int ll_setxattr(struct dentry *dentry, const char *name, const void *value,
 
         rc = ll_setxattr_internal(dentry->d_inode, name, value, size, 
                                   flags, ATTR_EA);
-        
+
         /* update inode's acl info */
         if (rc == 0 && strcmp(name, XATTR_NAME_ACL_ACCESS) == 0) {
                 if (value) {
@@ -1889,12 +1890,15 @@ int ll_getxattr_internal(struct inode *inode, const char *name,
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETXATTR);
 
+        if (sbi->ll_remote && !strcmp(name, XATTR_NAME_ACL_ACCESS))
+                RETURN(-EOPNOTSUPP);
+
         ll_inode2id(&id, inode);
-        rc = md_getattr(sbi->ll_md_exp, &id, valid, name,
+        rc = md_getattr(sbi->ll_md_exp, &id, valid, name, NULL, 0,
                         size, &request);
         if (rc) {
                 if (rc != -ENODATA && rc != -EOPNOTSUPP)
-                        CERROR("md_getattr fails: rc = %d\n", rc);
+                        CERROR("rc = %d\n", rc);
                 GOTO(out, rc);
         }
 
@@ -1903,11 +1907,10 @@ int ll_getxattr_internal(struct inode *inode, const char *name,
         LASSERT_REPSWABBED(request, 0);
 
         ea_size = body->eadatasize;
-        LASSERT(ea_size <= request->rq_repmsg->buflens[0]);
-
         if (size == 0) 
                 GOTO(out, rc = ea_size);
 
+        LASSERT(ea_size <= request->rq_repmsg->buflens[1]);
         ea_data = lustre_msg_buf(request->rq_repmsg, 1, ea_size);
         LASSERT(ea_data != NULL);
         LASSERT_REPSWABBED(request, 1);
@@ -1915,6 +1918,7 @@ int ll_getxattr_internal(struct inode *inode, const char *name,
         if (value)
                 memcpy(value, ea_data, ea_size);
         rc = ea_size;
+
  out:
         ptlrpc_req_finished(request);
         RETURN(rc);

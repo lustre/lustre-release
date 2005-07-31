@@ -269,11 +269,11 @@ extern struct inode_operations ll_file_inode_operations;
 int ll_md_real_close(struct obd_export *md_exp,
                      struct inode *inode, int flags);
 extern int ll_inode_revalidate_it(struct dentry *);
-extern int ll_setxattr(struct dentry *, const char *, const void *,
-                       size_t, int);
-extern int ll_getxattr(struct dentry *, const char *, void *, size_t);
-extern int ll_listxattr(struct dentry *, char *, size_t);
-extern int ll_removexattr(struct dentry *, const char *);
+int ll_setxattr(struct dentry *, const char *, const void *,
+                size_t, int);
+int ll_getxattr(struct dentry *, const char *, void *, size_t);
+int ll_listxattr(struct dentry *, char *, size_t);
+int ll_removexattr(struct dentry *, const char *);
 extern int ll_inode_permission(struct inode *, int, struct nameidata *);
 int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,

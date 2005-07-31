@@ -49,8 +49,8 @@ static int ll_readlink_internal(struct inode *inode,
         }
 
         ll_inode2id(&id, inode);
-        rc = md_getattr(sbi->ll_md_exp, &id, OBD_MD_LINKNAME, NULL, symlen,
-                        request);
+        rc = md_getattr(sbi->ll_md_exp, &id, OBD_MD_LINKNAME, NULL, NULL, 0,
+                        symlen, request);
 
         if (rc) {
                 if (rc != -ENOENT)

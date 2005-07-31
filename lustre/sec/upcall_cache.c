@@ -263,7 +263,6 @@ find_again:
         }
         
         /* Now we know it's good */
-        LASSERT(UC_CACHE_IS_VALID(entry));
         write_unlock(&cache->uc_hashlock);
 
         RETURN(entry);

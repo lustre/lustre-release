@@ -447,7 +447,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 }
                 ll_inode2id(&id, inode);
                 rc = mdc_getattr(sbi->ll_md_exp, &id, valid, NULL, 0,
-                                 ealen, &req);
+                                 NULL, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, lli->lli_st_ino);
                         RETURN(-abs(rc));
@@ -878,7 +878,7 @@ static int llu_readlink_internal(struct inode *inode,
 
         ll_inode2id(&id, inode);
         rc = mdc_getattr(sbi->ll_md_exp, &id,
-                         OBD_MD_LINKNAME, NULL, 0, symlen, request);
+                         OBD_MD_LINKNAME, NULL, 0, NULL, symlen, request);
         if (rc) {
                 CERROR("inode %lu: rc = %d\n", lli->lli_st_ino, rc);
                 RETURN(rc);
@@ -1533,7 +1533,7 @@ llu_fsswop_mount(const char *source,
         /* fetch attr of root inode */
         err = mdc_getattr(sbi->ll_md_exp, &rootid,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, NULL, 0,
-                          0, &request);
+                          NULL, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lov, err);

@@ -63,6 +63,8 @@
 #define LL_IOC_MDC_MKDIRSTRIPE          _IOW ('f', 160, long)
 #define LL_IOC_GROUP_LOCK               _IOW ('f', 161, long)
 #define LL_IOC_GROUP_UNLOCK             _IOW ('f', 162, long)
+#define LL_IOC_GETFACL                  _IOW ('f', 163, long)
+#define LL_IOC_SETFACL                  _IOW ('f', 164, long)
 
 #define LL_IOC_FLUSH_CRED               _IOW ('f', 170, long)
 
@@ -136,5 +138,14 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
         strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
+
+/* remote acl ioctl */
+struct ll_acl_ioctl_data {
+        char           *cmd;            /* IN */
+        unsigned long   cmd_len;
+        char           *res;            /* OUT */
+        unsigned long   res_len;
+        int             status;         /* OUT */
+};
 
 #endif /* _LUSTRE_USER_H */

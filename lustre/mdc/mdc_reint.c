@@ -34,6 +34,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_acl.h>
 #include "mdc_internal.h"
 
 /* this function actually sends request to desired target. */
@@ -108,8 +109,18 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         mdc_setattr_pack(req->rq_reqmsg, 1, data, iattr, ea, ealen,
                          ea2, ea2len);
 
+        /* prepare the reply buffer
+         */
+        bufcount = 1;
         size[0] = sizeof(struct mds_body);
-        req->rq_replen = lustre_msg_size(1, size);
+
+        /* This is a hack for setfacl remotely. XXX */
+        if (ealen == sizeof(XATTR_NAME_LUSTRE_ACL) &&
+            !strncmp((char *) ea, XATTR_NAME_LUSTRE_ACL, ealen)) {
+                size[bufcount++] = LUSTRE_ACL_SIZE_MAX;
+        }
+
+        req->rq_replen = lustre_msg_size(bufcount, size);
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
         *request = req;

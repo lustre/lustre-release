@@ -394,6 +394,65 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
         l_dput(de);
 }
+
+static int mds_reint_remote_setfacl(struct obd_device *obd,
+                                    struct mds_export_data *med,
+                                    struct mds_update_record *rec,
+                                    struct ptlrpc_request *req)
+{
+        struct rmtacl_upcall_desc desc;
+        struct dentry   *de;
+        struct inode    *inode;
+        struct mds_body *body;
+        int              rc = 0;
+        int              repsize[2] = { sizeof(*body), LUSTRE_ACL_SIZE_MAX };
+        ENTRY;
+
+        rc = lustre_pack_reply(req, 2, repsize, NULL);
+        if (rc)
+                RETURN(rc);
+
+        de = mds_id2dentry(obd, rec->ur_id1, NULL);
+        if (IS_ERR(de))
+                GOTO(out, rc = PTR_ERR(de));
+
+        inode = de->d_inode;
+        LASSERT(inode);
+
+        /* setxattr from remote client:
+         */
+        memset(&desc, 0, sizeof(desc));
+        desc.cmd = (char *) rec->ur_ea2data;
+        desc.cmdlen = rec->ur_ea2datalen;
+        desc.res = lustre_msg_buf(req->rq_repmsg, 1, LUSTRE_ACL_SIZE_MAX);
+        desc.reslen = LUSTRE_ACL_SIZE_MAX;
+
+        mds_do_remote_acl_upcall(&desc);
+        if (desc.upcall_status)
+                GOTO(out_put, rc = desc.upcall_status);
+
+        if (desc.status < 0)
+                desc.status = -desc.status;
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        LASSERT(body);
+
+        /* client (lmv) will do limited checking upon replied mds_body,
+         * we pack it as normal, but "steal" field "flags" field to store
+         * the acl execution status.
+         */
+        mds_pack_inode2body(obd, body, inode, 1);
+        body->flags = desc.status;
+        mds_body_do_reverse_map(med, body);
+
+        EXIT;
+out_put:
+        l_dput(de);
+out:
+        req->rq_status = rc;
+        return 0;
+}
+
 /*This is a tmp fix for cmobd setattr reint*/
 
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
@@ -432,7 +491,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         void *handle = NULL;
         struct mds_logcancel_data *mlcd = NULL;
         int rc = 0, cleanup_phase = 0, err;
-        int locked = 0;
+        int repsize = sizeof(*body), locked = 0;
         ENTRY;
 
         LASSERT(offset == 1);
@@ -440,6 +499,16 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x",
                   id_ino(rec->ur_id1), id_gen(rec->ur_id1),
                   rec->ur_iattr.ia_valid);
+
+        /* remote setfacl need special handling */
+        if ((rec->ur_iattr.ia_valid & ATTR_EA) &&
+            !strcmp(rec->ur_eadata, XATTR_NAME_LUSTRE_ACL)) {
+                return mds_reint_remote_setfacl(obd, med, rec, req);
+        }
+
+        rc = lustre_pack_reply(req, 1, &repsize, NULL);
+        if (rc)
+                RETURN(rc);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
         MD_COUNTER_INCREMENT(obd, setattr);
@@ -508,17 +577,22 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         if (rc == 0) {
                 if (rec->ur_iattr.ia_valid & ATTR_EA) {
-                        int flags = (int)rec->ur_iattr.ia_attr_flags;
+                        int flags = (int) rec->ur_iattr.ia_attr_flags;
 
                         rc = -EOPNOTSUPP;
-                        if (inode->i_op && inode->i_op->setxattr) 
-                                rc = inode->i_op->setxattr(de, rec->ur_eadata,
-                                       rec->ur_ea2data, rec->ur_ea2datalen,
-                                       flags);
+                        if (!med->med_remote && inode->i_op &&
+                            inode->i_op->setxattr) 
+                                rc = inode->i_op->setxattr(
+                                                de, rec->ur_eadata,
+                                                rec->ur_ea2data,
+                                                rec->ur_ea2datalen,
+                                                flags);
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_RM) {
                         rc = -EOPNOTSUPP;
-                        if (inode->i_op && inode->i_op->removexattr) 
-                                rc = inode->i_op->removexattr(de, rec->ur_eadata);
+                        if (!med->med_remote && inode->i_op &&
+                            inode->i_op->removexattr) 
+                                rc = inode->i_op->removexattr(
+                                                de, rec->ur_eadata);
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_CMOBD) {
                         char *name;
                         int type;

@@ -1180,6 +1180,7 @@ static inline int md_delete_inode(struct obd_export *exp,
 
 static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
                              __u64 valid, const char *xattr_name,
+                             const void *xattr_data, unsigned int xattr_datalen,
                              unsigned int ea_size,
                              struct ptlrpc_request **request)
 {
@@ -1188,6 +1189,7 @@ static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
         EXP_CHECK_MD_OP(exp, getattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
         rc = MDP(exp->exp_obd, getattr)(exp, id, valid, xattr_name,
+                                        xattr_data, xattr_datalen,
                                         ea_size, request);
         RETURN(rc);
 }

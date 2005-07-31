@@ -967,8 +967,8 @@ int mds_pack_link(struct dentry *dentry, struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
-                struct mds_body *repbody, int req_off, int reply_off)
+int mds_pack_xattr(struct dentry *dentry, struct ptlrpc_request *req,
+                   struct mds_body *repbody, int req_off, int reply_off)
 {
         struct inode *inode = dentry->d_inode;
         char *ea_name;
@@ -982,7 +982,42 @@ int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
                 value = lustre_msg_buf(req->rq_repmsg, reply_off + 1, len);
 
         rc = -EOPNOTSUPP;
-        if (inode->i_op && inode->i_op->getxattr) 
+
+        if (!strcmp(ea_name, XATTR_NAME_LUSTRE_ACL)) {
+                struct rmtacl_upcall_desc desc;
+
+                if (len != LUSTRE_ACL_SIZE_MAX || !value) {
+                        CERROR("no reply buffer prepared\n");
+                        RETURN(-EFAULT);
+                }
+
+                memset(&desc, 0, sizeof(desc));
+                desc.get = 1;
+                desc.cmd = lustre_msg_string(req->rq_reqmsg, req_off + 2, 0);
+                desc.cmdlen =  req->rq_reqmsg->buflens[req_off + 2];
+                desc.res = (char *) value;
+                desc.reslen = LUSTRE_ACL_SIZE_MAX;
+
+                mds_do_remote_acl_upcall(&desc);
+
+                if (desc.upcall_status)
+                        RETURN(desc.upcall_status);
+
+                if (desc.reslen > LUSTRE_ACL_SIZE_MAX) {
+                        CERROR("downcall claim reslen %u\n", desc.reslen);
+                        RETURN(-EINVAL);
+                }
+                /* like remote setfacl, steal "flags" in mds_body as the
+                 * exececution status
+                 */
+                repbody->flags = desc.status;
+                repbody->valid |= OBD_MD_FLXATTR;
+                repbody->eadatasize = desc.reslen;
+
+                RETURN(0);
+        }
+
+        if (inode->i_op && inode->i_op->getxattr)
                 rc = inode->i_op->getxattr(dentry, ea_name, value, len);
 
         if (rc < 0) {
@@ -994,11 +1029,11 @@ int mds_pack_ea(struct dentry *dentry, struct ptlrpc_request *req,
                 rc = 0;
         }
 
-        RETURN(rc);        
+        RETURN(rc);
 }
 
-int mds_pack_ealist(struct dentry *dentry, struct ptlrpc_request *req,
-                    struct mds_body *repbody, int reply_off)
+int mds_pack_xattr_list(struct dentry *dentry, struct ptlrpc_request *req,
+                        struct mds_body *repbody, int reply_off)
 {
         struct inode *inode = dentry->d_inode;        
         void *value = NULL;
@@ -1172,9 +1207,9 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                    (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 rc = mds_pack_link(dentry, req, body, reply_off);
         } else if (reqbody->valid & OBD_MD_FLXATTR) {
-                rc = mds_pack_ea(dentry, req, body, req_off, reply_off);
+                rc = mds_pack_xattr(dentry, req, body, req_off, reply_off);
         } else if (reqbody->valid & OBD_MD_FLXATTRLIST) {
-                rc = mds_pack_ealist(dentry, req, body, reply_off);
+                rc = mds_pack_xattr_list(dentry, req, body, reply_off);
         }
         
         if (reqbody->valid & OBD_MD_FLACL) {
@@ -1258,16 +1293,23 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
                 char *ea_name = lustre_msg_string(req->rq_reqmsg, 
                                                   offset + 1, 0);
                 rc = -EOPNOTSUPP;
-                if (inode->i_op && inode->i_op->getxattr) 
-                        rc = inode->i_op->getxattr(de, ea_name, NULL, 0);
-                
-                if (rc < 0) {
-                        if (rc != -ENODATA && rc != -EOPNOTSUPP)
-                                CERROR("error getting inode %lu EA: rc = %d\n",
-                                       inode->i_ino, rc);
-                        size[bufcount] = 0;
+
+                if (!strcmp(ea_name, XATTR_NAME_LUSTRE_ACL)) {
+                        size[bufcount] = LUSTRE_ACL_SIZE_MAX;
                 } else {
-                        size[bufcount] = min_t(int, body->eadatasize, rc);
+                        if (inode->i_op && inode->i_op->getxattr)
+                                rc = inode->i_op->getxattr(de, ea_name,
+                                                           NULL, 0);
+
+                        if (rc < 0) {
+                                if (rc != -ENODATA && rc != -EOPNOTSUPP)
+                                        CERROR("error get inode %lu EA: %d\n",
+                                               inode->i_ino, rc);
+                                size[bufcount] = 0;
+                        } else {
+                                size[bufcount] = min_t(int,
+                                                       body->eadatasize, rc);
+                        }
                 }
                 bufcount++;
         } else if (body->valid & OBD_MD_FLXATTRLIST) {
@@ -3003,9 +3045,14 @@ int mds_handle(struct ptlrpc_request *req)
                 else
                         bufcount = 1;
 
-                rc = lustre_pack_reply(req, bufcount, size, NULL);
-                if (rc)
-                        break;
+                /* for SETATTR: I have different reply setting for
+                 * remote setfacl, so delay the reply buffer allocation.
+                 */
+                if (opc != REINT_SETATTR) {
+                        rc = lustre_pack_reply(req, bufcount, size, NULL);
+                        if (rc)
+                                break;
+                }
 
                 rc = mds_reint(req, MDS_REQ_REC_OFF, NULL);
                 fail = OBD_FAIL_MDS_REINT_NET_REP;
@@ -4415,6 +4462,7 @@ static int __init mds_init(void)
         struct lprocfs_static_vars lvars;
 
         mds_init_lsd_cache();
+        mds_init_rmtacl_upcall_cache();
 
         lprocfs_init_multi_vars(0, &lvars);
         class_register_type(&mds_obd_ops, NULL, lvars.module_vars,
@@ -4428,6 +4476,7 @@ static int __init mds_init(void)
 
 static void /*__exit*/ mds_exit(void)
 {
+        mds_cleanup_rmtacl_upcall_cache();
         mds_cleanup_lsd_cache();
 
         class_unregister_type(OBD_MDS_DEVICENAME);

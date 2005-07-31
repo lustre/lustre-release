@@ -29,6 +29,8 @@
 #include <getopt.h>
 #include <string.h>
 #include <mntent.h>
+#include <dirent.h>
+#include <libgen.h>
 #include <portals/ptlctl.h>
 
 #include <liblustre.h>
@@ -48,6 +50,8 @@ static int lfs_showfid(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
+static int lfs_getfacl(int argc, char **argv);
+static int lfs_setfacl(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -85,6 +89,12 @@ command_t cmdlist[] = {
          "usage: catinfo {keyword} [node name]\n"
          "\tkeywords are one of followings: config, deletions.\n"
          "\tnode name must be provided when use keyword config."},
+        {"getfacl", lfs_getfacl, 0,
+         "Get file access control lists.\n"
+         "usage: getfacl [-dRLPvh] file"},
+        {"setfacl", lfs_setfacl, 0,
+         "Set file access control lists.\n"
+         "usage: setfacl [-bkndRLPvh] [{-m|-x} acl_spec] [{-M|-X} acl_file] file ..."},
         {"osts", lfs_osts, 0, "osts"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
@@ -462,6 +472,135 @@ static int lfs_catinfo(int argc, char **argv)
         }
 
         return rc;
+}
+
+/*
+ * We assume one and only one filename is supplied as the
+ * last parameter.
+ */
+static int acl_cmd_parse(int argc, char **argv,
+                         char *dirbuf, char *cmdbuf)
+{
+        char path[PATH_MAX];
+        char path2[PATH_MAX];
+        FILE *fp;
+        struct mntent *mnt = NULL;
+        char *dir, *tgt;
+        int found = 0, i;
+
+        if (argc < 2)
+                return -1;
+
+        /* get path prefix */
+        strncpy(path, argv[argc - 1], PATH_MAX);
+        dir = dirname(path);
+
+        /* try to resolve the pathname into relative to the
+         * root of the mounted lustre filesystem.
+         * FIXME we simply suppose there's no sub-mounted filesystems
+         * under this mounted lustre tree.
+         */
+        if (getcwd(path2, PATH_MAX) == NULL) {
+                fprintf(stderr, "getcwd old: %s\n", strerror(errno));
+                return -1;
+        }
+
+        if (chdir(dir) == -1) {
+                fprintf(stderr, "chdir to %s: %s\n",
+                        dir, strerror(errno));
+                return -1;
+        }
+
+        if (getcwd(path, PATH_MAX) == NULL) {
+                fprintf(stderr, "getcwd new: %s\n", strerror(errno));
+                return -1;
+        }
+
+        if (chdir(path2) == -1) {
+                fprintf(stderr, "chdir back: %s\n", strerror(errno));
+                return -1;
+        }
+
+        fp = setmntent(MOUNTED, "r");
+        if (fp == NULL) {
+                fprintf(stderr, "setmntent(%s): %s\n", MOUNTED,
+                        strerror(errno));
+                return -1;
+        }
+
+        while (1) {
+                mnt = getmntent(fp);
+                if (!mnt)
+                        break;
+                
+                if (!llapi_is_lustre_mnttype(mnt->mnt_type))
+                        continue;
+
+                if (!strncmp(mnt->mnt_dir, path, strlen(mnt->mnt_dir))) {
+                        char *p;
+
+                        /* save the mountpoint dir part */
+                        strncpy(dirbuf, mnt->mnt_dir, PATH_MAX);
+
+                        /* get rest of path under the mountpoint,
+                         * don't start with slash.
+                         */
+                        p = path + strlen(mnt->mnt_dir);
+                        while (*p == '/')
+                                p++;
+                        snprintf(path2, PATH_MAX, "%s", p);
+
+                        /* remove trailing slash */
+                        if (path2[strlen(path2)] == '/')
+                                path2[strlen(path2)] = '\0';
+                        found = 1;
+                        /* continue try to match more proper fs */
+                }
+        }
+        endmntent(fp);
+
+        if (!found) {
+                fprintf(stderr, "no mounted lustre fs\n");
+                return -1;
+        }
+
+        /* get base name of target */
+        strncpy(path, argv[argc - 1], PATH_MAX);
+        tgt = basename(path);
+
+        cmdbuf[0] = '\0';
+        for (i = 1; i < argc - 1; i++) {
+                strncat(cmdbuf, argv[i], PATH_MAX);
+                strncat(cmdbuf, " ", PATH_MAX);
+        }
+        strncat(cmdbuf, path2, PATH_MAX);
+        if (path2[0] != '\0')
+                strncat(cmdbuf, "/", PATH_MAX);
+        strncat(cmdbuf, tgt, PATH_MAX);
+
+        return 0;
+}
+
+static int lfs_getfacl(int argc, char **argv)
+{
+        char dir[PATH_MAX];
+        char cmd[PATH_MAX];
+
+        if (acl_cmd_parse(argc, argv, dir, cmd))
+                return CMD_HELP;
+
+        return llapi_getfacl(dir, cmd);
+}
+
+static int lfs_setfacl(int argc, char **argv)
+{
+        char dir[PATH_MAX];
+        char cmd[PATH_MAX];
+
+        if (acl_cmd_parse(argc, argv, dir, cmd))
+                return CMD_HELP;
+
+        return llapi_setfacl(dir, cmd);
 }
 
 int main(int argc, char **argv)

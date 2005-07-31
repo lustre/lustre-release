@@ -52,6 +52,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_acl.h>
 #include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
 
@@ -829,6 +830,70 @@ int llapi_catinfo(char *dir, char *keyword, char *node_name)
                 fprintf(stdout, "%s", data.ioc_pbuf1);
 
         closedir(root);
+        return rc;
+}
+
+int llapi_getfacl(char *dir, char *cmd)
+{
+        struct ll_acl_ioctl_data data;
+        char out[LUSTRE_ACL_SIZE_MAX];
+        int fd, rc;
+
+        data.cmd = cmd;
+        data.cmd_len = strlen(cmd) + 1;
+        data.res = out;
+        data.res_len = sizeof(out);
+        data.status = 0;
+
+        fd = open(dir, O_RDONLY | O_DIRECTORY);
+        if (fd == -1) {
+                err_msg("can't open dir %s", dir);
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_GETFACL, &data);
+        if (rc)
+                err_msg("getfacl failed");
+        else {
+                out[sizeof(out) - 1] = '\0';
+                printf("%s", out);
+                rc = data.status;
+        }
+
+        close(fd);
+
+        return rc;
+}
+
+int llapi_setfacl(char *dir, char *cmd)
+{
+        struct ll_acl_ioctl_data data;
+        char out[LUSTRE_ACL_SIZE_MAX];
+        int fd, rc;
+
+        data.cmd = cmd;
+        data.cmd_len = strlen(cmd) + 1;
+        data.res = out;
+        data.res_len = sizeof(out);
+        data.status = 0;
+
+        fd = open(dir, O_RDONLY | O_DIRECTORY);
+        if (fd == -1) {
+                err_msg("can't open dir %s", dir);
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_SETFACL, &data);
+        if (rc)
+                err_msg("setfacl failed");
+        else {
+                out[sizeof(out) - 1] = '\0';
+                printf("%s", out);
+                rc = data.status;
+        }
+
+        close(fd);
+
         return rc;
 }
 

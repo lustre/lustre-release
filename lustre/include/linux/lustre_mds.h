@@ -241,6 +241,32 @@ struct lsd_downcall_args {
         struct lsd_permission  *perms;       
 };
 
+/* remote acl upcall */
+struct rmtacl_upcall_desc {
+        int     status;         /* helper execution status */
+        int     upcall_status;  /* error in upcall itself */
+        int     get;            /* is getfacl */
+        char   *cmd;            /* cmdline (up) */
+        __u32   cmdlen;         /* cmdline length (up) */
+        char   *res;            /* output (down) */
+        __u32   reslen;         /* output length (down) */
+        /* upcall internal use */
+        uid_t   uid;
+        char   *root;
+};
+
+struct rmtacl_upcall_entry {
+        struct upcall_cache_entry   base;
+        struct rmtacl_upcall_desc  *desc;
+};
+
+struct rmtacl_downcall_args {
+        __u64   key;
+        char   *res;            /* output text */
+        __u32   reslen;         /* output text length */
+        int     status;         /* helper exit code */
+};
+
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
@@ -301,8 +327,9 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                       struct lustre_md *md);
 int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                __u64 valid, const char *xattr_name, unsigned int ea_size,
-                struct ptlrpc_request **request);
+                __u64 valid, const char *xattr_name,
+                const void *xattr_data, unsigned int xattr_datalen,
+                unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request);

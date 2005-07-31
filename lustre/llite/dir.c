@@ -51,6 +51,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_acl.h>
 #include "llite_internal.h"
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
@@ -435,6 +436,126 @@ out:
         return err;
 }
 
+/*
+ * we don't call getxattr_internal/setxattr_internal because we
+ * need more precisely control.
+ */
+static int ll_ioctl_getfacl(struct inode *inode,
+                            struct file *file,
+                            struct ll_acl_ioctl_data *ioc)
+{
+        struct ptlrpc_request *req = NULL;
+        struct mds_body *body;
+        char *cmd, *res;
+        struct lustre_id id;
+        int rc;
+        ENTRY;
+
+        if (!ioc->cmd || !ioc->cmd_len ||
+            !ioc->res || !ioc->res_len) {
+                CERROR("error: cmd %p, len %lu, res %p, len %lu\n",
+                       ioc->cmd, ioc->cmd_len, ioc->res, ioc->res_len);
+                RETURN(-EINVAL);
+        }
+
+        OBD_ALLOC(cmd, ioc->cmd_len);
+        if (!cmd)
+                RETURN(-ENOMEM);
+        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
+                GOTO(out, rc = -EFAULT);
+
+        /* we didn't call ll_getxattr_internal() because we'd like to
+         * copy from reply buffer to user space directly.
+         */
+        ll_inode2id(&id, inode);
+        rc = md_getattr(ll_i2sbi(inode)->ll_md_exp, &id, OBD_MD_FLXATTR,
+                        XATTR_NAME_LUSTRE_ACL,
+                        cmd, ioc->cmd_len, ioc->res_len, &req);
+        if (rc < 0) {
+                CERROR("rc: %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        res = lustre_msg_buf(req->rq_repmsg, 1, ioc->res_len);
+        LASSERT(res);
+        if (copy_to_user(ioc->res, res, ioc->res_len))
+                rc = -EFAULT;
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        LASSERT(body);
+        ioc->status = (__s32) body->flags;
+
+        EXIT;
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        OBD_FREE(cmd, ioc->cmd_len);
+
+        return rc;
+}
+
+static int ll_ioctl_setfacl(struct inode *inode,
+                            struct file *file,
+                            struct ll_acl_ioctl_data *ioc)
+{
+        struct ptlrpc_request *req = NULL;
+        struct mdc_op_data op_data;
+        struct mds_body *body;
+        struct iattr attr;
+        char *cmd;
+        int replen, rc;
+        ENTRY;
+
+        if (!ioc->cmd || !ioc->cmd_len) {
+                CERROR("error: cmd %p, len %lu\n", ioc->cmd, ioc->cmd_len);
+                RETURN(-EINVAL);
+        }
+
+        OBD_ALLOC(cmd, ioc->cmd_len);
+        if (!cmd)
+                RETURN(-ENOMEM);
+        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
+                GOTO(out, rc = -EFAULT);
+
+        memset(&attr, 0x0, sizeof(attr));
+        attr.ia_valid |= ATTR_EA;
+        attr.ia_attr_flags = 0;
+
+        ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
+
+        rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, &op_data, &attr,
+                        (void*) XATTR_NAME_LUSTRE_ACL,
+                        sizeof(XATTR_NAME_LUSTRE_ACL),
+                        (void*) cmd, ioc->cmd_len, &req);
+        if (rc) {
+                CERROR("md_setattr fails: rc = %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        LASSERT(body);
+        ioc->status = (__s32) body->flags;
+
+        LASSERT(req->rq_repmsg->bufcount == 2);
+        replen = req->rq_repmsg->buflens[1];
+        LASSERT(replen <= LUSTRE_ACL_SIZE_MAX);
+        if (replen) {
+                if (replen > ioc->res_len)
+                        replen = ioc->res_len;
+                if (copy_to_user(ioc->res,
+                                 lustre_msg_buf(req->rq_repmsg, 1, replen),
+                                 replen))
+                        rc = -EFAULT;
+        }
+        EXIT;
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        OBD_FREE(cmd, ioc->cmd_len);
+
+        return rc;
+}
+
 static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         unsigned int cmd, unsigned long arg)
 {
@@ -538,7 +659,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 valid |= OBD_MD_FLDIREA;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL,
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL, 0,
                                 obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                 &request);
                 if (rc < 0) {
@@ -726,6 +847,38 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(req);
         out_catinfo:
                 obd_ioctl_freedata(buf, len);
+                RETURN(rc);
+        }
+        case LL_IOC_GETFACL: {
+                struct ll_acl_ioctl_data ioc, *uioc;
+                int rc;
+
+                if (copy_from_user(&ioc, (void *) arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                rc = ll_ioctl_getfacl(inode, file, &ioc);
+                if (!rc) {
+                        uioc = (struct ll_acl_ioctl_data *) arg;
+                        if (copy_to_user(&uioc->status, &ioc.status,
+                                         sizeof(ioc.status)))
+                                rc = -EFAULT;
+                }
+                RETURN(rc);
+        }
+        case LL_IOC_SETFACL: {
+                struct ll_acl_ioctl_data ioc, *uioc;
+                int rc;
+
+                if (copy_from_user(&ioc, (void *) arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                rc = ll_ioctl_setfacl(inode, file, &ioc);
+                if (!rc) {
+                        uioc = (struct ll_acl_ioctl_data *) arg;
+                        if (copy_to_user(&uioc->status, &ioc.status,
+                                         sizeof(ioc.status)))
+                                rc = -EFAULT;
+                }
                 RETURN(rc);
         }
         case LL_IOC_FLUSH_CRED:

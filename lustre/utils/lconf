@@ -2154,10 +2154,18 @@ class MDSDEV(Module):
     	    lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
 
         if development_mode():
+            # set lsd upcall path
             procentry = "/proc/fs/lustre/mds/lsd_upcall"
             upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/lsd_upcall")
             if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
                 print "MDS Warning: failed to set lsd cache upcall"
+            else:
+                run("echo ", upcall, " > ", procentry)
+            # set lacl upcall path
+            procentry = "/proc/fs/lustre/mds/lacl_upcall"
+            upcall = os.path.abspath(os.path.dirname(sys.argv[0]) + "/lacl_upcall")
+            if not (os.access(procentry, os.R_OK) and os.access(upcall, os.R_OK)):
+                print "MDS Warning: failed to set remote acl upcall"
             else:
                 run("echo ", upcall, " > ", procentry)
 

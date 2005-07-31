@@ -189,3 +189,15 @@ Index: linux-2.6.10/include/linux/mm.h
  /* filemap.c */
  extern unsigned long page_unuse(struct page *);
  extern void truncate_inode_pages(struct address_space *, loff_t);
+Index: linux-2.6.10/fs/namespace.c
+===================================================================
+--- linux-2.6.10/fs/namespace.c.symbol	2005-07-28 13:16:56.000000000 -0600
++++ linux-2.6.10/fs/namespace.c	2005-07-28 13:17:24.000000000 -0600
+@@ -38,6 +38,7 @@ static inline int sysfs_init(void)
+ 
+ /* spinlock for vfsmount related operations, inplace of dcache_lock */
+ spinlock_t vfsmount_lock __cacheline_aligned_in_smp = SPIN_LOCK_UNLOCKED;
++EXPORT_SYMBOL(vfsmount_lock);
+ 
+ static struct list_head *mount_hashtable;
+ static int hash_mask, hash_bits;
