@@ -420,6 +420,8 @@ ptl_acceptor(void *arg)
 	}
 	
 	libcfs_sock_release(ptl_acceptor_state.pta_sock);
+        ptl_acceptor_state.pta_sock = NULL;
+
         if (blind_ni != NULL)
                 ptl_ni_decref(blind_ni);
 
