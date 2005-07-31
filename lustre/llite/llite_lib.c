@@ -503,6 +503,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
+        INIT_LIST_HEAD(&lli->lli_close_item);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         memset(&lli->lli_id, 0, sizeof(lli->lli_id));
         sema_init(&lli->lli_och_sem, 1);

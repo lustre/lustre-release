@@ -1467,6 +1467,18 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
                                             sizeof(*reply_body));
 
+        if (request_body && (request_body->valid & OBD_MD_FLSIZE)) {
+                /* we set i_size/i_blocks here, nobody will see
+                 * them until all write references are dropped.
+                 * btw, we hold one reference */
+                LASSERT(mfd->mfd_mode & FMODE_WRITE);
+                i_size_write(inode, request_body->size);
+                inode->i_blocks = request_body->blocks;
+                iattr.ia_size = inode->i_size;
+                iattr.ia_valid |= ATTR_SIZE;
+                mds_inode_unset_attrs_old(inode);
+        }
+
         idlen = ll_id2str(idname, inode->i_ino, inode->i_generation);
         CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, 
                idname, inode->i_nlink, mds_orphan_open_count(inode));
@@ -1558,17 +1570,9 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 		}
 
                 goto out; /* Don't bother updating attrs on unlinked inode */
-        } else if ((mfd->mfd_mode & FMODE_WRITE) && rc == 0 && request_body) {
+        } else if ((mfd->mfd_mode & FMODE_WRITE) && rc == 0) {
                 /* last writer closed file - let's update i_size/i_blocks */
-                if (request_body->valid & OBD_MD_FLSIZE) {
-                        LASSERT(request_body->valid & OBD_MD_FLBLOCKS);
-                        CDEBUG(D_OTHER, "update size "LPD64" for "DLID4
-                               ", epoch "LPD64"\n", inode->i_size,
-                               OLID4(&request_body->id1),
-                               request_body->io_epoch);
-                        iattr.ia_size = inode->i_size;
-                        iattr.ia_valid |= ATTR_SIZE;
-                }
+                mds_validate_size(obd, inode, request_body, &iattr);
         }
 
 #if 0
@@ -1629,6 +1633,12 @@ out:
         /* If other clients have this file open for write, rc will be > 0 */
         if (rc > 0)
                 rc = 0;
+        if (!obd->obd_recovering && mds_inode_has_old_attrs(inode)
+                        && !mds_inode_is_orphan(inode)
+                        && atomic_read(&inode->i_writecount) == 0) {
+                CERROR("leave inode %lu/%u with old attributes\n",
+                       inode->i_ino, inode->i_generation);
+        }
         l_dput(mfd->mfd_dentry);
         mds_mfd_destroy(mfd);
 
@@ -1689,11 +1699,10 @@ static int mds_extent_lock_callback(struct ldlm_lock *lock,
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 __u64 lov_merge_blocks(struct lov_stripe_md *lsm);
 
-int mds_validate_size(struct obd_device *obd, struct mds_body *body,
-                      struct mds_file_data *mfd)
+int mds_validate_size(struct obd_device *obd, struct inode *inode,
+                      struct mds_body *body, struct iattr *iattr)
 {
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-        struct inode *inode = mfd->mfd_dentry->d_inode;
         struct lustre_handle lockh = { 0 };
         struct lov_stripe_md *lsm = NULL;
         int rc, len, flags;
@@ -1704,32 +1713,15 @@ int mds_validate_size(struct obd_device *obd, struct mds_body *body,
         if (!S_ISREG(inode->i_mode))
                 RETURN(0);
 
-        /* we update i_size/i_blocks only for writers */
-        if (!(mfd->mfd_mode & FMODE_WRITE))
-                RETURN(0);
-
-        /* we like when client reports actual i_size/i_blocks himself */
-        if (body->valid & OBD_MD_FLSIZE) {
-                LASSERT(body->valid & OBD_MD_FLBLOCKS);
-                CDEBUG(D_OTHER, "client reports "LPD64"/"LPD64" for "DLID4"\n",
-                       body->size, body->blocks, OLID4(&body->id1));
-                RETURN(0);
-        }
-
         /* we shouldn't fetch size from OSTes during recovery - deadlock */
-        if (obd->obd_recovering)
-                RETURN(0);
-
-        DOWN_READ_I_ALLOC_SEM(inode);
-        if (atomic_read(&inode->i_writecount) > 1 
-                        || mds_inode_is_orphan(inode)) {
-                /* there is no need to update i_size/i_blocks on orphans.
-                 * also, if this is not last writer, then it doesn't make
-                 * sense to fetch i_size/i_blocks from OSSes */
-                UP_READ_I_ALLOC_SEM(inode);
+        if (obd->obd_recovering) {
+                CERROR("size-on-mds has no support on OST yet\n");
                 RETURN(0);
         }
-        UP_READ_I_ALLOC_SEM(inode);
+
+        /* if nobody modified attrs. we're lucky */
+        if (!mds_inode_has_old_attrs(inode))
+                RETURN(0);
 
         /* 1: client didn't send actual i_size/i_blocks
          * 2: we seem to be last writer
@@ -1781,12 +1773,19 @@ int mds_validate_size(struct obd_device *obd, struct mds_body *body,
                 GOTO(cleanup, rc);
         }
 
-        body->size = lov_merge_size(lsm, 0);
-        body->blocks = lov_merge_blocks(lsm);
-        body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        CDEBUG(D_INODE, "LOV reports "LPD64"/%lu for "DLID4" [%s%s%s]\n",
+               inode->i_size, inode->i_blocks, OLID4(&body->id1),
+               atomic_read(&inode->i_writecount) > 1 ? "U" : "",
+               mds_inode_has_old_attrs(inode) ? "D" : "",
+               mds_inode_is_orphan(inode) ? "O" : "");
 
-        CDEBUG(D_OTHER, "LOV reports "LPD64"/"LPD64" for "DLID4"\n",
-                        body->size, body->blocks, OLID4(&body->id1));
+        i_size_write(inode, lov_merge_size(lsm, 0));
+        inode->i_blocks = lov_merge_blocks(lsm);
+        iattr->ia_size = inode->i_size;
+        iattr->ia_valid |= ATTR_SIZE;
+        DOWN_WRITE_I_ALLOC_SEM(inode);
+        mds_inode_unset_attrs_old(inode);
+        UP_WRITE_I_ALLOC_SEM(inode);
 
         obd_cancel(obd->u.mds.mds_dt_exp, lsm, LCK_PR, &lockh);
         
@@ -1846,23 +1845,17 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 RETURN(-ESTALE);
         }
 
-        rc = mds_validate_size(obd, body, mfd);
-        LASSERT(rc == 0);
-
         inode = mfd->mfd_dentry->d_inode;
-
-        if (mfd->mfd_mode & FMODE_WRITE) {
-                /* we set i_size/i_blocks here, nobody will see
-                 * them until all write references are dropped.
-                 * btw, we hold one reference */
-                if (body->valid & OBD_MD_FLSIZE)
-                        i_size_write(inode, body->size);
-                if (body->valid & OBD_MD_FLBLOCKS)
-                        inode->i_blocks = body->blocks;
-        }
 
         /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
         DOWN_WRITE_I_ALLOC_SEM(inode); /* mds_mfd_close drops this */
+
+        if (body->flags & MDS_BFLAG_DIRTY_EPOCH) {
+                /* the client modified data through the handle
+                 * we need to care about attrs. -bzzz */
+                mds_inode_set_attrs_old(inode);
+        }
+
         if (mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
                 struct mds_body *rep_body;
 

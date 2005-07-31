@@ -779,7 +779,7 @@ static int lmv_change_cbdata(struct obd_export *exp,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        int rc = 0;
+        int i, rc;
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -789,10 +789,13 @@ static int lmv_change_cbdata(struct obd_export *exp,
         CDEBUG(D_OTHER, "CBDATA for "DLID4"\n", OLID4(id));
         LASSERT(id_group(id) < lmv->desc.ld_tgt_count);
 
-        rc = md_change_cbdata(lmv->tgts[id_group(id)].ltd_exp,
-                              id, it, data);
+        /* with CMD every object can have two locks in different
+         * namespaces: lookup lock in space of mds storing direntry
+         * and update/open lock in space of mds storing inode */
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++)
+                md_change_cbdata(lmv->tgts[i].ltd_exp, id, it, data);
         
-        RETURN(rc);
+        RETURN(0);
 }
 
 static int lmv_change_cbdata_name(struct obd_export *exp,

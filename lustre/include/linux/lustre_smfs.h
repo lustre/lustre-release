@@ -175,6 +175,7 @@ struct fs_extent{
 //#define SM_DIRTY_WRITE          0x10
 #define SM_DO_COW         	0x20
 #define SM_DO_COWED         	0x40
+#define SM_HND_IBLOCKS         	0x80
 
 /*
 #define SMFS_DO_REC(smfs_info) (smfs_info->smsi_flags & SM_DO_REC)
@@ -217,6 +218,9 @@ struct fs_extent{
 #define SMFS_DO_INODE_COWED(inode) (I2SMI(inode)->smi_flags & SM_DO_COWED)
 #define SMFS_CLEAN_INODE_COWED(inode) (I2SMI(inode)->smi_flags &= ~SM_DO_COWED)
 
+#define SMFS_DO_HND_IBLOCKS(smfs_info) (smfs_info->smsi_flags & SM_HND_IBLOCKS)
+#define SMFS_SET_HND_IBLOCKS(smfs_info) (smfs_info->smsi_flags |= SM_HND_IBLOCKS)
+#define SMFS_CLEAN_HND_IBLOCKS(smfs_info) (smfs_info->smsi_flags &= ~SM_HND_IBLOCKS)
 
 //#define LVFS_SMFS_BACK_ATTR "lvfs_back_attr"
 

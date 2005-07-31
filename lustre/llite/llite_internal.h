@@ -291,7 +291,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
-                    struct obd_client_handle *och);
+                    struct obd_client_handle *och, int dirty);
 void ll_och_fill(struct inode *inode, struct lookup_intent *it,
                  struct obd_client_handle *och);
 
@@ -529,5 +529,9 @@ ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
         data->create_mode = mode;
         data->mod_time = LTIME_S(CURRENT_TIME);
 }
+
+/* pass this flag to ll_md_real_close() to send close rpc right away */
+#define FMODE_SYNC               00000010
+
 
 #endif /* LLITE_INTERNAL_H */

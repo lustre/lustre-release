@@ -124,7 +124,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
         struct mds_body *body;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
-        mdc_pack_id(&body->id1, oa->o_id, 0, oa->o_mode, 0, 0);
+        mdc_pack_id(&body->id1, oa->o_id, oa->o_generation, oa->o_mode, 0, 0);
 
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
         if (oa->o_valid & OBD_MD_FLATIME) {

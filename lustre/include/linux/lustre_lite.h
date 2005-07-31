@@ -72,7 +72,8 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
 #define LLI_F_PREFER_EXTENDED_SIZE      2
-
+#define LLI_F_DIRTY_HANDLE              3
+                                                   
 struct ll_inode_info {
         int                     lli_size_pid;
         int                     lli_inode_magic;
@@ -131,6 +132,8 @@ static inline struct ll_inode_info *ll_i2info(struct inode *inode)
 
 #define LLI_HAVE_FLSIZE(inode)  \
         test_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &ll_i2info(inode)->lli_flags)
+#define LLI_DIRTY_HANDLE(inode)  \
+        test_bit(LLI_F_DIRTY_HANDLE, &ll_i2info(inode)->lli_flags)
 
 /* lprocfs.c */
 enum {

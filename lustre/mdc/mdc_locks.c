@@ -143,12 +143,16 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
-                LASSERTF(old_inode->i_state & I_FREEING,
-                         "Found existing inode %p/%lu/%u state %lu in lock: "
-                         "setting data to %p/%lu/%u\n", old_inode,
-                         old_inode->i_ino, old_inode->i_generation,
-                         old_inode->i_state, new_inode, new_inode->i_ino,
-                         new_inode->i_generation);
+                if (!(old_inode->i_state & I_FREEING)) {
+                        CERROR("Found existing inode %p/%lu/%u state %lu "
+                               "in lock: setting data to %p/%lu/%u\n",
+                               old_inode, old_inode->i_ino,
+                               old_inode->i_generation, old_inode->i_state,
+                               new_inode, new_inode->i_ino,
+                               new_inode->i_generation);
+                        unlock_res_and_lock(lock);
+                        LBUG();
+                }
         }
 #endif
         lock->l_ast_data = data;

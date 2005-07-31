@@ -1397,7 +1397,7 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
                 RETURN(0);
         
         if (obd->obd_recovering) {
-                CDEBUG(D_ERROR, "size for "DLID4" is unknown yet (recovering)\n",
+                CDEBUG(D_INODE, "size for "DLID4" is unknown yet (recovering)\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
@@ -1405,13 +1405,13 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
         if (atomic_read(&inode->i_writecount)) {
                 /* some one has opened the file for write.
                  * mds doesn't know actual size */
-                CDEBUG(D_OTHER, "MDS doesn't know actual size for "DLID4"\n",
+                CDEBUG(D_INODE, "MDS doesn't know actual size for "DLID4"\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
-        CDEBUG(D_OTHER, "MDS returns "LPD64"/"LPD64" for"DLID4"\n",
+        CDEBUG(D_INODE, "MDS returns "LPD64"/"LPD64" for"DLID4"\n",
                body->size, body->blocks, OLID4(&body->id1));
-        body->valid |= OBD_MD_FLSIZE;
+        body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         RETURN(0);
 }
 

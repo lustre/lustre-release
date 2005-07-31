@@ -653,6 +653,7 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
         struct fsfilt_operations *cache_fsfilt = I2FOPS(dentry->d_inode);
         struct dentry *cache_dentry = NULL;
         struct inode *cache_inode = I2CI(dentry->d_inode);
+        struct smfs_super_info *sbi = S2SMI(dentry->d_inode->i_sb);
         struct hook_setattr_msg msg = {
                 .dentry = dentry,
                 .attr = iattr
@@ -673,6 +674,11 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
 
         SMFS_PRE_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg);
         
+        if (SMFS_DO_HND_IBLOCKS(sbi)) {
+                /* size-on-mds changes i_blocks directly to reflect
+                 * aggregated i_blocks from all OSTs -bzzz */
+                cache_inode->i_blocks = dentry->d_inode->i_blocks;
+        }
         rc = cache_fsfilt->fs_setattr(cache_dentry, handle, iattr, do_trunc);
 
         SMFS_POST_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg, rc);

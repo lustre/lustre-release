@@ -648,6 +648,8 @@ struct mds_status_req {
 };
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
+#define MDS_BFLAG_CLOSE_EPOCH          0x2
+#define MDS_BFLAG_DIRTY_EPOCH          0x4
 
 struct mds_body {
         struct lustre_id id1;

@@ -42,6 +42,8 @@
 #include <linux/iobuf.h>
 #endif
 
+#include <linux/pagevec.h>
+
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_mds.h>
@@ -498,8 +500,72 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first,
         RETURN(rc);
 }
 
+
+static void ll_close_vma(struct vm_area_struct *vma)
+{
+        struct inode *inode = vma->vm_file->f_dentry->d_inode;
+        struct address_space *mapping = inode->i_mapping;
+        unsigned long next, size, end;
+        struct ll_async_page *llap;
+        struct obd_export *exp;
+        struct pagevec pvec;
+        int i;
+        
+        if (!(vma->vm_flags & VM_SHARED))
+                return;
+
+        /* all pte's are synced to mem_map by the moment
+         * we scan backing store and put all dirty pages
+         * onto pending list to track flushing */
+        
+        LASSERT(LLI_DIRTY_HANDLE(inode));
+        exp = ll_i2dtexp(inode);
+        if (exp == NULL) {
+                CERROR("can't get export for the inode\n");
+                return;
+        }
+        
+	pagevec_init(&pvec, 0);
+        next = vma->vm_pgoff;
+        size = (vma->vm_end - vma->vm_start) / PAGE_SIZE;
+        end = next + size - 1;
+
+        CDEBUG(D_INODE, "close vma 0x%p[%lu/%lu/%lu from %lu/%u]\n", vma,
+               next, size, end, inode->i_ino, inode->i_generation);
+
+        while (next <= end && pagevec_lookup(&pvec, mapping, next, PAGEVEC_SIZE)) {
+                for (i = 0; i < pagevec_count(&pvec); i++) {
+                        struct page *page = pvec.pages[i];
+
+                        if (page->index > next)
+                                next = page->index;
+                        if (next > end)
+                                continue;
+                        next++;
+
+                        lock_page(page);
+                        if (page->mapping != mapping || !PageDirty(page)) {
+                                unlock_page(page);
+                                continue;
+                        }
+
+                        llap = llap_from_page(page, LLAP_ORIGIN_COMMIT_WRITE);
+                        if (IS_ERR(llap)) {
+                                CERROR("can't get llap\n");
+                                unlock_page(page);
+                                continue;
+                        }
+
+                        llap_write_pending(inode, llap);
+                        unlock_page(page);
+                }
+                pagevec_release(&pvec);
+        }
+}
+
 static struct vm_operations_struct ll_file_vm_ops = {
         .nopage         = ll_nopage,
+        .close          = ll_close_vma,
 };
 
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
@@ -508,8 +574,13 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         ENTRY;
 
         rc = generic_file_mmap(file, vma);
-        if (rc == 0)
+        if (rc == 0) {
+                struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
                 vma->vm_ops = &ll_file_vm_ops;
+                /* mark i/o epoch dirty */
+                if (vma->vm_flags & VM_SHARED)
+                        set_bit(LLI_F_DIRTY_HANDLE, &lli->lli_flags);
+        }
 
         RETURN(rc);
 }

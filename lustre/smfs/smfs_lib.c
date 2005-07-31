@@ -241,6 +241,7 @@ int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
                         struct mds_obd * mds = &obd->u.mds;
                         
                         smfs_mds_flags(mds, root_dentry->d_inode);
+                        SMFS_SET_HND_IBLOCKS(smb);
                 }
                 else
                         CDEBUG(D_SUPER,"Unknown OBD (%s) post_setup\n",

@@ -196,6 +196,7 @@ int ll_prepare_write(struct file *file, struct page *page,
         int rc = 0;
         ENTRY;
 
+        LASSERT(LLI_DIRTY_HANDLE(inode));
         LASSERT(PageLocked(page));
         (void)llap_cast_private(page); /* assertion */
 
@@ -431,6 +432,7 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         if (llap == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
         llap->llap_magic = LLAP_MAGIC;
+        INIT_LIST_HEAD(&llap->llap_pending_write);
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
                                  (obd_off)page->index << PAGE_SHIFT,
                                  &ll_async_page_ops, llap, &llap->llap_cookie);
@@ -471,7 +473,7 @@ static int queue_or_sync_write(struct obd_export *exp,
                                 OBD_BRW_WRITE, 0, 0, 0, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
-                //llap_write_pending(inode, llap);
+                llap_write_pending(llap->llap_page->mapping->host, llap);
                 GOTO(out, 0);
         }
 
@@ -524,6 +526,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         LASSERT(inode == file->f_dentry->d_inode);
         LASSERT(PageLocked(page));
+        LASSERT(LLI_DIRTY_HANDLE(inode));
 
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
@@ -609,6 +612,7 @@ int ll_writepage(struct page *page)
 
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
+        LASSERT(LLI_DIRTY_HANDLE(inode));
 
         exp = ll_i2dtexp(inode);
         if (exp == NULL)
@@ -670,7 +674,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         unlock_page(page);
 
-        if (0 && cmd == OBD_BRW_WRITE) {
+        if (cmd == OBD_BRW_WRITE) {
                 llap_write_complete(page->mapping->host, llap);
                 ll_try_done_writing(page->mapping->host);
         }
@@ -721,7 +725,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        //llap_write_complete(inode, llap);
+        llap_write_complete(inode, llap);
         rc = obd_teardown_async_page(exp, ll_i2info(inode)->lli_smd, NULL,
                                      llap->llap_cookie);
         if (rc != 0)

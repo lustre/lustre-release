@@ -1172,11 +1172,21 @@ static int check_for_next_transno(struct obd_device *obd)
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
         } else if (queue_len == atomic_read(&obd->obd_req_replay_clients)) {
-                /* some clients haven't connected in time, but we need
-                 * their requests to continue recovery. so, we abort ... */
-                CDEBUG(D_ERROR, "abort due to missed clients: queue: %d max: %d\n",
-                       queue_len, max);
-                obd->obd_abort_recovery = 1;
+                /* some clients haven't connected in time, but we can try
+                 * to replay requests that demand on already committed ones
+                 * also, we can replay first non-committed transation */
+                LASSERT(req_transno != 0);
+                if (req_transno == obd->obd_last_committed + 1) {
+                        obd->obd_next_recovery_transno = req_transno;
+                } else if (req_transno > obd->obd_last_committed) {
+                        /* can't continue recovery: have no needed transno */
+                        obd->obd_abort_recovery = 1;
+                        CDEBUG(D_ERROR, "abort due to missed clients. max: %d, "
+                               "connected: %d, completed: %d, queue_len: %d, "
+                               "req_transno: "LPU64", next_transno: "LPU64"\n",
+                               max, connected, completed, queue_len,
+                               req_transno, next_transno);
+                }
                 wake_up = 1;
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -1341,7 +1351,7 @@ static int target_recovery_thread(void *arg)
         /* If some clients haven't connected in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
-                CERROR("some clients haven't connect in time (%d/%d),"
+                CDEBUG(D_ERROR, "few clients haven't connect in time (%d/%d),"
                        "evict them ...\n", obd->obd_connected_clients,
                        obd->obd_max_recoverable_clients);
                 obd->obd_abort_recovery = 0;
@@ -1351,7 +1361,7 @@ static int target_recovery_thread(void *arg)
         }
 
         /* next stage: replay requests */
-        CWARN("1: request replay stage - %d clients from t"LPU64"\n",
+        CDEBUG(D_ERROR, "1: request replay stage - %d clients from t"LPU64"\n",
               atomic_read(&obd->obd_req_replay_clients),
               obd->obd_next_recovery_transno);
         while ((req = target_next_replay_req(obd))) {
@@ -1377,15 +1387,16 @@ static int target_recovery_thread(void *arg)
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
-                CERROR("req replay timed out, aborting ...\n");
+                CDEBUG(D_ERROR, "req replay timed out, aborting ...\n");
                 obd->obd_abort_recovery = 0;
                 stale = class_disconnect_stale_exports(obd, req_replay_done, 0);
                 atomic_sub(stale, &obd->obd_lock_replay_clients);
                 abort_req_replay_queue(obd);
+                LBUG();
         }
 
         /* The second stage: replay locks */
-        CWARN("2: lock replay stage - %d clients\n",
+        CDEBUG(D_ERROR, "2: lock replay stage - %d clients\n",
               atomic_read(&obd->obd_lock_replay_clients));
         while ((req = target_next_replay_lock(obd))) {
                 LASSERT(trd->trd_processing_task == current->pid);

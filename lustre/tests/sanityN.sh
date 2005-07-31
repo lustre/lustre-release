@@ -319,6 +319,7 @@ run_test 14 "execution of file open for write returns -ETXTBSY ="
 test_14a() {
         mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
+	sync
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1

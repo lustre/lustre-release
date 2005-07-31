@@ -723,9 +723,6 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         ost_stime_record(req, &start, 1, 2);
         if (rc == 0) {
-                repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
-                memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
-
 #if CHECKSUM_BULK
                 repbody->oa.o_cksum = ost_checksum_bulk(desc);
                 repbody->oa.o_valid |= OBD_MD_FLCKSUM;

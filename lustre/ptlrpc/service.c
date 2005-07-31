@@ -843,7 +843,11 @@ static int ptlrpc_main(void *arg)
                                 (svc->srv_nthreads - 1))),
                               &lwi);
 
+#if 0
+                /* disable watchdog: with CMD server can issue request
+                 * to another server to satisfy the request -bzzz */
                 lc_watchdog_touch(watchdog);
+#endif
                 ptlrpc_check_rqbd_pools(svc);
                 
                 if (!list_empty (&svc->srv_reply_queue))

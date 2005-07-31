@@ -69,6 +69,24 @@ do {                                                                       \
         (inode)->i_flags &= ~(0x4000000);                                  \
         CDEBUG(D_VFSTRACE, "removing orphan flag from inode %p\n", inode); \
 } while (0)
+
+
+/* inode flags managed by mds directly */
+#define MDS_IF_ATTRS_OLD        0x8000000       /* inode needs attrs. refreshing */
+
+#define mds_inode_has_old_attrs(inode)  ((inode)->i_flags & MDS_IF_ATTRS_OLD)
+#define mds_inode_set_attrs_old(inode)                                   \
+do {                                                                     \
+        (inode)->i_flags |= MDS_IF_ATTRS_OLD;                            \
+        CDEBUG(D_VFSTRACE, "setting attr.old flag on inode %p\n", inode);\
+} while (0)
+#define mds_inode_unset_attrs_old(inode)                                     \
+do {                                                                         \
+        (inode)->i_flags &= ~(MDS_IF_ATTRS_OLD);                             \
+        CDEBUG(D_VFSTRACE, "removing attrs.old flag from inode %p\n", inode);\
+} while (0)
+
+
 #endif /* __KERNEL__ */
 
 /* mds/mds_reint.c */
@@ -170,7 +188,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                   int unlink_orphan);
 int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
-
+int mds_validate_size(struct obd_device *obd, struct inode *inode,
+                      struct mds_body *body, struct iattr *iattr);
 
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,

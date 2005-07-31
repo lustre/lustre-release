@@ -72,7 +72,7 @@ finish:
 }
 
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
-                    struct obd_client_handle *och)
+                    struct obd_client_handle *och, int dirty)
 {
         struct ptlrpc_request *req = NULL;
         struct obdo *obdo = NULL;
@@ -102,6 +102,7 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                 RETURN(-ENOMEM);
 
         obdo->o_id = inode->i_ino;
+        obdo->o_generation = inode->i_generation;
         obdo->o_valid = OBD_MD_FLID;
         obdo_from_inode(obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
                                       OBD_MD_FLATIME | OBD_MD_FLMTIME |
@@ -117,8 +118,13 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         obdo->o_valid |= OBD_MD_FLEPOCH;
         obdo->o_easize = ll_i2info(inode)->lli_io_epoch;
 
-        if (ll_validate_size(inode, &obdo->o_size, &obdo->o_blocks))
-                obdo->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        if (dirty) {
+                /* we modified data through this handle */
+                obdo->o_flags |= MDS_BFLAG_DIRTY_EPOCH;
+                obdo->o_valid |= OBD_MD_FLFLAGS;
+                if (ll_validate_size(inode, &obdo->o_size, &obdo->o_blocks))
+                        obdo->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        }
 
         rc = md_close(md_exp, obdo, och, &req);
         obdo_free(obdo);
@@ -149,10 +155,11 @@ int ll_md_real_close(struct obd_export *md_exp,
                      struct inode *inode, int flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
+        int freeing = inode->i_state & I_FREEING;
         struct obd_client_handle **och_p;
         struct obd_client_handle *och;
         __u64 *och_usecount;
-        int rc = 0;
+        int rc = 0, dirty = 0;
         ENTRY;
 
         if (flags & FMODE_WRITE) {
@@ -172,9 +179,32 @@ int ll_md_real_close(struct obd_export *md_exp,
                 up(&lli->lli_och_sem);
                 RETURN(0);
         }
-        och = *och_p;
+        if (ll_is_inode_dirty(inode)) {
+                /* the inode still has dirty pages, let's close later */
+                CDEBUG(D_INODE, "inode %lu/%u still has dirty pages\n",
+                       inode->i_ino, inode->i_generation);
+                LASSERT(freeing == 0);
+                ll_queue_done_writing(inode);
+                up(&lli->lli_och_sem);
+                RETURN(0);
+        }
+        
+        if (LLI_DIRTY_HANDLE(inode) && (flags & FMODE_WRITE)) {
+                clear_bit(LLI_F_DIRTY_HANDLE,  &lli->lli_flags);
+                dirty = 1;
+        } else if (0 && !(flags & FMODE_SYNC) && !freeing) {
+                /* in order to speed up creation rate we pass
+                 * closing to dedicated thread so we don't need
+                 * to wait for close reply here -bzzz */
+                ll_queue_done_writing(inode);
+                up(&lli->lli_och_sem);
+                RETURN(0);
+        }
 
+        och = *och_p;
         *och_p = NULL;
+
+
         up(&lli->lli_och_sem);
 
         /*
@@ -184,7 +214,7 @@ int ll_md_real_close(struct obd_export *md_exp,
          * and this will be called from block_ast callack.
         */
         if (och && och->och_fh.cookie != DEAD_HANDLE_MAGIC)
-                rc = ll_md_och_close(md_exp, inode, och);
+                rc = ll_md_och_close(md_exp, inode, och, dirty);
         
         RETURN(rc);
 }
@@ -450,7 +480,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 
                         ll_och_fill(inode, it, och);
                         /* ll_md_och_close() will free och */
-                        ll_md_och_close(ll_i2mdexp(inode), inode, och);
+                        ll_md_och_close(ll_i2mdexp(inode), inode, och, 0);
                 }
                 (*och_usecount)++;
                         
@@ -1189,6 +1219,9 @@ static ssize_t ll_file_write(struct file *file, const char *buf,
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, count, *ppos);
 
+        /* mark open handle dirty */
+        set_bit(LLI_F_DIRTY_HANDLE, &(ll_i2info(inode)->lli_flags));
+
         /* generic_file_write handles O_APPEND after getting i_sem */
         retval = generic_file_write(file, buf, count, ppos);
         EXIT;
@@ -1282,7 +1315,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         rc = ll_file_release(f->f_dentry->d_inode, f);
         
         /* Now also destroy our supplemental och */
-        ll_md_och_close(ll_i2mdexp(inode), f->f_dentry->d_inode, och);
+        ll_md_och_close(ll_i2mdexp(inode), f->f_dentry->d_inode, och, 0);
         EXIT;
  out:
         ll_intent_release(&oit);
