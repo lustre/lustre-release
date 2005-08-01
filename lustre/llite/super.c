@@ -57,12 +57,12 @@ struct super_operations lustre_super_operations =
         .read_inode2    = ll_read_inode2,
         .clear_inode    = ll_clear_inode,
 //        .delete_inode   = ll_delete_inode,
-        .put_super      = lustre_put_super,
+        .put_super      = ll_put_super,
         .statfs         = ll_statfs,
         .umount_begin   = ll_umount_begin,
         .fh_to_dentry   = ll_fh_to_dentry,
         .dentry_to_fh   = ll_dentry_to_fh,
-        .remount_fs     = lustre_remount_fs,
+        .remount_fs     = ll_remount_fs,
 };
 
 static struct file_system_type lustre_fs_type = {
@@ -86,6 +86,10 @@ static int __init init_lustre_lite(void)
 
         if (proc_lustre_root)
                 proc_lustre_fs_root = proc_mkdir("llite", proc_lustre_root);
+
+        // FIXME register_filesystem should be in obd_mount init, not here.
+        // here we just have: 
+        lustre_register_client_fill_super(ll_fill_super);
 
         ll_register_cache(&ll_cache_definition);
 

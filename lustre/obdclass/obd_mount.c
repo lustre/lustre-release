@@ -31,6 +31,8 @@
 #include <linux/obd_class.h>
 #include <lustre/lustre_user.h>
 
+static int (*client_fill_super)(struct super_block *sb) = NULL;
+
 static int dentry_readdir(struct obd_device *obd, struct dentry *dir, 
                           struct vfsmount *inmnt, struct list_head *dentry_list)
 {
@@ -325,9 +327,10 @@ static void server_put_super(struct super_block *sb)
                 class_manual_cleanup(obd, flags);
 
         class_del_profile(sbi->lsi_ldd->ldd_svname);
+        lustre_common_put_super(sb);
 }
 
-static void server_umount_force(struct super_block *sb)
+static void server_umount_begin(struct super_block *sb)
 {
         struct lustre_sb_info *sbi = s2sbi(sb);
                                                                                        
@@ -340,7 +343,7 @@ static struct super_operations server_ops =
 {
         //.statfs         = NULL,
         .put_super      = server_put_super,
-        .umount_begin   = server_umount_force, /* umount -f */
+        .umount_begin   = server_umount_begin, /* umount -f */
 };
 
 #define log2(n) ffz(~(n))
@@ -382,8 +385,6 @@ static int server_fill_super_common(struct super_block *sb)
         RETURN(0);
 }
                            
-#if 0
-FIXME
 
 /* Get the log "profile" from a remote MGMT and process it.
   FIXME  If remote doesn't exist, try local
@@ -391,6 +392,8 @@ FIXME
 int lustre_get_process_log(struct super_block *sb, char * profile,
                        struct config_llog_instance *cfg)
 {
+#if 0
+FIXME
         char  *peer = "MDS_PEER_UUID";
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
@@ -494,8 +497,8 @@ out:
                 rc = err;
 
         RETURN(rc);
-}
 #endif
+}
 
 /* Process all local logs.
 FIXME clients and servers should use the same fn. No need to have MDS 
@@ -794,9 +797,15 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         lustre_start_mgc(sb);
 
         if (lmd_is_client(lmd)) {
-                CERROR("Mounting client\n");
-                /* Connect and start */
-                err = client_fill_super(sb, lmd->lmd_dev /*profile */);
+                if (!client_fill_super) {
+                        CERROR("Nothing registered for client_fill_super!\n"
+                               "Is llite module loaded?\n");
+                        err = -ENOSYS;
+                } else {
+                        CERROR("Mounting client\n");
+                        /* Connect and start */
+                        err = (*client_fill_super)(sb);
+                }
         } else {
                 CERROR("Mounting server\n");
                 err = server_fill_super(sb);
@@ -811,52 +820,23 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 } 
                                                                                 
 /* Common umount */
-void lustre_put_super(struct super_block *sb)
+void lustre_common_put_super(struct super_block *sb)
 {
-        struct lustre_sb_info *sbi = s2sbi(sb);
-        struct obd_device *obd;
-
-        LASSERT(sbi->lsi_lmd);
-        if (!lmd_is_client(sbi->lsi_lmd)) {
-                // FIXME unmount overmounted client first 
-                //mntput?
-                server_put_super(sb);
-        } else {
-                client_put_super(sb, sbi->lsi_lmd->lmd_dev);
-        }
+        CERROR("common put super %p\n", sb);
 
         lustre_stop_mgc(sb);
         lustre_free_sbi(sb);
-}
+}      
 
-/* Common remount */
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data)
+void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 {
-        struct lustre_sb_info *sbi = s2sbi(sb);
-        int ret = 0;
-        __u32 read_only;
-
-        if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
-                read_only = *flags & MS_RDONLY;
-                if (sbi->lsi_lmd && !lmd_is_client(sbi->lsi_lmd)) {
-                        // FIXME what does this mean? 
-                        CERROR("Remount server %s RO %d\n", 
-                               sbi->lsi_ldd->ldd_svname, read_only);
-                } else {
-                        ret = ll_remount_fs(sb, read_only);
-                }
-                if (read_only)
-                        sb->s_flags |= MS_RDONLY;
-                else
-                        sb->s_flags &= ~MS_RDONLY;
-        }
-        return ret;
+        client_fill_super = cfs;
 }
-
 
 EXPORT_SYMBOL(lustre_fill_super);
-EXPORT_SYMBOL(lustre_put_super);
-EXPORT_SYMBOL(lustre_remount_fs);
+EXPORT_SYMBOL(lustre_register_client_fill_super);
+EXPORT_SYMBOL(lustre_common_put_super);
+EXPORT_SYMBOL(lustre_get_process_log);
 EXPORT_SYMBOL(class_manual_cleanup);
 
 

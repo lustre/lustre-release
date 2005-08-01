@@ -334,8 +334,8 @@ char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
 void ll_options(char *options, char **ost, char **mds, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
-int client_fill_super(struct super_block *sb, char *profilenm);
-void client_put_super(struct super_block *sb, char *profilenm);
+int ll_fill_super(struct super_block *sb);
+void ll_put_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
@@ -349,6 +349,7 @@ void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
+int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode,
                   struct ptlrpc_request *req, int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);

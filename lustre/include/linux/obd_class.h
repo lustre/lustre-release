@@ -91,6 +91,12 @@ void ping_evictor_stop(void);
 
 char *obd_export_nid2str(struct obd_export *exp);
 
+/* obd_mount.c */
+int lustre_fill_super(struct super_block *sb, void *data, int silent);
+void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
+void lustre_common_put_super(struct super_block *sb);
+int class_manual_cleanup(struct obd_device *obd, char *flags);
+
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_attach(struct lustre_cfg *lcfg);

@@ -445,13 +445,14 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_inode_magic = LLI_INODE_MAGIC;
 }
 
-int client_fill_super(struct super_block *sb, char *profilenm)
+int ll_fill_super(struct super_block *sb)
 {
         struct lustre_profile *lprof;
         struct lustre_sb_info *lsi = s2sbi(sb);
         struct ll_sb_info *sbi;
         char  *osc;
         char  *mdc;
+        char  *profilenm = get_profile_name(sb);
         struct config_llog_instance cfg;
         char   ll_instance[sizeof(sb) * 2 + 1];
         int    err;
@@ -518,11 +519,12 @@ out_free:
         RETURN(err);
 }
                                                                                        
-void client_put_super(struct super_block *sb, char *profilenm)
+void ll_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2sbi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        char *profilenm = get_profile_name(sb);
         char flags[2] = "";
         int next = 0;
         ENTRY;
@@ -539,12 +541,13 @@ void client_put_super(struct super_block *sb, char *profilenm)
                 class_manual_cleanup(obd, flags);
         }                       
         
-        /* client */
         if (profilenm) 
                 class_del_profile(profilenm);
         
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
+
+        lustre_common_put_super(sb);
 
         EXIT;
 } /* client_put_super */
@@ -1203,18 +1206,26 @@ void ll_umount_begin(struct super_block *sb)
         EXIT;
 }
 
-int ll_remount_fs(struct super_block *sb, __u32 read_only)
+int ll_remount_fs(struct super_block *sb, int *flags, char *data)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int err;
-
-        err = obd_set_info(sbi->ll_mdc_exp, 
-                           strlen("read-only"), "read-only", 
-                           sizeof(read_only), &read_only);
-        if (err) {
-                CERROR("Failed to change the read-only flag "
-                       "during remount: %d\n", err);
-                return err;
+        __u32 read_only;
+ 
+        if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
+                read_only = *flags & MS_RDONLY;
+                err = obd_set_info(sbi->ll_mdc_exp, strlen("read-only"),
+                                   "read-only", sizeof(read_only), &read_only);
+                if (err) {
+                        CERROR("Failed to change the read-only flag during "
+                               "remount: %d\n", err);
+                        return err;
+                }
+ 
+                if (read_only)
+                        sb->s_flags |= MS_RDONLY;
+                else
+                        sb->s_flags &= ~MS_RDONLY;
         }
         return 0;
 }
@@ -1271,3 +1282,9 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
         LBUG();
         return NULL;
 }
+
+EXPORT_SYMBOL(ll_fill_super);
+EXPORT_SYMBOL(ll_put_super);
+EXPORT_SYMBOL(ll_remount_fs);
+EXPORT_SYMBOL(ll_umount_begin);
+

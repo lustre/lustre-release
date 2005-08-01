@@ -84,11 +84,6 @@ struct obd_device;
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix);
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
 
-int lustre_fill_super(struct super_block *sb, void *data, int silent);
-void lustre_put_super(struct super_block *sb);
-int lustre_remount_fs(struct super_block *sb, int *flags, char *data);
-int class_manual_cleanup(struct obd_device *obd, char *flags);
-
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);

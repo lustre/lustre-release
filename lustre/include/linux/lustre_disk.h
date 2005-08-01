@@ -108,7 +108,6 @@ struct lustre_mount_data {
         (((x)->lmd_flags & LMD_FLG_CLIENT) || \
         (!((x)->lmd_flags & LMD_FLG_MNTCNF))) 
 
-
 /****************** mkfs command *********************/
 
 #define MO_IS_LOOP     0x01
@@ -185,6 +184,8 @@ struct lustre_sb_info {
 # define    s2sbi(sb)        ((struct lustre_sb_info *)((sb)->u.generic_sbp))
 # define    s2sbi_nocast(sb) ((sb)->u.generic_sbp)
 #endif
+
+#define     get_profile_name(sb)   (s2sbi(sb)->lsi_lmd->lmd_dev)
 
 #endif /* __KERNEL__ */
 

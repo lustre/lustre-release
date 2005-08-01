@@ -96,10 +96,10 @@ struct super_operations lustre_super_operations =
         .alloc_inode   = ll_alloc_inode,
         .destroy_inode = ll_destroy_inode,
         .clear_inode   = ll_clear_inode,
-        .put_super     = lustre_put_super,
+        .put_super     = ll_put_super,
         .statfs        = ll_statfs,
         .umount_begin  = ll_umount_begin,
-        .remount_fs    = lustre_remount_fs,
+        .remount_fs    = ll_remount_fs,
 };
 
 struct file_system_type lustre_fs_type = {
@@ -128,6 +128,8 @@ static int __init init_lustre_lite(void)
 
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
+
+        lustre_register_client_fill_super(ll_fill_super);
 
         ll_register_cache(&ll_cache_definition);
 

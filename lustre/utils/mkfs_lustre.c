@@ -297,10 +297,13 @@ int write_local_files(struct mkfs_opts *mop)
         }
 
         if (mop->mo_flags & MO_IS_LOOP) {
+                /* ext3 can't understand iopen_nopriv, others
                 if (strlen(mop->mo_ldd.ldd_mount_opts)) 
                         snprintf(local_mount_opts, sizeof(local_mount_opts),
                                  "loop,%s", mop->mo_ldd.ldd_mount_opts);
-                else sprintf(local_mount_opts, "loop");
+                else 
+                */
+                        sprintf(local_mount_opts, "loop");
         }
         sprintf(cmd, "mount -t ext3 %s%s %s %s",
                 strlen(local_mount_opts) ? "-o ": "", 
@@ -518,6 +521,39 @@ out:
         return ret;
 }
 
+static int load_module(char *module_name)
+{
+        char buf[256];
+        int rc;
+        
+        vprint("loading %s\n", module_name);
+        sprintf(buf, "/sbin/modprobe %s", module_name);
+        rc = system(buf);
+        if (rc) {
+                fprintf(stderr, "%s: failed to modprobe %s (%d)\n", 
+                        progname, module_name, rc);
+                fprintf(stderr, "Check /etc/modules.conf\n");
+        }
+        return rc;
+}
+
+static int load_modules(struct mkfs_opts *mop)
+{
+        int rc = 0;
+
+        //client: rc = load_module("lustre");
+        
+        if (IS_OST(&mop->mo_ldd)) {
+                rc = load_module("oss");
+                if (rc) return rc;
+        }
+        if (IS_MDT(&mop->mo_ldd)) {
+                rc = load_module("mds");
+                if (rc) return rc;
+        }
+        return rc;
+}
+
 static int jt_setup()
 {
         int ret;
@@ -582,16 +618,27 @@ static int _do_jt(int (*cmd)(int argc, char **argv), char *cmd_name, ...)
 #define do_jt(cmd, a...)  if ((ret = _do_jt(cmd, #cmd, ## a))) goto out_jt
 #define do_jt_noret(cmd, a...)  _do_jt(cmd, #cmd, ## a) 
 
+static int get_local_nids(void)
+{
+        int ret;
+        /* Get local nids */
+        ret = do_jt_noret(jt_ptl_network, "network", 0);
+        // FIXME save these 
+        return 0;
+}
+
 int lustre_log_setup(struct mkfs_opts *mop)
 {
         char confname[] = "llog_writer";
         char name[128];
-        int  ret = 0;
+        int  numnids, ret = 0;
 
         vprint("Creating Lustre logs\n"); 
 
         if ((ret = jt_setup()))
                 return ret;
+
+        numnids = get_local_nids();
 
         /* FIXME can't we just write these log files ourselves? Why do we 
            have to go through an obd at all? jt_ioc_dump()? */
@@ -697,7 +744,11 @@ int lustre_log_setup(struct mkfs_opts *mop)
                               mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
 
-
+                if (numnids == 0) {
+                        fprintf(stderr, "%s: Can't figure out local nids, "
+                                "skipping client log creation\n", progname);
+                        goto out_jt;
+                }
                 /* Write client startup log */
                 do_jt(jt_cfg_clear_log,  "clear_log", "client", 0);
                 do_jt(jt_cfg_record,     "record", "client", 0);
@@ -752,22 +803,6 @@ out_jt:
         return ret;
 }
 
-static int load_module(char *module_name)
-{
-        char buf[256];
-        int rc;
-        
-        vprint("loading %s\n", module_name);
-        sprintf(buf, "/sbin/modprobe %s", module_name);
-        rc = system(buf);
-        if (rc) {
-                fprintf(stderr, "%s: failed to modprobe %s (%d)\n", 
-                        progname, module_name, rc);
-                fprintf(stderr, "Check /etc/modules.conf\n");
-        }
-        return rc;
-}
-
 /* Make the mdt/ost server obd name based on the filesystem name */
 static void make_sv_name(struct mkfs_opts *mop)
 {
@@ -776,13 +811,13 @@ static void make_sv_name(struct mkfs_opts *mop)
            So rewrite ost log, last_rcvd, and disk label, or we need to talk
            to MGMT now to get index # */
 
-        if (IS_MGMT(&mop->mo_ldd)) {
-                sprintf(mop->mo_ldd.ldd_svname, "MGMT");
-        } else {
+        if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd)) {
                 sprintf(mop->mo_ldd.ldd_svname, "%.8s-%s%04x",
                         mop->mo_ldd.ldd_fsname,
                         IS_MDT(&mop->mo_ldd) ? "MDT" : "OST",  
                         mop->mo_index);
+        } else {
+                sprintf(mop->mo_ldd.ldd_svname, "MGMT");
         }
         vprint("Server name: %s\n", mop->mo_ldd.ldd_svname);
 }
