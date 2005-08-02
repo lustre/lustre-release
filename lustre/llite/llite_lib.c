@@ -1057,7 +1057,6 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        lli->lli_inode_magic = LLI_INODE_DEAD;
         ll_inode2id(&id, inode);
         
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
