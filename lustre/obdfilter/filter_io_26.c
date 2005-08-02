@@ -289,8 +289,6 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         }
                         
  out:
-        wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
-
         if (rc == 0)
                 rc = dreq->dr_error;
         RETURN(rc);
@@ -539,6 +537,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                          oti->oti_transno, obd->obd_last_committed);
 
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
+
+        wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
 
 cleanup:
         filter_grant_commit(exp, niocount, res);
