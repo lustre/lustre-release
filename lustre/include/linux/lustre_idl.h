@@ -92,6 +92,11 @@
 #define MGMT_REPLY_PORTAL              25
 #define MGMT_CLI_REQUEST_PORTAL        26
 #define MGMT_CLI_REPLY_PORTAL          27
+//#define MGC_REQUEST_PORTAL           28 
+#define MGC_REPLY_PORTAL               29
+#define MGS_REQUEST_PORTAL             30
+//#define MGS_REPLY_PORTAL             31
+
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -203,6 +208,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 
 #define OBD_CONNECT_RDONLY 0x1
 
+#define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
 #define OST_CONNECT_SUPPORTED  (0)
 #define ECHO_CONNECT_SUPPORTED (0)
@@ -1159,5 +1165,17 @@ typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
 } quota_cmd_t;
+
+/*mount-conf*/
+
+/*
+ * Opcodes for management/monitoring node.
+ */
+typedef enum {
+        MGS_CONNECT = 700,
+        MGS_DISCONNECT,
+        MGS_LAST_OPC
+} mgs_cmd_t;
+#define MGS_FIRSTOPC MGS_CONNECT,
 
 #endif

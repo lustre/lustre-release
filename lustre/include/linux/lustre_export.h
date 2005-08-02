@@ -8,6 +8,26 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 
+/*export struct for mount-conf */
+/*FIXME: some attributes Mixed now*/
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct mgs_client_data {
+        __u8 mcd_uuid[40];      /* client UUID */
+        __u64 mcd_last_transno; /* last completed transaction ID */
+        __u64 mcd_last_xid;     /* xid for the last transaction */
+        __u32 mcd_last_result;  /* result from last RPC */
+        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
+        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
+};
+
+struct mgs_export_data {
+        struct list_head        med_open_head;
+        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
+        struct mgs_client_data *med_mcd;
+        loff_t                  med_lr_off;
+        int                     med_lr_idx;
+};
+
 struct mds_client_data;
 
 struct mds_export_data {
@@ -72,12 +92,14 @@ struct obd_export {
                                   exp_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {
+                struct mgs_export_data    eu_mgs_data;
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
+#define exp_mgs_data    u.eu_mgs_data
 #define exp_mds_data    u.eu_mds_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data

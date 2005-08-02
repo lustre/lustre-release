@@ -302,6 +302,31 @@ struct client_obd {
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
 };
 
+struct mgs_server_data;
+
+/*a light client obd for mount-conf */
+struct mgc_obd {
+        struct obd_import       *cl_import;
+        struct semaphore         cl_sem;
+        int                      cl_conn_count;
+        struct mgc_rpc_lock     *cl_rpc_lock;
+}
+
+struct mgs_obd {
+        struct ptlrpc_service           *mgs_service;
+        struct vfsmount                 *mgs_vfsmnt;
+        struct super_block              *mgs_sb;
+        struct file                     *mgs_rcvd_filp;
+        spinlock_t                       mgs_transno_lock;
+        __u64                            mgs_last_transno;
+        struct mgs_server_data          *mgs_server_data;
+        struct dentry                   *mgs_configs_dir;
+        struct llog_handle              *mgs_cfg_llh;
+        char                            *mgs_profile;
+        unsigned long                   *mgs_client_bitmap;
+        struct semaphore                 mgs_orphan_recovery_sem;
+};
+
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
  * can reuse the various client setup/connect functions. */
 struct mgmtcli_obd {
@@ -565,6 +590,8 @@ struct obd_device {
                 struct cache_obd cobd;
                 struct ptlbd_obd ptlbd;
                 struct mgmtcli_obd mgmtcli;
+                struct mgc_obd mgc;
+                struct mgs_obd mgs;
         } u;
        /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
