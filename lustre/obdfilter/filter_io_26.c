@@ -289,6 +289,8 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         }
                         
  out:
+        wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
+
         if (rc == 0)
                 rc = dreq->dr_error;
         RETURN(rc);
@@ -390,9 +392,11 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                 rc2 = filter_finish_transno(exp, oti, 0);
                 if (rc2 != 0)
                         CERROR("can't close transaction: %d\n", rc);
+                rc = (rc == 0) ? rc2 : rc;
 
-                if (rc == 0)
-                        rc = rc2;
+                rc2 = fsfilt_commit_async(obd,inode,oti->oti_handle,wait_handle);
+                rc = (rc == 0) ? rc2 : rc;
+
                 if (rc != 0)
                         RETURN(rc);
         }
@@ -439,6 +443,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         unsigned long now = jiffies;
         int i, err, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
+        void *wait_handle = NULL;
         int   total_size = 0;
         loff_t old_size;
         ENTRY;
@@ -511,7 +516,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
-                              oti, NULL);
+                              oti, &wait_handle);
 
 #if 0
         if (inode->i_size != old_size) {
@@ -526,19 +531,11 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
-        err = fsfilt_commit(obd, obd->u.filter.fo_sb, inode, oti->oti_handle,
-                            obd_sync_filter);
-        if (err)
+        err = fsfilt_commit_wait(obd, inode, wait_handle);
+        if (rc == 0)
                 rc = err;
-
-        if (obd_sync_filter && !err)
-                LASSERTF(oti->oti_transno <= obd->obd_last_committed,
-                         "oti_transno "LPU64" last_committed "LPU64"\n",
-                         oti->oti_transno, obd->obd_last_committed);
-
+   
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
-
-        wait_event(dreq->dr_wait, atomic_read(&dreq->dr_numreqs) == 0);
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

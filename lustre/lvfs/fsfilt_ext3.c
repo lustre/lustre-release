@@ -346,7 +346,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
         LASSERT(current->journal_info == handle);
 
-        lock_kernel();
+        lock_24kernel();
         transaction = handle->h_transaction;
         journal = transaction->t_journal;
         tid = transaction->t_tid;
@@ -364,9 +364,9 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
                 CERROR("strange race: %lu != %lu\n",
                        (unsigned long) tid, (unsigned long) rtid);
 #else
-        log_start_commit(journal, transaction->t_tid);
+        log_start_commit(journal, tid);
 #endif
-        unlock_kernel();
+        unlock_24kernel();
 
         *wait_handle = (void *) tid;
         CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
