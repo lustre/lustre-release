@@ -365,15 +365,14 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                 return ELDLM_OK;
         }
 
-        /* FIXME: protect by ns_hash_lock -bzzz */
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 spin_lock(&ns->ns_hash_lock);
                 tmp = ns->ns_hash[i].next;
                 while (tmp != &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
-                        spin_unlock(&ns->ns_hash_lock);
                         ldlm_resource_getref(res);
+                        spin_unlock(&ns->ns_hash_lock);
 
                         cleanup_resource(res, &res->lr_granted, flags);
                         cleanup_resource(res, &res->lr_converting, flags);
