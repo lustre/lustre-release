@@ -1025,6 +1025,8 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                                "l_ast_data %p is bogus: magic %0x8\n",
                                lock->l_ast_data, lli->lli_inode_magic);
                         inode = NULL;
+                        unlock_res_and_lock(lock);
+                        LBUG();
                 }
         }
         unlock_res_and_lock(lock);
