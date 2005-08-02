@@ -1733,8 +1733,8 @@ class MDSDEV(Module):
             #    self.inode_size = 256
             else:
                 self.inode_size = 512
-
-        debug('stripe_count %d, inode_size %d', stripe_count, self.inode_size)
+            debug('stripe_count %d, inode_size %d',
+                  stripe_count, self.inode_size)
 
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
