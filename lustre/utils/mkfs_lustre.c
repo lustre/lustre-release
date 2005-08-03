@@ -552,14 +552,15 @@ static int load_modules(struct mkfs_opts *mop)
 
         //client: rc = load_module("lustre");
         vprint("Loading modules...");
-        if (IS_OST(&mop->mo_ldd)) {
+
+        /* portals, ksocknal, fsfilt, etc. in modules.conf */
+        rc = load_module("_lustre");
+        if (rc) return rc;
+
+        if (IS_OST(&mop->mo_ldd)) 
                 rc = load_module("oss");
-                if (rc) return rc;
-        }
-        if (IS_MDT(&mop->mo_ldd)) {
+        if (IS_MDT(&mop->mo_ldd)) 
                 rc = load_module("mds");
-                if (rc) return rc;
-        }
         vprint("done\n");
         return rc;
 }
@@ -885,6 +886,7 @@ void set_defaults(struct mkfs_opts *mop)
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
         
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
+        mop->mo_stripe_count = 1;
         mop->mo_index = -1;
 
         gethostname(hostname, sizeof(hostname));

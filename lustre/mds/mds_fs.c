@@ -219,7 +219,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         LASSERT(offsetof(struct mds_client_data, mcd_padding) +
                 sizeof(mcd->mcd_padding) == MDS_LR_CLIENT_SIZE);
         LASSERT(MDS_LR_CLIENT_SIZE == LR_CLIENT_SIZE);
-        LASSERT(MDS_LR_CLIENT_START == LR_CLIENT_SIZE);
+        LASSERT(MDS_LR_CLIENT_START == LR_CLIENT_START);
 
         OBD_ALLOC_WAIT(lsd, sizeof(*lsd));
         if (!lsd)
@@ -272,12 +272,9 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         }
 
         if (lsd->lsd_feature_compat & ~cpu_to_le32(LR_COMPAT_COMMON_LR)) {
-                struct mds_server_data *msd;
                 CERROR("old last_rcvd format, updating\n");
-                msd = (struct mds_server_data *)lsd;
-                /* careful ordering */
-                lsd->lsd_mount_count = msd->msd_mount_count;
-                lsd->lsd_last_transno = msd->msd_last_transno;
+                lsd->lsd_mount_count = lsd->lsd_last_transno; //msd->msd_mount_count
+                lsd->lsd_last_transno = lsd->lsd_unused; //msd->msd_last_transno;
                 lsd->lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
                 GOTO(err_msd, rc = -EINVAL);
         }
@@ -300,6 +297,12 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                last_rcvd_size <= le32_to_cpu(lsd->lsd_client_start) ? 0 :
                (last_rcvd_size - le32_to_cpu(lsd->lsd_client_start)) /
                 le16_to_cpu(lsd->lsd_client_size));
+
+        if (!lsd->lsd_server_size || !lsd->lsd_client_start ||
+            !lsd->lsd_client_size) {
+                CERROR("Bad last_rcvd contents!\n");
+                GOTO(err_msd, rc = -EINVAL);
+        }
 
         /* When we do a clean MDS shutdown, we save the last_transno into
          * the header.  If we find clients with higher last_transno values

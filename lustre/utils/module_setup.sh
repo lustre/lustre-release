@@ -41,20 +41,21 @@ depmod -a -e
 echo "Copying mount from local build dir to "$MDIR
 cp ../utils/mount.lustre /sbin/.
 
+MP="/sbin/modprobe"
+MPI="$MP --ignore-install"
+
 [ -e $MODFILE ] || touch $MODFILE
 if [ `grep -c lustre $MODFILE` -eq 0 ]; then
     echo Modifying $MODFILE
     echo "# Lustre modules added by $0" >> $MODFILE
     if [ $KVER -eq 24 ]; then
-	echo alias lustre null >> $MODFILE
-	echo above lustre llite osc mdc >> $MODFILE
-	echo above mds llite osc $FSFLT >> $MODFILE
-	echo alias oss ost >> $MODFILE
-	echo above ost llite obdfilter $FSFLT >> $MODFILE
-	echo above portals ksocknal >> $MODFILE
+	echo alias _lustre ksocknal portals $FSFLT >> $MODFILE
+	echo below mds _lustre osc >> $MODFILE
+	echo below oss _lustre ost >> $MODFILE
+	echo below ost _lustre >> $MODFILE
+	echo below llite _lustre osc mdc >> $MODFILE
+	echo alias lustre llite >> $MODFILE
     else
-	MP="/sbin/modprobe"
-	MPI="$MP --ignore-install"
 	echo "install kptlrouter $MP portals && $MPI kptlrouter" >> $MODFILE
 	echo "install _lustre $MP portals && $MP lvfs && $MP obdclass && $MP ptlrpc" >> $MODFILE
 	echo "install obdfilter $MP _lustre && $MP ost && $MP ldiskfs && $MP $FSFLT && $MPI obdfilter" >> $MODFILE

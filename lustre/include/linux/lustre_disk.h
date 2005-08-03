@@ -174,7 +174,7 @@ struct ll_sb_info;
 struct lustre_sb_info {
         int                       lsi_flags;
         //struct lvfs_run_ctxt      lsi_ctxt;    /* mount context */
-        struct obd_device        *lsi_mgc;     /* mgmt cli obd */
+        struct obd_device        *lsi_mgc;     /* mgc obd */
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
         struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
         //struct fsfilt_operations *lsi_fsops;

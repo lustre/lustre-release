@@ -234,7 +234,7 @@ static int lustre_update_llog(struct obd_device *obd)
 
         // FIXME this should be called from lov_add_obd?
 #if 0
-        if (mcobd->cfobd_logs_info.ost_number > 0) {
+        if (mgcobd->cfobd_logs_info.ost_number > 0) {
                 struct obd_ioctl_data ioc_data = { 0 };
                 CERROR("update new logs.\n");
                 err = obd_iocontrol(OBD_IOC_UPDATE_LOG, obd->obd_self_export,
@@ -252,13 +252,13 @@ static void server_put_super(struct super_block *sb)
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct l_linux_dirent *dirent, *n;
         struct obd_device *obd;
-        struct mgmtcli_obd *mcobd;
+        struct mgc_obd *mgcobd;
         char flags[2] = "";
         int err;
                                                                                        
         obd = sbi->lsi_mgc;
         CERROR("server put_super %s\n", obd->obd_name);
-        mcobd = &obd->u.mgmtcli;
+        mgcobd = &obd->u.mgc;
                                                                                        
         lustre_update_llog(obd);
                                                                                        
@@ -284,8 +284,8 @@ static void server_put_super(struct super_block *sb)
          */
         
         /* Find all the logs in the CONFIGS directory */
-        err = dentry_readdir(obd, mcobd->mc_configs_dir,
-                       mcobd->mc_vfsmnt, &dentry_list);
+        err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
+                       mgcobd->mgc_vfsmnt, &dentry_list);
         if (err)
                 CERROR("Can't read LOGS dir, %d\n", err);
                                                                                        
@@ -511,14 +511,14 @@ int lustre_process_logs(struct super_block *sb,
         struct list_head dentry_list;
         struct l_linux_dirent *dirent, *n;
         struct obd_device *obd;
-        struct mgmtcli_obd *mcobd;
+        struct mgc_obd *mgcobd;
         struct lustre_sb_info *sbi = s2sbi(sb);
         int is_first_mount = 0;
         int err;
                                                                                        
         obd = sbi->lsi_mgc;
         LASSERT(obd);
-        mcobd = &obd->u.mgmtcli;
+        mgcobd = &obd->u.mgc;
                                                                                        
         err = parse_last_rcvd(obd, lr_uuid, &is_first_mount);
         if (err) {
@@ -543,13 +543,13 @@ int lustre_process_logs(struct super_block *sb,
                         CERROR("Can't read %s\n", STRIPE_FILE);
                         return(err);
                 }
-                mcobd_start_accept(obd, lmd, lr_uuid, stripe_size);
+                mgcobd_start_accept(obd, lmd, lr_uuid, stripe_size);
    #endif                                                                       
         }
                                                                                        
         /* Find all the logs in the CONFIGS directory */
-        err = dentry_readdir(obd, mcobd->mc_configs_dir,
-                       mcobd->mc_vfsmnt, &dentry_list);
+        err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
+                       mgcobd->mgc_vfsmnt, &dentry_list);
         if (err) {
                 CERROR("Can't read LOGS dir\n");
                 return(err);
@@ -594,7 +594,7 @@ static int lustre_kern_mount(struct super_block *sb)
         struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = sbi->lsi_lmd;
         struct obd_device *obd;
-        struct mgmtcli_obd *mcobd;
+        struct mgc_obd *mgcobd;
         char *options = NULL;
         struct vfsmount *mnt;
         unsigned long page;
@@ -657,10 +657,10 @@ static int lustre_kern_mount(struct super_block *sb)
         }
 
         obd = sbi->lsi_mgc;
-        mcobd = &obd->u.mgmtcli;
-        mcobd->mc_vfsmnt = mnt;
-        mcobd->mc_sb = mnt->mnt_root->d_inode->i_sb; // is this different than sb? */
-        fsfilt_setup(obd, mcobd->mc_sb);
+        mgcobd = &obd->u.mgc;
+        mgcobd->mgc_vfsmnt = mnt;
+        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb; // is this different than sb? */
+        fsfilt_setup(obd, mgcobd->mgc_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
@@ -721,7 +721,7 @@ out_free:
         return (err);
 }
 
-/* Set up a mcobd to process startup logs */
+/* Set up a mgcobd to process startup logs */
 static int lustre_start_mgc(struct super_block *sb)
 {
         struct config_llog_instance cfg;
@@ -743,18 +743,21 @@ static int lustre_start_mgc(struct super_block *sb)
                                                                                        
         err = do_lcfg(mcname, 0, LCFG_SETUP, 0, 0, 0, 0);
         if (err) {
-                CERROR("mcobd setup error %d\n", err);
+                CERROR("mgcobd setup error %d\n", err);
                 do_lcfg(mcname, 0, LCFG_DETACH, 0, 0, 0, 0);
                 goto out_free;
         }
         
         obd = class_name2obd(mcname);
         if (!obd) {
-                CERROR("Can't find mcobd %s\n", mcname);
+                CERROR("Can't find mgcobd %s\n", mcname);
                 err = -ENOTCONN;
                 goto out_free;
         }
+        // part of mgc_setup obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
+        
         sbi->lsi_mgc = obd;
+        
 
 out_free:
         OBD_FREE(mcname, sizeof(sb) * 2 + 1);

@@ -302,43 +302,25 @@ struct client_obd {
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
 };
 
-struct mgs_server_data;
-
 /*a light client obd for mount-conf */
 struct mgc_obd {
-        struct obd_import       *cl_import;
-        struct semaphore         cl_sem;
-        int                      cl_conn_count;
-        struct mgc_rpc_lock     *cl_rpc_lock;
-}
+        struct obd_import       *mgc_import;
+        struct semaphore         mgc_sem;
+        int                      mgc_conn_count;
+        struct mgc_rpc_lock     *mgc_rpc_lock;
+        struct vfsmount         *mgc_vfsmnt;     /* for local config dirs */
+        struct super_block      *mgc_sb;
+        struct file             *mgc_rcvd_filp;
+        struct dentry           *mgc_configs_dir;
+};
 
 struct mgs_obd {
         struct ptlrpc_service           *mgs_service;
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;
-        spinlock_t                       mgs_transno_lock;
-        __u64                            mgs_last_transno;
-        struct mgs_server_data          *mgs_server_data;
         struct dentry                   *mgs_configs_dir;
         struct llog_handle              *mgs_cfg_llh;
-        char                            *mgs_profile;
-        unsigned long                   *mgs_client_bitmap;
-        struct semaphore                 mgs_orphan_recovery_sem;
 };
-
-/* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
- * can reuse the various client setup/connect functions. */
-struct mgmtcli_obd {
-        /* from confobd */
-        struct super_block      *mc_sb;           /* from mount */
-        struct vfsmount         *mc_vfsmnt;       /* local mount */
-        struct dentry           *mc_configs_dir;
-        struct llog_handle      *mc_cfg_llh;
-        //struct logs_info         mc_logs_info;
-        struct list_head         mc_registered;   /* chain of mgc's */
-};
-
-#define mc_import mc_client_obd.cl_import
 
 struct mds_obd {
         struct ptlrpc_service           *mds_service;
@@ -588,7 +570,6 @@ struct obd_device {
                 struct lov_obd lov;
                 struct cache_obd cobd;
                 struct ptlbd_obd ptlbd;
-                struct mgmtcli_obd mgmtcli;
                 struct mgc_obd mgc;
                 struct mgs_obd mgs;
         } u;
