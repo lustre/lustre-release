@@ -187,8 +187,8 @@ init_options(struct lustre_mount_data *lmd)
         //ptl_parse_ipaddr(&lmd->lmd_ipaddr, lmd->lmd_hostname); 
         lmd->lmd_magic = LMD_MAGIC;
         lmd->lmd_flags = LMD_FLG_MNTCNF;
-        lmd->lmd_mgmtnid.primary = PTL_NID_ANY;
-        lmd->lmd_mgmtnid.backup  = PTL_NID_ANY;
+        lmd->lmd_mgsnid.primary = PTL_NID_ANY;
+        lmd->lmd_mgsnid.backup  = PTL_NID_ANY;
         return 0;
 }
 
@@ -196,9 +196,9 @@ int
 print_options(struct lustre_mount_data *lmd)
 {
         printf("mgmt primary nid: %s\n",
-               libcfs_nid2str(lmd->lmd_mgmtnid.primary));
+               libcfs_nid2str(lmd->lmd_mgsnid.primary));
         printf("mgmt backup nid:  %s\n",
-               libcfs_nid2str(lmd->lmd_mgmtnid.backup));
+               libcfs_nid2str(lmd->lmd_mgsnid.backup));
         printf("device:           %s\n", lmd->lmd_dev);
         printf("mount point:      %s\n", lmd->lmd_mtpt);
         printf("options:          %s\n", lmd->lmd_opts);
@@ -318,8 +318,8 @@ build_data(char *source, char *target, char *options,
                         printf("CLIENT\n");
                 lmd->lmd_flags |= LMD_FLG_CLIENT;
 
-                /* <mgmtnid>[,<alt mgmtnid>]:/fsname[/fsetname[/subdir/]]
-                   nid=mgmtnid, devname=fsname */
+                /* <mgsnid>[,<alt mgsnid>]:/fsname[/fsetname[/subdir/]]
+                   nid=mgsnid, devname=fsname */
                 nid = buf;
                 *s = '\0';
                 while (*++s == '/') /*spin*/;
@@ -329,10 +329,10 @@ build_data(char *source, char *target, char *options,
                 if (rc)
                         return rc;
 
-                if (lmd->lmd_mgmtnid.primary != PTL_NID_ANY)
+                if (lmd->lmd_mgsnid.primary != PTL_NID_ANY)
                         /* In case it was defined as -o mgmtnode= */
-                        //FIXME set_nid_pair(&lmd->lmd_mgmtnid, nid);
-                if (lmd->lmd_mgmtnid.primary == PTL_NID_ANY) {
+                        //FIXME set_nid_pair(&lmd->lmd_mgsnid, nid);
+                if (lmd->lmd_mgsnid.primary == PTL_NID_ANY) {
                         fprintf(stderr, "%s: can't parse nid '%s'\n",
                                 progname, nid);
                         return 1;

@@ -819,9 +819,9 @@ int write_llog_files(struct mkfs_opts *mop)
 #13 L add_conn 0:MDC_uml1_mdsA_MNT_client 1:NID_uml2_UUID
                 */
                 //FIXME use gethostname for nid uuid? 
-                        do_jt(jt_lcfg_add_uuid, "add_uuid",
-                              libcfs_nid2str(mop->mo_hostnid.primary),
-                              mop->mo_hostnid.primary, 0);
+                        do_jt(jt_lcfg_add_uuid, "add_uuid", 
+                              mop->mo_ldd.ldd_svname /*FIXME mds name */,
+                              libcfs_nid2str(mop->mo_hostnid.primary), 0);
                         do_jt(jt_lcfg_attach,   "attach", "mdc", mdcname, 
                               mdcname/*uuid*/, 0);
                         do_jt(jt_lcfg_device,   "cfg_device", mdcname, 0);

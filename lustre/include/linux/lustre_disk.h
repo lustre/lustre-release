@@ -90,7 +90,7 @@ struct lustre_disk_data {
 struct lustre_mount_data {
         __u32     lmd_magic;
         __u32     lmd_flags;          /* lustre mount flags */
-        struct host_desc lmd_mgmtnid; /* mgmt nid */
+        struct host_desc lmd_mgsnid;  /* who to contact at startup */
         //struct lustre_disk_data *lmd_ldd; /* in-mem copy of ldd */
         char      lmd_dev[128];       /* device or file system name */
         char      lmd_mtpt[128];      /* mount point (for client overmount) */
