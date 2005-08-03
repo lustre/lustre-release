@@ -316,7 +316,6 @@ struct mgs_obd {
         struct ptlrpc_service           *mgs_service;
         struct vfsmount                 *mgs_vfsmnt;
         struct super_block              *mgs_sb;
-        struct file                     *mgs_rcvd_filp;
         spinlock_t                       mgs_transno_lock;
         __u64                            mgs_last_transno;
         struct mgs_server_data          *mgs_server_data;
