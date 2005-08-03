@@ -163,7 +163,7 @@ struct llog_operations {
         int (*lop_next_block)(struct llog_handle *h, int *curr_idx,
                               int next_idx, __u64 *offset, void *buf, int len);
         int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
-                          struct llog_logid *logid, char *name);
+                          struct llog_logid *logid, char* fsname, char *name);
         int (*lop_close)(struct llog_handle *handle);
         int (*lop_read_header)(struct llog_handle *handle);
 

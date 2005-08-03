@@ -43,15 +43,15 @@
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+                            struct llog_logid *logid, char* fsname ,char *name)
 {
         struct obd_import *imp;
         struct llogd_body req_body;
         struct llogd_body *body;
         struct llog_handle *handle;
         struct ptlrpc_request *req = NULL;
-        int size[2] = {sizeof(req_body)};
-        char *tmp[2] = {(char*) &req_body};
+        int size[3] = {sizeof(req_body)};
+        char *tmp[3] = {(char*) &req_body};
         int bufcount = 1;
         int repsize[] = {sizeof (req_body)};
         int rc;
@@ -76,13 +76,20 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 req_body.lgd_logid = *logid;
         req_body.lgd_ctxt_idx = ctxt->loc_idx - 1;
 
+        if (fsname) {
+                size[bufcount] = strlen(fsname) + 1;
+                tmp[bufcount] = fsname;
+                bufcount++;
+        }
+
         if (name) {
                 size[bufcount] = strlen(name) + 1;
                 tmp[bufcount] = name;
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE,bufcount,size,tmp);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE, 
+                              bufcount, size, tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 

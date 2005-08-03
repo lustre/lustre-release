@@ -421,7 +421,8 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         RETURN(-EIO);
 }
 
-static struct file *llog_filp_open(char *name, int flags, int mode)
+static struct file *llog_filp_open(char* fsname, char *name, 
+                                   int flags, int mode)
 {
         char *logname;
         struct file *filp;
@@ -429,9 +430,12 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
 
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
-                return ERR_PTR(-ENOMEM);
+                return ERR_PTR(-ENOMEM); 
+        if (fsname)
+              len = snprintf(logname, PATH_MAX, "CONFIGS/%s/%s", fsname, name);
+        else
+              len = snprintf(logname, PATH_MAX, "CONFIGS/%s", name);
 
-        len = snprintf(logname, PATH_MAX, "LOGS/%s", name);
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
@@ -448,7 +452,7 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+                            struct llog_logid *logid, char* fsname, char *name)
 {
         struct llog_handle *handle;
         struct obd_device *obd;
@@ -499,7 +503,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(name, open_flags, 0644);
+                handle->lgh_file = llog_filp_open(fsname, name, open_flags, 0644);
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
 
