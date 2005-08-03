@@ -936,7 +936,7 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                 for (i = 0; i < num; i++) {
                         if (created[i] == 0)
                                 continue;
-                        //unmap_underlying_metadata(bdev, blocks[i]);
+                        unmap_underlying_metadata(bdev, blocks[i]);
                 }
         }
         return err;
