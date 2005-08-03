@@ -311,7 +311,8 @@ static void check_metadata(struct super_block *sb, sector_t block)
                 return;
 
         if (PageDirty(page))
-                CERROR("page 0x%p/%lu is dirty\n", page, page->index);
+                CERROR("page 0x%p/%lu in mapping 0x%p is dirty\n",
+                       page, page->index, bd_mapping);
 
 	spin_lock(&bd_mapping->private_lock);
 	if (!page_has_buffers(page))
@@ -320,8 +321,9 @@ static void check_metadata(struct super_block *sb, sector_t block)
 	bh = head;
 	do {
                 if (buffer_dirty(bh))
-                        CERROR("buffer 0x%p in page 0x%p/%lu is dirty\n",
-                               bh, page, page->index);
+                        CERROR("buffer 0x%p in page 0x%p/%lu/%u is dirty (0x%p)\n",
+                               bh, page, page->index, (unsigned) block,
+                               page->mapping);
 		bh = bh->b_this_page;
 	} while (bh != head);
 
@@ -344,7 +346,7 @@ out_unlock:
  * not be dirty, because we already called fdatasync/fdatawait on them.
  */
 static int filter_clear_page_cache(struct inode *inode,
-                                   struct dio_request *iobuf)
+                                   struct dio_request *iobuf, int rw)
 {
         struct page *page;
         int i, rc, rc2;
@@ -378,7 +380,8 @@ static int filter_clear_page_cache(struct inode *inode,
                 unlock_page(page);
                 page_cache_release(page);
 
-                check_metadata(inode->i_sb, iobuf->dr_pages[i]->index);
+                if (rw == OBD_BRW_WRITE)
+                        check_metadata(inode->i_sb, iobuf->dr_blocks[i]);
         }
         return 0;
 }
@@ -438,7 +441,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                         RETURN(rc);
         }
 
-        rc = filter_clear_page_cache(inode, dreq);
+        rc = filter_clear_page_cache(inode, dreq, rw);
         if (rc != 0)
                 RETURN(rc);
 

@@ -898,6 +898,9 @@ map:
                         *(bp->created) = (exist == 0 ? 1 : 0);
                         bp->created++;
                         *(bp->blocks) = newex->ee_start + i;
+                        //if (exist == 0)
+                        //unmap_underlying_metadata(inode->i_sb->s_bdev,
+                        //                          newex->ee_start + i);
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
