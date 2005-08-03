@@ -120,6 +120,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         CDEBUG(D_HA, "%s: oscc recovery finished: %d\n",
                                oscc->oscc_obd->obd_name, rc);
+                        wake_up(&oscc->oscc_waitq);
                 } else {
                         CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
                                oscc->oscc_obd->obd_name, rc);
@@ -142,7 +143,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                                           !oscc_recovering(oscc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
+                                CDEBUG(D_ERROR,"%p: timeout waiting on recovery\n",
                                        oscc);
                                 RETURN(rc);
                         }

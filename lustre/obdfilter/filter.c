@@ -2493,7 +2493,7 @@ filter_clear_orphans(struct obd_export *exp, struct obdo *oa)
                 GOTO(out_free_doa, 0);
         }
 
-        CWARN("%s:["LPU64"] deleting orphan objects from "LPU64" to "
+        CDEBUG(D_ERROR, "%s:["LPU64"] deleting orphan objects from "LPU64" to "
               LPU64"\n", exp->exp_obd->obd_name, doa->o_gr,
               oa->o_id + 1, last);
         
@@ -2502,8 +2502,8 @@ filter_clear_orphans(struct obd_export *exp, struct obdo *oa)
                 filter_destroy(exp, doa, NULL, NULL);
         }
 
-        CDEBUG(D_HA, "%s:["LPU64"] after destroy: set last_objids = "
-               LPU64"\n", exp->exp_obd->obd_name, doa->o_gr, oa->o_id);
+        CDEBUG(D_ERROR, "%s:["LPU64"] after destroy: set last_objids = "
+               LPU64"\n", exp->exp_obd->obd_name, doa->o_gr, last + 1);
 
         /* return next free id to be used as a new start of sequence -bzzz */
         oa->o_id = last + 1;
