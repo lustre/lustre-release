@@ -898,9 +898,6 @@ map:
                         *(bp->created) = (exist == 0 ? 1 : 0);
                         bp->created++;
                         *(bp->blocks) = newex->ee_start + i;
-                        //if (exist == 0)
-                        //unmap_underlying_metadata(inode->i_sb->s_bdev,
-                        //                          newex->ee_start + i);
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
@@ -915,7 +912,7 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
 {
         struct ext3_extents_tree tree;
         struct bpointers bp;
-        int err;
+        int err, i;
                                                                                                                                                                                                      
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                 block, block + num, (unsigned) inode->i_ino);
@@ -932,6 +929,16 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
         ext3_ext_invalidate_cache(&tree);
         ext3_up_truncate_sem(inode);
+
+        /* unmap underlying pages/buffers from blockdevice mapping */
+        if (create) {
+                struct block_device *bdev = inode->i_sb->s_bdev;
+                for (i = 0; i < num; i++) {
+                        if (created[i] == 0)
+                                continue;
+                        //unmap_underlying_metadata(bdev, blocks[i]);
+                }
+        }
         return err;
 }
 
