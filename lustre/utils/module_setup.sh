@@ -49,11 +49,12 @@ if [ `grep -c lustre $MODFILE` -eq 0 ]; then
     echo Modifying $MODFILE
     echo "# Lustre modules added by $0" >> $MODFILE
     if [ $KVER -eq 24 ]; then
-	echo alias _lustre ksocknal portals $FSFLT >> $MODFILE
-	echo below mds _lustre osc >> $MODFILE
-	echo below oss _lustre ost >> $MODFILE
-	echo below ost _lustre >> $MODFILE
-	echo below llite _lustre osc mdc >> $MODFILE
+	echo alias _lustre portals >> $MODFILE
+	echo add above _lustre ksocknal $FSFLT >> $MODFILE
+	echo add below mds _lustre osc >> $MODFILE
+	echo add below oss _lustre ost >> $MODFILE
+	echo add below ost _lustre >> $MODFILE
+	echo add below llite _lustre osc mdc >> $MODFILE
 	echo alias lustre llite >> $MODFILE
     else
 	echo "install kptlrouter $MP portals && $MPI kptlrouter" >> $MODFILE

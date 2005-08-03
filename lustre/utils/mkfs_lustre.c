@@ -557,10 +557,8 @@ static int load_modules(struct mkfs_opts *mop)
         rc = load_module("_lustre");
         if (rc) return rc;
 
-        if (IS_OST(&mop->mo_ldd)) 
-                rc = load_module("oss");
-        if (IS_MDT(&mop->mo_ldd)) 
-                rc = load_module("mds");
+        /* FIXME currently use the MDT to write llogs, should be a MGS */
+        rc = load_module("mds");
         vprint("done\n");
         return rc;
 }
@@ -791,11 +789,14 @@ int write_llog_files(struct mkfs_opts *mop)
                 /* Write client startup logs */
                 numnids = jt_getnids(nidarray, 
                                      sizeof(nidarray) / sizeof(nidarray[0]));
+#if 0
+//Let the MGS create the client logs after the MDT has registered 
                 if (numnids <= 0) {
                         fprintf(stderr, "%s: Can't figure out local nids, "
                                 "skipping client log creation\n", progname);
                         goto out_jt;
                 }
+
                 snprintf(mdcname, sizeof(mdcname), "%s-mdc", 
                          mop->mo_ldd.ldd_fsname);
                 while (numnids) {
@@ -818,15 +819,18 @@ int write_llog_files(struct mkfs_opts *mop)
 #12 L add_uuid nid=c0a80202 nal_type=0 0:(null) 1:NID_uml2_UUID
 #13 L add_conn 0:MDC_uml1_mdsA_MNT_client 1:NID_uml2_UUID
                 */
-                //FIXME use gethostname for nid uuid? 
+                        /* FIXME we need to put _all_possible_nids_ for 
+                           every server in the client startup llog.  client
+                           will then choose which nid to use. */
                         do_jt(jt_lcfg_add_uuid, "add_uuid", 
                               mop->mo_ldd.ldd_svname /*FIXME mds name */,
                               libcfs_nid2str(mop->mo_hostnid.primary), 0);
                         do_jt(jt_lcfg_attach,   "attach", "mdc", mdcname, 
                               mdcname/*uuid*/, 0);
                         do_jt(jt_lcfg_device,   "cfg_device", mdcname, 0);
-                        do_jt(jt_lcfg_setup,    "setup", mop->mo_ldd.ldd_svname,
-                              libcfs_nid2str(mop->mo_hostnid.primary), 0);
+                        /* mdc_setup client_uuid server_uuid */
+                        do_jt(jt_lcfg_setup,    "setup", cliname, 
+                              mop->mo_ldd.ldd_svname, 0);
                         if (mop->mo_hostnid.backup != PTL_NID_ANY) {
                                 do_jt(jt_lcfg_add_uuid, "add_uuid", 
                                       libcfs_nid2str(mop->mo_hostnid.backup),
@@ -840,6 +844,7 @@ int write_llog_files(struct mkfs_opts *mop)
                                 do_jt(jt_lcfg_set_timeout, "set_timeout", 
                                       mop->mo_timeout, 0);
                 }
+#endif
         }
 
 out_jt:        

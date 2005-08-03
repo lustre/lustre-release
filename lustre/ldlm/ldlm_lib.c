@@ -189,7 +189,7 @@ int mgc_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        if (!strcmp(name, LUSTRE_MGC_NAME)) {
+        if (strcmp(name, LUSTRE_MGC_NAME) == 0) {
                 rq_portal = MGS_REQUEST_PORTAL;
                 rp_portal = MGC_REPLY_PORTAL;
                 connect_op = MGS_CONNECT;
