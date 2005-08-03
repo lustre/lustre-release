@@ -346,7 +346,7 @@ out_unlock:
  * not be dirty, because we already called fdatasync/fdatawait on them.
  */
 static int filter_clear_page_cache(struct inode *inode,
-                                   struct dio_request *iobuf, int rw)
+                                   struct dio_request *iobuf)
 {
         struct page *page;
         int i, rc, rc2;
@@ -380,7 +380,7 @@ static int filter_clear_page_cache(struct inode *inode,
                 unlock_page(page);
                 page_cache_release(page);
 
-                if (rw == OBD_BRW_WRITE)
+                if (iobuf->dr_blocks[i])
                         check_metadata(inode->i_sb, iobuf->dr_blocks[i]);
         }
         return 0;
@@ -441,7 +441,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
                         RETURN(rc);
         }
 
-        rc = filter_clear_page_cache(inode, dreq, rw);
+        rc = filter_clear_page_cache(inode, dreq);
         if (rc != 0)
                 RETURN(rc);
 
