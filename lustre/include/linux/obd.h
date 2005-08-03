@@ -357,7 +357,7 @@ struct mds_obd {
         __u64                            mds_io_epoch;
         struct semaphore                 mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
-        struct mds_server_data          *mds_server_data;
+        struct lr_server_data           *mds_server_data;
         struct dentry                   *mds_pending_dir;
         struct dentry                   *mds_logs_dir;
         struct dentry                   *mds_objects_dir;

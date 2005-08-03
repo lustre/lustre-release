@@ -804,6 +804,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 } else {
                         CERROR("Mounting client\n");
                         /* Connect and start */
+                        /* (should always be ll_fill_super) */
                         err = (*client_fill_super)(sb);
                 }
         } else {
@@ -828,6 +829,8 @@ void lustre_common_put_super(struct super_block *sb)
         lustre_free_sbi(sb);
 }      
 
+/* We can't call ll_fill_super by name because it lives in a module that
+   must be loaded after this one. */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 {
         client_fill_super = cfs;

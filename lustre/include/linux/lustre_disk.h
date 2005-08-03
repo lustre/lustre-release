@@ -119,6 +119,7 @@ struct mkfs_opts {
         char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
         char  mo_device[128];           /* disk device name */
         char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
+        char  mo_loopdev[128];          /* in case a loop dev is needed */
         long  mo_device_sz;
         int   mo_flags; 
         /* Below here is required for mdt,ost,or client logs */
@@ -137,6 +138,8 @@ struct mkfs_opts {
 
 #define LAST_RCVD "last_rcvd"
 #define LR_SERVER_SIZE    512
+#define LR_CLIENT_START   8192
+#define LR_CLIENT_SIZE    128
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */
@@ -158,6 +161,11 @@ struct lr_server_data {
         __u32 lsd_index;           /* target index (stripe index for ost)*/
         __u8  lsd_padding[LR_SERVER_SIZE - 144];
 };
+
+#define LR_COMPAT_COMMON_LR     0x10000000   /* Common last_rvcd format (e.g. above) */
+#define MDS_ROCOMPAT_LOVOBJID   0x00000001
+#define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
+#define MDS_INCOMPAT_SUPP       (0)
 
 #ifdef __KERNEL__
 /****************** superblock additional info *********************/

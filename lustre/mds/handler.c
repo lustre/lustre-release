@@ -54,6 +54,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/lustre_quota.h>
+#include <linux/lustre_disk.h>
 
 #include "mds_internal.h"
 
@@ -1422,7 +1423,7 @@ int mds_handle(struct ptlrpc_request *req)
 int mds_update_server_data(struct obd_device *obd, int force_sync)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct mds_server_data *msd = mds->mds_server_data;
+        struct lr_server_data *lsd = mds->mds_server_data;
         struct file *filp = mds->mds_rcvd_filp;
         struct lvfs_run_ctxt saved;
         loff_t off = 0;
@@ -1430,11 +1431,11 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        msd->msd_last_transno = cpu_to_le64(mds->mds_last_transno);
+        lsd->lsd_last_transno = cpu_to_le64(mds->mds_last_transno);
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mds->mds_mount_count, mds->mds_last_transno);
-        rc = fsfilt_write_record(obd, filp, msd, sizeof(*msd), &off,force_sync);
+        rc = fsfilt_write_record(obd, filp, lsd, sizeof(*lsd), &off,force_sync);
         if (rc)
                 CERROR("error writing MDS server data: rc = %d\n", rc);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

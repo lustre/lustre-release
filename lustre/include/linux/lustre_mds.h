@@ -92,10 +92,6 @@ struct mds_update_record {
 
 #define MDS_CLIENT_SLOTS 17
 
-#define MDS_ROCOMPAT_LOVOBJID   0x00000001
-#define MDS_ROCOMPAT_SUPP       (MDS_ROCOMPAT_LOVOBJID)
-
-#define MDS_INCOMPAT_SUPP       (0)
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as fsd_server_data so we might one day merge. */

@@ -51,16 +51,16 @@ if [ `grep -c lustre $MODFILE` -eq 0 ]; then
 	echo above mds llite osc $FSFLT >> $MODFILE
 	echo alias oss ost >> $MODFILE
 	echo above ost llite obdfilter $FSFLT >> $MODFILE
-	echo below ptlrpc ksocknal >> $MODFILE
+	echo above portals ksocknal >> $MODFILE
     else
 	MP="/sbin/modprobe"
 	MPI="$MP --ignore-install"
 	echo "install kptlrouter $MP portals && $MPI kptlrouter" >> $MODFILE
-	echo "install ptlrpc $MP ksocknal && $MPI ptlrpc" >> $MODFILE
-	echo "install ost $MP obdfilter $FSFLT && $MPI ost" >> $MODFILE
-	echo "install oss $MP ost && $MPI oss" >> $MODFILE
-	echo "install mds $MP osc $FSFLT && $MPI mds" >> $MODFILE
-	echo "install llite $MP osc mdc && $MPI llite" >> $MODFILE
+	echo "install _lustre $MP portals && $MP lvfs && $MP obdclass && $MP ptlrpc" >> $MODFILE
+	echo "install obdfilter $MP _lustre && $MP ost && $MP ldiskfs && $MP $FSFLT && $MPI obdfilter" >> $MODFILE
+	echo "install oss $MP _lustre && $MP ost && $MPI oss" >> $MODFILE
+	echo "install mds $MP _lustre && $MP osc && $MPI mds" >> $MODFILE
+	echo "install llite $MP _lustre && $MP osc && $MP mdc && $MPI llite" >> $MODFILE
 	echo "alias lustre llite" >> $MODFILE
     fi
     echo "# end Lustre modules" >> $MODFILE

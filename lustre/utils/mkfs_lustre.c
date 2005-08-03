@@ -180,7 +180,7 @@ static void run_command_out()
 }
 
 /* Figure out the loop device names */
-void init_loop_base()
+void loop_init()
 {
         if (!access("/dev/loop0", F_OK | R_OK))
                 strcpy(loop_base, "/dev/loop\0");
@@ -194,10 +194,10 @@ void init_loop_base()
 }
 
 /* Setup a file in the first unused loop_device */
-int setup_loop(char* file, char* loop_device)
+int loop_setup(struct mkfs_opts *mop)
 {
+        char l_device[64];
         int i,ret = 0;
-        char l_device[20];
 
         for (i = 0; i < MAX_LOOP_DEVICES; i++) {
                 sprintf(l_device, "%s%d", loop_base, i);
@@ -208,20 +208,30 @@ int setup_loop(char* file, char* loop_device)
                 ret = run_command(cmd);
                 /* losetup gets 1 (256?) for good non-set-up device */
                 if (ret) {
-                        sprintf(cmd, "losetup %s %s", l_device, file);
+                        sprintf(cmd, "losetup %s %s", l_device, mop->mo_device);
                         ret = run_command(cmd);
                         if (ret) {
                                 fprintf(stderr, "error %d on losetup: %s\n",
                                         ret, strerror(ret));
                                 exit(8);
                         }
-                        strcpy(loop_device, l_device);
+                        strcpy(mop->mo_loopdev, l_device);
                         return ret;
                 }
         }
         
         fprintf(stderr,"out of loop devices!\n");
-        return 1;
+        return EMFILE;
+}
+
+int loop_cleanup(struct mkfs_opts *mop)
+{
+        int ret = 1;
+        if (mop->mo_flags & MO_IS_LOOP) {
+                sprintf(cmd, "losetup -d %s", mop->mo_loopdev);
+                ret = run_command(cmd);
+        }
+        return ret;
 }
 
 /* Determine if a device is a block device (as opposed to a file) */
@@ -235,7 +245,7 @@ int is_block(char* devname)
                 return 0;
         ret = stat(devname, &st);
         if (ret != 0) {
-                fprintf(stderr,"can not stat %s\n",devname);
+                fprintf(stderr, "cannot stat %s\n",devname);
                 exit(4);
         }
         return S_ISBLK(st.st_mode);
@@ -256,7 +266,7 @@ int device_size_proc(char* device)
         major = dev_major(st.st_rdev);
         minor = dev_minor(st.st_rdev);
 
-        sprintf(cmd,"cat /proc/partitions ");
+        sprintf(cmd, "cat /proc/partitions");
         ret = run_command(cmd);
         for (i = 0; i < 32; i++) {
                 if (strlen(cmd_out[i]) == 0) 
@@ -288,8 +298,8 @@ int write_local_files(struct mkfs_opts *mop)
         FILE *filep;
         int ret = 0;
 
+        /* Mount this device temporarily in order to write these files */
         vprint("mounting backing device\n");
-        /* Mount this device temporarily as ext3 in order to write this file */
         if (!mkdtemp(mntpt)) {
                 fprintf(stderr, "Can't create temp mount point %s: %s\n",
                         mntpt, strerror(errno));
@@ -297,16 +307,15 @@ int write_local_files(struct mkfs_opts *mop)
         }
 
         if (mop->mo_flags & MO_IS_LOOP) {
-                /* ext3 can't understand iopen_nopriv, others
+                /* ext3 can't understand iopen_nopriv, others */
                 if (strlen(mop->mo_ldd.ldd_mount_opts)) 
                         snprintf(local_mount_opts, sizeof(local_mount_opts),
                                  "loop,%s", mop->mo_ldd.ldd_mount_opts);
                 else 
-                */
                         sprintf(local_mount_opts, "loop");
         }
-        sprintf(cmd, "mount -t ext3 %s%s %s %s",
-                strlen(local_mount_opts) ? "-o ": "", 
+        sprintf(cmd, "mount -t %s %s%s %s %s",
+                MT_STR(&mop->mo_ldd), strlen(local_mount_opts) ? "-o ": "", 
                 local_mount_opts, mop->mo_device, mntpt);
         ret = run_command(cmd);
         if (ret) {
@@ -348,6 +357,13 @@ int write_local_files(struct mkfs_opts *mop)
         memset(&lsd, 0, sizeof(lsd));
         strncpy(lsd.lsd_uuid, mop->mo_ldd.ldd_svname, sizeof(lsd.lsd_uuid));
         lsd.lsd_index = mop->mo_index;
+        lsd.lsd_feature_compat |= cpu_to_le32(LR_COMPAT_COMMON_LR);
+        lsd.lsd_server_size = cpu_to_le32(LR_SERVER_SIZE);
+        lsd.lsd_client_start = cpu_to_le32(LR_CLIENT_START);
+        lsd.lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
+        if (IS_MDT(&mop->mo_ldd))
+                lsd.lsd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
+        
         fwrite(&lsd, sizeof(lsd), 1, filep);
         ret = 0;
         fclose(filep);
@@ -360,24 +376,17 @@ out_rmdir:
         return ret;
 }
 
-int create_loop_device(struct mkfs_opts *mop, char *loop_device)
+int loop_format(struct mkfs_opts *mop)
 {
         int ret = 0;
        
-        init_loop_base();
+        loop_init();
 
         sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%ld of=%s", 
                 mop->mo_device_sz, mop->mo_device);
         ret = run_command(cmd);
         if (ret != 0){
                 fprintf(stderr, "Unable to create backing store: %d\n", ret);
-                return ret;
-        }
-
-        ret = setup_loop(mop->mo_device, loop_device);
-        if (ret) {
-                fatal();
-                fprintf(stderr, "Loop device setup failed %d\n", ret);
         }
         return ret;
 }
@@ -386,7 +395,6 @@ int create_loop_device(struct mkfs_opts *mop, char *loop_device)
 int make_lustre_backfs(struct mkfs_opts *mop)
 {
         char mkfs_cmd[256];
-        char loopdev[128];
         char buf[40];
         char *dev;
         int ret = 0;
@@ -465,13 +473,18 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 return EINVAL;
         }
 
+        /* Loop device? */
         dev = mop->mo_device;
         if (mop->mo_flags & MO_IS_LOOP) {
-                /* setup a loopback file if needed */
-                ret = create_loop_device(mop, loopdev);
-                dev = loopdev;
-                if (ret)
+                ret = loop_format(mop);
+                if (!ret)
+                        ret = loop_setup(mop);
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Loop device setup failed %d\n", ret);
                         return ret;
+                }
+                dev = mop->mo_loopdev;
         }
         
         vprint("formatting backing filesystem %s on %s\n",
@@ -513,11 +526,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         }
 
 out:
-        if (mop->mo_flags & MO_IS_LOOP) {
-                sprintf(cmd, "losetup -d %s", loopdev);
-                ret = run_command(cmd);
-        }
-       
+        loop_cleanup(mop);      
         return ret;
 }
 
@@ -542,7 +551,7 @@ static int load_modules(struct mkfs_opts *mop)
         int rc = 0;
 
         //client: rc = load_module("lustre");
-        
+        vprint("Loading modules...");
         if (IS_OST(&mop->mo_ldd)) {
                 rc = load_module("oss");
                 if (rc) return rc;
@@ -551,6 +560,7 @@ static int load_modules(struct mkfs_opts *mop)
                 rc = load_module("mds");
                 if (rc) return rc;
         }
+        vprint("done\n");
         return rc;
 }
 
@@ -558,18 +568,48 @@ static int jt_setup()
 {
         int ret;
         /* FIXME uneeded? */
-        ret = access("/dev/portals", F_OK);
+        ret = access(PORTALS_DEV_PATH, F_OK);
         if (ret) 
-                system("mknod /dev/portals c 10 240");
-        ret = access("/dev/obd", F_OK);
+                system("mknod "PORTALS_DEV_PATH" c 10 240");
+        ret = access(OBD_DEV_PATH, F_OK);
         if (ret) 
-                system("mknod /dev/obd c 10 241");
+                system("mknod "OBD_DEV_PATH" c 10 241");
 
         ptl_initialize(0, NULL);
         obd_initialize(0, NULL);
         return 0; 
 }
 
+/* see jt_ptl_network */
+int jt_getnids(ptl_nid_t *nidarray, int maxnids)
+{
+        struct portal_ioctl_data data;
+        int                      count;
+        int                      rc;
+
+        for (count = 0; count < maxnids; count++) {
+                PORTAL_IOC_INIT (data);
+                data.ioc_count = count;
+                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NI, &data);
+
+                if (rc >= 0) {
+                        vprint("%s\n", libcfs_nid2str(data.ioc_nid));
+                        nidarray[count] = data.ioc_nid;
+                        continue;
+                }
+
+                if (errno == ENOENT)
+                        break;
+
+                fprintf(stderr,"IOC_PORTAL_GET_NI error %d: %s\n",
+                        errno, strerror(errno));
+                return -1;
+        }
+        
+        if (count == 0)
+                printf("<no local networks>\n");
+        return count;
+}
 
 static void jt_print(char *cmd_name, int argc, char **argv)
 {
@@ -618,27 +658,26 @@ static int _do_jt(int (*cmd)(int argc, char **argv), char *cmd_name, ...)
 #define do_jt(cmd, a...)  if ((ret = _do_jt(cmd, #cmd, ## a))) goto out_jt
 #define do_jt_noret(cmd, a...)  _do_jt(cmd, #cmd, ## a) 
 
-static int get_local_nids(void)
-{
-        int ret;
-        /* Get local nids */
-        ret = do_jt_noret(jt_ptl_network, "network", 0);
-        // FIXME save these 
-        return 0;
-}
-
-int lustre_log_setup(struct mkfs_opts *mop)
+int write_llog_files(struct mkfs_opts *mop)
 {
         char confname[] = "llog_writer";
         char name[128];
-        int  numnids, ret = 0;
+        char *dev;
+        int  ret = 0;
+
+        load_modules(mop);
 
         vprint("Creating Lustre logs\n"); 
-
         if ((ret = jt_setup()))
                 return ret;
-
-        numnids = get_local_nids();
+        
+        dev = mop->mo_device;
+        if (mop->mo_flags & MO_IS_LOOP) {
+                ret = loop_setup(mop);
+                if (ret)
+                        return ret;
+                dev = mop->mo_loopdev;
+        }
 
         /* FIXME can't we just write these log files ourselves? Why do we 
            have to go through an obd at all? jt_ioc_dump()? */
@@ -647,14 +686,14 @@ int lustre_log_setup(struct mkfs_opts *mop)
         /* Set up a temporary obd for writing logs. 
            mds and confobd can handle OBD_IOC_DORECORD */
         ret = do_jt_noret(jt_lcfg_attach, "attach", "mds"/*confobd*/, confname,
-                          "conf_uuid", 0);
+                          mop->mo_ldd.ldd_svname/*uuid*/, 0);
         if (ret)
                 return ENODEV;
         ret = do_jt_noret(jt_lcfg_device, "cfg_device", confname, 0);
         if (ret)
                 return ENODEV;
-        do_jt(jt_lcfg_setup,  "setup", mop->mo_device,  
-              MT_STR(&mop->mo_ldd), mop->mo_ldd.ldd_mount_opts, 0);
+        do_jt(jt_lcfg_setup,  "setup", dev,  
+              MT_STR(&mop->mo_ldd), /*mop->mo_ldd.ldd_mount_opts,*/ 0);
         /* Record on this device. */
         do_jt(jt_obd_device,  "device", confname, 0);
 
@@ -686,8 +725,12 @@ int lustre_log_setup(struct mkfs_opts *mop)
         }
         
         if (IS_MDT(&mop->mo_ldd)) {
+                ptl_nid_t nidarray[128];
                 char scnt[20], ssz[20], soff[20], spat[20];
                 char cliname[sizeof(mop->mo_ldd.ldd_fsname)];
+                char mdcname[sizeof(mop->mo_ldd.ldd_fsname)];
+                ptl_nid_t nid;
+                int numnids;
 
                 /* Write mds-conf log */
                 do_jt(jt_cfg_clear_log, "clear_log", name, 0);
@@ -744,18 +787,28 @@ int lustre_log_setup(struct mkfs_opts *mop)
                               mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
 
-                if (numnids == 0) {
+                /* Write client startup logs */
+                numnids = jt_getnids(nidarray, 
+                                     sizeof(nidarray) / sizeof(nidarray[0]));
+                if (numnids <= 0) {
                         fprintf(stderr, "%s: Can't figure out local nids, "
                                 "skipping client log creation\n", progname);
                         goto out_jt;
                 }
-                /* Write client startup log */
-                do_jt(jt_cfg_clear_log,  "clear_log", "client", 0);
-                do_jt(jt_cfg_record,     "record", "client", 0);
-                do_jt(jt_lcfg_attach,    "attach", "lov", name, 
-                      name/*uuid*/, 0);
-                do_jt(jt_lcfg_lov_setup, "lov_setup", name/*uuid*/,
-                      scnt, ssz, soff, spat, 0);
+                snprintf(mdcname, sizeof(mdcname), "%s-mdc", 
+                         mop->mo_ldd.ldd_fsname);
+                while (numnids) {
+                        numnids--;
+                        nid = nidarray[numnids];
+                        snprintf(cliname, sizeof(cliname), "client-%s",
+                                 libcfs_net2str(PTL_NIDNET(nid)));
+                        vprint("log for %s\n", cliname);
+                        do_jt(jt_cfg_clear_log,  "clear_log", cliname, 0);
+                        do_jt(jt_cfg_record,     "record", cliname, 0);
+                        do_jt(jt_lcfg_attach,    "attach", "lov", name, 
+                              name/*uuid*/, 0);
+                        do_jt(jt_lcfg_lov_setup, "lov_setup", name/*uuid*/,
+                              scnt, ssz, soff, spat, 0);
                 /* add osts here as in mdt above */
                 /* add mdc
 #09 L add_uuid nid=c0a80201 nal_type=0 0:(null) 1:NID_uml1_UUID
@@ -765,28 +818,27 @@ int lustre_log_setup(struct mkfs_opts *mop)
 #13 L add_conn 0:MDC_uml1_mdsA_MNT_client 1:NID_uml2_UUID
                 */
                 //FIXME use gethostname for nid uuid? 
-                do_jt(jt_lcfg_add_uuid, "add_uuid",
-                      libcfs_nid2str(mop->mo_hostnid.primary),
-                      mop->mo_hostnid.primary, 0);
-                snprintf(cliname, sizeof(cliname), "%s-mdc", 
-                         mop->mo_ldd.ldd_fsname);
-                do_jt(jt_lcfg_attach,   "attach", "mdc", cliname, 
-                      cliname/*uuid*/, 0);
-                do_jt(jt_lcfg_device,   "cfg_device", cliname, 0);
-                do_jt(jt_lcfg_setup,    "setup", mop->mo_ldd.ldd_svname,
-                      libcfs_nid2str(mop->mo_hostnid.primary), 0);
-                if (mop->mo_hostnid.backup != PTL_NID_ANY) {
-                        do_jt(jt_lcfg_add_uuid, "add_uuid", 
-                              libcfs_nid2str(mop->mo_hostnid.backup),
-                              mop->mo_hostnid.backup, 0);
-                        do_jt(jt_lcfg_add_conn, "add_conn", 
-                              libcfs_nid2str(mop->mo_hostnid.backup)/*uuid*/, 0);
+                        do_jt(jt_lcfg_add_uuid, "add_uuid",
+                              libcfs_nid2str(mop->mo_hostnid.primary),
+                              mop->mo_hostnid.primary, 0);
+                        do_jt(jt_lcfg_attach,   "attach", "mdc", mdcname, 
+                              mdcname/*uuid*/, 0);
+                        do_jt(jt_lcfg_device,   "cfg_device", mdcname, 0);
+                        do_jt(jt_lcfg_setup,    "setup", mop->mo_ldd.ldd_svname,
+                              libcfs_nid2str(mop->mo_hostnid.primary), 0);
+                        if (mop->mo_hostnid.backup != PTL_NID_ANY) {
+                                do_jt(jt_lcfg_add_uuid, "add_uuid", 
+                                      libcfs_nid2str(mop->mo_hostnid.backup),
+                                      mop->mo_hostnid.backup, 0);
+                                do_jt(jt_lcfg_add_conn, "add_conn", 
+                                      libcfs_nid2str(mop->mo_hostnid.backup)/*uuid*/, 0);
+                        }
+                        do_jt(jt_lcfg_mount_option, "mount_option", 
+                              cliname, name/*osc(lov)*/, mdcname, 0);
+                        if (mop->mo_timeout)
+                                do_jt(jt_lcfg_set_timeout, "set_timeout", 
+                                      mop->mo_timeout, 0);
                 }
-                do_jt(jt_lcfg_mount_option, "mount_option", 
-                      "client", name/*osc(lov)*/, cliname, 0);
-                if (mop->mo_timeout)
-                        do_jt(jt_lcfg_set_timeout, "set_timeout", 
-                              mop->mo_timeout, 0);
         }
 
 out_jt:        
@@ -799,7 +851,7 @@ out_jt:
         do_jt_noret(jt_obd_detach,  "detach", 0);
 
         obd_finalize(1, (char **)&name /*dummy*/);
-        
+        loop_cleanup(mop);
         return ret;
 }
 
@@ -1014,13 +1066,14 @@ int main(int argc , char *const argv[])
         strcpy(mop.mo_device, argv[optind]);
         
         /* These are the permanent mount options. */ 
-        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
-            (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) {
+        if (mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) {
+                sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
+                if (IS_OST(&mop.mo_ldd))
+                        strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
+        } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
-                if ((IS_OST(&mop.mo_ldd)) && (get_os_version() == 24))
-                        strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
         } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",
                         mop.mo_device);
@@ -1063,7 +1116,7 @@ int main(int argc , char *const argv[])
                 return ret;
         }
 
-        ret = lustre_log_setup(&mop);
+        ret = write_llog_files(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "failed to write setup logs\n");
