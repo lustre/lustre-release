@@ -63,6 +63,17 @@ EXTRA_KCFLAGS="$EXTRA_KCFLAGS -DKERNEL -DKERNEL_PRIVATE"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -DDRIVER_PRIVATE -DAPPLE -DNeXT"
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__KERNEL__ -D__DARWIN__"
 #
+# C flags for Panther/Tiger
+#
+case $target_os in
+        darwin8*)
+                EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN8__"
+        darwin7*)
+                EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN7__"
+        ;;
+esac
+
+#
 # Debugging flags. Remove!
 #
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -O0 -DMACH_ASSERT=1"
