@@ -2935,6 +2935,12 @@ def doClumanager(lustreDB, hosts):
 
             new_services += add_clumanager_node(node_db, nodes, services)
 
+    nodenames = []
+    for node in nodes.keys():
+        nodedb = lustreDB.lookup(node)
+        nodenames.append(nodedb.getName())
+    nodenames.sort()
+
     print """<?xml version="1.0"?>
 <cluconfig version="3.0">
   <clumembd broadcast="no" interval="750000" loglevel="5" multicast="yes" multicast_ipaddress="225.0.0.11" thread="yes" tko_count="20"/>
@@ -2944,21 +2950,18 @@ def doClumanager(lustreDB, hosts):
   <clulockd loglevel="5"/>
   <cluster config_viewnumber="1" name="%s"/>
   <sharedstate driver="libsharedraw.so" rawprimary="%s" rawshadow="%s" type="raw"/>
-  <members> """ % (our_host, config.rawprimary, config.rawsecondary)
-
-    nodekeys = nodes.keys()
-    nodekeys.sort()
-
-    servicekeys = services.keys()
-    servicekeys.sort()
+  <members> """ % (string.join(nodenames, ' '), config.rawprimary, config.rawsecondary)
     
+
     i = 0
-    for node in nodekeys:
-        nodedb = lustreDB.lookup(node)
-        print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, nodedb.getName())
+    for node in nodenames:
+        print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, node)
         i += 1
 
     print "  </members>\n  <failoverdomains>"
+
+    servicekeys = services.keys()
+    servicekeys.sort()
 
     i = 0
     for service in servicekeys:
