@@ -68,6 +68,7 @@ EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__KERNEL__ -D__DARWIN__"
 case $target_os in
         darwin8*)
                 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN8__"
+	;;
         darwin7*)
                 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -D__DARWIN7__"
         ;;
