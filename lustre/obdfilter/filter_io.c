@@ -506,8 +506,6 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         struct fsfilt_objinfo fso;
         struct obd_device *obd;
         obd_size left;
-        obd_uid uid;
-        obd_gid gid;
         void *iobuf; 
         
         ENTRY;
@@ -524,13 +522,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         obd = exp->exp_obd;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        uid = oa->o_valid & OBD_MD_FLUID ? oa->o_uid : 0;
-        gid = oa->o_valid & OBD_MD_FLGID ? oa->o_gid : 0;
-        
         /* make sure that object is already allocated */
-        dentry = filter_crow_object(obd, obj->ioo_gr,
-                                    obj->ioo_id, uid, gid);
-
+        dentry = filter_crow_object(obd, oa);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
 

@@ -1313,9 +1313,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         oa->o_valid |= OBD_MD_FLGID;
                 }
 
-                /* putting there also fid, needed for quota too. */
-                memcpy(obdo_id(oa), &lli->lli_id, sizeof(lli->lli_id));
-                oa->o_valid |= OBD_MD_FLINLINE;
+                *(obdo_id(oa)) = lli->lli_id;
+                oa->o_valid |= OBD_MD_FLIFID;
 
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME);
@@ -2146,7 +2145,9 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oa->o_id = lsm->lsm_object_id;
                 oa->o_gr = lsm->lsm_object_gr;
                 oa->o_flags = flags;
-                oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
+                *(obdo_id(oa)) = ll_i2info(inode)->lli_id;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP 
+                              | OBD_MD_FLIFID;
 
                 rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL);
                 obdo_free(oa);

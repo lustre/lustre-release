@@ -969,7 +969,7 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
                                       OBD_MD_FLCTIME | OBD_MD_FLFLAGS |
                                       OBD_MD_FLSIZE | OBD_MD_FLGROUP |
                                       OBD_MD_FLUID | OBD_MD_FLGID |
-                                      OBD_MD_FLINLINE)));
+                                      OBD_MD_FLINLINE | OBD_MD_FLIFID)));
 
         LASSERT(!(src_oa->o_valid & OBD_MD_FLGROUP) || src_oa->o_gr > 0);
 

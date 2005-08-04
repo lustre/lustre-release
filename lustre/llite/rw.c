@@ -217,20 +217,6 @@ int ll_prepare_write(struct file *file, struct page *page,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
                 OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
-        /*
-         * needed for quota to create OSS object on write with correct
-         * owner/group.
-         */
-        oa->o_uid = inode->i_uid;
-        oa->o_valid |= OBD_MD_FLUID;
-
-        oa->o_gid = inode->i_gid;
-        oa->o_valid |= OBD_MD_FLGID;
-
-        /* putting there also fid, needed for quota too. */
-        memcpy(obdo_id(oa), &lli->lli_id, sizeof(lli->lli_id));
-        oa->o_valid |= OBD_MD_FLINLINE;
-        
         rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode),
                      oa, lsm, 1, &pga, NULL);
         if (rc)
@@ -264,6 +250,10 @@ int ll_prepare_write(struct file *file, struct page *page,
                 /* bug 1598: don't clobber blksize */
                 oa->o_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLKSZ);
                 obdo_refresh_inode(inode, oa, oa->o_valid);
+        } else if (rc == -ENOENT) {
+                /* tolerate no entry error here, cause the objects might
+                 * not be created yet */
+                rc = 0;
         }
 
         EXIT;
@@ -368,10 +358,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd == OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
-                mdc_pack_id(obdo_id(oa), inode->i_ino, 0, inode->i_mode, 
-                            id_group(&ll_i2info(inode)->lli_id),
-                            id_fid(&ll_i2info(inode)->lli_id));
-
+                *(obdo_id(oa)) = ll_i2info(inode)->lli_id;
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }

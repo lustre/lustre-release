@@ -2178,8 +2178,6 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *filter;
         struct ldlm_resource *res;
         struct dentry *dentry;
-        obd_uid uid;
-        obd_gid gid;
         int rc;
         ENTRY;
 
@@ -2188,12 +2186,9 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
-        uid = oa->o_valid & OBD_MD_FLUID ? oa->o_uid : 0;
-        gid = oa->o_valid & OBD_MD_FLGID ? oa->o_gid : 0;
         
         /* make sure that object is allocated. */
-        dentry = filter_crow_object(exp->exp_obd, oa->o_gr,
-                                    oa->o_id, uid, gid);
+        dentry = filter_crow_object(exp->exp_obd, oa);
         if (IS_ERR(dentry))
                 GOTO(out_pop, rc = PTR_ERR(dentry));
 
@@ -2307,8 +2302,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         RETURN(rc);
 }
 
-int filter_create_object(struct obd_device *obd, obd_gr group,
-                         obd_id id, obd_uid uid, obd_gid gid)
+int filter_create_object(struct obd_device *obd, struct obdo *oa)
 {
         struct dentry *dparent = NULL;
         struct dentry *dchild = NULL;
@@ -2323,22 +2317,22 @@ int filter_create_object(struct obd_device *obd, obd_gr group,
 
         filter = &obd->u.filter;
 
-        down(&filter->fo_create_locks[group]);
+        down(&filter->fo_create_locks[oa->o_gr]);
 
-        if (test_bit(group, &filter->fo_destroys_in_progress)) {
+        if (test_bit(oa->o_gr, &filter->fo_destroys_in_progress)) {
                 CWARN("%s: create aborted by destroy\n",
                       obd->obd_name);
                 GOTO(out, rc = -EALREADY);
         }
 
-        CDEBUG(D_INFO, "create objid "LPU64"\n", id);
+        CDEBUG(D_INFO, "create objid "LPU64"\n", oa->o_id);
 
-        dparent = filter_parent_lock(obd, group, id, &lock);
+        dparent = filter_parent_lock(obd, oa->o_gr, oa->o_id, &lock);
         if (IS_ERR(dparent))
                 GOTO(cleanup, rc = PTR_ERR(dparent));
         cleanup_phase = 1;
 
-        dchild = filter_id2dentry(obd, dparent, group, id);
+        dchild = filter_id2dentry(obd, dparent, oa->o_gr, oa->o_id);
         if (IS_ERR(dchild))
                 GOTO(cleanup, rc = PTR_ERR(dchild));
         cleanup_phase = 2;
@@ -2352,10 +2346,12 @@ int filter_create_object(struct obd_device *obd, obd_gr group,
                 GOTO(cleanup, rc = PTR_ERR(handle));
         cleanup_phase = 3;
 
-        uc.luc_uid = uid;
-        uc.luc_gid = gid;
-        uc.luc_fsuid = uid;
-        uc.luc_fsgid = gid;
+        uc.luc_uid = oa->o_uid;
+        uc.luc_gid = oa->o_gid;
+        uc.luc_fsuid = oa->o_uid;
+        uc.luc_fsgid = oa->o_gid;
+        uc.luc_cap = current->cap_effective;
+        cap_raise(uc.luc_cap, CAP_SYS_RESOURCE);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         rc = ll_vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
@@ -2366,12 +2362,24 @@ int filter_create_object(struct obd_device *obd, obd_gr group,
                 GOTO(cleanup, rc);
         }
 
+        /* nobody else is touching this newly created object */
+        LASSERT(dchild->d_inode);
+        if (oa->o_valid & OBD_MD_FLIFID) {
+                rc = fsfilt_set_md(obd, dchild->d_inode, handle, obdo_id(oa),
+                                   sizeof(struct lustre_id), EA_SID);
+                if (rc) {
+                        CERROR("store fid in object failed! rc:%d\n", rc);
+                        GOTO(cleanup, rc);
+                }
+        }
+
+
         fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC);
 
         /* save last created object id */
-        filter_save_last_id(filter, group, id);
+        filter_save_last_id(filter, oa->o_gr, oa->o_id);
 
-        rc = filter_update_last_objid(obd, group, 0);
+        rc = filter_update_last_objid(obd, oa->o_gr, 0);
         if (rc) {
                 CERROR("unable to write lastobjid, but "
                        "orphans were deleted, err = %d\n",
@@ -2400,20 +2408,21 @@ cleanup:
                 GOTO(out, rc);
 
 out:
-        up(&filter->fo_create_locks[group]);
+        up(&filter->fo_create_locks[oa->o_gr]);
         RETURN(rc);
 }
 
 struct dentry *
-filter_crow_object(struct obd_device *obd, __u64 ogr,
-                   __u64 oid, obd_uid uid, obd_gid gid)
+filter_crow_object(struct obd_device *obd, struct obdo *oa)
 {
         struct dentry *dentry;
+        obd_uid uid;
+        obd_gid gid;
         int rc = 0;
         ENTRY;
 
         /* check if object is already allocated */
-        dentry = filter_id2dentry(obd, NULL, ogr, oid);
+        dentry = filter_id2dentry(obd, NULL, oa->o_gr, oa->o_id);
         if (IS_ERR(dentry))
                 RETURN(dentry);
 
@@ -2424,17 +2433,20 @@ filter_crow_object(struct obd_device *obd, __u64 ogr,
         
         CDEBUG(D_INODE, "OSS object "LPU64"/"LPU64
                " does not exists - allocate it now\n",
-               oid, ogr);
+               oa->o_id, oa->o_gr);
 
-        rc = filter_create_object(obd, ogr, oid, uid, gid);
+        uid = oa->o_valid & OBD_MD_FLUID ? oa->o_uid : 0;
+        gid = oa->o_valid & OBD_MD_FLGID ? oa->o_gid : 0;
+
+        rc = filter_create_object(obd, oa);
         if (rc) {
                 CERROR("cannot create OSS object "LPU64"/"LPU64
-                       ", err = %d\n", oid, ogr, rc);
+                       ", err = %d\n", oa->o_id, oa->o_gr, rc);
                 RETURN(ERR_PTR(rc));
         }
 
         /* lookup for just created object and return it to caller */
-        dentry = filter_id2dentry(obd, NULL, ogr, oid);
+        dentry = filter_id2dentry(obd, NULL, oa->o_gr, oa->o_id);
         if (IS_ERR(dentry))
                 RETURN(dentry);
                 
@@ -2442,14 +2454,10 @@ filter_crow_object(struct obd_device *obd, __u64 ogr,
                 f_dput(dentry);
                 dentry = ERR_PTR(-ENOENT);
                 CERROR("cannot find just created OSS object "
-                       LPU64"/"LPU64" err = %d\n", oid,
-                       ogr, (int)PTR_ERR(dentry));
+                       LPU64"/"LPU64" err = %d\n", oa->o_id,
+                       oa->o_gr, (int)PTR_ERR(dentry));
                 RETURN(dentry);
-        } else {
-                /* XXX: here should be storing fid from client into OSS object
-                 * EA to use it for quota later.  --umka */
         }
-
         RETURN(dentry);
 }
 
