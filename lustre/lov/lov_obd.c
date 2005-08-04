@@ -354,6 +354,8 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 
         CDEBUG(D_INFO, "Marking OSC %s %sactive\n", uuid->uuid,
                activate ? "" : "in");
+        CDEBUG(D_ERROR, "Marking OSC %s %sactive\n", uuid->uuid,
+               activate ? "" : "in");
 
         tgt->active = activate;
         if (activate)
@@ -1651,6 +1653,12 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 
+static int dump_missed_lock(struct ldlm_lock *lock, void *data)
+{
+        LDLM_ERROR(lock, "forgotten lock");
+        return LDLM_ITER_CONTINUE;
+}
+
 static int lov_change_cbdata(struct obd_export *exp,
                              struct lov_stripe_md *lsm, ldlm_iterator_t it,
                              void *data)
@@ -1673,6 +1681,11 @@ static int lov_change_cbdata(struct obd_export *exp,
                 struct lov_stripe_md submd;
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        submd.lsm_object_id = loi->loi_id;
+                        submd.lsm_object_gr = lsm->lsm_object_gr;
+                        submd.lsm_stripe_count = 0;
+                        obd_change_cbdata(lov->tgts[loi->loi_ost_idx].ltd_exp,
+                                          &submd, dump_missed_lock, NULL);
                         continue;
                 }
 
