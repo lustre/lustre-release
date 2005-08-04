@@ -1686,7 +1686,7 @@ static int lov_change_cbdata(struct obd_export *exp,
                         submd.lsm_stripe_count = 0;
                         obd_change_cbdata(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                           &submd, dump_missed_lock, NULL);
-                        continue;
+                        /*continue;*/
                 }
 
                 submd.lsm_object_id = loi->loi_id;
@@ -2011,7 +2011,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                         }
                 }
-                LDLM_ERROR(data->lock, "lock on inode without such object\n");
+                LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
