@@ -1020,10 +1020,18 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                 if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
                         inode = igrab(lock->l_ast_data);
                 } else {
+                        struct timeval now;
+                        do_gettimeofday(&now);
                         inode = lock->l_ast_data;
+                        LDLM_ERROR(lock, "granted at %lu.%lu, now %lu.%lu",
+                                   lock->l_enqueued_time.tv_sec,
+                                   lock->l_enqueued_time.tv_usec,
+                                   now.tv_sec, now.tv_usec);
                         CDEBUG(inode->i_state & I_FREEING ? D_INFO : D_WARNING,
                                "l_ast_data %p is bogus: magic %0x8\n",
                                lock->l_ast_data, lli->lli_inode_magic);
+                        CDEBUG(D_ERROR, "i_state = 0x%lx, l_ast_data %p is bogus: magic %0x8\n",
+                               inode->i_state, lock->l_ast_data, lli->lli_inode_magic);
                         inode = NULL;
                         unlock_res_and_lock(lock);
                         LBUG();

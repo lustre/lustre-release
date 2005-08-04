@@ -357,6 +357,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         /* lock enqueued on the server */
         cleanup_phase = 1;
 
+        do_gettimeofday(&lock->l_enqueued_time);
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
         *flags = reply->lock_flags;
