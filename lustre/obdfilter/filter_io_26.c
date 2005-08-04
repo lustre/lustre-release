@@ -296,43 +296,6 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
  
-static void check_metadata(struct super_block *sb, sector_t block)
-{
-	struct inode *bd_inode = sb->s_bdev->bd_inode;
-	struct address_space *bd_mapping = bd_inode->i_mapping;
-	pgoff_t index;
-	struct buffer_head *bh;
-	struct buffer_head *head;
-	struct page *page;
-
-	index = block >> (PAGE_CACHE_SHIFT - bd_inode->i_blkbits);
-	page = find_get_page(bd_mapping, index);
-	if (!page)
-                return;
-
-        if (PageDirty(page))
-                CERROR("page 0x%p/%lu in mapping 0x%p is dirty\n",
-                       page, page->index, bd_mapping);
-
-	spin_lock(&bd_mapping->private_lock);
-	if (!page_has_buffers(page))
-		goto out_unlock;
-	head = page_buffers(page);
-	bh = head;
-	do {
-                if (buffer_dirty(bh))
-                        CERROR("buffer 0x%p in page 0x%p/%lu/%u is dirty (0x%p)\n",
-                               bh, page, page->index, (unsigned) block,
-                               page->mapping);
-		bh = bh->b_this_page;
-	} while (bh != head);
-
-out_unlock:
-	spin_unlock(&bd_mapping->private_lock);
-	page_cache_release(page);
-	return;
-}
-
 /* These are our hacks to keep our directio/bh IO coherent with ext3's
  * page cache use.  Most notably ext3 reads file data into the page
  * cache when it is zeroing the tail of partial-block truncates and
@@ -379,9 +342,6 @@ static int filter_clear_page_cache(struct inode *inode,
   
                 unlock_page(page);
                 page_cache_release(page);
-
-                if (iobuf->dr_blocks[i])
-                        check_metadata(inode->i_sb, iobuf->dr_blocks[i]);
         }
         return 0;
 }
