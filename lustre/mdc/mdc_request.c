@@ -586,7 +586,7 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         if (open_req->rq_transno == 0) {
                 DEBUG_REQ(D_ERROR, open_req, "BUG 3892  open");
                 DEBUG_REQ(D_ERROR, req, "BUG 3892 close");
-                LASSERTF(open_req->rq_transno != 0, "BUG 3892");
+                LASSERTF(open_req->rq_transno != 0, "BUG 3892\n");
         }
         LASSERT(open_req->rq_import == imp);
 
