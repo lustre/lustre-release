@@ -27,7 +27,7 @@
 #
 # Based in part on the XML obdctl modifications done by Brian Behlendorf
 
-import sys, getopt, types
+import sys, getopt, types, errno
 import string, os, stat, popen2, socket, time, random, fcntl, select
 import re, exceptions, signal, traceback
 import xml.dom.minidom
@@ -2713,6 +2713,50 @@ def doUnloadModules(services):
         if n.safe_to_clean_modules():
             n.cleanup_module()
 
+def doMakeServiceScript(services):
+    if config.nosetup:
+        return
+    try:
+        os.makedirs(config.service_scripts)
+    except OSError, e:
+        if e[0] != errno.EEXIST:
+            panic("Couldn't create scripts dir " + config.service_scripts + ": " + e[1])
+    
+    for s in services:
+        if s[1].get_class() != 'osd' and s[1].get_class() != 'mdsdev':
+            continue
+
+        target_uuid = s[1].get_first_ref('target')
+        target = toplustreDB.lookup(target_uuid)
+        target_symlink = config.service_scripts + "/" + target.getName()
+        if config.force:
+            try:
+                try:
+                    os.unlink(target_symlink)
+                    if config.verbose:
+                        print "Removed " + target_symlink
+                except OSError, e:
+                    if e[0] != errno.EISDIR:
+                        raise e
+                    os.rmdir(target_symlink)
+                    if config.verbose:
+                        print "Removed " + target_symlink
+            except OSError, e:
+                if e[0] != errno.ENOENT:
+                    panic("Error removing " + target_symlink + ": " + e[1])
+                    
+        try:
+            os.symlink("/etc/init.d/lustre", target_symlink)
+            if config.verbose:
+                print "Created service link " + target_symlink + " to /etc/init.d/lustre"
+
+        except OSError, e:
+            if e[0] == errno.EEXIST:
+                extra_error = " (use --force option to remove existing files)"
+            else:
+                extra_error = ""
+            panic("Error creating " + target_symlink + ": " + e[1] + extra_error)
+
 #
 # Load profile for
 def doHost(lustreDB, hosts):
@@ -2744,7 +2788,11 @@ def doHost(lustreDB, hosts):
     # if not cleaning, load modules first.
     prof_list = node_db.get_refs('profile')
 
-    if config.write_conf:
+    if config.make_service_scripts:
+        for_each_profile(node_db, prof_list, doMakeServiceScript)
+        return
+    
+    elif config.write_conf:
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
@@ -2809,6 +2857,147 @@ def doHost(lustreDB, hosts):
 
         for_each_profile(node_db, prof_list, doSetup)
         lustreDB.close()
+
+def add_clumanager_node(node_db, nodes, services):
+    new_services = []
+    node_name = node_db.getUUID()
+    nodes[node_name] = []
+    
+    for prof_uuid in node_db.get_refs('profile'):
+        prof_db = toplustreDB.lookup(prof_uuid)
+        for ref_class, ref_uuid in prof_db.get_all_refs():
+            if ref_class not in ('osd', 'mdsdev'):
+                continue
+            devdb = toplustreDB.lookup(ref_uuid)
+            tgt_uuid = devdb.get_first_ref('target')
+
+            nodes[node_name].append(ref_uuid)
+
+            if not services.has_key(tgt_uuid):
+                if config.verbose:
+                    print "New service: " + tgt_uuid + " (originally found on " + node_name + ")"
+                new_services.append(tgt_uuid)
+                services[tgt_uuid] = []
+            services[tgt_uuid].append(ref_uuid)
+
+    return new_services
+
+def add_clumanager_services(new_services, nodes, dev_list):
+    new_nodes = []
+    for devdb in dev_list:
+        tgt_uuid = devdb.get_first_ref('target')
+        if tgt_uuid in new_services:
+            node_uuid = devdb.get_first_ref('node')
+        
+            if not (nodes.has_key(node_uuid) or node_uuid in new_nodes):
+                if config.verbose:
+                    print "New node: " + node_uuid + " for service " + tgt_uuid
+                new_nodes.append(node_uuid)
+
+    return new_nodes
+
+def doClumanager(lustreDB, hosts):
+    nodes = {}
+    services = {}
+
+    dev_list = []
+    
+    for dev_uuid in toplustreDB.get_refs('osd') + toplustreDB.get_refs('mdsdev'):
+        dev_list.append(lustreDB.lookup(dev_uuid))
+
+    node_db = None
+    for h in hosts:
+        node_db = lustreDB.lookup_name(h, 'node')
+        if node_db:
+            our_host = h
+            new_services = add_clumanager_node(node_db, nodes, services)
+            break
+            
+    if not node_db:
+        panic('No host entry found.')
+
+    while 1:
+        if len(new_services) == 0:
+            break
+        
+        new_nodes = add_clumanager_services(new_services, nodes, dev_list)
+        if len(new_nodes) == 0:
+            break
+
+        if len(new_nodes) + len(nodes.keys()) > 8:
+            panic("CluManager only supports 8 nodes per failover \"cluster.\"")
+
+        new_services = []
+        for node_uuid in new_nodes:
+            node_db = lustreDB.lookup(node_uuid)
+            if not node_db:
+                panic("No node entry for " + node_uuid + " was found.")
+
+            new_services += add_clumanager_node(node_db, nodes, services)
+
+    print """<?xml version="1.0"?>
+<cluconfig version="3.0">
+  <clumembd broadcast="no" interval="750000" loglevel="5" multicast="yes" multicast_ipaddress="225.0.0.11" thread="yes" tko_count="20"/>
+  <cluquorumd loglevel="5" pinginterval="2"/>
+  <clurmtabd loglevel="5" pollinterval="4"/>
+  <clusvcmgrd loglevel="5"/>
+  <clulockd loglevel="5"/>
+  <cluster config_viewnumber="1" name="%s"/>
+  <sharedstate driver="libsharedraw.so" rawprimary="%s" rawshadow="%s" type="raw"/>
+  <members> """ % (our_host, config.rawprimary, config.rawsecondary)
+
+    nodekeys = nodes.keys()
+    nodekeys.sort()
+
+    servicekeys = services.keys()
+    servicekeys.sort()
+    
+    i = 0
+    for node in nodekeys:
+        nodedb = lustreDB.lookup(node)
+        print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, nodedb.getName())
+        i += 1
+
+    print "  </members>\n  <failoverdomains>"
+
+    i = 0
+    for service in servicekeys:
+        svcdb = lustreDB.lookup(service)
+        print "    <failoverdomain id=\"%d\" name=\"%s\" ordered=\"yes\" restricted=\"yes\">" % (i, svcdb.getName())
+        i += 1
+
+        j = 0
+        active_uuid = get_active_target(svcdb)
+        for svc_uuid in [active_uuid] + services[service]:
+            if svc_uuid == active_uuid and j > 0:
+                continue
+            svcdb = lustreDB.lookup(svc_uuid)
+
+            svc_node_uuid = svcdb.get_first_ref('node')
+            svc_nodedb = lustreDB.lookup(svc_node_uuid)
+
+            print "      <failoverdomainnode id=\"%d\" name=\"%s\"/>" % (j, svc_nodedb.getName())
+            j += 1
+
+        print "    </failoverdomain>"
+
+    print "  </failoverdomains>\n  <services>"
+
+    i = 0
+    for service in servicekeys:
+        svcdb = lustreDB.lookup(service)
+        active_uuid = get_active_target(svcdb)
+        activedb = lustreDB.lookup(active_uuid)
+
+        svc_node_uuid = activedb.get_first_ref('node')
+        svc_nodedb = lustreDB.lookup(svc_node_uuid)
+
+        print "    <service checkinterval=\"30\" failoverdomain=\"%s\" id=\"%d\" name=\"%s\" userscript=\"%s/%s\">" \
+              % ( svcdb.getName(), i, svcdb.getName(), config.service_scripts, svcdb.getName())
+        print "      <service_ipaddresses/>\n    </service>"
+        i += 1
+
+    print "  </services>\n</cluconfig>"
 
 def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
     tgt = lustreDB.lookup(tgt_uuid)
@@ -3080,6 +3269,11 @@ lconf_options = [
     ('gdb_script', "Fullname of gdb debug script", PARAM, default_gdb_script()),
     ('debug_path', "Path to save debug dumps", PARAM, default_debug_path()),
     ('allow_unprivileged_port', "Allow connections from unprivileged ports"),
+    ('clumanager', "Generate CluManager config file for this node's cluster"),
+    ('rawprimary', "For clumanager, device of the primary quorum", PARAM, "/dev/raw/raw1"),
+    ('rawsecondary', "For clumanager, device of the secondary quorum", PARAM, "/dev/raw/raw2"),
+    ('service_scripts', "For clumanager, directory containing per-service scripts", PARAM, "/etc/lustre/services"),
+    ('make_service_scripts', "Create per-service symlinks for use with clumanager"),
 # Client recovery options
     ('recover', "Recover a device"),
     ('group', "The group of devices to configure or cleanup", PARAM),
@@ -3200,7 +3394,10 @@ def main():
         lctl.clear_log(config.record_device, config.record_log)
         lctl.record(config.record_device, config.record_log)
 
-    doHost(lustreDB, node_list)
+    if config.clumanager:
+        doClumanager(lustreDB, node_list)
+    else:
+        doHost(lustreDB, node_list)
 
     if config.record:
         lctl.end_record()

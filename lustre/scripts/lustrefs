@@ -14,7 +14,7 @@
 #
 ### BEGIN INIT INFO
 # Provides: lustrefs
-# Required-Start: $network $remote_fs
+# Required-Start: $network $remote_fs +sshd +lustre
 # Required-Stop: $network $remote_fs
 # Should-Start: 
 # Should-Stop: 
