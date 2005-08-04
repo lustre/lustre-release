@@ -2950,7 +2950,7 @@ def doClumanager(lustreDB, hosts):
   <clulockd loglevel="5"/>
   <cluster config_viewnumber="1" name="%s"/>
   <sharedstate driver="libsharedraw.so" rawprimary="%s" rawshadow="%s" type="raw"/>
-  <members> """ % (string.join(nodenames, ' '), config.rawprimary, config.rawsecondary)
+  <members> """ % (string.join(nodenames), config.rawprimary, config.rawsecondary)
     
 
     i = 0
