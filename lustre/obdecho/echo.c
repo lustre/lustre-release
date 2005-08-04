@@ -5,20 +5,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -94,7 +97,7 @@ static int echo_disconnect(struct obd_export *exp)
 static int echo_destroy_export(struct obd_export *exp)
 {
         ENTRY;
-        
+
         target_destroy_export(exp);
 
         RETURN(0);
@@ -117,7 +120,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 return -EINVAL;
         }
@@ -169,7 +172,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
         obd_id id = oa->o_id;
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
@@ -191,7 +194,7 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = class_exp2obd(exp);
 
         if (!obd) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
@@ -231,7 +234,7 @@ echo_page_debug_setup(struct page *page, int rw, obd_id id,
                         block_debug_setup(addr, OBD_ECHO_BLOCK_SIZE,
                                           0xecc0ecc0ecc0ecc0ULL,
                                           0xecc0ecc0ecc0ecc0ULL);
-                
+
                 addr   += OBD_ECHO_BLOCK_SIZE;
                 offset += OBD_ECHO_BLOCK_SIZE;
                 len    -= OBD_ECHO_BLOCK_SIZE;
@@ -258,7 +261,7 @@ echo_page_debug_check(struct page *page, obd_id id,
 
                 if (rc2 != 0 && rc == 0)
                         rc = rc2;
-                
+
                 addr   += OBD_ECHO_BLOCK_SIZE;
                 offset += OBD_ECHO_BLOCK_SIZE;
                 len    -= OBD_ECHO_BLOCK_SIZE;
@@ -429,7 +432,7 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                                r->page, addr, r->offset);
 
                         if (verify) {
-                                vrc = echo_page_debug_check(page, obj->ioo_id, 
+                                vrc = echo_page_debug_check(page, obj->ioo_id,
                                                             r->offset, r->len);
                                 /* check all the pages always */
                                 if (vrc != 0 && rc == 0)
@@ -513,7 +516,7 @@ static int echo_cleanup(struct obd_device *obd)
          * happened before calling ldlm_namespace_free() */
         set_current_state (TASK_UNINTERRUPTIBLE);
         schedule_timeout (HZ);
-        
+
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         leaked = atomic_read(&obd->u.echo.eo_prep);

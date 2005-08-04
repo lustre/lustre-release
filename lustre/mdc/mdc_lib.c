@@ -3,23 +3,26 @@
  *
  *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
-#define DEBUG_SUBSYSTEM S_MDS
+#define DEBUG_SUBSYSTEM S_MDC
 #ifndef __KERNEL__
 # include <fcntl.h>
 # include <liblustre.h>
@@ -249,14 +252,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        if (in_group_p(data->ctxt.gid1))
-                rec->rn_suppgid1 = data->ctxt.gid1;
-        else
-                rec->rn_suppgid1 = -1;
-        if (in_group_p(data->ctxt.gid2))
-                rec->rn_suppgid2 = data->ctxt.gid2;
-        else
-                rec->rn_suppgid2 = -1;
+        rec->rn_suppgid1 = data->ctxt.gid1;
+        rec->rn_suppgid2 = data->ctxt.gid2;
         rec->rn_fid1 = data->fid1;
         rec->rn_fid2 = data->fid2;
         rec->rn_time = data->mod_time;

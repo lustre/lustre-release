@@ -6,20 +6,23 @@
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Eric Barton <eeb@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * (Un)packing of OST requests
  *
@@ -68,12 +71,27 @@ lustre_init_msg (struct lustre_msg *msg, int count, int *lens, char **bufs)
 int lustre_pack_request (struct ptlrpc_request *req,
                          int count, int *lens, char **bufs)
 {
+        int reqlen;
         ENTRY;
 
-        req->rq_reqlen = lustre_msg_size (count, lens);
-        OBD_ALLOC(req->rq_reqmsg, req->rq_reqlen);
-        if (req->rq_reqmsg == NULL)
-                RETURN(-ENOMEM);
+        reqlen = lustre_msg_size (count, lens);
+        /* See if we got it from prealloc pool */
+        if (req->rq_reqmsg) {
+                /* Cannot return error here, that would create
+                   infinite loop in ptlrpc_prep_req_pool */
+                /* In this case ptlrpc_prep_req_from_pool sets req->rq_reqlen
+                   to maximum size that would fit into this preallocated
+                   request */
+                LASSERTF(req->rq_reqlen >= reqlen, "req->rq_reqlen %d, "
+                                                   "reqlen %d\n",req->rq_reqlen,
+                                                    reqlen);
+                memset(req->rq_reqmsg, 0, reqlen);
+        } else {
+                OBD_ALLOC(req->rq_reqmsg, reqlen);
+                if (req->rq_reqmsg == NULL)
+                        RETURN(-ENOMEM);
+        }
+        req->rq_reqlen = reqlen;
 
         lustre_init_msg (req->rq_reqmsg, count, lens, bufs);
         RETURN (0);
@@ -105,6 +123,42 @@ do {                                                                    \
 # define PTLRPC_RS_DEBUG_LRU_DEL(rs) do {} while(0)
 #endif
 
+static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc,
+                                                      int size)
+{
+        unsigned long flags;
+        struct ptlrpc_reply_state *rs = NULL;
+
+        spin_lock_irqsave(&svc->srv_lock, flags);
+        /* See if we have anything in a pool, and wait if nothing */
+        while (list_empty(&svc->srv_free_rs_list)) {
+                struct l_wait_info lwi;
+                int rc;
+                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                /* If we cannot get anything for some long time, we better
+                   bail out instead of waiting infinitely */
+                lwi = LWI_TIMEOUT(10 * HZ, NULL, NULL);
+                rc = l_wait_event(svc->srv_free_rs_waitq,
+                                  !list_empty(&svc->srv_free_rs_list), &lwi);
+                if (rc)
+                        goto out;
+                spin_lock_irqsave(&svc->srv_lock, flags);
+        }
+        
+        rs = list_entry(svc->srv_free_rs_list.next, struct ptlrpc_reply_state,
+                        rs_list);
+        list_del(&rs->rs_list);
+        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        LASSERT(rs);
+        LASSERTF(svc->srv_max_reply_size > size, "Want %d, prealloc %d\n", size,
+                 svc->srv_max_reply_size);
+        memset(rs, 0, size);
+        rs->rs_prealloc = 1;
+out:
+        return rs;
+}
+
+
 int lustre_pack_reply (struct ptlrpc_request *req,
                        int count, int *lens, char **bufs)
 {
@@ -118,9 +172,12 @@ int lustre_pack_reply (struct ptlrpc_request *req,
         msg_len = lustre_msg_size (count, lens);
         size = offsetof (struct ptlrpc_reply_state, rs_msg) + msg_len;
         OBD_ALLOC (rs, size);
-        if (rs == NULL)
-                RETURN (-ENOMEM);
-
+        if (unlikely(rs == NULL)) {
+                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_srv_ni->sni_service,
+                                         size);
+                if (!rs)
+                        RETURN (-ENOMEM);
+        }
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
@@ -152,7 +209,18 @@ void lustre_free_reply_state (struct ptlrpc_reply_state *rs)
         LASSERT (list_empty(&rs->rs_exp_list));
         LASSERT (list_empty(&rs->rs_obd_list));
 
-        OBD_FREE (rs, rs->rs_size);
+        if (unlikely(rs->rs_prealloc)) {
+                unsigned long flags;
+                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+
+                spin_lock_irqsave(&svc->srv_lock, flags);
+                list_add(&rs->rs_list,
+                         &svc->srv_free_rs_list);
+                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                wake_up(&svc->srv_free_rs_waitq);
+        } else {
+                OBD_FREE(rs, rs->rs_size);
+        }
 }
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
@@ -251,6 +319,22 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
 
         RETURN(0);
 }
+
+/**
+ * lustre_msg_buflen - return the length of buffer @n in message @m
+ * @m - lustre_msg (request or reply) to look at
+ * @n - message index (base 0)
+ *
+ * returns zero for non-existent message indices
+ */
+int lustre_msg_buflen(struct lustre_msg *m, int n)
+{
+        if (n >= m->bufcount)
+                return 0;
+
+        return m->buflens[n];
+}
+EXPORT_SYMBOL(lustre_msg_buflen);
 
 void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
 {
@@ -679,9 +763,10 @@ void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d)
         /* the lock data is a union and the first two fields are always an
          * extent so it's ok to process an LDLM_EXTENT and LDLM_FLOCK lock
          * data the same way. */
-        __swab64s (&d->l_flock.start);
-        __swab64s (&d->l_flock.end);
-        __swab32s (&d->l_flock.pid);
+        __swab64s(&d->l_extent.start);
+        __swab64s(&d->l_extent.end);
+        __swab64s(&d->l_extent.gid);
+        __swab32s(&d->l_flock.pid);
 }
 
 void lustre_swab_ldlm_intent (struct ldlm_intent *i)
@@ -751,42 +836,6 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
         if (hdr->llh_hdr.lrh_type == LLOG_HDR_MAGIC)
                 return 0;
         return -1;
-}
-
-void lustre_swab_llogd_body (struct llogd_body *d)
-{
-        __swab64s (&d->lgd_logid.lgl_oid);
-        __swab64s (&d->lgd_logid.lgl_ogr);
-        __swab32s (&d->lgd_logid.lgl_ogen);
-        __swab32s (&d->lgd_ctxt_idx);
-        __swab32s (&d->lgd_llh_flags);
-        __swab32s (&d->lgd_index);
-        __swab32s (&d->lgd_saved_index);
-        __swab32s (&d->lgd_len);
-        __swab64s (&d->lgd_cur_offset);
-}
-
-void lustre_swab_llog_hdr (struct llog_log_hdr *h)
-{
-        __swab32s (&h->llh_hdr.lrh_index);
-        __swab32s (&h->llh_hdr.lrh_len);
-        __swab32s (&h->llh_hdr.lrh_type);
-        __swab64s (&h->llh_timestamp);
-        __swab32s (&h->llh_count);
-        __swab32s (&h->llh_bitmap_offset);
-        __swab32s (&h->llh_flags);
-        __swab32s (&h->llh_tail.lrt_index);
-        __swab32s (&h->llh_tail.lrt_len);
-}
-
-void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
-{
-        __swab64s (&d->lgdc_gen.mnt_cnt);
-        __swab64s (&d->lgdc_gen.conn_cnt);
-        __swab64s (&d->lgdc_logid.lgl_oid);
-        __swab64s (&d->lgdc_logid.lgl_ogr);
-        __swab32s (&d->lgdc_logid.lgl_ogen);
-        __swab32s (&d->lgdc_ctxt_idx);
 }
 
 void lustre_swab_qdata(struct qunit_data *d)
@@ -869,8 +918,6 @@ void lustre_assert_wire_constants(void)
                  (long long)OST_LAST_OPC);
         LASSERTF(OBD_OBJECT_EOF == 0xffffffffffffffffULL," found %lld\n",
                  (long long)OBD_OBJECT_EOF);
-        LASSERTF(OST_REQ_HAS_OA1 == 1, " found %lld\n",
-                 (long long)OST_REQ_HAS_OA1);
         LASSERTF(MDS_GETATTR == 33, " found %lld\n",
                  (long long)MDS_GETATTR);
         LASSERTF(MDS_GETATTR_NAME == 34, " found %lld\n",
@@ -1883,7 +1930,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_res_id *)0)->name[4]));
 
         /* Checks for struct ldlm_extent */
-        LASSERTF((int)sizeof(struct ldlm_extent) == 16, " found %lld\n",
+        LASSERTF((int)sizeof(struct ldlm_extent) == 24, " found %lld\n",
                  (long long)(int)sizeof(struct ldlm_extent));
         LASSERTF((int)offsetof(struct ldlm_extent, start) == 0, " found %lld\n",
                  (long long)(int)offsetof(struct ldlm_extent, start));
@@ -1893,6 +1940,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_extent, end));
         LASSERTF((int)sizeof(((struct ldlm_extent *)0)->end) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_extent *)0)->end));
+        LASSERTF((int)offsetof(struct ldlm_extent, gid) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_extent, gid));
+        LASSERTF((int)sizeof(((struct ldlm_extent *)0)->gid) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_extent *)0)->gid));
 
         /* Checks for struct ldlm_flock */
         LASSERTF((int)sizeof(struct ldlm_flock) == 32, " found %lld\n",

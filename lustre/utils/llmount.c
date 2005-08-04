@@ -26,11 +26,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
 #include <getopt.h>
+#include <sys/utsname.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
@@ -66,6 +68,7 @@ void usage(FILE *out)
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
+                "\t\tflock/noflock: enable/disable flock support\n"
                 "\t\tnettype={tcp,elan,iibnal,lonal}: network type\n"
                 "\t\tcluster_id=0xNNNN: cluster this node is part of\n"
                 "\t\tlocal_nid=0xNNNN: client ID (default ipaddr or nodenum)\n"
@@ -147,15 +150,26 @@ init_options(struct lustre_mount_data *lmd)
 int
 print_options(struct lustre_mount_data *lmd)
 {
+#if CRAY_PORTALS
+        const int   cond_print = (lmd->lmd_nal != CRAY_KB_SSNAL);
+#else
+        const int   cond_print = 1;
+#endif
         int i;
 
         printf("mds:             %s\n", lmd->lmd_mds);
         printf("profile:         %s\n", lmd->lmd_profile);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
-        printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+
+        if (cond_print)
+                printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
+
         printf("nal:             %x\n", lmd->lmd_nal);
-        printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
-        printf("port:            %d\n", lmd->lmd_port);
+
+        if (cond_print) {
+                printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
+                printf("port:            %d\n", lmd->lmd_port);
+        }
 
         for (i = 0; i < route_index; i++)
                 printf("route:           "LPX64" : "LPX64" - "LPX64"\n",
@@ -234,40 +248,46 @@ struct opt_map {
         const char *opt;        /* option name */
         int skip;               /* skip in mtab option string */
         int inv;                /* true if flag value should be inverted */
-        int mask;               /* flag mask value */
+        int ms_mask;            /* MS flag mask value */
+        int lmd_mask;           /* LMD flag mask value */
 };
 
 static const struct opt_map opt_map[] = {
-  { "defaults", 0, 0, 0         },      /* default options */
-  { "rw",       1, 1, MS_RDONLY },      /* read-write */
-  { "ro",       0, 0, MS_RDONLY },      /* read-only */
-  { "exec",     0, 1, MS_NOEXEC },      /* permit execution of binaries */
-  { "noexec",   0, 0, MS_NOEXEC },      /* don't execute binaries */
-  { "suid",     0, 1, MS_NOSUID },      /* honor suid executables */
-  { "nosuid",   0, 0, MS_NOSUID },      /* don't honor suid executables */
-  { "dev",      0, 1, MS_NODEV  },      /* interpret device files  */
-  { "nodev",    0, 0, MS_NODEV  },      /* don't interpret devices */
-  { "async",    0, 1, MS_SYNCHRONOUS},  /* asynchronous I/O */
-  { "auto",     0, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0, 0         },      /* Can  only be mounted explicitly */
-  { "nousers",  0, 1, 0         },      /* Forbid ordinary user to mount */
-  { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
-  { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
-  { "_netdev",  0, 0, 0         },      /* Device accessible only via network */
-  { NULL,       0, 0, 0         }
+  { "defaults", 0, 0, 0, 0         },      /* default options */
+  { "rw",       1, 1, MS_RDONLY, 0 },      /* read-write */
+  { "ro",       0, 0, MS_RDONLY, 0 },      /* read-only */
+  { "exec",     0, 1, MS_NOEXEC, 0 },      /* permit execution of binaries */
+  { "noexec",   0, 0, MS_NOEXEC, 0 },      /* don't execute binaries */
+  { "suid",     0, 1, MS_NOSUID, 0 },      /* honor suid executables */
+  { "nosuid",   0, 0, MS_NOSUID, 0 },      /* don't honor suid executables */
+  { "dev",      0, 1, MS_NODEV,  0 },      /* interpret device files  */
+  { "nodev",    0, 0, MS_NODEV,  0 },      /* don't interpret devices */
+  { "async",    0, 1, MS_SYNCHRONOUS, 0},  /* asynchronous I/O */
+  { "auto",     0, 0, 0, 0         },      /* Can be mounted using -a */
+  { "noauto",   0, 0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "nousers",  0, 1, 0, 0         },      /* Forbid ordinary user to mount */
+  { "nouser",   0, 1, 0, 0         },      /* Forbid ordinary user to mount */
+  { "noowner",  0, 1, 0, 0         },      /* Device owner has no special privs */
+  { "_netdev",  0, 0, 0, 0         },      /* Device accessible only via network */
+  { "flock",    0, 0, 0, LMD_FLG_FLOCK},   /* Enable flock support */
+  { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
+  { NULL,       0, 0, 0, 0         }
 };
 /****************************************************************************/
 
-static int parse_one_option(const char *check, int *flagp)
+static int parse_one_option(const char *check, int *ms_flags, int *lmd_flags)
 {
         const struct opt_map *opt;
 
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
                 if (strcmp(check, opt->opt) == 0) {
-                        if (opt->inv)
-                                *flagp &= ~(opt->mask);
-                        else
-                                *flagp |= opt->mask;
+                        if (opt->inv) {
+                                *ms_flags &= ~(opt->ms_mask);
+                                *lmd_flags &= ~(opt->lmd_mask);
+                        } else {
+                                *ms_flags |= opt->ms_mask;
+                                *lmd_flags |= opt->lmd_mask;
+                        }
                         return 1;
                 }
         }
@@ -328,13 +348,15 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
+                        } else if (!strcmp(opt, "sec")) {
+                                /* do nothing */
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'\n",
                                         progname, opt);
                                 usage(stderr);
                         }
                 } else {
-                        if (parse_one_option(opt, flagp))
+                        if (parse_one_option(opt, flagp, &lmd->lmd_flags))
                                 continue;
 
                         fprintf(stderr, "%s: unknown option '%s'\n",
@@ -382,22 +404,63 @@ set_local(struct lustre_mount_data *lmd)
                         progname, lmd->lmd_nal);
                 return 1;
 
+#if CRAY_PORTALS
+        case CRAY_KB_SSNAL:
+                return 0;
+
+        case CRAY_KB_ERNAL:
+#else
         case SOCKNAL:
                 /* We need to do this before the mount is started if routing */
-                system("/sbin/modprobe ksocknal");
+                system("/sbin/modprobe -q ksocknal");
         case TCPNAL:
         case OPENIBNAL:
         case IIBNAL:
         case VIBNAL:
         case RANAL:
+#endif
+        {
+                struct utsname uts;
+
                 rc = gethostname(buf, sizeof(buf) - 1);
                 if (rc) {
-                        fprintf (stderr, "%s: can't get local buf: %d\n",
-                                 progname, rc);
+                        fprintf(stderr, "%s: can't get hostname: %s\n",
+                                progname, strerror(rc));
                         return rc;
                 }
+
+                rc = uname(&uts);
+                /* for 2.6 kernels, reserve at least 8MB free, or we will
+                 * go OOM during heavy read load */
+                if (rc == 0 && strncmp(uts.release, "2.6", 3) == 0) {
+                        int f, minfree = 32768;
+                        char name[40], val[40];
+                        FILE *meminfo;
+
+                        meminfo = fopen("/proc/meminfo", "r");
+                        if (meminfo != NULL) {
+                                while (fscanf(meminfo, "%s %s %*s\n", name, val) != EOF) {
+                                        if (strcmp(name, "MemTotal:") == 0) {
+                                                f = strtol(val, NULL, 0);
+                                                if (f > 0 && f < 8 * minfree)
+                                                        minfree = f / 16;
+                                                break;
+                                        }
+                                }
+                                fclose(meminfo);
+                        }
+                        f = open("/proc/sys/vm/min_free_kbytes", O_WRONLY);
+                        if (f >= 0) {
+                                sprintf(val, "%d", minfree);
+                                write(f, val, strlen(val));
+                                close(f);
+                        }
+                }
                 break;
-        case QSWNAL: {
+        }
+#if !CRAY_PORTALS
+        case QSWNAL:
+        {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
                                   "/proc/elan/device0/position",
@@ -405,7 +468,7 @@ set_local(struct lustre_mount_data *lmd)
                 int   i = 0;
 
                 /* We need to do this before the mount is started if routing */
-                system("/sbin/modprobe kqswnal");
+                system("/sbin/modprobe -q kqswnal");
                 do {
                         rc = get_local_elan_id(pfiles[i], buf);
                 } while (rc != 0 && pfiles[++i] != NULL);
@@ -427,6 +490,7 @@ set_local(struct lustre_mount_data *lmd)
                 }
                 break;
         }
+#endif
         }
 
         if (ptl_parse_nid (&nid, ptr) != 0) {
@@ -450,6 +514,13 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         progname, lmd->lmd_nal);
                 return 1;
 
+#if CRAY_PORTALS
+        case CRAY_KB_SSNAL:
+                lmd->lmd_server_nid = strtoll(hostname,0,0);
+                return 0;
+
+        case CRAY_KB_ERNAL:
+#else
         case IIBNAL:
                 if (lmd->lmd_server_nid != PTL_NID_ANY)
                         break;
@@ -466,6 +537,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
         case OPENIBNAL:
         case VIBNAL:
         case RANAL:
+#endif
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
@@ -481,6 +553,7 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                         return (1);
                 }
                 break;
+#if !CRAY_PORTALS
         case QSWNAL: {
                 char buf[64];
 
@@ -502,8 +575,8 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 
                 break;
         }
+#endif
         }
-
         return 0;
 }
 
@@ -516,12 +589,12 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd,
         int rc;
 
         if (lmd_bad_magic(lmd))
-                return -EINVAL;
+                return 4;
 
         if (strlen(source) >= sizeof(buf)) {
                 fprintf(stderr, "%s: host:/mds/profile argument too long\n",
                         progname);
-                return -EINVAL;
+                return 1;
         }
         strcpy(buf, source);
         if ((s = strchr(buf, ':'))) {

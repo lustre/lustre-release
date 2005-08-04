@@ -39282,7 +39282,7 @@ Index: linux-2.4.29/arch/um/os-Linux/file.c
 +{
 +	int err;
 +
-+	err = ftruncate(fd, len);
++	err = ftruncate64(fd, len);
 +	if(err)
 +		return(-errno);
 +	return(0);
@@ -39292,7 +39292,7 @@ Index: linux-2.4.29/arch/um/os-Linux/file.c
 +{
 +	int err;
 +
-+	err = truncate(file, len);
++	err = truncate64(file, len);
 +	if(err)
 +		return(-errno);
 +	return(0);

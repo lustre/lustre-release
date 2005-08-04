@@ -12,7 +12,7 @@
 #include <sys/ioctl.h>
 
 #if 0
-#include <linux/extN_fs.h>
+#include <linux/ldiskfs_fs.h>
 #endif
 #include <liblustre.h>
 #include <linux/lustre_lib.h>
@@ -153,7 +153,7 @@ int main(int argc, char ** argv)
                                        strerror(errno));
                                 break;
                         }
-                        rc = ioctl(fd, EXTN_IOC_GETEA, NULL);
+                        rc = ioctl(fd, LDISKFS_IOC_GETEA, NULL);
                         if (rc < 0) {
                                 printf("ioctl(%s) error: %s\n", filename,
                                        strerror(errno));

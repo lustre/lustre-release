@@ -7,20 +7,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_FILTER
@@ -38,20 +41,29 @@
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;
-        char *option = NULL;
+        unsigned long page;
+        int rc;
 
         if (lcfg->lcfg_bufcount < 3 || LUSTRE_CFG_BUFLEN(lcfg, 2) < 1)
                 RETURN(-EINVAL);
 
-        /* for extN/ext3 filesystem, we must mount it with 'writeback' mode */
+        /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
+        page = get_zeroed_page(GFP_KERNEL);
+        if (!page)
+                RETURN(-ENOMEM);
+
+        /* for ext3/ldiskfs filesystem, we must mount in 'writeback' mode */
         if (!strcmp(lustre_cfg_string(lcfg, 2), "ldiskfs"))
-                option = "data=writeback";
+                strcpy((void *)page, "data=writeback");
         else if (!strcmp(lustre_cfg_string(lcfg, 2), "ext3"))
-                option = "data=writeback,asyncdel";
+                strcpy((void *)page, "data=writeback,asyncdel");
         else
                 LBUG(); /* just a reminder */
 
-        return filter_common_setup(obd, len, buf, option);
+        rc = filter_common_setup(obd, len, buf, (void *)page);
+        free_page(page);
+
+        return rc;
 }
 
 int filter_san_preprw(int cmd, struct obd_export *exp, struct obdo *oa,

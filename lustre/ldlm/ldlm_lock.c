@@ -5,20 +5,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -45,7 +48,8 @@ char *ldlm_lockname[] = {
         [LCK_PR] "PR",
         [LCK_CW] "CW",
         [LCK_CR] "CR",
-        [LCK_NL] "NL"
+        [LCK_NL] "NL",
+        [LCK_GROUP] "GROUP"
 };
 char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
@@ -122,6 +126,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         if (atomic_dec_and_test(&lock->l_refc)) {
                 struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
+                struct obd_export *export = NULL;
 
                 l_lock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
@@ -134,8 +139,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 ldlm_resource_putref(lock->l_resource);
                 lock->l_resource = NULL;
-                if (lock->l_export)
-                        class_export_put(lock->l_export);
+                export = lock->l_export;
 
                 if (lock->l_parent)
                         LDLM_LOCK_PUT(lock->l_parent);
@@ -145,6 +149,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
                 l_unlock(&ns->ns_lock);
+                if (export)
+                        class_export_put(export);
         }
 
         EXIT;
@@ -155,6 +161,7 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
         ENTRY;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (!list_empty(&lock->l_lru)) {
+                LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
                 list_del_init(&lock->l_lru);
                 lock->l_resource->lr_namespace->ns_nr_unused--;
                 LASSERT(lock->l_resource->lr_namespace->ns_nr_unused >= 0);
@@ -248,6 +255,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
 
         atomic_set(&lock->l_refc, 2);
         INIT_LIST_HEAD(&lock->l_children);
+        INIT_LIST_HEAD(&lock->l_childof);
         INIT_LIST_HEAD(&lock->l_res_link);
         INIT_LIST_HEAD(&lock->l_lru);
         INIT_LIST_HEAD(&lock->l_export_chain);
@@ -433,7 +441,7 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
         ldlm_lock_remove_from_lru(lock);
         if (mode & (LCK_NL | LCK_CR | LCK_PR))
                 lock->l_readers++;
-        if (mode & (LCK_EX | LCK_CW | LCK_PW))
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
         LDLM_LOCK_GET(lock);
@@ -453,7 +461,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
         }
-        if (mode & (LCK_EX | LCK_CW | LCK_PW)) {
+        if (mode & (LCK_EX | LCK_CW | LCK_PW | LCK_GROUP)) {
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
@@ -586,6 +594,11 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     (lock->l_policy_data.l_extent.start >
                      policy->l_extent.start ||
                      lock->l_policy_data.l_extent.end < policy->l_extent.end))
+                        continue;
+
+                if (unlikely(mode == LCK_GROUP) &&
+                    lock->l_resource->lr_type == LDLM_EXTENT &&
+                    lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
                         continue;
 
                 if (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED))
@@ -923,7 +936,6 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list)
                                 (w->w_lock, &w->w_desc, w->w_data,
                                  LDLM_CB_BLOCKING);
                 } else if (w->w_lock->l_completion_ast != NULL) {
-                        LASSERT(w->w_lock->l_completion_ast != NULL);
                         rc = w->w_lock->l_completion_ast(w->w_lock, w->w_flags,
                                                          w->w_data);
                 } else {
@@ -1090,15 +1102,24 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         int granted = 0;
+        int old_mode, rc;
+        ldlm_error_t err;
         ENTRY;
 
-        LBUG();
+        if (new_mode == lock->l_granted_mode) { // No changes? Just return.
+                *flags |= LDLM_FL_BLOCK_GRANTED;
+                RETURN(lock->l_resource);
+        }
+
+        LASSERTF(new_mode == LCK_PW && lock->l_granted_mode == LCK_PR,
+                 "new_mode %u, granted %u\n", new_mode, lock->l_granted_mode);
 
         res = lock->l_resource;
         ns = res->lr_namespace;
 
         l_lock(&ns->ns_lock);
 
+        old_mode = lock->l_req_mode;
         lock->l_req_mode = new_mode;
         ldlm_resource_unlink_lock(lock);
 
@@ -1109,6 +1130,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 } else {
                         /* This should never happen, because of the way the
                          * server handles conversions. */
+                        LDLM_ERROR(lock, "Erroneous flags %d on local lock\n",
+                                   *flags);
                         LBUG();
 
                         res->lr_tmp = &rpc_list;
@@ -1120,10 +1143,20 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                 lock->l_completion_ast(lock, 0, NULL);
                 }
         } else {
-                /* FIXME: We should try the conversion right away and possibly
-                 * return success without the need for an extra AST */
-                ldlm_resource_add_lock(res, &res->lr_converting, lock);
-                *flags |= LDLM_FL_BLOCK_CONV;
+                int pflags = 0;
+                ldlm_processing_policy policy;
+                policy = ldlm_processing_policy_table[res->lr_type];
+                res->lr_tmp = &rpc_list;
+                rc = policy(lock, &pflags, 0, &err);
+                res->lr_tmp = NULL;
+                if (rc == LDLM_ITER_STOP) {
+                        lock->l_req_mode = old_mode;
+                        ldlm_resource_add_lock(res, &res->lr_granted, lock);
+                        res = NULL;
+                } else {
+                        *flags |= LDLM_FL_BLOCK_GRANTED;
+                        granted = 1;
+                }
         }
 
         l_unlock(&ns->ns_lock);

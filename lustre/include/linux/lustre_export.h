@@ -12,7 +12,7 @@ struct mds_client_data;
 
 struct mds_export_data {
         struct list_head        med_open_head;
-        spinlock_t              med_open_lock;
+        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
         struct mds_client_data *med_mcd;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
@@ -68,6 +68,7 @@ struct obd_export {
         __u64                     exp_connect_flags;
         int                       exp_flags;
         unsigned int              exp_failed:1,
+                                  exp_disconnected:1,
                                   exp_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {

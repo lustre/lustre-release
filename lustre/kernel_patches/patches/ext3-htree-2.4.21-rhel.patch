@@ -1328,7 +1328,7 @@ Index: linux-2.4.21/fs/ext3/namei.c
  			ret = bh;
  			goto cleanup_and_exit;
  		} else {
-@@ -198,6 +863,66 @@
+@@ -198,6 +863,74 @@
  	return ret;
  }
  
@@ -1347,17 +1347,25 @@ Index: linux-2.4.21/fs/ext3/namei.c
 +	int namelen = dentry->d_name.len;
 +	const u8 *name = dentry->d_name.name;
 +	struct inode *dir = dentry->d_parent->d_inode;
-+	
++
 +	sb = dir->i_sb;
-+	if (!(frame = dx_probe (dentry, 0, &hinfo, frames, err)))
-+		return NULL;
++	/* NFS may look up ".." - look at dx_root directory block */
++	if (namelen > 2 || name[0] != '.'||(name[1] != '.' && name[1] != '\0')){
++		if (!(frame = dx_probe(dentry, 0, &hinfo, frames, err)))
++			return NULL;
++	} else {
++		frame = frames;
++		frame->bh = NULL;			/* for dx_release() */
++		frame->at = (struct dx_entry *)frames;	/* hack for zero entry*/
++		dx_set_block(frame->at, 0);		/* dx_root block is 0 */
++	}
 +	hash = hinfo.hash;
 +	do {
 +		block = dx_get_block(frame->at);
 +		if (!(bh = ext3_bread (NULL,dir, block, 0, err)))
 +			goto errout;
 +		de = (struct ext3_dir_entry_2 *) bh->b_data;
-+		top = (struct ext3_dir_entry_2 *) ((char *) de + sb->s_blocksize -
++		top = (struct ext3_dir_entry_2 *)((char *)de + sb->s_blocksize -
 +				       EXT3_DIR_REC_LEN(0));
 +		for (; de < top; de = ext3_next_entry(de))
 +		if (ext3_match (namelen, name, de)) {
@@ -2521,16 +2529,3 @@ Index: linux-2.4.21/include/linux/ext3_jbd.h
  int
  ext3_mark_iloc_dirty(handle_t *handle, 
  		     struct inode *inode,
-Index: linux-2.4.21/lib/rbtree.c
-===================================================================
---- linux-2.4.21.orig/lib/rbtree.c	2004-09-11 10:16:18.000000000 -0400
-+++ linux-2.4.21/lib/rbtree.c	2004-09-16 19:40:16.000000000 -0400
-@@ -17,6 +17,8 @@
-   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- 
-   linux/lib/rbtree.c
-+
-+  rb_get_first and rb_get_next written by Theodore Ts'o, 9/8/2002
- */
- 
- #include <linux/rbtree.h>

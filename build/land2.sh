@@ -15,7 +15,7 @@ if [ -f "$CONFLICTS" ] ; then
     exit 
 fi
 
-#cvs update $dir 2>&1 | grep "^M" && echo "uncommitted changes" && exit 1
+cvs update $dir 2>&1 | grep "^M" && echo "uncommitted changes" && exit 1
 
 echo -n "Tagging as ${CHILD}_BASE_$date ..."
 $CVS tag -F ${CHILD}_BASE_$date $dir

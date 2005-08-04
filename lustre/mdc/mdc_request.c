@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -474,7 +477,14 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
-                LASSERT(mod->mod_open_req->rq_type != LI_POISON);
+                if (mod->mod_open_req->rq_type == LI_POISON) {
+                        /* FIXME This should be an ASSERT, but until we
+                           figure out why it can be poisoned here, give 
+                           a reasonable return. bug 6155 */
+                        CERROR("LBUG POISONED req %p!\n", mod->mod_open_req);
+                        ptlrpc_free_req(req);
+                        GOTO(out, rc = -EIO);
+                }
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
@@ -611,97 +621,6 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
         return rc;
 }
 
-static int mdc_quotacheck(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        struct ptlrpc_request *req;
-        struct obd_quotactl *body;
-        int size = sizeof(*body);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_QUOTACHECK, 1, &size,
-                              NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
-
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
-        memcpy(body, oqctl, sizeof(*body));
-
-        req->rq_replen = lustre_msg_size(0, NULL);
-
-        spin_lock(&cli->cl_qchk_lock);
-        cli->cl_qchk_stat = CL_QUOTACHECKING;
-        spin_unlock(&cli->cl_qchk_lock);
-        rc = ptlrpc_queue_wait(req);
-        if (rc) {
-                spin_lock(&cli->cl_qchk_lock);
-                cli->cl_qchk_stat = rc;
-                spin_unlock(&cli->cl_qchk_lock);
-        }
-out:
-        ptlrpc_req_finished(req);
-        RETURN (rc);
-}
-
-static int mdc_poll_quotacheck(struct obd_export *exp,
-                               struct if_quotacheck *qchk)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        int stat;
-        ENTRY;
-                                                                                                                 
-        spin_lock(&cli->cl_qchk_lock);
-        stat = cli->cl_qchk_stat;
-        spin_unlock(&cli->cl_qchk_lock);
-                                                                                                                 
-        qchk->stat = stat;
-        if (stat == CL_QUOTACHECKING) {
-                qchk->stat = -ENODATA;
-                stat = 0;
-        } else if (stat) {
-                if (qchk->stat > CL_QUOTACHECKING)
-                        qchk->stat = stat = -EINTR;
-                                                                                                                 
-                strncpy(qchk->obd_type, LUSTRE_MDS_NAME, 10);
-                qchk->obd_uuid = cli->cl_import->imp_target_uuid;
-        }
-        RETURN(stat);
-}
-
-static int mdc_quotactl(struct obd_export *exp, struct obd_quotactl *oqctl)
-{
-        struct ptlrpc_request *req;
-        struct obd_quotactl *oqc;
-        int size = sizeof(*oqctl);
-        int rc;
-        ENTRY;
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_QUOTACTL, 1, &size,
-                              NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
-
-        memcpy(lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*oqctl)), oqctl, size);
-
-        req->rq_replen = lustre_msg_size(1, &size);
-
-        rc = ptlrpc_queue_wait(req);
-        if (!rc) {
-                oqc = lustre_swab_repbuf(req, 0, sizeof (*oqc),
-                                         lustre_swab_obd_quotactl);
-                if (oqc == NULL) {
-                        CERROR ("Can't unpack mds_body\n");
-                        GOTO(out, rc = -EPROTO);
-                }
-
-                memcpy(oqctl, oqc, sizeof(*oqctl));
-        }
-out:
-        ptlrpc_req_finished(req);
-        RETURN (rc);
-}
-
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -715,10 +634,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_INC_USE_COUNT;
 #else
-	if (!try_module_get(THIS_MODULE)) {
-		CERROR("Can't get module. Is it alive?");
-		return -EINVAL;
-	}
+        if (!try_module_get(THIS_MODULE)) {
+                CERROR("Can't get module. Is it alive?");
+                return -EINVAL;
+        }
 #endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
@@ -754,7 +673,7 @@ out:
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
 #else
-	module_put(THIS_MODULE);
+        module_put(THIS_MODULE);
 #endif
 
         return rc;
@@ -1040,6 +959,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
 {
         struct obd_device *obd = mdc_exp->exp_obd;
         struct client_obd *cli = &obd->u.cli;
+        struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC };
         struct lov_desc desc;
         __u32 valsize = sizeof(desc);
         int rc, size;
@@ -1054,13 +974,9 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         if (rc)
                 RETURN(rc);
 
-        /* If default_stripe_count is zero we stripe over all OSTs */
-        if (desc.ld_default_stripe_count != 0) {
-                struct lov_stripe_md lsm = { .lsm_magic = LOV_MAGIC,
-                                             .lsm_stripe_count =
-                                                desc.ld_default_stripe_count };
-                size = obd_size_diskmd(lov_exp, &lsm);
-        }
+        lsm.lsm_stripe_count = desc.ld_default_stripe_count;
+        size = obd_size_diskmd(lov_exp, &lsm);
+
         if (cli->cl_default_mds_easize < size)
                 cli->cl_default_mds_easize = size;
 
@@ -1071,9 +987,13 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd)
+static int mdc_precleanup(struct obd_device *obd, int stage)
 {
         int rc = 0;
+        ENTRY;
+        
+        if (stage < 2) 
+                RETURN(0);
 
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)

@@ -40,6 +40,7 @@ jbd-2.4.19-pre1-jcberr.patch
 resched-2.4.19-pre1.patch
 ext3-xattr-ptr-arith-fix.patch
 vmalloc_to_page-2.4.19-bgl.patch 
+procfs-ndynamic-2.4.patch
 ext3-truncate-buffer-head.patch
 kallsyms-2.4-bgl.patch 
 kksymoops-2.4-bgl.patch 

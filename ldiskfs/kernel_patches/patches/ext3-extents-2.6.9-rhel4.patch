@@ -2556,16 +2556,16 @@ Index: linux-stage/include/linux/ext3_fs.h
 --- linux-stage.orig/include/linux/ext3_fs.h	2005-02-25 14:53:56.424908168 +0200
 +++ linux-stage/include/linux/ext3_fs.h	2005-02-25 15:39:12.841950008 +0200
 @@ -186,8 +186,9 @@
+ #define EXT3_NOTAIL_FL			0x00008000 /* don't merge file tail */
  #define EXT3_DIRSYNC_FL			0x00010000 /* dirsync behaviour (directories only) */
  #define EXT3_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
- #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
 +#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
+ #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
  
 -#define EXT3_FL_USER_VISIBLE		0x0003DFFF /* User visible flags */
 +#define EXT3_FL_USER_VISIBLE		0x000BDFFF /* User visible flags */
  #define EXT3_FL_USER_MODIFIABLE		0x000380FF /* User modifiable flags */
  
- /*
 @@ -237,6 +238,9 @@
  #endif
  #define EXT3_IOC_GETRSVSZ		_IOR('f', 5, long)

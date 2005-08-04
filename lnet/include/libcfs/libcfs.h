@@ -38,6 +38,9 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
+/* Has there been an LBUG? */
+extern unsigned int portals_catastrophe;
+
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
  */
@@ -71,6 +74,8 @@ extern unsigned int portal_printk;
 #define S_LMV         0x00800000
 #define S_CMOBD       0x01000000
 #define S_SEC         0x02000000
+#define S_GSS         0x04000000
+#define S_GKS         0x08000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf
@@ -115,7 +120,6 @@ extern unsigned int portal_printk;
 #endif
 
 #ifdef __KERNEL__
-#if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
         CHECK_STACK(CDEBUG_STACK);                                            \
@@ -141,9 +145,9 @@ do {                                                                          \
                                   cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
-                                          __FILE__, __FUNCTION__, __LINE__,   \
-                                          0, "skipped %d similar messages\n", \
-                                          cdebug_count);                      \
+                                          __FILE__, __FUNCTION__, __LINE__,0, \
+                                          "previously skipped %d similar "    \
+                                          "messages\n", cdebug_count);        \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (cfs_time_after(cfs_time_current(),                        \
@@ -158,16 +162,41 @@ do {                                                                          \
                 cdebug_next = cfs_time_current() + cdebug_delay;              \
         } else {                                                              \
                 portals_debug_msg(DEBUG_SUBSYSTEM,                            \
-                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  portal_debug &                              \
+                                  ~(D_EMERG|D_ERROR|D_WARNING|D_CONSOLE),     \
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, cdebug_format, ## a);         \
                 cdebug_count++;                                               \
         }                                                                     \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
-#define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
+#elif defined(LUSTRE_UTILS)
+
+#define CDEBUG(mask, format, a...)                                      \
+do {                                                                    \
+        if ((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE))       \
+                fprintf(stderr, "(%s:%d:%s()) " format,                 \
+                        __FILE__, __LINE__, __FUNCTION__, ## a);        \
+} while (0)
+#define CDEBUG_LIMIT CDEBUG
+
+#else  /* !__KERNEL__ && !LUSTRE_UTILS*/
+
+#define CDEBUG(mask, format, a...)                                      \
+do {                                                                    \
+        if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||   \
+            (portal_debug & (mask) &&                                   \
+             portal_subsystem_debug & DEBUG_SUBSYSTEM))                 \
+                fprintf(stderr, "(%s:%d:%s()) " format,                 \
+                        __FILE__, __LINE__, __FUNCTION__, ## a);        \
+} while (0)
+#define CDEBUG_LIMIT CDEBUG
+
+#endif /* !__KERNEL__ */
+
+#define CWARN(format, a...)          CDEBUG_LIMIT(D_WARNING, format, ## a)
+#define CERROR(format, a...)         CDEBUG_LIMIT(D_ERROR, format, ## a)
+#define CEMERG(format, a...)         CDEBUG_LIMIT(D_EMERG, format, ## a)
 
 #define LCONSOLE(mask, format, a...) CDEBUG(D_CONSOLE | (mask), format, ## a)
 #define LCONSOLE_INFO(format, a...)  CDEBUG_LIMIT(D_CONSOLE, format, ## a)
@@ -184,9 +213,8 @@ do {                                                                    \
         goto label;                                                     \
 } while (0)
 
-#define CDEBUG_ENTRY_EXIT (0)
-
-#ifdef CDEBUG_ENTRY_EXIT
+#define CDEBUG_ENTRY_EXIT 1
+#if CDEBUG_ENTRY_EXIT
 
 /*
  * if rc == NULL, we need to code as RETURN((void *)NULL), otherwise
@@ -215,41 +243,11 @@ do {                                                                    \
 #else /* !CDEBUG_ENTRY_EXIT */
 
 #define RETURN(rc) return (rc)
-#define ENTRY
-#define EXIT
+#define ENTRY                           do { } while (0)
+#define EXIT                            do { } while (0)
 
 #endif /* !CDEBUG_ENTRY_EXIT */
 
-#else /* !1 */
-#define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
-#define CERROR(format, a...)            printk(KERN_ERR format, ## a)
-#define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
-#define LCONSOLE(mask, format, a...)    printk(format, ## a)
-#define LCONSOLE_INFO(format, a...)     printk(KERN_INFO format, ## a)
-#define LCONSOLE_WARN(format, a...)     printk(KERN_WARNING format, ## a)
-#define LCONSOLE_ERROR(format, a...)    printk(KERN_ERROR format, ## a)
-#define LCONSOLE_EMERG(format, a...)    printk(KERN_EMERG format, ## a)
-#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
-#define RETURN(rc)                      return (rc)
-#define ENTRY                           do { } while (0)
-#define EXIT                            do { } while (0)
-#endif /* !1 */
-#else /* !__KERNEL__ */
-#define CDEBUG(mask, format, a...)      do { } while (0)
-#define LCONSOLE(mask, format, a...)    fprintf(stderr, format, ## a)
-#define CWARN(format, a...)             fprintf(stderr, format, ## a)
-#define CERROR(format, a...)            fprintf(stderr, format, ## a)
-#define CEMERG(format, a...)            fprintf(stderr, format, ## a)
-#define LCONSOLE_INFO(format, a...)     fprintf(stderr, format, ## a)
-#define LCONSOLE_WARN(format, a...)     fprintf(stderr, format, ## a)
-#define LCONSOLE_ERROR(format, a...)    fprintf(stderr, format, ## a)
-#define LCONSOLE_EMERG(format, a...)    fprintf(stderr, format, ## a)
-#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
-#define RETURN(rc)                      return (rc)
-#define ENTRY                           do { } while (0)
-#define EXIT                            do { } while (0)
-#endif /* !__KERNEL__ */
 
 #define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
 

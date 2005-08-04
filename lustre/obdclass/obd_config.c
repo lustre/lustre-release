@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * Config API
  *
@@ -81,7 +84,7 @@ int class_attach(struct lustre_cfg *lcfg)
 
         len = strlen(name) + 1;
         OBD_ALLOC(namecopy, len);
-        if (!namecopy) 
+        if (!namecopy)
                 GOTO(out, rc = -ENOMEM);
         memcpy(namecopy, name, len);
         cleanup_phase = 2; /* free obd_name */
@@ -127,7 +130,7 @@ int class_attach(struct lustre_cfg *lcfg)
                         GOTO(out, rc = -EINVAL);
         }
 
-        /* The attach is our first obd reference */
+        /* Detach drops this */
         atomic_set(&obd->obd_refcount, 1);
 
         obd->obd_attached = 1;
@@ -160,7 +163,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("Device %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
-        
+
         if (obd->obd_set_up) {
                 CERROR("Device %d already setup (type %s)\n",
                        obd->obd_minor, obd->obd_type->typ_name);
@@ -177,7 +180,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
         /* just leave this on forever.  I can't use obd_set_up here because
            other fns check that status, and we're not actually set up yet. */
-        obd->obd_starting = 1;  
+        obd->obd_starting = 1;
         spin_unlock(&obd->obd_dev_lock);
 
         exp = class_new_export(obd);
@@ -195,9 +198,14 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
+        spin_lock(&obd->obd_dev_lock);
+        /* cleanup drops this */
+        atomic_inc(&obd->obd_refcount);
+        spin_unlock(&obd->obd_dev_lock);
+
         CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
                obd->obd_name, obd->obd_uuid.uuid);
-        
+
         RETURN(0);
 
 err_exp:
@@ -210,28 +218,33 @@ err_exp:
 static int __class_detach(struct obd_device *obd)
 {
         int err = 0;
+        ENTRY;
 
-        if (OBP(obd, detach)) 
+        CDEBUG(D_CONFIG, "destroying obd %d (%s)\n",
+               obd->obd_minor, obd->obd_name);
+
+        if (OBP(obd, detach))
                 err = OBP(obd,detach)(obd);
-        
+
         if (obd->obd_name) {
                 OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                 obd->obd_name = NULL;
         } else {
                 CERROR("device %d: no name at detach\n", obd->obd_minor);
         }
-        
+
         LASSERT(OBT(obd));
         /* Attach took type refcount */
         obd->obd_type->typ_refcnt--;
         class_put_type(obd->obd_type);
         class_release_dev(obd);
-        return (err);
+        RETURN(err);
 }
 
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         ENTRY;
+
         if (obd->obd_set_up) {
                 CERROR("OBD device %d still set up\n", obd->obd_minor);
                 RETURN(-EBUSY);
@@ -245,7 +258,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
         obd->obd_attached = 0;
         spin_unlock(&obd->obd_dev_lock);
-        
+
         CDEBUG(D_IOCTL, "detach on obd %s (uuid %s)\n",
                obd->obd_name, obd->obd_uuid.uuid);
 
@@ -256,6 +269,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 static void dump_exports(struct obd_device *obd)
 {
         struct obd_export *exp, *n;
+        char ipbuf[PTL_NALFMT_SIZE];
 
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
                 struct ptlrpc_reply_state *rs;
@@ -269,8 +283,9 @@ static void dump_exports(struct obd_device *obd)
                         nreplies++;
                 }
 
-                CDEBUG(D_IOCTL, "%s: %p %s %d %d %d: %p %s\n",
+                CDEBUG(D_IOCTL, "%s: %p %s %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
+                       obd_export_nid2str(exp, ipbuf),
                        atomic_read(&exp->exp_refcount),
                        exp->exp_failed, nreplies, first_reply,
                        nreplies > 3 ? "..." : "");
@@ -281,8 +296,8 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         int err = 0;
         char *flag;
-
         ENTRY;
+
         OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
 
         if (!obd->obd_set_up) {
@@ -311,6 +326,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                        obd->obd_name);
                                 obd->obd_fail = 1;
                                 obd->obd_no_transno = 1;
+                                obd->obd_no_recov = 1;
                                 /* Set the obd readonly if we can */
                                 if (OBP(obd, iocontrol))
                                         obd_iocontrol(OBD_IOC_SET_READONLY,
@@ -322,14 +338,14 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                        *flag);
                         }
         }
-        
-        /* The two references that should be remaining are the
-         * obd_self_export and the attach reference. */
-        if (atomic_read(&obd->obd_refcount) > 2) {
+
+        /* The three references that should be remaining are the
+         * obd_self_export and the attach and setup references. */
+        if (atomic_read(&obd->obd_refcount) > 3) {
                 if (!(obd->obd_fail || obd->obd_force)) {
                         CERROR("OBD %s is still busy with %d references\n"
                                "You should stop active file system users,"
-                               " or use the --force option to cleanup.\n",  
+                               " or use the --force option to cleanup.\n",
                                obd->obd_name, atomic_read(&obd->obd_refcount));
                         dump_exports(obd);
                         GOTO(out, err = -EBUSY);
@@ -341,20 +357,18 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         LASSERT(obd->obd_self_export);
-        if (obd->obd_self_export) {
-               /* mds_precleanup will clean up the lov (and osc's)*/
-               err = obd_precleanup(obd);
-               if (err)
-                       GOTO(out, err);
-               obd->obd_self_export->exp_flags |= 
-                       (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
-                       (obd->obd_force ? OBD_OPT_FORCE : 0);
-               class_unlink_export(obd->obd_self_export);
-               obd->obd_self_export = NULL;
-        }
 
+        /* Precleanup stage 1, we must make sure all exports (other than the
+           self-export) get destroyed. */
+        err = obd_precleanup(obd, 1);
+        if (err)
+                CERROR("Precleanup %s returned %d\n",
+                       obd->obd_name, err);
+
+        class_decref(obd);
         obd->obd_set_up = 0;
         obd->obd_type->typ_refcnt--;
+
         RETURN(0);
 out:
         /* Allow a failed cleanup to try again. */
@@ -364,16 +378,45 @@ out:
 
 void class_decref(struct obd_device *obd)
 {
-        if (atomic_dec_and_test(&obd->obd_refcount)) {
-                int err;
-                CDEBUG(D_IOCTL, "finishing cleanup of obd %s (%s)\n",
+        int err;
+        int refs;
+
+        spin_lock(&obd->obd_dev_lock);
+        atomic_dec(&obd->obd_refcount);
+        refs = atomic_read(&obd->obd_refcount);
+        spin_unlock(&obd->obd_dev_lock);
+
+        CDEBUG(D_INFO, "Decref %s now %d\n", obd->obd_name, refs);
+
+        if ((refs == 1) && obd->obd_stopping) {
+                /* All exports (other than the self-export) have been
+                   destroyed; there should be no more in-progress ops
+                   by this point.*/
+                /* if we're not stopping, we didn't finish setup */
+                /* Precleanup stage 2,  do other type-specific
+                   cleanup requiring the self-export. */
+                err = obd_precleanup(obd, 2);
+                if (err)
+                        CERROR("Precleanup %s returned %d\n",
+                               obd->obd_name, err);
+                obd->obd_self_export->exp_flags |=
+                        (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                        (obd->obd_force ? OBD_OPT_FORCE : 0);
+                /* note that we'll recurse into class_decref again */
+                class_unlink_export(obd->obd_self_export);
+                return;
+        }
+
+        if (refs == 0) {
+                CDEBUG(D_CONFIG, "finishing cleanup of obd %s (%s)\n",
                        obd->obd_name, obd->obd_uuid.uuid);
                 LASSERT(!obd->obd_attached);
                 if (obd->obd_stopping) {
-                        /* If we're not stopping, we never set up */
+                        /* If we're not stopping, we were never set up */
                         err = obd_cleanup(obd);
                         if (err)
-                                CERROR("Cleanup returned %d\n", err);
+                                CERROR("Cleanup %s returned %d\n",
+                                       obd->obd_name, err);
                 }
                 err = __class_detach(obd);
                 if (err)
@@ -568,6 +611,10 @@ int class_process_config(struct lustre_cfg *lcfg)
                 CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n",
                        obd_timeout, lcfg->lcfg_num);
                 obd_timeout = max(lcfg->lcfg_num, 1U);
+                if (ldlm_timeout >= obd_timeout)
+                        ldlm_timeout = max(obd_timeout / 3, 1U);
+                else if (ldlm_timeout < 10 && obd_timeout >= ldlm_timeout * 4)
+                        ldlm_timeout = min(obd_timeout / 3, 30U);
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
@@ -575,7 +622,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                        lustre_cfg_string(lcfg, 1));
                 if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof obd_lustre_upcall)
                         GOTO(out, err = -EINVAL);
-                strncpy(obd_lustre_upcall, lustre_cfg_string(lcfg, 1), 
+                strncpy(obd_lustre_upcall, lustre_cfg_string(lcfg, 1),
                         sizeof (obd_lustre_upcall));
                 GOTO(out, err = 0);
         }
@@ -685,7 +732,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 struct portals_cfg *pcfg = (struct portals_cfg *)cfg_buf;
                 if (pcfg->pcfg_version != PORTALS_CFG_VERSION) {
                         if (pcfg->pcfg_version == __swab32(PORTALS_CFG_VERSION)) {
-                                CDEBUG(D_OTHER, "swabbing portals_cfg %p\n", 
+                                CDEBUG(D_OTHER, "swabbing portals_cfg %p\n",
                                        pcfg);
                                 lustre_swab_portals_cfg(pcfg);
                         } else {

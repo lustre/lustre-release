@@ -128,6 +128,7 @@ extern struct proc_dir_entry *proc_lustre_root;
 
 struct obd_device;
 struct file;
+struct obd_histogram;
 
 #ifdef LPROCFS
 
@@ -259,7 +260,6 @@ extern int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
                                     __u64 *val);
 int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode,
                            struct file_operations *seq_fops, void *data);
-struct obd_histogram;
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_clear(struct obd_histogram *oh);
@@ -303,7 +303,7 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-#define LPROCFS_INIT_VARS(name, vclass, vinstance) do {} while (0)
+#define LPROCFS_INIT_VARS(name, vclass, vinstance)
 #define lprocfs_init_vars(...) do {} while (0)
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
@@ -362,6 +362,14 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off,
 static inline
 int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                           int count, int *eof, void *data) { return 0; }
+static inline
+void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value) {}
+static inline
+void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value) {}
+static inline
+void lprocfs_oh_clear(struct obd_histogram *oh) {}
+static inline
+unsigned long lprocfs_oh_sum(struct obd_histogram *oh) { return 0; }
 static inline
 int lprocfs_counter_read(char *page, char **start, off_t off,
                          int count, int *eof, void *data) { return 0; }

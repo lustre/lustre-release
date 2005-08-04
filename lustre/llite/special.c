@@ -274,8 +274,13 @@ static int ll_special_open(struct inode *inode, struct file *filp)
         struct file_operations *sfops = filp->f_op;
         struct ptlrpc_request *req;
         struct lookup_intent *it;
+        struct ll_file_data *fd;
         int rc = -EINVAL, err;
         ENTRY;
+
+        fd = ll_file_data_get();
+        if (fd == NULL)
+                RETURN(-ENOMEM);
 
         if (pfop && *pfop) {
                 /* FIXME fops_get */
@@ -291,7 +296,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
 
         it = filp->f_it;
 
-        err = ll_local_open(filp, it);
+        err = ll_local_open(filp, it, fd);
         if (rc != 0) {
                 CERROR("error opening special file: rc %d\n", rc);
                 ll_mdc_close(ll_i2sbi(inode)->ll_mdc_exp, inode, filp);

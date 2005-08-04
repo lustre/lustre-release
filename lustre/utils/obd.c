@@ -48,7 +48,9 @@
 #include <errno.h>
 #include <string.h>
 
+#ifdef HAVE_ASM_PAGE_H
 #include <asm/page.h>           /* needed for PAGE_SIZE - rread */
+#endif
 
 #include <linux/obd_class.h>
 #include <portals/ptlctl.h>
@@ -83,7 +85,7 @@ static int max = sizeof(rawbuf);
 static int thread;
 static int nthreads;
 
-static uint32_t cur_device = MAX_OBD_DEVICES;
+static int cur_device = MAX_OBD_DEVICES;
 
 union lsm_buffer {
         char                 space [4096];
@@ -1397,11 +1399,11 @@ int jt_obd_test_brw(int argc, char **argv)
                                 case 'r':
                                         repeat_offset = 1;
                                         break;
-                                        
+
                                 case 'x':
                                         verify = 0;
                                         break;
-                                        
+
                                 default:
                                         fprintf (stderr, "Can't parse cmd '%s'\n",
                                                  argv[2]);
@@ -1490,7 +1492,7 @@ int jt_obd_test_brw(int argc, char **argv)
         len = pages * getpagesize();
         thr_offset = offset_pages * getpagesize();
         stride = len;
-        
+
         if (thread) {
                 pthread_mutex_lock (&shared_data->mutex);
                 if (nthr_per_obj != 0) {
@@ -2019,14 +2021,14 @@ int jt_llog_catlist(int argc, char **argv)
         IOC_INIT(data);
         data.ioc_inllen1 = max - size_round(sizeof(data));
         IOC_PACK(argv[0], data);
-        
+
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CATLOGLIST, buf);
-        if (rc == 0) 
+        if (rc == 0)
                 fprintf(stdout, "%s", ((struct obd_ioctl_data*)buf)->ioc_bulk);
         else
-                fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n", 
+                fprintf(stderr, "OBD_IOC_CATLOGLIST failed: %s\n",
                         strerror(errno));
-        
+
         return rc;
 }
 

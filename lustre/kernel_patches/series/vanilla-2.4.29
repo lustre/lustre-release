@@ -1,7 +1,3 @@
-uml-patch-2.4.29-1.patch
-uml-2.4.20-do_mmap_pgoff-fix.patch
-uml-export-end_iomem.patch
-uml-exprt-clearuser.patch
 configurable-x86-stack-2.4.20.patch
 configurable-x86_64-2.4.21.patch
 dev_read_only_2.4.20-rh.patch
@@ -38,8 +34,12 @@ ext3-truncate-buffer-head.patch
 inode-max-readahead-2.4.24.patch
 ext3-extents-2.4.29.patch
 ext3-extents-asyncdel-2.4.24.patch
-export_num_siblings.patch
 ext3-nlinks-2.4.24.patch
+ext3-ialloc-2.4.24.patch
 export-show_task-2.4-vanilla.patch 
 export-zap-page-range.patch
 remove-suid-2.4-rhel.patch
+kallsyms-2.4.29.patch
+fsprivate-2.4.patch
+nfsd_iallocsem.patch
+linux-2.4.24-jbd-handle-EIO.patch

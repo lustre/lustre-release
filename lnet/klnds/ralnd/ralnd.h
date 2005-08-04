@@ -115,6 +115,10 @@ typedef struct
         wait_queue_head_t       rad_waitq;      /* scheduler waits here */
         spinlock_t              rad_lock;       /* serialise */
         void                   *rad_scheduler;  /* scheduling thread */
+        unsigned int            rad_nphysmap;   /* # phys mappings */
+        unsigned int            rad_nppphysmap; /* # phys pages mapped */
+        unsigned int            rad_nvirtmap;   /* # virt mappings */
+        unsigned long           rad_nobvirtmap; /* # virt bytes mapped */
 } kra_device_t;
 
 typedef struct

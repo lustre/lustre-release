@@ -75,7 +75,8 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                 return 0;
 
         /* Apply the attributes in 'opaque' to this inode */
-        ll_update_inode(inode, md->body, md->lsm);
+        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                ll_update_inode(inode, md->body, md->lsm);
         return 1;
 }
 
@@ -189,7 +190,7 @@ int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                 { .name = {inode->i_ino, inode->i_generation} };
         struct obd_device *obddev = class_conn2obd(conn);
         ENTRY;
-        
+
         RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
                                       opaque));
 }
@@ -371,6 +372,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
         ll_inode2fid(&pfid, parent);
         ll_i2uctxt(&ctxt, parent, NULL);
+
+        it->it_create_mode &= ~current->fs->umask;
 
         rc = mdc_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
                              dentry->d_name.name, dentry->d_name.len, NULL, 0,
@@ -718,6 +721,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         struct obdo *oa;
         int rc;
         ENTRY;
+
+        oti.oti_thread = request->rq_svc_thread;
 
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));

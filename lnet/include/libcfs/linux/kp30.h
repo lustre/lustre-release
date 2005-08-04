@@ -93,6 +93,7 @@ static inline void our_cond_resched(void)
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
+        portals_catastrophe = 1;                                        \
         portals_debug_dumplog();                                        \
         portals_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
@@ -101,6 +102,7 @@ do {                                                                    \
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
+        portals_catastrophe = 1;                                        \
         portals_debug_dumpstack(NULL);                                  \
         portals_debug_dumplog();                                        \
         portals_run_lbug_upcall(file, func, line);                      \
@@ -296,7 +298,8 @@ extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) && defined(__KERNEL__)
+/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"

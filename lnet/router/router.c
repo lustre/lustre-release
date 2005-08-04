@@ -329,7 +329,7 @@ kpr_ge_isbetter (kpr_gateway_entry_t *ge1, kpr_gateway_entry_t *ge2)
                        atomic_read (&ge2->kpge_weight)) & significant_bits;
         int    rc = (diff > (significant_bits >> 1));
 
-        CDEBUG(D_NET, "[%p]"LPX64"=%d %s [%p]"LPX64"=%d\n",
+        CDEBUG(D_INFO, "[%p]"LPX64"=%d %s [%p]"LPX64"=%d\n",
                ge1, ge1->kpge_nid, atomic_read (&ge1->kpge_weight),
                rc ? ">" : "<",
                ge2, ge2->kpge_nid, atomic_read (&ge2->kpge_weight));
@@ -348,7 +348,7 @@ kpr_update_weight (kpr_gateway_entry_t *ge, int nob)
          * rounded and scaled to the portals header size, so we get better
          * use of the significant bits in kpge_weight. */
 
-        CDEBUG(D_NET, "gateway [%p]"LPX64" += %d\n", ge,
+        CDEBUG(D_INFO, "gateway [%p]"LPX64" += %d\n", ge,
                ge->kpge_nid, weight);
         
         atomic_add (weight, &ge->kpge_weight);
@@ -367,7 +367,7 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
         /* Caller wants to know if 'target_nid' can be reached via a gateway
          * ON HER OWN NETWORK */
 
-        CDEBUG (D_NET, "lookup "LPX64" from NAL %x\n", target_nid, 
+        CDEBUG (D_INFO, "lookup "LPX64" from NAL %x\n", target_nid, 
                 ne->kpne_interface.kprni_nalid);
         LASSERT (!in_interrupt());
 

@@ -6,7 +6,7 @@ Summary: Lustre File System
 Name: lustre
 Version: %{version}
 Release: @RELEASE@
-Copyright: GPL
+License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
@@ -104,12 +104,12 @@ rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
 make distdir distdir=lustre-source/lustre-%{version}
 
-%files
+cat >lustre.files <<EOF
 %attr(-, root, root) /sbin/mount.lustre
 %attr(-, root, root) /usr/sbin/*
 %attr(-, root, root) /usr/bin/*
 %attr(-, root, root) %{_libdir}/lustre/python
-%attr(-, root, root) /usr/share/lustre/examples
+%attr(-, root, root) /usr/share/lustre/*
 
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /etc/init.d/lustrefs
@@ -123,8 +123,18 @@ make distdir distdir=lustre-source/lustre-%{version}
 
 %attr(-, root, root) /etc/openldap/slapd-lustre.conf
 %attr(-, root, root) /etc/openldap/schema/lustre.schema
-%attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
-%attr(-, root, root) /usr/share/lustre/top.ldif
+EOF
+if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
+  echo '%attr(-, root, root) %{_libdir}/liblustre.a' >>lustre.files
+  echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
+fi
+
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
+  echo '%attr(-, root, root) %{_libdir}/lustre/snmp' >>lustre.files
+  echo '%attr(-, root, root) %{_datadir}/lustre/snmp/mibs' >>lustre.files
+fi
+
+%files -f lustre.files
 
 %files modules
 %attr(-, root, root) %doc COPYING
@@ -149,6 +159,7 @@ if [ $1 = 0 -a -f /etc/init.d/lustre ] ; then
 	/sbin/chkconfig --del lustre
 	/sbin/chkconfig --del lustrefs
 fi
+rm -f %{_libdir}/lustre/python/Lustre/*.pyc
 
 %post modules
 if [ ! -e /dev/obd ]; then
@@ -161,6 +172,27 @@ if [ -f /boot/System.map-%{kversion} ]; then
 	depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 else
 	depmod -ae %{kversion} || exit 0
+fi
+for ext in .local "" ; do
+	f=/etc/modprobe.conf$ext
+	if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
+		cat >> $f <<EOF
+install kptlrouter modprobe portals ; modprobe --ignore-install kptlrouter
+install ptlrpc modprobe ksocknal ; modprobe --ignore-install ptlrpc
+install llite modprobe lov osc ; modprobe --ignore-install llite
+alias lustre llite
+EOF
+		break
+	fi
+done
+f=/etc/modules.conf
+if [ -f $f ] && ! grep llite $f >/dev/null 2>/dev/null ; then
+	cat >> $f <<EOF
+add below kptlrouter portals
+add below ptlrpc ksocknal
+add below llite lov osc
+alias lustre llite
+EOF
 fi
 
 %postun modules

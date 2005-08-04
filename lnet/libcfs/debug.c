@@ -31,11 +31,12 @@
 
 #include "tracefile.h"
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS);
 EXPORT_SYMBOL(portal_subsystem_debug);
 
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
-                             D_RPCTRACE | D_VFSTRACE);
+                             D_RPCTRACE | D_VFSTRACE | D_CONFIG | D_IOCTL |
+                             D_CONSOLE);
 EXPORT_SYMBOL(portal_debug);
 
 unsigned int portal_printk;
@@ -43,6 +44,9 @@ EXPORT_SYMBOL(portal_printk);
 
 unsigned int portal_stack;
 EXPORT_SYMBOL(portal_stack);
+
+unsigned int portals_catastrophe;
+EXPORT_SYMBOL(portals_catastrophe);
 
 #ifdef __KERNEL__
 atomic_t portal_kmemory = ATOMIC_INIT(0);
@@ -198,7 +202,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
                 return str;
         }
 
-        switch(nal){
+        switch(NALID_FROM_IFACE(nal)){
 /* XXX this could be a nal method of some sort, 'cept it's config
  * dependent whether (say) socknal NIDs are actually IP addresses... */
 #if !CRAY_PORTALS
@@ -225,6 +229,11 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case LONAL:
                 snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
+                break;
+#else
+        case PTL_IFACE_SS:
+        case PTL_IFACE_SS_ACCEL:
+                snprintf(str, PTL_NALFMT_SIZE, "%u", (__u32)nid);
                 break;
 #endif
         default:

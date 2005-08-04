@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -70,6 +73,37 @@ void qos_shrink_lsm(struct lov_request_set *set)
         } else {
                 CWARN("'leaking' %d bytes\n", oldsize - newsize);
         }
+}
+
+int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
+{
+        struct lov_stripe_md *lsm = set->set_md;
+        struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
+        unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
+        int stripe, i, rc = -EIO;
+        ENTRY;
+
+        ost_idx = (req->rq_idx + 1) % ost_count; 
+        for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
+                if (lov->tgts[ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
+                        continue;
+                }
+                /* check if objects has been created on this ost */
+                for (stripe = req->rq_stripe; stripe >= 0; stripe--) {
+                        if (ost_idx == lsm->lsm_oinfo[stripe].loi_ost_idx)
+                                break;
+                }
+
+                if (stripe < 0) {
+                        req->rq_idx = ost_idx;
+                        rc = obd_create(lov->tgts[ost_idx].ltd_exp, req->rq_oa, 
+                                        &req->rq_md, set->set_oti);
+                        if (!rc)
+                                break;
+                }
+        }
+        RETURN(rc);
 }
 
 #define LOV_CREATE_RESEED_INTERVAL 1000

@@ -6,7 +6,7 @@ Index: linux-2.6.0/fs/ext3/inode.c
 ===================================================================
 --- linux-2.6.0.orig/fs/ext3/inode.c	2003-12-31 00:33:49.000000000 +0300
 +++ linux-2.6.0/fs/ext3/inode.c	2003-12-31 01:14:17.000000000 +0300
-@@ -3136,3 +3136,58 @@
+@@ -3136,3 +3136,62 @@
  		ret = ret2;
  	return ret;
  }
@@ -28,8 +28,9 @@ Index: linux-2.6.0/fs/ext3/inode.c
 +                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
 +                if (blocks[i] == 0) {
 +                        failed++;
-+                        created[i] = -1;
-+                } else {
++			if (created)
++				created[i] = -1;
++		} else if (created) {
 +                        created[i] = 0;
 +                }
 +        }
@@ -53,18 +54,21 @@ Index: linux-2.6.0/fs/ext3/inode.c
 +                               "block %ld\n", iblock);
 +                        goto out;
 +                }
++		/* Unmap any metadata buffers from the block mapping, to avoid
++		 * data corruption due to direct-write from Lustre being
++		 * clobbered by a later flush of the blockdev metadata buffer.*/
 +                if (buffer_new(&dummy))
 +                        unmap_underlying_metadata(dummy.b_bdev,
-+							dummy.b_blocknr);
++                                                      dummy.b_blocknr);
 +                blocks[i] = dummy.b_blocknr;
-+                created[i] = 1;
++		if (created)
++			created[i] = 1;
 +        }
 +
 + out:
 +	ext3_journal_stop(handle);
 +        return rc;
 +}
-+
 Index: linux-2.6.0/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.0.orig/fs/ext3/super.c	2003-12-31 00:33:49.000000000 +0300

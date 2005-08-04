@@ -1486,7 +1486,7 @@ init_tx:
         } else {
                 LASSERT (tx->tx_nsp == 1);
                 /* No RDMA: local completion happens now! */
-                CDEBUG(D_WARNING,"No data: immediate completion\n");
+                CWARN("No data: immediate completion\n");
                 lib_finalize (&kibnal_lib, NULL, libmsg,
                               status == 0 ? PTL_OK : PTL_FAIL);
         }
@@ -2449,7 +2449,7 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
                 goto out;
         }
 
-        CDEBUG(D_WARNING, "Connection %p -> "LPX64" ESTABLISHED.\n",
+        CWARN("Connection %p -> "LPX64" ESTABLISHED.\n",
                conn, conn->ibc_peer->ibp_nid);
 
 out:

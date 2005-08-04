@@ -18,7 +18,7 @@ Index: linux-2.4.21-suse2/fs/ext3/inode.c
  		if (ret)
  			break;
  
-@@ -3105,3 +3105,75 @@
+@@ -3105,3 +3105,80 @@
  		ret = ret2;
  	return ret;
  }
@@ -53,8 +53,9 @@ Index: linux-2.4.21-suse2/fs/ext3/inode.c
 +                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
 +                if (blocks[i] == 0) {
 +                        failed++;
-+                        created[i] = -1;
-+                } else {
++			if (created)
++				created[i] = -1;
++		} else if (created) {
 +                        created[i] = 0;
 +                }
 +        }
@@ -82,10 +83,14 @@ Index: linux-2.4.21-suse2/fs/ext3/inode.c
 +                               "allocating block %ld\n", rc, iblock);
 +                        goto out;
 +                }
++		/* Unmap any metadata buffers from the block mapping, to avoid
++		 * data corruption due to direct-write from Lustre being
++		 * clobbered by a later flush of the blockdev metadata buffer.*/
 +                if (buffer_new(&bh))
 +                        unmap_underlying_metadata(&bh);
 +                blocks[i] = bh.b_blocknr;
-+                created[i] = 1;
++		if (created)
++			created[i] = 1;
 +        }
 +
 + out:

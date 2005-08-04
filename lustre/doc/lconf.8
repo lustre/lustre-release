@@ -1,4 +1,4 @@
-.TH lconf 1 "2003 Oct 8" Lustre "configuration utilities"
+.TH lconf 1 "2004 Sep 16" Lustre "configuration utilities"
 .SH NAME
 lconf \- Lustre filesystem configuration utility
 .SH SYNOPSIS
@@ -14,11 +14,23 @@ lconf \- Lustre filesystem configuration utility
 The arguments that can be used for lconf are:
 .PP
 .TP
+--client_uuid <uuid> 
+The failed client (required for recovery).
+.TP
+--clientoptions <options> 
+Additional options for Lustre.
+.TP
 --config <arg> 
 Cluster configuration name used for LDAP query
 .TP
+--conn_uuid <uuid> 
+The failed connection (required for recovery).
+.TP
 --d|--cleanup 
 Unconfigure a node. The same config and --node argument used for configuration needs to be used for cleanup as well. This will attempt to undo all of the configuration steps done by lconf, including unloading the kernel modules.
+.TP
+--debug_path <path> 
+Path to save debug dumps.
 .TP
 --dump <file> 
 Dump the kernel debug log to the specified file before portals is unloaded during cleanup.
@@ -68,6 +80,12 @@ Perform configuration of devices and services up to level given. level can take 
 --minlevel <level> 
 Specify the minimum level of services to configure/cleanup. Default is 0.
 .TP
+--mkfsoptions <options> 
+Specify additional options for the mk*fs command line.
+.TP
+--mountfsoptions <options> 
+Specify additional options for mount fs command line. Mount options will be passed by this argument. For example, extents are to be enabled by adding ",extents" to the --mountfsoptions option. "errors=remount-ro" and "asyncdel" can also be added to it.
+.TP
 --node node_name 
 Specify a specific node to configure. By default, lconf will search for nodes with the local hostname and 'localhost'. When --node is used, only node_name is searched for. If a matching node is not found in the config, then lconf exits with an error.
 .TP
@@ -80,11 +98,23 @@ Only setup devices and services, do not load modules.
 --nosetup 
 Only load modules, do not configure devices or services.
 .TP
+--portals <path> 
+Specify portals source directory. If this is a relative path, then it is assumed to be relative to lustre.
+.TP
 --portals_upcall <path> 
 Specify the location of the Portals upcall scripts used by the client for recovery
 .TP
 --ptldebug debug-level 
 This options can be used to set the required debug level.
+.TP
+--record 
+Write config information on mds.
+.TP
+--record_log <arg> 
+Specify the name of config record log.
+.TP
+--record_device <arg> 
+Specify MDS device name that will record the config commands.
 .TP
 --recover <arg> 
 Recover a device.
@@ -95,8 +125,14 @@ Reformat all the devices. This is essential on the first time the file system is
 --select <arg> 
 Select a particular node for a service 
 .TP
+--service <arg>
+Shorthand for --group <arg> --select <arg>=<hostname>
+.TP
 --subsystem <arg> 
 Set the portals debug subsystem.
+.TP
+--tgt_uuid <uuid> 
+Specify the failed target (required for recovery).
 .TP
 --timeout <arg> 
 Set the recovery timeout period.

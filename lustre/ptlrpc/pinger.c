@@ -7,20 +7,23 @@
  *   Authors: Phil Schwan <phil@clusterfs.com>
  *            Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef __KERNEL__
@@ -38,7 +41,7 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
-int ptlrpc_ping(struct obd_import *imp) 
+int ptlrpc_ping(struct obd_import *imp)
 {
         struct ptlrpc_request *req;
         int rc = 0;
@@ -47,17 +50,16 @@ int ptlrpc_ping(struct obd_import *imp)
         req = ptlrpc_prep_req(imp, OBD_PING, 0, NULL,
                               NULL);
         if (req) {
-                DEBUG_REQ(D_HA, req, "pinging %s->%s",
+                DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
                           imp->imp_target_uuid.uuid);
                 req->rq_no_resend = req->rq_no_delay = 1;
-                req->rq_replen = lustre_msg_size(0, 
-                                                 NULL);
+                req->rq_replen = lustre_msg_size(0, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
-                          imp->imp_obd->obd_uuid.uuid,
-                          imp->imp_target_uuid.uuid);
+                       imp->imp_obd->obd_uuid.uuid,
+                       imp->imp_target_uuid.uuid);
                 rc = -ENOMEM;
         }
 
@@ -66,7 +68,13 @@ int ptlrpc_ping(struct obd_import *imp)
 
 static inline void ptlrpc_update_next_ping(struct obd_import *imp)
 {
-        imp->imp_next_ping = jiffies + PING_INTERVAL * HZ;
+        imp->imp_next_ping = jiffies + HZ *
+                (imp->imp_state == LUSTRE_IMP_DISCON ? 10 : PING_INTERVAL);
+}
+
+void ptlrpc_ping_import_soon(struct obd_import *imp)
+{
+        imp->imp_next_ping = jiffies;
 }
 
 #ifdef __KERNEL__
@@ -134,7 +142,8 @@ static int ptlrpc_pinger_main(void *arg)
                                                 obd_timeout * HZ;
                                         ptlrpc_initiate_recovery(imp);
                                 } else if (level != LUSTRE_IMP_FULL ||
-                                         imp->imp_obd->obd_no_recov) {
+                                         imp->imp_obd->obd_no_recov ||
+                                         imp->imp_deactive) {
                                         CDEBUG(D_HA, "not pinging %s "
                                                "(in recovery: %s or recovery "
                                                "disabled: %u/%u)\n",
@@ -145,11 +154,10 @@ static int ptlrpc_pinger_main(void *arg)
                                 } else if (imp->imp_pingable || force) {
                                         ptlrpc_ping(imp);
                                 }
-
                         } else {
                                 if (!imp->imp_pingable)
                                         continue;
-                                CDEBUG(D_HA,
+                                CDEBUG(D_INFO,
                                        "don't need to ping %s (%lu > %lu)\n",
                                        imp->imp_target_uuid.uuid,
                                        imp->imp_next_ping, this_ping);
@@ -170,7 +178,7 @@ static int ptlrpc_pinger_main(void *arg)
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-                CDEBUG(D_HA, "next ping in %lu (%lu)\n", time_to_next_ping,
+                CDEBUG(D_INFO, "next ping in %lu (%lu)\n", time_to_next_ping,
                        this_ping + PING_INTERVAL * HZ);
                 if (time_to_next_ping > 0) {
                         lwi = LWI_TIMEOUT(max_t(long, time_to_next_ping, HZ),
@@ -350,6 +358,8 @@ static int pinger_check_rpcs(void *arg)
 
         pd->pd_this_ping = curtime;
         pd->pd_set = ptlrpc_prep_set();
+        if (pd->pd_set == NULL)
+                goto out;
         set = pd->pd_set;
 
         /* add rpcs into set */
@@ -444,6 +454,7 @@ do_check_set:
         ptlrpc_set_destroy(set);
         pd->pd_set = NULL;
 
+out:
         pd->pd_next_ping = pd->pd_this_ping + PING_INTERVAL * HZ;
         pd->pd_this_ping = 0; /* XXX for debug */
 

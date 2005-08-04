@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -217,6 +220,9 @@ void request_in_callback(ptl_event_t *ev)
         ptlrpc_id2str(&req->rq_peer, req->rq_peerstr);
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
+#if CRAY_PORTALS
+        req->rq_uid = ev->uid;
+#endif
         
         spin_lock_irqsave (&service->srv_lock, flags);
 
@@ -371,7 +377,13 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 pni = &ptlrpc_interfaces[i];
 
+#if !CRAY_PORTALS
                 if (pni->pni_number == peer_nal) {
+#else
+		/* compatible nals but may be from different bridges */
+		if (NALID_FROM_IFACE(pni->pni_number) == 
+		    NALID_FROM_IFACE(peer_nal)) {
+#endif
                         peer->peer_id.nid = peer_nid;
                         peer->peer_id.pid = LUSTRE_SRV_PTL_PID;
                         peer->peer_ni = pni;
@@ -427,21 +439,27 @@ ptl_pid_t ptl_get_pid(void)
 
 #ifndef  __KERNEL__
         pid = getpid();
+# if CRAY_PORTALS
+	/* hack to keep pid in range accepted by ernal */
+	pid &= 0xFF;
+	if (pid == LUSTRE_SRV_PTL_PID)
+		pid++;
+# endif
 #else
         pid = LUSTRE_SRV_PTL_PID;
 #endif
         return pid;
 }
-        
+
 int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
 {
         int              rc;
         char             str[20];
         ptl_handle_ni_t  nih;
         ptl_pid_t        pid;
-        
+
         pid = ptl_get_pid();
-        
+
         /* We're not passing any limits yet... */
         rc = PtlNIInit(number, pid, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
@@ -451,7 +469,7 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         }
 
         CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
-        
+
         PtlSnprintHandle(str, sizeof(str), nih);
         CDEBUG (D_NET, "init %x %s: %s\n", number, name, str);
 
@@ -467,6 +485,11 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         /* kernel portals calls our master callback when events are added to
          * the event queue.  In fact lustre never pulls events off this queue,
          * so it's only sized for some debug history. */
+# if CRAY_PORTALS
+        rc = PtlNIDebug(pni->pni_ni_h, 0xffffffff);
+        if (rc != PTL_OK)
+                CDEBUG(D_ERROR, "Can't enable Cray Portals Debug: rc %d\n", rc);
+# endif
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, ptlrpc_master_callback,
                         &pni->pni_eq_h);
 #else
@@ -637,7 +660,9 @@ int ptlrpc_init_portals(void)
                 {LONAL,     "lonal"},
                 {RANAL,     "ranal"},
 #else
-                {CRAY_KB_ERNAL, "cray_kb_ernal"},
+                {CRAY_KERN_NAL, "cray_kern_nal"},
+                {CRAY_QK_NAL, "cray_qk_nal"},
+                {CRAY_USER_NAL, "cray_user_nal"},
 #endif
         };
         int   rc;

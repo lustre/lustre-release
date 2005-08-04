@@ -191,6 +191,17 @@ fi
 ])
 
 #
+# LB_PATH_SNMP
+#
+# check for in-tree snmp support
+#
+AC_DEFUN([LB_PATH_SNMP],
+[LB_CHECK_FILE([$srcdir/snmp/lustre-snmp.c],[SNMP_DIST_SUBDIR="snmp"])
+AC_SUBST(SNMP_DIST_SUBDIR)
+AC_SUBST(SNMP_SUBDIR)
+])
+
+#
 # LB_CONFIG_MODULES
 #
 # Build kernel modules?
@@ -462,6 +473,7 @@ LB_PROG_CC
 
 LB_PATH_LIBSYSIO
 LB_PATH_CRAY_PORTALS
+LB_PATH_SNMP
 
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
@@ -474,6 +486,9 @@ LC_CONFIG_LIBLUSTRE
 
 LP_CONFIGURE
 LC_CONFIGURE
+if test "$SNMP_DIST_SUBDIR" ; then
+	LS_CONFIGURE
+fi
 
 LB_CONDITIONALS
 LB_CONFIG_HEADERS
@@ -489,10 +504,13 @@ build/lustre.spec
 
 LP_CONFIG_FILES
 LC_CONFIG_FILES
+if test "$SNMP_DIST_SUBDIR" ; then
+	LS_CONFIG_FILES
+fi
 
 AC_SUBST(ac_configure_args)
 
-MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c'
+MOSTLYCLEANFILES='.*.cmd .*.flags *.o *.ko *.mod.c .depend .*.1.*'
 AC_SUBST(MOSTLYCLEANFILES)
 
 AC_OUTPUT

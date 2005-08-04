@@ -68,4 +68,5 @@ rename_many
 memhog
 mmap_sanity
 rmdirmany
+flock_test
 writemany

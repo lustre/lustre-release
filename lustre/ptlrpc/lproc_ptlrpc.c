@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -102,12 +105,7 @@ const char* ll_opcode2str(__u32 opcode)
         return ll_rpc_opcode_table[offset].opname;
 }
 
-#ifndef LPROCFS
-void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
-                                     struct ptlrpc_service *svc) { return ; }
-void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc) { return; }
-#else
-
+#ifdef LPROCFS
 void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              char *name, struct proc_dir_entry **procroot_ret,
                              struct lprocfs_stats **stats_ret)
@@ -167,7 +165,7 @@ ptlrpc_lprocfs_read_req_history_len(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
         struct ptlrpc_service *svc = data;
-        
+
         *eof = 1;
         return snprintf(page, count, "%d\n", svc->srv_n_history_rqbds);
 }
@@ -177,7 +175,7 @@ ptlrpc_lprocfs_read_req_history_max(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
         struct ptlrpc_service *svc = data;
-        
+
         *eof = 1;
         return snprintf(page, count, "%d\n", svc->srv_max_history_rqbds);
 }
@@ -191,7 +189,7 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
         unsigned long          flags;
         int                    val;
         int                    rc = lprocfs_write_helper(buffer, count, &val);
-        
+
         if (rc < 0)
                 return rc;
 
@@ -204,11 +202,11 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
         bufpages = (svc->srv_buf_size + PAGE_SIZE - 1)/PAGE_SIZE;
         if (val > num_physpages/(2*bufpages))
                 return -ERANGE;
-        
+
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_max_history_rqbds = val;
         spin_unlock_irqrestore(&svc->srv_lock, flags);
- 
+
         return count;
 }
 
@@ -230,7 +228,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
             srhi->srhi_seq <= seq) {
                 /* If srhi_req was set previously, hasn't been culled and
                  * we're searching for a seq on or after it (i.e. more
-                 * recent), search from it onwards. 
+                 * recent), search from it onwards.
                  * Since the service history is LRU (i.e. culled reqs will
                  * be near the head), we shouldn't have to do long
                  * re-scans */
@@ -244,7 +242,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
 
         while (e != &svc->srv_request_history) {
                 req = list_entry(e, struct ptlrpc_request, rq_history_list);
-                
+
                 if (req->rq_history_seq >= seq) {
                         srhi->srhi_seq = req->rq_history_seq;
                         srhi->srhi_req = req;
@@ -252,7 +250,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service *svc,
                 }
                 e = e->next;
         }
-        
+
         return -ENOENT;
 }
 
@@ -270,16 +268,16 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 
         srhi->srhi_seq = 0;
         srhi->srhi_req = NULL;
-        
+
         spin_lock_irqsave(&svc->srv_lock, flags);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-        
+
         if (rc == 0) {
                 *pos = srhi->srhi_seq;
                 return srhi;
         }
-        
+
         OBD_FREE(srhi, sizeof(*srhi));
         return NULL;
 }
@@ -294,7 +292,7 @@ ptlrpc_lprocfs_svc_req_history_stop(struct seq_file *s, void *iter)
 }
 
 static void *
-ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s, 
+ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
                                     void *iter, loff_t *pos)
 {
         struct ptlrpc_service       *svc = s->private;
@@ -379,13 +377,13 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
         struct lprocfs_vars lproc_vars[] = {
-                {.name       = "req_buffer_history_len", 
+                {.name       = "req_buffer_history_len",
                  .write_fptr = NULL,
-                 .read_fptr  = ptlrpc_lprocfs_read_req_history_len, 
+                 .read_fptr  = ptlrpc_lprocfs_read_req_history_len,
                  .data       = svc},
                 {.name       = "req_buffer_history_max",
                  .write_fptr = ptlrpc_lprocfs_write_req_history_max,
-                 .read_fptr  = ptlrpc_lprocfs_read_req_history_max, 
+                 .read_fptr  = ptlrpc_lprocfs_read_req_history_max,
                  .data       = svc},
                 {NULL}
         };
@@ -401,13 +399,13 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
         ptlrpc_lprocfs_register(entry, svc->srv_name,
                                 "stats", &svc->srv_procroot,
                                 &svc->srv_stats);
-        
+
         if (svc->srv_procroot == NULL)
                 return;
 
         lprocfs_add_vars(svc->srv_procroot, lproc_vars, NULL);
 
-        req_history = create_proc_entry("req_history", 0400, 
+        req_history = create_proc_entry("req_history", 0400,
                                         svc->srv_procroot);
         if (req_history != NULL) {
                 req_history->data = svc;
@@ -421,6 +419,7 @@ void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
                                 &obddev->obd_svc_procroot,
                                 &obddev->obd_svc_stats);
 }
+EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
@@ -457,6 +456,8 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
                 obd->obd_svc_stats = NULL;
         }
 }
+EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
+
 
 int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                             unsigned long count, void *data)
@@ -485,7 +486,7 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                 CERROR("can't disconnect %s: no export found\n", doomed.uuid);
         } else {
                 CERROR("evicting %s at adminstrative request\n", doomed.uuid);
-                ptlrpc_fail_export(doomed_exp);
+                class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
         }
         return count;

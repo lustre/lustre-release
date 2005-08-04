@@ -4,20 +4,23 @@
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -243,14 +246,10 @@ void ptlrpc_fail_import(struct obd_import *imp, int generation)
         EXIT;
 }
 
-#define ATTEMPT_TOO_SOON(last)  \
-        ((last) && ((long)(jiffies - (last)) <= (long)(obd_timeout * 2 * HZ)))
-
 static int import_select_connection(struct obd_import *imp)
 {
-        struct obd_import_conn *imp_conn, *tmp;
+        struct obd_import_conn *imp_conn;
         struct obd_export *dlmexp;
-        int found = 0;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
@@ -262,34 +261,13 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        list_for_each_entry(imp_conn, &imp->imp_conn_list, oic_item) {
-                if (!imp_conn->oic_last_attempt ||
-                    time_after(jiffies, imp_conn->oic_last_attempt + 
-                               obd_timeout * 2 * HZ)) {
-                        found = 1;
-                        break;
-                }
-        }
-
-        /* if not found, simply choose the current one */
-        if (!found) {
-                CWARN("%s: continuing with current connection\n",
-                      imp->imp_obd->obd_name);
-                LASSERT(imp->imp_conn_current);
-                imp_conn = imp->imp_conn_current;
-        }
-        LASSERT(imp_conn->oic_conn);
-
-        imp_conn->oic_last_attempt = jiffies;
-
-        /* move the items ahead of the selected one to list tail */
-        while (1) {
-                tmp= list_entry(imp->imp_conn_list.next,
-                                struct obd_import_conn, oic_item);
-                if (tmp == imp_conn)
-                        break;
-                list_del(&tmp->oic_item);
-                list_add_tail(&tmp->oic_item, &imp->imp_conn_list);
+        if (imp->imp_conn_current && 
+            !(imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
+                imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
+                                  struct obd_import_conn, oic_item);
+        } else {
+                imp_conn = list_entry(imp->imp_conn_list.next,
+                                      struct obd_import_conn, oic_item);
         }
 
         /* switch connection, don't mind if it's same as the current one */
@@ -405,6 +383,36 @@ out:
         RETURN(rc);
 }
 
+static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
+{
+        struct obd_import_conn *imp_conn;
+        unsigned long flags;
+        int wake_pinger = 0;
+
+        ENTRY;
+
+        spin_lock_irqsave(&imp->imp_lock, flags);
+        if (list_empty(&imp->imp_conn_list))
+                GOTO(unlock, 0);
+
+        imp_conn = list_entry(imp->imp_conn_list.prev,
+                              struct obd_import_conn,
+                              oic_item);
+
+        if (imp->imp_conn_current != imp_conn) {
+                ptlrpc_ping_import_soon(imp);
+                wake_pinger = 1;
+        }
+
+ unlock:
+        spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+        if (wake_pinger)
+                ptlrpc_pinger_wake_up();
+
+        EXIT;
+}
+
 static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                                     void * data, int rc)
 {
@@ -426,7 +434,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 GOTO(out, rc);
 
         LASSERT(imp->imp_conn_current);
-        imp->imp_conn_current->oic_last_attempt = 0;
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
@@ -442,6 +449,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         imp->imp_replayable = 0;
                 }
                 imp->imp_remote_handle = request->rq_repmsg->handle;
+
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 GOTO(finish, rc = 0);
         }
@@ -520,13 +528,22 @@ finish:
                         ptlrpc_connect_import(imp, NULL);
                         RETURN(0);
                 }
+        } else {
+                list_del(&imp->imp_conn_current->oic_item);
+                list_add(&imp->imp_conn_current->oic_item,
+                         &imp->imp_conn_list);
+                imp->imp_conn_current = NULL;
         }
+
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
                         ptlrpc_deactivate_import(imp);
                 }
+
+                ptlrpc_maybe_ping_import_soon(imp);
+                
                 CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
@@ -576,6 +593,7 @@ static int signal_completed_replay(struct obd_import *imp)
         RETURN(0);
 }
 
+#ifdef __KERNEL__
 static int ptlrpc_invalidate_import_thread(void *data)
 {
         struct obd_import *imp = data;
@@ -604,6 +622,7 @@ static int ptlrpc_invalidate_import_thread(void *data)
 
         RETURN(0);
 }
+#endif
 
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
@@ -616,20 +635,25 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                 deuuidify(imp->imp_target_uuid.uuid, NULL,
                           &target_start, &target_len);
                 LCONSOLE_ERROR("This client was evicted by %.*s; in progress "
-                               "operations using this service will %s.\n",
-                               target_len, target_start,
-                               imp->imp_replayable
-                               ? "be reattempted"
-                               : "fail");
+                               "operations using this service will fail.\n",
+                               target_len, target_start);
                 CDEBUG(D_HA, "evicted from %s@%s; invalidating\n",
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
 
+#ifdef __KERNEL__
                 rc = kernel_thread(ptlrpc_invalidate_import_thread, imp,
                                    CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
+                else
+                        rc = 0;
                 RETURN(rc);
+#else
+                ptlrpc_invalidate_import(imp);
+
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+#endif
         }
 
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {

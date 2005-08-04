@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <info@clusterfs.com>
+ *  Copyright (C) 2001-2004 Cluster File Systems, Inc. <info@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -58,7 +58,16 @@ struct fsfilt_operations {
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
-        /* this method is needed to make IO operation fsfilt nature depend. */
+        /*
+         * this method is needed to make IO operation fsfilt nature depend.
+         *
+         * This operation maybe synchronous or asynchronous.
+         *
+         * Return convention: positive number of bytes written (synchronously)
+         * on success. Negative errno value on failure. Zero if asynchronous
+         * IO was submitted successfully.
+         *
+         */
         int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
@@ -82,7 +91,7 @@ struct fsfilt_operations {
                                   struct obd_quotactl *oqctl);
         int     (* fs_quotactl)(struct super_block *sb,
                                 struct obd_quotactl *oqctl);
-        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type, 
+        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
                                  int cmd);
         int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
 };
@@ -146,8 +155,7 @@ static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
         return fsfilt_start_log(obd, inode, op, oti, 0);
 }
 
-static inline void *fsfilt_brw_start_log(struct obd_device *obd,
-                                         int objcount,
+static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                                          struct fsfilt_objinfo *fso,
                                          int niocount, struct niobuf_local *nb,
                                          struct obd_trans_info *oti, int logs)
@@ -253,7 +261,7 @@ static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
                                   struct inode *inode, void *bio)
 {
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
-        
+
         if (rw == OBD_BRW_READ)
                 return obd->obd_fsops->fs_send_bio(READ, inode, bio);
         return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);
@@ -301,27 +309,35 @@ static inline int fsfilt_quotacheck(struct obd_device *obd,
                                     struct super_block *sb,
                                     struct obd_quotactl *oqctl)
 {
-       return obd->obd_fsops->fs_quotacheck(sb, oqctl);
+        if (obd->obd_fsops->fs_quotacheck)
+                return obd->obd_fsops->fs_quotacheck(sb, oqctl);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_quotactl(struct obd_device *obd,
                                   struct super_block *sb,
                                   struct obd_quotactl *oqctl)
 {
-       return obd->obd_fsops->fs_quotactl(sb, oqctl);
+        if (obd->obd_fsops->fs_quotactl)
+                return obd->obd_fsops->fs_quotactl(sb, oqctl);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_quotainfo(struct obd_device *obd,
                                    struct lustre_quota_info *lqi,
                                    int type, int cmd)
 {
-        return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+        if (obd->obd_fsops->fs_quotainfo)
+                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_dquot(struct obd_device *obd,
                                struct lustre_dquot *dquot, int cmd)
 {
-        return obd->obd_fsops->fs_dquot(dquot, cmd);
+        if (obd->obd_fsops->fs_dquot)
+                return obd->obd_fsops->fs_dquot(dquot, cmd);
+        return -ENOTSUPP;
 }
 
 static inline int fsfilt_map_inode_pages(struct obd_device *obd,
@@ -334,11 +350,8 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                                   created, create, sem);
 }
 
-static inline int fs_prep_san_write(struct obd_device *obd,
-                                    struct inode *inode,
-                                    long *blocks,
-                                    int nblocks,
-                                    loff_t newsize)
+static inline int fs_prep_san_write(struct obd_device *obd, struct inode *inode,
+                                    long *blocks, int nblocks, loff_t newsize)
 {
         return obd->obd_fsops->fs_prep_san_write(inode, blocks,
                                                  nblocks, newsize);

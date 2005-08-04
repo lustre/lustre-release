@@ -11,8 +11,12 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004102113353091/kernel/sched.c
  {
  	task_t *relative;
  	unsigned state;
-@@ -3200,6 +3200,7 @@
- 	if (state != TASK_RUNNING)
+@@ -3200,9 +3200,10 @@
+ 	else
+ 		printk(" (NOTLB)\n");
+ 
+-	if (state != TASK_RUNNING)
++	if (state != TASK_RUNNING || p == current)
  		show_stack(p, NULL);
  }
 +EXPORT_SYMBOL(show_task);

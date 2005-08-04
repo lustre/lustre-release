@@ -285,7 +285,7 @@
  
 --- linux-2.4.20-hp4-pnnl13/fs/nfsd/vfs.c~nfs_export_kernel-2.4.20-hp	2002-11-29 02:53:15.000000000 +0300
 +++ linux-2.4.20-hp4-pnnl13-alexey/fs/nfsd/vfs.c	2003-10-08 10:54:08.000000000 +0400
-@@ -77,6 +77,126 @@ struct raparms {
+@@ -77,6 +77,129 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
  
@@ -384,6 +384,9 @@
 +	return err;
 +}
 +
++#ifndef O_OWNER_OVERRIDE
++#define O_OWNER_OVERRIDE 0200000000
++#endif
 +static int setattr_raw(struct inode *inode, struct iattr *iap)
 +{
 +	int err;
@@ -412,14 +415,16 @@
  /*
   * Look up one component of a pathname.
   * N.B. After this call _both_ fhp and resfh need an fh_put
-@@ -300,7 +422,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
+@@ -300,7 +422,12 @@ nfsd_setattr(struct svc_rqst *rqstp, str
  	}
  	err = nfserr_notsync;
  	if (!check_guard || guardtime == inode->i_ctime) {
 -		err = notify_change(dentry, iap);
-+		if (dentry->d_inode->i_op && dentry->d_inode->i_op->setattr_raw)
++		if (dentry->d_inode->i_op &&dentry->d_inode->i_op->setattr_raw){
++			if (accmode & MAY_OWNER_OVERRIDE)
++				iap->ia_valid & O_OWNER_OVERRIDE;
 +			err = setattr_raw(dentry->d_inode, iap);
-+		else
++		} else
 +			err = notify_change(dentry, iap);
  		err = nfserrno(err);
  	}
@@ -432,13 +437,10 @@
  	int		err;
  
  	/* If we get here, then the client has already done an "open", and (hopefully)
-@@ -473,6 +599,18 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -473,6 +599,15 @@ nfsd_open(struct svc_rqst *rqstp, struct
  		filp->f_mode  = FMODE_READ;
  	}
  
-+#ifndef O_OWNER_OVERRIDE
-+#define O_OWNER_OVERRIDE 0200000000
-+#endif
 +	intent_init(&it, IT_OPEN, (filp->f_flags & ~O_ACCMODE) | filp->f_mode |
 +		    O_OWNER_OVERRIDE);
 +

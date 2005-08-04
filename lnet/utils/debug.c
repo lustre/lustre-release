@@ -673,6 +673,8 @@ static struct mod_paths {
         {"llog_test", "lustre/obdclass"},
         {"ptlrpcs", "lustre/sec"},
         {"ptlrpcs_gss", "lustre/sec/gss"},
+        {"gks", "lustre/sec/gks"},
+        {"gkc", "lustre/sec/gks"},
         {"ptlrpc", "lustre/ptlrpc"},
         {"obdext2", "lustre/obdext2"},
         {"ost", "lustre/ost"},
@@ -722,6 +724,7 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
                 return 0;
         }
 
+        printf("dir\n");
         for (mp = mod_paths; mp->name != NULL; mp++) {
                 struct module_info info;
                 int rc;
@@ -739,6 +742,8 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
                         printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
                                path[0] ? "/" : "", mp->path, mp->name,
                                info.addr + sizeof(struct module));
+                        printf("dir %s%s%s\n", path,
+                               path[0] ? "/" : "", mp->path);
                 }
         }
 
@@ -774,6 +779,7 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                 return 0;
         }
 
+        printf("dir\n");
         while ((rc = fscanf(file, "%s %s %s %s %s %lx\n",
                 modname, others, others, others, others, &modaddr)) == 6) {
                 for (mp = mod_paths; mp->name != NULL; mp++) {
@@ -783,6 +789,8 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                 if (mp->name) {
                         printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", path,
                                path[0] ? "/" : "", mp->path, mp->name, modaddr);
+                        printf("dir %s%s%s\n", path,
+                               path[0] ? "/" : "", mp->path);
                 }
         }
 

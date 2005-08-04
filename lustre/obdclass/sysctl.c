@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -58,31 +61,47 @@ enum {
 };
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
-int proc_fail_loc(ctl_table *table, int write, struct file *filp,
-                  void *buffer, size_t *lenp)
+#define ll_proc_dointvec(table,write,filp,buffer,lenp,ppos)             \
+        proc_dointvec(table,write,filp,buffer,lenp)
+#define LL_PROC_PROTO(name)                                             \
+        name(ctl_table *table, int write, struct file *filp,   \
+                      void *buffer, size_t *lenp)
 #else
-int proc_fail_loc(ctl_table *table, int write, struct file *filp,
+#define ll_proc_dointvec(table,write,filp,buffer,lenp,ppos)             \
+        proc_dointvec(table,write,filp,buffer,lenp,ppos);
+#define LL_PROC_PROTO(name)                                             \
+        name(ctl_table *table, int write, struct file *filp,            \
                   void *buffer, size_t *lenp, loff_t *ppos)
 #endif
+
+int LL_PROC_PROTO(proc_fail_loc)
 {
         int rc;
         int old_fail_loc = obd_fail_loc;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
-        rc = proc_dointvec(table,write,filp,buffer,lenp);
-#else
-        rc = proc_dointvec(table,write,filp,buffer,lenp,ppos);
-#endif
+        rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
         if (old_fail_loc != obd_fail_loc)
                 wake_up(&obd_race_waitq);
         return rc;
 }
 
+int LL_PROC_PROTO(proc_set_timeout)
+{
+        int rc;
+
+        rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
+        if (ldlm_timeout >= obd_timeout)
+                ldlm_timeout = max(obd_timeout / 3, 1U);
+        else if (ldlm_timeout < 10 && obd_timeout >= ldlm_timeout * 4)
+                ldlm_timeout = min(obd_timeout / 3, 30U);
+        return rc;
+}
+
 static ctl_table obd_table[] = {
         {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
-                &proc_dointvec},
-        {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
                 &proc_fail_loc},
+        {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
+                &proc_set_timeout},
         {OBD_DUMP_ON_TIMEOUT, "dump_on_timeout", &obd_dump_on_timeout,
                 sizeof(int), 0644, NULL, &proc_dointvec},
         /* XXX need to lock so we avoid update races with recovery upcall! */
@@ -93,7 +112,7 @@ static ctl_table obd_table[] = {
         {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
                 0644, NULL, &proc_dointvec},
         {OBD_LDLM_TIMEOUT, "ldlm_timeout", &ldlm_timeout, sizeof(int), 0644,
-                NULL, &proc_dointvec},
+                NULL, &proc_set_timeout},
         { 0 }
 };
 

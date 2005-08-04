@@ -16,3 +16,4 @@ autoMakefile
 .depend
 sources
 fsfilt_ldiskfs.*
+fsfilt-ldiskfs.*

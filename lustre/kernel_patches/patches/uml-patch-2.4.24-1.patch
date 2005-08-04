@@ -13455,7 +13455,7 @@ diff -Naur -X ../exclude-files orig/arch/um/fs/hostfs/hostfs_user.c um/arch/um/f
 +		if(chown(file, -1, attrs->ia_gid)) return(-errno);
 +	}
 +	if(attrs->ia_valid & HOSTFS_ATTR_SIZE){
-+		if(truncate(file, attrs->ia_size)) return(-errno);
++		if(truncate64(file, attrs->ia_size)) return(-errno);
 +	}
 +	ma = HOSTFS_ATTR_ATIME_SET | HOSTFS_ATTR_MTIME_SET;
 +	if((attrs->ia_valid & ma) == ma){

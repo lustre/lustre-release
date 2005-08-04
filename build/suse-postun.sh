@@ -9,7 +9,17 @@ else
     exit 0
 fi
 
-if [ "$(readlink /boot/$image)" = $image-%ver_str ]; then
+case %ver_str in
+    (*xen*|*um*)
+	SHORTNM=%ver_str
+	SHORTNM=-${SHORTNM##*-}
+	;;
+    (*)
+	unset SHORTNM
+	;;
+esac
+
+if [ "$(readlink /boot/$image$SHORTNM)" = $image-%ver_str ]; then
     # This may be the last kernel RPM on the system, or it may
     # be an update. In both of those cases the symlinks will
     # eventually be correct. Only if this kernel
@@ -19,25 +29,32 @@ if [ "$(readlink /boot/$image)" = $image-%ver_str ]; then
     # manager will always have a kernel to boot in its default
     # configuration.
     shopt -s nullglob
-    for image in $(cd /boot ; ls -dt $image-*); do
-	initrd=initrd-${image#*-}
-	if [ -f /boot/$image -a -f /boot/$initrd ]; then
-	    relink $image /boot/${image%%%%-*}
-	    relink $initrd /boot/${initrd%%%%-*}
+    for img in $(cd /boot ; ls -dt $image-*$SHORTNM); do
+	initrd=initrd-${img#*-}
+	if [ -f /boot/$img -a -f /boot/$initrd ]; then
+	    relink $img /boot/${img%%%%-*}$SHORTNM
+	    relink $initrd /boot/${initrd%%%%-*}$SHORTNM
+
+	    # Notify the boot loader that a new kernel image is active.
+	    if [ -x /sbin/new-kernel-pkg ]; then
+		/sbin/new-kernel-pkg $(/sbin/get_kernel_version /boot/$img)
+	    fi
 	    break
 	fi
     done
     shopt -u nullglob
 fi
 
-# Created in the other kernel's %post
-case "$(readlink /boot/$image.previous)" in
-$image-%ver_str|$(readlink /boot/$image))
-    rm -f /boot/$image.previous ;;
+# Check whether there is a .previous link to the image we're about
+# to remove or to the image we point the new symlink to (so .previous
+# would be identical to the current symlink)
+case "$(readlink /boot/$image$SHORTNM.previous)" in
+$image-%ver_str|$(readlink /boot/$image$SHORTNM))
+    rm -f /boot/$image$SHORTNM.previous ;;
 esac
-case "$(readlink /boot/initrd.previous)" in
-initrd-%ver_str|$(readlink /boot/initrd))
-    rm -f /boot/initrd.previous ;;
+case "$(readlink /boot/initrd$SHORTNM.previous)" in
+initrd-%ver_str|$(readlink /boot/initrd$SHORTNM))
+    rm -f /boot/initrd$SHORTNM.previous ;;
 esac
 # created in %post
 rm -f /boot/initrd-%ver_str

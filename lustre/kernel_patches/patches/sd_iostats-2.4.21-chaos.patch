@@ -28,7 +28,7 @@ diff -u -p -r1.1.1.1 Config.in
  
  if [ "$CONFIG_BLK_DEV_SD" != "n" ]; then
     int  'Maximum number of SCSI disks that can be loaded as modules' CONFIG_SD_EXTRA_DEVS 40
-+   bool 'SCSI disk I/O stats' CONFIG_SD_IOSTATS
++   bool 'SCSI disk I/O stats' CONFIG_SD_IOSTATS y
  fi
  
  dep_tristate '  SCSI tape support' CONFIG_CHR_DEV_ST $CONFIG_SCSI
@@ -74,7 +74,7 @@ diff -u -p -r1.1.1.1 sd.c
 +static inline void sd_iostats_init(void) {}
 +static inline void sd_iostats_init_disk(int disk) {}
 +static inline void sd_iostats_fini(void) {}
-+static inline void sd_iostats_bump(kdev_t dev, unsigned int nsect, int iswrite) {}
++static inline void sd_iostats_bump(int dev, unsigned int nsect, int iswrite) {}
 +#endif
 +
  /* device number --> sd_gendisks index */

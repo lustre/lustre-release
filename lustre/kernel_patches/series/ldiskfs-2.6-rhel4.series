@@ -9,3 +9,5 @@ ext3-include-fixes-2.6-rhel4.patch
 ext3-extents-2.6.9-rhel4.patch
 ext3-mballoc2-2.6.9-rhel4.patch 
 ext3-nlinks-2.6.7.patch
+ext3-htree-dot-2.6.patch 
+ext3-ialloc-2.6.patch

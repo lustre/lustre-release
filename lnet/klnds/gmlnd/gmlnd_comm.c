@@ -155,19 +155,16 @@ int gmnal_rx_thread(void *arg)
 		buffer = we->buffer;
 		switch(((gmnal_msghdr_t*)buffer)->type) {
 		case(GMNAL_SMALL_MESSAGE):
-			gmnal_pre_receive(nal_data, we, 
-					   GMNAL_SMALL_MESSAGE);
-		break;	
+			gmnal_pre_receive(nal_data, we, GMNAL_SMALL_MESSAGE);
+		break;
 		case(GMNAL_LARGE_MESSAGE_INIT):
-			gmnal_pre_receive(nal_data, we, 
-					   GMNAL_LARGE_MESSAGE_INIT);
-		break;	
+			gmnal_pre_receive(nal_data,we,GMNAL_LARGE_MESSAGE_INIT);
+		break;
 		case(GMNAL_LARGE_MESSAGE_ACK):
-			gmnal_pre_receive(nal_data, we, 
-					   GMNAL_LARGE_MESSAGE_ACK);
-		break;	
+			gmnal_pre_receive(nal_data, we,GMNAL_LARGE_MESSAGE_ACK);
+		break;
 		default:
-			CDEBUG(D_ERROR, "Unsupported message type\n");
+			CERROR("Unsupported message type\n");
 			gmnal_rx_bad(nal_data, we, NULL);
 		}
 		PORTAL_FREE(we, sizeof(gmnal_rxtwe_t));
@@ -200,7 +197,7 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	ptl_hdr_t	*portals_hdr;
         int              rc;
 
-	CDEBUG(D_INFO, "nal_data [%p], we[%p] type [%d]\n", 
+	CDEBUG(D_INFO, "nal_data [%p], we[%p] type [%d]\n",
 	       nal_data, we, gmnal_type);
 
 	buffer = we->buffer;
@@ -217,20 +214,19 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	       "type [%d], length [%d], buffer [%p]\n",
 	       snode, sport, type, length, buffer);
 	CDEBUG(D_INFO, "gmnal_msghdr:: Sender node [%u], magic [%d], "
-	       "gmnal_type [%d]\n", gmnal_msghdr->sender_node_id, 
+	       "gmnal_type [%d]\n", gmnal_msghdr->sender_node_id,
 	       gmnal_msghdr->magic, gmnal_msghdr->type);
 	CDEBUG(D_INFO, "portals_hdr:: Sender node ["LPD64"], "
-	       "dest_node ["LPD64"]\n", portals_hdr->src_nid, 
+	       "dest_node ["LPD64"]\n", portals_hdr->src_nid,
 	       portals_hdr->dest_nid);
 
-	
 	/*
- 	 *	Get a receive descriptor for this message
+	 *	Get a receive descriptor for this message
 	 */
 	srxd = gmnal_rxbuffer_to_srxd(nal_data, buffer);
 	CDEBUG(D_INFO, "Back from gmnal_rxbuffer_to_srxd\n");
 	if (!srxd) {
-		CDEBUG(D_ERROR, "Failed to get receive descriptor\n");
+		CERROR("Failed to get receive descriptor\n");
                 /* I think passing a NULL srxd to lib_parse will crash
                  * gmnal_recv() */
                 LBUG();
@@ -239,7 +235,7 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	}
 
 	/*
- 	 *	no need to bother portals library with this
+	 *	no need to bother portals library with this
 	 */
 	if (gmnal_type == GMNAL_LARGE_MESSAGE_ACK) {
 		gmnal_large_tx_ack_received(nal_data, srxd);
@@ -250,8 +246,8 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	srxd->type = gmnal_type;
 	srxd->nsiov = gmnal_msghdr->niov;
 	srxd->gm_source_node = gmnal_msghdr->sender_node_id;
-	
-	CDEBUG(D_PORTALS, "Calling lib_parse buffer is [%p]\n", 
+
+	CDEBUG(D_PORTALS, "Calling lib_parse buffer is [%p]\n",
 	       buffer+GMNAL_MSGHDR_SIZE);
 	/*
  	 *	control passes to lib, which calls cb_recv 
@@ -306,7 +302,7 @@ gmnal_rx_bad(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, gmnal_srxd_t *srxd)
 	if (srxd) {
 		gmnal_rx_requeue_buffer(nal_data, srxd);
 	} else {
-		CDEBUG(D_ERROR, "Can't find a descriptor for this buffer\n");
+		CERROR("Can't find a descriptor for this buffer\n");
 		/*
 		 *	get rid of it ?
 		 */
@@ -334,7 +330,7 @@ gmnal_small_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie)
 
 
 	if (!private) {
-		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
+		CERROR("gmnal_small_rx no context\n");
 		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
@@ -386,7 +382,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	       hdr->dest_nid, hdr->src_nid);
 
 	if (!nal_data) {
-		CDEBUG(D_ERROR, "no nal_data\n");
+		CERROR("no nal_data\n");
 		return(PTL_FAIL);
 	} else {
 		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
@@ -397,7 +393,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 					    &local_nid);
 	GMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
-		CDEBUG(D_ERROR, "Failed to obtain local id\n");
+		CERROR("Failed to obtain local id\n");
 		return(PTL_FAIL);
 	}
 	CDEBUG(D_INFO, "Local Node_id is [%u][%x]\n", local_nid, local_nid);
@@ -431,20 +427,20 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 
 
 	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "
-   	       "gmsize [%lu] msize [%d] global_nid ["LPU64"] local_nid[%d] "
-	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
+	       "gmsize [%lu] msize [%d] global_nid ["LPU64"] local_nid[%d] "
+	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size,
 	       stxd->msg_size, global_nid, local_nid, stxd);
 
 	GMNAL_GM_LOCK(nal_data);
 	stxd->gm_priority = GM_LOW_PRIORITY;
 	stxd->gm_target_node = local_nid;
-	gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer, 
-				      stxd->gm_size, stxd->msg_size, 
-				      GM_LOW_PRIORITY, local_nid, 
+	gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer,
+				      stxd->gm_size, stxd->msg_size,
+				      GM_LOW_PRIORITY, local_nid,
 				      gmnal_small_tx_callback, (void*)stxd);
 	GMNAL_GM_UNLOCK(nal_data);
 	CDEBUG(D_INFO, "done\n");
-		
+
 	return(PTL_OK);
 }
 
@@ -480,7 +476,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 			       gm_status);
 			gnid = 0;
 		}
-		CDEBUG(D_ERROR, "Result of send stxd [%p] is [%s] to [%u]\n",
+		CERROR("Result of send stxd [%p] is [%s] to [%u]\n",
 		       stxd, gmnal_gm_error(status), gnid);
 	}
 
@@ -494,22 +490,20 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		/*
 		 *	do a resend on the dropped ones
 		 */
-			CDEBUG(D_ERROR, "send stxd [%p] was dropped "
-			       "resending\n", context);
+			CERROR("send stxd [%p] dropped, resending\n", context);
 			GMNAL_GM_LOCK(nal_data);
-			gm_send_to_peer_with_callback(nal_data->gm_port, 
-						      stxd->buffer, 
-						      stxd->gm_size, 
-						      stxd->msg_size, 
-						      stxd->gm_priority, 
-						      stxd->gm_target_node, 
+			gm_send_to_peer_with_callback(nal_data->gm_port,
+						      stxd->buffer,
+						      stxd->gm_size,
+						      stxd->msg_size,
+						      stxd->gm_priority,
+						      stxd->gm_target_node,
 						      gmnal_small_tx_callback,
 						      context);
 			GMNAL_GM_UNLOCK(nal_data);
-		
 		return;
-  		case(GM_TIMED_OUT):
-  		case(GM_SEND_TIMED_OUT):
+		case(GM_TIMED_OUT):
+		case(GM_SEND_TIMED_OUT):
 		/*
 		 *	drop these ones
 		 */
@@ -628,7 +622,7 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
 					      context);
 		GMNAL_GM_UNLOCK(nal_data);
 	} else {
-		CDEBUG(D_ERROR, "send_to_peer status for stxd [%p] is "
+		CERROR("send_to_peer status for stxd [%p] is "
 		       "[%d][%s]\n", stxd, status, gmnal_gm_error(status));
 	}
 
@@ -669,7 +663,7 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	if (libnal)
 		nal_data = (gmnal_data_t*)libnal->libnal_data;
 	else  {
-		CDEBUG(D_ERROR, "no libnal.\n");
+		CERROR("no libnal.\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 	
@@ -755,7 +749,7 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 					       iov->iov_base, iov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			GMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] "
+			CERROR("gm_register_memory returns [%d][%s] "
 			       "for memory [%p] len ["LPSZ"]\n", 
 			       gm_status, gmnal_gm_error(gm_status), 
 			       iov->iov_base, iov->iov_len);
@@ -784,7 +778,7 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 					    &local_nid);
 	if (gm_status != GM_SUCCESS) {
 		GMNAL_GM_UNLOCK(nal_data);
-		CDEBUG(D_ERROR, "Failed to obtain local id\n");
+		CERROR("Failed to obtain local id\n");
 		gmnal_return_stxd(nal_data, stxd);
 		/* TO DO deregister memory on failure */
 		return(GMNAL_STATUS_FAIL);
@@ -795,9 +789,9 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 				      local_nid, gmnal_large_tx_callback, 
 				      (void*)stxd);
 	GMNAL_GM_UNLOCK(nal_data);
-	
+
 	CDEBUG(D_INFO, "done\n");
-		
+
 	return(PTL_OK);
 }
 
@@ -837,7 +831,7 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		libnal, private, cookie, nriov, riov, mlen, rlen);
 
 	if (!srxd) {
-		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
+		CERROR("gmnal_large_rx no context\n");
 		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
 	}
@@ -880,21 +874,21 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
         if (nriov > 1)
 	        gm_bcopy(&riov[1], &srxd->riov[1], (nriov-1)*(sizeof(struct iovec)));
 	srxd->nriov = nriov;
-        
+
         riov = srxd->riov;
 	nriov_dup = nriov;
 	riov_dup = riov;
 	while(nriov--) {
-		CDEBUG(D_INFO, "Registering memory [%p] len ["LPSZ"] \n", 
+		CDEBUG(D_INFO, "Registering memory [%p] len ["LPSZ"] \n",
 		       riov->iov_base, riov->iov_len);
 		GMNAL_GM_LOCK(nal_data);
-		gm_status = gm_register_memory(nal_data->gm_port, 
+		gm_status = gm_register_memory(nal_data->gm_port,
 					       riov->iov_base, riov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			GMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] "
-			       "for memory [%p] len ["LPSZ"]\n", 
-			       gm_status, gmnal_gm_error(gm_status), 
+			CERROR("gm_register_memory returns [%d][%s] "
+			       "for memory [%p] len ["LPSZ"]\n",
+			       gm_status, gmnal_gm_error(gm_status),
 			       riov->iov_base, riov->iov_len);
 			GMNAL_GM_LOCK(nal_data);
 			while (riov_dup != riov) {
@@ -918,9 +912,9 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	 *	now do gm_get to get the data
 	 */
 	srxd->cookie = cookie;
-	if (gmnal_remote_get(srxd, srxd->nsiov, (struct iovec*)buffer, 
+	if (gmnal_remote_get(srxd, srxd->nsiov, (struct iovec*)buffer,
 			      nriov_dup, riov_dup) != GMNAL_STATUS_OK) {
-		CDEBUG(D_ERROR, "can't get the data");
+		CERROR("can't get the data");
 	}
 
 	CDEBUG(D_INFO, "lgmanl_large_rx done\n");
@@ -949,7 +943,7 @@ gmnal_remote_get(gmnal_srxd_t *srxd, int nsiov, struct iovec *siov,
 
 	ncalls = gmnal_copyiov(0, srxd, nsiov, siov, nriov, riov);
 	if (ncalls < 0) {
-		CDEBUG(D_ERROR, "there's something wrong with the iovecs\n");
+		CERROR("there's something wrong with the iovecs\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 	CDEBUG(D_INFO, "gmnal_remote_get ncalls [%d]\n", ncalls);
@@ -959,7 +953,7 @@ gmnal_remote_get(gmnal_srxd_t *srxd, int nsiov, struct iovec *siov,
 
 	ncalls = gmnal_copyiov(1, srxd, nsiov, siov, nriov, riov);
 	if (ncalls < 0) {
-		CDEBUG(D_ERROR, "there's something wrong with the iovecs\n");
+		CERROR("there's something wrong with the iovecs\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 
@@ -991,15 +985,15 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 	CDEBUG(D_TRACE, "copy[%d] nal_data[%p]\n", do_copy, nal_data);
 	if (do_copy) {
 		if (!nal_data) {
-			CDEBUG(D_ERROR, "Bad args No nal_data\n");
+			CERROR("Bad args No nal_data\n");
 			return(GMNAL_STATUS_FAIL);
 		}
 		GMNAL_GM_LOCK(nal_data);
-		if (gm_global_id_to_node_id(nal_data->gm_port, 
-					    srxd->gm_source_node, 
+		if (gm_global_id_to_node_id(nal_data->gm_port,
+					    srxd->gm_source_node,
 					    &source_node) != GM_SUCCESS) {
 
-			CDEBUG(D_ERROR, "cannot resolve global_id [%u] "
+			CERROR("cannot resolve global_id [%u] "
 			       "to local node_id\n", srxd->gm_source_node);
 			GMNAL_GM_UNLOCK(nal_data);
 			return(GMNAL_STATUS_FAIL);
@@ -1013,7 +1007,7 @@ gmnal_copyiov(int do_copy, gmnal_srxd_t *srxd, int nsiov,
 		 *	Set pointer in stxd to srxd so callback count in srxd
 		 *	can be decremented to find last callback to complete
 		 */
-		CDEBUG(D_INFO, "gmnal_copyiov source node is G[%u]L[%d]\n", 
+		CDEBUG(D_INFO, "gmnal_copyiov source node is G[%u]L[%d]\n",
 		       srxd->gm_source_node, source_node);
 	}
 
@@ -1124,8 +1118,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	CDEBUG(D_TRACE, "called for context [%p]\n", context);
 
 	if (status != GM_SUCCESS) {
-		CDEBUG(D_ERROR, "reports error [%d][%s]\n", status, 
-		       gmnal_gm_error(status));
+		CERROR("reports error [%d/%s]\n",status,gmnal_gm_error(status));
 	}
 
 	spin_lock(&srxd->callback_lock);
@@ -1144,11 +1137,11 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 		CDEBUG(D_ERROR, "NOT final callback context[%p]\n", srxd);
 		return;
 	}
-	
+
 	/*
 	 *	Let our client application proceed
-	 */	
-	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
+	 */
+	CERROR("final callback context[%p]\n", srxd);
 	lib_finalize(libnal, srxd, srxd->cookie, PTL_OK);
 
 	/*
@@ -1164,10 +1157,10 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	riov = srxd->riov;
 	GMNAL_GM_LOCK(nal_data);
 	while (nriov--) {
-		CDEBUG(D_ERROR, "deregister memory [%p]\n", riov->iov_base);
-		if (gm_deregister_memory(srxd->nal_data->gm_port, 
-		    		         riov->iov_base, riov->iov_len)) {
-			CDEBUG(D_ERROR, "failed to deregister memory [%p]\n", 
+		CERROR("deregister memory [%p]\n", riov->iov_base);
+		if (gm_deregister_memory(srxd->nal_data->gm_port,
+				         riov->iov_base, riov->iov_len)) {
+			CERROR("failed to deregister memory [%p]\n",
 			       riov->iov_base);
 		}
 		riov++;
@@ -1202,7 +1195,7 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 	unsigned int	local_nid;
 	gm_status_t	gm_status = GM_SUCCESS;
 
-	CDEBUG(D_TRACE, "srxd[%p] target_node [%u]\n", srxd, 
+	CDEBUG(D_TRACE, "srxd[%p] target_node [%u]\n", srxd,
 	       srxd->gm_source_node);
 
 	GMNAL_GM_LOCK(nal_data);
@@ -1210,7 +1203,7 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 					    srxd->gm_source_node, &local_nid);
 	GMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
-		CDEBUG(D_ERROR, "Failed to obtain local id\n");
+		CERROR("Failed to obtain local id\n");
 		return;
 	}
 	CDEBUG(D_INFO, "Local Node_id is [%u][%x]\n", local_nid, local_nid);
@@ -1244,20 +1237,20 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "
 	       "gmsize [%lu] msize [%d] global_nid [%u] local_nid[%d] "
-	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size, 
+	       "stxd [%p]\n", nal_data->gm_port, stxd->buffer, stxd->gm_size,
 	       stxd->msg_size, srxd->gm_source_node, local_nid, stxd);
 	GMNAL_GM_LOCK(nal_data);
 	stxd->gm_priority = GM_LOW_PRIORITY;
 	stxd->gm_target_node = local_nid;
-	gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer, 
-				      stxd->gm_size, stxd->msg_size, 
-				      GM_LOW_PRIORITY, local_nid, 
-				      gmnal_large_tx_ack_callback, 
+	gm_send_to_peer_with_callback(nal_data->gm_port, stxd->buffer,
+				      stxd->gm_size, stxd->msg_size,
+				      GM_LOW_PRIORITY, local_nid,
+				      gmnal_large_tx_ack_callback,
 				      (void*)stxd);
-	
+
 	GMNAL_GM_UNLOCK(nal_data);
 	CDEBUG(D_INFO, "gmnal_large_tx_ack :: done\n");
-		
+
 	return;
 }
 
@@ -1265,19 +1258,19 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 /*
  *	A callback to indicate the small transmit operation is compete
  *	Check for errors and try to deal with them.
- *	Call lib_finalise to inform the client application that the 
+ *	Call lib_finalise to inform the client application that the
  *	send is complete and the memory can be reused.
  *	Return the stxd when finished with it (returns a send token)
  */
-void 
-gmnal_large_tx_ack_callback(gm_port_t *gm_port, void *context, 
+void
+gmnal_large_tx_ack_callback(gm_port_t *gm_port, void *context,
 			     gm_status_t status)
 {
 	gmnal_stxd_t	*stxd = (gmnal_stxd_t*)context;
 	gmnal_data_t	*nal_data = (gmnal_data_t*)stxd->nal_data;
 
 	if (!stxd) {
-		CDEBUG(D_ERROR, "send completion event for unknown stxd\n");
+		CERROR("send completion event for unknown stxd\n");
 		return;
 	}
 	CDEBUG(D_TRACE, "send completion event for stxd [%p] status is [%d]\n",

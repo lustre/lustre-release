@@ -96,12 +96,12 @@
 #define IBNAL_SERVICE_LEVEL      0
 #define IBNAL_STATIC_RATE        0
 #define IBNAL_RETRY_CNT          7
-#define IBNAL_RNR_CNT            7 
+#define IBNAL_RNR_CNT            6 
 #define IBNAL_EE_FLOW_CNT        1
 #define IBNAL_LOCAL_SUB          1
 #define IBNAL_TRAFFIC_CLASS      0
 #define IBNAL_SOURCE_PATH_BIT    0
-#define IBNAL_OUS_DST_RD         32
+#define IBNAL_OUS_DST_RD         1
 #define IBNAL_IB_MTU             vv_mtu_1024
 
 /* sdp-hca-params.h */
@@ -112,6 +112,7 @@
 
 /* other low-level IB constants */
 #define IBNAL_LOCAL_ACK_TIMEOUT   0x12
+#define IBNAL_RNR_NAK_TIMER       0x10
 #define IBNAL_PKT_LIFETIME        5
 #define IBNAL_ARB_INITIATOR_DEPTH 0
 #define IBNAL_ARB_RESP_RES        0
@@ -126,10 +127,10 @@
 #define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
 #define IBNAL_CREDIT_HIGHWATER    7             /* when to eagerly return credits */
 
-#define IBNAL_NTX                 64            /* # tx descs */
-#define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
-/* reduced from 256 to ensure we register < 255 pages per region.  
- * this can change if we register all memory. */
+#define IBNAL_ARP_RETRIES         3             /* How many times to retry ARP */
+
+#define IBNAL_NTX                 32            /* # tx descs */
+#define IBNAL_NTX_NBLK            256           /* # reserved tx descs */
 
 #define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
 
@@ -137,12 +138,7 @@
 
 #define IBNAL_CONCURRENT_PEERS    1000          /* # nodes all talking at once to me */
 
-#define IBNAL_RDMA_BASE  0x0eeb0000
 #define IBNAL_CKSUM      0
-#define IBNAL_WHOLE_MEM  1
-#if !IBNAL_WHOLE_MEM
-# error "incompatible with voltaire adaptor-tavor (REGISTER_RAM_IN_ONE_PHY_MR)"
-#endif
 
 /* default vals for runtime tunables */
 #define IBNAL_IO_TIMEOUT          50            /* default comms timeout (seconds) */
@@ -155,10 +151,13 @@
 #define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#if IBNAL_WHOLE_MEM
-# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
-#else
+#define IBNAL_USE_FMR   1
+
+#if IBNAL_USE_FMR
 # define IBNAL_MAX_RDMA_FRAGS 1
+# define IBNAL_FMR_NMAPS      1000
+#else
+# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
 #endif
 
 /* RX messages (per connection) */
@@ -178,21 +177,20 @@ typedef struct
 typedef struct
 {
         int               ibp_npages;           /* # pages */
-        int               ibp_mapped;           /* mapped? */
-        __u64             ibp_vaddr;            /* mapped region vaddr */
-        __u32             ibp_lkey;             /* mapped region lkey */
-        __u32             ibp_rkey;             /* mapped region rkey */
-        vv_mem_reg_h_t    ibp_handle;           /* mapped region handle */
         struct page      *ibp_pages[0];
 } kib_pages_t;
 
+#if IBNAL_USE_FMR
 typedef struct
 {
-        vv_mem_reg_h_t    md_handle;
-        __u32             md_lkey;
-        __u32             md_rkey;
-        __u64             md_addr;
+        vv_fmr_h_t        md_fmrhandle;         /* FMR handle */
+        int               md_fmrcount;          /* # mappings left */
+        int               md_active;            /* mapping in use? */
+        __u32             md_lkey;              /* local key */
+        __u32             md_rkey;              /* remote key */
+        __u64             md_addr;              /* IO VM address */
 } kib_md_t;
+#endif
 
 typedef struct
 {
@@ -270,30 +268,17 @@ typedef struct kib_rx                           /* receive message */
         struct kib_conn          *rx_conn;      /* owning conn */
         int                       rx_responded; /* responded to peer? */
         int                       rx_posted;    /* posted? */
-#if IBNAL_WHOLE_MEM
         vv_l_key_t                rx_lkey;      /* local key */
-#else        
-        __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
-#endif
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
         vv_wr_t                   rx_wrq;       /* receive work item */
         vv_scatgat_t              rx_gl;        /* and its memory */
 } kib_rx_t;
-
-#if IBNAL_WHOLE_MEM
-# define KIBNAL_RX_VADDR(rx) ((__u64)((unsigned long)((rx)->rx_msg)))
-# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_lkey)
-#else
-# define KIBNAL_RX_VADDR(rx) ((rx)->rx_vaddr)
-# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_conn->ibc_rx_pages->ibp_lkey)
-#endif
 
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
         int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         struct kib_conn          *tx_conn;      /* owning conn */
-        int                       tx_mapped;    /* mapped for RDMA? */
         int                       tx_sending;   /* # tx callbacks outstanding */
         int                       tx_queued;    /* queued for sending */
         int                       tx_waiting;   /* waiting for peer */
@@ -301,26 +286,21 @@ typedef struct kib_tx                           /* transmit message */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
         lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
-#if IBNAL_WHOLE_MEM
         vv_l_key_t                tx_lkey;      /* local key for message buffer */
-#else
-        kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
-        __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
-#endif
         kib_msg_t                *tx_msg;       /* message buffer (host vaddr) */
         int                       tx_nwrq;      /* # send work items */
+#if IBNAL_USE_FMR
+        vv_wr_t                   tx_wrq[2];    /* send work items... */
+        vv_scatgat_t              tx_gl[2];     /* ...and their memory */
+        kib_rdma_desc_t           tx_rd[1];     /* rdma descriptor */
+        kib_md_t                  tx_md;        /* FMA mapping descriptor */
+        __u64                    *tx_pages;     /* page array for mapping */
+#else
         vv_wr_t                  *tx_wrq;       /* send work items... */
         vv_scatgat_t             *tx_gl;        /* ...and their memory */
         kib_rdma_desc_t          *tx_rd;        /* rdma descriptor (src buffers) */
-} kib_tx_t;
-
-#if IBNAL_WHOLE_MEM
-# define KIBNAL_TX_VADDR(tx) ((__u64)((unsigned long)((tx)->tx_msg)))
-# define KIBNAL_TX_LKEY(tx)  ((tx)->tx_lkey)
-#else
-# define KIBNAL_TX_VADDR(tx) ((tx)->tx_vaddr)
-# define KIBNAL_TX_LKEY(tx)  (kibnal_data.kib_tx_pages->ibp_lkey)
 #endif
+} kib_tx_t;
 
 #define KIB_TX_UNMAPPED       0
 #define KIB_TX_MAPPED         1
@@ -377,16 +357,17 @@ typedef struct kib_conn
 } kib_conn_t;
 
 #define IBNAL_CONN_INIT_NOTHING       0         /* incomplete init */
-#define IBNAL_CONN_INIT               1         /* completed init */
-#define IBNAL_CONN_ACTIVE_ARP         2         /* active arping */
-#define IBNAL_CONN_ACTIVE_CONNECT     3         /* active sending req */
-#define IBNAL_CONN_ACTIVE_CHECK_REPLY 4         /* active checking reply */
-#define IBNAL_CONN_ACTIVE_RTU         5         /* active sending rtu */
-#define IBNAL_CONN_PASSIVE_WAIT       6         /* passive waiting for rtu */
-#define IBNAL_CONN_ESTABLISHED        7         /* connection established */
-#define IBNAL_CONN_DISCONNECT1        8         /* disconnect phase 1 */
-#define IBNAL_CONN_DISCONNECT2        9         /* disconnect phase 2 */
-#define IBNAL_CONN_DISCONNECTED       10        /* disconnect complete */
+#define IBNAL_CONN_INIT_QP            1         /* QP allocated */
+#define IBNAL_CONN_INIT               2         /* completed init */
+#define IBNAL_CONN_ACTIVE_ARP         3         /* active arping */
+#define IBNAL_CONN_ACTIVE_CONNECT     4         /* active sending req */
+#define IBNAL_CONN_ACTIVE_CHECK_REPLY 5         /* active checking reply */
+#define IBNAL_CONN_ACTIVE_RTU         6         /* active sending rtu */
+#define IBNAL_CONN_PASSIVE_WAIT       7         /* passive waiting for rtu */
+#define IBNAL_CONN_ESTABLISHED        8         /* connection established */
+#define IBNAL_CONN_DISCONNECT1        9         /* disconnect phase 1 */
+#define IBNAL_CONN_DISCONNECT2        10        /* disconnect phase 2 */
+#define IBNAL_CONN_DISCONNECTED       11        /* disconnect complete */
 
 typedef struct kib_peer
 {
@@ -401,6 +382,7 @@ typedef struct kib_peer
         struct list_head    ibp_conns;          /* all active connections */
         struct list_head    ibp_tx_queue;       /* msgs waiting for a conn */
         int                 ibp_connecting;     /* connecting+accepting */
+        int                 ibp_arp_count;      /* # arp attempts */
         unsigned long       ibp_reconnect_time; /* when reconnect may be attempted */
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
@@ -619,6 +601,15 @@ kibnal_set_conn_state (kib_conn_t *conn, int state)
         mb();
 }
 
+#if IBNAL_USE_FMR
+
+static inline int
+kibnal_rd_size (kib_rdma_desc_t *rd) 
+{
+        return rd->rd_nob;
+}
+
+#else
 static inline __u64
 kibnal_rf_addr (kib_rdma_frag_t *rf)
 {
@@ -644,3 +635,4 @@ kibnal_rd_size (kib_rdma_desc_t *rd)
         
         return size;
 }
+#endif

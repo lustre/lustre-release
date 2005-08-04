@@ -1,7 +1,8 @@
 # This file is sourced by lustre/lustrecvs
 
 portalstag="HEAD"
-libsysiotag="LIBSYSIO_HEAD_20040809"
+libsysiotag="HEAD"
+snmptag=""
 
 export LC_COLLATE=C
 
@@ -22,16 +23,16 @@ case "$lustretag" in
 	portalstag="b1_2"
 	;;
 
-    b_cmd*)
-    	portalstag="$lustretag"
-	;;
-
-    b_cray*)
-	libsysiotag="LIBSYSIO_HEAD_20041101"
+    b1_4)
+	snmptag="HEAD"
 	;;
 
     b1_4_newconfig)	
         portalstag="b_hd_newconfig"
+	;;
+
+    b_cmd*)
+    	portalstag="$lustretag"
 	;;
 
     b_port_ahead)
@@ -57,8 +58,16 @@ case "$lustretag" in
 	lustretag="b1_4"
 	;;
 
+    b_ptlrpc_cleanup)
+	portalstag="b_ptlrpc_cleanup"
+	;;
+
     b_release_*)
 	portalstag=$lustretag
+	;;
+
+    b_ioprovement)
+	portalstag=b_ioprovement
 	;;
 
     v1_[0-3]*|v1_4_*|[A-Z]*)
@@ -73,4 +82,5 @@ esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
 cvs_cmd portals portals "$portalstag"
+cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"

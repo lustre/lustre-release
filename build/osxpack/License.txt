@@ -1,0 +1,11 @@
+Lustre(tm) for OS X
+
+This software is a proprietary product of Cluster File Systems,
+Inc. which owns all intellectual property rights to this software.
+
+You must obtain a license from Cluster File Systems and agree to its
+terms before using this software, contact sales@clusterfs.com.
+
+This software is beta software modifying and running kernel code.
+Back up all systems before use.  This software is provided to you
+without any warranty, fitness for purpose or other guarantees.

@@ -235,7 +235,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 /* Passed by mount */
 struct lustre_mount_data {
         uint32_t lmd_magic;
-        uint32_t lmd_version;
+        uint32_t lmd_flags;
         uint64_t lmd_local_nid;
         uint64_t lmd_server_nid;
         uint32_t lmd_nal;
@@ -245,5 +245,6 @@ struct lustre_mount_data {
         char     lmd_profile[64];
 };
 
+#define LMD_FLG_FLOCK 0x0001
 
 #endif // _LUSTRE_CFG_H

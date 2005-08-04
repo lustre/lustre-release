@@ -2,13 +2,14 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
 ===================================================================
 --- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/Kconfig	2005-04-01 18:36:39.218039672 +0300
 +++ linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig	2005-04-01 18:36:45.571073864 +0300
-@@ -61,6 +61,13 @@
+@@ -61,6 +61,14 @@
  	help
  	   SCSI dump support
  
 +config SD_IOSTATS
 +   bool "Enable SCSI disk I/O stats"
 +   depends on BLK_DEV_SD
++   default y
 +   ---help---
 +     This enables SCSI disk I/O stats collection.  You must also enable
 +     /proc file system support if you want this feature.

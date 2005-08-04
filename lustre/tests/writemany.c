@@ -25,6 +25,16 @@ char cmdname[512];
 int o_abort = 0;
 int o_quiet = 0;
 
+void usage(char *name)
+{
+        fprintf(stderr, "usage: %s [opts] <dirname> <seconds> <threads>\n",
+                name);
+        fprintf(stderr, "  -q quiet\n");
+        fprintf(stderr, "  -a abort other children on first err\n");
+        exit(1);
+}
+
+
 struct kid_list_t {
         pid_t kid;
         struct kid_list_t *next;
@@ -47,6 +57,13 @@ void kill_kids(void)
                 kill(head->kid, SIGTERM);
                 head = head->next;
         }
+}
+
+static int usr1_received;
+void usr1_handler(int unused)
+{
+        usr1_received = 1;
+        kill_kids();
 }
 
 int wait_for_threads(int live_threads)
@@ -75,7 +92,7 @@ int wait_for_threads(int live_threads)
                          * always returns 1 (OK).  See wait(2).
                          */
                         int err = WEXITSTATUS(status);
-                        if (err || WIFSIGNALED(status))
+                        if (err)
                                 fprintf(stderr,
                                         "%s: error: PID %d had rc=%d\n",
                                         cmdname, ret, err);
@@ -126,10 +143,15 @@ int run_one_child(char *file, int thread, int seconds)
         gettimeofday(&start, NULL);
 
         while(!rc) {
-                gettimeofday(&cur, NULL);
-                if (cur.tv_sec > (start.tv_sec + seconds))
+                if (usr1_received)
                         break;
 
+                gettimeofday(&cur, NULL);
+                if (seconds) {
+                        if (cur.tv_sec > (start.tv_sec + seconds))
+                                break;
+                }
+                
                 sprintf(filename, "%s-%d-%ld", file, thread, nfiles);
 
                 fd = open(filename, O_RDWR | O_CREAT, 0666);
@@ -176,16 +198,6 @@ int run_one_child(char *file, int thread, int seconds)
         return rc;
 }
 
-void usage(char *name)
-{
-        fprintf(stderr,
-                "usage: %s [opts] <dirname> <seconds> <threads>\n",
-                name);
-        fprintf(stderr, "  -q quiet\n");
-        fprintf(stderr, "  -a abort other children on first err\n");
-        exit(1);
-}
-
 int main(int argc, char *argv[])
 {
         unsigned long duration;
@@ -225,6 +237,8 @@ int main(int argc, char *argv[])
                         cmdname, argv[i]);
                 exit(2);
         }
+
+        signal(SIGUSR1, usr1_handler);
 
         for (i = 1; i <= threads; i++) {
                 rc = fork();

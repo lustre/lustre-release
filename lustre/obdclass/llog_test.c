@@ -4,20 +4,23 @@
  *  Copyright (C) 2003 Cluster File Systems, Inc.
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * A kernel module which tests the llog API from the OBD setup function.
  */
@@ -529,14 +532,14 @@ static int llog_test_7(struct obd_device *obd)
 static int llog_run_tests(struct obd_device *obd)
 {
         struct llog_handle *llh;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
         int rc, err, cleanup_phase = 0;
         char name[10];
         ENTRY;
 
         sprintf(name, "%x", llog_test_rand);
-        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
         rc = llog_test_1(obd, name);
         if (rc)
@@ -576,7 +579,7 @@ static int llog_run_tests(struct obd_device *obd)
                 if (!rc)
                         rc = err;
         case 0:
-                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
 
         return rc;
@@ -662,9 +665,11 @@ static struct obd_ops llog_obd_ops = {
         .o_llog_finish = llog_test_llog_finish,
 };
 
+#ifdef LPROCFS
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
+#endif
 
 static int __init llog_test_init(void)
 {

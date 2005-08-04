@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -164,7 +167,7 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
         res_id.name[0] = fid->id;
         res_id.name[1] = fid->generation;
 
-        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
+        ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it,
                            data);
 
         EXIT;
@@ -277,7 +280,6 @@ int mdc_enqueue(struct obd_export *exp,
 
         if (it->it_op & IT_OPEN) {
                 it->it_create_mode |= S_IFREG;
-                it->it_create_mode &= ~current->fs->umask;
 
                 size[2] = sizeof(struct mds_rec_create);
                 size[3] = data->namelen + 1;
@@ -329,7 +331,7 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 4;
                 req->rq_replen = lustre_msg_size(4, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
-                obd_valid valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
+                obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE;
                 size[2] = sizeof(struct mds_body);
                 size[3] = data->namelen + 1;
 
@@ -431,9 +433,8 @@ int mdc_enqueue(struct obd_export *exp,
                 }
 
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
-                        /* The eadata is opaque; just check that it is
-                         * there.  Eventually, obd_unpackmd() will check
-                         * the contents */
+                        /* The eadata is opaque; just check that it is there.
+                         * Eventually, obd_unpackmd() will check the contents */
                         eadata = lustre_swab_repbuf(req, 2, body->eadatasize,
                                                     NULL);
                         if (eadata == NULL) {
@@ -631,7 +632,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                sizeof(lockh));
                 }
         }
-        CDEBUG(D_DENTRY, "D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
+        CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
                len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
                it->d.lustre.it_disposition, rc);
 

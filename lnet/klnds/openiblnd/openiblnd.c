@@ -800,7 +800,7 @@ kibnal_stop_ip_listener(int clear_acceptq)
         down(&kibnal_data.kib_listener_signal);
 
         LASSERT (kibnal_data.kib_listener_sock == NULL);
-        CDEBUG(D_WARNING, "Listener stopped\n");
+        CWARN("Listener stopped\n");
 
         if (!clear_acceptq)
                 return;

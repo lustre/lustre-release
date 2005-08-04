@@ -42,7 +42,7 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 	gm_status_t	gm_status;
 
 
-	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n", 
+	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n",
 	       pcfg->pcfg_command, private);
 	nal_data = (gmnal_data_t*)private;
 	switch(pcfg->pcfg_command) {
@@ -53,23 +53,24 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 
 		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
 		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
-	
+
 		GMNAL_GM_LOCK(nal_data);
 		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
-                gm_status = gm_host_name_to_node_id_ex (nal_data->gm_port, 0, name, &nid);
+                gm_status = gm_host_name_to_node_id_ex(nal_data->gm_port, 0,
+                                                       name, &nid);
 		GMNAL_GM_UNLOCK(nal_data);
                 if (gm_status != GM_SUCCESS) {
-                        CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) failed[%d]\n",
-                                name, gm_status);
+                        CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) "
+                               "failed[%d]\n", name, gm_status);
                         return (-1);
                 } else
 		        CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
 		GMNAL_GM_LOCK(nal_data);
-		gm_status = gm_node_id_to_global_id(nal_data->gm_port, 
+		gm_status = gm_node_id_to_global_id(nal_data->gm_port,
 						    nid, &gnid);
 		GMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n", 
+			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n",
 			       gm_status);
 			return(-1);
 		}
@@ -100,11 +101,9 @@ gmnal_load(void)
 	} else {
 		CDEBUG(D_INFO, "Portals GMNAL Failed to initialise\n");
 		return(-ENODEV);
-		
 	}
 
 	CDEBUG(D_INFO, "This is the end of the gmnal init routine");
-
 
 	return(0);
 }

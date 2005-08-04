@@ -1,8 +1,8 @@
-Index: linux-2.6.5-suse/fs/ext3/mballoc.c
+Index: linux-stage/fs/ext3/mballoc.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/mballoc.c	2005-03-02 22:42:20.659360368 +0300
-+++ linux-2.6.5-suse/fs/ext3/mballoc.c	2005-03-11 16:13:13.000000000 +0300
-@@ -0,0 +1,1863 @@
+--- linux-stage.orig/fs/ext3/mballoc.c	2004-02-23 16:02:56.000000000 -0500
++++ linux-stage/fs/ext3/mballoc.c	2005-07-28 16:10:14.951971768 -0400
+@@ -0,0 +1,1864 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -932,8 +932,9 @@ Index: linux-2.6.5-suse/fs/ext3/mballoc.c
 +		 * We've been searching too long. Let's try to allocate
 +		 * the best chunk we've found so far
 +		 */
-+		printk(KERN_ERR "EXT3-fs: too long searching (%d/%d)\n",
-+				ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
++		ext3_warning(inode->i_sb, __FUNCTION__,
++			     "too long searching: got %d want %d\n",
++			     ac.ac_b_ex.fe_len, ac.ac_g_ex.fe_len);
 +		ext3_mb_try_best_found(&ac, &e3b);
 +		if (ac.ac_status != AC_STATUS_FOUND) {
 +			/*
@@ -1866,10 +1867,10 @@ Index: linux-2.6.5-suse/fs/ext3/mballoc.c
 +	return;
 +}
 +
-Index: linux-2.6.5-suse/fs/ext3/super.c
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/super.c	2005-02-26 18:40:25.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/super.c	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/fs/ext3/super.c	2005-07-28 16:09:49.624822080 -0400
++++ linux-stage/fs/ext3/super.c	2005-07-28 16:10:14.952971616 -0400
 @@ -389,6 +389,7 @@
  	struct ext3_super_block *es = sbi->s_es;
  	int i;
@@ -1920,10 +1921,10 @@ Index: linux-2.6.5-suse/fs/ext3/super.c
  
  	return 0;
  
-Index: linux-2.6.5-suse/fs/ext3/Makefile
+Index: linux-stage/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/Makefile	2005-02-26 18:40:25.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/Makefile	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/fs/ext3/Makefile	2005-07-28 16:09:49.623822232 -0400
++++ linux-stage/fs/ext3/Makefile	2005-07-28 16:10:14.953971464 -0400
 @@ -5,7 +5,7 @@
  obj-$(CONFIG_EXT3_FS) += ext3.o
  
@@ -1933,10 +1934,10 @@ Index: linux-2.6.5-suse/fs/ext3/Makefile
  
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
-Index: linux-2.6.5-suse/fs/ext3/balloc.c
+Index: linux-stage/fs/ext3/balloc.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/balloc.c	2005-02-02 00:55:47.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/balloc.c	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/fs/ext3/balloc.c	2005-07-28 16:09:46.411310608 -0400
++++ linux-stage/fs/ext3/balloc.c	2005-07-28 16:10:14.954971312 -0400
 @@ -78,7 +78,7 @@
   *
   * Return buffer_head on success or NULL in case of failure.
@@ -1964,10 +1965,10 @@ Index: linux-2.6.5-suse/fs/ext3/balloc.c
  			unsigned long goal, int *errp)
  {
  	struct buffer_head *bitmap_bh = NULL;
-Index: linux-2.6.5-suse/fs/ext3/namei.c
+Index: linux-stage/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/namei.c	2005-02-26 18:40:19.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/namei.c	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/fs/ext3/namei.c	2005-07-28 16:09:48.092055096 -0400
++++ linux-stage/fs/ext3/namei.c	2005-07-28 16:10:14.955971160 -0400
 @@ -1640,7 +1640,7 @@
   * If the create succeeds, we fill in the inode information
   * with d_instantiate(). 
@@ -1977,10 +1978,10 @@ Index: linux-2.6.5-suse/fs/ext3/namei.c
  		struct nameidata *nd)
  {
  	handle_t *handle; 
-Index: linux-2.6.5-suse/fs/ext3/inode.c
+Index: linux-stage/fs/ext3/inode.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/inode.c	2005-02-26 18:40:25.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/inode.c	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/fs/ext3/inode.c	2005-07-28 16:09:49.622822384 -0400
++++ linux-stage/fs/ext3/inode.c	2005-07-28 16:10:14.958970704 -0400
 @@ -572,7 +572,7 @@
  		ext3_journal_forget(handle, branch[i].bh);
  	}
@@ -1999,7 +2000,7 @@ Index: linux-2.6.5-suse/fs/ext3/inode.c
  	return err;
  }
  
-@@ -1830,7 +1830,7 @@
+@@ -1835,7 +1835,7 @@
  		}
  	}
  
@@ -2008,7 +2009,7 @@ Index: linux-2.6.5-suse/fs/ext3/inode.c
  }
  
  /**
-@@ -2001,7 +2001,7 @@
+@@ -2006,7 +2006,7 @@
  				ext3_journal_test_restart(handle, inode);
  			}
  
@@ -2017,11 +2018,11 @@ Index: linux-2.6.5-suse/fs/ext3/inode.c
  
  			if (parent_bh) {
  				/*
-Index: linux-2.6.5-suse/fs/ext3/extents.c
+Index: linux-stage/fs/ext3/extents.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/extents.c	2005-02-26 18:40:25.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/extents.c	2005-02-26 18:40:26.000000000 +0300
-@@ -774,7 +774,7 @@
+--- linux-stage.orig/fs/ext3/extents.c	2005-07-28 16:09:49.619822840 -0400
++++ linux-stage/fs/ext3/extents.c	2005-07-28 16:10:14.960970400 -0400
+@@ -771,7 +771,7 @@
  		for (i = 0; i < depth; i++) {
  			if (!ablocks[i])
  				continue;
@@ -2030,8 +2031,8 @@ Index: linux-2.6.5-suse/fs/ext3/extents.c
  		}
  	}
  	kfree(ablocks);
-@@ -1431,7 +1431,7 @@
- 			path->p_idx->ei_leaf);
+@@ -1428,7 +1428,7 @@
+ 		  path->p_idx->ei_leaf);
  	bh = sb_find_get_block(tree->inode->i_sb, path->p_idx->ei_leaf);
  	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->ei_leaf);
 -	ext3_free_blocks(handle, tree->inode, path->p_idx->ei_leaf, 1);
@@ -2039,7 +2040,7 @@ Index: linux-2.6.5-suse/fs/ext3/extents.c
  	return err;
  }
  
-@@ -1919,10 +1919,12 @@
+@@ -1913,10 +1913,12 @@
  	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
  	handle_t *handle = ext3_journal_start(tree->inode, needed);
  	struct buffer_head *bh;
@@ -2053,7 +2054,7 @@ Index: linux-2.6.5-suse/fs/ext3/extents.c
  	if (from >= ex->ee_block && to == ex->ee_block + ex->ee_len - 1) {
  		/* tail removal */
  		unsigned long num, start;
-@@ -1934,7 +1936,7 @@
+@@ -1928,7 +1930,7 @@
  			bh = sb_find_get_block(tree->inode->i_sb, start + i);
  			ext3_forget(handle, 0, tree->inode, bh, start + i);
  		}
@@ -2061,12 +2062,12 @@ Index: linux-2.6.5-suse/fs/ext3/extents.c
 +		ext3_free_blocks(handle, tree->inode, start, num, metadata);
  	} else if (from == ex->ee_block && to <= ex->ee_block + ex->ee_len - 1) {
  		printk("strange request: removal %lu-%lu from %u:%u\n",
- 			from, to, ex->ee_block, ex->ee_len);
-Index: linux-2.6.5-suse/fs/ext3/xattr.c
+ 		       from, to, ex->ee_block, ex->ee_len);
+Index: linux-stage/fs/ext3/xattr.c
 ===================================================================
---- linux-2.6.5-suse.orig/fs/ext3/xattr.c	2005-02-26 18:40:22.000000000 +0300
-+++ linux-2.6.5-suse/fs/ext3/xattr.c	2005-02-26 18:40:26.000000000 +0300
-@@ -1366,7 +1366,7 @@
+--- linux-stage.orig/fs/ext3/xattr.c	2005-07-28 16:09:48.855938968 -0400
++++ linux-stage/fs/ext3/xattr.c	2005-07-28 16:10:43.588618336 -0400
+@@ -1371,7 +1371,7 @@
  			new_bh = sb_getblk(sb, block);
  			if (!new_bh) {
  getblk_failed:
@@ -2075,7 +2076,7 @@ Index: linux-2.6.5-suse/fs/ext3/xattr.c
  				error = -EIO;
  				goto cleanup;
  			}
-@@ -1408,7 +1408,7 @@
+@@ -1411,7 +1411,7 @@
  		if (HDR(old_bh)->h_refcount == cpu_to_le32(1)) {
  			/* Free the old block. */
  			ea_bdebug(old_bh, "freeing");
@@ -2084,19 +2085,19 @@ Index: linux-2.6.5-suse/fs/ext3/xattr.c
  
  			/* ext3_forget() calls bforget() for us, but we
  			   let our caller release old_bh, so we need to
-@@ -1504,7 +1504,7 @@
- 	lock_buffer(bh);
- 	if (HDR(bh)->h_refcount == cpu_to_le32(1)) {
- 		ext3_xattr_cache_remove(bh);
+@@ -1519,7 +1519,7 @@
+ 			mb_cache_entry_free(ce);
+ 			ce = NULL;
+ 		}
 -		ext3_free_blocks(handle, inode, EXT3_I(inode)->i_file_acl, 1);
 +		ext3_free_blocks(handle, inode, EXT3_I(inode)->i_file_acl, 1, 1);
  		get_bh(bh);
  		ext3_forget(handle, 1, inode, bh, EXT3_I(inode)->i_file_acl);
  	} else {
-Index: linux-2.6.5-suse/include/linux/ext3_fs.h
+Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.5-suse.orig/include/linux/ext3_fs.h	2005-02-26 18:40:25.000000000 +0300
-+++ linux-2.6.5-suse/include/linux/ext3_fs.h	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/include/linux/ext3_fs.h	2005-07-28 16:09:49.626821776 -0400
++++ linux-stage/include/linux/ext3_fs.h	2005-07-28 16:10:14.962970096 -0400
 @@ -57,6 +57,14 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
@@ -2120,7 +2121,7 @@ Index: linux-2.6.5-suse/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef clear_opt
-@@ -698,7 +707,7 @@
+@@ -700,7 +709,7 @@
  extern unsigned long ext3_bg_num_gdb(struct super_block *sb, int group);
  extern int ext3_new_block (handle_t *, struct inode *, unsigned long, int *);
  extern void ext3_free_blocks (handle_t *, struct inode *, unsigned long,
@@ -2129,7 +2130,7 @@ Index: linux-2.6.5-suse/include/linux/ext3_fs.h
  extern unsigned long ext3_count_free_blocks (struct super_block *);
  extern void ext3_check_blocks_bitmap (struct super_block *);
  extern struct ext3_group_desc * ext3_get_group_desc(struct super_block * sb,
-@@ -820,6 +829,37 @@
+@@ -822,6 +831,37 @@
  extern int ext3_ext_ioctl(struct inode *inode, struct file *filp,
  			  unsigned int cmd, unsigned long arg);
  
@@ -2167,10 +2168,10 @@ Index: linux-2.6.5-suse/include/linux/ext3_fs.h
  #endif	/* __KERNEL__ */
  
  #define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
-Index: linux-2.6.5-suse/include/linux/ext3_fs_sb.h
+Index: linux-stage/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.6.5-suse.orig/include/linux/ext3_fs_sb.h	2005-02-26 18:40:20.000000000 +0300
-+++ linux-2.6.5-suse/include/linux/ext3_fs_sb.h	2005-02-26 18:40:26.000000000 +0300
+--- linux-stage.orig/include/linux/ext3_fs_sb.h	2005-07-28 16:09:48.346016488 -0400
++++ linux-stage/include/linux/ext3_fs_sb.h	2005-07-28 16:10:14.963969944 -0400
 @@ -23,10 +23,30 @@
  #define EXT_INCLUDE
  #include <linux/blockgroup_lock.h>

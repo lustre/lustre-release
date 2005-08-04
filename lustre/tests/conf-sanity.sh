@@ -9,6 +9,13 @@
 
 set -e
 
+ONLY=${ONLY:-"$*"}
+# bug number for skipped test: 
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -75,7 +82,7 @@ umount_client() {
 
 manual_umount_client(){
 	echo "manual umount lustre on ${MOUNTPATH}...."
-	do_facet  client "umount $MOUNT"
+	do_facet client "umount $MOUNT"
 }
 
 setup() {
@@ -341,18 +348,18 @@ test_9() {
         # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
         start_ost
         start_mds
-        CHECK_PTLDEBUG="`do_facet mds cat /proc/sys/portals/debug`"
+        CHECK_PTLDEBUG="`do_facet mds sysctl portals.debug | cut -d= -f2`"
         if [ $CHECK_PTLDEBUG = "3" ]; then
            echo "lconf --debug success"
         else
            echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
            return 1
         fi
-        CHECK_SUBSYSTEM="`do_facet mds cat /proc/sys/portals/subsystem_debug`"
-        if [ $CHECK_SUBSYSTEM = "20" ]; then
+        CHECK_SUBSYS="`do_facet mds sysctl portals.subsystem_debug|cut -d= -f2`"
+        if [ $CHECK_SUBSYS = "20" ]; then
            echo "lconf --subsystem success"
         else
-           echo "lconf --subsystem: want 20, have $CHECK_SUBSYSTEM"
+           echo "lconf --subsystem: want 20, have $CHECK_SUBSYS"
            return 1
         fi
         mount_client $MOUNT

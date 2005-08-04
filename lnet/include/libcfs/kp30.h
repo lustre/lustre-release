@@ -405,7 +405,8 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_MEMHOG                  _IOWR('e', 42, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MAX_NR                             42
+#define IOC_PORTAL_DMSG                    _IOWR('e', 43, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_MAX_NR                             43
 
 enum {
         QSWNAL    = 1,
@@ -423,6 +424,9 @@ enum {
 };
 
 #define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
+#ifndef CRAY_PORTALS
+#define NALID_FROM_IFACE(nal) (nal)
+#endif
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 

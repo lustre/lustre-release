@@ -39,13 +39,14 @@
 
 #include "test_common.h"
 
+#define MAX_STRING_SIZE 2048
 
-
-static char mds_server[1024] = {0,};
-static char barrier_script[1024] = {0,};
-static char failover_script[1024] = {0,};
-static char barrier_cmd[1024] = {0,};
-static char failover_cmd[1024] = {0,};
+static char mds_server[MAX_STRING_SIZE] = {0,};
+static char barrier_script[MAX_STRING_SIZE] = {0,};
+static char failover_script[MAX_STRING_SIZE] = {0,};
+static char barrier_cmd[MAX_STRING_SIZE] = {0,};
+static char failover_cmd[MAX_STRING_SIZE] = {0,};
+static char ssh_cmd[MAX_STRING_SIZE] = {0,};
 
 static void replay_barrier()
 {
@@ -91,9 +92,11 @@ static void mds_failover()
 
 void t0()
 {
+        char *path="/mnt/lustre/f0";
         ENTRY("empty replay");
         replay_barrier();
         mds_failover();
+        t_check_stat_fail("/mnt/lustre/f0");
         LEAVE();
 }
 
@@ -315,19 +318,19 @@ extern void __liblustre_cleanup_(void);
 void usage(const char *cmd)
 {
         printf("Usage: \t%s --target mdsnid:/mdsname/profile -s mds_hostname "
-                "-b \"barrier cmd\" -f \"failover cmd\"\n", cmd);
+                "-b \"barrier cmd\" -f \"failover cmd\" [--rsh \"rsh_cmd\"]\n", cmd);
         printf("       \t%s --dumpfile dumpfile -s mds_hostname -b \"barrier cmd\" "
-                "-f \"failover cmd\"\n", cmd);
+                "-f \"failover cmd\" [--rsh \"rsh_cmd\"]\n", cmd);
         exit(-1);
 }
 
 void test_ssh()
 {
-        char cmd[1024];
+        char cmd[MAX_STRING_SIZE];
 
-        sprintf(cmd, "ssh %s cat /dev/null", mds_server);
+        sprintf(cmd, "%s %s cat /dev/null", ssh_cmd, mds_server);
         if (system(cmd)) {
-                printf("ssh can't access server node: %s\n", mds_server);
+                printf("Can't access server node: %s using method: %s\n", mds_server, ssh_cmd);
                 exit(-1);
         }
 }
@@ -338,10 +341,11 @@ int main(int argc, char * const argv[])
         static struct option long_opts[] = {
                 {"target", 1, 0, 0},
                 {"dumpfile", 1, 0, 0},
+                {"ssh", 1, 0, 0},
                 {0, 0, 0, 0}
         };
 
-        if (argc < 4)
+        if (argc < 4 - (getenv(ENV_LUSTRE_MNTTGT)||getenv(ENV_LUSTRE_DUMPFILE)))
                 usage(argv[0]);
 
         while ((c = getopt_long(argc, argv, "s:b:f:", long_opts, &opt_index)) != -1) {
@@ -354,18 +358,20 @@ int main(int argc, char * const argv[])
                                 setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
                         } else if (!strcmp(long_opts[opt_index].name, "dumpfile")) {
                                 setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        } else if (!strcmp(long_opts[opt_index].name, "ssh")) {
+                                safe_strncpy(ssh_cmd, optarg, MAX_STRING_SIZE);
                         } else
                                 usage(argv[0]);
                         break;
                 }
                 case 's':
-                        strcpy(mds_server, optarg);
+                        safe_strncpy(mds_server, optarg, MAX_STRING_SIZE);
                         break;
                 case 'b':
-                        strcpy(barrier_script, optarg);
+                        safe_strncpy(barrier_script, optarg, MAX_STRING_SIZE);
                         break;
                 case 'f':
-                        strcpy(failover_script, optarg);
+                        safe_strncpy(failover_script, optarg, MAX_STRING_SIZE);
                         break;
                 default:
                         usage(argv[0]);
@@ -378,11 +384,18 @@ int main(int argc, char * const argv[])
             !strlen(failover_script))
                 usage(argv[0]);
 
+        /* default to using ssh */
+        if (!strlen(ssh_cmd)) {
+                safe_strncpy(ssh_cmd, "ssh", MAX_STRING_SIZE);
+        }
+
         test_ssh();
 
         /* prepare remote command */
-        sprintf(barrier_cmd, "ssh %s \"%s\"", mds_server, barrier_script);
-        sprintf(failover_cmd, "ssh %s \"%s\"", mds_server, failover_script);
+        sprintf(barrier_cmd, "%s %s \"%s\"", 
+                ssh_cmd, mds_server, barrier_script);
+        sprintf(failover_cmd, "%s %s \"%s\"", 
+                ssh_cmd, mds_server, failover_script);
 
         setenv(ENV_LUSTRE_TIMEOUT, "10", 1);
 

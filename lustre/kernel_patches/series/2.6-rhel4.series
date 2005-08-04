@@ -14,3 +14,4 @@ lookup_bdev_init_intent.patch
 remove-suid-2.6-suse.patch
 export-show_task-2.6-vanilla.patch
 sd_iostats-2.6-rhel4.patch 
+fsprivate-2.6.patch

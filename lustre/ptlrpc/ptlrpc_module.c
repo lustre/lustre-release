@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -100,6 +103,10 @@ EXPORT_SYMBOL(ptlrpc_uuid_to_connection);
 EXPORT_SYMBOL(ptlrpc_queue_wait);
 EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
+EXPORT_SYMBOL(ptlrpc_add_rqs_to_pool);
+EXPORT_SYMBOL(ptlrpc_init_rq_pool);
+EXPORT_SYMBOL(ptlrpc_free_rq_pool);
+EXPORT_SYMBOL(ptlrpc_prep_req_pool);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
 EXPORT_SYMBOL(ptlrpc_unregister_reply);
@@ -131,10 +138,11 @@ EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
 EXPORT_SYMBOL(ptlrpc_commit_replies);
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
-EXPORT_SYMBOL(ptlrpc_start_n_threads);
+EXPORT_SYMBOL(ptlrpc_start_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
 EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(ptlrpc_daemonize);
+EXPORT_SYMBOL(ptlrpc_service_health_check);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_msg_swabbed);
@@ -189,7 +197,6 @@ EXPORT_SYMBOL(ptlrpc_activate_import);
 EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
-EXPORT_SYMBOL(ptlrpc_fail_export);
 EXPORT_SYMBOL(ptlrpc_recover_import);
 
 /* pinger.c */
@@ -202,10 +209,6 @@ EXPORT_SYMBOL(ptlrpcd_addref);
 EXPORT_SYMBOL(ptlrpcd_decref);
 EXPORT_SYMBOL(ptlrpcd_add_req);
 EXPORT_SYMBOL(ptlrpcd_wake);
-
-/* lproc_ptlrpc.c */
-EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
-EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
 /* llogd.c */
 EXPORT_SYMBOL(llog_origin_handle_create);

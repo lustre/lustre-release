@@ -68,10 +68,10 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 	ntx = gm_num_send_tokens(nal_data->gm_port);
 	GMNAL_GM_UNLOCK(nal_data);
 	CDEBUG(D_INFO, "total number of send tokens available is [%d]\n", ntx);
-	
+
 	/*
- 	 *	allocate a number for small sends
-	 * 	num_stxds from gmnal_module.c
+	 *	allocate a number for small sends
+	 *	num_stxds from gmnal_module.c
 	 */
 	nstx = num_stxds;
 	/*
@@ -84,19 +84,19 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 	 */
 	nltx = ntx - (nrxt_stx + nstx);
 	if (nltx < 1) {
-		CDEBUG(D_ERROR, "No tokens available for large messages\n");
+		CERROR("No tokens available for large messages\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 
 
 	/*
-	 * A semaphore is initialised with the 
+	 * A semaphore is initialised with the
 	 * number of transmit tokens available.
 	 * To get a stxd, acquire the token semaphore.
- 	 * this decrements the available token count
-	 * (if no tokens you block here, someone returning a 
+	 * this decrements the available token count
+	 * (if no tokens you block here, someone returning a
 	 * stxd will release the semaphore and wake you)
-	 * When token is obtained acquire the spinlock 
+	 * When token is obtained acquire the spinlock
 	 * to manipulate the list
 	 */
 	GMNAL_TXD_TOKEN_INIT(nal_data, nstx);
@@ -105,21 +105,20 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 	GMNAL_RXT_TXD_LOCK_INIT(nal_data);
 	GMNAL_LTXD_TOKEN_INIT(nal_data, nltx);
 	GMNAL_LTXD_LOCK_INIT(nal_data);
-	
+
 	for (i=0; i<=nstx; i++) {
 		PORTAL_ALLOC(txd, sizeof(gmnal_stxd_t));
 		if (!txd) {
-			CDEBUG(D_ERROR, "Failed to malloc txd [%d]\n", i);
+			CERROR("Failed to malloc txd [%d]\n", i);
 			return(GMNAL_STATUS_NOMEM);
 		}
 		GMNAL_GM_LOCK(nal_data);
-		txbuffer = gm_dma_malloc(nal_data->gm_port, 
+		txbuffer = gm_dma_malloc(nal_data->gm_port,
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],"
-			       " size [%d]\n", i, 
-			       GMNAL_SMALL_MSG_SIZE(nal_data));
+			CERROR("Failed to gm_dma_malloc txbuffer [%d], "
+			       "size [%d]\n", i,GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(gmnal_stxd_t));
 			return(GMNAL_STATUS_FAIL);
 		}
@@ -138,7 +137,7 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 	for (i=0; i<=nrxt_stx; i++) {
 		PORTAL_ALLOC(txd, sizeof(gmnal_stxd_t));
 		if (!txd) {
-			CDEBUG(D_ERROR, "Failed to malloc txd [%d]\n", i);
+			CERROR("Failed to malloc txd [%d]\n", i);
 			return(GMNAL_STATUS_NOMEM);
 		}
 		GMNAL_GM_LOCK(nal_data);
@@ -146,9 +145,8 @@ gmnal_alloc_txd(gmnal_data_t *nal_data)
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d],"
-			       " size [%d]\n", i, 
-			       GMNAL_SMALL_MSG_SIZE(nal_data));
+			CERROR("Failed to gm_dma_malloc txbuffer [%d],"
+			       " size [%d]\n",i,GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(txd, sizeof(gmnal_stxd_t));
 			return(GMNAL_STATUS_FAIL);
 		}
@@ -252,7 +250,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
                         CDEBUG(D_PORTALS, "Got token\n");
 	        } else {
 		        if (GMNAL_TXD_TRYGETTOKEN(nal_data)) {
-			        CDEBUG(D_ERROR, "can't get token\n");
+			        CERROR("can't get token\n");
 			        return(NULL);
 		        }
 	        }
@@ -260,7 +258,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
 	        txd = nal_data->stxd;
 		nal_data->stxd = txd->next;
 	        GMNAL_TXD_UNLOCK(nal_data);
-	        CDEBUG(D_INFO, "got [%p], head is [%p]\n", txd, 
+	        CDEBUG(D_INFO, "got [%p], head is [%p]\n", txd,
 		       nal_data->stxd);
                 txd->kniov = 0;
         }       /* general txd get */
@@ -273,7 +271,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
 void
 gmnal_return_stxd(gmnal_data_t *nal_data, gmnal_stxd_t *txd)
 {
-	CDEBUG(D_TRACE, "nal_data [%p], txd[%p] rxt[%d]\n", nal_data, 
+	CDEBUG(D_TRACE, "nal_data [%p], txd[%p] rxt[%d]\n", nal_data,
 	       txd, txd->rxt);
 
         /*
@@ -356,9 +354,9 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 	GMNAL_GM_LOCK(nal_data);
 	nrx = gm_num_receive_tokens(nal_data->gm_port);
 	GMNAL_GM_UNLOCK(nal_data);
-	CDEBUG(D_INFO, "total number of receive tokens available is [%d]\n", 
+	CDEBUG(D_INFO, "total number of receive tokens available is [%d]\n",
 	       nrx);
-	
+
 	nsrx = nrx/2;
 	nsrx = 12;
 	/*
@@ -367,7 +365,7 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 	 */
 	nsrx = num_stxds*2 + 2;
 
-	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n", 
+	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n",
 	       nsrx);
 
 
@@ -376,7 +374,7 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 					     gm_hash_hash_ptr, 0, 0, nsrx, 0);
 	GMNAL_GM_UNLOCK(nal_data);
 	if (!nal_data->srxd_hash) {
-			CDEBUG(D_ERROR, "Failed to create hash table\n");
+			CERROR("Failed to create hash table\n");
 			return(GMNAL_STATUS_NOMEM);
 	}
 
@@ -386,43 +384,40 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 	for (i=0; i<=nsrx; i++) {
 		PORTAL_ALLOC(rxd, sizeof(gmnal_srxd_t));
 		if (!rxd) {
-			CDEBUG(D_ERROR, "Failed to malloc rxd [%d]\n", i);
+			CERROR("Failed to malloc rxd [%d]\n", i);
 			return(GMNAL_STATUS_NOMEM);
 		}
 #if 0
 		PORTAL_ALLOC(rxbuffer, GMNAL_SMALL_MSG_SIZE(nal_data));
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to malloc rxbuffer [%d], "
-			       "size [%d]\n", i, 
-			       GMNAL_SMALL_MSG_SIZE(nal_data));
+			CERROR("Failed to malloc rxbuffer [%d], "
+			       "size [%d]\n", i,GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(gmnal_srxd_t));
 			return(GMNAL_STATUS_FAIL);
 		}
 		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] "
-		       "rxbuffer [%p], size [%d]\n", nal_data->gm_port, 
+		       "rxbuffer [%p], size [%d]\n", nal_data->gm_port,
 		       rxbuffer, GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_LOCK(nal_data);
-		gm_status = gm_register_memory(nal_data->gm_port, rxbuffer, 
+		gm_status = gm_register_memory(nal_data->gm_port, rxbuffer,
 					       GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p],"
+			CERROR("gm_register_memory failed buffer [%p],"
 			       " index [%d]\n", rxbuffer, i);
 			switch(gm_status) {
 				case(GM_FAILURE):
-					CDEBUG(D_ERROR, "GM_FAILURE\n");
+					CERROR("GM_FAILURE\n");
 				break;
 				case(GM_PERMISSION_DENIED):
-					CDEBUG(D_ERROR, "PERMISSION_DENIED\n");
+					CERROR("PERMISSION_DENIED\n");
 				break;
 				case(GM_INVALID_PARAMETER):
-					CDEBUG(D_ERROR, "INVALID_PARAMETER\n");
+					CERROR("INVALID_PARAMETER\n");
 				break;
 				default:
-					CDEBUG(D_ERROR, "Unknown error[%d]\n", 
-					       gm_status);
+					CERROR("Unknown error[%d]\n",gm_status);
 				break;
-				
 			}
 			return(GMNAL_STATUS_FAIL);
 		}
@@ -432,22 +427,21 @@ gmnal_alloc_srxd(gmnal_data_t *nal_data)
 					 GMNAL_SMALL_MSG_SIZE(nal_data));
 		GMNAL_GM_UNLOCK(nal_data);
 		if (!rxbuffer) {
-			CDEBUG(D_ERROR, "Failed to gm_dma_malloc rxbuffer [%d],"
-			       " size [%d]\n", i, 
-			       GMNAL_SMALL_MSG_SIZE(nal_data));
+			CERROR("Failed to gm_dma_malloc rxbuffer [%d], "
+			       "size [%d]\n",i ,GMNAL_SMALL_MSG_SIZE(nal_data));
 			PORTAL_FREE(rxd, sizeof(gmnal_srxd_t));
 			return(GMNAL_STATUS_FAIL);
 		}
 #endif
-		
+
 		rxd->buffer = rxbuffer;
 		rxd->size = GMNAL_SMALL_MSG_SIZE(nal_data);
 		rxd->gmsize = gm_min_size_for_length(rxd->size);
 
-		if (gm_hash_insert(nal_data->srxd_hash, 
+		if (gm_hash_insert(nal_data->srxd_hash,
 				   (void*)rxbuffer, (void*)rxd)) {
 
-			CDEBUG(D_ERROR, "failed to create hash entry rxd[%p] "
+			CERROR("failed to create hash entry rxd[%p] "
 			       "for rxbuffer[%p]\n", rxd, rxbuffer);
 			return(GMNAL_STATUS_FAIL);
 		}
@@ -584,7 +578,7 @@ gmnal_stop_rxthread(gmnal_data_t *nal_data)
 	}
 
 	if (nal_data->rxthread_flag != GMNAL_THREAD_RESET) {
-		CDEBUG(D_ERROR, "I don't know how to wake the thread\n");
+		CERROR("I don't know how to wake the thread\n");
 	} else {
 		CDEBUG(D_INFO, "rx thread seems to have stopped\n");
 	}
@@ -612,7 +606,7 @@ gmnal_stop_ctthread(gmnal_data_t *nal_data)
 	}
 
 	if (nal_data->ctthread_flag == GMNAL_THREAD_STOP) {
-		CDEBUG(D_ERROR, "I DON'T KNOW HOW TO WAKE THE THREAD\n");
+		CERROR("I DON'T KNOW HOW TO WAKE THE THREAD\n");
 	} else {
 		CDEBUG(D_INFO, "CT THREAD SEEMS TO HAVE STOPPED\n");
 	}
@@ -889,7 +883,7 @@ gmnal_is_small_msg(gmnal_data_t *nal_data, int niov, struct iovec *iov,
 		CDEBUG(D_INFO, "Yep, small message\n");
 		return(1);
 	} else {
-		CDEBUG(D_ERROR, "No, not small message\n");
+		CERROR("No, not small message\n");
 		/*
 		 *	could be made up of lots of little ones !
 		 */
@@ -914,7 +908,7 @@ gmnal_add_rxtwe(gmnal_data_t *nal_data, gm_recv_t *recv)
 
 	PORTAL_ALLOC(we, sizeof(gmnal_rxtwe_t));
 	if (!we) {
-		CDEBUG(D_ERROR, "failed to malloc\n");
+		CERROR("failed to malloc\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 	we->buffer = gm_ntohp(recv->buffer);
@@ -981,7 +975,7 @@ gmnal_get_rxtwe(gmnal_data_t *nal_data)
 			if (!nal_data->rxtwe_head)
 				nal_data->rxtwe_tail = NULL;
 		} else {
-			CDEBUG(D_WARNING, "woken but no work\n");
+			CWARN("woken but no work\n");
 		}
 		spin_unlock(&nal_data->rxtwe_lock);
 	} while (!we);
@@ -1016,7 +1010,7 @@ gmnal_start_kernel_threads(gmnal_data_t *nal_data)
 	nal_data->ctthread_pid = 
 	         kernel_thread(gmnal_ct_thread, (void*)nal_data, 0);
 	if (nal_data->ctthread_pid <= 0) {
-		CDEBUG(D_ERROR, "Caretaker thread failed to start\n");
+		CERROR("Caretaker thread failed to start\n");
 		return(GMNAL_STATUS_FAIL);
 	}
 
@@ -1053,7 +1047,7 @@ gmnal_start_kernel_threads(gmnal_data_t *nal_data)
 		nal_data->rxthread_pid[threads] = 
 		       kernel_thread(gmnal_rx_thread, (void*)nal_data, 0);
 		if (nal_data->rxthread_pid[threads] <= 0) {
-			CDEBUG(D_ERROR, "Receive thread failed to start\n");
+			CERROR("Receive thread failed to start\n");
 			gmnal_stop_rxthread(nal_data);
 			gmnal_stop_ctthread(nal_data);
 			return(GMNAL_STATUS_FAIL);

@@ -9,20 +9,23 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -376,11 +379,11 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa = NULL;
-        int  cleanup_phase = 0, rc = 0;
+        int rc;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OST_SETATTR))
-                GOTO(cleanup, rc);
+                RETURN(0);
 
         /* first get memory EA */
         oa = obdo_alloc();
@@ -389,14 +392,12 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         LASSERT(lmm);
 
-        cleanup_phase = 1;
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
-                GOTO(cleanup, rc);
+                GOTO(out, rc);
         }
 
-        cleanup_phase = 2;
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
         oa->o_uid = inode->i_uid;
@@ -410,19 +411,12 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         /* do setattr from mds to ost asynchronously */
         rc = obd_setattr_async(mds->mds_osc_exp, oa, lsm, &oti);
         if (rc)
-                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64" on ost error "
-                       "%d\n", lsm->lsm_object_id, rc);
-cleanup:
-        switch(cleanup_phase) {
-        case 2:
-                obd_free_memmd(mds->mds_osc_exp, &lsm);
-        case 1:
-                obdo_free(oa);
-        case 0:
-                if (logcookies)
-                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
-        }
+                CDEBUG(D_INODE, "mds to ost setattr objid 0x"LPX64
+                       " on ost error %d\n", lsm->lsm_object_id, rc);
 
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
+  out:
+        obdo_free(oa);
         RETURN(rc);
 }
 
@@ -529,6 +523,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
                         if (logcookies == NULL)
                                 GOTO(cleanup, rc = -ENOMEM);
+
                         if (mds_log_op_setattr(obd, inode, lmm, lmm_size,
                                                logcookies,
                                                mds->mds_max_cookiesize) <= 0) {
@@ -613,6 +608,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         switch (cleanup_phase) {
         case 2:
                 OBD_FREE(lmm, mds->mds_max_mdsize);
+                if (logcookies)
+                        OBD_FREE(logcookies, mds->mds_max_cookiesize);
         case 1:
                 if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)
@@ -703,7 +700,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 if (rc != -ENOENT)
-                        CERROR("parent lookup error %d\n", rc);
+                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                               rec->ur_fid1->id, rec->ur_fid1->generation, rc);
                 GOTO(cleanup, rc);
         }
         cleanup_phase = 1; /* locked parent dentry */
@@ -815,24 +813,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CDEBUG(D_INODE, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
                 } else {
-                        struct lustre_handle child_ino_lockh;
-
                         CDEBUG(D_INODE, "created ino %lu with gen %x\n",
                                inode->i_ino, inode->i_generation);
-
-                        /* The inode we were allocated may have just been freed
-                         * by an unlink operation.  We take this lock to
-                         * synchronize against the matching reply-ack-lock taken
-                         * in unlink, to avoid replay problems if this reply
-                         * makes it out to the client but the unlink's does not.
-                         * See bug 2029 for more detail.*/
-                        rc = mds_lock_new_child(obd, inode, &child_ino_lockh);
-                        if (rc != ELDLM_OK) {
-                                CERROR("error locking for unlink/create sync: "
-                                       "%d\n", rc);
-                        } else {
-                                ldlm_lock_decref(&child_ino_lockh, LCK_EX);
-                        }
                 }
 
                 rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
@@ -887,6 +869,13 @@ cleanup:
                         break;
                 }
         } else if (created) {
+                /* The inode we were allocated may have just been freed
+                 * by an unlink operation.  We take this lock to
+                 * synchronize against the matching reply-ack-lock taken
+                 * in unlink, to avoid replay problems if this reply
+                 * makes it out to the client but the unlink's does not.
+                 * See bug 2029 for more detail.*/
+                mds_lock_new_child(obd, dchild->d_inode, NULL);
                 /* save uid/gid of create inode and parent */
                 parent_uid = dir->i_uid;
                 parent_gid = dir->i_gid;
@@ -2087,16 +2076,16 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
 
-        push_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
-        pop_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
         RETURN(rc);
 }

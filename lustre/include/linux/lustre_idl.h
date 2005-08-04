@@ -33,15 +33,19 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include <lustre/types.h>
+#endif
+
 #ifdef __KERNEL__
-# include <asm/types.h>
 # include <linux/types.h>
-# include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
+# include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
 #else
-# include <asm/types.h>
 # include <stdint.h>
 #endif
 #endif
@@ -370,11 +374,11 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_MDS        (0x100000000ULL) /* where an inode lives on */
 #define OBD_MD_REINT      (0x200000000ULL) /* reintegrate oa */
 
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM|\
-                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE|\
-                           OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
-
+#define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
+                          OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
+                          OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
+                          OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
+                          OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -734,7 +738,8 @@ extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
  *  LOV data structures
  */
 
-#define LOV_MIN_STRIPE_SIZE 65536UL /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_SIZE 65536   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MAX_STRIPE_COUNT  160   /* until bug 4424 is fixed */
 
 #define LOV_MAX_UUID_BUFFER_SIZE  8192
 /* The size of the buffer the lov/mdc reserves for the
@@ -785,13 +790,15 @@ extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 
 /* lock types */
 typedef enum {
+        LCK_MINMODE = 0,
         LCK_EX = 1,
         LCK_PW = 2,
         LCK_PR = 4,
         LCK_CW = 8,
         LCK_CR = 16,
         LCK_NL = 32,
-//      LCK_GROUP = 64,
+        LCK_GROUP = 64,
+        LCK_MAXMODE
 } ldlm_mode_t;
 
 typedef enum {
@@ -807,14 +814,15 @@ typedef enum {
 struct ldlm_extent {
         __u64 start;
         __u64 end;
+        __u64 gid;
 };
 
 struct ldlm_flock {
         __u64 start;
         __u64 end;
-        __u64 blocking_export;
-        pid_t blocking_pid;
-        pid_t pid;
+        __u64 blocking_export;  /* not actually used over the wire */
+        __u32 blocking_pid;     /* not actually used over the wire */
+        __u32 pid;
 };
 
 /* it's important that the fields of the ldlm_extent structure match

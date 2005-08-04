@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -277,6 +280,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
@@ -384,6 +388,7 @@ int lov_prep_match_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_stripe = i;
@@ -495,9 +500,33 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
         LASSERT(set->set_completes);
 
-        if (!set->set_success)
-                GOTO(cleanup, rc = -EIO);
-        if (*lsmp == NULL && set->set_count != set->set_success) {
+        /* try alloc objects on other osts if osc_create fails for
+         * exceptions: RPC failure, ENOSPC, etc */
+        if (set->set_count != set->set_success) {
+                list_for_each_entry (req, &set->set_list, rq_link) {
+                        if (req->rq_rc == 0)
+                                continue;
+                        
+                        set->set_completes--;
+                        req->rq_complete = 0;
+                        
+                        rc = qos_remedy_create(set, req);
+                        lov_update_create_set(set, req, rc);
+
+                        if (rc)
+                                break;
+                }
+        }
+
+        /* no successful creates */
+        if (set->set_success == 0)
+                GOTO(cleanup, rc);
+        
+        /* If there was an explicit stripe set, fail.  Otherwise, we
+         * got some objects and that's not bad. */
+        if (set->set_count != set->set_success) {
+                if (*lsmp)
+                        GOTO(cleanup, rc);
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
@@ -533,7 +562,7 @@ cleanup:
                 if (!req->rq_complete || req->rq_rc)
                         continue;
 
-                sub_exp = lov->tgts[req->rq_idx].ltd_exp,
+                sub_exp = lov->tgts[req->rq_idx].ltd_exp;
                 err = obd_destroy(sub_exp, req->rq_oa, NULL, oti);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
@@ -1203,6 +1232,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obdo *src_oa,
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
 
                 lov_set_add_req(req, set);
         }
@@ -1281,6 +1311,7 @@ int lov_prep_sync_set(struct obd_export *exp, struct obdo *src_oa,
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
 
                 lov_set_add_req(req, set);
         }

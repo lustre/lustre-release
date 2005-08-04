@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -86,8 +89,10 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         int rc = 0;
         ENTRY;
 
-        if (flags == LDLM_FL_WAIT_NOREPROC)
+        if (flags == LDLM_FL_WAIT_NOREPROC) {
+                LDLM_DEBUG(lock, "client-side enqueue waiting on pending lock");
                 goto noreproc;
+        }
 
         if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
                        LDLM_FL_BLOCK_CONV))) {
@@ -110,8 +115,16 @@ noreproc:
 
         lwd.lwd_lock = lock;
 
-        lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ldlm_expired_completion_wait,
-                               interrupted_completion_wait, &lwd);
+        if (unlikely(flags & LDLM_FL_NO_TIMEOUT)) {
+                LDLM_DEBUG(lock, "waiting indefinitely because CW lock was"
+                           " met\n");
+                lwi = LWI_INTR(interrupted_completion_wait, &lwd);
+        } else {
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ,
+                                       ldlm_expired_completion_wait,
+                                       interrupted_completion_wait, &lwd);
+        }
+
         if (imp != NULL) {
                 spin_lock_irqsave(&imp->imp_lock, irqflags);
                 lwd.lwd_generation = imp->imp_generation;
@@ -210,6 +223,12 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
         l_unlock(&ns->ns_lock);
 
         ldlm_lock_decref_and_cancel(lockh, mode);
+
+        /* XXX - HACK because we shouldn't call ldlm_lock_destroy()
+         *       from llite/file.c/ll_file_flock(). */
+        if (lock->l_resource->lr_type == LDLM_FLOCK) {
+                ldlm_lock_destroy(lock);
+        }
 }
 
 int ldlm_cli_enqueue(struct obd_export *exp,
@@ -433,6 +452,8 @@ cleanup:
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
                                   int *flags)
 {
+        struct ldlm_resource *res;
+        int rc;
         ENTRY;
         if (lock->l_resource->lr_namespace->ns_client) {
                 CERROR("Trying to cancel local lock\n");
@@ -440,16 +461,22 @@ static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
         }
         LDLM_DEBUG(lock, "client-side local convert");
 
-        ldlm_lock_convert(lock, new_mode, flags);
-        ldlm_reprocess_all(lock->l_resource);
-
+        res = ldlm_lock_convert(lock, new_mode, flags);
+        if (res) {
+                ldlm_reprocess_all(res);
+                rc = 0;
+        } else {
+                rc = EDEADLOCK;
+        }
         LDLM_DEBUG(lock, "client-side local convert handler END");
         LDLM_LOCK_PUT(lock);
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* FIXME: one of ldlm_cli_convert or the server side should reject attempted
  * conversion of locks which are on the waiting or converting queue */
+/* Caller of this code is supposed to take care of lock readers/writers
+   accounting */
 int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
 {
         struct ldlm_request *body;
@@ -498,13 +525,23 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
                 GOTO (out, rc = -EPROTO);
         }
 
+        if (req->rq_status)
+                GOTO(out, rc = req->rq_status);
+
         res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
-        if (res != NULL)
+        if (res != NULL) {
                 ldlm_reprocess_all(res);
-        /* Go to sleep until the lock is granted. */
-        /* FIXME: or cancelled. */
-        if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC, NULL);
+                /* Go to sleep until the lock is granted. */
+                /* FIXME: or cancelled. */
+                if (lock->l_completion_ast) {
+                        rc = lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC,
+                                                    NULL);
+                        if (rc)
+                                GOTO(out, rc);
+                }
+        } else {
+                rc = EDEADLOCK;
+        }
         EXIT;
  out:
         LDLM_LOCK_PUT(lock);
@@ -613,6 +650,10 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         LIST_HEAD(cblist);
         ENTRY;
 
+#ifndef __KERNEL__
+        sync = LDLM_SYNC; /* force to be sync in user space */
+#endif
+
         l_lock(&ns->ns_lock);
         count = ns->ns_nr_unused - ns->ns_max_unused;
 
@@ -636,18 +677,25 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
                 /* We can't re-add to l_lru as it confuses the refcounting in
                  * ldlm_lock_remove_from_lru() if an AST arrives after we drop
-                 * ns_lock below.  Use l_pending_chain as that is unused on
-                 * client, and lru is client-only.  bug 5666 */
-                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))
-                        list_add(&lock->l_pending_chain, &cblist);
+                 * ns_lock below.  Use l_export_chain as that is unused on
+                 * client, and lru is client-only (l_pending_chain is used by
+                 * ldlm_chain_lock_for_replay() on client).  bug 5666 */
+                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock)) {
+                        LASSERTF(list_empty(&lock->l_export_chain),
+                                 "lock %p next %p prev %p\n",
+                                 lock, &lock->l_export_chain.next,
+                                 &lock->l_export_chain.prev);
+                        __LDLM_DEBUG(D_INFO, lock, "adding to LRU clear list");
+                        list_add(&lock->l_export_chain, &cblist);
+                }
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
 
-        list_for_each_entry_safe(lock, next, &cblist, l_pending_chain) {
-                list_del_init(&lock->l_pending_chain);
+        list_for_each_entry_safe(lock, next, &cblist, l_export_chain) {
+                list_del_init(&lock->l_export_chain);
                 ldlm_handle_bl_callback(ns, NULL, lock);
         }
         RETURN(rc);
@@ -935,6 +983,8 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
         struct list_head *list = closure;
 
         /* we use l_pending_chain here, because it's unused on clients. */
+        LASSERTF(list_empty(&lock->l_pending_chain),"lock %p next %p prev %p\n",
+                 lock, &lock->l_pending_chain.next,&lock->l_pending_chain.prev);
         list_add(&lock->l_pending_chain, list);
         return LDLM_ITER_CONTINUE;
 }
@@ -1036,8 +1086,8 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 int ldlm_replay_locks(struct obd_import *imp)
 {
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        struct list_head list, *pos, *next;
-        struct ldlm_lock *lock;
+        struct list_head list;
+        struct ldlm_lock *lock, *next;
         int rc = 0;
 
         ENTRY;
@@ -1051,11 +1101,11 @@ int ldlm_replay_locks(struct obd_import *imp)
         l_lock(&ns->ns_lock);
         (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
 
-        list_for_each_safe(pos, next, &list) {
-                lock = list_entry(pos, struct ldlm_lock, l_pending_chain);
-                rc = replay_one_lock(imp, lock);
+        list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
+                list_del_init(&lock->l_pending_chain);
                 if (rc)
-                        break; /* or try to do the rest? */
+                        continue; /* or try to do the rest? */
+                rc = replay_one_lock(imp, lock);
         }
         l_unlock(&ns->ns_lock);
 

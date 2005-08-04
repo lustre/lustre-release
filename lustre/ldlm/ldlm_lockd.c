@@ -5,20 +5,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -167,7 +170,7 @@ static int expired_lock_main(void *arg)
                         export = class_export_get(lock->l_export);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
-                        ptlrpc_fail_export(export);
+                        class_fail_export(export);
                         class_export_put(export);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
@@ -196,7 +199,8 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (time_after(lock->l_callback_timeout, jiffies))
+                if (time_after(lock->l_callback_timeout, jiffies) ||
+                    (lock->l_req_mode == LCK_GROUP))
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
@@ -372,7 +376,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 
         if (obd_dump_on_timeout)
                 portals_debug_dumplog();
-        ptlrpc_fail_export(lock->l_export);
+        class_fail_export(lock->l_export);
 }
 
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,
@@ -672,8 +676,8 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 GOTO(out, rc = -EFAULT);
         }
 
-        if (dlm_req->lock_desc.l_req_mode < LCK_EX ||
-            dlm_req->lock_desc.l_req_mode > LCK_NL ||
+        if (dlm_req->lock_desc.l_req_mode <= LCK_MINMODE ||
+            dlm_req->lock_desc.l_req_mode >= LCK_MAXMODE ||
             dlm_req->lock_desc.l_req_mode & (dlm_req->lock_desc.l_req_mode-1)) {
                 DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d\n",
                           dlm_req->lock_desc.l_req_mode);
@@ -839,14 +843,23 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (!lock) {
                 req->rq_status = EINVAL;
         } else {
+                void *res;
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
-                                  &dlm_rep->lock_flags);
-                if (ldlm_del_waiting_lock(lock))
-                        CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                req->rq_status = 0;
+                do_gettimeofday(&lock->l_enqueued_time);
+                res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
+                                        &dlm_rep->lock_flags);
+                if (res) {
+                        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                        if (ldlm_del_waiting_lock(lock))
+                                CDEBUG(D_DLMTRACE,"converted waiting lock %p\n",
+                                       lock);
+                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                        req->rq_status = 0;
+                } else {
+                        req->rq_status = EDEADLOCK;
+                }
         }
 
         if (lock) {
@@ -1409,7 +1422,7 @@ static int ldlm_setup(void)
         if (ldlm_state == NULL)
                 RETURN(-ENOMEM);
 
-#ifdef __KERNEL__
+#ifdef LPROCFS
         rc = ldlm_proc_setup();
         if (rc != 0)
                 GOTO(out_free, rc);
@@ -1417,9 +1430,10 @@ static int ldlm_setup(void)
 
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                                1500, ldlm_callback_handler, "ldlm_cbd",
-                                ldlm_svc_proc_dir, NULL);
+                                LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
+                                LDLM_CB_REPLY_PORTAL, 1500,
+                                ldlm_callback_handler, "ldlm_cbd",
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
         if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
@@ -1428,10 +1442,10 @@ static int ldlm_setup(void)
 
         ldlm_state->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_CANCEL_REQUEST_PORTAL,
+                                LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL, 30000,
                                 ldlm_cancel_handler, "ldlm_canceld",
-                                ldlm_svc_proc_dir, NULL);
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");
@@ -1464,13 +1478,13 @@ static int ldlm_setup(void)
                 wait_for_completion(&blp->blp_comp);
         }
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cancel_service,
-                                    LDLM_NUM_THREADS, "ldlm_cn");
+        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cancel_service,
+                                  "ldlm_cn");
         if (rc)
                 GOTO(out_thread, rc);
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cb_service,
-                                    LDLM_NUM_THREADS, "ldlm_cb");
+        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cb_service,
+                                  "ldlm_cb");
         if (rc)
                 GOTO(out_thread, rc);
 
@@ -1503,7 +1517,7 @@ static int ldlm_setup(void)
 #endif
 
  out_proc:
-#ifdef __KERNEL__
+#ifdef LPROCFS
         ldlm_proc_cleanup();
  out_free:
 #endif
@@ -1548,7 +1562,9 @@ static int ldlm_cleanup(int force)
         wake_up(&expired_lock_thread.elt_waitq);
         wait_event(expired_lock_thread.elt_waitq,
                    expired_lock_thread.elt_state == ELT_STOPPED);
-
+#else
+        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
 #endif
 
         OBD_FREE(ldlm_state, sizeof(*ldlm_state));
@@ -1587,9 +1603,6 @@ void __exit ldlm_exit(void)
         LASSERTF(kmem_cache_destroy(ldlm_lock_slab) == 0,
                  "couldn't free ldlm lock slab\n");
 }
-
-/* ldlm_flock.c */
-EXPORT_SYMBOL(ldlm_flock_completion_ast);
 
 /* ldlm_extent.c */
 EXPORT_SYMBOL(ldlm_extent_shift_kms);

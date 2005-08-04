@@ -8,20 +8,23 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #include <linux/config.h>
@@ -79,7 +82,7 @@ static void check_pending_bhs(unsigned long *blocks, int nr_pages, dev_t dev,
 /* when brw_kiovec() is asked to read from block -1UL it just zeros
  * the page.  this gives us a chance to verify the write mappings
  * as well */
-static int filter_cleanup_mappings(int rw, struct kiobuf *iobuf, 
+static int filter_cleanup_mappings(int rw, struct kiobuf *iobuf,
                                    struct inode *inode)
 {
         int i, blocks_per_page_bits = PAGE_SHIFT - inode->i_blkbits;
@@ -107,23 +110,55 @@ static void dump_page(int rw, unsigned long block, struct page *page)
 }
 #endif
 
-static void filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+/* These are our hacks to keep our directio/bh IO coherent with ext3's
+ * page cache use.  Most notably ext3 reads file data into the page
+ * cache when it is zeroing the tail of partial-block truncates and
+ * leaves it there, sometimes generating io from it at later truncates.
+ * This removes the partial page and its buffers from the page cache,
+ * so it should only ever cause a wait in rare cases, as otherwise we
+ * always do full-page IO to the OST.
+ *
+ * The call to truncate_complete_page() will call journal_flushpage() to
+ * free the buffers and drop the page from cache.  The buffers should not
+ * be dirty, because we already called fdatasync/fdatawait on them.
+ */
+static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
 {
         struct page *page;
-        int i;
+        int i, rc, rc2;
 
+        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
+                          inode->i_dev, 1 << inode->i_blkbits);
+
+        /* This is nearly generic_osync_inode, without the waiting on the inode
+        rc = generic_osync_inode(inode, inode->i_mapping,
+                                 OSYNC_DATA|OSYNC_METADATA);
+         */
+        rc = filemap_fdatasync(inode->i_mapping);
+        rc2 = fsync_inode_data_buffers(inode);
+        if (rc == 0)
+                rc = rc2;
+        rc2 = filemap_fdatawait(inode->i_mapping);
+        if (rc == 0)
+                rc = rc2;
+        if (rc != 0)
+                RETURN(rc);
+
+        /* be careful to call this after fsync_inode_data_buffers has waited
+         * for IO to complete before we evict it from the cache */
         for (i = 0; i < iobuf->nr_pages ; i++) {
                 page = find_lock_page(inode->i_mapping,
                                       iobuf->maplist[i]->index);
                 if (page == NULL)
                         continue;
-                if (page->mapping != NULL) {
-                        block_flushpage(page, 0);
-                        truncate_complete_page(page);
-                }
+                if (page->mapping != NULL)
+                        ll_truncate_complete_page(page);
+
                 unlock_page(page);
                 page_cache_release(page);
         }
+
+        return 0;
 }
 
 /* Must be called with i_sem taken for writes; this will drop it */
@@ -147,7 +182,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
         if (iobuf->nr_pages * blocks_per_page > KIO_MAX_SECTORS)
                 GOTO(cleanup, rc = -EINVAL);
 
-        if (iobuf->nr_pages * blocks_per_page > 
+        if (iobuf->nr_pages * blocks_per_page >
             OBDFILTER_CREATED_SCRATCHPAD_ENTRIES)
                 GOTO(cleanup, rc = -EINVAL);
 
@@ -196,26 +231,9 @@ int filter_direct_io(int rw, struct dentry *dchild, void *buf,
                         GOTO(cleanup, rc);
         }
 
-        /* these are our hacks to keep our directio/bh IO coherent with ext3's
-         * page cache use.  Most notably ext3 reads file data into the page
-         * cache when it is zeroing the tail of partial-block truncates and
-         * leaves it there, sometimes generating io from it at later truncates.
-         * Someday very soon we'll be performing our brw_kiovec() IO to and
-         * from the page cache. */
-        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
-                          inode->i_dev, 1 << inode->i_blkbits);
-
-        rc = filemap_fdatasync(inode->i_mapping);
-        if (rc == 0)
-                rc = fsync_inode_data_buffers(inode);
-        if (rc == 0)
-                rc = filemap_fdatawait(inode->i_mapping);
+        rc = filter_clear_page_cache(inode, iobuf);
         if (rc < 0)
                 GOTO(cleanup, rc);
-
-        /* be careful to call this after fsync_inode_data_buffers has waited
-         * for IO to complete before we evict it from the cache */
-        filter_clear_page_cache(inode, iobuf);
 
         rc = fsfilt_send_bio(rw, obd, inode, iobuf);
 
@@ -291,6 +309,11 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
+void filter_iobuf_put(void *iobuf)
+{
+        clear_kiobuf(iobuf);
+}
+
 int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
                        void **ret)
 {
@@ -343,7 +366,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
@@ -360,10 +383,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE,
-                                obj->ioo_bufcnt, &iobuf);
-        if (rc)
-                GOTO(cleanup, rc);
+        iobuf = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -390,7 +410,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                         iattr.ia_size = this_size;
         }
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -417,10 +437,14 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
-        if (err)
+        if (err) {
+                CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
+        }
         if (obd_sync_filter && !err)
-                LASSERT(oti->oti_transno <= obd->obd_last_committed);
+                LASSERTF(oti->oti_transno <= obd->obd_last_committed,
+                         "oti_transno "LPU64" last_committed "LPU64"\n",
+                         oti->oti_transno, obd->obd_last_committed);
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 
 cleanup:
@@ -428,12 +452,15 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_free_iobuf(iobuf);
+                filter_iobuf_put(iobuf);
         case 0:
-                filter_free_dio_pages(objcount, obj, niocount, res);
+                /*
+                 * lnb->page automatically returns back into per-thread page
+                 * pool (bug 5137)
+                 */
                 f_dput(res->dentry);
         }
 

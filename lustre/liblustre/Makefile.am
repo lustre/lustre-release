@@ -1,10 +1,11 @@
 ## Liblustre excecutables & libraries Makefile
 SUBDIRS = . tests
 
-AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 \
+              $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
 AM_CFLAGS = $(LLCFLAGS)
 
-LIBS = $(LIBEFENCE)
+AM_LIBS = $(LIBEFENCE)
 
 LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/lov/liblov.a \
@@ -15,14 +16,16 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
 
+if !CRAY_PORTALS
 PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
               $(top_builddir)/portals/unals/libtcpnal.a \
               $(top_builddir)/portals/portals/libportals.a
+else
+PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
+              $(CRAY_PORTALS_LIBS)/libportals.a
+endif
 
-SYSIO_LIBS =  $(SYSIO)/drivers/native/libsysio_native.a \
-              $(SYSIO)/drivers/sockets/libsysio_sockets.a \
-              $(SYSIO)/src/libsysio.a \
-              $(SYSIO)/dev/stdfd/libsysio_stdfd.a
+SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 
 if LIBLUSTRE
 lib_LIBRARIES = liblustre.a
@@ -40,16 +43,18 @@ install-exec-hook: liblustre.so
 	done
 else
 install-exec-hook:
-
 endif
 
-libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
+libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
+		     lutil.c lutil.h llite_lib.h
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
 		     llite_lib.h
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	$(srcdir)/genlib.sh $(SYSIO) $(AR) $(LINK) || ( rm -f $@; exit 1 )
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(CRAY_PORTALS_LIBS)" "$(LIBS)"
 
 EXTRA_DIST = genlib.sh
+
+CLEANFILES := liblsupport.a liblustre.so
