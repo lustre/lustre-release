@@ -732,8 +732,7 @@ int init_obdclass(void)
         proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
         entry = create_proc_entry("devices", 0444, proc_lustre_root);
         if (entry == NULL) {
-                printk(KERN_ERR "LustreError: error registering "
-                       "/proc/fs/lustre/devices\n");
+                CERROR("error registering /proc/fs/lustre/devices\n");
                 lprocfs_remove(proc_lustre_root);
                 RETURN(-ENOMEM);
         }
@@ -784,7 +783,7 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #include <linux/lustre_version.h>
 #define LUSTRE_MIN_VERSION 32
-#define LUSTRE_MAX_VERSION 46
+#define LUSTRE_MAX_VERSION 47
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
