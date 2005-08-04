@@ -2371,6 +2371,8 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa)
                         CERROR("store fid in object failed! rc:%d\n", rc);
                         GOTO(cleanup, rc);
                 }
+        } else {
+                CWARN("create object without lustre id!\n");
         }
 
 
