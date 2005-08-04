@@ -62,6 +62,15 @@ Description: fsx running with liblustre complained that using truncate() to
 Details    : This is the liblustre equivalent of the fix for bug 6196.  Fixes
              ATTR_SIZE and lsm use in llu_setattr_raw.
 
+Severity   : critical
+Bugzilla   : 6866
+Frequency  : rare, only 2.6 kernels
+Description: Unusual file access patterns on the MDS may result in inode
+             data being lost in very rare circumstances.
+Details    : Bad interaction between the ea-in-inode patch and the "no-read"
+             code in the 2.6 kernel caused the inode and/or EA data not to
+             be read from disk, causing single-file corruption.
+
 ------------------------------------------------------------------------------
 
 2005-07-07  Cluster File Systems, Inc. <info@clusterfs.com>
