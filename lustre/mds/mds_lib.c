@@ -381,7 +381,6 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
                 b->valid |= OBD_MD_FID;
         
         mds_pack_inode2id(obd, &b->id1, inode, fid);
-
 }
 
 /* unpacking */
