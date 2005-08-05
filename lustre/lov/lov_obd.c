@@ -1679,16 +1679,6 @@ static int lov_change_cbdata(struct obd_export *exp,
         lov = &exp->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        submd.lsm_object_id = loi->loi_id;
-                        submd.lsm_object_gr = lsm->lsm_object_gr;
-                        submd.lsm_stripe_count = 0;
-                        obd_change_cbdata(lov->tgts[loi->loi_ost_idx].ltd_exp,
-                                          &submd, dump_missed_lock, NULL);
-                        /*continue;*/
-                }
-
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
