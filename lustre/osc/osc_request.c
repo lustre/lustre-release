@@ -299,7 +299,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*body));
 
-        if (oa->o_valid & OBD_MD_FLCOOKIE) 
+        if (oa->o_valid & OBD_MD_FLCOOKIE)
                 memcpy(obdo_logcookie(oa), oti->oti_logcookies,
                        sizeof(*oti->oti_logcookies));
 
@@ -920,7 +920,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
         /* set/clear over quota flag for a uid/gid */
         if (req->rq_reqmsg->opc == OST_WRITE &&
             body->oa.o_valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA))
-                osc_set_quota_flag(cli, body->oa.o_uid, body->oa.o_gid, 
+                osc_set_quota_flag(cli, body->oa.o_uid, body->oa.o_gid,
                                    body->oa.o_valid, body->oa.o_flags);
 
         if (rc < 0)
@@ -1119,7 +1119,7 @@ static void sort_brw_pages(struct brw_page *array, int num)
         } while (stride > 1);
 }
 
-static obd_count 
+static obd_count
 max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 {
         int count = 1;
@@ -1127,12 +1127,12 @@ max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 
 	LASSERT (pages > 0);
         offset = pg->off & (PAGE_SIZE - 1);
-        
+
 	for (;;) {
 		pages--;
 		if (pages == 0)                 /* that's all */
                         return count;
-                
+
                 if (offset + pg->count < PAGE_SIZE) /* doesn't end on page boundary */
 			return count;
 		
@@ -1535,6 +1535,14 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 }
                 if (pos == NULL)
                         break;
+                /*
+                 * Page submitted for IO has to be locked. Either by
+                 * ->ap_make_ready() or by higher layers.
+                 *
+                 * XXX nikita: this assertion should be adjusted when lustre
+                 * starts using PG_writeback for pages being written out.
+                 */
+                LASSERT(PageLocked(oap->oap_page));
 
                 /* If there is a gap at the start of this page, it can't merge
                  * with any previous page, so we'll hand the network a
@@ -1571,7 +1579,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                  * RPCs aligned on PTLRPC_MAX_BRW_SIZE boundaries to help reads
                  * have the same alignment as the initial writes that allocated
                  * extents on the server. */
-                ending_offset = (oap->oap_obj_off + oap->oap_page_off + 
+                ending_offset = (oap->oap_obj_off + oap->oap_page_off +
                                  oap->oap_count) & (PTLRPC_MAX_BRW_SIZE - 1);
                 if (ending_offset == 0)
                         break;
@@ -1664,7 +1672,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 }
         }
 
-        CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %dr/%dw in flight\n", 
+        CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %dr/%dw in flight\n",
                         request, page_count, aa, cli->cl_r_in_flight,
                         cli->cl_w_in_flight);
 
@@ -3119,7 +3127,7 @@ static int osc_disconnect(struct obd_export *exp)
 }
 
 static int osc_import_event(struct obd_device *obd,
-                            struct obd_import *imp, 
+                            struct obd_import *imp,
                             enum obd_import_event event)
 {
         struct client_obd *cli;
@@ -3221,7 +3229,7 @@ static int osc_precleanup(struct obd_device *obd, int stage)
         int rc = 0;
         ENTRY;
 
-        if (stage < 2) 
+        if (stage < 2)
                 RETURN(0);
 
         rc = obd_llog_finish(obd, 0);
@@ -3244,7 +3252,7 @@ int osc_cleanup(struct obd_device *obd)
         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
         oscc->oscc_flags |= OSCC_FLAG_EXITING;
         spin_unlock(&oscc->oscc_lock);
-        
+
         /* free memory of osc quota cache */
         osc_qinfo_cleanup(cli);
 
