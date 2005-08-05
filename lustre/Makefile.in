@@ -7,9 +7,9 @@ subdir-m += ptlrpc
 subdir-m += osc
 subdir-m += obdecho
 subdir-m += mgc
-subdir-m += mgs
 
-@SERVER_TRUE@subdir-m += mgc mds obdfilter ost mgs
-@CLIENT_TRUE@subdir-m += mgc mdc llite 
+@SERVER_TRUE@subdir-m += mds obdfilter ost
+#add to above line when directory exists:  mgs
+@CLIENT_TRUE@subdir-m += mdc llite 
 
 @INCLUDE_RULES@

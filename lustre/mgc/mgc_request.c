@@ -29,7 +29,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_MGC
+#define DEBUG_SUBSYSTEM S_CONFOBD
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -53,10 +53,10 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        OBD_ALLOC(mgc->cl_rpc_lock, sizeof (*mgc->cl_rpc_lock));
-        if (!mgc->cl_rpc_lock)
+        OBD_ALLOC(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
+        if (!mgc->mgc_rpc_lock)
                 RETURN(-ENOMEM);
-        mgc_init_rpc_lock(mgc->cl_rpc_lock);
+        mgc_init_rpc_lock(mgc->mgc_rpc_lock);
 
         ptlrpcd_addref();
 
@@ -74,7 +74,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 
 err_rpc_lock:
-        OBD_FREE(mgc->cl_rpc_lock, sizeof (*mgc->cl_rpc_lock));
+        OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
         ptlrpcd_decref();
         RETURN(rc);
 }
@@ -98,7 +98,7 @@ static int mgc_cleanup(struct obd_device *obd)
 {
         struct mgc_obd *mgc = &obd->u.mgc;
 
-        OBD_FREE(mgc->cl_rpc_lock, sizeof (*mgc->cl_rpc_lock));
+        OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
 
         lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
@@ -111,7 +111,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_ioctl_data *data = karg;
-        struct obd_import *imp = obd->u.mgc.cl_import;
+        struct obd_import *imp = obd->u.mgc.mgc_import;
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
@@ -134,6 +134,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = ptlrpc_set_import_active(imp, data->ioc_offset);
                 GOTO(out, rc);
         case OBD_IOC_PARSE: {
+                CERROR("MGC parsing llog %s\n", data->ioc_inlbuf1);
                 ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
                 rc = class_config_parse_llog(ctxt, data->ioc_inlbuf1, NULL);
                 GOTO(out, rc);
@@ -201,7 +202,7 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.mgc.cl_import;
+                ctxt->loc_imp = obd->u.mgc.mgc_import;
         }
 
         RETURN(rc);

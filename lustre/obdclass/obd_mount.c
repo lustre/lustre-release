@@ -529,7 +529,7 @@ int lustre_process_logs(struct super_block *sb,
         if ((strncmp(lr_uuid, "OST", 3) == 0) && is_first_mount) {
                 /* Always register with MGS.  If this is the first mount
                    for an OST, we might have to change our name */
-      //          err = ost_register(lmd, lr_uuid);
+                err = 1;//ost_register(lmd, lr_uuid);
                 if (err) {
                         CERROR("OST register Failed\n");
                         return(err);
@@ -586,17 +586,95 @@ int lustre_process_logs(struct super_block *sb,
         return(err);
 }
                                                  
+int mgc_fs_setup(struct super_block *sb, struct vfsmount *mnt)
+{
+        struct lvfs_run_ctxt saved;
+        struct lustre_sb_info *sbi = s2sbi(sb);
+        struct obd_device *obd = sbi->lsi_mgc;
+        struct mgc_obd *mgcobd = &obd->u.mgc;
+        struct dentry *dentry;
+        int err;
+
+        LASSERT(obd);
+
+        obd->obd_fsops = fsfilt_get_ops(MT_STR(sbi->lsi_ldd))
+        if (IS_ERR(obd->obd_fsops)) {
+               CERROR("No fstype %s rc=%ld\n", MT_STR(sbi->lsi_ldd), 
+                      PTR_ERR(obd->obd_fsops));
+               return(PTR_ERR(obd->obd_fsops));
+        }
+
+        mgcobd->mgc_vfsmnt = mnt;
+        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb; // is this different than sb? */
+        fsfilt_setup(obd, mgcobd->mgc_sb);
+
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.pwdmnt = mnt;
+        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+        obd->obd_lvfs_ctxt.fs = get_ds();
+        //obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        dentry = lookup_one_len(MOUNT_CONFIGS_DIR, current->fs->pwd,
+                                strlen(MOUNT_CONFIGS_DIR));
+        if (IS_ERR(dentry)) {
+                err = PTR_ERR(dentry);
+                CERROR("cannot lookup %s directory: rc = %d\n", 
+                       MOUNT_CONFIGS_DIR, err);
+                goto err_ops;
+        }
+        mgcobd->mgc_configs_dir = dentry;
+        
+        err = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0,
+                            NULL, &llog_lvfs_ops);
+        if (err)
+                goto err_dput;
+
+err_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        return(err);
+err_dput:
+        dput(mgcobd->mgc_configs_dir);
+err_ops:        
+        fsfilt_put_ops(obd->obd_fsops);
+        obd->obd_fsops = NULL;
+        goto err_pop;
+}
+
+int mgc_fs_cleanup(struct obdclass *obd)
+{
+        llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+        
+        if (mgcobd->mgc_configs_dir != NULL) {
+                struct lvfs_run_ctxt saved;
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+                l_dput(mgcobd->mgc_configs_dir);
+                mgcobd->mgc_configs_dir = NULL; 
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        }
+
+        if (mgcobd->mgc_vfsmnt)
+                // FIXME mntput should not be done by real server, only us */
+                mntput(mgcobd->mgc_vfsmnt);
+        mgc->mgc_sb = NULL;
+        
+        if (obd->obd_fsops) 
+                fsfilt_put_ops(obd->obd_fsops);
+        return(0);
+}
+
+
 /* Kernel mount using mount options in MOUNT_DATA_FILE */
-static int lustre_kern_mount(struct super_block *sb)
+static struct vfsmount *lustre_kern_mount(struct super_block *sb)
 {
         struct lvfs_run_ctxt mount_ctxt;
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = sbi->lsi_lmd;
         struct obd_device *obd;
-        struct mgc_obd *mgcobd;
-        char *options = NULL;
         struct vfsmount *mnt;
+        char *options = NULL;
         unsigned long page;
         int err;
 
@@ -655,33 +733,22 @@ static int lustre_kern_mount(struct super_block *sb)
                 CERROR("do_kern_mount failed: err = %d\n", err);
                 goto out_free;
         }
-
-        obd = sbi->lsi_mgc;
-        mgcobd = &obd->u.mgc;
-        mgcobd->mgc_vfsmnt = mnt;
-        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb; // is this different than sb? */
-        fsfilt_setup(obd, mgcobd->mgc_sb);
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
-        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-        //obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
-
+        
         sbi->lsi_ldd = ldd;   /* freed at sbi cleanup */
-
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
-        return(0);
+        return(mnt);
 
 out_free:
         OBD_FREE(ldd, sizeof(*ldd));
-        return(err);
+        sbi->lsi_ldd = NULL;    
+        return(ERR_PTR(err));
 }
 
 static int server_fill_super(struct super_block *sb)
 {
         struct config_llog_instance cfg;
         struct lustre_sb_info *sbi = s2sbi(sb);
+        struct vfsmount *mnt;
         int err;
 
         cfg.cfg_instance = sbi->lsi_mgc->obd_name;
@@ -689,15 +756,19 @@ static int server_fill_super(struct super_block *sb)
                  sbi->lsi_mgc->obd_name);
 
         /* mount to read server info */
-        err = lustre_kern_mount(sb);
-        if (err) {
+        mnt = lustre_kern_mount(sb);
+        if (IS_ERR(mnt)) {
                 CERROR("Unable to mount device %s: %d\n", 
                       sbi->lsi_lmd->lmd_dev, err);
-                GOTO(out_free, err);
+                GOTO(out_free, err = PTR_ERR(mnt));
         }
         CERROR("Found service %s for fs %s on device %s\n",
                sbi->lsi_ldd->ldd_svname, sbi->lsi_ldd->ldd_fsname, 
                sbi->lsi_lmd->lmd_dev);
+        
+        err = mgc_fs_setup(sb, mnt);
+        if (err) 
+                goto out_free;
         
         /* Set up all obd devices for service */
         err = lustre_process_logs(sb, &cfg, 0);
@@ -728,11 +799,12 @@ static int lustre_start_mgc(struct super_block *sb)
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct obd_device *obd;
         char *mcname;
+        int mcname_sz = sizeof(sb) * 2 + 5;
         int err = 0;
 
         /* Generate a string unique to this super, let's try
            the address of the super itself.*/
-        OBD_ALLOC(mcname, sizeof(sb) * 2 + 1);
+        OBD_ALLOC(mcname, mcname_sz);
         sprintf(mcname, "MGC_%p", sb);
         cfg.cfg_instance = mcname;
         snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mcname);
@@ -754,13 +826,10 @@ static int lustre_start_mgc(struct super_block *sb)
                 err = -ENOTCONN;
                 goto out_free;
         }
-        // part of mgc_setup obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
-        
         sbi->lsi_mgc = obd;
         
-
 out_free:
-        OBD_FREE(mcname, sizeof(sb) * 2 + 1);
+        OBD_FREE(mcname, mcname_sz);
         return err;
 }
 
@@ -770,8 +839,23 @@ static void lustre_stop_mgc(struct super_block *sb)
         struct obd_device *obd;
 
         obd = sbi->lsi_mgc;
+
+        /* FIXME this should be called from mgc_cleanup from manual_cleanup */
+        if (mgcobd->mgc_sb)
+                /* if we're a server, eg. something's mounted */
+                mgc_fs_cleanup(obd);
+
         class_manual_cleanup(obd, NULL);
 }
+
+/* Common umount */
+void lustre_common_put_super(struct super_block *sb)
+{
+        CERROR("common put super %p\n", sb);
+
+        lustre_stop_mgc(sb);
+        lustre_free_sbi(sb);
+}      
 
 /* Common mount */
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
@@ -823,14 +907,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         RETURN(err);
 } 
                                                                                 
-/* Common umount */
-void lustre_common_put_super(struct super_block *sb)
-{
-        CERROR("common put super %p\n", sb);
-
-        lustre_stop_mgc(sb);
-        lustre_free_sbi(sb);
-}      
 
 /* We can't call ll_fill_super by name because it lives in a module that
    must be loaded after this one. */

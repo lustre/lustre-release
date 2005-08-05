@@ -373,7 +373,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_create(ctxt, res, logid, name);
+        rc = lop->lop_create(ctxt, res, logid, NULL/*fsname*/, name);
         RETURN(rc);
 }
 

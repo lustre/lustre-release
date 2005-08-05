@@ -6,11 +6,11 @@
 AUTOMAKE_OPTIONS = foreign
 
 ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
-	doc utils tests conf scripts autoconf
+	mgc doc utils tests conf scripts autoconf
 
-SERVER_SUBDIRS := ldiskfs obdfilter ost mds mgc mgs
+SERVER_SUBDIRS := ldiskfs obdfilter ost mds mgs
 
-CLIENT_SUBDIRS := mgc mdc llite
+CLIENT_SUBDIRS := mdc llite
 
 LIBLUSTRE_SUBDIRS := liblustre
 

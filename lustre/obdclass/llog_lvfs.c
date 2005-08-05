@@ -733,7 +733,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 }
 
 static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
+                            struct llog_logid *logid, char *fsname, char *name)
 {
         LBUG();
         return 0;
