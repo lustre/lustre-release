@@ -1328,6 +1328,7 @@ static int target_recovery_thread(void *arg)
         struct target_recovery_data *trd = &obd->obd_recovery_data;
         char peer_str[PTL_NALFMT_SIZE];
         struct l_wait_info lwi = { 0 };
+        unsigned long delta;
         unsigned long flags;
         ENTRY;
 
@@ -1367,6 +1368,7 @@ static int target_recovery_thread(void *arg)
         }
 
         /* next stage: replay requests */
+        delta = jiffies;
         CDEBUG(D_ERROR, "1: request replay stage - %d clients from t"LPU64"\n",
               atomic_read(&obd->obd_req_replay_clients),
               obd->obd_next_recovery_transno);
@@ -1398,6 +1400,7 @@ static int target_recovery_thread(void *arg)
                 stale = class_disconnect_stale_exports(obd, req_replay_done, 0);
                 atomic_sub(stale, &obd->obd_lock_replay_clients);
                 abort_req_replay_queue(obd);
+                /* XXX for debuggin tests 11 and 17 */
                 LBUG();
         }
 
@@ -1434,7 +1437,7 @@ static int target_recovery_thread(void *arg)
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
         /* The third stage: reply on final pings */
-        CWARN("3: final stage - process recovery completion pings\n");
+        CDEBUG(D_ERROR, "3: final stage - process recovery completion pings\n");
         while ((req = target_next_final_ping(obd))) {
                 LASSERT(trd->trd_processing_task == current->pid);
                 DEBUG_REQ(D_HA, req, "processing final ping from %s: ", 
@@ -1442,9 +1445,14 @@ static int target_recovery_thread(void *arg)
                 (void)trd->trd_recovery_handler(req);
                 ptlrpc_free_clone(req);
         }
-        
-        CWARN("4: recovery completed - %d/%d reqs/locks replayed\n",
-              obd->obd_replayed_requests, obd->obd_replayed_locks);
+       
+        delta = (jiffies - delta) / HZ;
+        CDEBUG(D_ERROR,"4: recovery completed in %lus - %d/%d reqs/locks\n",
+              delta, obd->obd_replayed_requests, obd->obd_replayed_locks);
+        if (delta > obd_timeout * 2) {
+                CWARN("too long recovery - read logs\n");
+                portals_debug_dumplog();
+        }
         target_finish_recovery(obd);
 
         trd->trd_processing_task = 0;
