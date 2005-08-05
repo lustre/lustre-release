@@ -550,7 +550,7 @@ int jt_lcfg_mount_option(int argc, char **argv)
         struct lustre_cfg *lcfg;
         int i;
 
-        if (argc < 3 || argc > 4)
+        if (argc < 3 || argc > 5)
                 return CMD_HELP;
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);

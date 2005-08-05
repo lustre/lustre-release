@@ -63,6 +63,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
+#include <linux/lustre_gs.h>
 #include "osc_internal.h"
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
@@ -730,6 +731,28 @@ static obd_count cksum_pages(int nob, obd_count page_count,
 }
 #endif
 
+#define osc_encrypt_page(page, off, count)  \
+        osc_crypt_page(page, off, count, ENCRYPT_DATA)
+#define osc_decrypt_page(page, off, count)  \
+        osc_crypt_page(page, off, count, DECRYPT_DATA)
+
+/*Put a global call back var here is Ugly, but put it to client_obd 
+ *also seems not a good idea, WangDi*/ 
+crypt_cb_t  osc_crypt_cb = NULL;     
+   
+static int osc_crypt_page(struct page *page, obd_off page_off, obd_off count, 
+                          int flags)
+{
+        int rc = 0;
+        ENTRY;
+
+        if (osc_crypt_cb != NULL)
+                rc = osc_crypt_cb(page, page_off, count, flags);
+        if (rc != 0) 
+                CERROR("crypt page error %d \n", rc);
+        RETURN(rc); 
+}
+
 static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page *pga, int *requested_nobp,
@@ -798,6 +821,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg->pg, pg->pg->private, pg->pg->index, pg->disk_offset,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
                          pg_prev->disk_offset);
+                
+                if (opc == OST_WRITE) {
+                        osc_encrypt_page(pg->pg, pg->page_offset, pg->count);
+                } 
 
                 ptlrpc_prep_bulk_page(desc, pg->pg,
                                       pg->page_offset & ~PAGE_MASK, pg->count);
@@ -868,7 +895,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         RETURN(-EPROTO);
                 }
                 LASSERT (req->rq_bulk->bd_nob == requested_nob);
-
+                osc_decrypt_page(pga->pg, pga->page_offset, 
+                                 pga->count);
                 RETURN(check_write_rcs(req, requested_nob, niocount,
                                        page_count, pga));
         }
@@ -919,6 +947,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                                req->rq_import->imp_connection->c_peer.peer_id.nid);
         }
 #endif
+        osc_decrypt_page(pga->pg, pga->page_offset, pga->count);
         RETURN(0);
 }
 
@@ -2947,6 +2976,12 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
                 if (cli->cl_import)
                         ptlrpcs_import_flush_current_creds(cli->cl_import);
+                RETURN(0);
+        }
+        if (keylen == strlen("crypto_cb") &&
+            memcmp(key, "crypto_cb", keylen) == 0) {
+                LASSERT(vallen == sizeof(crypt_cb_t));
+                osc_crypt_cb = (crypt_cb_t)val; 
                 RETURN(0);
         }
 

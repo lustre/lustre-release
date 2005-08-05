@@ -178,6 +178,9 @@ Object creation command summary:
   --master_obd obd_name
   --cache_obd obd_name
 
+--add gks
+  --gks gks_name  
+
 --commit - Close a configuration version, and start a new one
 """
 
@@ -283,6 +286,10 @@ lmc_options = [
 
     # lmv
     ('lmv', "Specify LMV name.", PARAM,""),
+    
+    #gks name
+    ('gks', "Specify gks name.", PARAM,""),
+
     ]
 
 def error(*args):
@@ -536,6 +543,17 @@ class GenConfig:
         lmv = self.newService("lmv", name, uuid)
         return lmv
 
+    def gks(self, name, uuid, gkd_uuid):
+        gks = self.newService("gks", name, uuid)
+        gks.appendChild(self.ref("active", gkd_uuid))
+        return gks 
+
+    def gkd(self, name, uuid, node_uuid, gks_uuid):
+        gkd = self.newService("gkd", name, uuid)
+        gkd.appendChild(self.ref("node", node_uuid))
+        gkd.appendChild(self.ref("target", gks_uuid))
+	return gkd
+    
     def mds(self, name, uuid, mdd_uuid, group="", lmv=""):
         mds = self.newService("mds", name, uuid)
         mds.appendChild(self.ref("active", mdd_uuid))
@@ -611,10 +629,11 @@ class GenConfig:
             self.addElement(mtpt, "oss_sec", oss_sec)
         return mtpt
 
-    def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid):
+    def filesystem(self, name, uuid, mds_uuid, obd_uuid, mgmt_uuid, gks_uuid):
         fs = self.newService("filesystem", name, uuid)
         fs.appendChild(self.ref("mds", mds_uuid))
         fs.appendChild(self.ref("obd", obd_uuid))
+        fs.appendChild(self.ref("gks", gks_uuid))
         if mgmt_uuid:
             fs.appendChild(self.ref("mgmt", mgmt_uuid))
         return fs
@@ -978,6 +997,37 @@ def add_route(gen, lustre, options):
         node_add_profile(gen, node, "routetbl", rtbl_uuid)
     rtbl.appendChild(gen.route(gw_net_type, gw, gw_cluster_id, tgt_cluster_id,
                                lo, hi))
+ 
+def add_gks(gen, lustre, options):
+    """ create a gks """
+    node_name = get_option(options, 'node')
+    gks_name = get_option(options, 'gks')
+    if not gks_name:
+        gks_name = new_name('GKS_'+ node_name)
+    
+    gkd_name = new_name("GKD_" + gks_name + "_" + node_name)
+    gkd_uuid = new_uuid(gkd_name)
+    
+    gks_uuid = name2uuid(lustre, gks_name, 'gks', fatal=0)
+
+    if not gks_uuid:
+        gks_uuid = new_uuid(gks_name)
+        gks = gen.gks(gks_name, gks_uuid, gkd_uuid)
+        lustre.appendChild(gks)
+    else:
+        gks = lookup(lustre, gks_uuid)
+
+    # add gkd profile
+    node_uuid = name2uuid(lustre, node_name, 'node')
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, "gkd", gkd_uuid)
+    net_uuid = get_net_uuid(lustre, node_name)
+    if not net_uuid:
+        error("NODE: ", node_name, "not found")
+
+    gkd = gen.gkd(gkd_name, gkd_uuid, node_uuid, gks_uuid)
+    lustre.appendChild(gkd)
+
 
 def add_mds(gen, lustre, options):
     node_name = get_option(options, 'node')
@@ -1450,7 +1500,7 @@ def add_lmv(gen, lustre, options):
 
     lmv = gen.lmv(name, uuid)
     lustre.appendChild(lmv)
-    
+   
 def find_client(lustre, mds_uuid, client_uuid):
     mds = lookup(lustre, mds_uuid)
     clients = mds.getElementsByTagName('client_ref')
@@ -1461,7 +1511,7 @@ def find_client(lustre, mds_uuid, client_uuid):
 		return 1
     return 0
     
-def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
+def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid, gks_uuid):
     fs_name = new_name("FS_fsname")
     fs_uuid = new_uuid(fs_name)
     
@@ -1472,12 +1522,12 @@ def new_filesystem(gen, lustre, mds_uuid, obd_uuid, mgmt_uuid):
 	mds.appendChild(gen.ref("client", obd_uuid))
 
     fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, 
-			obd_uuid, mgmt_uuid)
+			obd_uuid, mgmt_uuid, gks_uuid)
 			
     lustre.appendChild(fs)
     return fs_uuid
 
-def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
+def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name, gks_name):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds', fatal=0)
     if not mds_uuid:
         mds_uuid = name2uuid(lustre, mds_name, tag='lmv', fatal=0)
@@ -1499,10 +1549,14 @@ def get_fs_uuid(gen, lustre, mds_name, obd_name, mgmt_name):
     else:
         mgmt_uuid = ''
 
+    if gks_name:
+	gks_uuid = name2uuid(lustre, gks_name, tag='gks', fatal=1)
+    else: 
+	gks_uuid = ''
     fs_uuid = lookup_filesystem(lustre, mds_uuid, obd_uuid)
     if not fs_uuid:
         fs_uuid = new_filesystem(gen, lustre, mds_uuid, 
-                                 obd_uuid, mgmt_uuid)
+                                 obd_uuid, mgmt_uuid, gks_uuid)
     return fs_uuid
 
 def add_mtpt(gen, lustre, options):
@@ -1518,6 +1572,7 @@ def add_mtpt(gen, lustre, options):
     lov_name = get_option(options, 'lov')
     ost_name = get_option(options, 'ost')
     mds_name = get_option(options, 'mds')
+    gks_name = get_option(options, 'gks')
     if mds_name == '':
         mds_name = get_option(options, 'lmv')
         if mds_name == '':
@@ -1537,7 +1592,7 @@ def add_mtpt(gen, lustre, options):
 
     if fs_name == '':
         mgmt_name = get_option(options, 'mgmt')
-        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name, mgmt_name)
+        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name, mgmt_name, gks_name)
     else:
         fs_uuid = name2uuid(lustre, fs_name, tag='filesystem')
 
@@ -1698,6 +1753,8 @@ def add(devtype, gen, lustre, options):
         add_mgmt(gen, lustre, options)
     elif devtype == 'lmv':
         add_lmv(gen, lustre, options)
+    elif devtype == 'gks':
+	add_gks(gen, lustre, options)
     else:
         error("unknown device type:", devtype)
 

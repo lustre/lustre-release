@@ -133,6 +133,12 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    struct mds_req_sec_desc *rsd);
 void mds_exit_ucred(struct lvfs_ucred *ucred);
 
+int mds_set_gskey(struct obd_device *obd, void *handle, 
+                  struct inode *inode, void *key, int key_len, int valid); 
+int mds_set_crypto_type(struct obd_device *obd, void *val, __u32 vallen);
+
+int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg, 
+                   int *offset, struct mds_body *body, struct inode *inode);
 /* mds/mds_unlink_open.c */
 int mds_cleanup_orphans(struct obd_device *obd);
 
@@ -259,8 +265,9 @@ int mds_pack_xattr(struct dentry *dentry, struct ptlrpc_request *req,
                    struct mds_body *repbody, int req_off, int reply_off);
 int mds_pack_xattr_list(struct dentry *dentry, struct ptlrpc_request *req,
                         struct mds_body *repbody, int reply_off);
-int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
+int mds_pack_acl(struct ptlrpc_request *req, int *reply_off,
                  struct mds_body *body, struct inode *inode);
+
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
                       struct inode *, int);
 
@@ -272,6 +279,7 @@ void mds_pack_dentry2id(struct obd_device *, struct lustre_id *,
 
 void mds_pack_dentry2body(struct obd_device *, struct mds_body *b,
                           struct dentry *, int);
+
 #endif
 
 /* mds/mds_lmv.c */

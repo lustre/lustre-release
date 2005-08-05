@@ -61,6 +61,7 @@
 # include <linux/list.h>
 # include <linux/string.h> /* for strncpy, below */
 # include <linux/fs.h>     /* to check for FMODE_EXEC, dev_t, lest we redefine */
+# include <linux/posix_acl.h>     
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
@@ -117,6 +118,8 @@
 #define MGMT_REPLY_PORTAL              25
 #define MGMT_CLI_REQUEST_PORTAL        26
 #define MGMT_CLI_REPLY_PORTAL          27
+#define GKS_REQUEST_PORTAL             28
+#define GKC_REPLY_PORTAL               29
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -141,6 +144,7 @@
 #define LUSTRE_DLM_VERSION  0x00040000
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_PBD_VERSION  0x00060000
+#define LUSTRE_GKS_VERSION  0x00070000
 
 struct lustre_handle {
         __u64 cookie;
@@ -417,13 +421,14 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLXATTRLIST (0x0000000200000000LL) /* user xattr list */
 #define OBD_MD_FLACL    (0x0000000400000000LL)    /* acl */
 #define OBD_MD_FLRMTACL (0x0000000800000000LL)    /* remote acl */
+#define OBD_MD_FLKEY        (0x0000001000000000LL)    /* mds key extended attributes */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
                            OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
                            OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
                            OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST |        \
-                           OBD_MD_FLACL | OBD_MD_MDS))
+                           OBD_MD_FLACL | OBD_MD_FLKEY | OBD_MD_MDS))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -687,6 +692,7 @@ struct lustre_md {
         struct mea             *mea;
         struct posix_acl       *posix_acl;
         struct mds_remote_perm *remote_perm;
+        struct lustre_key *key; 
 };
 
 void lustre_swab_remote_perm(struct mds_remote_perm *p);
@@ -735,6 +741,8 @@ struct mds_rec_setattr {
 #define ATTR_EA         0x00040000
 #define ATTR_EA_RM      0x00080000
 #define ATTR_EA_CMOBD   0x00100000
+#define ATTR_KEY        0x00200000
+#define ATTR_MAC        0x00400000
 extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 #ifndef FMODE_READ
@@ -752,6 +760,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_DIRECTORY       00200000
 
 #define MDS_OPEN_DELAY_CREATE    0100000000   /* delay initial object create */
+#define MDS_OPEN_HAS_KEY         01000000000 /* just set the EA the obj exist */
 #define MDS_OPEN_HAS_EA          010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS        020000000000 /* just set the EA the obj exist */
 
@@ -764,6 +773,8 @@ struct mds_rec_create {
         struct lustre_id cr_replayid;
         __u64            cr_time;
         __u64            cr_rdev;
+        __u64            cr_enkey;
+        __u64            cr_mac;
 };
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
@@ -1189,11 +1200,47 @@ typedef enum {
         SEC_LAST_OPC
 } sec_cmd_t;
 #define SEC_FIRST_OPC SEC_INIT
+/* GS opcodes*/
+typedef enum {
+        GKS_CONNECT      = 700,
+        GKS_DISCONNECT   = 701,
+        GKS_GET_KEY      = 702,
+        GKS_DECRYPT_KEY  = 703,
+        GKS_GET_MAC      = 704,
+} gks_cmd_t;
 
+#ifdef __KERNEL__
+#define KEY_SIZE        16 
+#define MAC_SIZE        16 
+
+struct crypto_key {
+        __u8    ck_mac[MAC_SIZE];
+        __u8    ck_key[KEY_SIZE];
+        __u32   ck_type;
+};
+
+struct key_perm {
+        uid_t    kp_uid;       
+        gid_t    kp_gid;
+        __u32    kp_mode;
+        __u32    kp_acl_count;
+        struct   posix_acl_entry kp_acls[0]; 
+};
+
+struct key_context {
+        struct crypto_key kc_ck;
+        __u32  kc_command;
+        __u32  kc_valid;
+        struct key_perm kc_perm;
+}; 
+typedef int (*crypt_cb_t)(struct page *page, __u64 offset, __u64 count, 
+                          int flags);
+extern void lustre_swab_key_context (struct key_context *kctxt);
+extern void lustre_swab_key_perms (struct key_perm *kperm);
+#endif /*for define __KERNEL*/
 extern void lustre_swab_lustre_id(struct lustre_id *id);
 extern void lustre_swab_lov_desc(struct lov_desc *desc);
 extern void lustre_swab_lustre_stc(struct lustre_stc *stc);
 extern void lustre_swab_lustre_fid(struct lustre_fid *fid);
 extern void lustre_swab_mds_status_req(struct mds_status_req *r);
-
 #endif

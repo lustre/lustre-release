@@ -383,7 +383,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
         ll_inode2id(&pid, parent);
-
+ 
+        /*ONLY need key for open_create file*/
+        rc = ll_crypto_init_it_key(parent, it);
+        if (rc != 0) 
+                GOTO(out, retval = ERR_PTR(rc)); 
+        
         rc = md_intent_lock(ll_i2mdexp(parent), &pid, (char *)dentry->d_name.name,
                             dentry->d_name.len, NULL, 0, NULL, it, flags, &req,
                             ll_mdc_blocking_ast);
@@ -576,7 +581,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         struct inode *dir = nd->dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mdc_op_data *op_data;
-        int err = -EMLINK;
+        int err = -EMLINK, key_size = 0;
+        void *key = NULL;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
@@ -587,8 +593,9 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 
         switch (mode & S_IFMT) {
         case 0:
-        case S_IFREG:
+        case S_IFREG: 
                 mode |= S_IFREG; /* for mode = 0 case, fallthrough */
+                ll_crypto_create_key(dir, mode, &key, &key_size);
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
@@ -599,8 +606,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
                 ll_prepare_mdc_data(op_data, dir, NULL,
                                     (char *)nd->last.name, 
 				    nd->last.len, 0);
-                
-                err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_md_exp, op_data, key, key_size, mode,
                                 current->fsuid, current->fsgid, rdev,
                                 &request);
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -614,6 +620,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         default:
                 err = -EINVAL;
         }
+        if (key && key_size)
+                OBD_FREE(key, key_size);
         RETURN(err);
 }
 
@@ -637,6 +645,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild,
         case 0:
         case S_IFREG:
                 mode |= S_IFREG; /* for mode = 0 case, fallthrough */
+                
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:

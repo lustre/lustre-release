@@ -183,6 +183,16 @@ out_unlock:
         up(&lli->lli_size_sem);
 } /* ll_truncate */
 
+struct ll_async_page *llap_cast_private(struct page *page)
+{
+        struct ll_async_page *llap = (struct ll_async_page *)page->private;
+
+        LASSERTF(llap == NULL || llap->llap_magic == LLAP_MAGIC, 
+                 "page %p private %lu gave magic %d which != %d\n",
+                 page, page->private, llap->llap_magic, LLAP_MAGIC);
+        return llap;
+}
+
 int ll_prepare_write(struct file *file, struct page *page,
                      unsigned from, unsigned to)
 {
@@ -384,17 +394,6 @@ static struct obd_async_page_ops ll_async_page_ops = {
 };
 
 
-struct ll_async_page *llap_cast_private(struct page *page)
-{
-        struct ll_async_page *llap = (struct ll_async_page *)page->private;
-
-        LASSERTF(llap == NULL || llap->llap_magic == LLAP_MAGIC,
-                 "page %p private %lu gave magic %d which != %d\n",
-                 page, page->private, llap->llap_magic, LLAP_MAGIC);
-
-        return llap;
-}
-
 /* XXX have the exp be an argument? */
 struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
@@ -408,16 +407,17 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         LASSERTF(origin < LLAP__ORIGIN_MAX, "%u\n", origin);
 
         llap = llap_cast_private(page);
-        if (llap != NULL)
+        if (llap != NULL) {
                 GOTO(out, llap);
-
+        }
         exp = ll_i2dtexp(page->mapping->host);
         if (exp == NULL)
                 RETURN(ERR_PTR(-EINVAL));
-
+        
         OBD_ALLOC(llap, sizeof(*llap));
-        if (llap == NULL)
+        if (llap == NULL) {
                 RETURN(ERR_PTR(-ENOMEM));
+        }
         llap->llap_magic = LLAP_MAGIC;
         INIT_LIST_HEAD(&llap->llap_pending_write);
         rc = obd_prep_async_page(exp, ll_i2info(inode)->lli_smd, NULL, page,
@@ -430,8 +430,10 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 
         CDEBUG(D_CACHE, "llap %p page %p cookie %p obj off "LPU64"\n", llap,
                page, llap->llap_cookie, (obd_off)page->index << PAGE_SHIFT);
-        /* also zeroing the PRIVBITS low order bitflags */
+       
         __set_page_ll_data(page, llap);
+       
+         /* also zeroing the PRIVBITS low order bitflags */
         llap->llap_page = page;
 
         spin_lock(&sbi->ll_lock);
@@ -469,7 +471,6 @@ static int queue_or_sync_write(struct obd_export *exp,
         rc = oig_init(&oig);
         if (rc)
                 GOTO(out, rc);
-
         rc = obd_queue_group_io(exp, lsm, NULL, oig, llap->llap_cookie,
                                 OBD_BRW_WRITE, 0, to, 0, ASYNC_READY |
                                 ASYNC_URGENT | ASYNC_COUNT_STABLE |
@@ -703,7 +704,6 @@ void ll_removepage(struct page *page)
                 EXIT;
                 return;
         }
-
         llap = llap_from_page(page, 0);
         if (IS_ERR(llap)) {
                 CERROR("page %p ind %lu couldn't find llap: %ld\n", page,
@@ -765,10 +765,11 @@ static int ll_issue_page_read(struct obd_export *exp,
         page_cache_get(page);
         llap->llap_defer_uptodate = defer;
         llap->llap_ra_used = 0;
+        
         rc = obd_queue_group_io(exp, ll_i2info(page->mapping->host)->lli_smd,
                                 NULL, oig, llap->llap_cookie, OBD_BRW_READ, 0,
                                 PAGE_SIZE, 0, ASYNC_COUNT_STABLE | ASYNC_READY
-                                              | ASYNC_URGENT);
+                                | ASYNC_URGENT);
         if (rc) {
                 LL_CDEBUG_PAGE(D_ERROR, page, "read queue failed: rc %d\n", rc);
                 page_cache_release(page);
@@ -1057,7 +1058,7 @@ int ll_readpage(struct file *filp, struct page *page)
         llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
-
+        
         if (ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD)
                 ras_update(ll_i2sbi(inode), &fd->fd_ras, page->index,
                            llap->llap_defer_uptodate);

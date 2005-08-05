@@ -31,7 +31,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_version.h>
-
 #include "llite_internal.h"
 
 /* should NOT be called with the dcache lock, see fs/dcache.c */
@@ -285,6 +284,14 @@ int ll_intent_alloc(struct lookup_intent *it)
 void ll_intent_free(struct lookup_intent *it)
 {
         if (it->d.fs_data) {
+                struct lustre_intent_data *lustre_data = 
+                        (struct lustre_intent_data *)it->d.fs_data;
+                if (lustre_data->it_key) {
+                        OBD_FREE(lustre_data->it_key, 
+                                 lustre_data->it_key_size);
+                        lustre_data->it_key = NULL;
+                        lustre_data->it_key_size = 0;
+                }
                 OBD_SLAB_FREE(it->d.fs_data, ll_intent_slab,
                               sizeof(struct lustre_intent_data));
                 it->d.fs_data = NULL;
@@ -429,7 +436,11 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
 do_lock:
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it != NULL);
-
+        
+        rc = ll_crypto_init_it_key(de->d_inode, it);
+        if (rc)
+                GOTO(out, rc);
+        
         rc = md_intent_lock(exp, &pid, (char *)de->d_name.name, de->d_name.len,
                             NULL, 0, &cid, it, flags, &req, ll_mdc_blocking_ast);
         /* If req is NULL, then md_intent_lock() only tried to do a lock match;
@@ -531,7 +542,9 @@ do_lookup:
                 if (ll_intent_alloc(it))
                         LBUG();
         }
-        
+        rc = ll_crypto_init_it_key(de->d_inode, it);
+        if (rc)
+               GOTO(out, rc); 
         rc = md_intent_lock(exp, &pid, (char *)de->d_name.name, de->d_name.len,
                             NULL, 0, NULL, it, 0, &req, ll_mdc_blocking_ast);
         if (rc >= 0) {

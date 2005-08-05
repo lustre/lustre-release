@@ -133,6 +133,16 @@
                                   OST_MAX_THREADS), 2UL)
 #define OST_NBUFS       (64 * smp_num_cpus)
 #define OST_BUFSIZE     (8 * 1024)
+/*GSS service parameters*/
+#define GKS_NBUFS       (64 * smp_num_cpus)
+#define GKS_BUFSIZE     (8 * 1024)
+#define GKT_MAX_THREADS 32UL
+#define GKT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
+                                  GKT_MAX_THREADS), 2UL)
+
+#define GKS_MAXREQSIZE  (5 * 1024)
+
+
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
  *
@@ -750,7 +760,8 @@ void lustre_init_msg (struct lustre_msg *msg, int count,
                       int *lens, char **bufs);
 void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
                        struct mdc_op_data *data, struct iattr *iattr,
-                       void *ea, int ealen, void *ea2, int ea2len);
+                       void *ea, int ealen, void *ea2, int ea2len, 
+                       void *ea3, int ea3len);
 void *mdc_create_pack(struct lustre_msg *msg, int offset,
                       struct mdc_op_data *op_data, __u32 mode,
                       __u64 rdev, const void *data, int datalen);
@@ -762,6 +773,7 @@ void *mdc_rename_pack(struct lustre_msg *msg, int offset,
                       struct mdc_op_data *data,
                       const char *old, int oldlen,
                       const char *new, int newlen);
+__u32 mds_pack_open_flags(__u32 flags);
 
 /* lustre id helper functions and macros. */
 static inline

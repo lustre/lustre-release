@@ -65,6 +65,8 @@ struct mds_update_record {
         void               *ur_eadata;
         int                 ur_ea2datalen;
         void               *ur_ea2data;
+        int                 ur_ea3datalen;
+        void               *ur_ea3data;
         int                 ur_cookielen;       /* obsolete? */
         struct llog_cookie *ur_logcookies;      /* obsolete? */
         struct iattr        ur_iattr;
@@ -335,7 +337,7 @@ int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request);
+                void *ea3, int ea3len, struct ptlrpc_request **request);
 int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);

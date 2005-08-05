@@ -35,6 +35,7 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_sec.h>
 #include <linux/fcntl.h>
+#include <linux/posix_acl.h>
 
 
 #define HDR_SIZE(count) \
@@ -481,9 +482,25 @@ void *mdc_create_pack(struct lustre_msg *msg, int offset,
         return ((void*)tmp + size_round(datalen));
 }
 
+__u32 mds_pack_open_flags(__u32 flags)
+{
+        return
+                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
+                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
+                          MDS_OPEN_HAS_OBJS)) |
+                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
+                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
+                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
+                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
+                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
+                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
+                0;
+}
+
 void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
                        struct mdc_op_data *data, struct iattr *iattr,
-                       void *ea, int ealen, void *ea2, int ea2len)
+                       void *ea, int ealen, void *ea2, int ea2len, 
+                       void *ea3, int ea3len)
 {
         struct mds_rec_setattr *rec = lustre_msg_buf(msg, offset, sizeof(*rec));
         char *tmp = NULL;
@@ -515,6 +532,13 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
 
         memcpy(lustre_msg_buf(msg, offset + 2, ea2len), ea2, ea2len);
         tmp += size_round(ea2len);
+
+        if (ea3len == 0)
+                return (void*)tmp;
+
+        memcpy(lustre_msg_buf(msg, offset + 3, ea3len), ea3, ea3len);
+        tmp += size_round(ea3len);
+
         return (void*)tmp;
 }
 
@@ -883,4 +907,23 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
 void lustre_assert_wire_constants(void)
 {
 }
-
+/* for gks key rec */
+void lustre_swab_key_perms(struct key_perm *kperm)
+{
+        int i;
+        __swab32s(&kperm->kp_uid);
+        __swab32s(&kperm->kp_gid);
+        __swab32s(&kperm->kp_mode);
+        __swab32s(&kperm->kp_acl_count);
+        for (i = 0; i < kperm->kp_acl_count; i++) {
+                __swab16s(&kperm->kp_acls[i].e_tag); 
+                __swab16s(&kperm->kp_acls[i].e_perm); 
+                __swab32s(&kperm->kp_acls[i].e_id); 
+        }  
+}
+void lustre_swab_key_context (struct key_context *kctxt)
+{
+        __swab32s (&kctxt->kc_command);
+        __swab32s (&kctxt->kc_valid); /* for use with open */
+        lustre_swab_key_perms(&kctxt->kc_perm);
+}

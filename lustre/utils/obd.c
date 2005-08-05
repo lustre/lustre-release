@@ -1981,6 +1981,104 @@ int jt_obd_recover(int argc, char **argv)
 
         return rc;
 }
+int jt_set_lkey_type(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        char *dir, *type;
+        int rc, fd;
+
+        if (argc < 3 || argc > 4)
+                return CMD_HELP;
+
+        dir = argv[1];
+        type = argv[2];
+
+        IOC_INIT(data);
+
+        data.ioc_inllen1 = strlen(type) + 1;
+        data.ioc_inlbuf1 = type;
+
+        IOC_PACK(argv[0], data);
+
+        fd = open(dir, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open \"%s\" failed: %s\n", dir,
+                        strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_KEY_TYPE, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+        }
+        close(fd);
+        return rc;
+}
+
+int jt_disable_crypto(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        char *file;
+        int rc, fd;
+
+        if (argc < 2 || argc > 3)
+                return CMD_HELP;
+
+        file = argv[1];
+
+        IOC_INIT(data);
+
+        IOC_PACK(argv[0], data);
+
+        fd = open(file, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open \"%s\" failed: %s\n", file,
+                        strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_DISABLE_CRYPTO, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+        }
+        close(fd);
+        
+        return rc;
+}
+
+int jt_enable_crypto(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        char *file;
+        int rc, fd;
+
+        if (argc < 3 || argc > 4)
+                return CMD_HELP;
+
+        file = argv[1];
+
+        IOC_INIT(data);
+
+        IOC_PACK(argv[0], data);
+
+        fd = open(file, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open \"%s\" failed: %s\n", file,
+                        strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_ENABLE_CRYPTO, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+        }
+        close(fd);
+        return rc;
+}
+
 
 int jt_obd_mdc_lookup(int argc, char **argv)
 {

@@ -114,9 +114,9 @@ struct ll_inode_info {
         __u64                   lli_open_fd_write_count;
         struct obd_client_handle *lli_mds_exec_och;
         __u64                   lli_open_fd_exec_count;
-
         struct posix_acl       *lli_posix_acl;
         struct remote_acl      *lli_remote_acl;
+        struct lustre_key      *lli_key_info;
 };
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
@@ -177,6 +177,9 @@ struct lustre_intent_data {
         __u64   it_lock_handle;
         void    *it_data;
         int     it_lock_mode;
+        int     it_int_flags;
+        void    *it_key;
+        int     it_key_size;
 };
 #define LUSTRE_IT(it) ((struct lustre_intent_data *)((it)->d.fs_data))
 

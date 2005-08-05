@@ -36,6 +36,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_gs.h>
 
 /* @priority: if non-zero, move the selected to the list head
  * @nocreate: if non-zero, only search in existed connections
@@ -197,6 +198,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MGMT_REQUEST_PORTAL;
                 rp_portal = MGMT_REPLY_PORTAL;
                 connect_op = MGMT_CONNECT;
+        } else if (!strcmp(name, LUSTRE_GKC_NAME)) {
+                rq_portal = GKS_REQUEST_PORTAL;
+                rp_portal = GKC_REPLY_PORTAL;
+                connect_op = GKS_CONNECT;
+
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);

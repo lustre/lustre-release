@@ -76,7 +76,7 @@ start() {
     facet=$1
     shift
     active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet -v \
         --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
         --mds_sec $SECURITY $@ $XMLCONFIG
 }
@@ -376,6 +376,26 @@ del_ost() {
     facet=$1
     shift
     do_lmc --delete ost --node ${facet}_facet --ost ${facet}_svc $*
+}
+start_gsk() {
+    facet=$1
+    shift
+    rm -f ${facet}active
+    add_facet $facet
+    do_facet $facet $LCONF --node ${facet}_facet  --ptldebug $PTLDEBUG $* $XMLCONFIG 
+}
+stop_gsk() {
+    facet=$1
+    shift
+    do_facet $facet $LCONF --node ${facet}_facet  --cleanup $* $XMLCONFIG 
+}
+
+add_gsk() {
+    facet=$1
+    shift
+    rm -f ${facet}active
+    add_facet $facet
+    do_lmc --add gss --gss ${facet}_svc --node ${facet}_facet $*
 }
 add_cmobd() {
     facet=$1

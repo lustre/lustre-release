@@ -526,7 +526,7 @@ static int ll_ioctl_setfacl(struct inode *inode,
         rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, &op_data, &attr,
                         (void*) XATTR_NAME_LUSTRE_ACL,
                         sizeof(XATTR_NAME_LUSTRE_ACL),
-                        (void*) cmd, ioc->cmd_len, &req);
+                        (void*) cmd, ioc->cmd_len, NULL, 0, &req);
         if (rc) {
                 CERROR("md_setattr fails: rc = %d\n", rc);
                 GOTO(out, rc);
@@ -611,6 +611,29 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 obd_ioctl_freedata(buf, len);
                 return rc;
         }
+        case LL_IOC_KEY_TYPE: {
+                char *buf = NULL;
+                char *type;
+                int typelen, rc, len = 0;
+
+                rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
+                if (rc)
+                        RETURN(rc);
+                data = (void *)buf;
+
+                type = data->ioc_inlbuf1;
+                typelen = data->ioc_inllen1;
+
+                if (typelen < 1) {
+                        CDEBUG(D_INFO, "LL_IOC_KEY_TYPE missing filename\n");
+                        GOTO(out_free, rc = -EINVAL);
+                }
+                ll_set_sb_gksinfo(inode->i_sb, type);
+                EXIT;
+        out_free:
+                obd_ioctl_freedata(buf, len);
+                RETURN(rc);
+        }
         case LL_IOC_MDC_MKDIRSTRIPE:
                 RETURN(ll_mkdir_stripe(inode, arg));
         case LL_IOC_LOV_SETSTRIPE: {
@@ -637,7 +660,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_setattr(sbi->ll_md_exp, op_data, &attr, &lum,
-                                sizeof(lum), NULL, 0, &request);
+                                sizeof(lum), NULL, 0, NULL, 0, &request);
                 OBD_FREE(op_data, sizeof(*op_data));
                 ptlrpc_req_finished(request);
 

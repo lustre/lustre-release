@@ -1357,7 +1357,8 @@ request:
 
 static int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                        struct iattr *iattr, void *ea, int ealen, void *ea2,
-                       int ea2len, struct ptlrpc_request **request)
+                       int ea2len, void *ea3, int ea3len, 
+                       struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1381,7 +1382,8 @@ static int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                         data->id1 = obj->objs[i].id;
                         
                         rc = md_setattr(lmv->tgts[id_group(&data->id1)].ltd_exp, 
-                                        data, iattr, ea, ealen, ea2, ea2len, &req);
+                                        data, iattr, ea, ealen, ea2, ea2len, 
+                                        ea3, ea3len, &req);
 
                         if (id_equal_fid(&obj->id, &obj->objs[i].id)) {
                                 /*
@@ -1400,7 +1402,8 @@ static int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
         } else {
                 LASSERT(id_group(&data->id1) < lmv->desc.ld_tgt_count);
                 rc = md_setattr(lmv->tgts[id_group(&data->id1)].ltd_exp,
-                                data, iattr, ea, ealen, ea2, ea2len, request); 
+                                data, iattr, ea, ealen, ea2, ea2len, ea3,
+                                ea3len, request); 
                 if (rc == 0) {
                         body = lustre_msg_buf((*request)->rq_repmsg, 0,
                                               sizeof(*body));
@@ -1999,8 +2002,10 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(rc);
         }
 
-        if ((keylen == strlen("flush_cred") &&
-             strcmp(key, "flush_cred") == 0)) {
+        if (((keylen == strlen("flush_cred") &&
+             strcmp(key, "flush_cred") == 0)) || 
+             ((keylen == strlen("crypto_type") &&
+             strcmp(key, "crypto_type") == 0))) {
                 int rc = 0, i;
 
                 for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;

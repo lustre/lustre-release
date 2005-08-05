@@ -714,10 +714,10 @@ class LCTLInterface:
         return out
 
     # dump mount options
-    def mount_option(self, profile, osc, mdc):
+    def mount_option(self, profile, osc, mdc, gkc):
         cmds = """
-  mount_option %s %s %s
-  quit""" % (profile, osc, mdc)
+  mount_option %s %s %s %s
+  quit""" % (profile, osc, mdc, gkc)
         self.run(cmds)
 
     # delete mount options
@@ -1726,6 +1726,66 @@ class LMV(Module):
     def correct_level(self, level, op=None):
         return level
 
+class GKD(Module):
+    def __init__(self,db):
+        Module.__init__(self, 'GKD', db)
+        target_uuid = self.db.get_first_ref('target')
+        self.target = self.db.lookup(target_uuid)
+        self.name = self.target.getName()
+
+        active_uuid = get_active_target(self.target)
+        if not active_uuid:
+            panic("No target device found:", target_uuid)
+        if active_uuid == self.uuid:
+            self.active = 1
+        else:
+            self.active = 0
+      
+	self.uuid = target_uuid  
+    def prepare(self):
+        if is_prepared(self.name):
+            return
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+        run_acceptors()
+
+	lctl.newdev("gks", self.name, self.uuid, setup ="") 
+	if not is_prepared('GKT'):
+    	    lctl.newdev("gkt", 'GKT', 'GKT_UUID', setup ="")
+
+    def cleanup(self):
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+        self.info()
+        if is_prepared(self.name):
+            try:
+                lctl.cleanup(self.name, self.uuid, config.force,
+                             config.failover)
+            except CommandError, e:
+                log(self.module_name, "cleanup failed: ", self.name)
+                e.dump()
+                cleanup_error(e.rc)
+                Module.cleanup(self)
+        if is_prepared('GKT'):
+            try:
+                lctl.cleanup("GKT", "GKT_UUID", config.force,
+                             config.failover)
+            except CommandError, e:
+                print "cleanup failed: ", self.name
+                e.dump()
+                cleanup_error(e.rc)
+        
+    def add_module(self, manager):
+	if self.active:
+	    manager.add_lustre_module('sec/gks', 'gks')
+	    manager.add_lustre_module('sec/gks', 'gkc')
+
+    def correct_level(self, level, op=None):
+        return level
+
+
 class CONFDEV(Module):
     def __init__(self, db, name, target_uuid, uuid):
         Module.__init__(self, 'CONFDEV', db)
@@ -1960,7 +2020,7 @@ class CONFDEV(Module):
             lctl.clear_log(self.name, self.target.getName())
             lctl.record(self.name, self.target.getName())
             client.prepare()
-            lctl.mount_option(self.target.getName(), client.get_name(), "")
+            lctl.mount_option(self.target.getName(), client.get_name(), "", "")
             lctl.end_record()
 
             config.cleanup = 1
@@ -2522,6 +2582,13 @@ class Client(Module):
             e.dump()
             cleanup_error(e.rc)
 
+class GKC(Client):
+    def __init__(self, db, uuid, fs_name):
+         Client.__init__(self, db, uuid, 'gkc', fs_name)
+
+    def permits_inactive(self):
+        return 0
+
 class MDC(Client):
     def __init__(self, db, uuid, fs_name):
          Client.__init__(self, db, uuid, 'mdc', fs_name)
@@ -2808,7 +2875,15 @@ class Mountpoint(Module):
 	if not self.mds_uuid:
 	    self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        client_uuid = generate_client_uuid(self.name)
+        self.gks_uuid =fs.get_first_ref('gks')
+	client_uuid = generate_client_uuid(self.name)
+
+        self.oss_sec = self.db.get_val('oss_sec','null')
+        self.mds_sec = self.db.get_val('mds_sec','null')
+        if config.mds_sec:
+            self.mds_sec = config.mds_sec
+        if config.oss_sec:
+            self.oss_sec = config.oss_sec
 
         self.oss_sec = self.db.get_val('oss_sec','null')
         self.mds_sec = self.db.get_val('mds_sec','null')
@@ -2827,7 +2902,9 @@ class Mountpoint(Module):
        
         self.vosc = VOSC(ost, client_uuid, self.name, self.name)
 	self.vmdc = VMDC(mds, client_uuid, self.name, self.name)
-        
+
+	if self.gks_uuid:
+	    self.gkc = get_gkc(db, client_uuid, self.name, self.gks_uuid)      
     def prepare(self):
         if not config.record and fs_is_mounted(self.path):
             log(self.path, "already mounted.")
@@ -2836,12 +2913,18 @@ class Mountpoint(Module):
 
 	self.vosc.prepare()
         self.vmdc.prepare()
+	if self.gks_uuid:
+	   self.gkc.prepare()
 
         self.info(self.path, self.mds_uuid, self.obd_uuid)
         if config.record or config.lctl_dump:
-            lctl.mount_option(local_node_name, self.vosc.get_name(), 
-			      self.vmdc.get_name())
-            return
+	    if self.gks_uuid:
+            	lctl.mount_option(local_node_name, self.vosc.get_name(), 
+			          self.vmdc.get_name(), self.gkc.get_name())
+            else:
+            	lctl.mount_option(local_node_name, self.vosc.get_name(), 
+			          self.vmdc.get_name(), "")
+	    return
 
         if config.clientoptions:
             if self.clientoptions:
@@ -2854,8 +2937,12 @@ class Mountpoint(Module):
             # so replace it with Lustre async
             self.clientoptions = string.replace(self.clientoptions, "async", "lasync")
 
-        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,mds_sec=%s,oss_sec=%s%s %s %s" % \
-              (self.vosc.get_name(), self.vmdc.get_name(), self.mds_sec,
+	if self.gks_uuid:
+	    gkc_name = self.gkc.get_name();
+	else:
+	    gkc_name = "null"	
+        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,gkc=%s,mds_sec=%s,oss_sec=%s%s %s %s" % \
+              (self.vosc.get_name(), self.vmdc.get_name(), gkc_name, self.mds_sec,
 	       self.oss_sec, self.clientoptions, config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
@@ -2883,12 +2970,15 @@ class Mountpoint(Module):
 
         self.vmdc.cleanup()
         self.vosc.cleanup()
+	if self.gks_uuid:
+	    self.gkc.cleanup()    
 
     def add_module(self, manager):
         self.vosc.add_module(manager)
         self.vmdc.add_module(manager)
         manager.add_lustre_module('llite', 'llite')
-
+	if self.gks_uuid:
+	    manager.add_lustre_module('sec/gks', 'gkc')
     def correct_level(self, level, op=None):
         return level
 
@@ -2924,8 +3014,10 @@ def getServiceLevel(self):
         ret = 30
     elif type in ('mdsdev',):
         ret = 40
-    elif type in ('lmv',):
+    elif type in ('lmv', 'cobd',):
         ret = 45
+    elif type in ('gkd'):
+	ret = 50
     elif type in ('cmobd', 'cobd',):
         ret = 60 
     elif type in ('mountpoint', 'echoclient'):
@@ -2971,6 +3063,13 @@ def get_mdc(db, fs_name, mds_uuid):
         error("no mds:", mds_uuid)
     mdc = MDC(mds_db, mds_uuid, fs_name)
     return mdc
+
+def get_gkc(db, uuid, fs_name, gks_uuid):
+    gks_db = db.lookup(gks_uuid);
+    if not gks_db:
+        error("no gks:", gks_uuid)
+    gkc = GKC(gks_db, uuid, fs_name)
+    return gkc
 
 ############################################################
 # routing ("rooting")
@@ -3110,6 +3209,8 @@ def newService(db):
         n = ECHO_CLIENT(db)
     elif type == 'lmv':
         n = LMV(db)
+    elif type == 'gkd':
+	n = GKD(db)
     else:
         panic ("unknown service type:", type)
     return n

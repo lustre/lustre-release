@@ -472,6 +472,7 @@ static int mds_get_md_type(char *name)
                 RETURN(EA_SID);
         RETURN(0);
 }
+
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open, the client holds a lock
  * already.
@@ -589,10 +590,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                                 flags);
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_RM) {
                         rc = -EOPNOTSUPP;
-                        if (!med->med_remote && inode->i_op &&
-                            inode->i_op->removexattr) 
-                                rc = inode->i_op->removexattr(
-                                                de, rec->ur_eadata);
+                        if (inode->i_op && inode->i_op->removexattr) 
+                                rc = inode->i_op->removexattr(de, 
+                                                  rec->ur_eadata);
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_CMOBD) {
                         char *name;
                         int type;
@@ -608,7 +608,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                                    rec->ur_ea2datalen, type);
                         if (rc)
                                 GOTO(cleanup, rc);               
-                } else if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) {
+                } else if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
+                           !((rec->ur_iattr.ia_valid & ATTR_KEY) || 
+                             (rec->ur_iattr.ia_valid & ATTR_MAC))) {
                         struct lov_stripe_md *lsm = NULL;
                         struct lov_user_md *lum = NULL;
 
@@ -640,7 +642,19 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                                 GOTO(cleanup, rc);
                                 }
                         }
-                }    
+                }   
+                if ((rec->ur_iattr.ia_valid & ATTR_KEY) || 
+                    (rec->ur_iattr.ia_valid & ATTR_MAC)) {
+                        void *key;
+                        int keylen;
+                        LASSERT(rec->ur_eadatalen || rec->ur_ea3datalen); 
+                        LASSERT(rec->ur_eadata || rec->ur_ea3data); 
+                        key = rec->ur_eadata ? rec->ur_eadata : rec->ur_ea3data;
+                        keylen = rec->ur_eadatalen ? rec->ur_eadatalen : 
+                                                     rec->ur_ea3datalen;
+                        mds_set_gskey(obd, handle, inode, key, keylen, 
+                                      rec->ur_iattr.ia_valid); 
+                }
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
@@ -905,6 +919,14 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
+                if (rec->ur_eadata && rec->ur_eadatalen && 
+                    (rc == 0) && (dchild->d_inode != NULL)) {
+                        /*Assumption: When ur_eadata is not NULL, 
+                         *ur_eadata is crypto key, should fix it later, Wangdi*/
+                        mds_set_gskey(obd, handle, dchild->d_inode, 
+                                      rec->ur_eadata, rec->ur_eadatalen, 
+                                      ATTR_MAC | ATTR_KEY); 
+                }
                 EXIT;
                 break;
         }

@@ -79,6 +79,7 @@ struct fsfilt_cb_data {
 #define XATTR_LUSTRE_MDS_MEA_EA         "mea"
 #define XATTR_LUSTRE_MDS_MID_EA         "mid"
 #define XATTR_LUSTRE_MDS_SID_EA         "sid"
+#define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -512,6 +513,11 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                                            XATTR_LUSTRE_MDS_MID_EA,
                                            lmm, lmm_size);
                 break;
+        case EA_KEY:
+                rc = fsfilt_ext3_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_KEY_EA,
+                                           lmm, lmm_size);
+                break;
         default:
                 return -EINVAL;
         }
@@ -543,6 +549,11 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm,
         case EA_MID:
                 rc = fsfilt_ext3_get_xattr(inode,
                                            XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_KEY:
+                rc = fsfilt_ext3_get_xattr(inode, 
+                                           XATTR_LUSTRE_MDS_KEY_EA,
                                            lmm, lmm_size);
                 break;
         default:

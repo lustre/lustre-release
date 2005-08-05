@@ -108,6 +108,7 @@ struct ll_sb_info {
 
         /* mount object entry name */
         char                      ll_gns_oname[PATH_MAX];
+        void                      *ll_crypto_info;
 };
 
 struct ll_gns_ctl {
@@ -257,8 +258,9 @@ void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
-struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
+
+struct lpage_data *lpd_cast_private(struct page *page);
 
 void ll_ra_accounting(struct page *page, struct address_space *mapping);
 void ll_truncate(struct inode *inode);
@@ -275,6 +277,8 @@ int ll_getxattr(struct dentry *, const char *, void *, size_t);
 int ll_listxattr(struct dentry *, char *, size_t);
 int ll_removexattr(struct dentry *, const char *);
 extern int ll_inode_permission(struct inode *, int, struct nameidata *);
+int ll_get_acl(struct inode *, struct posix_acl **acl, 
+               struct ptlrpc_request **req);
 int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
@@ -295,6 +299,8 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
 void ll_och_fill(struct inode *inode, struct lookup_intent *it,
                  struct obd_client_handle *och);
 
+int ll_getxattr_internal(struct inode *inode, const char *name,
+                         void *value, size_t size, __u64 valid);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
@@ -334,8 +340,8 @@ extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, char **mds_sec,
-                char **oss_sec, int *async, int *flags);
+void ll_options(char *options, char **ost, char **mds, char **gss, 
+                char **mds_sec, char **oss_sec, int *async, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);
@@ -486,7 +492,6 @@ static inline struct obd_export *ll_i2mdexp(struct inode *inode)
 {
         return ll_s2mdexp(inode->i_sb);
 }
-
 static inline int ll_mds_max_easize(struct super_block *sb)
 {
         return sbi2md(ll_s2sbi(sb))->cl_max_mds_easize;
@@ -496,6 +501,7 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 {
         return ll_i2info(inode)->lli_maxbytes;
 }
+
 
 static inline void
 ll_inode2id(struct lustre_id *id, struct inode *inode)
@@ -530,8 +536,135 @@ ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
         data->mod_time = LTIME_S(CURRENT_TIME);
 }
 
+struct crypto_helper_ops {
+       int (*init_it_key)(struct inode *inode, struct lookup_intent *it);
+       int (*create_key)(struct inode *dir, mode_t mode, void **key, 
+                         int* key_size);
+       int (*get_mac)(struct inode *inode, struct iattr *iattr, void*value, 
+                      int size, void **key, int* key_size);
+       int (*decrypt_key)(struct inode *inode, struct lookup_intent *it);
+       int (*init_inode_key)(struct inode *inode, void *md_key);
+       int (*destroy_key)(struct inode *inode);
+}; 
+
+/*llite crypto ops for crypto api*/
+struct ll_crypto_info {
+        struct obd_export    *ll_gt_exp;
+        struct list_head     ll_cops_list;
+        struct crypto_helper_ops *ll_cops;
+        int    ll_c_flags;
+};
+#define ll_page2key(page)  ((ll_i2info(page->mapping->host))->lli_key_info)
+static inline struct ll_crypto_info* ll_s2crpi(struct super_block *sb)
+{
+        return (struct ll_crypto_info*)ll_s2sbi(sb)->ll_crypto_info;
+}
+static inline struct ll_crypto_info* ll_i2crpi(struct inode *inode)
+{
+        return (struct ll_crypto_info*)ll_i2sbi(inode)->ll_crypto_info;
+}
+
+static inline struct crypto_helper_ops* ll_i2crpops(struct inode *inode)
+{
+        return ll_i2crpi(inode)->ll_cops; 
+}
+
+static inline struct crypto_helper_ops* ll_s2crpops(struct super_block *sb)
+{
+        return ll_s2crpi(sb)->ll_cops; 
+}
+
+static inline struct obd_export *ll_s2gsexp(struct super_block *sb)
+{
+        struct ll_crypto_info *llci = ll_s2crpi(sb);
+        if (llci)
+                return llci->ll_gt_exp;
+        return NULL;
+}
+static inline struct obd_export *ll_i2gsexp(struct inode *inode)
+{
+        return ll_s2gsexp(inode->i_sb);
+}
+
+static inline 
+int ll_crypto_init_it_key(struct inode *inode, struct lookup_intent *it) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;;
+                if (ops && ops->init_it_key)
+                        return ops->init_it_key(inode, it); 
+        } 
+        return 0;
+}
+
+static inline 
+int ll_crypto_create_key(struct inode *inode, mode_t mode, void **key, 
+                         int* key_size) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;;
+                if (ops && ops->create_key)
+                        return ops->create_key(inode, mode, key, key_size); 
+        } 
+        return 0;
+}
+
+static inline 
+int ll_crypto_get_mac(struct inode *inode, struct iattr *attr, void *acl, 
+                      int acl_size, void **mac, int *mac_size) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;
+                if (ops && ops->get_mac)
+                        return ops->get_mac(inode, attr, acl, acl_size, 
+                                            mac, mac_size);
+        }  
+        return 0;
+}
+
+static inline 
+int ll_crypto_decrypt_key(struct inode *inode, struct lookup_intent *it) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;
+                if (ops && ops->decrypt_key)
+                        return ops->decrypt_key(inode, it);  
+        }
+        return 0; 
+}
+
+static inline 
+int ll_crypto_init_inode_key(struct inode *inode, void *md_key) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;
+                if (ops && ops->init_inode_key)
+                        return ops->init_inode_key(inode, md_key);  
+        }
+        return 0; 
+}
+
+static inline 
+int ll_crypto_destroy_inode_key(struct inode *inode) 
+{
+        struct ll_crypto_info *lci = ll_i2crpi(inode);
+        if (lci) {
+                struct crypto_helper_ops *ops = lci->ll_cops;
+                if (ops && ops->destroy_key)
+                        return ops->destroy_key(inode);  
+        }
+        return 0; 
+}
+
+int lustre_init_crypto(struct super_block *sb, char *gkc, 
+                       struct obd_connect_data *data, int async);
+int lustre_destroy_crypto(struct super_block *sb);
+int ll_set_sb_gksinfo(struct super_block *sb, char *type);
 /* pass this flag to ll_md_real_close() to send close rpc right away */
 #define FMODE_SYNC               00000010
-
-
 #endif /* LLITE_INTERNAL_H */

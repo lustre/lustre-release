@@ -2013,6 +2013,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 }
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
+                portals_debug_dumpstack(NULL);
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {
@@ -2139,7 +2140,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 spin_unlock(&lov->lov_lock);
 
                 RETURN(rc);
-        } else if (KEY_IS("flush_cred")) {
+        } else if (KEY_IS("flush_cred") || KEY_IS("crypto_cb")) {
                 struct lov_tgt_desc *tgt;
                 int rc = 0, i;
 

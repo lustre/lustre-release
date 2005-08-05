@@ -315,7 +315,7 @@ command_t cmdlist[] = {
          "setup mds/ost from the llog file\n"
          "usage: start <profilename>"},
         {"mount_option", jt_lcfg_mount_option, 0, 
-         "usage: mount_option profile osc_name [mdc_name] \n"},
+         "usage: mount_option profile osc_name [mdc_name] [gsc_name] \n"},
         {"del_mount_option", jt_lcfg_del_mount_option, 0,
          "usage: del_mount_option profile\n"},
         {"set_timeout", jt_lcfg_set_timeout, 0,
@@ -365,12 +365,15 @@ command_t cmdlist[] = {
         {"llog_remove", jt_llog_remove, 0,
          "remove one log from catalog, erase it from disk.\n"
          "usage: llog_remove <catalog id|catalog name> <log id>"},
-
+        
         /* Misc commands */
         {"flush_cred", jt_flush_cred, 0,
          "flush the client side credential.\n"
          "usage: flush_cred [mountpoint]..."},
-
+        {"set_crypt", jt_set_lkey_type, 0,
+         "set lustre key management type, only support gsk and mdk\n"
+         "usage: set_crypt [dir] [gsk|mdk]...."},
+        
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_daemon", jt_dbg_debug_daemon, 0,

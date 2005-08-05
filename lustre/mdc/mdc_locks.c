@@ -39,6 +39,7 @@
 #include <linux/lustre_sec.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_acl.h>
+#include <linux/lustre_gs.h>
 #include <linux/lustre_lite.h>
 #include "mdc_internal.h"
 
@@ -239,13 +240,18 @@ int mdc_enqueue(struct obd_export *exp,
         reqsize[0] = lustre_secdesc_size();
 
         if (it->it_op & IT_OPEN) {
+                struct lustre_intent_data *lustre_data = 
+                                   (struct lustre_intent_data *) it->d.fs_data;  
                 it->it_create_mode |= S_IFREG;
                 it->it_create_mode &= ~current->fs->umask;
 
                 reqsize[req_buffers++] = sizeof(struct mds_rec_create);
                 reqsize[req_buffers++] = data->namelen + 1;
                 reqsize[req_buffers++] = obddev->u.cli.cl_max_mds_easize;
-
+                /*pack the lustre key*/
+                if (lustre_data->it_key_size > 0 && lustre_data->it_key)
+                        reqsize[req_buffers++] = lustre_data->it_key_size; 
+                
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
                                       LDLM_ENQUEUE, req_buffers, reqsize, NULL);
                 if (!req)
@@ -262,15 +268,18 @@ int mdc_enqueue(struct obd_export *exp,
 
                 /* pack the intended request */
                 mdc_open_pack(req->rq_reqmsg, MDS_REQ_INTENT_REC_OFF, data,
-                              it->it_create_mode, 0, it->it_flags, lmm, lmmsize);
+                              it->it_create_mode, 0, it->it_flags, lmm, lmmsize,
+                              lustre_data->it_key, lustre_data->it_key_size);
                 /* get ready for the reply */
-                repsize[3] = 4;
-                repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
-                reply_buffers = 5;
-                req->rq_replen = lustre_msg_size(5, repsize);
+                reply_buffers = 3;
+                repsize[reply_buffers++] = sizeof(int);
+                repsize[reply_buffers++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                repsize[reply_buffers++] = sizeof(int);
+                repsize[reply_buffers++] = sizeof(struct crypto_key);
+                req->rq_replen = lustre_msg_size(reply_buffers, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
                 __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE |
-                              OBD_MD_FLACL;
+                            OBD_MD_FLACL | OBD_MD_FLKEY;
 
                 /* we don't expect xattr retrieve could reach here */
                 LASSERT(!(valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST)));
@@ -297,10 +306,12 @@ int mdc_enqueue(struct obd_export *exp,
                                  valid, it->it_flags, data);
                 
                 /* get ready for the reply */
-                repsize[3] = 4;
-                repsize[4] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
-                reply_buffers = 5;
-                req->rq_replen = lustre_msg_size(5, repsize);
+                reply_buffers = 3;
+                repsize[reply_buffers++] = sizeof(int);
+                repsize[reply_buffers++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
+                repsize[reply_buffers++] = sizeof(int);
+                repsize[reply_buffers++] = sizeof(struct crypto_key);
+                req->rq_replen = lustre_msg_size(reply_buffers, repsize);
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
@@ -404,7 +415,8 @@ int mdc_enqueue(struct obd_export *exp,
 
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 5 || reply_buffers == 4 || 
-                reply_buffers == 3 || reply_buffers == 1);
+                reply_buffers == 3 || reply_buffers == 1 || 
+                reply_buffers == 6 || reply_buffers == 7);
         if (reply_buffers >= 3) {
                 struct mds_body *body;
 
@@ -433,7 +445,8 @@ int mdc_enqueue(struct obd_export *exp,
                                 LASSERT(replayea);
                                 memcpy(replayea, eadata, body->eadatasize);
 
-                                LASSERT(req->rq_reqmsg->bufcount == 6);
+                                LASSERT(req->rq_reqmsg->bufcount == 6 || 
+                                        req->rq_reqmsg->bufcount == 7);
                                 req->rq_reqmsg->buflens[5] = body->eadatasize;
                                 /* If this isn't the last buffer, we might
                                  * have to shift other data around. */

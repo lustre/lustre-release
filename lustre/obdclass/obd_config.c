@@ -423,7 +423,8 @@ struct lustre_profile *class_get_profile(char * prof)
 
 int class_add_profile(int proflen, char *prof,
                       int lovlen, char *lov,
-                      int lmvlen, char *lmv)
+                      int lmvlen, char *lmv,
+                      int gkclen, char *gkc)
 {
         struct lustre_profile *lprof;
         int err = 0;
@@ -452,9 +453,15 @@ int class_add_profile(int proflen, char *prof,
                         GOTO(out, err = -ENOMEM);
                 memcpy(lprof->lp_lmv, lmv, lmvlen);
         }
-
+        if (gkclen > 0 ) {
+                LASSERT(gkclen == (strlen(gkc) + 1));
+                OBD_ALLOC(lprof->lp_gkc, gkclen);
+                if (lprof->lp_gkc == NULL)
+                        GOTO(out, err = -ENOMEM);
+                memcpy(lprof->lp_gkc, gkc, gkclen);
+        }
+        
         list_add(&lprof->lp_list, &lustre_profile_list);
-
 out:
         RETURN(err);
 }
@@ -510,10 +517,11 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err);
         }
         case LCFG_MOUNTOPT: {
-                CDEBUG(D_IOCTL, "mountopt: profile %s osc %s mdc %s\n",
+                CDEBUG(D_IOCTL, "mountopt: profile %s osc %s mdc %s gkc %s \n",
                        lustre_cfg_string(lcfg, 1),
                        lustre_cfg_string(lcfg, 2),
-                       lustre_cfg_string(lcfg, 3));
+                       lustre_cfg_string(lcfg, 3),
+                       lustre_cfg_string(lcfg, 4));
                 /* set these mount options somewhere, so ll_fill_super
                  * can find them. */
                 err = class_add_profile(LUSTRE_CFG_BUFLEN(lcfg, 1),
@@ -521,7 +529,9 @@ int class_process_config(struct lustre_cfg *lcfg)
                                         LUSTRE_CFG_BUFLEN(lcfg, 2),
                                         lustre_cfg_string(lcfg, 2),
                                         LUSTRE_CFG_BUFLEN(lcfg, 3),
-                                        lustre_cfg_string(lcfg, 3));
+                                        lustre_cfg_string(lcfg, 3),
+                                        LUSTRE_CFG_BUFLEN(lcfg, 4),
+                                        lustre_cfg_string(lcfg, 4));
                 GOTO(out, err);
         }
         case LCFG_DEL_MOUNTOPT: {

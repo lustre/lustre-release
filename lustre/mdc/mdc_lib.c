@@ -50,26 +50,11 @@ void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
         b->nlink = size;                        /* !! */
 }
 
-static __u32 mds_pack_open_flags(__u32 flags)
-{
-        return
-                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
-                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
-                          MDS_OPEN_HAS_OBJS)) |
-                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
-                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
-                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
-                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
-                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
-                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
-                0;
-}
-
 /* packing of MDS records */
 void mdc_open_pack(struct lustre_msg *msg, int offset,
                    struct mdc_op_data *op_data, __u32 mode,
                    __u64 rdev, __u32 flags, const void *lmm,
-                   int lmmlen)
+                   int lmmlen, void *key, int keylen)
 {
         struct mds_rec_create *rec;
         char *tmp;
@@ -96,6 +81,11 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
                 tmp = lustre_msg_buf(msg, offset + 2, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
+        }
+        if (key) {
+                rec->cr_flags |= MDS_OPEN_HAS_KEY;
+                tmp = lustre_msg_buf(msg, offset + 3, keylen);
+                memcpy(tmp, key, keylen); 
         }
 }
 

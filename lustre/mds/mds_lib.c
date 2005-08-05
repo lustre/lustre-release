@@ -44,11 +44,14 @@
 #include <asm/uaccess.h>
 #include <linux/slab.h>
 #include <asm/segment.h>
+#include <linux/random.h>
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_sec.h>
 #include <linux/lustre_ucache.h>
+#include <linux/lustre_gs.h>
+#include <linux/lustre_fsfilt.h>
 #include "mds_internal.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
@@ -214,6 +217,132 @@ int mds_pack_inode2id(struct obd_device *obd,
         RETURN(rc);
 }
 
+int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg, 
+                  int *offset, struct mds_body *body, struct inode *inode)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct crypto_key_md *md_key;
+        struct crypto_key *ckey;
+        __u32 buflen, *sizep;
+        void *buf;
+        int size, rc = 0;
+        ENTRY;
+ 
+        if ((mds->mds_crypto_type != MKS_TYPE && 
+             mds->mds_crypto_type != GKS_TYPE))
+                RETURN(rc);
+
+        sizep = lustre_msg_buf(repmsg, (*offset)++, 4);
+        if (!sizep) {
+                CERROR("can't locate returned ckey size buf\n");
+                RETURN(-EPROTO);
+        }
+        *sizep = cpu_to_le32(sizeof(*ckey));
+
+        OBD_ALLOC(md_key, sizeof(*md_key));
+      
+        buflen = repmsg->buflens[*offset];
+        buf = lustre_msg_buf(repmsg, (*offset)++, buflen);
+
+        size = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
+                           EA_KEY);
+        if (size < 0) {
+                CERROR("Can not get gskey from MDS ino %lu rc %d\n", 
+                       inode->i_ino, size);
+                GOTO(out, rc = size); 
+        }
+        if (le32_to_cpu(md_key->md_magic) != MD_KEY_MAGIC) {
+                CDEBUG(D_INFO, "given match %x != magic %x\n",
+                       md_key->md_magic, MD_KEY_MAGIC);
+                GOTO(out, rc = 0); 
+        }       
+ 
+        CDEBUG(D_INFO, "get key %s mac %s for ino %lu  size %d \n",
+               md_key->md_ck.ck_key, md_key->md_ck.ck_mac, inode->i_ino, size);
+        ckey=(struct crypto_key*)buf;
+
+        memcpy(ckey, &md_key->md_ck, sizeof(*ckey));
+        body->valid |= OBD_MD_FLKEY;
+out:                
+        OBD_FREE(md_key, sizeof(*md_key));
+        RETURN(rc);
+}
+
+static int mds_get_gskey(struct inode *inode, struct crypto_key *ckey)
+{
+        LASSERT(ckey);
+        /*tmp create gs key here*/
+        get_random_bytes(ckey->ck_key, KEY_SIZE);       
+        ckey->ck_type = MKS_TYPE; 
+        RETURN(0); 
+}
+
+int mds_set_gskey(struct obd_device *obd, void *handle, 
+                  struct inode *inode, void *key, int key_len, 
+                  int valid) 
+{
+        struct crypto_key_md *md_key = NULL;
+        struct crypto_key *ckey = (struct crypto_key *)key; 
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;       
+        ENTRY;
+
+        if ((mds->mds_crypto_type != MKS_TYPE && 
+             mds->mds_crypto_type != GKS_TYPE) || key_len == 0)
+                RETURN(rc);
+        
+        OBD_ALLOC(md_key, sizeof(*md_key)); 
+        LASSERT(ckey != NULL);
+        if (mds->mds_crypto_type == MKS_TYPE) { 
+                mds_get_gskey(inode, ckey);
+        }
+        rc = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
+                           EA_KEY);
+        if (rc < 0)
+                GOTO(free, rc);
+        LASSERT(le32_to_cpu(md_key->md_magic) == MD_KEY_MAGIC || 
+                md_key->md_magic == 0);
+        if (le32_to_cpu(md_key->md_magic) == MD_KEY_MAGIC) {
+                CDEBUG(D_INFO, "reset key %s mac %s", md_key->md_ck.ck_mac,
+                       md_key->md_ck.ck_key);
+        } 
+ 
+        md_key->md_magic = cpu_to_le32(MD_KEY_MAGIC);
+        if (valid & ATTR_MAC) { 
+                memcpy(md_key->md_ck.ck_mac, ckey->ck_mac, MAC_SIZE);
+                CDEBUG(D_INFO, "set mac %s for ino %lu \n",
+                       md_key->md_ck.ck_mac, inode->i_ino);
+        }
+        if (valid & ATTR_KEY) { 
+                memcpy(md_key->md_ck.ck_key, ckey->ck_key, KEY_SIZE);
+                CDEBUG(D_INFO, "set key %s for ino %lu \n",
+                       md_key->md_ck.ck_key, inode->i_ino);
+        }
+        rc = fsfilt_set_md(obd, inode, handle, md_key,
+                           sizeof(*md_key), EA_KEY);
+free:
+        if (md_key)
+                OBD_FREE(md_key, sizeof(*md_key));
+        RETURN(rc);
+}
+
+int mds_set_crypto_type(struct obd_device *obd, void *val, __u32 vallen)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        ENTRY;       
+ 
+        if (vallen >= strlen("mks") &&
+             memcmp(val, "mks", vallen) == 0) {
+                mds->mds_crypto_type = MKS_TYPE;         
+        } 
+        if (vallen >= strlen("gks") &&
+             memcmp(val, "gks", vallen) == 0) {
+                mds->mds_crypto_type = GKS_TYPE;         
+        } 
+
+        CDEBUG(D_IOCTL, "invalid key\n");
+        RETURN(0);
+} 
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
                          struct inode *inode, int fid)
@@ -252,6 +381,7 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
                 b->valid |= OBD_MD_FID;
         
         mds_pack_inode2id(obd, &b->id1, inode, fid);
+
 }
 
 /* unpacking */
@@ -293,6 +423,14 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                         RETURN (-EFAULT);
 
                 r->ur_ea2datalen = req->rq_reqmsg->buflens[offset + 2];
+        }
+
+        if (req->rq_reqmsg->bufcount > offset + 3) {
+                r->ur_ea3data = lustre_msg_buf(req->rq_reqmsg, offset + 3, 0);
+                if (r->ur_ea3data == NULL)
+                        RETURN (-EFAULT);
+
+                r->ur_ea3datalen = req->rq_reqmsg->buflens[offset + 3];
         }
 
         RETURN(0);
@@ -446,7 +584,7 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-
+ 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
@@ -454,11 +592,18 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
 
         LASSERT_REQSWAB (req, offset + 2);
-        if (req->rq_reqmsg->bufcount > offset + 2) {
+       
+        if (req->rq_reqmsg->bufcount > offset + 2) { 
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_eadata == NULL)
                         RETURN(-EFAULT);
                 r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+        }
+        
+        if (rec->cr_flags & MDS_OPEN_HAS_KEY) {
+                LASSERT(req->rq_reqmsg->bufcount > offset + 3);
+                r->ur_ea2data = lustre_msg_buf(req->rq_reqmsg, offset + 3, 0);
+                r->ur_ea2datalen = req->rq_reqmsg->buflens[offset + 3];  
         }
         RETURN(0);
 }

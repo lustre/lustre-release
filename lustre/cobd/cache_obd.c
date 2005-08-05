@@ -1116,7 +1116,8 @@ static int cobd_md_link(struct obd_export *exp, struct mdc_op_data *data,
 
 static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
                            struct iattr *iattr, void *ea, int ealen, void *ea2, 
-                           int ea2len, struct ptlrpc_request **request)
+                           int ea2len, void *ea3, int ea3len, 
+                           struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1128,7 +1129,7 @@ static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
         }
         cobd_exp = cobd_get_exp(obd);
         return md_setattr(cobd_exp, data, iattr, ea,
-                          ealen, ea2, ea2len, request);
+                          ealen, ea2, ea2len, ea3, ea3len, request);
 }
 
 static int cobd_md_readpage(struct obd_export *exp,

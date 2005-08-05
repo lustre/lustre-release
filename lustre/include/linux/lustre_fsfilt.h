@@ -44,7 +44,8 @@ enum ea_type {
         EA_LOV   = (1 << 0),
         EA_MEA   = (1 << 1),
         EA_SID   = (1 << 2),
-        EA_MID   = (1 << 3)
+        EA_MID   = (1 << 3),
+        EA_KEY   = (1 << 4)
 };
 
 struct fsfilt_operations {

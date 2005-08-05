@@ -499,6 +499,8 @@ struct lustre_intent_data {
         void    *it_data;
         int     it_lock_mode;
         int     it_int_flags;
+        void    *it_key;
+        int     it_key_size;
 };
 
 #define LUSTRE_IT(it) ((struct lustre_intent_data *)((it)->d.fs_data))

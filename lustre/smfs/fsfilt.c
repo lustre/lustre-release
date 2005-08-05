@@ -750,6 +750,7 @@ static int fsfilt_smfs_get_xattr(struct inode *inode, char *name,
 #define XATTR_LUSTRE_MDS_MEA_EA         "mea"
 #define XATTR_LUSTRE_MDS_MID_EA         "mid"
 #define XATTR_LUSTRE_MDS_SID_EA         "sid"
+#define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size, enum ea_type type)
@@ -775,6 +776,11 @@ static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
         case EA_MID:
                 rc = fsfilt_smfs_set_xattr(inode, handle,
                                            XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_KEY:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_KEY_EA,
                                            lmm, lmm_size);
                 break;
         default:

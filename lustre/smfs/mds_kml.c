@@ -107,7 +107,7 @@ static int mds_rec_setxattr_pack(char *buffer, struct dentry *dentry,
         LASSERT(kbuf && name);
 
         tmp = mdc_setattr_pack(msg, 0, op_data, NULL, name, strlen(name), 
-                               kbuf->buf, kbuf->buf_size);
+                               kbuf->buf, kbuf->buf_size, NULL, 0);
         OBD_FREE(op_data, sizeof(*op_data));
 
         rec = (struct mds_rec_setattr *)lustre_msg_buf(msg, 0, 0);
@@ -152,7 +152,8 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
-        tmp = mdc_setattr_pack(msg, 0, op_data, iattr, ea, ealen, NULL, 0);
+        tmp = mdc_setattr_pack(msg, 0, op_data, iattr, ea, ealen, 
+                               NULL, 0, NULL, 0);
         OBD_FREE(op_data, sizeof(*op_data));
 
         /* FIXME-WANGDI: there are maybe some better ways to set the time

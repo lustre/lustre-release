@@ -102,6 +102,7 @@ struct lustre_profile {
         char *lp_profile;
         char *lp_lov;
         char *lp_lmv;
+        char *lp_gkc;
 };
 
 struct lustre_profile *class_get_profile(char * prof);
@@ -1349,7 +1350,7 @@ static inline int md_rename(struct obd_export *exp, struct mdc_op_data *data,
 
 static inline int md_setattr(struct obd_export *exp, struct mdc_op_data *data,
                              struct iattr *iattr, void *ea, int ealen,
-                             void *ea2, int ea2len,
+                             void *ea2, int ea2len, void *ea3, int ea3len,
                              struct ptlrpc_request **request)
 {
         int rc;
@@ -1357,7 +1358,7 @@ static inline int md_setattr(struct obd_export *exp, struct mdc_op_data *data,
         EXP_CHECK_MD_OP(exp, setattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, setattr);
         rc = MDP(exp->exp_obd, setattr)(exp, data, iattr, ea, ealen,
-                                        ea2, ea2len, request);
+                                        ea2, ea2len, ea3, ea3len, request);
         RETURN(rc);
 }
 

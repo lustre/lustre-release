@@ -4,7 +4,7 @@
 # See the file COPYING in this distribution
 
 if GSS
-SUBDIRS = . gss #kcrypto 
+SUBDIRS = . gss  gks #kcrypto 
 endif
 
 if LIBLUSTRE

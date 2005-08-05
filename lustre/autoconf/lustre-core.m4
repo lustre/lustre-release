@@ -580,6 +580,8 @@ lustre/sec/Makefile
 lustre/sec/autoMakefile
 lustre/sec/gss/Makefile
 lustre/sec/gss/autoMakefile
+lustre/sec/gks/Makefile
+lustre/sec/gks/autoMakefile
 lustre/smfs/Makefile
 lustre/smfs/autoMakefile
 lustre/snapfs/Makefile

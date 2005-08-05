@@ -196,11 +196,14 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
+EXPORT_SYMBOL(lustre_swab_key_context);
+EXPORT_SYMBOL(lustre_swab_key_perms);
 EXPORT_SYMBOL(mdc_create_pack);
 EXPORT_SYMBOL(mdc_setattr_pack);
 EXPORT_SYMBOL(mdc_unlink_pack);
 EXPORT_SYMBOL(mdc_link_pack);
 EXPORT_SYMBOL(mdc_rename_pack);
+EXPORT_SYMBOL(mds_pack_open_flags);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);

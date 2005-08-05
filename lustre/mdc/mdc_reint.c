@@ -71,7 +71,8 @@ static int mdc_reint(struct ptlrpc_request *request,
  * setattr portal. */
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2,
-                int ea2len, struct ptlrpc_request **request)
+                int ea2len, void *ea3, int ea3len, 
+                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_rec_setattr *rec;
@@ -86,6 +87,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         if (ealen > 0) {
                 bufcount++;
                 if (ea2len > 0)
+                        bufcount++;
+                if (ea3len > 0)
                         bufcount++;
         }
 
@@ -107,7 +110,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
                        LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
         mdc_setattr_pack(req->rq_reqmsg, 1, data, iattr, ea, ealen,
-                         ea2, ea2len);
+                         ea2, ea2len, ea3, ea3len);
 
         /* prepare the reply buffer
          */

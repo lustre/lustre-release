@@ -125,7 +125,7 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
         ea2len = ea2 ? msg->buflens[2] : 0;
 
         rc = md_setattr(cmobd->master_exp, op_data, &iattr,
-                        ea1, ea1len, ea2, ea2len, &req);
+                        ea1, ea1len, ea2, ea2len, NULL, 0, &req);
         OBD_FREE(op_data, sizeof(*op_data));
 
         if (req)

@@ -29,9 +29,11 @@ int mdc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
 void mdc_getattr_pack(struct lustre_msg *msg, int offset,
                       __u64 valid, int flags, struct mdc_op_data *data);
+
 void mdc_open_pack(struct lustre_msg *msg, int offset,
-                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
-                   __u32 flags, const void *lmm, int lmmlen);
+                   struct mdc_op_data *op_data, __u32 mode,
+                   __u64 rdev, __u32 flags, const void *lmm,
+                   int lmmlen, void *key, int keylen);
 void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
                       __u64 offset, __u32 size, struct lustre_id *mdc_id);
 void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,

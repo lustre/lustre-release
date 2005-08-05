@@ -5,7 +5,7 @@ kgdb-ga.patch
 lustre_version.patch
 vfs-dcache_locking-vanilla-2.6.10-fc3.patch
 vfs-dcache_lustre_invalid-vanilla-2.6.patch
-vfs-intent_api-vanilla-2.6.10-fc3.patch
+vfs-intent_api-vanilla-2.6.10-fc3.patch 
 vfs-lookup_last-vanilla-2.6.10-fc3.patch
 vfs-raw_ops-vanilla-2.6.10-fc3.patch
 export-2.6-fc3.patch 

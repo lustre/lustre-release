@@ -43,6 +43,7 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_gs.h>
 
 #include "mds_internal.h"
 
@@ -700,7 +701,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         struct mds_file_data *mfd = NULL;
         obd_id *ids = NULL;
         unsigned mode;
-        int rc = 0;
+        int rc = 0, reply_off;
         ENTRY;
 
         /* atomically create objects if necessary */
@@ -748,13 +749,23 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         }
                 }
         }
-        rc = mds_pack_acl(req, 3, body, dchild->d_inode);
+
+        reply_off = 3;
+        rc = mds_pack_acl(req, &reply_off, body, dchild->d_inode);
+
         if (rc < 0) {
                 CERROR("pack posix acl: rc = %d\n", rc);
                 up(&dchild->d_inode->i_sem);
                 RETURN(rc);
         }
 
+        rc = mds_pack_gskey(obd, req->rq_repmsg, &reply_off, body, 
+                            dchild->d_inode); 
+        if (rc < 0) {
+                CERROR("mds_pack_gskey: rc = %d\n", rc);
+                up(&dchild->d_inode->i_sem);
+                RETURN(rc);
+        }
         /* If the inode has no EA data, then MDSs hold size, mtime */
         if (S_ISREG(dchild->d_inode->i_mode) &&
             !(body->valid & OBD_MD_FLEASIZE)) {
@@ -1202,7 +1213,16 @@ got_child:
                 else {
                         MD_COUNTER_INCREMENT(obd, create);
                 }
-
+                
+                if ((rec->ur_flags & MDS_OPEN_HAS_KEY) || 
+                     mds->mds_crypto_type == MKS_TYPE) {
+                        rc = mds_set_gskey(obd, handle, dchild->d_inode, 
+                                           rec->ur_ea2data, rec->ur_ea2datalen, 
+                                           ATTR_KEY | ATTR_MAC);
+                        if (rc) {
+                                CERROR("error in set gs key rc %d\n", rc); 
+                        }
+                }
                 if (ino) {
                         rc = mds_update_inode_sid(obd, dchild->d_inode,
                                                   handle, rec->ur_id2);
@@ -1887,6 +1907,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         mds_mfd_put(mfd);
         RETURN(0);
 }
+
 
 int mds_done_writing(struct ptlrpc_request *req, int offset)
 {

@@ -27,6 +27,7 @@
 
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_gs.h>
 #include "llite_internal.h"
 
 /* record that a write is in flight */

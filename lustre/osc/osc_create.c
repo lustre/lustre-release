@@ -128,6 +128,49 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 spin_unlock(&oscc->oscc_lock);
                 RETURN(rc);
         }
+        while (try_again) {
+                /* If orphans are being recovered, then we must wait until
+                   it is finished before we can continue with create. */
+                if (oscc_recovering(oscc)) {
+                        struct l_wait_info lwi;
+
+                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
+                               oscc);
+
+                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        rc = l_wait_event(oscc->oscc_waitq,
+                                          !oscc_recovering(oscc), &lwi);
+                        LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                        if (rc == -ETIMEDOUT) {
+                                CDEBUG(D_ERROR,"%p: timeout waiting on recovery\n",
+                                       oscc);
+                                RETURN(rc);
+                        }
+                        CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
+                               oscc);
+                }
+
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_EXITING) {
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        rc = -ENOSPC;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
+                }
+
+                oscc->oscc_next_id++;
+                oa->o_id = oscc->oscc_next_id;
+                try_again = 0;
+                spin_unlock(&oscc->oscc_lock);
+
+                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                       oscc->oscc_obd->u.cli.cl_import->imp_target_uuid.uuid,
+                       oa->o_id);
+        }
 
         while (try_again) {
                 /* If orphans are being recovered, then we must wait until

@@ -114,7 +114,6 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         obdo->o_fid = id_fid(&ll_i2info(inode)->lli_id);
         obdo->o_mds = id_group(&ll_i2info(inode)->lli_id);
 
-
         obdo->o_valid |= OBD_MD_FLEPOCH;
         obdo->o_easize = ll_i2info(inode)->lli_io_epoch;
 
@@ -429,7 +428,6 @@ int ll_file_open(struct inode *inode, struct file *file)
                 oit.it_flags |= 2;
 
         it = file->f_it;
-
         /*
          * sometimes LUSTRE_IT(it) may not be allocated like opening file by
          * dentry_open() from GNS stuff.
@@ -464,6 +462,10 @@ int ll_file_open(struct inode *inode, struct file *file)
                 och_p = &lli->lli_mds_read_och;
                 och_usecount = &lli->lli_open_fd_read_count;
         }
+
+        rc = ll_crypto_decrypt_key(inode, it);
+        if (rc)
+                GOTO(out, rc);
 
         down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
@@ -1514,6 +1516,31 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 putname(filename);
                 return rc;
         }
+        case LL_IOC_KEY_TYPE: {
+                struct obd_ioctl_data *data;
+                char *buf = NULL;
+                char *type;
+                int typelen, rc, len = 0;
+
+                rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
+                if (rc)
+                        RETURN(rc);
+                data = (void *)buf;
+
+                type = data->ioc_inlbuf1;
+                typelen = data->ioc_inllen1;
+
+                if (typelen < 1) {
+                        CDEBUG(D_INFO, "LL_IOC_KEY_TYPE missing filename\n");
+                        GOTO(out, rc = -EINVAL);
+                }
+                ll_set_sb_gksinfo(inode->i_sb, type);
+                EXIT;
+        out:
+                obd_ioctl_freedata(buf, len);
+                return rc;
+        }
+
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
         case EXT3_IOC_GETFLAGS:
@@ -1761,6 +1788,10 @@ int ll_inode_revalidate_it(struct dentry *dentry)
         rc = ll_intent_alloc(&oit);
         if (rc)
                 RETURN(-ENOMEM);
+        
+        rc = ll_crypto_init_it_key(inode, &oit);
+        if (rc)
+                GOTO(out, rc);
 
         rc = md_intent_lock(sbi->ll_md_exp, &id, NULL, 0, NULL, 0, &id,
                             &oit, 0, &req, ll_mdc_blocking_ast);
@@ -1834,7 +1865,8 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
         struct iattr attr;
-        int rc = 0;
+        void *key = NULL;
+        int rc = 0, key_size = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
@@ -1847,15 +1879,24 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         attr.ia_valid |= valid;
         attr.ia_attr_flags = flags;
 
+        if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0) {
+                rc = ll_crypto_get_mac(inode, NULL, (void *)value, size, 
+                                       &key, &key_size);
+        }
+
         ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
 
         rc = md_setattr(sbi->ll_md_exp, &op_data, &attr,
-                        (void*) name, strnlen(name, XATTR_NAME_MAX) + 1,
-                        (void*) value, size, &request);
-        if (rc)
+                        (void*) name, strnlen(name, XATTR_NAME_MAX) + 1, 
+                        (void*) value,  size, key, key_size, &request);
+        
+        if (key && key_size) 
+                OBD_FREE(key, key_size);
+        if (rc) {
+                CERROR("md_setattr fails: rc = %d\n", rc);
                 GOTO(out, rc);
-
- out:
+        }
+out:
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -1909,7 +1950,6 @@ int ll_removexattr(struct dentry *dentry, const char *name)
                                     ATTR_EA_RM);
 }
 
-static
 int ll_getxattr_internal(struct inode *inode, const char *name,
                          void *value, size_t size, __u64 valid)
 {

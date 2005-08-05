@@ -410,6 +410,7 @@ struct mds_obd {
         spinlock_t                      mds_denylist_lock;
         struct list_head                mds_denylist;
         struct semaphore                mds_create_sem;
+        int                             mds_crypto_type;
 };
 
 struct echo_obd {
@@ -537,6 +538,16 @@ struct lmv_obd {
         int                     connect_flags;
         struct semaphore        init_sem;
         struct obd_connect_data conn_data;
+};
+struct gks_crypto_key {
+        char *key;
+        int   len; 
+};
+struct gks_obd {
+        struct ptlrpc_service    *gks_service;
+        struct crypto_tfm        *gks_mac_tfm;       
+        struct crypto_tfm        *gks_key_tfm;
+        struct gks_crypto_key    gks_key;
 };
 
 struct niobuf_local {
@@ -700,6 +711,7 @@ struct obd_device {
                 struct lmv_obd           lmv;
                 struct cm_obd            cm;
                 struct conf_obd          conf;
+                struct gks_obd           gks;
         } u;
         
         /* fields used by LProcFS */
@@ -921,7 +933,7 @@ struct md_ops {
                         struct ptlrpc_request **);
         int (*m_setattr)(struct obd_export *, struct mdc_op_data *,
                          struct iattr *, void *, int , void *, int,
-                         struct ptlrpc_request **);
+                         void *, int, struct ptlrpc_request **);
         int (*m_sync)(struct obd_export *, struct lustre_id *,
                       struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, struct lustre_id *,

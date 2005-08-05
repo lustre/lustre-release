@@ -46,6 +46,7 @@ struct llu_sb_info {
         struct obd_uuid         ll_sb_uuid;
         struct obd_export      *ll_md_exp;
         struct obd_export      *ll_dt_exp;
+        struct obd_export      *ll_gt_exp;
         obd_id                  ll_rootino;
         int                     ll_flags;
         struct list_head        ll_conn_chain;

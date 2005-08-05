@@ -2180,6 +2180,8 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *filter;
         struct ldlm_resource *res;
         struct dentry *dentry;
+        obd_uid uid;
+        obd_gid gid;
         int rc;
         ENTRY;
 
@@ -2188,7 +2190,6 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
-        
         /* make sure that object is allocated. */
         dentry = filter_crow_object(exp->exp_obd, oa);
         if (IS_ERR(dentry))
@@ -2434,7 +2435,6 @@ filter_crow_object(struct obd_device *obd, struct obdo *oa)
                 RETURN(dentry);
 
         f_dput(dentry);
-        
         CDEBUG(D_INODE, "OSS object "LPU64"/"LPU64
                " does not exists - allocate it now\n",
                oa->o_id, oa->o_gr);
