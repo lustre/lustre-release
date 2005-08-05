@@ -371,7 +371,6 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                 while (tmp != &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
-                        spin_unlock(&ns->ns_hash_lock);
                         ldlm_resource_getref(res);
                         spin_unlock(&ns->ns_hash_lock);
 
