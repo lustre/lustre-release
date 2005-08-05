@@ -152,10 +152,45 @@ struct ll_sb_info {
         struct file_operations   *ll_fop;
 };
 
+/*
+ * per file-descriptor read-ahead data.
+ */
 struct ll_readahead_state {
         spinlock_t      ras_lock;
-        unsigned long   ras_last_readpage, ras_consecutive;
+        /*
+         * index of the last page that read(2) needed and that wasn't in the
+         * cache. Used by ras_update() to detect seeks.
+         *
+         * XXX nikita: if access seeks into cached region, Lustre doesn't see
+         * this.
+         */
+        unsigned long   ras_last_readpage;
+        /*
+         * number of pages read after last read-ahead window reset. As window
+         * is reset on each seek, this is effectively a number of consecutive
+         * accesses. Maybe ->ras_accessed_in_window is better name.
+         *
+         * XXX nikita: window is also reset (by ras_update()) when Lustre
+         * believes that memory pressure evicts read-ahead pages. In that
+         * case, it probably doesn't make sense to expand window to
+         * PTLRPC_MAX_BRW_PAGES on the third access.
+         */
+        unsigned long   ras_consecutive;
+        /*
+         * Parameters of current read-ahead window. Handled by
+         * ras_update(). On the initial access to the file or after a seek,
+         * window is reset to 0. After 3 consecutive accesses, window is
+         * expanded to PTLRPC_MAX_BRW_PAGES. Afterwards, window is enlarged by
+         * PTLRPC_MAX_BRW_PAGES chunks up to ->ra_max_pages.
+         */
         unsigned long   ras_window_start, ras_window_len;
+        /*
+         * Where next read-ahead should start at. This lies within read-ahead
+         * window. Read-ahead window is read in pieces rather than at once
+         * because: 1. lustre limits total number of pages under read-ahead by
+         * ->ra_max_pages (see ll_ra_count_get()), 2. client cannot read pages
+         * not covered by DLM lock.
+         */
         unsigned long   ras_next_readahead;
 
 };
@@ -414,7 +449,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
 struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode);
-int ll_tree_lock(struct ll_lock_tree *tree, 
+int ll_tree_lock(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
                  const char *buf, size_t count, int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);
