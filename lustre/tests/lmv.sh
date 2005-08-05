@@ -61,5 +61,4 @@ for num in `seq $OSTCOUNT`; do
     ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --backfstype $OST_BACKFSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
 done
 
-${LMC} -m $config --add mtpt --node localhost --path $MOUNT --lmv lmv1 --lov lov1 || exit 40
-${LMC} -m $config --add mtpt --node client --path $MOUNT2 --lmv lmv1 --lov lov1 || exit 41
+${LMC} -m $config --add mtpt --node localhost --path $MOUNT --mds lmv1 --lov lov1 || exit 40
