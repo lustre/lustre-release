@@ -43,13 +43,14 @@
 #include <linux/obd_class.h>
 //#include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
-#include <linux/lprocfs_status.h>
+#include <linux/lustre_log.h>
+//#include <linux/lprocfs_status.h>
 #include "mgc_internal.h"
 
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct mgc_obd *mgc = &obd->u.mgc;
-        struct lprocfs_static_vars lvars;
+        //struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -63,10 +64,12 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = mgc_obd_setup(obd, len, buf);
         if (rc)
                 GOTO(err_rpc_lock, rc);
-        lprocfs_init_vars(mgc, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
-
-        rc = obd_llog_init(obd, obd, 0, NULL);
+        //lprocfs_init_vars(mgc, &lvars);
+        //lprocfs_obd_setup(obd, lvars.obd_vars);
+        
+        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
+                        &llog_lvfs_ops);
+        //rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
                 mgc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -79,31 +82,22 @@ err_rpc_lock:
         RETURN(rc);
 }
 
-static int mgc_precleanup(struct obd_device *obd, int stage)
+static int mgc_cleanup(struct obd_device *obd)
 {
-        int rc = 0;
-        ENTRY;
-
-        if (stage < 2)
-                RETURN(0);
+        struct mgc_obd *mgc = &obd->u.mgc;
+        int rc;
 
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)
                 CERROR("failed to cleanup llogging subsystems\n");
 
-        RETURN(rc);
-}
-
-static int mgc_cleanup(struct obd_device *obd)
-{
-        struct mgc_obd *mgc = &obd->u.mgc;
-
         OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
 
-        lprocfs_obd_cleanup(obd);
+        //lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
-        return mgc_obd_cleanup(obd);
+        rc = mgc_obd_cleanup(obd);
+        return(rc);
 }
 
 static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -221,7 +215,6 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
 struct obd_ops mgc_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = mgc_setup,
-        .o_precleanup   = mgc_precleanup,
         .o_cleanup      = mgc_cleanup,
         .o_add_conn     = client_import_add_conn,
         .o_del_conn     = client_import_del_conn,

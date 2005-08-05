@@ -625,12 +625,13 @@ int mgc_fs_setup(struct super_block *sb, struct vfsmount *mnt)
                 goto err_ops;
         }
         mgcobd->mgc_configs_dir = dentry;
-        
+     #if 0   
         err = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0,
                             NULL, &llog_lvfs_ops);
         if (err)
                 goto err_dput;
-
+     #endif
+         
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return(err);
