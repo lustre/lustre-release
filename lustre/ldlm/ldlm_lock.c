@@ -546,7 +546,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
 {
         struct ldlm_lock *lock = __ldlm_handle2lock(lockh, 0);
-        LASSERT(lock != NULL);
+        LASSERTF(lock != NULL, "can't find lockh "LPX64"\n", lockh->cookie);
         ldlm_lock_decref_internal(lock, mode);
         LDLM_LOCK_PUT(lock);
 }
