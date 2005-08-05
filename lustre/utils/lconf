@@ -1214,7 +1214,7 @@ class kmod:
                                self.name)
             if not module and self.name != 'ptlrpcs_gss':
                 panic('module not found:', self.name)
-            (rc, out)  = run('/usr/local/sbin/insmod', module)
+            (rc, out)  = run('/sbin/insmod', module)
             if rc:
                 if self.name == 'ptlrpcs_gss':
                     print "Warning: not support gss security!"
