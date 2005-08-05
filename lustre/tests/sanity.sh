@@ -802,6 +802,25 @@ test_26e() {
 }
 run_test 26e "unlink multiple component recursive symlink ======"
 
+# recursive symlinks (bug 7022)
+test_26f() {
+	mkdir $DIR/foo
+	cd $DIR/foo
+	mkdir -p bar/bar1
+	mkdir foo
+	cd foo
+	ln -s .. dotdot
+	ln -s dotdot/bar bar
+	cd ../..
+	output=`ls foo/foo/bar/bar1`
+	if test "$output" = bar1; then 
+		error "unexpected output"
+	fi 
+	rm -r foo
+	$CHECKSTAT -a $DIR/foo || error
+}
+run_test 26f "rm -r of a directory which has  recursive symlink ======"
+
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
