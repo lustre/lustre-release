@@ -49,7 +49,7 @@ struct ll_sb_info {
         /* this protects pglist and max_r_a_pages.  It isn't safe to grab from
          * interrupt contexts. */
         spinlock_t                ll_lock;
-        
+
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_md_exp;
         struct obd_export        *ll_dt_exp;
@@ -125,10 +125,45 @@ struct ll_gns_ctl {
 #define LL_GNS_UMOUNT             (1 << 0)
 #define LL_GNS_CHECK              (1 << 1)
 
+/*
+ * per file-descriptor read-ahead data.
+ */
 struct ll_readahead_state {
         spinlock_t      ras_lock;
-        unsigned long   ras_last_readpage, ras_consecutive;
+        /*
+         * index of the last page that read(2) needed and that wasn't in the
+         * cache. Used by ras_update() to detect seeks.
+         *
+         * XXX nikita: if access seeks into cached region, Lustre doesn't see
+         * this.
+         */
+        unsigned long   ras_last_readpage;
+        /*
+         * number of pages read after last read-ahead window reset. As window
+         * is reset on each seek, this is effectively a number of consecutive
+         * accesses. Maybe ->ras_accessed_in_window is better name.
+         *
+         * XXX nikita: window is also reset (by ras_update()) when Lustre
+         * believes that memory pressure evicts read-ahead pages. In that
+         * case, it probably doesn't make sense to expand window to
+         * PTLRPC_MAX_BRW_PAGES on the third access.
+         */
+        unsigned long   ras_consecutive;
+        /*
+         * Parameters of current read-ahead window. Handled by
+         * ras_update(). On the initial access to the file or after a seek,
+         * window is reset to 0. After 3 consecutive accesses, window is
+         * expanded to PTLRPC_MAX_BRW_PAGES. Afterwards, window is enlarged by
+         * PTLRPC_MAX_BRW_PAGES chunks up to ->ra_max_pages.
+         */
         unsigned long   ras_window_start, ras_window_len;
+        /*
+         * Where next read-ahead should start at. This lies within read-ahead
+         * window. Read-ahead window is read in pieces rather than at once
+         * because: 1. lustre limits total number of pages under read-ahead by
+         * ->ra_max_pages (see ll_ra_count_get()), 2. client cannot read pages
+         * not covered by DLM lock.
+         */
         unsigned long   ras_next_readahead;
 
 };
@@ -241,7 +276,7 @@ extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 
 /* llite/namei.c */
-int ll_objects_destroy(struct ptlrpc_request *request, 
+int ll_objects_destroy(struct ptlrpc_request *request,
                        struct inode *dir, int offset);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
@@ -277,7 +312,7 @@ int ll_getxattr(struct dentry *, const char *, void *, size_t);
 int ll_listxattr(struct dentry *, char *, size_t);
 int ll_removexattr(struct dentry *, const char *);
 extern int ll_inode_permission(struct inode *, int, struct nameidata *);
-int ll_get_acl(struct inode *, struct posix_acl **acl, 
+int ll_get_acl(struct inode *, struct posix_acl **acl,
                struct ptlrpc_request **req);
 int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
@@ -340,7 +375,7 @@ extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, char **gss, 
+void ll_options(char *options, char **ost, char **mds, char **gss,
                 char **mds_sec, char **oss_sec, int *async, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
@@ -513,7 +548,7 @@ ll_inode2id(struct lustre_id *id, struct inode *inode)
                     id_fid(lid));
 }
 
-static inline void 
+static inline void
 ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
                     struct inode *i2, const char *name, int namelen,
                     int mode)
@@ -538,14 +573,14 @@ ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
 
 struct crypto_helper_ops {
        int (*init_it_key)(struct inode *inode, struct lookup_intent *it);
-       int (*create_key)(struct inode *dir, mode_t mode, void **key, 
+       int (*create_key)(struct inode *dir, mode_t mode, void **key,
                          int* key_size);
-       int (*get_mac)(struct inode *inode, struct iattr *iattr, void*value, 
+       int (*get_mac)(struct inode *inode, struct iattr *iattr, void*value,
                       int size, void **key, int* key_size);
        int (*decrypt_key)(struct inode *inode, struct lookup_intent *it);
        int (*init_inode_key)(struct inode *inode, void *md_key);
        int (*destroy_key)(struct inode *inode);
-}; 
+};
 
 /*llite crypto ops for crypto api*/
 struct ll_crypto_info {
@@ -566,12 +601,12 @@ static inline struct ll_crypto_info* ll_i2crpi(struct inode *inode)
 
 static inline struct crypto_helper_ops* ll_i2crpops(struct inode *inode)
 {
-        return ll_i2crpi(inode)->ll_cops; 
+        return ll_i2crpi(inode)->ll_cops;
 }
 
 static inline struct crypto_helper_ops* ll_s2crpops(struct super_block *sb)
 {
-        return ll_s2crpi(sb)->ll_cops; 
+        return ll_s2crpi(sb)->ll_cops;
 }
 
 static inline struct obd_export *ll_s2gsexp(struct super_block *sb)
@@ -586,82 +621,82 @@ static inline struct obd_export *ll_i2gsexp(struct inode *inode)
         return ll_s2gsexp(inode->i_sb);
 }
 
-static inline 
-int ll_crypto_init_it_key(struct inode *inode, struct lookup_intent *it) 
+static inline
+int ll_crypto_init_it_key(struct inode *inode, struct lookup_intent *it)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;;
                 if (ops && ops->init_it_key)
-                        return ops->init_it_key(inode, it); 
-        } 
+                        return ops->init_it_key(inode, it);
+        }
         return 0;
 }
 
-static inline 
-int ll_crypto_create_key(struct inode *inode, mode_t mode, void **key, 
-                         int* key_size) 
+static inline
+int ll_crypto_create_key(struct inode *inode, mode_t mode, void **key,
+                         int* key_size)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;;
                 if (ops && ops->create_key)
-                        return ops->create_key(inode, mode, key, key_size); 
-        } 
+                        return ops->create_key(inode, mode, key, key_size);
+        }
         return 0;
 }
 
-static inline 
-int ll_crypto_get_mac(struct inode *inode, struct iattr *attr, void *acl, 
-                      int acl_size, void **mac, int *mac_size) 
+static inline
+int ll_crypto_get_mac(struct inode *inode, struct iattr *attr, void *acl,
+                      int acl_size, void **mac, int *mac_size)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;
                 if (ops && ops->get_mac)
-                        return ops->get_mac(inode, attr, acl, acl_size, 
+                        return ops->get_mac(inode, attr, acl, acl_size,
                                             mac, mac_size);
-        }  
+        }
         return 0;
 }
 
-static inline 
-int ll_crypto_decrypt_key(struct inode *inode, struct lookup_intent *it) 
+static inline
+int ll_crypto_decrypt_key(struct inode *inode, struct lookup_intent *it)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;
                 if (ops && ops->decrypt_key)
-                        return ops->decrypt_key(inode, it);  
+                        return ops->decrypt_key(inode, it);
         }
-        return 0; 
+        return 0;
 }
 
-static inline 
-int ll_crypto_init_inode_key(struct inode *inode, void *md_key) 
+static inline
+int ll_crypto_init_inode_key(struct inode *inode, void *md_key)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;
                 if (ops && ops->init_inode_key)
-                        return ops->init_inode_key(inode, md_key);  
+                        return ops->init_inode_key(inode, md_key);
         }
-        return 0; 
+        return 0;
 }
 
-static inline 
-int ll_crypto_destroy_inode_key(struct inode *inode) 
+static inline
+int ll_crypto_destroy_inode_key(struct inode *inode)
 {
         struct ll_crypto_info *lci = ll_i2crpi(inode);
         if (lci) {
                 struct crypto_helper_ops *ops = lci->ll_cops;
                 if (ops && ops->destroy_key)
-                        return ops->destroy_key(inode);  
+                        return ops->destroy_key(inode);
         }
-        return 0; 
+        return 0;
 }
 
-int lustre_init_crypto(struct super_block *sb, char *gkc, 
+int lustre_init_crypto(struct super_block *sb, char *gkc,
                        struct obd_connect_data *data, int async);
 int lustre_destroy_crypto(struct super_block *sb);
 int ll_set_sb_gksinfo(struct super_block *sb, char *type);

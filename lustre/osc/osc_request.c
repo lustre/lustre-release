@@ -514,7 +514,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 rc = 0;
         } else {
                 rc = ptlrpc_queue_wait(request);
-        
+
                 if (rc == -ENOENT)
                         rc = 0;
 
@@ -736,11 +736,11 @@ static obd_count cksum_pages(int nob, obd_count page_count,
 #define osc_decrypt_page(page, off, count)  \
         osc_crypt_page(page, off, count, DECRYPT_DATA)
 
-/*Put a global call back var here is Ugly, but put it to client_obd 
- *also seems not a good idea, WangDi*/ 
-crypt_cb_t  osc_crypt_cb = NULL;     
-   
-static int osc_crypt_page(struct page *page, obd_off page_off, obd_off count, 
+/*Put a global call back var here is Ugly, but put it to client_obd
+ *also seems not a good idea, WangDi*/
+crypt_cb_t  osc_crypt_cb = NULL;
+
+static int osc_crypt_page(struct page *page, obd_off page_off, obd_off count,
                           int flags)
 {
         int rc = 0;
@@ -748,9 +748,9 @@ static int osc_crypt_page(struct page *page, obd_off page_off, obd_off count,
 
         if (osc_crypt_cb != NULL)
                 rc = osc_crypt_cb(page, page_off, count, flags);
-        if (rc != 0) 
+        if (rc != 0)
                 CERROR("crypt page error %d \n", rc);
-        RETURN(rc); 
+        RETURN(rc);
 }
 
 static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
@@ -821,10 +821,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg->pg, pg->pg->private, pg->pg->index, pg->disk_offset,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
                          pg_prev->disk_offset);
-                
+
                 if (opc == OST_WRITE) {
                         osc_encrypt_page(pg->pg, pg->page_offset, pg->count);
-                } 
+                }
 
                 ptlrpc_prep_bulk_page(desc, pg->pg,
                                       pg->page_offset & ~PAGE_MASK, pg->count);
@@ -895,7 +895,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         RETURN(-EPROTO);
                 }
                 LASSERT (req->rq_bulk->bd_nob == requested_nob);
-                osc_decrypt_page(pga->pg, pga->page_offset, 
+                osc_decrypt_page(pga->pg, pga->page_offset,
                                  pga->count);
                 RETURN(check_write_rcs(req, requested_nob, niocount,
                                        page_count, pga));
@@ -1267,10 +1267,10 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         cli = aa->aa_cli;
         /* in failout recovery we ignore writeback failure and want
          * to just tell llite to unlock the page and continue */
-        if (request->rq_reqmsg->opc == OST_WRITE && 
+        if (request->rq_reqmsg->opc == OST_WRITE &&
             (cli->cl_import == NULL || cli->cl_import->imp_invalid)) {
-                CDEBUG(D_INODE, "flipping to rc 0 imp %p inv %d\n", 
-                       cli->cl_import, 
+                CDEBUG(D_INODE, "flipping to rc 0 imp %p inv %d\n",
+                       cli->cl_import,
                        cli->cl_import ? cli->cl_import->imp_invalid : -1);
                 rc = 0;
         }
@@ -1464,6 +1464,14 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 }
                 if (pos == NULL)
                         break;
+                /*
+                 * Page submitted for IO has to be locked. Either by
+                 * ->ap_make_ready() or by higher layers.
+                 *
+                 * XXX nikita: this assertion should be adjusted when lustre
+                 * starts using PG_writeback for pages being written out.
+                 */
+                LASSERT(PageLocked(oap->oap_page));
 
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
@@ -1688,8 +1696,8 @@ static void osc_check_rpcs(struct client_obd *cli)
 
         while ((loi = osc_next_loi(cli)) != NULL) {
                 LOI_DEBUG(loi, "%lu in flight\n", rpcs_in_flight(cli));
-                
-                if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)                        
+
+                if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)
                         break;
 
                 /* attempt some read/write balancing by alternating between
@@ -1786,7 +1794,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         /* Make sure that there are write rpcs in flight to wait for.  This
          * is a little silly as this object may not have any pending but
          * other objects sure might. */
-        if (cli->cl_w_in_flight) {                
+        if (cli->cl_w_in_flight) {
                 list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
                 init_waitqueue_head(&ocw.ocw_waitq);
                 ocw.ocw_oap = oap;
@@ -2981,7 +2989,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         if (keylen == strlen("crypto_cb") &&
             memcmp(key, "crypto_cb", keylen) == 0) {
                 LASSERT(vallen == sizeof(crypt_cb_t));
-                osc_crypt_cb = (crypt_cb_t)val; 
+                osc_crypt_cb = (crypt_cb_t)val;
                 RETURN(0);
         }
 
@@ -3078,7 +3086,7 @@ static int osc_disconnect(struct obd_export *exp, unsigned long flags)
 }
 
 static int osc_import_event(struct obd_device *obd,
-                            struct obd_import *imp, 
+                            struct obd_import *imp,
                             enum obd_import_event event)
 {
         struct client_obd *cli;
@@ -3091,7 +3099,7 @@ static int osc_import_event(struct obd_device *obd,
                 /* Only do this on the MDS OSC's */
                 if (imp->imp_server_timeout) {
                         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-                        
+
                         spin_lock(&oscc->oscc_lock);
                         oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
                         spin_unlock(&oscc->oscc_lock);
@@ -3114,7 +3122,7 @@ static int osc_import_event(struct obd_device *obd,
                 /* all pages go to failing rpcs due to the invalid import */
                 osc_check_rpcs(cli);
                 spin_unlock(&cli->cl_loi_list_lock);
-                
+
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
                 break;
