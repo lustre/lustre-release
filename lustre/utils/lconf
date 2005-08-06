@@ -2337,22 +2337,22 @@ class OSD(Module):
 	    return
         manager.add_lustre_module('ost', 'ost')
             
-        #if self.fstype == 'smfs' or self.fstype == 'ldiskfs':
-        #    manager.add_lustre_module(self.fstype, self.fstype)
+        if self.fstype == 'smfs' or self.fstype == 'ldiskfs':
+            manager.add_lustre_module(self.fstype, self.fstype)
 		
-        #if self.fstype:
-        #    manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
+        if self.fstype:
+            manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
 
-        #if self.fstype == 'smfs':
-        #    manager.add_lustre_module(self.backfstype, self.backfstype)
-        #    manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.backfstype))
+        if self.fstype == 'smfs':
+            manager.add_lustre_module(self.backfstype, self.backfstype)
+            manager.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.backfstype))
 
-	#for option in self.mountfsoptions:
-	#    if option == 'snap':
-	#	if not self.fstype == 'smfs':
-	#	    panic("mountoptions with snap, but fstype is not smfs\n")
-	#	manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
-	#	manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
+	for option in self.mountfsoptions:
+	    if option == 'snap':
+		if not self.fstype == 'smfs':
+		    panic("mountoptions with snap, but fstype is not smfs\n")
+		manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.fstype))
+		manager.add_lustre_module('lvfs', 'fsfilt_snap_%s' % (self.backfstype))
 
         manager.add_lustre_module(self.osdtype, self.osdtype)
 	
