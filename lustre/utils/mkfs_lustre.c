@@ -884,6 +884,7 @@ void set_defaults(struct mkfs_opts *mop)
 {
         char hostname[128];
         mop->mo_ldd.ldd_magic = LDD_MAGIC;
+        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX;
 
         if (get_os_version() == 24) 
                 mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
@@ -980,16 +981,18 @@ int main(int argc , char *const argv[])
                         mop.mo_hostnid.backup = libcfs_str2nid(optarg);
                         break;
                 case 'G':
-                        mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MGMT;
+                        mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
                         break;
                 case 'h':
                         usage(stdout);
                         break;
                 case 'i':
-                        if (IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd))
+                        if (IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd)) {
                                 mop.mo_index = atol(optarg);
-                        else
+                                mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
+                        } else {
                                 badopt(opt, "MDT,OST");
+                        }
                         break;
                 case 'm':
                         if (IS_MGMT(&mop.mo_ldd))
@@ -997,7 +1000,7 @@ int main(int argc , char *const argv[])
                         set_nid_pair(&mop.mo_ldd.ldd_mgmtnid, optarg);
                         break;
                 case 'M':
-                        mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MDT;
+                        mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MDT;
                         break;
                 case 'n':
                         if (!(IS_MDT(&mop.mo_ldd) || IS_OST(&mop.mo_ldd)))
@@ -1015,7 +1018,7 @@ int main(int argc , char *const argv[])
                         mountopts = optarg;
                         break;
                 case 'O':
-                        mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_OST;
+                        mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_OST;
                         break;
                 case 'r':
                         mop.mo_flags |= MO_FORCEFORMAT;
@@ -1057,7 +1060,7 @@ int main(int argc , char *const argv[])
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
             mop.mo_ldd.ldd_mgmtnid.primary == PTL_NID_ANY) {
                 vprint("No MGMT specified, adding to this MDT\n");
-                mop.mo_ldd.ldd_flags |= LDD_SV_TYPE_MGMT;
+                mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
                 //FIXME mop.mo_ldd.ldd_mgmt.primary == libcfs_str2nid(localhost);
         }
 

@@ -1451,6 +1451,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_cfg* lcfg = buf;
         char *options = NULL;
         struct mds_obd *mds = &obd->u.mds;
+        struct lustre_mount_info *lmi;
         struct vfsmount *mnt;
         char ns_name[48];
         unsigned long page;
@@ -1469,31 +1470,36 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (IS_ERR(obd->obd_fsops))
                 RETURN(rc = PTR_ERR(obd->obd_fsops));
 
-        page = __get_free_page(GFP_KERNEL);
-        if (!page)
-                RETURN(-ENOMEM);
+        lmi = lustre_get_mount(obd->obd_name);
+        if (lmi) {
+                /* We already mounted in lustre_fill_super */
+                mnt = lmi->lmi_mnt;
+        } else {
+                /* old path */
+                page = __get_free_page(GFP_KERNEL);
+                if (!page)
+                        RETURN(-ENOMEM);
 
-        options = (char *)page;
-        memset(options, 0, PAGE_SIZE);
+                options = (char *)page;
+                memset(options, 0, PAGE_SIZE);
 
-        /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
-         * and the rest of options are passed by mount options. Probably this
-         * should be moved to somewhere else like startup scripts or lconf. */
-        sprintf(options, "iopen_nopriv");
+                /* here we use "iopen_nopriv" hardcoded, because it affects MDS utility
+                 * and the rest of options are passed by mount options. Probably this
+                 * should be moved to somewhere else like startup scripts or lconf. */
+                sprintf(options, "iopen_nopriv");
 
-        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4))
-                sprintf(options + strlen(options), ",%s",
-                        lustre_cfg_string(lcfg, 4));
-
-        //FIXME mount was already done in lustre_fill_super,
-        //we just need to access it
-        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
-                            lustre_cfg_string(lcfg, 1), (void *)options);
-        free_page(page);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("do_kern_mount failed: rc = %d\n", rc);
-                GOTO(err_ops, rc);
+                if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0 && lustre_cfg_buf(lcfg, 4))
+                        sprintf(options + strlen(options), ",%s",
+                                lustre_cfg_string(lcfg, 4));
+                
+                mnt = do_kern_mount(lustre_cfg_string(lcfg, 2), 0,
+                                    lustre_cfg_string(lcfg, 1), (void *)options);
+                free_page(page);
+                if (IS_ERR(mnt)) {
+                        rc = PTR_ERR(mnt);
+                        CERROR("do_kern_mount failed: rc = %d\n", rc);
+                        GOTO(err_ops, rc);
+                }
         }
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
@@ -1587,10 +1593,14 @@ err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
 err_put:
-        unlock_kernel();
-        mntput(mds->mds_vfsmnt);
+        if (lmi) {
+                lustre_put_mount(obd->obd_name);
+        } else {
+                unlock_kernel();
+                mntput(mds->mds_vfsmnt);
+                lock_kernel();
+        }               
         mds->mds_sb = 0;
-        lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         return rc;

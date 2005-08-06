@@ -40,9 +40,10 @@
 
 #define LDD_MAGIC 0xbabb0001
 
-#define LDD_SV_TYPE_MDT  0x0001
-#define LDD_SV_TYPE_OST  0x0002
-#define LDD_SV_TYPE_MGMT 0x0004
+#define LDD_F_SV_TYPE_MDT  0x0001
+#define LDD_F_SV_TYPE_OST  0x0002
+#define LDD_F_SV_TYPE_MGMT 0x0004
+#define LDD_F_NEED_INDEX   0x0010
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 
@@ -79,9 +80,9 @@ struct lustre_disk_data {
         char      ldd_mount_opts[128]; /* target fs mount opts */
 };
         
-#define IS_MDT(data)   ((data)->ldd_flags & LDD_SV_TYPE_MDT)
-#define IS_OST(data)   ((data)->ldd_flags & LDD_SV_TYPE_OST)
-#define IS_MGMT(data)  ((data)->ldd_flags & LDD_SV_TYPE_MGMT)
+#define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
+#define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
+#define IS_MGMT(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGMT)
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /****************** mount command *********************/
@@ -179,6 +180,7 @@ struct lustre_sb_info {
         struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
         //struct fsfilt_operations *lsi_fsops;
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
+        atomic_t                  lsi_mounts;  /* mount references to this sb */
 };
 
 #define LSI_SERVER                       0x00000001
@@ -196,5 +198,32 @@ struct lustre_sb_info {
 #define     get_profile_name(sb)   (s2sbi(sb)->lsi_lmd->lmd_dev)
 
 #endif /* __KERNEL__ */
+
+/****************** mount lookup info *********************/
+
+struct lustre_mount_info {
+        char               *lmi_name;
+        struct super_block *lmi_sb;
+        struct vfsmount    *lmi_mnt;
+        struct list_head    lmi_list_chain;
+};
+
+/****************** misc *********************/
+#define LUSTRE_MGC_NAME "mgc"
+
+/****************** prototypes *********************/
+
+#ifdef __KERNEL__
+
+/* obd_mount.c */
+int lustre_fill_super(struct super_block *sb, void *data, int silent);
+void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
+void lustre_common_put_super(struct super_block *sb);
+int class_manual_cleanup(struct obd_device *obd, char *flags);
+struct lustre_mount_info *lustre_get_mount(char *name);
+struct lustre_mount_info *lustre_put_mount(char *name);
+
+#endif
+
 
 #endif // _LUSTRE_DISK_H
