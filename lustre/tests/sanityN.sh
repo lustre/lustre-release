@@ -408,7 +408,7 @@ test_19() {     # bug 2441
         setfattr -n trusted.name2 -v value2 $DIR2/f2b || error
         setfattr -n trusted.name3 -v value3 $DIR1/f2b || error
         [ `getfattr -d -m "^trusted" $DIR2/f2b 2> /dev/null | \
-        grep "trusted" | wc -l` -eq 5 ] || error
+        grep "trusted" | wc -l` -eq 6 ] || error
                                                                                                                              
         setfattr -n user.author2 -v author2 $DIR/f2b || error
         setfattr -n user.author3 -v author3 $DIR/f2b || error
