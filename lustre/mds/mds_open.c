@@ -1031,7 +1031,8 @@ restart:
                        dparent->d_inode->i_ino, rc);
                 GOTO(cleanup, rc);
         }
-                       /* try to retrieve MEA data for this dir */
+
+        /* try to retrieve MEA data for this dir */
         rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
                 GOTO(cleanup, rc);
