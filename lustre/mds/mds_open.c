@@ -1371,7 +1371,7 @@ got_child:
                 struct ldlm_res_id child_res_id = { .name = {0}};
                 ldlm_policy_data_t sz_policy;
                 struct lustre_handle sz_lockh;
-                int lock_flags = 0;
+                int lock_flags = LDLM_FL_ATOMIC_CB;
 
                 child_res_id.name[0] = id_fid(&body->id1);
                 child_res_id.name[1] = id_group(&body->id1);

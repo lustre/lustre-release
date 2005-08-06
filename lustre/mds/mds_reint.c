@@ -1429,7 +1429,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
 
         /* XXX we could send ASTs on all these locks first before blocking? */
         for (i = 0; i < 4; i++) {
-                flags = 0;
+                flags = LDLM_FL_ATOMIC_CB;
 
                 /* 
                  * nevertheless zeroed res_ids should be at the end of list, and
