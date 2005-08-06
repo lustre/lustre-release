@@ -377,6 +377,10 @@ int mdc_llog_process(struct obd_export *, char *, llog_cb_t,
 
 int mdc_done_writing(struct obd_export *, struct obdo *);
 
+/* mds_audit_path.c */
+int mds_audit_id2name(struct obd_device *obd, char **name, int *namelen, 
+                      struct lustre_id *id);
+
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                 'f'
 #define IOC_REQUEST_MIN_NR               30

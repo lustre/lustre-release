@@ -28,5 +28,7 @@ linux-2.6.10-fc3-lkcd.patch
 vfs-intent_release_umount-vanilla-2.6.10-fc3.patch
 vfs-umount_lustre-vanilla-2.6.10-fc3.patch
 export-show_task-2.6-vanilla.patch
+nid-2.6-fc3.patch
 highmem-split-2.6.10-fc3.patch
 pag-basic-2.6.10-fc3.patch
+

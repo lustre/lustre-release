@@ -45,6 +45,7 @@
 #include <linux/lustre_commit_confd.h>
 #include <libcfs/list.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_audit.h>
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
 {
@@ -878,6 +879,19 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(rc);
 
         val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
+        
+        if (keylen == 8 && memcmp(key, "auditlog", 8) == 0) {
+                lustre_swab_reqbuf(req, 1, sizeof(struct audit_msg),
+                                   lustre_swab_audit_msg);
+        }
+        else if (keylen == 5 && strcmp(key, "audit") == 0) {
+                lustre_swab_reqbuf(req, 1, sizeof(struct audit_attr_msg),
+                                   lustre_swab_audit_attr);
+        }
+        else if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
+                lustre_swab_reqbuf(req, 1, sizeof(struct obdo),
+                                   lustre_swab_obdo);
+        }
 
         rc = obd_set_info(exp, keylen, key, req->rq_reqmsg->buflens[1], val);
         req->rq_repmsg->status = 0;

@@ -925,6 +925,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mea *mea = NULL;
         int mea_size, update_mode;
         int child_mode = LCK_PR;
+        struct lustre_id sid;
         __u64 fid = 0;
         ENTRY;
 
@@ -1023,12 +1024,19 @@ restart:
 
         cleanup_phase = 1; /* parent dentry and lock */
 
-        /* try to retrieve MEA data for this dir */
+        /* get parent id: ldlm lock on the parent protects ea */
+        rc = mds_read_inode_sid(obd, dparent->d_inode, &sid);
+        if (rc) {
+                CERROR("can't read parent inode id. ino(%lu) rc(%d)\n",
+                       dparent->d_inode->i_ino, rc);
+                GOTO(cleanup, rc);
+        }
+                       /* try to retrieve MEA data for this dir */
         rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
                 GOTO(cleanup, rc);
        
-        if (mea != NULL) {
+        if (mea != NULL && mea->mea_count) {
                 /*
                  * dir is already splitted, check is requested filename should *
                  * live at this MDS or at another one.
@@ -1213,7 +1221,10 @@ got_child:
                 else {
                         MD_COUNTER_INCREMENT(obd, create);
                 }
-                
+
+                mds_inode2id(obd, &body->id1, inode, fid);
+                mds_update_inode_ids(obd, dchild->d_inode, handle, &body->id1, &sid);
+
                 if ((rec->ur_flags & MDS_OPEN_HAS_KEY) || 
                      mds->mds_crypto_type == MKS_TYPE) {
                         rc = mds_set_gskey(obd, handle, dchild->d_inode, 
@@ -1221,26 +1232,6 @@ got_child:
                                            ATTR_KEY | ATTR_MAC);
                         if (rc) {
                                 CERROR("error in set gs key rc %d\n", rc); 
-                        }
-                }
-                if (ino) {
-                        rc = mds_update_inode_sid(obd, dchild->d_inode,
-                                                  handle, rec->ur_id2);
-                        if (rc) {
-                                CERROR("mds_update_inode_sid() failed, "
-                                       "rc = %d\n", rc);
-                        }
-                        id_assign_fid(&body->id1, rec->ur_id2);
-                        /* 
-                         * make sure, that fid is up-to-date.
-                         */
-                        mds_set_last_fid(obd, id_fid(rec->ur_id2));
-                } else {
-                        rc = mds_set_inode_sid(obd, dchild->d_inode,
-                                               handle, &body->id1, fid);
-                        if (rc) {
-                                CERROR("mds_set_inode_sid() failed, "
-                                       "rc = %d\n", rc);
                         }
                 }
 

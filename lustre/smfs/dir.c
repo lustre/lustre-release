@@ -626,7 +626,7 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                 rc = -ENOMEM;
                 goto exit;
         }
-        
+
         handle = smfs_trans_start(dir, FSFILT_OP_RMDIR, NULL);
         if (IS_ERR(handle) ) {
                 rc = -ENOSPC;
@@ -747,7 +747,8 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         struct hook_rename_msg msg = {
                 .dentry = old_dentry,
                 .new_dir = new_dir,
-                .new_dentry = new_dentry
+                .old_dir = old_dir,
+                .new_dentry = new_dentry,
         };
 
         ENTRY;
@@ -892,12 +893,6 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         struct inode *cache_inode = NULL;
         struct smfs_file_info *sfi = NULL;
         int    rc = 0;
-        struct hook_readdir_msg msg = {
-                .dentry = dentry,
-                .filp = filp,
-                .dirent = dirent,
-                .filldir = filldir
-        };
 
         ENTRY;
         
@@ -908,11 +903,8 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         sfi = F2SMFI(filp);
         if (sfi->magic != SMFS_FILE_MAGIC) BUG();
 
-        SMFS_PRE_HOOK(dentry->d_inode, HOOK_READDIR, &msg); 
-        
         rc = cache_inode->i_fop->readdir(sfi->c_file, dirent, filldir);
         
-        SMFS_POST_HOOK(dentry->d_inode, HOOK_READDIR, &msg, rc);
         duplicate_file(filp, sfi->c_file);
 
         RETURN(rc);

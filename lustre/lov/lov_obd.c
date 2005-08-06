@@ -48,7 +48,7 @@
 #include <linux/obd_lov.h>
 #include <linux/obd_ost.h>
 #include <linux/lprocfs_status.h>
-
+#include <linux/lustre_audit.h>
 #include "lov_internal.h"
 
 /* obd methods */
@@ -2130,6 +2130,89 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 spin_unlock(&lov->lov_lock);
 
                 RETURN(rc);
+        } else if (KEY_IS("auditlog")) {
+                ptl_nid_t nid = 0;
+                struct audit_msg * msg = val;
+                int i = 0, len = sizeof(nid);
+                struct obd_export * ost_exp;
+                //try to find client nid
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        if (!lov->tgts[i].ltd_exp)
+                                continue;
+                        rc = obd_get_info(lov->tgts[i].ltd_exp, 10,
+                                          "client_nid", &len, &nid);
+                        if (!rc)
+                                break;
+                }
+                
+                i = (__u32)nid % lov->desc.ld_tgt_count;
+                
+                CDEBUG(D_INFO, "Select OST %i for nid %.8x\n",i, (__u32)nid);
+                
+                ost_exp = lov->tgts[i].ltd_exp;
+                if (!ost_exp) {
+                        CERROR("can't send auditlog data,"
+                               "device %s is not attached?\n",
+                               lov->tgts[i].uuid.uuid);
+                        RETURN(-EFAULT);
+                }
+                msg->nid = nid;   
+                rc = obd_set_info(ost_exp, keylen, key, vallen, val);
+                
+                RETURN(rc);               
+        } else if (KEY_IS("audit_obj")) {
+                struct audit_lov_msg * msg = val;
+                int i = 0, index;
+                struct obd_export * ost_exp;
+                struct lov_oinfo *loi;
+                struct obdo *oa = NULL;
+                
+                oa = obdo_alloc();
+                if (oa == NULL)
+                        RETURN(-ENOMEM);
+
+                //set audit for all objects of file
+                CDEBUG(D_INFO, "Set audit 0x%x for objects\n", (__u32)msg->mask);
+                //use o_fid to store audit mask
+                oa->o_fid = msg->mask;
+                oa->o_uid = msg->uid;
+                oa->o_gid = msg->gid;
+                //iterate over all objects and set audit for each
+                for (i = 0, loi = msg->lsm->lsm_oinfo;
+                     i < msg->lsm->lsm_stripe_count; i++, loi++) {
+                        index = loi->loi_ost_idx;
+                        ost_exp = lov->tgts[index].ltd_exp;
+                        if (!ost_exp) {
+                                CERROR("can't send audit_obj data,"
+                                       "device %s is not attached?\n",
+                                       lov->tgts[i].uuid.uuid);
+                                continue;
+                        }
+                        oa->o_id = loi->loi_id;
+                        oa->o_gr = loi->loi_gr;
+                        
+                        obd_set_info(ost_exp, keylen, key, sizeof(*oa), oa);
+                }
+
+                obdo_free(oa);
+                RETURN(0);
+        } else if (KEY_IS("audit")) {
+                int i = 0;
+                struct obd_export * ost_exp;
+
+                //set audit for whole fs on OSS
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        ost_exp = lov->tgts[i].ltd_exp;
+                        if (!ost_exp) {
+                                CERROR("can't send audit_fs data,"
+                                       "device %s is not attached?\n",
+                                       lov->tgts[i].uuid.uuid);
+                                continue;
+                        }
+                        obd_set_info(ost_exp, keylen, key, vallen, val);
+                }
+                
+                RETURN(rc);           
         } else if (KEY_IS("flush_cred") || KEY_IS("crypto_cb")) {
                 struct lov_tgt_desc *tgt;
                 int rc = 0, i;

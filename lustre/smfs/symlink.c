@@ -43,18 +43,30 @@ static int smfs_readlink(struct dentry *dentry, char *buffer, int buflen)
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
         int rc = -ENOMEM;
+        struct hook_symlink_msg msg = {
+                .dentry = dentry,
+        };
+        
         ENTRY;
 
         if (!cache_inode || !cache_inode->i_op->readlink)
                 RETURN(-ENOENT);
-
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
-        if (cache_dentry)
-                rc = cache_inode->i_op->readlink(cache_dentry, buffer, 
-                                                 buflen);
         
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
+        if (!cache_dentry) {
+                rc = -ENOMEM;
+                goto exit;
+        }
+
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_READLINK, &msg);
+        
+        rc = cache_inode->i_op->readlink(cache_dentry, buffer, buflen);
+
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_READLINK, &msg, rc); 
+       
+exit:
         post_smfs_dentry(cache_dentry);
-        return rc;
+        RETURN(rc);
 }
 
 static int smfs_follow_link(struct dentry *dentry, struct nameidata *nd)

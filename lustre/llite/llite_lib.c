@@ -34,6 +34,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_acl.h>
+#include <linux/lustre_audit.h>
 #include <linux/lustre_gs.h>
 #include <linux/lustre_sec.h>
 #include "llite_internal.h"
@@ -94,7 +95,8 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         sbi->ll_gns_timer.data = (unsigned long)sbi;
         sbi->ll_gns_timer.function = ll_gns_timer_callback;
         init_timer(&sbi->ll_gns_timer);
-
+        //audit mask
+        sbi->ll_audit_mask = AUDIT_OFF;
         ll_set_sbi(sb, sbi);
 
         generate_random_uuid(uuid);
@@ -574,6 +576,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_mds_exec_och = NULL;
         lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
+        lli->lli_audit_mask = AUDIT_OFF;
         lli->lli_key_info = NULL;
 }
 
@@ -618,6 +621,8 @@ out:
                 OBD_FREE(mds_sec, strlen(mds_sec) + 1);
         if (oss_sec)
                 OBD_FREE(oss_sec, strlen(oss_sec) + 1);
+        if (gkc)
+                OBD_FREE(gkc, strlen(gkc) + 1);
 
         return err;
 } /* ll_read_super */
@@ -2038,6 +2043,14 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (body->valid & OBD_MD_FLSIZE)
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+
+        if (body->valid & OBD_MD_FLAUDIT) {
+                struct ll_sb_info * sbi = ll_s2sbi(inode->i_sb);
+                if (IS_AUDIT_OP(body->audit, AUDIT_FS))
+                        sbi->ll_audit_mask = body->audit;
+                else
+                        lli->lli_audit_mask = body->audit;
+        }
 
         if (mkey != NULL) {
                 LASSERT(body->valid & OBD_MD_FLKEY);

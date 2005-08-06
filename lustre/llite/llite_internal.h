@@ -11,6 +11,7 @@
 #define LLITE_INTERNAL_H
 
 #include <linux/lustre_debug.h>
+#include <linux/lustre_audit.h>
 
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
@@ -56,7 +57,7 @@ struct ll_sb_info {
         struct lov_desc           ll_dt_desc;
         struct proc_dir_entry    *ll_proc_root;
         struct lustre_id          ll_rootid;     /* root lustre id */
-
+                
         struct lustre_mount_data *ll_lmd;
         char                     *ll_instance;
 
@@ -74,7 +75,8 @@ struct ll_sb_info {
         struct ll_ra_info         ll_ra_info;
 
         unsigned int              ll_remote;      /* remote client? */
-
+        
+        __u64                     ll_audit_mask;
         /* times spent waiting for locks in each call site.  These are
          * all protected by the ll_lock */
         struct obd_service_time   ll_read_stime;
@@ -333,6 +335,8 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                     struct obd_client_handle *och, int dirty);
 void ll_och_fill(struct inode *inode, struct lookup_intent *it,
                  struct obd_client_handle *och);
+int ll_set_audit(struct inode *, __u64);
+int ll_audit_log(struct inode *, audit_op, int);
 
 int ll_getxattr_internal(struct inode *inode, const char *name,
                          void *value, size_t size, __u64 valid);
@@ -450,7 +454,15 @@ typedef struct rb_root  rb_root_t;
 typedef struct rb_node  rb_node_t;
 #endif
 
-struct ll_lock_tree_node;
+struct ll_lock_tree_node {
+        rb_node_t               lt_node;
+        struct list_head        lt_locked_item;
+        __u64                   lt_oid;
+        ldlm_policy_data_t      lt_policy;
+        struct lustre_handle    lt_lockh;
+        ldlm_mode_t             lt_mode;
+};
+//struct ll_lock_tree_node;
 struct ll_lock_tree {
         rb_root_t                       lt_root;
         struct list_head                lt_locked_list;

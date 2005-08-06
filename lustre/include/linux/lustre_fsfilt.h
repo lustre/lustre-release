@@ -45,7 +45,8 @@ enum ea_type {
         EA_MEA   = (1 << 1),
         EA_SID   = (1 << 2),
         EA_MID   = (1 << 3),
-        EA_KEY   = (1 << 4)
+        EA_KEY   = (1 << 4),
+        EA_PID   = (1 << 5),
 };
 
 struct fsfilt_operations {
@@ -103,13 +104,15 @@ struct fsfilt_operations {
         int     (* fs_post_setup)(struct obd_device *obd, struct vfsmount *mnt,
                                   struct dentry *dentry);
         int     (* fs_post_cleanup)(struct obd_device *obd, struct vfsmount *mnt);
-        int     (* fs_get_reint_log_ctxt)(struct super_block *sb, 
-                                          struct llog_ctxt **ctxt);
+        int     (* fs_set_info)(struct super_block *, struct inode *,
+                                __u32, void *, __u32, void *);
+        int     (* fs_get_info)(struct super_block *, struct inode *,
+                                __u32, void *, __u32 *, void *);
         int     (* fs_set_fs_flags)(struct inode *inode, int flags);
         int     (* fs_clear_fs_flags)(struct inode *inode, int flags);
         int     (* fs_set_ost_flags)(struct super_block *sb);
         int     (* fs_set_mds_flags)(struct super_block *sb);
-        int     (* fs_precreate_rec)(struct dentry *dentry, int *num, 
+        int     (* fs_precreate_rec)(struct dentry *dentry, int *num,
                                      struct obdo *oa);
         int     (* fs_set_xattr)(struct inode *inode, void *handle, char *name,
                                  void *buffer, int buffer_size);
@@ -653,12 +656,25 @@ fsfilt_free_write_extents(struct obd_device *obd,
 }
 
 static inline int 
-fsfilt_get_reint_log_ctxt(struct obd_device *obd,
-                          struct super_block *sb, 
-                          struct llog_ctxt **ctxt)
+fsfilt_set_info(struct obd_device *obd, struct super_block *sb, 
+                struct inode * inode, __u32 keylen, void * key,
+                __u32 valsize, void * val)
 {
-        if (obd->obd_fsops->fs_get_reint_log_ctxt)
-                return obd->obd_fsops->fs_get_reint_log_ctxt(sb, ctxt);
+        if (obd->obd_fsops->fs_set_info)
+                return obd->obd_fsops->fs_set_info(sb, inode, 
+                                                   keylen, key,
+                                                   valsize, val);
+        return 0;
+}
+
+static inline int 
+fsfilt_get_info(struct obd_device *obd, struct super_block *sb, 
+                struct inode * inode, __u32 keylen, void * key,
+                __u32 * valsize, void * val)
+{
+        if (obd->obd_fsops->fs_get_info)
+                return obd->obd_fsops->fs_get_info(sb, inode, keylen, key,
+                                                   valsize, val);
         return 0;
 }
 

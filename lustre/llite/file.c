@@ -31,8 +31,9 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/lustre_compat25.h>
 #endif
-#include "llite_internal.h"
 #include <linux/obd_lov.h>
+#include <linux/lustre_audit.h>
+#include "llite_internal.h"
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 __u64 lov_merge_blocks(struct lov_stripe_md *lsm);
@@ -385,6 +386,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
         file->private_data = fd;
         ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
         fd->fd_omode = it->it_flags;
+
         RETURN(0);
 }
 
@@ -547,6 +549,11 @@ int ll_file_open(struct inode *inode, struct file *file)
         file->f_flags &= ~O_LOV_DELAY_CREATE;
         GOTO(out, rc);
  out:
+        /* audit stuff if there was no RPC */
+        if (LUSTRE_IT(it)->it_data == 0) {
+                ll_audit_log(inode, AUDIT_OPEN, rc);
+        }
+
         req = LUSTRE_IT(it)->it_data;
         ll_intent_drop_lock(it);
         ll_intent_release(it);
@@ -1040,7 +1047,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
         CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                inode->i_ino, policy->l_extent.start, policy->l_extent.end);
 
-        do_gettimeofday(&start);
+        do_gettimeofday(&start);        
         rc = obd_enqueue(sbi->ll_dt_exp, lsm, LDLM_EXTENT, policy, mode,
                          &ast_flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
@@ -1121,7 +1128,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                                   LCK_PR);
 
         tree.lt_fd = file->private_data;
-
+        
         rc = ll_tree_lock(&tree, node, inode, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
@@ -1143,7 +1150,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
 
         CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, count, *ppos, inode->i_size);
-
+        
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         file->f_ramax = 0;
@@ -1151,6 +1158,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         file->f_ra.ra_pages = 0;
 #endif
         retval = generic_file_read(file, buf, count, ppos);
+        ll_audit_log(inode, AUDIT_READ, retval);
 
  out:
         ll_tree_unlock(&tree, inode);
@@ -1198,7 +1206,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf,
                 RETURN(PTR_ERR(node));
 
         tree.lt_fd = file->private_data;
-
+        
         rc = ll_tree_lock(&tree, node, inode, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
@@ -1226,8 +1234,11 @@ static ssize_t ll_file_write(struct file *file, const char *buf,
 
         /* generic_file_write handles O_APPEND after getting i_sem */
         retval = generic_file_write(file, buf, count, ppos);
+
         EXIT;
 out:
+        ll_audit_log(inode, AUDIT_WRITE, retval);
+
         ll_tree_unlock(&tree, inode);
         /* serialize with mmap/munmap/mremap */
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
@@ -1565,6 +1576,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         */
         case LL_IOC_FLUSH_CRED:
                 RETURN(ll_flush_cred(inode));
+        case LL_IOC_AUDIT:
+                RETURN(ll_set_audit(inode, arg));
         default:
                 RETURN( obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
                                       (void *)arg) );

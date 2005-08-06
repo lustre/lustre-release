@@ -269,6 +269,9 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
         loff_t tmp_ppos;
         loff_t *cache_ppos;
         ssize_t rc = -EIO;
+        struct hook_msg msg = {
+                .dentry = file->f_dentry,
+        };
 
         ENTRY;
 
@@ -291,6 +294,8 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
         *cache_ppos = *off;
 
         pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
+        SMFS_PRE_HOOK(file->f_dentry->d_inode, HOOK_READDIR, &msg);
+
 #if CONFIG_SNAPFS
         /*readdir page*/
         if (smfs_dotsnap_inode(file->f_dentry->d_inode)) {
@@ -312,6 +317,7 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
                                                cache_ppos);
 
 #endif
+        SMFS_POST_HOOK(file->f_dentry->d_inode, HOOK_READDIR, &msg, rc);
         *off = *cache_ppos;
         post_smfs_inode(file->f_dentry->d_inode, cache_inode);
         duplicate_file(file, sfi->c_file);
@@ -381,7 +387,11 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
         struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
         int     rc = -EIO;
-        
+        /*
+        struct hook_rw_msg  msg = {
+                .write = create,
+        };
+        */
         ENTRY;
         
         if (!cache_fsfilt)
@@ -396,9 +406,11 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
                 RETURN(-ENOSYS);
 
         down(&cache_inode->i_sem);
+        //SMFS_PRE_HOOK(inode, HOOK_MAP_PAGES, &msg);
 
         rc = cache_fsfilt->fs_map_inode_pages(cache_inode, page, pages, blocks,
                                               created, create, sem);
+
         up(&cache_inode->i_sem);
 
         RETURN(rc);
@@ -519,7 +531,7 @@ static int fsfilt_smfs_write_record(struct file *file, void *buf, int bufsize,
 }
 
 static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
-                                  struct dentry *root_dentry)
+                                  struct dentry *root_dentry)//, void *data)
 {
         struct super_block *sb = NULL;
         int rc = 0;
@@ -529,15 +541,13 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
         if (mnt) {
                 sb = mnt->mnt_sb;
                 
-                if (obd)
-                        S2SMI(sb)->smsi_exp = obd->obd_self_export;
+                LASSERT(obd);
+                S2SMI(sb)->smsi_exp = obd->obd_self_export;
                
-                rc = smfs_post_setup(obd, mnt, root_dentry);
+                rc = smfs_post_setup(obd, mnt, root_dentry);//, data);
                 if (rc) {
                         CERROR("post_setup fails in obd %p rc=%d", obd, rc);
                 }
-
-              
         }
         
         RETURN(rc);
@@ -654,7 +664,7 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
         struct dentry *cache_dentry = NULL;
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct smfs_super_info *sbi = S2SMI(dentry->d_inode->i_sb);
-        struct hook_setattr_msg msg = {
+        struct hook_attr_msg msg = {
                 .dentry = dentry,
                 .attr = iattr
         };
@@ -679,6 +689,7 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
                  * aggregated i_blocks from all OSTs -bzzz */
                 cache_inode->i_blocks = dentry->d_inode->i_blocks;
         }
+
         rc = cache_fsfilt->fs_setattr(cache_dentry, handle, iattr, do_trunc);
 
         SMFS_POST_HOOK(dentry->d_inode, HOOK_F_SETATTR, &msg, rc);
@@ -692,8 +703,7 @@ static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
 {
         struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
-        struct hook_setxattr_msg msg = {
-                .inode = inode,
+        struct hook_xattr_msg msg = {
                 .name = name,
                 .buffer = buffer,
                 .buffer_size = buffer_size
@@ -703,14 +713,13 @@ static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
         ENTRY;
         
         if (!cache_fsfilt)
-                RETURN(rc);
+                RETURN(-EIO);
 
         cache_inode = I2CI(inode);
         if (!cache_inode)
                 RETURN(rc);
         
         pre_smfs_inode(inode, cache_inode);
-
         SMFS_PRE_HOOK(inode, HOOK_F_SETXATTR, &msg);
         if (cache_fsfilt->fs_set_xattr)
                 rc = cache_fsfilt->fs_set_xattr(cache_inode, handle, name,
@@ -737,7 +746,6 @@ static int fsfilt_smfs_get_xattr(struct inode *inode, char *name,
                 RETURN(rc);
 
         pre_smfs_inode(inode, cache_inode);
-
         if (cache_fsfilt->fs_get_xattr)
                 rc = cache_fsfilt->fs_get_xattr(cache_inode, name,
                                                 buffer, buffer_size);
@@ -750,6 +758,7 @@ static int fsfilt_smfs_get_xattr(struct inode *inode, char *name,
 #define XATTR_LUSTRE_MDS_MEA_EA         "mea"
 #define XATTR_LUSTRE_MDS_MID_EA         "mid"
 #define XATTR_LUSTRE_MDS_SID_EA         "sid"
+#define XATTR_LUSTRE_MDS_PID_EA         "pid"
 #define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
@@ -776,6 +785,11 @@ static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
         case EA_MID:
                 rc = fsfilt_smfs_set_xattr(inode, handle,
                                            XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_PID:
+                rc = fsfilt_smfs_set_xattr(inode, handle,
+                                           XATTR_LUSTRE_MDS_PID_EA,
                                            lmm, lmm_size);
                 break;
         case EA_KEY:
@@ -814,6 +828,16 @@ static int fsfilt_smfs_get_md(struct inode *inode, void *lmm,
         case EA_MID:
                 rc = fsfilt_smfs_get_xattr(inode,
                                            XATTR_LUSTRE_MDS_MID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_PID:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_PID_EA,
+                                           lmm, lmm_size);
+                break;
+        case EA_KEY:
+                rc = fsfilt_smfs_get_xattr(inode,
+                                           XATTR_LUSTRE_MDS_KEY_EA,
                                            lmm, lmm_size);
                 break;
         default:
@@ -1164,6 +1188,81 @@ exit:
         
 }
 
+static int fsfilt_smfs_set_info (struct super_block *sb, struct inode * inode,
+                                 __u32 keylen, void *key,
+                                 __u32 valsize, void *val)
+{
+        int rc = 0;
+        struct plg_info_msg msg = {
+                .key = key,
+                .val = val,
+        };       
+        ENTRY;
+        
+        if (keylen >= 9 && memcmp(key, "file_read", 9) == 0) {
+                /* 
+                 * this key used to inform smfs on OST about incoming r/w
+                 */
+                struct lustre_id * id = val;
+                struct hook_rw_msg msg = {
+                        .write = 0,
+                        .id = id,
+                };
+                if (inode)
+                        SMFS_POST_HOOK(inode, HOOK_SI_READ, &msg, rc);
+        }
+        else if (keylen >= 10 && memcmp(key, "file_write", 10) == 0) {
+                /* 
+                 * this key used to inform smfs on OST about incoming r/w
+                 */
+                struct lustre_id * id = val;
+                struct hook_rw_msg msg = {
+                        .write = 1,
+                        .id = id,
+                };
+                if (inode)
+                        SMFS_POST_HOOK(inode, HOOK_SI_WRITE, &msg, rc);
+        }
+        else if (keylen >= 10 && memcmp(key, "audit_info", 10) == 0) {
+                /* this key used to pass audit data on MDS */
+                struct audit_info * info = val;
+                                
+                SMFS_POST_HOOK(inode, HOOK_SPECIAL, info, info->m.result);
+        }
+        else if (keylen >= 8 && memcmp(key, "auditlog", 8) == 0) {
+                /* 
+                 * this key used to inform smfs on OST about client audit data
+                 */
+
+                audit_client_log(sb, val);
+        }
+        else if (keylen == 5 && memcmp(key, "audit", 5) == 0) {
+                rc = smfs_set_audit(sb, inode, (__u64 *)val);
+        }   
+        else if (keylen == 7 && memcmp(key, "id2name", 7) == 0) {
+                rc = SMFS_PLG_HELP(sb, PLG_SET_INFO, &msg);
+        }
+        else
+                rc = -ENOENT;
+                
+        RETURN(rc);
+}
+
+static int fsfilt_smfs_get_info (struct super_block *sb, struct inode * inode,
+                                 __u32 keylen, void *key,
+                                 __u32 *valsize, void *val)
+{
+        int rc = -ENOENT;
+        
+        ENTRY;
+        
+        if (keylen == 5 && strcmp(key, "audit") == 0) {
+                __u64 * mask = val;
+                rc = smfs_get_audit(sb, inode, NULL, mask);
+        }
+                        
+        RETURN(rc);
+}
 
 static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_type                = "smfs",
@@ -1209,10 +1308,11 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
         .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
-        .fs_get_reint_log_ctxt  = NULL, /*fsfilt_smfs_get_reint_log_ctxt,*/
+        .fs_set_info            = fsfilt_smfs_set_info,
+        .fs_get_info            = fsfilt_smfs_get_info,
         .fs_set_snap_item       = fsfilt_smfs_set_snap_item,
         .fs_do_write_cow        = fsfilt_smfs_do_write_cow,
- };
+};
 
 struct fsfilt_operations *get_smfs_fs_ops(void)
 {

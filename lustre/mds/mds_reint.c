@@ -459,6 +459,8 @@ out:
 #define XATTR_LUSTRE_MDS_MEA_EA         "mea"
 #define XATTR_LUSTRE_MDS_MID_EA         "mid"
 #define XATTR_LUSTRE_MDS_SID_EA         "sid"
+#define XATTR_LUSTRE_MDS_PID_EA         "pid"
+#define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 static int mds_get_md_type(char *name)
 {
@@ -470,6 +472,11 @@ static int mds_get_md_type(char *name)
                 RETURN(EA_MID);
         if (!strcmp(name, XATTR_LUSTRE_MDS_SID_EA))
                 RETURN(EA_SID);
+        if (!strcmp(name, XATTR_LUSTRE_MDS_PID_EA))
+                RETURN(EA_PID);
+        if (!strcmp(name, XATTR_LUSTRE_MDS_KEY_EA))
+                RETURN(EA_KEY);
+
         RETURN(0);
 }
 
@@ -804,6 +811,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct dentry *dparent = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_body *body = NULL;
         struct dentry *dchild = NULL;
         struct inode *dir = NULL;
         void *handle = NULL;
@@ -814,6 +822,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct dentry_params dp;
         struct mea *mea = NULL;
         int mea_size;
+        struct lustre_id sid;
         __u64 fid;
         ENTRY;
 
@@ -845,12 +854,20 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         ldlm_lock_dump_handle(D_OTHER, lockh);
 
+        /* get parent id: ldlm lock on the parent protects ea */
+        rc = mds_read_inode_sid(obd, dir, &sid);
+        if (rc) {
+                CERROR("can't read parent id. ino(%lu) rc(%d)\n",
+                       dir->i_ino, rc);
+                GOTO(cleanup, rc);
+        }
+
         /* try to retrieve MEA data for this dir */
         rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (mea != NULL) {
+        if (mea != NULL && mea->mea_count) {
                 /*
                  * dir is already splitted, check is requested filename should
                  * live at this MDS or at another one.
@@ -913,6 +930,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dp.p_fid = fid;
         dp.p_group = mds->mds_num;
 
+        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+
         switch (type) {
         case S_IFREG: {
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE, NULL);
@@ -955,32 +974,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc);
                         }
 
-                        down(&dchild->d_inode->i_sem);
-                        if (dp.p_inum) {
-                                rc = mds_update_inode_sid(obd, dchild->d_inode,
-                                                          handle, rec->ur_id2);
-                                if (rc) {
-                                        CERROR("mds_update_inode_sid() failed, inode %lu, "
-                                               "rc %d\n", dchild->d_inode->i_ino, rc);
-                                }
-
-                                /* 
-                                 * make sure, that fid is up-to-date.
-                                 */
-                                mds_set_last_fid(obd, id_fid(rec->ur_id2));
-                        } else {
-                                rc = mds_set_inode_sid(obd, dchild->d_inode,
-                                                       handle, NULL, fid);
-                                if (rc) {
-                                        CERROR("mds_set_inode_sid() failed, inode %lu, "
-                                               "rc %d\n", dchild->d_inode->i_ino, rc);
-                                }
-                        }
-                        up(&dchild->d_inode->i_sem);
-                        
-                        if (rc)
-                                GOTO(cleanup, rc);
-                        
                         if (rec->ur_eadata)
                                 nstripes = *(u16 *)rec->ur_eadata;
 
@@ -1006,7 +999,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 } else if (!DENTRY_VALID(dchild)) {
                         /* inode will be created on another MDS */
                         struct obdo *oa = NULL;
-                        struct mds_body *body;
                         void *acl = NULL;
                         int acl_size;
 
@@ -1031,8 +1023,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         oa->o_uid = current->fsuid;
                         oa->o_gid = (dir->i_mode & S_ISGID) ?
                                                 dir->i_gid : current->fsgid;
-                        oa->o_valid |= OBD_MD_FLTYPE|OBD_MD_FLUID|OBD_MD_FLGID;
-
+                        /* transfer parent id to remote inode */
+                        memcpy(obdo_id(oa), &sid, sizeof(sid));
+                        oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLUID | 
+                                       OBD_MD_FLGID | OBD_MD_FLIFID;
+                                                
                         CDEBUG(D_OTHER, "%s: create dir on MDS %u\n",
                                obd->obd_name, i);
 
@@ -1102,8 +1097,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         }
 
                         /* fill reply */
-                        body = lustre_msg_buf(req->rq_repmsg,
-                                              0, sizeof(*body));
                         body->valid |= OBD_MD_FLID | OBD_MD_MDS | OBD_MD_FID;
 
                         obdo2id(&body->id1, oa);
@@ -1154,7 +1147,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         } else if (dchild->d_inode) {
                 struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
                 struct iattr iattr;
-                struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
 
                 created = 1;
@@ -1174,67 +1166,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (id_ino(rec->ur_id2)) {
                         LASSERT(id_ino(rec->ur_id2) == inode->i_ino);
                         inode->i_generation = id_gen(rec->ur_id2);
-
-                        if (type != S_IFDIR) {
-                                down(&inode->i_sem);
-                                rc = mds_update_inode_sid(obd, inode,
-                                                          handle, rec->ur_id2);
-                                up(&inode->i_sem);
-                                if (rc) {
-                                        CERROR("Can't update inode self id, "
-                                               "rc = %d.\n", rc);
-                                }
-
-                                /* 
-                                 * make sure, that fid is up-to-date.
-                                 */
-                                mds_set_last_fid(obd, id_fid(rec->ur_id2));
-                        }
-                        
                         /* dirtied and committed by the upcoming setattr. */
                         CDEBUG(D_INODE, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
-                } else {
-                        struct lustre_handle child_ino_lockh;
-
-                        CDEBUG(D_INODE, "created ino %lu with gen %x\n",
-                               inode->i_ino, inode->i_generation);
-
-                        if (type != S_IFDIR) {
-                                /* 
-                                 * allocate new id for @inode if it is not dir,
-                                 * because for dir it was already done.
-                                 */
-                                down(&inode->i_sem);
-                                rc = mds_set_inode_sid(obd, inode,
-                                                         handle, NULL, fid);
-                                up(&inode->i_sem);
-                                if (rc) {
-                                        CERROR("mds_set_inode_sid() failed, "
-                                               "inode %lu, rc %d\n", inode->i_ino,
-                                               rc);
-                                }
-                        }
-
-                        if (rc == 0) {
-                                /*
-                                 * the inode we were allocated may have just
-                                 * been freed by an unlink operation.  We take
-                                 * this lock to synchronize against the matching
-                                 * reply-ack-lock taken in unlink, to avoid
-                                 * replay problems if this reply makes it out to
-                                 * the client but the unlink's does not.  See
-                                 * bug 2029 for more detail.
-                                 */
-                                rc = mds_lock_new_child(obd, inode, &child_ino_lockh);
-                                if (rc != ELDLM_OK) {
-                                        CERROR("error locking for unlink/create sync: "
-                                               "%d\n", rc);
-                                } else {
-                                        ldlm_lock_decref(&child_ino_lockh, LCK_EX);
-                                }
-                        }
                 }
+                mds_inode2id(obd, &body->id1, dchild->d_inode, fid);
+                mds_update_inode_ids(obd, inode, handle, &body->id1, &sid);
 
                 rc = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
                 if (rc)
@@ -1266,7 +1203,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         }
                 }
                 
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
                 mds_pack_inode2body(obd, body, inode, 1);
                 mds_body_do_reverse_map(med, body);
         }
@@ -1292,6 +1228,14 @@ cleanup:
                                 CERROR("unlink in error path: %d\n", err);
                         break;
                 }
+        } else if (created) {
+                /* The inode we were allocated may have just been freed
+                 * by an unlink operation.  We take this lock to
+                 * synchronize against the matching reply-ack-lock taken
+                 * in unlink, to avoid replay problems if this reply
+                 * makes it out to the client but the unlink's does not.
+                 * See bug 2029 for more detail.*/
+                mds_lock_new_child(obd, dchild->d_inode, NULL);
         } else {
                 rc = err;
         }
@@ -3282,6 +3226,7 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
         struct dentry *de_new = NULL;
         int cleanup_phase = 0;
         int update_mode, rc = 0;
+        struct lustre_id ids[2]; /* sid, pid */
         ENTRY;
 
         /*
@@ -3290,6 +3235,11 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
          */
         CDEBUG(D_OTHER, "%s: request to create name %s for "DLID4"\n",
                obd->obd_name, rec->ur_tgt, OLID4(rec->ur_id1));
+
+        /* get parent id: ldlm lock on the parent protects ea */
+        rc = mds_read_inode_sid(obd, de_tgtdir->d_inode, &ids[1]);
+        if (rc)
+                GOTO(cleanup, rc);
 
         /* first, lookup the target */
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_id2, parent_lockh,
@@ -3308,7 +3258,14 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
 
         rc = mds_add_local_dentry(rec, offset, req, rec->ur_id1,
                                   de_tgtdir, de_new);
+        if (rc)
+                GOTO(cleanup, rc);
 
+        ids[0] = *(rec->ur_id1);
+        rc = obd_set_info(mds->mds_md_obd->u.lmv.tgts[id_group(rec->ur_id1)].ltd_exp, 
+                          strlen("ids"), "ids", 
+                          sizeof(struct lustre_id) * 2, ids);
+ 
         EXIT;
 cleanup:
         
@@ -3447,6 +3404,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct llog_create_locks *lcl = NULL;
         struct lov_mds_md *lmm = NULL;
         int rc = 0, cleanup_phase = 0;
+        struct lustre_id ids[2];  /* sid, pid */
         void *handle = NULL;
         ENTRY;
 
@@ -3565,6 +3523,11 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
         LASSERT(body != NULL);
 
+        /* get new parent id: ldlm lock on the parent protects ea */
+        rc = mds_read_inode_sid(obd, de_tgtdir->d_inode, &ids[1]);
+        if (rc)
+                GOTO(cleanup, rc);
+
         /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
         if (new_inode) 
                 DOWN_READ_I_ALLOC_SEM(new_inode);
@@ -3590,16 +3553,26 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if (de_old->d_flags & DCACHE_CROSS_REF) {
                 struct lustre_id old_id;
+                struct obd_export *tgt_exp = 
+                        mds->mds_md_obd->u.lmv.tgts[de_old->d_mdsnum].ltd_exp;
 
+                
                 mds_pack_dentry2id(obd, &old_id, de_old, 1);
 
                 rc = mds_add_local_dentry(rec, offset, req, &old_id,
                                           de_tgtdir, de_new);
                 if (rc)
                         GOTO(cleanup, rc);
-
+                
                 rc = mds_del_local_dentry(rec, offset, req, de_srcdir,
                                           de_old);
+                if (rc)
+                        GOTO(cleanup, rc);
+                
+                ids[0] = old_id;
+                rc = obd_set_info(tgt_exp, strlen("ids"), "ids", 
+                                  sizeof(struct lustre_id) * 2, ids);
+
                 GOTO(cleanup, rc);
         }
 
@@ -3645,6 +3618,10 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 }
         }
 
+        if (rc == 0)
+               rc = mds_update_inode_ids(obd, de_old->d_inode,
+                                         handle, NULL, &ids[1]);
+        
         EXIT;
 cleanup:
         rc = mds_finish_transno(mds, (de_tgtdir ? de_tgtdir->d_inode : NULL),

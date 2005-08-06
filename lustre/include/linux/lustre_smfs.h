@@ -496,7 +496,6 @@ static inline int smfs_do_cow(struct inode *inode)
         return 0;
 }
 
-
 extern int smfs_write_extents(struct inode *dir, struct dentry *dentry,
                               unsigned long from, unsigned long num);
 extern int smfs_rec_precreate(struct dentry *dentry, int *num, struct obdo *oa);

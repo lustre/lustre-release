@@ -48,10 +48,11 @@
 
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_audit.h>
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-
+/*
 struct ll_lock_tree_node {
         rb_node_t               lt_node;
         struct list_head        lt_locked_item;
@@ -60,7 +61,7 @@ struct ll_lock_tree_node {
         struct lustre_handle    lt_lockh;
         ldlm_mode_t             lt_mode;
 };
-
+*/
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int lt_get_mmap_locks(struct ll_lock_tree *tree, struct inode *inode,
                       unsigned long addr, size_t count);
@@ -568,6 +569,9 @@ static struct vm_operations_struct ll_file_vm_ops = {
         .close          = ll_close_vma,
 };
 
+/* Audit functions */
+extern int ll_audit_log (struct inode *, audit_op, int);
+
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
 {
         int rc;
@@ -577,10 +581,13 @@ int ll_file_mmap(struct file * file, struct vm_area_struct * vma)
         if (rc == 0) {
                 struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
                 vma->vm_ops = &ll_file_vm_ops;
+        
                 /* mark i/o epoch dirty */
                 if (vma->vm_flags & VM_SHARED)
                         set_bit(LLI_F_DIRTY_HANDLE, &lli->lli_flags);
         }
+        
+        ll_audit_log(file->f_dentry->d_inode, AUDIT_MMAP, rc);
 
         RETURN(rc);
 }

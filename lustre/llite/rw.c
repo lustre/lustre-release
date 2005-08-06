@@ -366,7 +366,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         oa->o_gr = lsm->lsm_object_gr;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
-        if (cmd == OBD_BRW_WRITE) {
+        if (cmd == OBD_BRW_WRITE || cmd == OBD_BRW_READ) {
                 oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
                 *(obdo_id(oa)) = ll_i2info(inode)->lli_id;
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;

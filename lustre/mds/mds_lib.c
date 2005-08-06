@@ -217,6 +217,25 @@ int mds_pack_inode2id(struct obd_device *obd,
         RETURN(rc);
 }
 
+void mds_inode2id(struct obd_device *obd, struct lustre_id *id,
+                  struct inode *inode, __u64 fid)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        ENTRY;
+
+        LASSERT(inode != NULL);
+        LASSERT(id != NULL);
+        LASSERT(fid != 0);
+        
+        id_fid(id) = fid;
+        id_ino(id) = inode->i_ino;
+        id_group(id) = mds->mds_num;
+        id_gen(id) = inode->i_generation;
+        id_type(id) = (S_IFMT & inode->i_mode);
+        
+        EXIT;
+}
+
 int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg, 
                   int *offset, struct mds_body *body, struct inode *inode)
 {
@@ -342,7 +361,8 @@ int mds_set_crypto_type(struct obd_device *obd, void *val, __u32 vallen)
 
         CDEBUG(D_IOCTL, "invalid key\n");
         RETURN(0);
-} 
+}
+
 /* Note that we can copy all of the fields, just some will not be "valid" */
 void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
                          struct inode *inode, int fid)
@@ -1172,6 +1192,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred,
                 rsd->rsd_cap &= ~CAP_FS_MASK;
 
         /* by now every fields other than groups in rsd have been granted */
+        ucred->luc_nid = peernid;
         ucred->luc_uid = rsd->rsd_uid;
         ucred->luc_gid = rsd->rsd_gid;
         ucred->luc_fsuid = rsd->rsd_fsuid;

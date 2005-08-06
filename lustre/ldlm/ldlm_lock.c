@@ -1008,7 +1008,7 @@ int ldlm_run_cp_ast_work(struct list_head *rpc_list)
          * will never call the local blocking_ast until we drop our
          * reader/writer reference, which we won't do until we get the
          * reply and finish enqueueing. */
-
+        
         list_for_each_safe(tmp, pos, rpc_list) {
                 struct ldlm_lock *lock =
                         list_entry(tmp, struct ldlm_lock, l_cp_ast);

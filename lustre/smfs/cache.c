@@ -205,8 +205,6 @@ static void setup_sm_special_ops(struct inode *inode)
         unlock_kernel();
 }
 
-#define SMFS_IOPEN_INO  1
-
 void sm_set_inode_ops(struct inode *inode)
 {
         struct smfs_super_info *smb = S2SMI(inode->i_sb);

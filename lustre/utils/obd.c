@@ -2567,6 +2567,7 @@ int jt_obd_snap_add(int argc, char **argv)
  
         return rc;
 }
+
 static void signal_server(int sig)
 {
         if (sig == SIGINT) {

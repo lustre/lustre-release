@@ -70,6 +70,7 @@ int obd_llog_setup(struct obd_device *obd, struct obd_llogs *llogs,
                 rc = op->lop_setup(obd, llogs, index, disk_obd, count, logid);
         if (ctxt && rc) {
                 obd->obd_llog_ctxt[index] = NULL;
+                llogs->llog_ctxt[index] = NULL;
                 OBD_FREE(ctxt, sizeof(*ctxt));
         }
 

@@ -616,7 +616,7 @@ static  post_lru_op smfs_lru_post[HOOK_MAX] = {
         [HOOK_READDIR]    NULL,
 };
 
-static int smfs_lru_pre_op(int op, struct inode *inode, void * msg, int ret, 
+static int smfs_lru_pre_op(hook_op op, struct inode *inode, void * msg, int ret, 
                            void *priv)
 {
         int rc = 0;
@@ -628,7 +628,7 @@ static int smfs_lru_pre_op(int op, struct inode *inode, void * msg, int ret,
         RETURN(rc); 
 }
 
-static int smfs_lru_post_op(int op, struct inode *inode, void *msg, int ret,
+static int smfs_lru_post_op(hook_op op, struct inode *inode, void *msg, int ret,
                             void *priv)
 {
         int rc = 0;
@@ -644,16 +644,6 @@ static int smfs_lru_post_op(int op, struct inode *inode, void *msg, int ret,
 }
 
 /* Helpers */
-static int smfs_exit_lru(struct super_block *sb, void * arg, void * priv)
-{
-        ENTRY;
-
-        smfs_deregister_plugin(sb, SMFS_PLG_LRU);
-                
-        EXIT;
-        return 0;
-}
-
 static int smfs_trans_lru (struct super_block *sb, void *arg, void * priv)
 {
         int size;
@@ -734,7 +724,6 @@ static int smfs_stop_lru(struct super_block *sb, void *arg, void * priv)
 
 typedef int (*lru_helper)(struct super_block * sb, void *msg, void *);
 static lru_helper smfs_lru_helpers[PLG_HELPER_MAX] = {
-        [PLG_EXIT]       smfs_exit_lru,
         [PLG_START]      smfs_start_lru,
         [PLG_STOP]       smfs_stop_lru,
         [PLG_TRANS_SIZE] smfs_trans_lru,
@@ -751,20 +740,47 @@ static int smfs_lru_help_op(int code, struct super_block * sb,
         RETURN(0);
 }
 
+static int smfs_exit_lru(struct super_block *sb, void * arg)
+{
+        struct smfs_plugin * plg;
+
+        ENTRY;
+
+        plg = smfs_deregister_plugin(sb, SMFS_PLG_LRU);
+        if (plg)
+                OBD_FREE(plg, sizeof(*plg));
+        else
+                CERROR("Cannot find LRU plugin while unregistering\n");
+  
+        EXIT;
+        return 0;
+}
+
 int smfs_init_lru(struct super_block *sb)
 {
-        struct smfs_plugin plg = {
-                .plg_type = SMFS_PLG_LRU,
-                .plg_pre_op = &smfs_lru_pre_op,
-                .plg_post_op = &smfs_lru_post_op,
-                .plg_helper = &smfs_lru_help_op,
-                .plg_private = NULL
-        };
+        struct smfs_plugin * plg = NULL;
         int rc = 0;
         
         ENTRY;
-
-        rc = smfs_register_plugin(sb, &plg); 
+        
+        OBD_ALLOC(plg, sizeof(*plg));
+        if (!plg) {
+                rc = -ENOMEM;
+                goto exit;
+        }
+        
+        plg->plg_type = SMFS_PLG_LRU;
+        plg->plg_pre_op = &smfs_lru_pre_op;
+        plg->plg_post_op = &smfs_lru_post_op;
+        plg->plg_helper = &smfs_lru_help_op;
+        plg->plg_exit = &smfs_exit_lru;
+        
+        rc = smfs_register_plugin(sb, plg);
+        if (!rc)
+                RETURN(0);
+exit:
+        if (plg)
+                OBD_FREE(plg, sizeof(*plg));
         
         RETURN(rc);
 }

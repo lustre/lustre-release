@@ -34,6 +34,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_audit.h>
 #include <linux/fcntl.h>
 #include <linux/posix_acl.h>
 
@@ -680,6 +681,14 @@ void lustre_swab_lustre_id(struct lustre_id *id)
         lustre_swab_lustre_fid(&id->li_fid);
 }
 
+void lustre_swab_parseid_pkg (struct parseid_pkg *pkg)
+{
+        __swab32s(&pkg->pp_type);
+        __swab32s(&pkg->pp_rc);
+        lustre_swab_lustre_id(&pkg->pp_id1);
+        lustre_swab_lustre_id(&pkg->pp_id2);
+}
+
 void lustre_swab_mds_status_req(struct mds_status_req *r)
 {
         __swab32s(&r->flags);
@@ -740,6 +749,7 @@ void lustre_swab_mds_body(struct mds_body *b)
         __swab64s(&b->size);
         __swab64s(&b->blocks);
         __swab64s(&b->valid);
+        __swab64s (&b->audit);
         __swab32s(&b->mode);
         __swab32s(&b->uid);
         __swab32s(&b->gid);
@@ -892,6 +902,22 @@ void lustre_swab_remote_perm(struct mds_remote_perm *p)
         __swab32s(&p->mrp_auth_uid);
         __swab32s(&p->mrp_auth_gid);
         __swab16s(&p->mrp_perm);
+}
+
+void lustre_swab_audit_msg (struct audit_msg *r)
+{
+        lustre_swab_lustre_id(&r->id);
+        __swab32s (&r->code);
+        __swab32s (&r->result);
+        __swab32s (&r->uid);
+        __swab32s (&r->gid);
+        __swab64s (&r->nid);
+}
+
+void lustre_swab_audit_attr (struct audit_attr_msg *r)
+{
+        lustre_swab_lustre_id(&r->id);
+        __swab64s (&r->attr);
 }
 
 /* no one calls this */

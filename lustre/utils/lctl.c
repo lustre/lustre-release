@@ -49,6 +49,157 @@ static int jt_opt_ignore_errors(int argc, char **argv) {
         return 0;
 }
 
+#include <linux/lustre_audit.h>
+
+static int parse_audit_ops(char * str, __u64 * mask)
+{
+        char * op = strtok(str, ",");
+        int rc = 0;
+        
+        while (op) {
+                if (!strcmp(op, "all")) {
+                        *mask |= AUDIT_ALL_OPS;
+                        break;
+                }
+                else if (!strcmp(op,"none")) {
+                        *mask &= ~AUDIT_ALL_OPS;
+                }
+                else if (!strcmp(op,"create"))
+                        SET_AUDIT_OP((*mask), AUDIT_CREATE);
+                else if (!strcmp(op,"link"))
+                        SET_AUDIT_OP((*mask), AUDIT_LINK);
+                else if (!strcmp(op,"delete"))
+                        SET_AUDIT_OP((*mask), AUDIT_UNLINK);
+                else if (!strcmp(op,"rename"))
+                        SET_AUDIT_OP((*mask), AUDIT_RENAME);
+                else if (!strcmp(op,"read")) {
+                        SET_AUDIT_OP((*mask), AUDIT_READ);
+                        SET_AUDIT_OP((*mask), AUDIT_MMAP);
+                }
+                else if (!strcmp(op,"write"))
+                        SET_AUDIT_OP((*mask), AUDIT_WRITE);
+                else if (!strcmp(op,"open"))
+                        SET_AUDIT_OP((*mask), AUDIT_OPEN);
+                else if (!strcmp(op,"stat"))
+                        SET_AUDIT_OP((*mask), AUDIT_STAT);
+                else if (!strcmp(op,"readdir"))
+                        SET_AUDIT_OP((*mask), AUDIT_READDIR);
+                else {
+                        fprintf(stderr, "invalid audit operation '%s'\n", op);
+                }       
+
+                op = strtok(NULL, ",");
+        }
+        
+        return rc;
+}
+
+#include <unistd.h>
+#include <dirent.h>
+#include <linux/unistd.h>
+
+static int set_dir_audit(char * dir, __u64 mask)
+{
+        int rc = 0;
+        char * buf;
+        DIR * sdr;
+        struct dirent * ent = (void*)buf;
+        
+        buf = malloc(strlen(dir) + NAME_MAX + 1);
+        
+        sdr = opendir(dir);
+        if (!sdr) {
+                fprintf(stderr, "cannot open dir %s\n", dir);
+                free(buf);
+                return -1;
+        }
+        
+        while ((ent = readdir(sdr)) != NULL) {
+                int fd;
+                
+                if (!strcmp(ent->d_name, ".") ||
+                    !strcmp(ent->d_name, ".."))
+                        continue;
+                //open file/dir
+                sprintf(buf, "%s%s", dir, ent->d_name);
+                //printf("set audit on %s\n", buf);
+
+                fd = open(buf, O_RDONLY);
+                if (fd < 0) {
+                        fprintf(stderr, "can't open: %s: %s\n", buf,
+                                strerror(rc = errno));
+                        closedir(sdr);
+                        free(buf);
+                        continue;
+                }
+                rc = ioctl(fd, LL_IOC_AUDIT, mask);
+                close(fd);
+        }
+        closedir(sdr);
+        free(buf);
+        return rc;
+}
+
+static int set_audit(int argc, char **argv, int fs)
+{
+        __u64 mask = 0;
+        struct stat st;
+        int rc, fd;
+
+        if (argc != 4)
+                return CMD_HELP;
+        
+        /* audit can be for all operations or for failed only */
+        if (!strcmp(argv[1], "fail"))
+                SET_AUDIT_OP(mask, AUDIT_FAIL);
+        else if (strcmp(argv[1], "all")) {
+                fprintf(stderr, "%s: invalid audit type %s\n",
+                        jt_cmdname(argv[0]), argv[1]);
+                return -EINVAL;
+        }
+        
+        rc = parse_audit_ops(argv[2], &mask);
+        if (rc < 0)
+                return -EINVAL;
+        
+        //open file/dir
+        fd = open(argv[3], O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "can't open: %s: %s\n", argv[3],
+                        strerror(rc = errno));
+                return -1;
+        }
+        
+        rc = fstat(fd, &st);
+        if (rc) {
+                close(fd);
+                return rc;
+        }
+        //audit for fs?
+        if (fs)
+                SET_AUDIT_OP(mask, AUDIT_FS);
+        /*else {
+                //if dir then set audit for childs also
+                if (S_ISDIR(st.st_mode)) {
+                        rc = set_dir_audit(argv[3], mask);
+                }
+        }*/
+        //set audit for file/dir itself
+        rc = ioctl(fd, LL_IOC_AUDIT, mask);
+        close(fd);
+        return rc;
+}
+
+static int jt_set_audit(int argc, char **argv)
+{
+        return set_audit(argc, argv, 0);
+}
+
+static int jt_set_fsaudit(int argc, char **argv)
+{
+        return set_audit(argc, argv, 1);
+}
+
 /*
  * XXX Should not belong to here
  */
@@ -328,6 +479,10 @@ command_t cmdlist[] = {
          "usage: del_conn <conn_uuid> \n"},
         {"set_security", jt_lcfg_set_security, 0,
          "usage: set_security key value\n"},
+        {"audit", jt_set_audit, 0,
+         "usage: audit type operations filename\n"},
+        {"fs_audit", jt_set_fsaudit, 0,
+         "usage: fs_audit type operations mountpoint\n"},
         {"lsync", jt_obd_reint_sync, 0,
          "usage: lsync\n"},  
         {"cache_on", jt_obd_cache_on, 0,

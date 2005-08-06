@@ -230,13 +230,14 @@ int mds_fs_setup_virtid(struct obd_device *obd);
 
 __u64 mds_alloc_fid(struct obd_device *obd);
 
-int mds_set_inode_sid(struct obd_device *, struct inode *,
-                      void *, struct lustre_id *, __u64 fid);
-
-int mds_update_inode_sid(struct obd_device *, struct inode *,
-                         void *, struct lustre_id *);
-
+void mds_inode2id(struct obd_device *obd, struct lustre_id *id,
+                  struct inode *inode, __u64 fid);
+int mds_update_inode_ids(struct obd_device *, struct inode *,
+                         void *, struct lustre_id *, struct lustre_id *);
 int mds_read_inode_sid(struct obd_device *, struct inode *,
+                       struct lustre_id *);
+
+int mds_read_inode_pid(struct obd_device *, struct inode *,
                        struct lustre_id *);
 
 int mds_update_inode_mid(struct obd_device *, struct inode *,
@@ -309,6 +310,13 @@ void mds_cleanup_lsd_cache(void);
 struct lustre_sec_desc * mds_get_lsd(__u32 uid);
 void mds_put_lsd(struct lustre_sec_desc *lsd);
 void mds_flush_lsd(__u32 id);
+
+/* mds_audit_path.c */
+int mds_parse_id(struct ptlrpc_request *req);
+
+/* mds_audit.c */
+int mds_set_audit(struct obd_device * obd, void * val);
+int mds_pack_audit(struct obd_device *, struct inode *, struct mds_body *);
 
 /* mds_acl.c */
 struct upcall_cache *__mds_get_global_rmtacl_upcall_cache(void);

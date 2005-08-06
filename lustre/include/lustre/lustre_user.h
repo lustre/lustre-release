@@ -70,7 +70,7 @@
 #define LL_IOC_KEY_TYPE                 _IOW ('f', 171, long)
 #define LL_IOC_DISABLE_CRYPTO           _IOW ('f', 172, long)
 #define LL_IOC_ENABLE_CRYPTO            _IOW ('f', 173, long)
-
+#define LL_IOC_AUDIT                    _IOW ('f', 174, __u64)
 
 #define O_LOV_DELAY_CREATE    0100000000  /* hopefully this does not conflict */
 

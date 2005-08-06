@@ -80,6 +80,8 @@ int smfs_options(char *data, char **devstr, char **namestr,
                                 *namestr = pos + 5;
                 } else if (!strcmp(pos, "kml")) {
                         SMFS_SET(*flags, SMFS_PLG_KML);
+                } else if (!strcmp(pos, "audit")) {
+                        SMFS_SET(*flags, SMFS_PLG_AUDIT);
                 } else if (!strcmp(pos, "cache")) {
                         SMFS_SET(*flags, SMFS_PLG_LRU);
                 } else if (!strcmp(pos, "snap")) {
@@ -194,6 +196,9 @@ static void smfs_mds_flags(struct mds_obd * mds, struct inode * root)
 }
                         
 
+extern int (*audit_id2name_superhack) (struct obd_device *obd, char **name,
+                                       int *namelen, struct lustre_id *id);
+
 int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
                     struct dentry * root_dentry)
 {
@@ -202,6 +207,10 @@ int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
         int rc = 0;
         
         ENTRY;
+
+        /* XXX to register id2name function of mds in smfs */
+        //if (data != NULL)
+        //        audit_id2name_superhack = data;
  
         OBD_ALLOC(current_ctxt, sizeof(*current_ctxt));
         if (!current_ctxt)
@@ -216,20 +225,13 @@ int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
         
         push_ctxt(&saved, smb->smsi_ctxt, NULL);
 
-        rc = smfs_llog_setup(smb);
+        rc = smfs_llog_setup(&smb->smsi_logs_dir, &smb->smsi_objects_dir);
         if (!rc) {
-                rc = SMFS_PLG_HELP(mnt->mnt_sb, PLG_START, NULL);
+                rc = SMFS_PLG_HELP(mnt->mnt_sb, PLG_START, obd);
         }
 
         pop_ctxt(&saved, smb->smsi_ctxt, NULL);
 
-        /* connect KML ctxt to obd */
-        if (obd && smb->smsi_kml_log) {
-                smb->smsi_kml_log->loc_idx = LLOG_REINT_ORIG_CTXT;
-                smb->smsi_kml_log->loc_obd = obd;
-                obd->obd_llog_ctxt[LLOG_REINT_ORIG_CTXT] = smb->smsi_kml_log;
-        }
-        
         /* enable plugins for directories on MDS or OST */
         if (obd && obd->obd_type && obd->obd_type->typ_name) {
                 if (!strcmp(obd->obd_type->typ_name, "obdfilter")) {
@@ -332,6 +334,8 @@ static int smfs_init_plugins(struct super_block * sb, int flags)
         INIT_LIST_HEAD(&smb->smsi_plg_list);
         init_rwsem(&smb->plg_sem);
 
+        if (SMFS_IS(flags, SMFS_PLG_AUDIT))
+                smfs_init_audit(sb);
         if (SMFS_IS(flags, SMFS_PLG_KML)) 
                 smfs_init_kml(sb);
         if (SMFS_IS(flags, SMFS_PLG_LRU)) 
@@ -345,9 +349,15 @@ static int smfs_init_plugins(struct super_block * sb, int flags)
 
 static void smfs_remove_plugins(struct super_block *sb)
 {
+        struct smfs_plugin * plg, *tmp;
+        struct smfs_super_info *smb = S2SMI(sb);
+        struct list_head * plist = &smb->smsi_plg_list;
+                
         ENTRY;
-
-        SMFS_PLG_HELP(sb, PLG_EXIT, (void*)sb);
+        
+        list_for_each_entry_safe(plg, tmp, plist, plg_list) {
+                plg->plg_exit(sb, plg->plg_private);
+        }
         
         EXIT;
 }
@@ -526,7 +536,7 @@ struct smfs_plugin * smfs_deregister_plugin(struct super_block *sb, int type)
         RETURN(plg);
 }
 
-void smfs_pre_hook (struct inode * inode, int op, void * msg) 
+void smfs_pre_hook (struct inode * inode, hook_op op, void * msg) 
 {
         struct smfs_super_info *smb = S2SMI(inode->i_sb);    
         struct smfs_inode_info *smi = I2SMI(inode);
@@ -552,10 +562,10 @@ void smfs_pre_hook (struct inode * inode, int op, void * msg)
         //EXIT;
 }
 
-void smfs_post_hook (struct inode * inode, int op, void * msg, int ret)
+void smfs_post_hook (struct inode * inode, hook_op op, void * msg, int ret)
 {
         struct smfs_super_info *smb = S2SMI(inode->i_sb);
-        struct smfs_inode_info *smi = I2SMI(inode);
+        //struct smfs_inode_info *smi = I2SMI(inode);
         struct list_head *hlist = &smb->smsi_plg_list;
         struct smfs_plugin *plg;
         
@@ -565,10 +575,10 @@ void smfs_post_hook (struct inode * inode, int op, void * msg, int ret)
                 //check that plugin is active
                 if(!SMFS_IS(smb->plg_flags, plg->plg_type))
                         continue;
-                //check that inode is allowed
+                /* this will be checked inside plg_post_op()
                 if (!SMFS_IS(smi->smi_flags, plg->plg_type))
                         continue;
-                
+                */
                 if (plg->plg_post_op)
                         plg->plg_post_op(op, inode, msg, ret, plg->plg_private);
         }
@@ -602,4 +612,20 @@ int smfs_helper (struct super_block * sb, int op, void * msg)
         return rc;
 }
 
+void * smfs_get_plg_priv(struct smfs_super_info * smb, int type) 
+{
+        struct list_head *hlist = &smb->smsi_plg_list;
+        struct smfs_plugin *plg, *tmp;
+        
+        list_for_each_entry_safe(plg, tmp, hlist, plg_list) {
+                CERROR("found type %x, needed %x\n", plg->plg_type, type);
+                if (plg->plg_type == type) {
+                        return (plg->plg_private);
+                }
+        }
+        
+        EXIT;
+        
+        return NULL;
+}
 

@@ -61,6 +61,7 @@
 
 #include <linux/lustre_smfs.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_audit.h>
 #include "filter_internal.h"
 
 /* Group 0 is no longer a legal group, to catch uninitialized IDs */
@@ -2180,8 +2181,8 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *filter;
         struct ldlm_resource *res;
         struct dentry *dentry;
-        obd_uid uid;
-        obd_gid gid;
+        /*obd_uid uid;*/
+        /*obd_gid gid;*/
         int rc;
         ENTRY;
 
@@ -2800,6 +2801,56 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
+static int filter_set_info(struct obd_export *exp, __u32 keylen,
+                           void *key, __u32 vallen, void *val)
+{
+        struct obd_device *obd;
+        int rc = -EINVAL;
+        ENTRY;
+
+        obd = class_exp2obd(exp);
+        if (obd == NULL) {
+                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
+                       exp->exp_handle.h_cookie);
+                RETURN(-EINVAL);
+        }
+
+        if (keylen == 8 && memcmp(key, "auditlog", 8) == 0) {
+                                               
+                rc = fsfilt_set_info(obd, obd->u.filter.fo_sb, NULL,
+                                     8, "auditlog", vallen, val);
+                RETURN(rc);
+        } else if (keylen == 5 && strcmp(key, "audit") == 0) {
+                //set audit for whole FS on OSS
+                struct audit_attr_msg * msg = val;
+
+                rc = fsfilt_set_info(obd, obd->u.filter.fo_sb, NULL,
+                                     5, "audit", sizeof(msg->attr), &msg->attr);
+                RETURN(rc);
+        } else if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
+                struct obdo * oa = val;
+                struct dentry * dentry;
+                __u64 mask = oa->o_fid;
+                
+                dentry = filter_crow_object(obd, oa);
+                if (IS_ERR(dentry))
+                        RETURN(PTR_ERR(dentry));
+                
+                rc = fsfilt_set_info(obd, obd->u.filter.fo_sb, dentry->d_inode,
+                                     5, "audit", sizeof(mask), &mask);
+
+                f_dput(dentry);
+
+                RETURN(rc);
+        }
+
+
+        if (rc)
+                CDEBUG(D_IOCTL, "invalid key\n");
+        
+        RETURN(rc);
+}
+
 static int filter_get_info(struct obd_export *exp, __u32 keylen,
                            void *key, __u32 *vallen, void *val)
 {
@@ -2839,7 +2890,8 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 /*Get log_context handle*/
                 unsigned long *llh_handle = val;
                 *vallen = sizeof(unsigned long);
-                *llh_handle = (unsigned long)obd->obd_llog_ctxt[LLOG_REINT_ORIG_CTXT];
+                *llh_handle = (unsigned long)llog_get_context(&obd->obd_llogs,
+                                                       LLOG_REINT_ORIG_CTXT);
                 RETURN(0);
         }
         if (keylen >= strlen("cache_sb") && memcmp(key, "cache_sb", 8) == 0) {
@@ -3069,6 +3121,7 @@ static struct obd_ops filter_obd_ops = {
         .o_owner          = THIS_MODULE,
         .o_attach         = filter_attach,
         .o_detach         = filter_detach,
+        .o_set_info       = filter_set_info,
         .o_get_info       = filter_get_info,
         .o_setup          = filter_setup,
         .o_precleanup     = filter_precleanup,

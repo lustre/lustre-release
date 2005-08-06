@@ -421,14 +421,16 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLXATTRLIST (0x0000000200000000LL) /* user xattr list */
 #define OBD_MD_FLACL    (0x0000000400000000LL)    /* acl */
 #define OBD_MD_FLRMTACL (0x0000000800000000LL)    /* remote acl */
-#define OBD_MD_FLKEY        (0x0000001000000000LL)    /* mds key extended attributes */
+#define OBD_MD_FLKEY    (0x0000001000000000LL)    /* mds key extended attributes */
+#define OBD_MD_FLAUDIT  (0x0000002000000000LL)    /* audit setting */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
                            OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
                            OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
                            OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST |        \
-                           OBD_MD_FLACL | OBD_MD_FLKEY | OBD_MD_MDS))
+                           OBD_MD_FLACL | OBD_MD_FLKEY |                \
+                           OBD_MD_MDS | OBD_MD_FLAUDIT))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -561,6 +563,7 @@ typedef enum {
         MDS_SYNC         = 44,
         MDS_DONE_WRITING = 45,
         MDS_ACCESS_CHECK = 46,
+        MDS_PARSE_ID     = 47,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -652,6 +655,38 @@ struct mds_status_req {
         __u32  repbuf;
 };
 
+struct parseid_pkg {
+        __u32                   pp_type;
+        __u32                   pp_rc;
+        struct lustre_id        pp_id1;
+        struct lustre_id        pp_id2;
+        __u8                    pp_name[NAME_MAX + 1];
+};
+
+struct audit_msg {
+        struct lustre_id id;
+        __u64 nid;
+        __u32 result;
+        __u32 uid;
+        __u32 gid;
+        __u32 code;
+};
+
+struct audit_attr_msg {
+        struct lustre_id id;
+        __u64 attr;
+};
+#if 0
+extern void lustre_swab_lustre_id(struct lustre_id *id);
+extern void lustre_swab_lustre_stc(struct lustre_stc *stc);
+extern void lustre_swab_lustre_fid(struct lustre_fid *fid);
+extern void lustre_swab_parseid_pkg(struct parseid_pkg *pkg);
+extern void lustre_swab_mds_status_req (struct mds_status_req *r);
+#endif
+extern void lustre_swab_audit_msg (struct audit_msg *r);
+extern void lustre_swab_audit_attr (struct audit_attr_msg *r);
+extern void lustre_swab_parseid_pkg(struct parseid_pkg *pkg);
+
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
 #define MDS_BFLAG_CLOSE_EPOCH          0x2
 #define MDS_BFLAG_DIRTY_EPOCH          0x4
@@ -664,6 +699,7 @@ struct mds_body {
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u64          io_epoch;
         __u64          valid;
+        __u64          audit;
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -1034,6 +1070,8 @@ typedef enum {
         LLOG_LOGID_MAGIC = 0x1064553b,
         SMFS_UPDATE_REC  = 0x10650000,
         CACHE_LRU_REC    = 0x10660000,
+        SMFS_AUDIT_GEN_REC = 0x10670000,
+        SMFS_AUDIT_NAME_REC = 0x10680000,
 } llog_op_type;
 
 /* Log record header - stored in little endian order.

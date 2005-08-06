@@ -63,6 +63,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
+#include <linux/lustre_audit.h>
 #include <linux/lustre_gs.h>
 #include "osc_internal.h"
 
@@ -2546,31 +2547,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 }
         }
 
-        if (mode == LCK_PW) {
-                rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
-                                     policy, LCK_PR, lockh);
-                if (rc == 1) {
-                        rc = ldlm_cli_convert(lockh, mode, flags);
-                        if (!rc) {
-                                /* Update readers/writers accounting */
-                                ldlm_lock_addref(lockh, LCK_PW);
-                                ldlm_lock_decref(lockh, LCK_PR);
-                                osc_set_data_with_check(lockh, data);
-                                RETURN(ELDLM_OK);
-                        }
-                        /* If the conversion failed, we need to drop refcount
-                           on matched lock before we get new one */
-                        /* XXX Won't it save us some efforts if we cancel PR
-                           lock here? We are going to take PW lock anyway and it
-                           will invalidate PR lock */
-                        ldlm_lock_decref(lockh, LCK_PR);
-                        if (rc != EDEADLOCK) {
-                                RETURN(rc);
-                        }
-                }
-        }
-
- no_match:
+no_match:
         if (*flags & LDLM_FL_HAS_INTENT) {
                 int size[2] = {0, sizeof(struct ldlm_request)};
 
@@ -2905,6 +2882,19 @@ static int osc_get_info(struct obd_export *exp, __u32 keylen,
         out:
                 ptlrpc_req_finished(req);
                 RETURN(rc);
+        } else if (keylen >= strlen("client_nid") &&
+                   strcmp(key, "client_nid") == 0) {
+                struct ptlrpc_connection * conn;
+                ptl_nid_t * nid = val;
+                *vallen = sizeof(*nid);
+                
+                conn = class_exp2cliimp(exp)->imp_connection;
+                if (!conn) 
+                        RETURN(-ENOTCONN);
+                
+                nid = &conn->c_peer.peer_id.nid;
+                
+                RETURN(0);
         }
         RETURN(-EPROTO);
 }
@@ -2955,6 +2945,63 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 CDEBUG(D_HA, "%s: set async = %d\n",
                        obd->obd_name, cl->cl_async);
                 RETURN(0);
+        }
+        
+        if (keylen == 5 && strcmp(key, "audit") == 0) {
+                struct ptlrpc_request *req;
+                char *bufs[2] = {key, val};
+                int size[2] = {keylen, vallen};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, size);
+                lustre_swab_reqbuf(req, 1, sizeof(struct audit_attr_msg),
+                                   lustre_swab_audit_attr);
+                rc = ptlrpc_queue_wait(req);
+                           
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+        
+        if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
+                struct ptlrpc_request *req;
+                char *bufs[2] = {key, val};
+                int size[2] = {keylen, vallen};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, size);
+                lustre_swab_reqbuf(req, 1, sizeof(struct obdo),
+                                   lustre_swab_obdo);
+                rc = ptlrpc_queue_wait(req);
+                           
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+
+        if (keylen == 8 && memcmp(key, "auditlog", 8) == 0) {
+                struct ptlrpc_request *req;
+                char *bufs[2] = {key, val};
+                int size[2] = {keylen, vallen};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, size);
+                lustre_swab_reqbuf(req, 1, sizeof(struct audit_msg),
+                                   lustre_swab_audit_msg);
+                rc = ptlrpc_queue_wait(req);
+                           
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         }
 
         if (keylen == strlen("sec") &&

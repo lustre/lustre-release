@@ -49,6 +49,7 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd_lmv.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_audit.h>
 #include "lmv_internal.h"
 
 /* not defined for liblustre building */
@@ -2001,7 +2002,51 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
 
                 RETURN(rc);
         }
-
+        if (keylen == 5 && strcmp(key, "audit") == 0) {
+                struct audit_attr_msg * msg = val;
+                int mds = id_group(&msg->id);
+                int i, rc = 0;
+                LASSERT(mds < lmv->desc.ld_tgt_count);
+                
+                if (IS_AUDIT_OP(msg->attr, AUDIT_FS)) {
+                        //FS audit, send message to all mds
+                        for (i = 0; i < lmv->desc.ld_tgt_count;i++) {
+                                obd_set_info(lmv->tgts[i].ltd_exp, 
+                                                  keylen, key, vallen, val);
+                        }
+                }
+                else if (IS_AUDIT_OP(msg->attr, AUDIT_DIR)) {
+                        //audit for dir.
+                        //if dir is splitted, send RPC to all mds involved
+                        struct lmv_obj *obj;
+                        struct lustre_id rid;
+                        int i;
+                        
+                        obj = lmv_grab_obj(obd, &msg->id);
+                        if (obj) {
+                                lmv_lock_obj(obj);
+                                for (i = 0; i < obj->objcount; i++) {
+                                        rid = obj->objs[i].id;
+                                        mds = id_group(&rid);
+                                        obd_set_info(lmv->tgts[mds].ltd_exp,
+                                                          keylen, key,
+                                                          vallen, val);
+                                }
+                                lmv_unlock_obj(obj);
+                                lmv_put_obj(obj);
+                        }
+                        else {
+                                rc = obd_set_info(lmv->tgts[mds].ltd_exp,
+                                                 keylen, key, vallen, val);
+                        }
+                }
+                else {
+                        //set audit for file
+                        rc = obd_set_info(lmv->tgts[mds].ltd_exp,
+                                          keylen, key, vallen, val);                        
+                }
+                RETURN(rc);
+        }
         if (((keylen == strlen("flush_cred") &&
              strcmp(key, "flush_cred") == 0)) || 
              ((keylen == strlen("crypto_type") &&

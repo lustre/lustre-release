@@ -440,7 +440,6 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         struct inode *inode;
         struct dentry *dentry;
         struct mds_obd *mds = &obd->u.mds;
-        __u64 fid;
         ENTRY;
 
         /* getting root directory and setup its fid. */
@@ -479,14 +478,10 @@ int mds_fs_setup_rootid(struct obd_device *obd)
                 GOTO(out_dentry, rc);
         }
         
-        fid = mds_alloc_fid(obd);
-        down(&inode->i_sem);
-        rc = mds_set_inode_sid(obd, inode, handle, &mds->mds_rootid, fid);
-        up(&inode->i_sem);
-        
+        mds_inode2id(obd, &mds->mds_rootid, inode, mds_alloc_fid(obd));
+        rc = mds_update_inode_ids(obd, inode, handle, &mds->mds_rootid, NULL);
         if (rc) {
-                CERROR("mds_set_inode_sid() failed, rc = %d\n",
-                       rc);
+                CERROR("mds_update_inode_ids() failed, rc = %d\n", rc);
                 GOTO(out_dentry, rc);
         }
 
@@ -585,13 +580,10 @@ int mds_fs_setup_virtid(struct obd_device *obd)
         id_gen(&sid) = inode->i_generation;
         id_type(&sid) = (S_IFMT & inode->i_mode);
 
-        down(&inode->i_sem);
-        rc = mds_update_inode_sid(obd, inode, handle, &sid);
-        up(&inode->i_sem);
+        rc = mds_update_inode_ids(obd, inode, handle, &sid, NULL);
 
         if (rc) {
-                CERROR("mds_update_inode_sid() failed, rc = %d\n",
-                       rc);
+                CERROR("mds_update_inode_ids() failed, rc = %d\n", rc);
                 RETURN(rc);
         }
 
@@ -692,7 +684,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create UNNAMED directory: rc = %d\n", rc);
-                GOTO(err_unnamed, rc);
+                GOTO(err_id_dir, rc);
         }
         mds->mds_unnamed_dir = dentry;
 
@@ -701,7 +693,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("cannot open/create %s file: rc = %d\n", LAST_RCVD, rc);
-                GOTO(err_id_dir, rc = PTR_ERR(file));
+                GOTO(err_unnamed, rc = PTR_ERR(file));
         }
         mds->mds_rcvd_filp = file;
         

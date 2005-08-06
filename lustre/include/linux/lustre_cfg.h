@@ -45,6 +45,7 @@ enum lcfg_command_type {
         LCFG_ADD_CONN       = 0x00cf00d,
         LCFG_DEL_CONN       = 0x00cf00e,
         LCFG_SET_SECURITY   = 0x00cf00f,
+        LCFG_SET_AUDIT      = 0x00cf010,
 };
 
 struct lustre_cfg_bufs {

@@ -80,16 +80,12 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 int mea_name2idx(struct mea *mea, char *name, int namelen)
 {
         unsigned int c;
-
-	/* just to simplify caller code */
-       	if (mea == NULL)
-		return 0;
-
-        if (mea->mea_count == 0)
-                return 0;
+        
+        LASSERT(mea && mea->mea_count);
 
 	c = raw_name2idx(mea->mea_magic, mea->mea_count, name, namelen);
-	LASSERT(c < mea->mea_count);
+
+        LASSERT(c < mea->mea_count);
         return c;
 }
 

@@ -561,7 +561,7 @@ exit:
 
 static int kml_setattr(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_setattr_msg *msg = arg;
+        struct hook_attr_msg *msg = arg;
         int rc = 0, length = 0;
         char *buffer = NULL;
         ENTRY;
@@ -597,7 +597,7 @@ exit:
 
 static int kml_setxattr(struct inode *inode, void *arg, struct kml_priv *priv) 
 {
-        struct hook_setxattr_msg *msg = arg;
+        struct hook_xattr_msg *msg = arg;
         struct kml_buffer kbuf;
         int rc = 0, length = 0;
         char *buffer = NULL;
@@ -610,7 +610,7 @@ static int kml_setxattr(struct inode *inode, void *arg, struct kml_priv *priv)
         kbuf.buf = msg->buffer;
         kbuf.buf_size = msg->buffer_size;
 
-        rc = priv->pack_fn(REINT_SETXATTR, buffer, NULL, msg->inode, msg->name, 
+        rc = priv->pack_fn(REINT_SETXATTR, buffer, NULL, inode, msg->name, 
                            &kbuf);
         if (rc <= 0) 
                 GOTO(exit, rc);
@@ -720,17 +720,21 @@ static post_kml_op smfs_kml_post[HOOK_MAX] = {
         [HOOK_F_SETXATTR] kml_setxattr,
 };
 
-static int smfs_kml_post_op(int code, struct inode * inode,
+static int smfs_kml_post_op(hook_op code, struct inode * inode,
                             void * msg, int ret, void * priv)
 {
         int rc = 0;
         
         ENTRY;
-                
+        
+        //check if inode has flag for KML               
+        if (!SMFS_IS(I2SMI(inode)->smi_flags, SMFS_PLG_KML))
+                RETURN(0);
+ 
         //KML don't handle failed ops
         if (ret)
                 RETURN(0);
-        
+
         if (smfs_kml_post[code]) {
                 CDEBUG(D_INODE,"KML: inode %lu, code: %u\n", inode->i_ino, code);
                 rc = smfs_kml_post[code](inode, msg, priv);
@@ -740,24 +744,6 @@ static int smfs_kml_post_op(int code, struct inode * inode,
 }
 
 /* Helpers */
-static int smfs_exit_kml(struct super_block *sb, void * arg, struct kml_priv * priv)
-{
-        struct smfs_plugin * plg = NULL;
-        ENTRY;
-
-        plg = smfs_deregister_plugin(sb, SMFS_PLG_KML);
-        if (plg)
-                OBD_FREE(plg, sizeof(*plg));
-        else
-                CERROR("Cannot find KLM plugin while unregistering\n");
-        
-        if (priv)
-                OBD_FREE(priv, sizeof(*priv));
-        
-        EXIT;
-        return 0;
-}
-
 static int smfs_trans_kml (struct super_block *sb, void *arg,
                            struct kml_priv * priv)
 {
@@ -803,7 +789,13 @@ static int smfs_start_kml(struct super_block *sb, void *arg,
                 RETURN(rc);
         }
         
-        (*ctxt)->llog_proc_cb = NULL;//smfs_llog_process_rec_cb;
+        /* connect KML ctxt to obd */
+        if (obd && smb->smsi_kml_log) {
+                smb->smsi_kml_log->loc_idx = LLOG_REINT_ORIG_CTXT;
+                smb->smsi_kml_log->loc_obd = obd;
+                smb->smsi_kml_log->loc_llogs = &obd->obd_llogs;
+                obd->obd_llogs.llog_ctxt[LLOG_REINT_ORIG_CTXT] = smb->smsi_kml_log;
+        }
 
         SMFS_SET(smb->plg_flags, SMFS_PLG_KML);
 
@@ -815,6 +807,7 @@ int smfs_stop_kml(struct super_block *sb, void *arg,
 {
         struct smfs_super_info * smb = S2SMI(sb);
         struct llog_ctxt *ctxt = smb->smsi_kml_log;
+        struct obd_device * obd = ctxt->loc_obd;
         ENTRY;
 
         if (!SMFS_IS(smb->plg_flags, SMFS_PLG_KML))
@@ -823,6 +816,7 @@ int smfs_stop_kml(struct super_block *sb, void *arg,
         SMFS_CLEAR(smb->plg_flags, SMFS_PLG_KML);
 
         llog_catalog_cleanup(ctxt);
+        obd->obd_llogs.llog_ctxt[LLOG_REINT_ORIG_CTXT] = NULL;
         OBD_FREE(ctxt, sizeof(*ctxt));
         
         RETURN(0);
@@ -830,7 +824,6 @@ int smfs_stop_kml(struct super_block *sb, void *arg,
 
 typedef int (*kml_helper)(struct super_block * sb, void *msg, struct kml_priv *);
 static kml_helper smfs_kml_helpers[PLG_HELPER_MAX] = {
-        [PLG_EXIT]       smfs_exit_kml,
         [PLG_START]      smfs_start_kml,
         [PLG_STOP]       smfs_stop_kml,
         [PLG_TRANS_SIZE] smfs_trans_kml,
@@ -848,6 +841,25 @@ static int smfs_kml_help_op(int code, struct super_block * sb,
         return rc;
 }
 
+static int smfs_exit_kml(struct super_block *sb, void * arg)
+{
+        struct smfs_plugin * plg = NULL;
+        struct kml_priv * priv = arg;
+        ENTRY;
+
+        plg = smfs_deregister_plugin(sb, SMFS_PLG_KML);
+        if (plg)
+                OBD_FREE(plg, sizeof(*plg));
+        else
+                CERROR("Cannot find KLM plugin while unregistering\n");
+        
+        if (priv)
+                OBD_FREE(priv, sizeof(*priv));
+        
+        EXIT;
+        return 0;
+}
+
 int smfs_init_kml(struct super_block *sb)
 {
         int rc = 0;
@@ -863,8 +875,9 @@ int smfs_init_kml(struct super_block *sb)
         
         plg->plg_type = SMFS_PLG_KML;
         plg->plg_pre_op = NULL;
-        plg->plg_post_op = &smfs_kml_post_op;
-        plg->plg_helper = &smfs_kml_help_op;
+        plg->plg_post_op = smfs_kml_post_op;
+        plg->plg_helper = smfs_kml_help_op;
+        plg->plg_exit = smfs_exit_kml;
                 
         OBD_ALLOC(priv, sizeof(*priv));
         if (!priv) {

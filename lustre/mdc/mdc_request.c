@@ -935,6 +935,39 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 CDEBUG(D_HA, "%s: set async = %d\n",
                        exp->exp_obd->obd_name, cl->cl_async);
                 RETURN(0);
+        } else if (keylen == 5 && strcmp(key, "audit") == 0) {
+                struct ptlrpc_request *req;
+                char *bufs[2] = {key, val};
+                int rc, size[2] = {keylen, vallen};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                lustre_swab_reqbuf(req, 1, sizeof(struct audit_attr_msg),
+                                   lustre_swab_audit_attr);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+
+                RETURN(rc);
+        } else if (keylen == strlen("ids") && memcmp(key, "ids", keylen) == 0) {
+                struct ptlrpc_request *req;
+                struct lustre_id *ids = (struct lustre_id *)val;
+                char *bufs[3] = {key, (char *)ids, (char *)(ids + 1)};
+                int rc, size[3] = {keylen, sizeof(struct lustre_id), 
+                                   sizeof(struct lustre_id)};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 3, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         }
         RETURN(rc);
 }
@@ -1317,7 +1350,8 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
 
         if ((keylen < strlen("mdsize") || strcmp(key, "mdsize") != 0) &&
             (keylen < strlen("mdsnum") || strcmp(key, "mdsnum") != 0) &&
-            (keylen < strlen("rootid") || strcmp(key, "rootid") != 0))
+            (keylen < strlen("rootid") || strcmp(key, "rootid") != 0) &&
+            (keylen < strlen("auditid") || strcmp(key, "auditid") != 0))
                 RETURN(-EPROTO);
                 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
@@ -1330,7 +1364,8 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
         if (rc)
                 GOTO(out_req, rc);
 
-        if (keylen >= strlen("rootid") && !strcmp(key, "rootid")) {
+        if ((keylen >= strlen("rootid") && !strcmp(key, "rootid")) ||
+            (keylen >= strlen("auditid") && !strcmp(key, "auditid"))) {
                 struct lustre_id *reply;
                 
                 reply = lustre_swab_repbuf(req, 0, sizeof(*reply),

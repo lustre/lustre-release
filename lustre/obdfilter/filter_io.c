@@ -883,16 +883,29 @@ cleanup:
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     int objcount, struct obd_ioobj *obj, int niocount,
-                    struct niobuf_local *res, struct obd_trans_info *oti,int rc)
+                    struct niobuf_local *res, struct obd_trans_info *oti,int ret)
 {
-        if (cmd == OBD_BRW_WRITE)
-                return filter_commitrw_write(exp, oa, objcount, obj, niocount,
-                                             res, oti, rc);
-        if (cmd == OBD_BRW_READ)
-                return filter_commitrw_read(exp, oa, objcount, obj, niocount,
-                                            res, oti, rc);
-        LBUG();
-        return -EPROTO;
+        int rc = -EPROTO;
+        struct lustre_id *id = obdo_id(oa);
+        __u32 len = sizeof(*id);
+        struct inode * inode = res->dentry->d_inode;
+        struct super_block * sb = res->dentry->d_sb;
+        struct obd_device *obd = class_exp2obd(exp);
+        
+        if (cmd == OBD_BRW_WRITE) {
+                rc = filter_commitrw_write(exp, oa, objcount, obj, niocount,
+                                           res, oti, ret);
+                fsfilt_set_info(obd, sb, inode, 10, "file_write", len, (void*)id);
+        }
+        else if (cmd == OBD_BRW_READ) {
+                rc = filter_commitrw_read(exp, oa, objcount, obj, niocount,
+                                          res, oti, ret);
+                fsfilt_set_info(obd, sb, inode, 9, "file_read", len, (void*)id);
+        }
+        else
+                LBUG();
+
+        return rc;
 }
 
 int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,

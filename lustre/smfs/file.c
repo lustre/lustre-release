@@ -392,9 +392,9 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
         struct dentry *cache_dentry;
         void  *handle = NULL;
         int rc = 0;
-        struct hook_setattr_msg msg = {
+        struct hook_attr_msg msg = {
                 .dentry = dentry,
-                .attr = attr
+                .attr = attr,
         };
 
         ENTRY;
@@ -432,6 +432,9 @@ int smfs_setxattr(struct dentry *dentry, const char *name, const void *value,
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry = NULL;
+        struct hook_xattr_msg msg = {
+                .name = (char*)name,
+        };
         int rc = 0;
 
         ENTRY;
@@ -444,9 +447,12 @@ int smfs_setxattr(struct dentry *dentry, const char *name, const void *value,
                 RETURN(-ENOMEM);
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_SETXATTR, &msg); 
 
         rc = cache_inode->i_op->setxattr(cache_dentry, name, value,
                                          size, flags);
+        
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_SETXATTR, &msg, rc);
 
         post_smfs_inode(dentry->d_inode, cache_inode);
         post_smfs_dentry(cache_dentry);
@@ -459,6 +465,9 @@ int smfs_getxattr(struct dentry *dentry, const char *name, void *buffer,
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
+        struct hook_xattr_msg msg = {
+                .name = (char*)name,
+        };
         int rc = 0;
 
         ENTRY;
@@ -471,10 +480,10 @@ int smfs_getxattr(struct dentry *dentry, const char *name, void *buffer,
                 RETURN(-ENOMEM);
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
-
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_GETXATTR, &msg);
         rc = cache_inode->i_op->getxattr(cache_dentry, name, buffer,
                                          size);
-
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_GETXATTR, &msg, rc);
         post_smfs_inode(dentry->d_inode, cache_inode);
         post_smfs_dentry(cache_dentry);
 
@@ -486,7 +495,10 @@ ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size)
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
         int rc = 0;
-
+        struct hook_xattr_msg msg = {
+                .name = NULL,
+        };
+        
         ENTRY;
         
         LASSERT(cache_inode);
@@ -497,9 +509,11 @@ ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 RETURN(-ENOMEM);
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_LISTXATTR, &msg);
 
         rc = cache_inode->i_op->listxattr(cache_dentry, buffer, size);
 
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_LISTXATTR, &msg, rc);
         post_smfs_inode(dentry->d_inode, cache_inode);
         post_smfs_dentry(cache_dentry);
 
@@ -511,7 +525,9 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;
         int rc = 0;
-
+        struct hook_xattr_msg msg = {
+                .name = (char*)name,
+        };
         ENTRY;
         
         LASSERT(cache_inode);
@@ -522,9 +538,11 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
                 RETURN(-ENOMEM);
 
         pre_smfs_inode(dentry->d_inode, cache_inode);
+        SMFS_PRE_HOOK(dentry->d_inode, HOOK_REMOVEXATTR, &msg);
 
         rc = cache_inode->i_op->removexattr(cache_dentry, name);
 
+        SMFS_POST_HOOK(dentry->d_inode, HOOK_REMOVEXATTR, &msg, rc);
         post_smfs_inode(dentry->d_inode, cache_inode);
         post_smfs_dentry(cache_dentry);
 

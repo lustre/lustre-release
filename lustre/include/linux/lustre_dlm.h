@@ -106,7 +106,7 @@ typedef enum {
 #define LDLM_FL_CLEANED        0x800000
 
 /* optimization hint: LDLM can run blocking callback from current context
- * w/o involving separate thread. in order to decrease cs rate */
+ * w/o involving separate thread. in order to decrease cs rate -bzzz */
 #define LDLM_FL_ATOMIC_CB      0x1000000
 
 /* while this flag is set, the lock can't change resource */

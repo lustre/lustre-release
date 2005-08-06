@@ -51,6 +51,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_sec.h>
+#include <linux/lustre_audit.h>
 #include <linux/lustre_acl.h>
 #include "llite_internal.h"
 
@@ -906,6 +907,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_FLUSH_CRED:
                 RETURN(ll_flush_cred(inode));
+        case LL_IOC_AUDIT:
+                RETURN(ll_set_audit(inode, SET_AUDIT_OP(arg, AUDIT_DIR)));
         default:
                 return obd_iocontrol(cmd, sbi->ll_dt_exp, 0,
                                      NULL, (void *)arg);

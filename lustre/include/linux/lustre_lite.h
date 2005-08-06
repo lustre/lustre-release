@@ -85,6 +85,7 @@ struct ll_inode_info {
         struct semaphore        lli_size_sem;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
+        __u64                   lli_audit_mask;
         unsigned long           lli_flags;
 
         /* this lock protects s_d_w and p_w_ll */

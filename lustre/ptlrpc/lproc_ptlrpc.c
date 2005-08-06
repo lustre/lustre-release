@@ -65,6 +65,7 @@ struct ll_rpc_opcode {
         { MDS_SYNC,         "mds_sync" },
         { MDS_DONE_WRITING, "mds_done_writing" },
         { MDS_ACCESS_CHECK, "mds_access_check"},
+        { MDS_PARSE_ID,     "mds_parse_id" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },

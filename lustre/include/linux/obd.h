@@ -625,6 +625,7 @@ enum llog_ctxt_id {
         LLOG_TEST_ORIG_CTXT   = 10,
         LLOG_TEST_REPL_CTXT   = 11,
         LLOG_REINT_ORIG_CTXT  = 12,
+        LLOG_AUDIT_ORIG_CTXT  = 13,
         LLOG_MAX_CTXTS
 };
 

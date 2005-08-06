@@ -68,6 +68,8 @@ do{                                                 \
         buffer += sizeof(opcode);                   \
 } while (0)
 
+#define SMFS_IOPEN_INO  1
+#define KEY_IS(str, key) (strcmp(str,key) == 0)
 
 extern int init_smfs_proc_sys(void);
 /*cache.c*/
@@ -84,6 +86,7 @@ void smfs_put_super(struct super_block *sb);
 int smfs_fill_super(struct super_block *sb, void *data, int silent);
 int smfs_post_setup(struct obd_device *, struct vfsmount *, struct dentry *);
 void smfs_post_cleanup(struct super_block *);
+void * smfs_get_plg_priv(struct smfs_super_info *, int);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;
@@ -153,13 +156,18 @@ int mds_rec_pack_init(struct smfs_super_info *smb);
 int ost_rec_pack_init(struct smfs_super_info *smb);
 
 /*smfs_llog.c*/
-extern int smfs_llog_setup(struct smfs_super_info *);
+extern int smfs_llog_setup(struct dentry **, struct dentry **);
 extern int smfs_llog_cleanup(struct smfs_super_info *);
 extern int smfs_llog_add_rec(struct smfs_super_info *, void *, int);
 /*ioctl.c*/
 extern int init_smfs_psdev(void);
 extern void smfs_cleanup_psdev(void);
 /*smfs_cow.c */
+
+/* audit_transfer.c */
+int audit_notify(struct llog_handle *llh, void*);
+int audit_start_transferd(void);
+int audit_stop_transferd(void);
 
 /* cache_space.c */
 extern int do_cache_manage;
