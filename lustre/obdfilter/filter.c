@@ -1370,7 +1370,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         if (l->l_glimpse_ast == NULL) {
                 /* We are racing with unlink(); just return -ENOENT */
                 CDEBUG(D_ERROR, "race with unlink: "LPX64"/"LPX64"\n",
-                       res->lr_name.name[0], res->lr_name.name[1]);
+                       res->lr_name.name[0], res->lr_name.name[2]);
                 rep->lock_policy_res1 = -ENOENT;
                 goto out;
         }
