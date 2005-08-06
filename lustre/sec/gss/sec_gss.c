@@ -451,9 +451,7 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
 static void
 gss_unhash_msg_nolock(struct gss_upcall_msg *gmsg)
 {
-#if defined(CONFIG_SMP)
-        LASSERT(spin_is_locked(&gmsg->gum_gsec->gs_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&gmsg->gum_gsec->gs_lock);
 
         if (list_empty(&gmsg->gum_list))
                 return;
@@ -482,9 +480,7 @@ struct gss_upcall_msg * gss_find_upcall(struct gss_sec *gsec,
         struct gss_upcall_msg *gmsg;
         ENTRY;
 
-#if defined(CONFIG_SMP)
-        LASSERT(spin_is_locked(&gsec->gs_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&gsec->gs_lock);
 
         list_for_each_entry(gmsg, &gsec->gs_upcalls, gum_list) {
                 if (memcmp(&gmsg->gum_data, gmd, sizeof(*gmd)))

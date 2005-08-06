@@ -2024,8 +2024,9 @@ int ll_listxattr(struct dentry *dentry, char *list, size_t size)
 }
 
 /*
- * XXX We could choose not to check DLM lock. Leave the decision
- * to remote acl handling.
+ * Here we hold DLM lock across permission check, to get better
+ * conformance especially for remote acl. will introduce certain
+ * overhead, maybe need a profile.
  */
 static int
 lustre_check_acl(struct inode *inode, int mask)
@@ -2086,6 +2087,14 @@ out:
 
 int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+
+        /* for remote client, permission bits in inode doesn't
+         * play a role anymore.
+         */
+        if (sbi->ll_remote)
+                return lustre_check_acl(inode, mask);
+
         return generic_permission(inode, mask, lustre_check_acl);
 }
 

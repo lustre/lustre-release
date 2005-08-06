@@ -221,14 +221,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         truncate_inode_pages(inode->i_mapping, 0);
                 }
 
-                /* we can't invalide acl here: suppose we touch a new file
-                 * under a dir, blocking ast on dir will lead to open failure
-                 * on client, although succeed on mds. it's kind of weird,
-                 * the real fix i think is improve client-vfs interaction.
-                 */
-#if 0
                 ll_inode_invalidate_acl(inode);
-#endif
 
                 if (inode->i_sb->s_root &&
                     inode != inode->i_sb->s_root->d_inode &&

@@ -1892,6 +1892,15 @@ void ll_inode_invalidate_acl(struct inode *inode)
                         up(&racl->ra_update_sem);
                 }
         } else {
+                /* we can't invalide acl here: suppose we touch a new file
+                 * under a dir, blocking ast on dir will lead to open failure
+                 * on client, although succeed on mds. it's kind of weird,
+                 * the real fix i think is improve client-vfs interaction.
+                 *
+                 * currently we just do nothing here.
+                 */
+                return;
+
                 LASSERT(!lli->lli_remote_acl);
                 spin_lock(&lli->lli_lock);
                 posix_acl_release(lli->lli_posix_acl);

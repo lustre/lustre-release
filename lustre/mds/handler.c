@@ -2860,16 +2860,21 @@ static int mdt_set_info(struct ptlrpc_request *req)
 static void mds_revoke_export_locks(struct obd_export *exp)
 {
         struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
-        struct list_head work;
+        struct list_head  rpc_list;
         struct ldlm_lock *lock, *next;
         struct ldlm_lock_desc desc;
 
+        /* don't do this for local client */
         if (!exp->u.eu_mds_data.med_remote)
                 return;
 
+        /* don't revoke locks during recovery */
+        if (exp->exp_obd->obd_recovering)
+                return;
+
         ENTRY;
-        CERROR("implement right locking here! -bzzz\n");
-        INIT_LIST_HEAD(&work);
+        INIT_LIST_HEAD(&rpc_list);
+
         spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each_entry_safe(lock, next, locklist, l_export_chain) {
 
@@ -2891,8 +2896,20 @@ static void mds_revoke_export_locks(struct obd_export *exp)
                         continue;
                 }
 
+                LASSERT(lock->l_blocking_ast);
+                LASSERT(!lock->l_blocking_lock);
+
                 lock->l_flags |= LDLM_FL_AST_SENT;
                 unlock_res_and_lock(lock);
+
+                list_move(&lock->l_export_chain, &rpc_list);
+        }
+        spin_unlock(&exp->exp_ldlm_data.led_lock);
+
+        while (!list_empty(&rpc_list)) {
+                lock = list_entry(rpc_list.next, struct ldlm_lock,
+                                  l_export_chain);
+                list_del_init(&lock->l_export_chain);
 
                 /* the desc just pretend to exclusive */
                 ldlm_lock2desc(lock, &desc);
@@ -2901,8 +2918,6 @@ static void mds_revoke_export_locks(struct obd_export *exp)
 
                 lock->l_blocking_ast(lock, &desc, NULL, LDLM_CB_BLOCKING);
         }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
-
         EXIT;
 }
 
