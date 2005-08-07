@@ -1648,8 +1648,8 @@ out:
         if (!obd->obd_recovering && mds_inode_has_old_attrs(inode)
                         && !mds_inode_is_orphan(inode)
                         && atomic_read(&inode->i_writecount) == 0) {
-                CERROR("leave inode %lu/%u with old attributes\n",
-                       inode->i_ino, inode->i_generation);
+                CERROR("leave inode %lu/%u with old attributes (nlink = %d)\n",
+                       inode->i_ino, inode->i_generation, inode->i_nlink);
         }
         l_dput(mfd->mfd_dentry);
         mds_mfd_destroy(mfd);
