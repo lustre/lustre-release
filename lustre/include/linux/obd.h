@@ -343,6 +343,7 @@ struct mds_obd {
         struct ptlrpc_service           *mds_service;
         struct ptlrpc_service           *mds_setattr_service;
         struct ptlrpc_service           *mds_readpage_service;
+        struct ptlrpc_service           *mds_close_service;
         struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
         struct dentry                   *mds_id_de;
@@ -453,6 +454,7 @@ struct ost_obd {
         spinlock_t             ost_lock;
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
+        struct ptlrpc_service *ost_destroy_service;
         struct obd_service_time ost_stimes[6];
 };
 

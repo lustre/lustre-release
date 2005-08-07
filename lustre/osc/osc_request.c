@@ -498,6 +498,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                                   OST_DESTROY, 1, &size, NULL);
         if (!request)
                 RETURN(-ENOMEM);
+        request->rq_request_portal = OST_DESTROY_PORTAL;
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*body));
 

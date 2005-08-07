@@ -120,6 +120,8 @@
 #define MGMT_CLI_REPLY_PORTAL          27
 #define GKS_REQUEST_PORTAL             28
 #define GKC_REPLY_PORTAL               29
+#define MDS_CLOSE_PORTAL               30
+#define OST_DESTROY_PORTAL             31
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2

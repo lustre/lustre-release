@@ -658,6 +658,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                               MDS_CLOSE, 3, reqsize, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
+        req->rq_request_portal = MDS_CLOSE_PORTAL;
 
         //reqsize[0] = lustre_secdesc_size();
         //lustre_pack_secdesc(req, reqsize[0]);

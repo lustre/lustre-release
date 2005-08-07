@@ -4472,8 +4472,26 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread3, rc);
 
+        mds->mds_close_service =
+                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
+                                MDS_CLOSE_PORTAL, MDC_REPLY_PORTAL,
+                                MDS_SERVICE_WATCHDOG_TIMEOUT,
+                                mds_handle, "mds_close",
+                                obd->obd_proc_entry);
+        if (!mds->mds_close_service) {
+                CERROR("failed to start close service\n");
+                GOTO(err_thread3, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_n_threads(obd, mds->mds_close_service,
+                                    MDT_NUM_THREADS, "ll_mdt_clos");
+
+        if (rc)
+                GOTO(err_thread4, rc);
         RETURN(0);
 
+err_thread4:
+        ptlrpc_unregister_service(mds->mds_close_service);
 err_thread3:
         ptlrpc_unregister_service(mds->mds_readpage_service);
 err_thread2:
@@ -4487,6 +4505,9 @@ static int mdt_cleanup(struct obd_device *obd, int flags)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
+
+        ptlrpc_stop_all_threads(mds->mds_close_service);
+        ptlrpc_unregister_service(mds->mds_close_service);
 
         ptlrpc_stop_all_threads(mds->mds_readpage_service);
         ptlrpc_unregister_service(mds->mds_readpage_service);

@@ -1319,8 +1319,25 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
+        ost->ost_destroy_service =
+                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
+                                OST_DESTROY_PORTAL, OSC_REPLY_PORTAL, 30000,
+                                ost_handle, "ost_destroy",
+                                obd->obd_proc_entry);
+        if (ost->ost_destroy_service == NULL) {
+                CERROR("failed to start service\n");
+                GOTO(out_create, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_n_threads(obd, ost->ost_destroy_service,
+                                    OST_NUM_THREADS, "ll_dstr_ost");
+        if (rc)
+                GOTO(out_destroy, rc = -EINVAL);
+
         RETURN(0);
 
+out_destroy:
+        ptlrpc_unregister_service(ost->ost_destroy_service);
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
 out_service:
@@ -1347,6 +1364,9 @@ static int ost_cleanup(struct obd_device *obd, int flags)
 
         ptlrpc_stop_all_threads(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_create_service);
+
+        ptlrpc_stop_all_threads(ost->ost_destroy_service);
+        ptlrpc_unregister_service(ost->ost_destroy_service);
 
 #ifdef ENABLE_GSS
         /* XXX */
