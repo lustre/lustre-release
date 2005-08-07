@@ -643,7 +643,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         struct obdo *oa = NULL;
 	int rc, mea_size = 0;
         struct lustre_id id;
-	void *handle;
+        void *handle;
 	ENTRY;
 
         if (update_mode != LCK_EX)
@@ -706,9 +706,8 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
          */
 	oa->o_id = dir->i_ino;
 
-        down(&dir->i_sem);
+        /* get parent id: ldlm lock on the parent protects ea */
         rc = mds_read_inode_sid(obd, dir, &id);
-        up(&dir->i_sem);
         if (rc) {
                 CERROR("Can't read inode self id, inode %lu, "
                        "rc %d.\n", dir->i_ino, rc);

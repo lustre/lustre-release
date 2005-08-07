@@ -1024,14 +1024,6 @@ restart:
 
         cleanup_phase = 1; /* parent dentry and lock */
 
-        /* get parent id: ldlm lock on the parent protects ea */
-        rc = mds_read_inode_sid(obd, dparent->d_inode, &sid);
-        if (rc) {
-                CERROR("can't read parent inode id. ino(%lu) rc(%d)\n",
-                       dparent->d_inode->i_ino, rc);
-                GOTO(cleanup, rc);
-        }
-
         /* try to retrieve MEA data for this dir */
         rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
@@ -1135,6 +1127,14 @@ got_child:
                 struct iattr iattr;
                 struct inode *inode;
                 
+                /* get parent id: ldlm lock on the parent protects ea */
+                rc = mds_read_inode_sid(obd, dparent->d_inode, &sid);
+                if (rc) {
+                        CERROR("can't read parent inode id. ino(%lu) rc(%d)\n",
+                                dparent->d_inode->i_ino, rc);
+                        GOTO(cleanup, rc);
+                }
+
                 ino = (unsigned long)id_ino(rec->ur_id2);
                 
                 rc = mds_try_to_split_dir(obd, dparent, &mea, 0,
