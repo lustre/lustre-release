@@ -1647,7 +1647,8 @@ out:
                 rc = 0;
         if (!obd->obd_recovering && mds_inode_has_old_attrs(inode)
                         && !mds_inode_is_orphan(inode)
-                        && atomic_read(&inode->i_writecount) == 0) {
+                        && atomic_read(&inode->i_writecount) == 0
+                        && inode->i_nlink != 0) {
                 CERROR("leave inode %lu/%u with old attributes (nlink = %d)\n",
                        inode->i_ino, inode->i_generation, inode->i_nlink);
         }
@@ -1780,7 +1781,12 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
                          LCK_PR, &flags, mds_extent_lock_callback,
                          ldlm_completion_ast, NULL, NULL,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
-        if (rc != 0) {
+        if (rc == -ENOENT) {
+                /* while we were enqueueing lock on OST, another thread
+                 * unlinked the file and started OST object destoying.
+                 * it's safe to return 0 here */
+                GOTO(cleanup, rc = 0);
+        } else if (rc != 0) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 GOTO(cleanup, rc);
         }
