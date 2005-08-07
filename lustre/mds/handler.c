@@ -2577,7 +2577,8 @@ repeat:
                 
                 mds_inode2id(obd, &id, new->d_inode, fid);
                 mds_update_inode_ids(obd, new->d_inode, handle, &id, 
-                                     obdo_id(&body->oa));
+                                     body->oa.o_valid & OBD_MD_FLID ?
+                                     NULL : obdo_id(&body->oa));
 
                 /* initializing o_fid after it is allocated. */
                 repbody->oa.o_fid = id_fid(&id);
