@@ -381,13 +381,13 @@ mds_name
 \layout Description
 
 --stripe_sz\SpecialChar ~
-<size> Specify the stripe size in bytes.
+<size> Specify the stripe size in bytes.  This much data is written to each
+ stripe before starting to write in the next stripe.  Default is 1048576.
 \layout Description
 
 --stripe_cnt\SpecialChar ~
-<count> A value of 0 for this means to stripe on all available
- OSTs.
- Default is 0.
+<count> A value of 0 for this means to use the currently optimal number
+ of stripes.  Default is 1 stripe per file.
 \layout Description
 
 --stripe_pattern\SpecialChar ~

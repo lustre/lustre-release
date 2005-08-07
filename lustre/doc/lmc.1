@@ -140,10 +140,10 @@ Common name for the LOV
 Common name for the MDS
 .TP
 --stripe_sz <size>
-Stripe size
+Specify the stripe size in bytes.  This much data is written to each stripe before starting to write in the next stripe.  Default is 1048576.
 .TP
 --stripe_cnt <count> 
-A value of 0 for this means to stripe on all available OSTs. Default is 0.
+A value of 0 for this means to use the currently optimal number of stripes.  Default is 1 stripe per file.
 .TP
 --stripe_pattern <pattern> 
 Only Pattern 0 (RAID 0) is supported currently.
