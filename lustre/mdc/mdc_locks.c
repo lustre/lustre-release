@@ -143,9 +143,9 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *l, void *data)
 #ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct ll_inode_info *lli = ll_i2info(data);
+                struct inode *old_inode = lock->l_ast_data;
                 struct inode *new_inode = data;
                 LASSERT(lli->lli_inode_magic == LLI_INODE_MAGIC);
-                struct inode *old_inode = lock->l_ast_data;
                 if (!(old_inode->i_state & I_FREEING)) {
                         CERROR("Found existing inode %p/%lu/%u state %lu "
                                "in lock: setting data to %p/%lu/%u\n",
