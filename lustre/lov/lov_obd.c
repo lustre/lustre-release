@@ -1653,12 +1653,6 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 
-static int dump_missed_lock(struct ldlm_lock *lock, void *data)
-{
-        LDLM_ERROR(lock, "forgotten lock");
-        return LDLM_ITER_CONTINUE;
-}
-
 static int lov_change_cbdata(struct obd_export *exp,
                              struct lov_stripe_md *lsm, ldlm_iterator_t it,
                              void *data)
