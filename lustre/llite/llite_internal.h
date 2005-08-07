@@ -462,7 +462,7 @@ struct ll_lock_tree_node {
         struct lustre_handle    lt_lockh;
         ldlm_mode_t             lt_mode;
 };
-//struct ll_lock_tree_node;
+
 struct ll_lock_tree {
         rb_root_t                       lt_root;
         struct list_head                lt_locked_list;

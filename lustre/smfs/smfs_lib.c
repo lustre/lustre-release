@@ -618,7 +618,6 @@ void * smfs_get_plg_priv(struct smfs_super_info * smb, int type)
         struct smfs_plugin *plg, *tmp;
         
         list_for_each_entry_safe(plg, tmp, hlist, plg_list) {
-                CERROR("found type %x, needed %x\n", plg->plg_type, type);
                 if (plg->plg_type == type) {
                         return (plg->plg_private);
                 }

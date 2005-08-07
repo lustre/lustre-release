@@ -215,7 +215,7 @@ static int smfs_set_fs_audit (struct super_block * sb, __u64 *mask)
         ENTRY;
         
         ctxt = &smb->smsi_exp->exp_obd->obd_lvfs_ctxt;
-        push_ctxt(&saved, ctxt, NULL);
+        
         priv = smfs_get_plg_priv(smb, SMFS_PLG_AUDIT);
         if(!priv) {
                 CERROR("error updating audit setting: rc = %d\n", rc);

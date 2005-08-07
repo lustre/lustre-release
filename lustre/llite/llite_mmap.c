@@ -52,16 +52,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/*
-struct ll_lock_tree_node {
-        rb_node_t               lt_node;
-        struct list_head        lt_locked_item;
-        __u64                   lt_oid;
-        ldlm_policy_data_t      lt_policy;
-        struct lustre_handle    lt_lockh;
-        ldlm_mode_t             lt_mode;
-};
-*/
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 int lt_get_mmap_locks(struct ll_lock_tree *tree, struct inode *inode,
                       unsigned long addr, size_t count);
