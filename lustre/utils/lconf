@@ -3655,7 +3655,6 @@ def sys_set_ptldebug(ptldebug):
             sysctl('portals/debug', val)
         except NameError, e:
             panic(str(e))
-    sysctl('portals/debug', 0xffffffffL)
 
 def sys_set_subsystem(subsystem):
     if config.subsystem:
