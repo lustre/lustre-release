@@ -2378,6 +2378,7 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa)
                 }
         } else {
                 CWARN("create object without lustre id!\n");
+                portals_debug_dumpstack(NULL);
         }
 
 
