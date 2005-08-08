@@ -495,7 +495,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
                                           !ptlrpc_bulk_active(desc), &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
+                                DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT"
+                                          ", expt_conn_cnt = %u",
+                                          req->rq_export->exp_conn_cnt);
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
