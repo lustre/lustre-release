@@ -11,14 +11,7 @@
 /*export struct for mount-conf */
 /*FIXME: some attributes Mixed now*/
 /* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mgs_client_data {
-        __u8 mcd_uuid[40];      /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 mcd_padding[MDS_LR_CLIENT_SIZE - 64];
-};
+struct mgs_client_data; 
 
 struct mgs_export_data {
         struct list_head        med_open_head;
