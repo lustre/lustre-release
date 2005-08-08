@@ -22,7 +22,7 @@
 #include "gmnal.h"
 
 
-int gmnal_small_msg_size = sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t) + PTL_MTU;
+int gmnal_small_msg_size = GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t) + PTL_MTU + 928;
 /*
  *      -1 indicates default value.
  *      This is 1 thread per cpu

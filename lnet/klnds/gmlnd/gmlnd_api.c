@@ -263,16 +263,6 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		return(PTL_FAIL);
 	}
 
-	gmnal_start_kernel_threads(nal_data);
-
-	while (nal_data->rxthread_flag != GMNAL_RXTHREADS_STARTED) {
-		gmnal_yield(1);
-		CDEBUG(D_INFO, "Waiting for receive thread signs of life\n");
-	}
-
-	CDEBUG(D_INFO, "receive thread seems to have started\n");
-
-
 	/*
 	 *	Initialise the portals library
 	 */
@@ -345,6 +335,19 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
 	}
+
+	/*
+	 * Now that we have initialised the portals library, start receive threads,
+	 * we do this to avoid processing messages before we can parse them
+	 */
+	gmnal_start_kernel_threads(nal_data);
+
+	while (nal_data->rxthread_flag != GMNAL_RXTHREADS_STARTED) {
+		gmnal_yield(1);
+		CDEBUG(D_INFO, "Waiting for receive thread signs of life\n");
+	}
+
+	CDEBUG(D_INFO, "receive thread seems to have started\n");
 
 	if (libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, libnal->libnal_data) != 0) {
 		CDEBUG(D_INFO, "libcfs_nal_cmd_register failed\n");

@@ -47,7 +47,13 @@
 #include "linux/string.h"
 #include "linux/stat.h"
 #include "linux/errno.h"
+#include "linux/version.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+#include "linux/buffer_head.h"
+#include "linux/fs.h"
+#else
 #include "linux/locks.h"
+#endif
 #include "linux/unistd.h"
 #include "linux/init.h"
 #include "linux/sem.h"
@@ -166,12 +172,12 @@ typedef struct _gmnal_srxd_t {
  *	watch alignment for ia32/64 interaction
  */
 typedef struct	_gmnal_msghdr {
-	int		magic;
-	int 		type;
-	unsigned int	sender_node_id;
-	int		niov;
+	__s32		magic;
+	__s32 		type;
+	__u32	        sender_node_id;
+	__s32		niov;
 	gm_remote_ptr_t	stxd_remote_ptr; /* 64 bits */
-	} gmnal_msghdr_t;
+} WIRE_ATTR gmnal_msghdr_t;
 #define GMNAL_MSGHDR_SIZE	sizeof(gmnal_msghdr_t)
 
 /*

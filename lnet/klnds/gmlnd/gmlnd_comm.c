@@ -50,7 +50,7 @@ gmnal_ct_thread(void *arg)
 
 	sprintf(current->comm, "gmnal_ct");
 
-	daemonize();
+	kportal_daemonize("gmnalctd");
 
 	nal_data->ctthread_flag = GMNAL_CTTHREAD_STARTED;
 
@@ -112,6 +112,7 @@ gmnal_ct_thread(void *arg)
  */
 int gmnal_rx_thread(void *arg)
 {
+        char                     name[16];
 	gmnal_data_t		*nal_data;
 	void			*buffer;
 	gmnal_rxtwe_t		*we = NULL;
@@ -129,9 +130,9 @@ int gmnal_rx_thread(void *arg)
 		if (nal_data->rxthread_pid[rank] == current->pid)
 			break;
 
-	sprintf(current->comm, "gmnal_rx_%d", rank);
+	snprintf(name, sizeof(name), "gmnal_rx_%d", rank);
 
-	daemonize();
+	kportal_daemonize(name);
 	/*
 	 * 	set 1 bit for each thread started
 	 *	doesn't matter which bit
@@ -257,8 +258,10 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	rc = lib_parse(nal_data->libnal, portals_hdr, srxd);
 
         if (rc != PTL_OK) {
-                /* I just received garbage; take appropriate action... */
-                LBUG();
+                /* I just received garbage; return the srxd for use */
+                CWARN("Returning srxd and discarding message, "
+                        "lib_parse didn't like it.\n");
+                return(gmnal_rx_bad(nal_data, we, srxd));
         }
 
 	return(GMNAL_STATUS_OK);
@@ -414,7 +417,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	msghdr->sender_node_id = nal_data->gm_global_nid;
 	CDEBUG(D_INFO, "processing msghdr at [%p]\n", buffer);
 
-	buffer += sizeof(gmnal_msghdr_t);
+	buffer += GMNAL_MSGHDR_SIZE;
 
 	CDEBUG(D_INFO, "processing  portals hdr at [%p]\n", buffer);
 	gm_bcopy(hdr, buffer, sizeof(ptl_hdr_t));
@@ -422,7 +425,7 @@ gmnal_small_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	buffer += sizeof(ptl_hdr_t);
 
 	CDEBUG(D_INFO, "sending\n");
-	tot_size = size+sizeof(ptl_hdr_t)+sizeof(gmnal_msghdr_t);
+	tot_size = size+sizeof(ptl_hdr_t)+GMNAL_MSGHDR_SIZE;
 	stxd->msg_size = tot_size;
 
 
@@ -597,10 +600,11 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 void gmnal_resume_sending_callback(struct gm_port *gm_port, void *context,
                                  gm_status_t status)
 {
-        gmnal_data_t    *nal_data;
         gmnal_stxd_t    *stxd = (gmnal_stxd_t*)context;
+        gmnal_data_t    *nal_data = (gmnal_data_t*)stxd->nal_data;
         CDEBUG(D_TRACE, "status is [%d] context is [%p]\n", status, context);
         gmnal_return_stxd(stxd->nal_data, stxd);
+        lib_finalize(nal_data->libnal, stxd, stxd->cookie, PTL_FAIL);
         return;
 }
 
@@ -624,8 +628,10 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
 	} else {
 		CERROR("send_to_peer status for stxd [%p] is "
 		       "[%d][%s]\n", stxd, status, gmnal_gm_error(status));
+                /* Recycle the stxd */
+		gmnal_return_stxd(nal_data, stxd);
+		lib_finalize(nal_data->libnal, stxd, stxd->cookie, PTL_FAIL);
 	}
-
 
 	return;
 }
@@ -694,8 +700,8 @@ gmnal_large_tx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	msghdr->sender_node_id = nal_data->gm_global_nid;
 	msghdr->stxd_remote_ptr = (gm_remote_ptr_t)stxd;
 	msghdr->niov = niov ;
-	buffer += sizeof(gmnal_msghdr_t);
-	mlen = sizeof(gmnal_msghdr_t);
+	buffer += GMNAL_MSGHDR_SIZE;
+	mlen = GMNAL_MSGHDR_SIZE;
 	CDEBUG(D_INFO, "mlen is [%d]\n", mlen);
 
 
@@ -838,7 +844,7 @@ gmnal_large_rx(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 
 	buffer = srxd->buffer;
 	msghdr = (gmnal_msghdr_t*)buffer;
-	buffer += sizeof(gmnal_msghdr_t);
+	buffer += GMNAL_MSGHDR_SIZE;
 	buffer += sizeof(ptl_hdr_t);
 
 	/*
@@ -1232,7 +1238,7 @@ gmnal_large_tx_ack(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 	CDEBUG(D_INFO, "processing msghdr at [%p]\n", buffer);
 
 	CDEBUG(D_INFO, "sending\n");
-	stxd->msg_size= sizeof(gmnal_msghdr_t);
+	stxd->msg_size= GMNAL_MSGHDR_SIZE;
 
 
 	CDEBUG(D_NET, "Calling gm_send_to_peer port [%p] buffer [%p] "

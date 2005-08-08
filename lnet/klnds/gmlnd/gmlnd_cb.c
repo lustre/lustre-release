@@ -34,6 +34,8 @@ ptl_err_t gmnal_cb_recv(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
         void            *buffer = NULL;
 	gmnal_srxd_t	*srxd = (gmnal_srxd_t*)private;
 	int		status = PTL_OK;
+        size_t          msglen = mlen;
+        size_t          nob;
 
 	CDEBUG(D_TRACE, "gmnal_cb_recv libnal [%p], private[%p], cookie[%p], "
 	       "niov[%d], iov [%p], offset["LPSZ"], mlen["LPSZ"], rlen["LPSZ"]\n",
@@ -46,26 +48,22 @@ ptl_err_t gmnal_cb_recv(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		 *  side occurrence of filling pkmap_count[].
 		 */
 		buffer = srxd->buffer;
-		buffer += sizeof(gmnal_msghdr_t);
+		buffer += GMNAL_MSGHDR_SIZE;
 		buffer += sizeof(ptl_hdr_t);
 
 		while(niov--) {
 			if (offset >= iov->iov_len) {
 				offset -= iov->iov_len;
-			} else if (offset > 0) {
-				CDEBUG(D_INFO, "processing [%p] base [%p] "
-                                       "len %d, offset %d, len ["LPSZ"]\n", iov,
-                                       iov->iov_base + offset, iov->iov_len,
-                                       offset, iov->iov_len - offset);
-				gm_bcopy(buffer, iov->iov_base + offset,
-					 iov->iov_len - offset);
-				buffer += iov->iov_len - offset;
-				offset = 0;
 			} else {
-				CDEBUG(D_INFO, "processing [%p] len ["LPSZ"]\n",
-                                       iov, iov->iov_len);
-				gm_bcopy(buffer, iov->iov_base, iov->iov_len);
-				buffer += iov->iov_len;
+                                nob = MIN (iov->iov_len - offset, msglen);
+                                CDEBUG(D_INFO, "processing iov [%p] base [%p] "
+                                       "offset [%d] len ["LPSZ"] to [%p] left "
+                                       "["LPSZ"]\n", iov, iov->iov_base,
+                                       offset, nob, buffer, msglen);
+                                gm_bcopy(buffer, iov->iov_base + offset, nob);
+                                buffer += nob;
+                                msglen -= nob;
+                                offset = 0;
 			}
 			iov++;
 		}
@@ -97,8 +95,11 @@ ptl_err_t gmnal_cb_recv_pages(lib_nal_t *libnal, void *private,
 	       libnal, private, cookie, kniov, kiov, offset, mlen, rlen);
 
 	if (srxd->type == GMNAL_SMALL_MESSAGE) {
+                size_t          msglen = mlen;
+                size_t          nob;
+
 		buffer = srxd->buffer;
-		buffer += sizeof(gmnal_msghdr_t);
+		buffer += GMNAL_MSGHDR_SIZE;
 		buffer += sizeof(ptl_hdr_t);
 
 		/*
@@ -114,31 +115,21 @@ ptl_err_t gmnal_cb_recv_pages(lib_nal_t *libnal, void *private,
 			if (offset >= kiov->kiov_len) {
 				offset -= kiov->kiov_len;
 			} else {
+                                nob = MIN (kiov->kiov_len - offset, msglen);
 				CDEBUG(D_INFO, "kniov page [%p] len [%d] "
                                        "offset[%d]\n", kiov->kiov_page,
                                        kiov->kiov_len, kiov->kiov_offset);
-				CDEBUG(D_INFO, "Calling kmap[%p]", kiov->kiov_page);
 				ptr = ((char *)kmap(kiov->kiov_page)) +
                                         kiov->kiov_offset;
 
-				if (offset > 0) {
-					CDEBUG(D_INFO, "processing [%p] base "
-                                               "[%p] len %d, offset %d, len ["
-                                               LPSZ"]\n", ptr, ptr + offset,
-                                               kiov->kiov_len, offset,
-					       kiov->kiov_len - offset);
-					gm_bcopy(buffer, ptr + offset,
-                                                 kiov->kiov_len - offset);
-					buffer += kiov->kiov_len - offset;
-					offset = 0;
-				} else {
-					CDEBUG(D_INFO, "processing [%p] len ["
-                                               LPSZ"]\n", ptr, kiov->kiov_len);
-					gm_bcopy(buffer, ptr, kiov->kiov_len);
-					buffer += kiov->kiov_len;
-				}
+                                CDEBUG(D_INFO, "processing ptr [%p] offset [%d] "
+                                       "len ["LPSZ"] from [%p] left ["LPSZ"]\n",
+                                       ptr, offset, nob, buffer, msglen);
+                                gm_bcopy(buffer, ptr + offset, nob);
 				kunmap(kiov->kiov_page);
-				CDEBUG(D_INFO, "Stored in [%p]\n", ptr);
+                                buffer += nob;
+                                msglen -= nob;
+                                offset = 0;
                         }
                         kiov++;
 		}
@@ -173,6 +164,9 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 	}
 
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
+                size_t msglen = len;
+                size_t nob;
+
 		CDEBUG(D_INFO, "This is a small message send\n");
 		/*
 		 * HP SFS 1380: With the change to gmnal_small_tx, need to get
@@ -181,24 +175,20 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		stxd = gmnal_get_stxd(nal_data, 1);
 		CDEBUG(D_INFO, "stxd [%p]\n", stxd);
 		/* Set the offset of the data to copy into the buffer */
-		buffer = stxd->buffer +sizeof(gmnal_msghdr_t)+sizeof(ptl_hdr_t);
+		buffer = stxd->buffer + GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t);
 		while(niov--) {
 			if (offset >= iov->iov_len) {
 				offset -= iov->iov_len;
-			} else if (offset > 0) {
-				CDEBUG(D_INFO, "processing iov [%p] base [%p] "
-                                       "len ["LPSZ"] to [%p]\n",
-                                       iov, iov->iov_base + offset,
-                                       iov->iov_len - offset, buffer);
-				gm_bcopy(iov->iov_base + offset, buffer,
-                                         iov->iov_len - offset);
-				buffer+= iov->iov_len - offset;
-				offset = 0;
 			} else {
-				CDEBUG(D_INFO, "processing iov [%p] len ["LPSZ
-                                       "] to [%p]\n", iov, iov->iov_len,buffer);
-				gm_bcopy(iov->iov_base, buffer, iov->iov_len);
-				buffer+= iov->iov_len;
+                                nob = MIN (iov->iov_len - offset, msglen);
+                                CDEBUG(D_INFO, "processing iov [%p] base [%p]"
+                                      " offset [%d] len ["LPSZ"] to [%p] left"
+                                      " ["LPSZ"]\n", iov, iov->iov_base,
+                                      offset, nob, buffer, msglen);
+                                gm_bcopy(iov->iov_base + offset, buffer, nob);
+                                buffer += nob;
+                                msglen -= nob;
+                                offset = 0;
 			}
 			iov++;
 		}
@@ -245,9 +235,12 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
 	stxd = gmnal_get_stxd(nal_data, 1);
 	CDEBUG(D_INFO, "stxd [%p]\n", stxd);
 	/* Set the offset of the data to copy into the buffer */
-	buffer = stxd->buffer + sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t);
+	buffer = stxd->buffer + GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t);
 
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, 0, NULL, len)) {
+                size_t msglen = len;
+                size_t nob;
+
 		CDEBUG(D_INFO, "This is a small message send\n");
 
 		while(kniov--) {
@@ -255,6 +248,7 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
 			if (offset >= kiov->kiov_len) {
 				offset -= kiov->kiov_len;
 			} else {
+                                nob = MIN (kiov->kiov_len - offset, msglen);
 				CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n",
 				       kiov->kiov_page, kiov->kiov_len, 
 				       kiov->kiov_offset);
@@ -262,24 +256,14 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
 				ptr = ((char *)kmap(kiov->kiov_page)) +
                                         kiov->kiov_offset;
 
-				if (offset > 0) {
-					CDEBUG(D_INFO, "processing [%p] base "
-                                               "[%p] len ["LPSZ"] to [%p]\n",
-					       ptr, ptr + offset,
-                                               kiov->kiov_len - offset, buffer);
-					gm_bcopy(ptr + offset, buffer,
-                                                 kiov->kiov_len - offset);
-					buffer+= kiov->kiov_len - offset;
-					offset = 0;
-				} else {
-					CDEBUG(D_INFO, "processing kmapped [%p]"
-                                               " len ["LPSZ"] to [%p]\n",
-					       ptr, kiov->kiov_len, buffer);
-					gm_bcopy(ptr, buffer, kiov->kiov_len);
-
-					buffer += kiov->kiov_len;
-				}
+                                CDEBUG(D_INFO, "processing ptr [%p] offset [%d]"
+                                       " len ["LPSZ"] to [%p] left ["LPSZ"]\n",
+                                       ptr, offset, nob, buffer, msglen);
+                                gm_bcopy(ptr + offset, buffer, nob);
 				kunmap(kiov->kiov_page);
+                                buffer += nob;
+                                msglen -= nob;
+                                offset = 0;
 			}
                         kiov++;
 		}
