@@ -889,6 +889,9 @@ def add_lov(gen, lustre, options):
     mds_name = get_option(options, 'mds')
     stripe_sz = get_option_int(options, 'stripe_sz')
     stripe_cnt = get_option_int(options, 'stripe_cnt')
+    if stripe_cnt == 0:
+        print "default stripe count (0) - will use %d stripe(s) per file" \
+                % DEFAULT_STRIPE_CNT
     pattern = get_option_int(options, 'stripe_pattern')
     uuid = new_uuid(name)
 
