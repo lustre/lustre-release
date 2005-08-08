@@ -371,7 +371,7 @@ static int llog_cat_process_cb(struct llog_handle *cat_llh,
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
-        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
+        CDEBUG(D_INFO, "processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
                le32_to_cpu(rec->lrh_index), cat_llh->lgh_id.lgl_oid);
 

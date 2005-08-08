@@ -111,11 +111,11 @@ const char *opstr[AUDIT_MAX] = {
         [AUDIT_READDIR]  "readdir",
 };
 
-#define construct_header(buf, size, rec)                                \
-        snprintf(buf, size,                                             \
-        "AUDIT [%u] [nid: "LPU64" uid: %u gid: %u rc: %d] [%s] ",       \
-        rec->time, rec->nid, rec->uid, rec->gid, (__s16)rec->result,      \
-        opstr[rec->opcode]);
+#define construct_header(buf, size, rec, id_rec)                        \
+        snprintf(buf, size, "AUDIT:"LPU64":%u/%u:%s:%d:"DLID4":",       \
+        rec->nid, rec->uid, rec->gid, opstr[rec->opcode], (__s16)rec->result,\
+        (unsigned long)id_rec->au_fid, (unsigned long)id_rec->au_mds, \
+        (unsigned long)id_rec->au_num, (unsigned long)id_rec->au_gen);
 
 #define REC2ID(rec, id) {                                       \
         id_ino(id) = rec->au_num;                               \
@@ -140,10 +140,10 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
         CDEBUG(D_INFO, "transfer %s\n", opstr[rec->opcode]);
 
         memset(buf, 0, PAGE_SIZE);
-        n = construct_header(buf, PAGE_SIZE, rec);
+        n = construct_header(buf, PAGE_SIZE, rec, id_rec);
         if (n < 0)
                 RETURN(n);
-                
+        
         switch (rec->opcode)
         {
                 case AUDIT_UNLINK:
@@ -155,7 +155,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
                 default:
                         break;
         }
-        
+                
         if (audit_id2name) {
                 char *name = NULL;
                 struct lustre_id id;
@@ -188,7 +188,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
 
         printk("%s\n", buf);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
@@ -196,7 +196,7 @@ static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 {
         struct obd_device *obd = llh->lgh_ctxt->loc_obd;
         struct audit_record *ad_rec;
-        int rc = 0;
+        
         ENTRY;
         
         if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
@@ -213,10 +213,8 @@ static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         
         LASSERT(ad_rec->opcode < AUDIT_MAX);
 
-        rc = transfer_record(obd, ad_rec, rec->lrh_type, data);
-        if (rc)
-                CERROR("transfer record failed! rc:%d\n", rc);
-
+        transfer_record(obd, ad_rec, rec->lrh_type, data);
+        
         RETURN(LLOG_DEL_RECORD);
 }
 

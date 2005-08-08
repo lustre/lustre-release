@@ -311,7 +311,7 @@ out:
         RETURN(rc);
 }
 
-#define ROOT_FID        1
+#define ROOT_FID        2
 struct name_item {
         struct list_head link;
         char             name[NAME_MAX + 1];

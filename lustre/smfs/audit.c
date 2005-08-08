@@ -196,7 +196,7 @@ int smfs_audit_check(struct inode * parent, hook_op hook, int ret,
         if (rc < 0)
                 RETURN(0);
         //should only failures be audited?
-        if (!ret && IS_AUDIT_OP(mask, AUDIT_FAIL))
+        if (ret >= 0 && IS_AUDIT_OP(mask, AUDIT_FAIL))
                 RETURN(0); 
 
         //check audit mask
@@ -218,7 +218,7 @@ static int smfs_set_fs_audit (struct super_block * sb, __u64 *mask)
         
         priv = smfs_get_plg_priv(smb, SMFS_PLG_AUDIT);
         if(!priv) {
-                CERROR("error updating audit setting: rc = %d\n", rc);
+                CERROR("Audit is not initialized, use mountoptions 'audit'\n");
                 RETURN(-EINVAL);
         }
         

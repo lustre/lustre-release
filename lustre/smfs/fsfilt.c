@@ -1237,7 +1237,7 @@ static int fsfilt_smfs_set_info (struct super_block *sb, struct inode * inode,
                 audit_client_log(sb, val);
         }
         else if (keylen == 5 && memcmp(key, "audit", 5) == 0) {
-                rc = smfs_set_audit(sb, inode, (__u64 *)val);
+                smfs_set_audit(sb, inode, (__u64 *)val);
         }   
         else if (keylen == 7 && memcmp(key, "id2name", 7) == 0) {
                 rc = SMFS_PLG_HELP(sb, PLG_SET_INFO, &msg);
