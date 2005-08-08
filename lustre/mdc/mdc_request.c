@@ -602,8 +602,8 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
 static void mdc_commit_close(struct ptlrpc_request *req)
 {
         struct mdc_open_data *mod = req->rq_cb_data;
-        struct ptlrpc_request *open_req;
         struct obd_import *imp = req->rq_import;
+        struct ptlrpc_request *open_req;
 
         DEBUG_REQ(D_HA, req, "close req committed");
         if (mod == NULL)
@@ -936,6 +936,20 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                 CDEBUG(D_HA, "%s: set async = %d\n",
                        exp->exp_obd->obd_name, cl->cl_async);
                 RETURN(0);
+        } else if (keylen == strlen("setext") && memcmp(key, "setext", keylen) == 0) {
+                struct ptlrpc_request *req;
+                char *bufs[2] = {key, val};
+                int rc, size[2] = {keylen, vallen};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OBD_VERSION,
+                                      OST_SET_INFO, 2, size, bufs);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                req->rq_replen = lustre_msg_size(0, NULL);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
+                RETURN(rc);
         } else if (keylen == 5 && strcmp(key, "audit") == 0) {
                 struct ptlrpc_request *req;
                 char *bufs[2] = {key, val};
@@ -1322,7 +1336,7 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
         if (!valsize || !val)
                 RETURN(-EFAULT);
 
-        if (keylen == strlen("remote_flag") && !strcmp(key, "remote_flag")) {
+        if (keylen >= strlen("remote_flag") && !strcmp(key, "remote_flag")) {
                 struct obd_import *imp;
                 struct obd_connect_data *data;
 
@@ -1351,6 +1365,8 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
 
         if ((keylen < strlen("mdsize") || strcmp(key, "mdsize") != 0) &&
             (keylen < strlen("mdsnum") || strcmp(key, "mdsnum") != 0) &&
+            (keylen < strlen("lovdesc") || strcmp(key, "lovdesc") != 0) &&
+            (keylen < strlen("getext") || strcmp(key, "getext") != 0) &&
             (keylen < strlen("rootid") || strcmp(key, "rootid") != 0) &&
             (keylen < strlen("auditid") || strcmp(key, "auditid") != 0))
                 RETURN(-EPROTO);
@@ -1388,6 +1404,18 @@ static int mdc_get_info(struct obd_export *exp, __u32 keylen,
                 }
 
                 *(struct lov_desc *)val = *reply;
+                RETURN(0);
+        } else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
+                struct fid_extent *reply;
+                
+                reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
+                                           lustre_swab_fid_extent);
+                if (reply == NULL) {
+                        CERROR("Can't unpack %s\n", (char *)key);
+                        GOTO(out_req, rc = -EPROTO);
+                }
+
+                *(struct fid_extent *)val = *reply;
                 RETURN(0);
         } else {
                 __u32 *reply;

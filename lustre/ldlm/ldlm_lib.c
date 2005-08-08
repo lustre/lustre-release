@@ -571,7 +571,7 @@ int target_check_deny_sec(struct obd_device *target, struct ptlrpc_request *req)
                 spin_lock(&target->u.mds.mds_denylist_lock);
                 rc = check_deny_list(&target->u.mds.mds_denylist, flavor);
                 spin_unlock(&target->u.mds.mds_denylist_lock);
-        } else if (!strcmp(target->obd_type->typ_name, "obdfilter")) {
+        } else if (!strcmp(target->obd_type->typ_name, OBD_FILTER_DEVICENAME)) {
                 spin_lock(&target->u.filter.fo_denylist_lock);
                 rc = check_deny_list(&target->u.filter.fo_denylist, flavor);
                 spin_unlock(&target->u.filter.fo_denylist_lock);

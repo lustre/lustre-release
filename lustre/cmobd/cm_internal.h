@@ -35,13 +35,6 @@ void cmobd_cleanup_write_srv(struct obd_device *);
 int cmobd_reint_mds(struct obd_device*obd, void *record, int opcode);
 int cmobd_reint_oss(struct obd_device *obd, void *record, int opcode);
 
-/* methods for updating/reading master lustre_id from local MDS inode EA.*/
-int mds_update_mid(struct obd_device *obd, struct lustre_id *id,
-                   void *data, int data_len);
-
-int mds_read_mid(struct obd_device *obd, struct lustre_id *id,
-                 void *data, int data_len);
-
 int mds_read_md(struct obd_device *obd, struct lustre_id *id, 
                 char **data, int *datalen);
 #endif /* CM_INTERNAL_H */

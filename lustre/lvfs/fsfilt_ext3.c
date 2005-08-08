@@ -51,7 +51,6 @@
 #include <linux/iobuf.h>
 #endif
 
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
 # define lock_24kernel() lock_kernel()
 # define unlock_24kernel() unlock_kernel()
@@ -74,13 +73,6 @@ struct fsfilt_cb_data {
 #ifndef EXT3_XATTR_INDEX_TRUSTED        /* temporary until we hit l28 kernel */
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
-
-#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
-#define XATTR_LUSTRE_MDS_MID_EA         "mid"
-#define XATTR_LUSTRE_MDS_SID_EA         "sid"
-#define XATTR_LUSTRE_MDS_PID_EA         "pid"
-#define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -509,11 +501,6 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                                            XATTR_LUSTRE_MDS_SID_EA,
                                            lmm, lmm_size);
                 break;
-        case EA_MID:
-                rc = fsfilt_ext3_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_MID_EA,
-                                           lmm, lmm_size);
-                break;
         case EA_PID:
                  rc = fsfilt_ext3_set_xattr(inode, handle,
                                             XATTR_LUSTRE_MDS_PID_EA,
@@ -550,11 +537,6 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm,
         case EA_SID:
                 rc = fsfilt_ext3_get_xattr(inode,
                                            XATTR_LUSTRE_MDS_SID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_MID:
-                rc = fsfilt_ext3_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_MID_EA,
                                            lmm, lmm_size);
                 break;
         case EA_PID:

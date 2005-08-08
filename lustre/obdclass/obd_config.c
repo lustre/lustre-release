@@ -359,8 +359,8 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("invalid priority\n");
                 RETURN(-EINVAL);
         }
-        if (strcmp(obd->obd_type->typ_name, "mdc") &&
-            strcmp(obd->obd_type->typ_name, "osc")) {
+        if (strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) &&
+            strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 CERROR("can't add connection on non-client dev\n");
                 RETURN(-EINVAL);
         }
@@ -376,6 +376,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(rc);
 }
+
 int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct obd_import *imp;
@@ -389,8 +390,8 @@ int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        if (strcmp(obd->obd_type->typ_name, "mdc") &&
-            strcmp(obd->obd_type->typ_name, "osc")) {
+        if (strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) &&
+            strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 CERROR("can't add connection on non-client dev\n");
                 RETURN(-EINVAL);
         }

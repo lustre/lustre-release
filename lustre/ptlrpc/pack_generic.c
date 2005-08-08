@@ -432,7 +432,7 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab32s(&ocd->ocd_nllu[1]);
 }
 
-void lustre_swab_obdo(struct obdo  *o)
+void lustre_swab_obdo(struct obdo *o)
 {
         __swab64s(&o->o_id);
         __swab64s(&o->o_gr);
@@ -468,9 +468,10 @@ void *mdc_create_pack(struct lustre_msg *msg, int offset,
 
         rec->cr_opcode = REINT_CREATE;
         rec->cr_id = op_data->id1;
-        memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
+        rec->cr_replayid = op_data->id2;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
+        rec->cr_flags = op_data->flags;
         rec->cr_time = op_data->mod_time;
 
         tmp = lustre_msg_buf(msg, offset + 1, op_data->namelen + 1);
@@ -499,7 +500,7 @@ __u32 mds_pack_open_flags(__u32 flags)
 }
 
 void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
-                       struct mdc_op_data *data, struct iattr *iattr,
+                       struct mdc_op_data *op_data, struct iattr *iattr,
                        void *ea, int ealen, void *ea2, int ea2len, 
                        void *ea3, int ea3len)
 {
@@ -507,7 +508,8 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
         char *tmp = NULL;
 
         rec->sa_opcode = REINT_SETATTR;
-        rec->sa_id = data->id1;
+        rec->sa_flags = op_data->flags;
+        rec->sa_id = op_data->id1;
 
         if (iattr) {
                 rec->sa_valid = iattr->ia_valid;
@@ -544,7 +546,7 @@ void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
 }
 
 void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
-                      struct mdc_op_data *data)
+                      struct mdc_op_data *op_data)
 {
         struct mds_rec_unlink *rec;
         char *tmp;
@@ -553,19 +555,20 @@ void *mdc_unlink_pack(struct lustre_msg *msg, int offset,
         LASSERT (rec != NULL);
 
         rec->ul_opcode = REINT_UNLINK;
-        rec->ul_mode = data->create_mode;
-        rec->ul_id1 = data->id1;
-        rec->ul_id2 = data->id2;
-        rec->ul_time = data->mod_time;
+        rec->ul_mode = op_data->create_mode;
+        rec->ul_id1 = op_data->id1;
+        rec->ul_id2 = op_data->id2;
+        rec->ul_time = op_data->mod_time;
+        rec->ul_flags = op_data->flags;
 
-        tmp = lustre_msg_buf(msg, offset + 1, data->namelen + 1);
+        tmp = lustre_msg_buf(msg, offset + 1, op_data->namelen + 1);
         LASSERT (tmp != NULL);
-        LOGL0(data->name, data->namelen, tmp);
-        return (void*)tmp;        
+        LOGL0(op_data->name, op_data->namelen, tmp);
+        return (void*)tmp;  
 }
 
 void *mdc_link_pack(struct lustre_msg *msg, int offset,
-                    struct mdc_op_data *data)
+                    struct mdc_op_data *op_data)
 {
         struct mds_rec_link *rec;
         char *tmp;
@@ -573,18 +576,19 @@ void *mdc_link_pack(struct lustre_msg *msg, int offset,
         rec = lustre_msg_buf(msg, offset, sizeof (*rec));
 
         rec->lk_opcode = REINT_LINK;
-        rec->lk_id1 = data->id1;
-        rec->lk_id2 = data->id2;
-        rec->lk_time = data->mod_time;
+        rec->lk_id1 = op_data->id1;
+        rec->lk_id2 = op_data->id2;
+        rec->lk_flags = op_data->flags;
+        rec->lk_time = op_data->mod_time;
 
-        tmp = lustre_msg_buf(msg, offset + 1, data->namelen + 1);
-        LOGL0(data->name, data->namelen, tmp);
+        tmp = lustre_msg_buf(msg, offset + 1, op_data->namelen + 1);
+        LOGL0(op_data->name, op_data->namelen, tmp);
         
         return (void*)tmp; 
 }
 
 void *mdc_rename_pack(struct lustre_msg *msg, int offset,
-                      struct mdc_op_data *data,
+                      struct mdc_op_data *op_data,
                       const char *old, int oldlen,
                       const char *new, int newlen)
 {
@@ -595,9 +599,10 @@ void *mdc_rename_pack(struct lustre_msg *msg, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = REINT_RENAME;
-        rec->rn_id1 = data->id1;
-        rec->rn_id2 = data->id2;
-        rec->rn_time = data->mod_time;
+        rec->rn_id1 = op_data->id1;
+        rec->rn_id2 = op_data->id2;
+        rec->rn_flags = op_data->flags;
+        rec->rn_time = op_data->mod_time;
 
         tmp = lustre_msg_buf(msg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -764,6 +769,7 @@ void lustre_swab_mds_body(struct mds_body *b)
 void lustre_swab_mds_rec_setattr(struct mds_rec_setattr *sa)
 {
         __swab32s(&sa->sa_opcode);
+        __swab32s(&sa->sa_flags);
         __swab32s(&sa->sa_valid);
         lustre_swab_lustre_id(&sa->sa_id);
         __swab32s(&sa->sa_mode);
@@ -779,7 +785,7 @@ void lustre_swab_mds_rec_setattr(struct mds_rec_setattr *sa)
 void lustre_swab_mds_rec_create(struct mds_rec_create *cr)
 {
         __swab32s(&cr->cr_opcode);
-        __swab32s(&cr->cr_flags); /* for use with open */
+        __swab32s(&cr->cr_flags);
         __swab32s(&cr->cr_mode);
         lustre_swab_lustre_id(&cr->cr_id);
         lustre_swab_lustre_id(&cr->cr_replayid);
@@ -790,6 +796,7 @@ void lustre_swab_mds_rec_create(struct mds_rec_create *cr)
 void lustre_swab_mds_rec_link(struct mds_rec_link *lk)
 {
         __swab32s(&lk->lk_opcode);
+        __swab32s(&lk->lk_flags);
         lustre_swab_lustre_id(&lk->lk_id1);
         lustre_swab_lustre_id(&lk->lk_id2);
 }
@@ -797,6 +804,7 @@ void lustre_swab_mds_rec_link(struct mds_rec_link *lk)
 void lustre_swab_mds_rec_unlink(struct mds_rec_unlink *ul)
 {
         __swab32s(&ul->ul_opcode);
+        __swab32s(&ul->ul_flags);
         __swab32s(&ul->ul_mode);
         lustre_swab_lustre_id(&ul->ul_id1);
         lustre_swab_lustre_id(&ul->ul_id2);
@@ -805,6 +813,7 @@ void lustre_swab_mds_rec_unlink(struct mds_rec_unlink *ul)
 void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn)
 {
         __swab32s(&rn->rn_opcode);
+        __swab32s(&rn->rn_flags);
         lustre_swab_lustre_id(&rn->rn_id1);
         lustre_swab_lustre_id(&rn->rn_id2);
 }
@@ -818,6 +827,12 @@ void lustre_swab_lov_desc(struct lov_desc *ld)
         __swab64s(&ld->ld_default_stripe_offset);
         __swab32s(&ld->ld_pattern);
         /* uuid endian insensitive */
+}
+
+void lustre_swab_fid_extent(struct fid_extent *ext)
+{
+        __swab64s(&ext->fe_start);
+        __swab64s(&ext->fe_width);
 }
 
 void lustre_swab_ldlm_res_id(struct ldlm_res_id *id)

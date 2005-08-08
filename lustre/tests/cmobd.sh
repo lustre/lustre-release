@@ -58,12 +58,10 @@ h2tcp () {
 ${LMC} -m $config --add net --node $NODE --nid `h2$NIDTYPE $NODE` \
 --nettype $NETTYPE || exit 1
 
-
 ${LMC} -m $config --add mds --node $NODE --mds $CACHE_MDS \
 --fstype $FSTYPE --backfstype $BACK_FSTYPE --dev $MDS_CACHE_DEV \
 --mountfsoptions $MDS_MOUNT_OPTS --size $MDSSIZE --format || exit 10
 
-#add master lmv
 ${LMC} -m $config --add lmv --lmv $MASTER_LMV || exit 12
 
 ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS1 \
@@ -74,7 +72,7 @@ ${LMC} -m $config --add mds --node $NODE --mds $MASTER_MDS2 \
 --fstype $BACK_FSTYPE --dev $MDS2_MASTER_DEV --size $MDSSIZE \
 --lmv $MASTER_LMV --format || exit 10
 
-${LMC} -m $config --add lov --lov $CACHE_LOV --mds $CACHE_MDS --masterlmv $MASTER_LMV \
+${LMC} -m $config --add lov --lov $CACHE_LOV --mds $CACHE_MDS --aware $MASTER_LMV \
 --stripe_sz $STRIPE_SIZE --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
 
 ${LMC} -m $config --add ost --ost $CACHE_OST --node $NODE --lov $CACHE_LOV \

@@ -66,7 +66,7 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         if (op_data != NULL)
                 rec->cr_id = op_data->id1;
         memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
-        rec->cr_flags = mds_pack_open_flags(flags);
+        rec->cr_flags = mds_pack_open_flags(flags) | op_data->flags ;
         rec->cr_time = op_data->mod_time;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;

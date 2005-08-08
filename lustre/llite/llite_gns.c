@@ -453,7 +453,7 @@ static int inline ll_gns_check_stop(void)
 }
 
 /* GNS control thread function. */
-static int ll_gns_thread_main(void *arg)
+static int ll_gns_thread(void *arg)
 {
         struct ll_gns_ctl *ctl = arg;
         unsigned long flags;
@@ -532,7 +532,7 @@ int ll_gns_start_thread(void)
         init_completion(&gns_ctl.gc_finishing);
         init_waitqueue_head(&gns_thread.t_ctl_waitq);
         
-        rc = kernel_thread(ll_gns_thread_main, &gns_ctl,
+        rc = kernel_thread(ll_gns_thread, &gns_ctl,
                            (CLONE_VM | CLONE_FILES));
         if (rc < 0) {
                 CERROR("cannot start GNS control thread, "

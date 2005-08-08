@@ -468,7 +468,6 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_COBD_CON               _IOWR('f', 220, long)
 #define OBD_IOC_COBD_COFF              _IOWR('f', 221, long)
-#define OBD_IOC_COBD_CFLUSH            _IOWR('f', 222, long)
 
 #define OBD_IOC_SMFS_SNAP_ADD          _IOWR('f', 230, long)
 

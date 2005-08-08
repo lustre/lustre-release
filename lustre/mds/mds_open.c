@@ -831,10 +831,8 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         }
         l_dput(dchild);
 
-        /*
-         * we didn't find it in PENDING so it isn't an orphan.  See if it was a
-         * regular inode that was previously created.
-         */
+        /* we didn't find it in PENDING so it isn't an orphan.  See if it was a
+         * regular inode that was previously created. */
         dchild = mds_id2dentry(req2obd(req), id, NULL);
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
@@ -1168,15 +1166,17 @@ got_child:
                         handle = NULL;
                         GOTO(cleanup, rc);
                 }
-                if (ino)
+                if (id_fid(rec->ur_id2))
                         fid = id_fid(rec->ur_id2); 
                 else 
                         fid = mds_alloc_fid(obd);
+                
                 dchild->d_fsdata = (void *) &dp;
                 dp.p_ptr = req;
                 dp.p_inum = ino;
+                
                 dp.p_fid = fid;
-                dp.p_group = mds->mds_num; 
+                dp.p_group = mds->mds_num;
 
                 rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode, NULL);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
@@ -1186,7 +1186,9 @@ got_child:
                         CDEBUG(D_INODE, "error during create: %d\n", rc);
                         GOTO(cleanup, rc);
                 }
+
                 inode = dchild->d_inode;
+
                 if (ino) {
                         LASSERT(ino == inode->i_ino);
                         
@@ -1362,6 +1364,17 @@ got_child:
         if (rc)
                 GOTO(cleanup, rc);
 
+        /* reintegration case */
+        if ((rec->ur_flags & MDS_REINT_REQ)) {
+                rc = mds_fidmap_add(obd, &body->id1);
+                if (rc < 0) {
+                        CERROR("can't create fid->ino mapping, err %d\n",
+                               rc);
+                } else {
+			rc = 0;
+		}
+        }
+        
         /* if this is a writer, we have to invalidate client's
          * update locks in order to make sure they don't use
          * isize/iblocks from mds anymore.

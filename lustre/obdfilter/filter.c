@@ -1427,10 +1427,11 @@ static int filter_post_fs_setup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         int rc = 0;
+        ENTRY;
         
         rc = fsfilt_post_setup(obd, filter->fo_dentry_O);
 
-        return rc;
+        RETURN(rc);
 }
 
 /* mount the file system (secretly) */

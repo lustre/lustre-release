@@ -27,15 +27,11 @@
 
 #include <linux/obd_class.h>
 
-#define OBD_CMOBD_DEVICENAME    "cmobd"
-
 #define CMOBD_MAX_THREADS       32UL
-
 #define CMOBD_NUM_THREADS       max(min_t(unsigned long, num_physpages / 8192, \
                                           CMOBD_MAX_THREADS), 2UL)
 
 #define CMOBD_MAX_EXTENT_SZ     PTLRPC_MAX_BRW_PAGES * PAGE_SIZE
-
 #define CMOBD_MAX_EXTENTS       1024
 
 /* for keeping the capacity of handle multi extents simultaneously */

@@ -657,6 +657,7 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 }
 #endif
 
+#if 0
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
 {
@@ -692,6 +693,7 @@ static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
 
 }
 #endif
+#endif
 
 struct dentry_operations ll_d_ops = {
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -700,7 +702,9 @@ struct dentry_operations ll_d_ops = {
         .d_revalidate_it = ll_revalidate_it,
 #endif
         .d_release = ll_release,
-        /*.d_iput = ll_dentry_iput,*/
+#if 0
+        .d_iput = ll_dentry_iput,
+#endif
         .d_delete = ll_ddelete,
         .d_compare = ll_dcompare,
 #if 0

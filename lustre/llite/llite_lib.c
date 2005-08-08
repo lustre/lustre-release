@@ -452,7 +452,7 @@ void lustre_common_put_super(struct super_block *sb)
         ENTRY;
 
         ll_gns_del_timer(sbi);
-        ll_close_thread_shutdown(sbi->ll_lcq);
+        ll_close_thread_stop(sbi->ll_lcq);
 
         lustre_destroy_crypto(sb);
 

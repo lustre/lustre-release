@@ -105,8 +105,7 @@ static int smfs_llog_process_rec_cb(struct llog_handle *handle,
 exit:
         RETURN(rc);
 }
-#endif
-#if 0
+
 /* not used curently */
 static smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb)
 {
@@ -243,8 +242,8 @@ int smfs_process_rec(struct super_block *sb,
         RETURN(rc);
 }
 
-/*smfs_path is gotten from intermezzo*/
-static char* smfs_path(struct dentry *dentry, struct dentry *root, char *buffer,
+/* smfs_path is gotten from intermezzo */
+static char *smfs_path(struct dentry *dentry, struct dentry *root, char *buffer,
                        int buflen)
 {
         char * end = buffer + buflen;
@@ -424,7 +423,9 @@ static int kml_pack_path (char **buf, struct dentry * dentry)
         return length;
 }
 #endif
-static int kml_create(struct inode * inode, void *arg, struct kml_priv * priv) 
+
+static int kml_create(struct inode *inode, void *arg,
+                      struct kml_priv *priv) 
 {
         struct hook_msg * msg = arg;
         //return smfs_post_rec_create(inode, msg->dentry, NULL, NULL);
@@ -576,7 +577,7 @@ static int kml_setattr(struct inode *inode, void *arg, struct kml_priv *priv)
                 GOTO(exit, rc);
         
         length += rc;
-        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void *)buffer, length); 
         /*
         if (!rc) {
                 if (attr && attr->ia_valid & ATTR_SIZE) {
@@ -610,13 +611,13 @@ static int kml_setxattr(struct inode *inode, void *arg, struct kml_priv *priv)
         kbuf.buf = msg->buffer;
         kbuf.buf_size = msg->buffer_size;
 
-        rc = priv->pack_fn(REINT_SETXATTR, buffer, NULL, inode, msg->name, 
-                           &kbuf);
+        rc = priv->pack_fn(REINT_SETXATTR, buffer, NULL, inode,
+                           msg->name, &kbuf);
         if (rc <= 0) 
                 GOTO(exit, rc);
         
         length += rc;
-        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void*)buffer, length); 
+        rc = smfs_llog_add_rec(S2SMI(inode->i_sb), (void *)buffer, length); 
         /*
         if (!rc) {
                 if (attr && attr->ia_valid & ATTR_SIZE) {
@@ -703,7 +704,9 @@ exit:
 }
 */
 
-typedef int (*post_kml_op)(struct inode * inode, void *msg, struct kml_priv * priv);
+typedef int (*post_kml_op)(struct inode *inode, void *msg,
+                           struct kml_priv *priv);
+
 static post_kml_op smfs_kml_post[HOOK_MAX] = {
         [HOOK_CREATE]  kml_create,
         [HOOK_LOOKUP]  NULL,
@@ -736,7 +739,8 @@ static int smfs_kml_post_op(hook_op code, struct inode * inode,
                 RETURN(0);
 
         if (smfs_kml_post[code]) {
-                CDEBUG(D_INODE,"KML: inode %lu, code: %u\n", inode->i_ino, code);
+                CDEBUG(D_INODE,"KML: inode %lu, code: %u\n",
+                       inode->i_ino, code);
                 rc = smfs_kml_post[code](inode, msg, priv);
         }
                 
@@ -747,45 +751,46 @@ static int smfs_kml_post_op(hook_op code, struct inode * inode,
 static int smfs_trans_kml (struct super_block *sb, void *arg,
                            struct kml_priv * priv)
 {
-        int size;
+        int size = 1;
+        ENTRY;
         
-        //TODO: pass fs opcode and see if kml can participate or not
-        //one record in log per operation
-        size = 1;
-        
-        return size;
+        /* FIXME-MIKE: pass fs opcode and see if kml can participate or not one
+         * record in log per operation size = 1 */
+
+        RETURN(size);
 }
 
-extern int mds_rec_pack(int, char*, struct dentry*, struct inode*, void*, void*);
-
 static int smfs_start_kml(struct super_block *sb, void *arg,
-                          struct kml_priv * kml_p)
+                          struct kml_priv *kml_p)
 {
-        int rc = 0;
-        struct smfs_super_info * smb = S2SMI(sb);
+        struct smfs_super_info *smb = S2SMI(sb);
         struct llog_ctxt **ctxt = &smb->smsi_kml_log;
         struct obd_device *obd = arg;
-
+        int rc = 0;
         ENTRY;
-        //is plugin already activated
+
+        /* is plugin already activated */
         if (SMFS_IS(smb->plg_flags, SMFS_PLG_KML))
                 RETURN(0);
-        
+
         if (obd && obd->obd_type && obd->obd_type->typ_name) {
-                if (strcmp(obd->obd_type->typ_name, "mds"))
-                        RETURN(0);                
+                if (!strcmp(obd->obd_type->typ_name, OBD_MDS_DEVICENAME)) {
+                        kml_p->pack_fn = mds_rec_pack;
+                } else if (!strcmp(obd->obd_type->typ_name, OBD_FILTER_DEVICENAME)) {
+                        kml_p->pack_fn = ost_rec_pack;
+                } else {
+                        CWARN("unexpected device type: %s\n", obd->obd_type->typ_name);
+                }
         }
-        
-        kml_p->pack_fn = mds_rec_pack;
-        
-        //this will do OBD_ALLOC() for ctxt
+
+        LASSERT(kml_p->pack_fn != NULL);
+
+        /* this will do OBD_ALLOC() for ctxt */
         rc = llog_catalog_setup(ctxt, KML_LOG_NAME, smb->smsi_exp,
                                 smb->smsi_ctxt, smb->sm_fsfilt,
-                                smb->smsi_logs_dir,
-                                smb->smsi_objects_dir);
-        
+                                smb->smsi_logs_dir, smb->smsi_objects_dir);
         if (rc) {
-                CERROR("Failed to initialize kml log list catalog %d\n", rc);
+                CERROR("failed to initialize kml log list catalog %d\n", rc);
                 RETURN(rc);
         }
         
@@ -798,7 +803,6 @@ static int smfs_start_kml(struct super_block *sb, void *arg,
         }
 
         SMFS_SET(smb->plg_flags, SMFS_PLG_KML);
-
         RETURN(0);
 }
 

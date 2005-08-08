@@ -19,8 +19,6 @@
 struct obd_ops;
 struct obd_device;
 
-#define OBD_LDLM_DEVICENAME  "ldlm"
-
 #define LDLM_DEFAULT_LRU_SIZE 100
 
 typedef enum {

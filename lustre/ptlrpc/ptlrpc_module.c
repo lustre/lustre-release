@@ -189,6 +189,7 @@ EXPORT_SYMBOL(lustre_swab_mds_rec_link);
 EXPORT_SYMBOL(lustre_swab_mds_rec_unlink);
 EXPORT_SYMBOL(lustre_swab_mds_rec_rename);
 EXPORT_SYMBOL(lustre_swab_lov_desc);
+EXPORT_SYMBOL(lustre_swab_fid_extent);
 EXPORT_SYMBOL(lustre_swab_ldlm_res_id);
 EXPORT_SYMBOL(lustre_swab_ldlm_policy_data);
 EXPORT_SYMBOL(lustre_swab_ldlm_intent);

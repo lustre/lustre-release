@@ -427,8 +427,8 @@ exit:
         RETURN(rc);
 }
 
-int smfs_setxattr(struct dentry *dentry, const char *name, const void *value,
-                  size_t size, int flags)
+int smfs_setxattr(struct dentry *dentry, const char *name,
+                  const void *value, size_t size, int flags)
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry = NULL;
@@ -460,8 +460,8 @@ int smfs_setxattr(struct dentry *dentry, const char *name, const void *value,
         RETURN(rc);
 }
 
-int smfs_getxattr(struct dentry *dentry, const char *name, void *buffer,
-                  size_t size)
+int smfs_getxattr(struct dentry *dentry, const char *name,
+                  void *buffer, size_t size)
 {
         struct inode *cache_inode = I2CI(dentry->d_inode);
         struct dentry *cache_dentry;

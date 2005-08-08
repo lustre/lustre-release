@@ -30,36 +30,29 @@
 #include <linux/lvfs.h>
 
 #include "smfs_internal.h"
-int smfs_llog_setup(struct dentry ** logs, struct dentry ** objects)
+int smfs_llog_setup(struct dentry **logs, struct dentry **objects)
 {
         struct dentry *dentry = NULL;
         int rc = 0;
-
-        /* create OBJECTS and LOGS for writing logs */
         ENTRY;
 
-        //push_ctxt(&saved, S2SMI(sb)->smsi_ctxt, NULL);
+        /* create OBJECTS and LOGS for writing logs */
         dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777, 1);
         if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                CERROR("cannot create LOGS directory: rc = %d\n", rc);
-                //rc = -EINVAL;
-                goto exit;
+                CERROR("cannot create LOGS directory: rc = %d\n",
+                       (int)PTR_ERR(dentry));
+                RETURN(rc);
         }
-
         *logs = dentry;
-                
+        
         dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
-                CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
-                //rc = -EINVAL;
-                goto exit;
+                CERROR("cannot create OBJECTS directory: rc = %d\n",
+                       (int)PTR_ERR(dentry));
+                RETURN(rc);
         }
-
         *objects = dentry;
         
-exit:
         RETURN(rc);
 }
 

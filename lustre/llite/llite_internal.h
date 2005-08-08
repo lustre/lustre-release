@@ -444,7 +444,7 @@ void ll_open_complete(struct inode *inode);
 int ll_is_inode_dirty(struct inode *inode);
 void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
-void ll_close_thread_shutdown(struct ll_close_queue *lcq);
+void ll_close_thread_stop(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 

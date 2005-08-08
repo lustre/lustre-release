@@ -1625,10 +1625,13 @@ class LOV(Module):
                 self.osclist.append((osc, index, gen, active))
             else:
                 panic('osc not found:', obd_uuid)
+    
     def get_uuid(self):
         return self.uuid
+    
     def get_name(self):
         return self.name
+    
     def prepare(self):
         if not config.record and is_prepared(self.name):
             return
@@ -1741,7 +1744,8 @@ class GKD(Module):
         else:
             self.active = 0
       
-	self.uuid = target_uuid  
+	self.uuid = target_uuid
+	
     def prepare(self):
         if is_prepared(self.name):
             return
@@ -1785,7 +1789,6 @@ class GKD(Module):
     def correct_level(self, level, op=None):
         return level
 
-
 class CONFDEV(Module):
     def __init__(self, db, name, target_uuid, uuid):
         Module.__init__(self, 'CONFDEV', db)
@@ -1800,6 +1803,7 @@ class CONFDEV(Module):
 	self.target = self.db.lookup(target_uuid)
         self.name = "conf_%s" % self.target.getName()
         self.client_uuids = self.target.get_refs('client')
+        self.fs_uuid = self.db.get_first_ref('filesystem')
         self.obdtype = self.db.get_val('obdtype', '')
 	
         self.mds_sec = self.db.get_val('mds_sec', '')
@@ -1967,6 +1971,19 @@ class CONFDEV(Module):
     def add_module(self, manager):
 	manager.add_lustre_module('obdclass', 'confobd')
 
+    # this method checks if current OBD belong to the same FS as passed
+    # mount point uuid. If not - do not write mountpoint and echo client 
+    # to log, it is not needed, but take damn long time (WB test case) 
+    # bug #7210  --umka
+    def belong_to_fs(self, mtpt_uuid):
+	mtpt = self.db.lookup(mtpt_uuid)
+        fs_uuid = mtpt.get_first_ref('filesystem')
+	
+	if not self.fs_uuid or self.fs_uuid == "" or fs_uuid == self.fs_uuid:
+	    return 1
+    
+        return 0
+    
     def write_conf(self):
         if self.target.get_class() == 'ost':
             config.record = 1
@@ -2048,8 +2065,9 @@ class CONFDEV(Module):
                 # refactor this into a funtion to test "clientness"
                 # of a node.
                 for ref_class, ref_uuid in prof_db.get_all_refs():
-                    if ref_class in ('mountpoint','echoclient'):
-                        debug("recording", client_name)
+                    if ref_class in ('mountpoint','echoclient') and self.belong_to_fs(ref_uuid):
+                        debug("recording:", client_name)
+			log("recording mountpoint:", ref_uuid)
                         old_noexec = config.noexec
                         config.noexec = 0
                         noexec_opt = ('', '-n')
@@ -2176,7 +2194,7 @@ class MDSDEV(Module):
  	if self.master != None:
             self.master.add_module(manager)
  
- 	# add CONFOBD modules
+ 	# add CONFDEV modules
  	if self.confobd != None:
             self.confobd.add_module(manager)
 	    
@@ -2356,7 +2374,7 @@ class OSD(Module):
 
         manager.add_lustre_module(self.osdtype, self.osdtype)
 	
- 	# add CONFOBD modules
+ 	# add CONFDEV modules
  	if self.confobd != None:
             self.confobd.add_module(manager)
 
@@ -2625,12 +2643,16 @@ class CMOBD(Module):
         master_class = master_obd.get_class()
         cache_class = cache_obd.get_class()
 
-	if master_class == 'ost' or master_class == 'lov':
+	if master_class == 'lov':
 	    client_uuid = "%s_lov_master_UUID" % (self.name)
             self.master = LOV(master_obd, client_uuid, self.name,
 			      "master_%s" % (self.name));
+        elif master_class == 'ost':
+	    client_uuid = "%s_ost_master_UUID" % (self.name)
+	    self.master = get_osc(master_obd, client_uuid, self.master_uuid) 
         elif master_class == 'mds':
-	    self.master = get_mdc(db, self.name, self.master_uuid) 
+	    client_uuid = "%s_mds_master_UUID" % (self.name)
+	    self.master = get_mdc(master_obd, client_uuid, self.master_uuid) 
         elif master_class == 'lmv':
 	    client_uuid = "%s_lmv_master_UUID" % (self.name)
             self.master = LMV(master_obd, client_uuid, self.name, 
@@ -2638,24 +2660,20 @@ class CMOBD(Module):
 	else:
 	    panic("unknown master obd class '%s'" %(master_class))
 	    
-	if cache_class == 'ost' or cache_class == 'lov':
-	    client_uuid = "%s_lov_cache_UUID" % (self.name)
-            self.cache = LOV(cache_obd, client_uuid, self.name,
-			     "cache_%s" % (self.name));
+        if cache_class == 'ost':
+	    self.cache = get_osc(cache_obd, cache_obd.getUUID(), 
+			         self.cache_uuid)
         elif cache_class == 'mds':
-	    self.cache = get_mdc(db, self.name, self.cache_uuid)
-        elif cache_class == 'lmv':
-	    client_uuid = "%s_lmv_cache_UUID" % (self.name) 
-            self.cache = LMV(cache_obd, client_uuid, self.name, 
-			     "cache_%s" % (self.name));
+	    self.cache = get_mdc(cache_obd, cache_obd.getUUID(), 
+			         self.cache_uuid)
 	else:
-	    panic("unknown cache obd class '%s'" %(cache_class))
+	    panic("invalid cache obd class '%s'" %(cache_class))
 
     def prepare(self):
-        self.master.prepare()
         if not config.record and is_prepared(self.name):
             return
         self.info(self.master_uuid, self.cache_uuid)
+        self.master.prepare()
         lctl.newdev("cmobd", self.name, self.uuid,
                     setup ="%s %s" %(self.master.uuid,
                                      self.cache.uuid))
@@ -2766,7 +2784,7 @@ class COBD(Module):
         manager.add_lustre_module('cobd', 'cobd')
         self.master.add_module(manager)
 
-# virtual interface for  OSC and LOV
+# virtual interface for OSC and LOV
 class VOSC(Module):
     def __init__(self, db, client_uuid, name, name_override = None):
         Module.__init__(self, 'VOSC', db)
@@ -2865,7 +2883,7 @@ def generate_client_uuid(name):
         return client_uuid[:36]
 
 class Mountpoint(Module):
-    def __init__(self,db):
+    def __init__(self, db):
         Module.__init__(self, 'MTPT', db)
         self.path = self.db.get_val('path')
         self.clientoptions = self.db.get_val('clientoptions', '')
@@ -2875,7 +2893,7 @@ class Mountpoint(Module):
 	if not self.mds_uuid:
 	    self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        self.gks_uuid =fs.get_first_ref('gks')
+        self.gks_uuid = fs.get_first_ref('gks')
 	client_uuid = generate_client_uuid(self.name)
 
         self.oss_sec = self.db.get_val('oss_sec','null')
@@ -2904,7 +2922,8 @@ class Mountpoint(Module):
 	self.vmdc = VMDC(mds, client_uuid, self.name, self.name)
 
 	if self.gks_uuid:
-	    self.gkc = get_gkc(db, client_uuid, self.name, self.gks_uuid)      
+	    self.gkc = get_gkc(db, client_uuid, self.name, self.gks_uuid)
+	    
     def prepare(self):
         if not config.record and fs_is_mounted(self.path):
             log(self.path, "already mounted.")
@@ -2979,6 +2998,7 @@ class Mountpoint(Module):
         manager.add_lustre_module('llite', 'llite')
 	if self.gks_uuid:
 	    manager.add_lustre_module('sec/gks', 'gkc')
+
     def correct_level(self, level, op=None):
         return level
 
@@ -3586,7 +3606,6 @@ def sysctl(path, val):
         fp.close()
     except IOError, e:
         panic(str(e))
-
 
 def sys_set_debug_path():
     sysctl('portals/debug_path', config.debug_path)

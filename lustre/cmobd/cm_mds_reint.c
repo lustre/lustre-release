@@ -49,7 +49,7 @@ static inline void cmobd_rec2iattr(struct mds_rec_setattr *rec,
 static void
 cmobd_prepare_mdc_data(struct mdc_op_data *data, struct lustre_id *id1,
                        struct lustre_id *id2, const char *name,
-                       int namelen, __u32 mode)
+                       int namelen, __u32 mode, __u32 flags)
 {
         LASSERT(id1);
         LASSERT(data);
@@ -59,14 +59,18 @@ cmobd_prepare_mdc_data(struct mdc_op_data *data, struct lustre_id *id1,
         data->id1 = *id1;
         if (id2)
                 data->id2 = *id2;
-	else
-		memset(&data->id2, 0, sizeof(data->id2));
 
 	data->valid = 0;
         data->name = name;
+	data->flags = flags;
         data->namelen = namelen;
         data->create_mode = mode;
         data->mod_time = LTIME_S(CURRENT_TIME);
+
+        /* zeroing out store cookie, as it makes no sense on master MDS and may
+         * also confuse it as may be considered as recovery case. */
+        memset(&data->id1.li_stc, 0, sizeof(data->id1.li_stc));
+        memset(&data->id2.li_stc, 0, sizeof(data->id2.li_stc));
 }
 
 /* If mdc_setattr() is called with an 'iattr', then it is a normal RPC that
@@ -102,20 +106,11 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
         /* FIXME-UMKA: here should be handling of setattr() from open. Bug
          * #249. Will be fixed later. */
 
-        /* converting localstore cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->sa_id,
-                          &rec->sa_id, sizeof(rec->sa_id));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
-
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         cmobd_prepare_mdc_data(op_data, &rec->sa_id, NULL,
-                               NULL, 0, 0);
+                               NULL, 0, 0, MDS_REINT_REQ);
 
         /* handling possible EAs. */
         ea1 = lustre_msg_buf(msg, 1, 0);
@@ -138,12 +133,10 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         struct cm_obd *cmobd = &obd->u.cm;
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
-        int rc = 0, namelen, datalen, alloc = 0;
-        struct mds_rec_create *rec;
+        int rc = 0, namelen, datalen;
         struct mdc_op_data *op_data;
+        struct mds_rec_create *rec;
         struct lustre_msg *msg;
-        struct mds_body *body;
-        struct lustre_id lid;
         char *name, *data;
         ENTRY;
 
@@ -153,17 +146,6 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         rec = lustre_msg_buf(msg, 0, 0);
         if (!rec) 
                 RETURN(-EINVAL);
-        
-        lid = rec->cr_replayid;
-
-        /* converting local inode store cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->cr_id,
-                          &rec->cr_id, sizeof(rec->cr_id));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
 
         /* getting name to be created and its length */
         name = lustre_msg_string(msg, 1, 0);
@@ -176,35 +158,26 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL) 
                 GOTO(exit, rc = -ENOMEM);
+
+        /* XXX: here is the issue preventing LMV from being used as master
+         * device for flushing cache to it. It is allusive to the fact that
+         * cache MDS parent id with wrong group component is used for forwarding
+         * reint requests to some MDS from those LMV knows about. As group is
+         * wrong - LMV forwards reqs to wrong MDS. Do not know how to fix it
+         * yet.  --umka */
  
-        /* zeroing @rec->cr_replayid out in request, as master MDS should create
-         * own inode (with own store cookie). */
-        memset(&rec->cr_replayid, 0, sizeof(rec->cr_replayid));
-       
         /* prepare mdc request data. */
         cmobd_prepare_mdc_data(op_data, &rec->cr_id, &rec->cr_replayid,
-                               name, namelen, rec->cr_mode);
+                               name, namelen, rec->cr_mode, MDS_REINT_REQ);
 
         /* requesting to master to create object with passed attributes. */
         rc = md_create(cmobd->master_exp, op_data, data, datalen,
                        rec->cr_mode, current->fsuid, current->fsgid,
                        rec->cr_rdev, &req);
         OBD_FREE(op_data, sizeof(*op_data));
-
-        if (!rc) {
-                /* here we save store cookie from master MDS to local 
-                 * inode EA. */
-                body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-
-                rc = mds_update_mid(cmobd->cache_exp->exp_obd, &lid,
-                                    &body->id1, sizeof(body->id1));
-        }
 exit:
         if (req)
                 ptlrpc_req_finished(req);
-        
-        if (alloc == 1)
-                OBD_FREE(data, datalen);
         
         RETURN(rc);
 }
@@ -228,15 +201,6 @@ static int cmobd_reint_unlink(struct obd_device *obd, void *record)
         if (!rec) 
                 RETURN(-EINVAL);
 
-        /* converting local store cookie to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->ul_id1,
-                          &rec->ul_id1, sizeof(rec->ul_id1));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
-
         /* getting name to be created and its length */
         name = lustre_msg_string(msg, 1, 0);
         namelen = name ? msg->buflens[1] - 1 : 0;
@@ -247,7 +211,8 @@ static int cmobd_reint_unlink(struct obd_device *obd, void *record)
 
         /* prepare mdc request data. */
         cmobd_prepare_mdc_data(op_data, &rec->ul_id1, NULL,
-                               name, namelen, rec->ul_mode);
+                               name, namelen, rec->ul_mode,
+                               MDS_REINT_REQ);
 
         rc = md_unlink(cmobd->master_exp, op_data, &req);
         OBD_FREE(op_data, sizeof(*op_data));
@@ -276,23 +241,6 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
         if (!rec) 
                 RETURN(-EINVAL);
 
-        /* converting local store cookie for both ids to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->lk_id1,
-                          &rec->lk_id1, sizeof(rec->lk_id1));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
-        
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->lk_id2,
-                          &rec->lk_id2, sizeof(rec->lk_id2));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
-        
         /* getting name to be created and its length */
         name = lustre_msg_string(msg, 1, 0);
         namelen = name ? msg->buflens[1] - 1: 0;
@@ -303,7 +251,7 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
 
         /* prepare mdc request data. */
         cmobd_prepare_mdc_data(op_data, &rec->lk_id1, &rec->lk_id2,
-                               name, namelen, 0);
+                               name, namelen, 0, MDS_REINT_REQ);
 
         rc = md_link(cmobd->master_exp, op_data, &req);
         OBD_FREE(op_data, sizeof(*op_data));
@@ -331,23 +279,6 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
         rec = lustre_msg_buf(msg, 0, 0);
         if (!rec) 
                 RETURN(-EINVAL);
-        
-        /* converting local store cookie for both ids to remote lustre_id. */
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->rn_id1,
-                          &rec->rn_id1, sizeof(rec->rn_id1));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
-        
-        rc = mds_read_mid(cmobd->cache_exp->exp_obd, &rec->rn_id2,
-                          &rec->rn_id2, sizeof(rec->rn_id2));
-        if (rc) {
-                CERROR("Can't read master MDS store cookie "
-                       "from local inode EA, err = %d.\n", rc);
-                RETURN(rc);
-        }
 
         /* getting old name and its length */
         old = lustre_msg_string(msg, 1, 0);
@@ -363,7 +294,7 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
         
         /* prepare mdc request data. */
         cmobd_prepare_mdc_data(op_data, &rec->rn_id1, &rec->rn_id1,
-                               NULL, 0, 0);
+                               NULL, 0, 0, MDS_REINT_REQ);
 
         rc = md_rename(cmobd->master_exp, op_data, old, oldlen,
                        new, newlen, &req);

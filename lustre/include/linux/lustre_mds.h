@@ -49,10 +49,6 @@ struct ptlrpc_request;
 struct obd_device;
 struct ll_file_data;
 
-#define OBD_MDS_DEVICENAME "mds"
-#define OBD_MDT_DEVICENAME "mdt"
-#define OBD_MDC_DEVICENAME "mdc"
-
 struct mds_update_record {
         __u32               ur_opcode;
         struct lustre_id   *ur_id1;
@@ -288,6 +284,7 @@ mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id,
                      struct vfsmount **mnt, int lock_mode,
                      struct lustre_handle *lockh, int *pmode,
                      char *name, int namelen, __u64 lockpart);
+		     
 int mds_update_server_data(struct obd_device *, int force_sync);
 int mds_update_last_fid(struct obd_device *obd, void *handle, 
 			int force_sync);

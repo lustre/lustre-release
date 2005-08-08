@@ -305,6 +305,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_IDONLY        (0x00000010) // if set in o_flags only adjust obj id
 #define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
 #define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
+#define OBD_FL_REINT         (0x00000080) /* reint during cache flush */
 
 /* this should be sizeof(struct lustre_handle) + sizeof(struct llog_cookie) +
  * sizeof(struct lustre_id). */
@@ -617,6 +618,11 @@ struct lustre_stc {
         } u;
 };
 
+struct fid_extent {
+        __u64 fe_start;
+        __u64 fe_width;
+};
+
 /* lustre file id */
 struct lustre_fid {
         __u64 lf_id;                   /* fid counter maintained on per 
@@ -745,24 +751,11 @@ struct mdc_op_data {
         struct mea      *mea1;       /* mea of inode1 */
         struct mea      *mea2;       /* mea of inode2 */
         __u64            valid;
+        __u32            flags;
 };
 
 #define MDS_MODE_DONT_LOCK      (1 << 30)
 #define MDS_MODE_REPLAY         (1 << 31)
-
-struct mds_rec_setattr {
-        __u32            sa_opcode;
-        __u32            sa_valid;
-        struct lustre_id sa_id;
-        __u32            sa_mode;
-        __u32            sa_uid;
-        __u32            sa_gid;
-        __u32            sa_attr_flags;
-        __u64            sa_size;
-        __u64            sa_atime;
-        __u64            sa_mtime;
-        __u64            sa_ctime;
-};
 
 /* XXX Following ATTR_XXX should go to vfs patch...  */
 #ifdef ATTR_CTIME_SET
@@ -781,7 +774,6 @@ struct mds_rec_setattr {
 #define ATTR_EA_CMOBD   0x00100000
 #define ATTR_KEY        0x00200000
 #define ATTR_MAC        0x00400000
-extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
@@ -796,6 +788,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_APPEND          00002000
 #define MDS_OPEN_SYNC            00010000
 #define MDS_OPEN_DIRECTORY       00200000
+#define MDS_REINT_REQ            01000000
 
 #define MDS_OPEN_DELAY_CREATE    0100000000   /* delay initial object create */
 #define MDS_OPEN_HAS_KEY         01000000000 /* just set the EA the obj exist */
@@ -819,6 +812,7 @@ extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
 
 struct mds_rec_link {
         __u32            lk_opcode;
+        __u32            lk_flags;
         __u32            lk_padding;
         struct lustre_id lk_id1;
         struct lustre_id lk_id2;
@@ -829,6 +823,7 @@ extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mds_rec_unlink {
         __u32            ul_opcode;
+        __u32            ul_flags;
         __u32            ul_mode;
         struct lustre_id ul_id1;
         struct lustre_id ul_id2;
@@ -839,10 +834,26 @@ extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
 
 struct mds_rec_rename {
         __u32            rn_opcode;
+        __u32            rn_flags;
         __u32            rn_padding;
         struct lustre_id rn_id1;
         struct lustre_id rn_id2;
         __u64            rn_time;
+};
+
+struct mds_rec_setattr {
+        __u32            sa_opcode;
+        __u32            sa_flags;
+        __u32            sa_valid;
+        struct lustre_id sa_id;
+        __u32            sa_mode;
+        __u32            sa_uid;
+        __u32            sa_gid;
+        __u32            sa_attr_flags;
+        __u64            sa_size;
+        __u64            sa_atime;
+        __u64            sa_mtime;
+        __u64            sa_ctime;
 };
 
 extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
@@ -1278,9 +1289,13 @@ typedef int (*crypt_cb_t)(struct page *page, __u64 offset, __u64 count,
 extern void lustre_swab_key_context (struct key_context *kctxt);
 extern void lustre_swab_key_perms (struct key_perm *kperm);
 #endif /*for define __KERNEL*/
+
 extern void lustre_swab_lustre_id(struct lustre_id *id);
 extern void lustre_swab_lov_desc(struct lov_desc *desc);
+extern void lustre_swab_fid_extent(struct fid_extent *ext);
 extern void lustre_swab_lustre_stc(struct lustre_stc *stc);
 extern void lustre_swab_lustre_fid(struct lustre_fid *fid);
 extern void lustre_swab_mds_status_req(struct mds_status_req *r);
+extern void lustre_swab_mds_rec_setattr(struct mds_rec_setattr *sa);
+
 #endif

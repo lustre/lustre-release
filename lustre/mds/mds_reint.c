@@ -453,23 +453,12 @@ out:
         return 0;
 }
 
-/*This is a tmp fix for cmobd setattr reint*/
-
-#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
-#define XATTR_LUSTRE_MDS_MID_EA         "mid"
-#define XATTR_LUSTRE_MDS_SID_EA         "sid"
-#define XATTR_LUSTRE_MDS_PID_EA         "pid"
-#define XATTR_LUSTRE_MDS_KEY_EA         "key"
-
 static int mds_get_md_type(char *name)
 {
         if (!strcmp(name, XATTR_LUSTRE_MDS_LOV_EA)) 
                 RETURN(EA_LOV);
         if (!strcmp(name, XATTR_LUSTRE_MDS_MEA_EA))
                 RETURN(EA_MEA);
-        if (!strcmp(name, XATTR_LUSTRE_MDS_MID_EA))
-                RETURN(EA_MID);
         if (!strcmp(name, XATTR_LUSTRE_MDS_SID_EA))
                 RETURN(EA_SID);
         if (!strcmp(name, XATTR_LUSTRE_MDS_PID_EA))
@@ -603,16 +592,20 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 } else if (rec->ur_iattr.ia_valid & ATTR_EA_CMOBD) {
                         char *name;
                         int type;
-                        /*tmp fix for cmobd set md reint*/
+                        
+                        /* tmp fix for cmobd set md reint */
                         LASSERT(rec->ur_eadata != NULL);
                         LASSERT(rec->ur_ea2data != NULL);
                         name = rec->ur_eadata;
+                        
                         CDEBUG(D_INFO, "set %s EA for cmobd \n", name);
+
                         type = mds_get_md_type(name);
-                        if (type != 0) 
+                        if (type != 0) {
                                 rc = fsfilt_set_md(obd, inode, handle, 
                                                    rec->ur_ea2data,
                                                    rec->ur_ea2datalen, type);
+                        }
                         if (rc)
                                 GOTO(cleanup, rc);               
                 } else if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
@@ -845,7 +838,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                        rec->ur_namelen - 1, MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                CERROR("parent lookup error %d\n", rc);
+                CERROR("parent lookup error %d, id "DLID4"\n",
+                       rc, OLID4(rec->ur_id1));
                 GOTO(cleanup, rc);
         }
         cleanup_phase = 1; /* locked parent dentry */
@@ -915,18 +909,21 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         rec->ur_mode |= S_ISGID;
         }
 
-        /*
-         * here inode number should be used only in the case of replaying. It is
-         * needed to check if object already created in the case of creating
-         * remote inode.
-         */
-        if (id_ino(rec->ur_id2)) 
+        /* for reint case stor ecookie should be zero */
+        if (rec->ur_flags & MDS_REINT_REQ) {
+                LASSERT(id_ino(rec->ur_id1) == 0);
+                LASSERT(id_ino(rec->ur_id2) == 0);
+        }
+        
+        if (id_fid(rec->ur_id2))
                 fid = id_fid(rec->ur_id2);
-        else 
+        else
                 fid = mds_alloc_fid(obd);
+        
         dchild->d_fsdata = (void *)&dp;
         dp.p_inum = (unsigned long)id_ino(rec->ur_id2);
         dp.p_ptr = req;
+
         dp.p_fid = fid;
         dp.p_group = mds->mds_num;
 
@@ -938,15 +935,28 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
+                
+                /* XXX: here we should check what type of EA is in ur_eadata 
+                 * and do appropriate actions. --umka */
                 if (rec->ur_eadata && rec->ur_eadatalen && 
-                    (rc == 0) && (dchild->d_inode != NULL)) {
-                        /*Assumption: When ur_eadata is not NULL, 
-                         *ur_eadata is crypto key, should fix it later, Wangdi*/
+                    rc == 0 && dchild->d_inode != NULL) {
+                    if (rec->ur_flags & MDS_REINT_REQ) {
+                        /* for CMOBD to set lov md info when cmobd reint
+                         * create */
+                        CDEBUG(D_INFO, "set lsm %p, len %d to inode %lu \n", 
+                               rec->ur_eadata, rec->ur_eadatalen, 
+                               dchild->d_inode->i_ino); 
+                        fsfilt_set_md(obd, dchild->d_inode, handle, rec->ur_eadata,
+                                      rec->ur_eadatalen, EA_LOV);  
+                    } else {
+                        /* assumption: when ur_eadata is not NULL, 
+                         * ur_eadata is crypto key, should fix it later, 
+                         * --wangdi */
                         mds_set_gskey(obd, handle, dchild->d_inode, 
                                       rec->ur_eadata, rec->ur_eadatalen, 
                                       ATTR_MAC | ATTR_KEY); 
+                    }
                 }
-                EXIT;
                 break;
         }
         case S_IFDIR: {
@@ -958,8 +968,14 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                  * processing load. first, we calculate which MDS to use to put
                  * new directory's inode in.
                  */
+
+                /* XXX: here we order mds_choose_mdsnum() to use local mdsnum
+                 * for reint requests. This should be gone when real flushing on
+                 * LMV is fixed. --umka */
                 i = mds_choose_mdsnum(obd, rec->ur_name, rec->ur_namelen - 1, 
-                                      rec->ur_flags, &req->rq_peer, dir);
+                                      rec->ur_flags, &req->rq_peer, dir,
+                                      (rec->ur_flags & MDS_REINT_REQ));
+                
                 if (i == mds->mds_num) {
                         /* inode will be created locally */
                         handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
@@ -1000,7 +1016,13 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         oa->o_mode = rec->ur_mode;
                         oa->o_uid = current->fsuid;
                         oa->o_gid = (dir->i_mode & S_ISGID) ?
-                                                dir->i_gid : current->fsgid;
+                                     dir->i_gid : current->fsgid;
+
+                        /* letting remote MDS know that this is reint
+                         * request. */
+                        if (rec->ur_flags & MDS_REINT_REQ)
+                                oa->o_flags |= OBD_FL_REINT;
+
                         /* transfer parent id to remote inode */
                         memcpy(obdo_id(oa), &sid, sizeof(sid));
                         oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLUID | 
@@ -1083,7 +1105,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         /* requested name exists in the directory */
                         rc = -EEXIST;
                 }
-                EXIT;
                 break;
         }
         case S_IFLNK:{
@@ -1094,7 +1115,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         rc = -EINVAL;           /* -EPROTO? */
                 else
                         rc = ll_vfs_symlink(dir, dchild, rec->ur_tgt, S_IALLUGO);
-                EXIT;
                 break;
         }
         case S_IFCHR:
@@ -1106,7 +1126,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, (handle = NULL, rc = PTR_ERR(handle)));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
-                EXIT;
                 break;
         }
         default:
@@ -1124,8 +1143,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
         } else if (dchild->d_inode) {
                 struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
-                struct iattr iattr;
                 struct inode *inode = dchild->d_inode;
+                struct iattr iattr;
 
                 created = 1;
                 iattr.ia_uid = rec->ur_fsuid;
@@ -1207,6 +1226,17 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 
                 mds_pack_inode2body(obd, body, inode, 1);
                 mds_body_do_reverse_map(med, body);
+
+                if (rec->ur_flags & MDS_REINT_REQ) {
+                        LASSERT(body != NULL);
+                        rc = mds_fidmap_add(obd, &body->id1);
+                        if (rc < 0) {
+                                CERROR("can't create fid->ino mapping, "
+                                       "err %d\n", rc);
+                        } else {
+                                rc = 0;
+                        }
+                }
         }
 
         EXIT;
@@ -2097,8 +2127,7 @@ cleanup:
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
-                            struct ptlrpc_request *req,
-                            struct lustre_handle *lh)
+                            struct ptlrpc_request *req, struct lustre_handle *lh)
 {
         struct dentry *dparent = NULL, *dchild;
         struct mds_obd *mds = mds_req2mds(req);
@@ -2177,8 +2206,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                                  &update_mode, rec->ur_name,
                                                  rec->ur_namelen, &child_lockh,
                                                  &dchild, LCK_EX,
-                                                 MDS_INODELOCK_LOOKUP |
-                                                 MDS_INODELOCK_UPDATE);
+                                                 (MDS_INODELOCK_LOOKUP |
+                                                  MDS_INODELOCK_UPDATE));
         }
         if (rc)
                 GOTO(cleanup, rc);
@@ -2331,6 +2360,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         CERROR("can't remove OST object, err %d\n",
                                rc);
                 }
+
+                if (child_inode->i_nlink == 0)
+                        mds_fidmap_del(obd, &body->id1);
         }
 
         GOTO(cleanup, rc);
@@ -2586,8 +2618,7 @@ cleanup:
 }
 
 static int mds_reint_link(struct mds_update_record *rec, int offset,
-                          struct ptlrpc_request *req,
-                          struct lustre_handle *lh)
+                          struct ptlrpc_request *req, struct lustre_handle *lh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de_src = NULL;

@@ -698,17 +698,19 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
         post_smfs_dentry(cache_dentry);
         RETURN(rc);
 }
+
 static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
                                  void *buffer, int buffer_size)
 {
-        struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        struct  inode *cache_inode = NULL;
+        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
+        struct inode *cache_inode = NULL;
         struct hook_xattr_msg msg = {
                 .name = name,
                 .buffer = buffer,
                 .buffer_size = buffer_size
         };
-        int     rc = -EIO;
+        int    rc = -EIO;
+        int    lov = 0;
         
         ENTRY;
         
@@ -719,6 +721,7 @@ static int fsfilt_smfs_set_xattr(struct inode *inode, void *handle, char *name,
         if (!cache_inode)
                 RETURN(rc);
         
+        lov = (!strcmp(name, XATTR_LUSTRE_MDS_LOV_EA));
         pre_smfs_inode(inode, cache_inode);
         SMFS_PRE_HOOK(inode, HOOK_F_SETXATTR, &msg);
         if (cache_fsfilt->fs_set_xattr)
@@ -750,16 +753,8 @@ static int fsfilt_smfs_get_xattr(struct inode *inode, char *name,
                 rc = cache_fsfilt->fs_get_xattr(cache_inode, name,
                                                 buffer, buffer_size);
         post_smfs_inode(inode, cache_inode);
-
         RETURN(rc);
 }
-
-#define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-#define XATTR_LUSTRE_MDS_MEA_EA         "mea"
-#define XATTR_LUSTRE_MDS_MID_EA         "mid"
-#define XATTR_LUSTRE_MDS_SID_EA         "sid"
-#define XATTR_LUSTRE_MDS_PID_EA         "pid"
-#define XATTR_LUSTRE_MDS_KEY_EA         "key"
 
 static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size, enum ea_type type)
@@ -780,11 +775,6 @@ static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
         case EA_SID:
                 rc = fsfilt_smfs_set_xattr(inode, handle,
                                            XATTR_LUSTRE_MDS_SID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_MID:
-                rc = fsfilt_smfs_set_xattr(inode, handle,
-                                           XATTR_LUSTRE_MDS_MID_EA,
                                            lmm, lmm_size);
                 break;
         case EA_PID:
@@ -823,11 +813,6 @@ static int fsfilt_smfs_get_md(struct inode *inode, void *lmm,
         case EA_SID:
                 rc = fsfilt_smfs_get_xattr(inode,
                                            XATTR_LUSTRE_MDS_SID_EA,
-                                           lmm, lmm_size);
-                break;
-        case EA_MID:
-                rc = fsfilt_smfs_get_xattr(inode,
-                                           XATTR_LUSTRE_MDS_MID_EA,
                                            lmm, lmm_size);
                 break;
         case EA_PID:

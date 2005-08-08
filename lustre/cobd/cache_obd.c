@@ -32,19 +32,25 @@
 #include <linux/obd_class.h>
 #include <linux/obd_cache.h>
 #include <linux/obd_lmv.h>
+#include <linux/obd_lov.h>
 
 static int cobd_attach(struct obd_device *obd,
                        obd_count len, void *buf)
 {
         struct lprocfs_static_vars lvars;
+        int rc = 0;
+        ENTRY;
         
         lprocfs_init_vars(cobd, &lvars);
-        return lprocfs_obd_attach(obd, lvars.obd_vars);
+        rc = lprocfs_obd_attach(obd, lvars.obd_vars);
+        
+        RETURN(rc);
 }
 
 static int cobd_detach(struct obd_device *obd)
 {
-        return lprocfs_obd_detach(obd);
+        ENTRY;
+        RETURN(lprocfs_obd_detach(obd));
 }
 
 static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -141,8 +147,15 @@ static int cobd_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         cobd->cache_exp = class_conn2export(&conn);
         
-        /* default set cache on */
+        /* default set cache on, but nothins is realy connected yet, will be
+         * done in cobd_connect() time. */
         cobd->cache_on = 1;
+
+        /* nothing is connected, make exports reflect this state to not confuse
+         * cobd_switch() later. */
+        cobd->cache_real_exp = NULL;
+        cobd->master_real_exp = NULL;
+        
         EXIT;
 put_names:
         if (rc) {
@@ -192,24 +205,64 @@ static inline struct obd_export *
 cobd_get_exp(struct obd_device *obd)
 {
         struct cache_obd *cobd = &obd->u.cobd;
+        ENTRY;
+        
         if (cobd->cache_on) {
                 CDEBUG(D_TRACE, "get cache exp %p \n", cobd->cache_exp); 
                 if (cobd->cache_real_exp)
-                       return cobd->cache_real_exp;
-                return cobd->cache_exp;
+                        RETURN(cobd->cache_real_exp);
+                RETURN(cobd->cache_exp);
         }
+        
         CDEBUG(D_TRACE, "get master exp %p \n", cobd->master_exp);
         if (cobd->master_real_exp)
-                return cobd->master_real_exp; 
-        return cobd->master_exp;
+                RETURN(cobd->master_real_exp); 
+        RETURN(cobd->master_exp);
+}
+
+static int cobd_init_dt_desc(struct obd_device *obd)
+{
+        struct cache_obd *cobd = &obd->u.cobd;
+        struct obd_export *cobd_exp;
+        __u32 valsize;
+        int rc = 0;
+        ENTRY;
+        
+        valsize = sizeof(cobd->dt_desc);
+        memset(&cobd->dt_desc, 0, sizeof(cobd->dt_desc));
+
+        cobd_exp = cobd_get_exp(obd);
+        rc = obd_get_info(cobd_exp, strlen("lovdesc") + 1,
+                          "lovdesc", &valsize, &cobd->dt_desc);
+        RETURN(rc);
+}
+        
+static int cobd_init_ea_size(struct obd_device *obd)
+{
+        int rc = 0, tgt_count, easize, cookiesize;
+        struct cache_obd *cobd = &obd->u.cobd;
+        struct obd_export *cobd_exp;
+        ENTRY;
+
+        tgt_count = cobd->dt_desc.ld_tgt_count;
+
+        /* no EA setup is needed as there is single OST with no LOV */
+        if (tgt_count == 0)
+                RETURN(0);
+
+        cobd_exp = cobd_get_exp(obd);
+        easize = lov_mds_md_size(tgt_count);
+        cookiesize = tgt_count * sizeof(struct llog_cookie);
+        rc = obd_init_ea_size(cobd_exp, easize, cookiesize);
+        RETURN(rc);
 }
 
 static int
-client_obd_connect(struct obd_device *obd,
-                   struct obd_export *exp,
-                   struct lustre_handle *conn,
-                   struct obd_connect_data *data,
-                   unsigned long flags)
+cobd_connect_client(struct obd_device *obd,
+                    struct obd_export *exp,
+                    struct lustre_handle *conn,
+                    struct obd_connect_data *data,
+                    unsigned long flags)
 { 
         struct obd_device *cli_obd;
         int rc = 0;
@@ -222,17 +275,18 @@ client_obd_connect(struct obd_device *obd,
         if (cli_obd == NULL) 
                 RETURN(-EINVAL);
 
-        rc = obd_connect(conn, cli_obd, &obd->obd_uuid, data, flags);
+        rc = obd_connect(conn, cli_obd, &obd->obd_uuid,
+                         data, flags);
         if (rc) 
                 CERROR("error connecting err %d\n", rc);
-        
+
         RETURN(rc);
 }
 
 static int
-client_obd_disconnect(struct obd_device *obd,
-                      struct obd_export *exp,
-                      unsigned long flags)
+cobd_disconnect_client(struct obd_device *obd,
+                       struct obd_export *exp,
+                       unsigned long flags)
 {
         struct obd_device *cli_obd;
         int rc = 0;
@@ -250,34 +304,116 @@ client_obd_disconnect(struct obd_device *obd,
         RETURN(rc);
 }
 
+#define COBD_CONNECT (1 << 0)
+#define COBD_DISCON (1 << 1)
+#define COBD_BOTH (1 << 2)
+
+/* magic function for switching cobd between two exports cache and master in
+ * strong correspondence with passed @cache_on. It also may perform partial
+ * actions like only turn off old export or only turn on new one.
+ *
+ * bias == COBD_CONNECT only connect new export (used in cobd_connect())
+ * bias == COBD_DISCON only disconnect old export (used in cobd_disconnect())
+ * bias == COBD_BOTH do both (disconnect old and connect new) (used in
+ * cobd_iocontrol())
+ */
+static int cobd_switch(struct obd_device *obd,
+                       int cache_on, int bias)
+{
+        struct cache_obd *cobd = &obd->u.cobd;
+        struct obd_device *cli_obd = NULL;
+        struct lustre_handle conn = {0,};
+        struct obd_export *discon_exp;
+        struct obd_export *conn_exp;
+        int rc = 0;
+        ENTRY;
+
+        if (cache_on) {
+                discon_exp = cobd->master_real_exp;
+                conn_exp = cobd->cache_exp;
+        } else {
+                discon_exp = cobd->cache_real_exp;
+                conn_exp = cobd->master_exp;
+        }
+
+        /* disconnect old export */
+        if (bias == COBD_BOTH || bias == COBD_DISCON) {
+                if (discon_exp) {
+                        rc = cobd_disconnect_client(obd, discon_exp, 0);
+                        if (rc) {
+                                CWARN("can't disconnect export %p, err %d\n",
+                                      discon_exp, rc);
+                        }
+                }
+                
+                if (cache_on)
+                        cobd->master_real_exp = NULL;
+                else
+                        cobd->cache_real_exp = NULL; 
+        }
+
+        /* connect new export */
+        if (bias == COBD_BOTH || bias == COBD_CONNECT) {
+                rc = cobd_connect_client(obd, conn_exp, &conn,
+                                         NULL, OBD_OPT_REAL_CLIENT);
+                if (rc) {
+                        CERROR("can't connect export %p, err %d\n",
+                               conn_exp, rc);
+                        RETURN(rc);
+                }
+
+                if (cache_on) {
+                        cobd->cache_real_exp = class_conn2export(&conn);
+                        cli_obd = class_exp2obd(cobd->cache_exp);
+                } else {
+                        cobd->master_real_exp = class_conn2export(&conn);
+                        cli_obd = class_exp2obd(cobd->master_exp);
+                }
+        }
+
+        cobd->cache_on = cache_on;
+        
+        if (bias == COBD_BOTH || bias == COBD_CONNECT) {
+                /* re-init EA size for new selected export. This should be done after
+                 * assigining new state to @cobd->cache_on to not call not connened
+                 * already old export. */
+                if (obd_md_type(cli_obd)) {
+                        rc = cobd_init_dt_desc(obd);
+                        if (rc == 0) {
+                                rc = cobd_init_ea_size(obd);
+                                if (rc) {
+                                        CERROR("can't initialize EA size, "
+                                               "err %d\n", rc);
+                                }
+                        } else {
+                                /* ignore cases when we di dnot manage to init
+                                 * lovdesc. This is because some devices may not know
+                                 * "lovdesc" info command. */
+                                rc = 0;
+                        }
+                }
+        }
+
+        RETURN(rc);
+}
+
 static int
 cobd_connect(struct lustre_handle *conn, struct obd_device *obd,
              struct obd_uuid *cluuid, struct obd_connect_data *data,
              unsigned long flags)
 {
-        struct lustre_handle cache_conn = { 0 };
         struct cache_obd *cobd = &obd->u.cobd;
-        struct obd_export *exp, *cobd_exp;
+        struct obd_export *exp;
         int rc = 0;
         ENTRY;
 
         rc = class_connect(conn, obd, cluuid);
         if (rc)
                 RETURN(rc);
-        exp = class_conn2export(conn);
 
-        cobd_exp = cobd_get_exp(obd);
-        
-        /* connecting cache */
-        rc = client_obd_connect(obd, cobd_exp, &cache_conn, 
-                                data, flags);
-        if (rc)
-                GOTO(err_discon, rc);
-       
-        cobd->cache_real_exp = class_conn2export(&cache_conn);
-        cobd->cache_on = 1;
-        EXIT;
-err_discon:
+        exp = class_conn2export(conn);
+        rc = cobd_switch(obd, cobd->cache_on,
+                         COBD_CONNECT);
         if (rc)
                 class_disconnect(exp, 0);
         else
@@ -288,8 +424,8 @@ err_discon:
 static int
 cobd_disconnect(struct obd_export *exp, unsigned long flags)
 {
+        struct cache_obd *cobd;
         struct obd_device *obd;
-        struct obd_export *cobd_exp;
         int rc = 0;
         ENTRY;
         
@@ -300,12 +436,15 @@ cobd_disconnect(struct obd_export *exp, unsigned long flags)
                        LPX64"\n", exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
-        cobd_exp = cobd_get_exp(obd);
-        
-        rc = client_obd_disconnect(obd, cobd_exp, flags);
 
+        /* here would be nice also to check that disconnect goes to the same
+         * export as connect did. But as now we are accepting the notion that
+         * cache should be switched after client umount this is not needed.
+         * --umka. */
+        cobd = &obd->u.cobd;
+        rc = cobd_switch(obd, cobd->cache_on, COBD_DISCON);
         class_disconnect(exp, flags);
-        
+
         RETURN(rc);
 }
 
@@ -314,16 +453,19 @@ static int cobd_get_info(struct obd_export *exp, __u32 keylen,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
         
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
 
         /* intercept cache utilisation info? */
-        return obd_get_info(cobd_exp, keylen, key, vallen, val);
+        rc = obd_get_info(cobd_exp, keylen, key, vallen, val);
+        RETURN(rc);
 }
 
 static int cobd_set_info(struct obd_export *exp, obd_count keylen,
@@ -331,17 +473,21 @@ static int cobd_set_info(struct obd_export *exp, obd_count keylen,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
        
-        LASSERT(cobd_exp); 
+        LASSERT(cobd_exp);
+        
         /* intercept cache utilisation info? */
-        return obd_set_info(cobd_exp, keylen, key, vallen, val);
+        rc = obd_set_info(cobd_exp, keylen, key, vallen, val);
+        RETURN(rc);
 }
 
 static int cobd_statfs(struct obd_device *obd,
@@ -349,9 +495,44 @@ static int cobd_statfs(struct obd_device *obd,
                        unsigned long max_age)
 {
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(obd);
-        return obd_statfs(class_exp2obd(cobd_exp), osfs, max_age);
+        rc = obd_statfs(class_exp2obd(cobd_exp), osfs, max_age);
+        RETURN(rc);
+}
+
+static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
+                          int len, void *karg, void *uarg)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct cache_obd  *cobd = &obd->u.cobd;
+        struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
+
+        down(&cobd->sem);
+        
+        /* here would be nice also to make sure somehow that there are no
+         * out-standing requests which go to wrong MDS after cache switch (close
+         * RPCs). But how to check that from COBD? I do not know. --umka */
+        switch (cmd) {
+        case OBD_IOC_COBD_CON:
+                if (!cobd->cache_on)
+                        rc = cobd_switch(obd, 1, COBD_BOTH);
+                break;
+        case OBD_IOC_COBD_COFF: 
+                if (cobd->cache_on)
+                        rc = cobd_switch(obd, 0, COBD_BOTH);
+                break;
+        default:
+                cobd_exp = cobd_get_exp(obd);
+                rc = obd_iocontrol(cmd, cobd_exp, len, karg, uarg);
+        }
+
+        up(&cobd->sem);
+        RETURN(rc);
 }
 
 static int cobd_dt_packmd(struct obd_export *exp,
@@ -360,14 +541,17 @@ static int cobd_dt_packmd(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_packmd(cobd_exp, disk_tgt, mem_src);
+        rc = obd_packmd(cobd_exp, disk_tgt, mem_src);
+        RETURN(rc);
 }
 
 static int cobd_dt_unpackmd(struct obd_export *exp,
@@ -377,14 +561,17 @@ static int cobd_dt_unpackmd(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_unpackmd(cobd_exp, mem_tgt, disk_src, disk_len);
+        rc = obd_unpackmd(cobd_exp, mem_tgt, disk_src, disk_len);
+        RETURN(rc);
 }
 
 static int cobd_dt_create(struct obd_export *exp,
@@ -395,14 +582,17 @@ static int cobd_dt_create(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_create(cobd_exp, obdo, acl, acl_size, ea, oti);
+        rc = obd_create(cobd_exp, obdo, acl, acl_size, ea, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_destroy(struct obd_export *exp,
@@ -412,20 +602,24 @@ static int cobd_dt_destroy(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_destroy(cobd_exp, obdo, ea, oti); 
+        rc = obd_destroy(cobd_exp, obdo, ea, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_precleanup(struct obd_device *obd, int flags)
 {
-        /* FIXME-WANGDI: do we need some cleanup here? */
-        return 0;
+        /* FIXME: do we need some cleanup here? */
+        ENTRY;
+        RETURN(0);
 }
 
 static int cobd_dt_getattr(struct obd_export *exp, struct obdo *oa,
@@ -433,14 +627,17 @@ static int cobd_dt_getattr(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_getattr(cobd_exp, oa, ea);
+        rc = obd_getattr(cobd_exp, oa, ea);
+        RETURN(rc);
 }
 
 static int cobd_dt_getattr_async(struct obd_export *exp,
@@ -449,14 +646,17 @@ static int cobd_dt_getattr_async(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_getattr_async(cobd_exp, obdo, ea, set);
+        rc = obd_getattr_async(cobd_exp, obdo, ea, set);
+        RETURN(rc);
 }
 
 static int cobd_dt_setattr(struct obd_export *exp, struct obdo *obdo,
@@ -465,14 +665,17 @@ static int cobd_dt_setattr(struct obd_export *exp, struct obdo *obdo,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_setattr(cobd_exp, obdo, ea, oti);
+        rc = obd_setattr(cobd_exp, obdo, ea, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_brw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -481,14 +684,17 @@ static int cobd_dt_brw(int cmd, struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_brw(cmd, cobd_exp, oa, ea, oa_bufs, pg, oti);
+        rc = obd_brw(cmd, cobd_exp, oa, ea, oa_bufs, pg, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_brw_async(int cmd, struct obd_export *exp,
@@ -499,15 +705,18 @@ static int cobd_dt_brw_async(int cmd, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_brw_async(cmd, cobd_exp, oa, ea, oa_bufs, 
-                             pg, set, oti);
+        rc = obd_brw_async(cmd, cobd_exp, oa, ea, oa_bufs, 
+                           pg, set, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_prep_async_page(struct obd_export *exp, 
@@ -519,15 +728,18 @@ static int cobd_dt_prep_async_page(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_prep_async_page(cobd_exp, lsm, loi, page, offset,
-                                   ops, data, res);
+        rc = obd_prep_async_page(cobd_exp, lsm, loi, page,
+                                 offset, ops, data, res);
+        RETURN(rc);
 }
 
 static int cobd_dt_queue_async_io(struct obd_export *exp,
@@ -538,15 +750,18 @@ static int cobd_dt_queue_async_io(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_queue_async_io(cobd_exp, lsm, loi, cookie, cmd, off, count,
-                                  brw_flags, async_flags);
+        rc = obd_queue_async_io(cobd_exp, lsm, loi, cookie, cmd, off,
+                                count, brw_flags, async_flags);
+        RETURN(rc);
 }
 
 static int cobd_dt_set_async_flags(struct obd_export *exp,
@@ -556,14 +771,18 @@ static int cobd_dt_set_async_flags(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_set_async_flags(cobd_exp, lsm, loi, cookie, async_flags);
+        rc = obd_set_async_flags(cobd_exp, lsm, loi, cookie,
+                                 async_flags);
+        RETURN(rc);
 }
 
 static int cobd_dt_queue_group_io(struct obd_export *exp, 
@@ -576,15 +795,19 @@ static int cobd_dt_queue_group_io(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_queue_group_io(cobd_exp, lsm, loi, oig, cookie,
-                                  cmd, off, count, brw_flags, async_flags);
+        rc = obd_queue_group_io(cobd_exp, lsm, loi, oig, cookie,
+                                cmd, off, count, brw_flags,
+                                async_flags);
+        RETURN(rc);
 }
 
 static int cobd_dt_trigger_group_io(struct obd_export *exp, 
@@ -594,30 +817,37 @@ static int cobd_dt_trigger_group_io(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_trigger_group_io(cobd_exp, lsm, loi, oig); 
+        rc = obd_trigger_group_io(cobd_exp, lsm, loi, oig);
+        RETURN(rc);
 }
 
 static int cobd_dt_teardown_async_page(struct obd_export *exp,
                                        struct lov_stripe_md *lsm,
-                                       struct lov_oinfo *loi, void *cookie)
+                                       struct lov_oinfo *loi,
+                                       void *cookie)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_teardown_async_page(cobd_exp, lsm, loi, cookie);
+        rc = obd_teardown_async_page(cobd_exp, lsm, loi, cookie);
+        RETURN(rc);
 }
 
 static int cobd_dt_punch(struct obd_export *exp, struct obdo *oa,
@@ -626,14 +856,17 @@ static int cobd_dt_punch(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_punch(cobd_exp, oa, ea, start, end, oti);
+        rc = obd_punch(cobd_exp, oa, ea, start, end, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_sync(struct obd_export *exp, struct obdo *oa,
@@ -642,14 +875,17 @@ static int cobd_dt_sync(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_sync(cobd_exp, oa, ea, start, end);
+        rc = obd_sync(cobd_exp, oa, ea, start, end);
+        RETURN(rc);
 }
 
 static int cobd_dt_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
@@ -660,16 +896,19 @@ static int cobd_dt_enqueue(struct obd_export *exp, struct lov_stripe_md *ea,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_enqueue(cobd_exp, ea, type, policy, mode, flags, 
-                           bl_cb, cp_cb, gl_cb, data, lvb_len,
-                           lvb_swabber, lockh);
+        rc = obd_enqueue(cobd_exp, ea, type, policy, mode, flags, 
+                         bl_cb, cp_cb, gl_cb, data, lvb_len,
+                         lvb_swabber, lockh);
+        RETURN(rc);
 }
 
 static int cobd_dt_match(struct obd_export *exp, struct lov_stripe_md *ea,
@@ -678,15 +917,18 @@ static int cobd_dt_match(struct obd_export *exp, struct lov_stripe_md *ea,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_match(cobd_exp, ea, type, policy, mode, flags, data,
-                         lockh); 
+        rc = obd_match(cobd_exp, ea, type, policy, mode, flags,
+                       data, lockh);
+        RETURN(rc);
 }
 static int cobd_dt_change_cbdata(struct obd_export *exp,
                                  struct lov_stripe_md *lsm, 
@@ -694,14 +936,17 @@ static int cobd_dt_change_cbdata(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_change_cbdata(cobd_exp, lsm, it, data);
+        rc = obd_change_cbdata(cobd_exp, lsm, it, data);
+        RETURN(rc);
 }
 
 static int cobd_dt_cancel(struct obd_export *exp,
@@ -710,14 +955,17 @@ static int cobd_dt_cancel(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_cancel(cobd_exp, ea, mode, lockh);
+        rc = obd_cancel(cobd_exp, ea, mode, lockh);
+        RETURN(rc);
 }
 
 static int cobd_dt_cancel_unused(struct obd_export *exp,
@@ -726,14 +974,17 @@ static int cobd_dt_cancel_unused(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
-
+        int rc = 0;
+        ENTRY;
+        
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_cancel_unused(cobd_exp, ea, flags, opaque);
+        rc = obd_cancel_unused(cobd_exp, ea, flags, opaque);
+        RETURN(rc);
 }
 
 static int cobd_dt_preprw(int cmd, struct obd_export *exp,
@@ -745,15 +996,18 @@ static int cobd_dt_preprw(int cmd, struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_preprw(cmd, cobd_exp, oa, objcount, obj,
-                          niocount, nb, res, oti);
+        rc = obd_preprw(cmd, cobd_exp, oa, objcount, obj,
+                        niocount, nb, res, oti);
+        RETURN(rc);
 }
 
 static int cobd_dt_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
@@ -763,99 +1017,38 @@ static int cobd_dt_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int err = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return obd_commitrw(cmd, cobd_exp, oa, objcount, obj,
-                            niocount, local, oti, rc);
+        err = obd_commitrw(cmd, cobd_exp, oa, objcount, obj,
+                           niocount, local, oti, rc);
+        RETURN(err);
 }
 
-static int cobd_flush(struct obd_device *obd)
-{
-        return 0; 
-}
-
-static int cobd_dt_iocontrol(unsigned int cmd, struct obd_export *exp,
-                             int len, void *karg, void *uarg)
+static int cobd_dt_adjust_kms(struct obd_export *exp,
+                              struct lov_stripe_md *lsm,
+                              obd_off size, int shrink)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct cache_obd  *cobd = &obd->u.cobd;
         struct obd_export *cobd_exp;
         int rc = 0;
         ENTRY;
 
-        down(&cobd->sem);
-        
-        switch (cmd) {
-        case OBD_IOC_COBD_CON:
-                if (!cobd->cache_on) {
-                        struct lustre_handle conn = {0};
-
-                        rc = client_obd_disconnect(obd, cobd->master_real_exp, 0);
-                        if (rc) {
-                                CWARN("can't disconnect master export, err %d\n",
-                                      rc);
-                        }
-                        
-                        rc = client_obd_connect(obd, cobd->cache_exp, &conn,
-                                                NULL, OBD_OPT_REAL_CLIENT);
-                        if (rc)
-                                GOTO(out, rc);
-
-                        cobd->cache_real_exp = class_conn2export(&conn);
-                        cobd->cache_on = 1;
-                }
-                break;
-        case OBD_IOC_COBD_COFF: 
-                if (cobd->cache_on) {
-                        struct lustre_handle conn = {0,};
-                        struct obd_device *master = NULL;
-                        struct obd_device *cache = NULL;
-                        int easize, cooksize;
-
-                        cache = class_exp2obd(cobd->cache_exp); 
-                        easize = cache->u.cli.cl_max_mds_easize; 
-                        cooksize = cache->u.cli.cl_max_mds_cookiesize;
-
-                        rc = client_obd_disconnect(obd, cobd->cache_real_exp, 0);
-                        if (rc) {
-                                CWARN("can't disconnect cache export, err %d\n",
-                                      rc);
-                        }
-                        rc = client_obd_connect(obd, cobd->master_exp, &conn,
-                                                NULL, OBD_OPT_REAL_CLIENT);
-                        if (rc)
-                                GOTO(out, rc);
-                        cobd->master_real_exp = class_conn2export(&conn);
-
-                        master = class_exp2obd(cobd->master_exp);
-                        master->u.cli.cl_max_mds_easize = easize;
-                        master->u.cli.cl_max_mds_cookiesize = cooksize;
-                        cobd->cache_on = 0;
-                }
-                break;
-        case OBD_IOC_COBD_CFLUSH:
-                if (cobd->cache_on) {
-                        cobd->cache_on = 0;
-                        cobd_flush(obd);
-                        cobd->cache_on = 1;
-                } else {
-                        CERROR("%s: cache is turned off\n", obd->obd_name);
-                }
-                break;
-        default:
-                cobd_exp = cobd_get_exp(obd);
-                rc = obd_iocontrol(cmd, cobd_exp, len, karg, uarg);
+        if (obd == NULL) {
+                CERROR("invalid client cookie "LPX64"\n", 
+                       exp->exp_handle.h_cookie);
+                RETURN(-EINVAL);
         }
-
-        EXIT;
-out:
-        up(&cobd->sem);
-        return rc;
+        cobd_exp = cobd_get_exp(obd);
+        rc = obd_adjust_kms(cobd_exp, lsm, size, shrink);
+        
+        RETURN(rc);
 }
 
 static int cobd_dt_llog_init(struct obd_device *obd,
@@ -865,12 +1058,15 @@ static int cobd_dt_llog_init(struct obd_device *obd,
 {
         struct obd_export *cobd_exp;
         struct obd_device *cobd_obd;
+        int rc = 0;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(obd);
         cobd_obd = class_exp2obd(cobd_exp);
         
-        return obd_llog_init(cobd_obd, &cobd_obd->obd_llogs, 
-                             disk_obd, count, logid);
+        rc = obd_llog_init(cobd_obd, &cobd_obd->obd_llogs, 
+                           disk_obd, count, logid);
+        RETURN(rc);
 }
 
 static int cobd_dt_llog_finish(struct obd_device *obd,
@@ -879,21 +1075,26 @@ static int cobd_dt_llog_finish(struct obd_device *obd,
 {
         struct obd_export *cobd_exp;
         struct obd_device *cobd_obd;
+        int rc = 0;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(obd);
         cobd_obd = class_exp2obd(cobd_exp);
 
-        return obd_llog_finish(cobd_obd, &cobd_obd->obd_llogs, count);
+        rc = obd_llog_finish(cobd_obd, &cobd_obd->obd_llogs, count);
+        RETURN(rc);
 }
 
 static int cobd_dt_notify(struct obd_device *obd, struct obd_device *watched,
                           int active, void *data)
 {
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(obd);
-
-        return obd_notify(class_exp2obd(cobd_exp), watched, active, data);
+        rc = obd_notify(class_exp2obd(cobd_exp), watched, active, data);
+        RETURN(rc);
 }
 
 static int cobd_dt_pin(struct obd_export *exp, obd_id ino, __u32 gen,
@@ -902,15 +1103,17 @@ static int cobd_dt_pin(struct obd_export *exp, obd_id ino, __u32 gen,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-
-        return obd_pin(cobd_exp, ino, gen, type, handle, flag);
+        rc = obd_pin(cobd_exp, ino, gen, type, handle, flag);
+        RETURN(rc);
 }
 
 static int cobd_dt_unpin(struct obd_export *exp,
@@ -919,24 +1122,29 @@ static int cobd_dt_unpin(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-
-        return obd_unpin(cobd_exp, handle, flag);
+        rc = obd_unpin(cobd_exp, handle, flag);
+        RETURN(rc);
 }
 
 static int cobd_dt_init_ea_size(struct obd_export *exp, int easize,
                                 int cookiesize)
 {
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(exp->exp_obd);
-        return obd_init_ea_size(cobd_exp, easize, cookiesize);
+        rc = obd_init_ea_size(cobd_exp, easize, cookiesize);
+        RETURN(rc);
 }
 
 static int cobd_dt_import_event(struct obd_device *obd,
@@ -944,10 +1152,11 @@ static int cobd_dt_import_event(struct obd_device *obd,
                                 enum obd_import_event event)
 {
         struct obd_export *cobd_exp;
+        ENTRY;
 
         cobd_exp = cobd_get_exp(obd);
         obd_import_event(class_exp2obd(cobd_exp), imp, event);
-        return 0; 
+        RETURN(0); 
 }
 
 static int cobd_md_getstatus(struct obd_export *exp,
@@ -955,14 +1164,17 @@ static int cobd_md_getstatus(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getstatus(cobd_exp, rootid);
+        rc = md_getstatus(cobd_exp, rootid);
+        RETURN(rc);
 }
 
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
@@ -973,15 +1185,18 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr(cobd_exp, id, valid, xattr_name,
-                          xattr_data, xattr_datalen, ea_size, request);
+        rc = md_getattr(cobd_exp, id, valid, xattr_name,
+                        xattr_data, xattr_datalen, ea_size, request);
+        RETURN(rc);
 }
 
 static int cobd_md_req2lustre_md(struct obd_export *mdc_exp, 
@@ -992,14 +1207,17 @@ static int cobd_md_req2lustre_md(struct obd_export *mdc_exp,
 {
         struct obd_device *obd = class_exp2obd(mdc_exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        mdc_exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_req2lustre_md(cobd_exp, req, offset, osc_exp, md);
+        rc = md_req2lustre_md(cobd_exp, req, offset, osc_exp, md);
+        RETURN(rc);
 }
 
 static int cobd_md_change_cbdata(struct obd_export *exp, struct lustre_id *id, 
@@ -1007,14 +1225,17 @@ static int cobd_md_change_cbdata(struct obd_export *exp, struct lustre_id *id,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_change_cbdata(cobd_exp, id, it, data);
+        rc = md_change_cbdata(cobd_exp, id, it, data);
+        RETURN(rc);
 }
 
 static int cobd_md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
@@ -1023,15 +1244,18 @@ static int cobd_md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_getattr_lock(cobd_exp, id, filename, namelen, valid,
-                               ea_size, request);
+        rc = md_getattr_lock(cobd_exp, id, filename, namelen,
+                             valid, ea_size, request);
+        RETURN(rc);
 }
 
 static int cobd_md_create(struct obd_export *exp, struct mdc_op_data *op_data,
@@ -1041,15 +1265,18 @@ static int cobd_md_create(struct obd_export *exp, struct mdc_op_data *op_data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_create(cobd_exp, op_data, data, datalen, mode,
-                         uid, gid, rdev, request);
+        rc = md_create(cobd_exp, op_data, data, datalen, mode,
+                       uid, gid, rdev, request);
+        RETURN(rc);
 }
 
 static int cobd_md_unlink(struct obd_export *exp,
@@ -1058,14 +1285,17 @@ static int cobd_md_unlink(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_unlink(cobd_exp, data, request);
+        rc = md_unlink(cobd_exp, data, request);
+        RETURN(rc);
 }
 
 static int cobd_md_valid_attrs(struct obd_export *exp,
@@ -1073,14 +1303,17 @@ static int cobd_md_valid_attrs(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_valid_attrs(cobd_exp, id);
+        rc = md_valid_attrs(cobd_exp, id);
+        RETURN(rc);
 }
 
 static int cobd_md_rename(struct obd_export *exp, struct mdc_op_data *data,
@@ -1089,14 +1322,17 @@ static int cobd_md_rename(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_rename(cobd_exp, data, old, oldlen, new, newlen, request);
+        rc = md_rename(cobd_exp, data, old, oldlen, new, newlen, request);
+        RETURN(rc);
 }
 
 static int cobd_md_link(struct obd_export *exp, struct mdc_op_data *data,
@@ -1104,14 +1340,17 @@ static int cobd_md_link(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_link(cobd_exp, data, request);
+        rc = md_link(cobd_exp, data, request);
+        RETURN(rc);
 }
 
 static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
@@ -1121,15 +1360,18 @@ static int cobd_md_setattr(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_setattr(cobd_exp, data, iattr, ea,
+        rc = md_setattr(cobd_exp, data, iattr, ea,
                           ealen, ea2, ea2len, ea3, ea3len, request);
+        RETURN(rc);
 }
 
 static int cobd_md_readpage(struct obd_export *exp,
@@ -1139,14 +1381,17 @@ static int cobd_md_readpage(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_readpage(cobd_exp, mdc_id, offset, page, request);
+        rc = md_readpage(cobd_exp, mdc_id, offset, page, request);
+        RETURN(rc);
 }
 
 static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
@@ -1155,14 +1400,17 @@ static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_close(cobd_exp, obdo, och, request);
+        rc = md_close(cobd_exp, obdo, och, request);
+        RETURN(rc);
 }
 
 static int cobd_md_done_writing(struct obd_export *exp,
@@ -1170,14 +1418,17 @@ static int cobd_md_done_writing(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_done_writing(cobd_exp, obdo);
+        rc = md_done_writing(cobd_exp, obdo);
+        RETURN(rc);
 }
 
 static int cobd_md_sync(struct obd_export *exp, struct lustre_id *id,
@@ -1185,15 +1436,17 @@ static int cobd_md_sync(struct obd_export *exp, struct lustre_id *id,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        
-        return md_sync(cobd_exp, id, request);
+        rc = md_sync(cobd_exp, id, request);
+        RETURN(rc);
 }
 
 static int cobd_md_set_open_replay_data(struct obd_export *exp,
@@ -1202,15 +1455,17 @@ static int cobd_md_set_open_replay_data(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        
-        return md_set_open_replay_data(cobd_exp, och, open_req);
+        rc = md_set_open_replay_data(cobd_exp, och, open_req);
+        RETURN(rc);
 }
 
 static int cobd_md_clear_open_replay_data(struct obd_export *exp,
@@ -1218,15 +1473,17 @@ static int cobd_md_clear_open_replay_data(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
- 
-        return md_clear_open_replay_data(cobd_exp, och);
+        rc = md_clear_open_replay_data(cobd_exp, och);
+        RETURN(rc);
 }
 
 static int cobd_md_store_inode_generation(struct obd_export *exp,
@@ -1235,15 +1492,17 @@ static int cobd_md_store_inode_generation(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-
-        return md_store_inode_generation(cobd_exp, req, reqoff, repoff);
+        rc = md_store_inode_generation(cobd_exp, req, reqoff, repoff);
+        RETURN(rc);
 }
 
 static int cobd_md_set_lock_data(struct obd_export *exp,
@@ -1251,15 +1510,17 @@ static int cobd_md_set_lock_data(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-
-        return md_set_lock_data(cobd_exp, l, data);
+        rc = md_set_lock_data(cobd_exp, l, data);
+        RETURN(rc);
 }
 
 static int cobd_md_enqueue(struct obd_export *exp, int lock_type,
@@ -1271,16 +1532,19 @@ static int cobd_md_enqueue(struct obd_export *exp, int lock_type,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_enqueue(cobd_exp, lock_type, it, lock_mode, data,
-                          lockh, lmm, lmmsize, cb_completion, cb_blocking,
-                          cb_data);
+        rc = md_enqueue(cobd_exp, lock_type, it, lock_mode, data,
+                        lockh, lmm, lmmsize, cb_completion, cb_blocking,
+                        cb_data);
+        RETURN(rc);
 }
 
 static int cobd_md_intent_lock(struct obd_export *exp, struct lustre_id *pid, 
@@ -1291,17 +1555,20 @@ static int cobd_md_intent_lock(struct obd_export *exp, struct lustre_id *pid,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         lookup_flags |= LOOKUP_COBD;
         cobd_exp = cobd_get_exp(obd);
         
-        return md_intent_lock(cobd_exp, pid, name, len, lmm, lmmsize,
-                              cid, it, lookup_flags, reqp, cb_blocking);
+        rc = md_intent_lock(cobd_exp, pid, name, len, lmm, lmmsize,
+                            cid, it, lookup_flags, reqp, cb_blocking);
+        RETURN(rc);
 }
 
 static struct obd_device *cobd_md_get_real_obd(struct obd_export *exp,
@@ -1309,14 +1576,15 @@ static struct obd_device *cobd_md_get_real_obd(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        ENTRY;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return NULL;
+                RETURN(NULL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_get_real_obd(cobd_exp, id);
+        RETURN(md_get_real_obd(cobd_exp, id));
 }
 
 static int cobd_md_change_cbdata_name(struct obd_export *exp,
@@ -1326,16 +1594,19 @@ static int cobd_md_change_cbdata_name(struct obd_export *exp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
+        int rc = 0;
 
         if (obd == NULL) {
                 CERROR("invalid client cookie "LPX64"\n", 
                        exp->exp_handle.h_cookie);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_change_cbdata_name(cobd_exp, id, name, namelen,
-                                     id2, it, data);
+        rc = md_change_cbdata_name(cobd_exp, id, name, namelen,
+                                   id2, it, data);
+        RETURN(rc);
 }
+
 static struct obd_ops cobd_obd_ops = {
         .o_owner                  = THIS_MODULE,
         .o_attach                 = cobd_attach,
@@ -1347,6 +1618,7 @@ static struct obd_ops cobd_obd_ops = {
         .o_set_info               = cobd_set_info,
         .o_get_info               = cobd_get_info,
         .o_statfs                 = cobd_statfs,
+        .o_iocontrol              = cobd_iocontrol,
 
         .o_packmd                 = cobd_dt_packmd,
         .o_unpackmd               = cobd_dt_unpackmd,
@@ -1372,7 +1644,6 @@ static struct obd_ops cobd_obd_ops = {
         .o_change_cbdata          = cobd_dt_change_cbdata,
         .o_cancel                 = cobd_dt_cancel,
         .o_cancel_unused          = cobd_dt_cancel_unused,
-        .o_iocontrol              = cobd_dt_iocontrol,
         .o_commitrw               = cobd_dt_commitrw,
         .o_llog_init              = cobd_dt_llog_init,
         .o_llog_finish            = cobd_dt_llog_finish,
@@ -1381,6 +1652,7 @@ static struct obd_ops cobd_obd_ops = {
         .o_unpin                  = cobd_dt_unpin,
         .o_import_event           = cobd_dt_import_event,
         .o_init_ea_size           = cobd_dt_init_ea_size,
+        .o_adjust_kms             = cobd_dt_adjust_kms,
 };
 
 struct md_ops cobd_md_ops = {

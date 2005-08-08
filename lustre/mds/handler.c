@@ -330,12 +330,35 @@ struct dentry *mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id
 struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
                              struct vfsmount **mnt)
 {
-        unsigned long ino = (unsigned long)id_ino(id);
-        __u32 generation = (__u32)id_gen(id);
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *result;
         struct inode *inode;
+        unsigned long ino;
+        __u32 generation;
         char idname[32];
+
+        if (!id_ino(id) && id_fid(id)) {
+                struct lustre_id *lid;
+                
+                /* if this is reint case we should use fidmap for resolving
+                 * correct local store cookie. */
+                lid = mds_fidmap_lookup(obd, id);
+                if (!lid)
+                        RETURN(ERR_PTR(-ENOENT));
+
+                ino = (unsigned long)id_ino(lid);
+                generation = (__u32)id_gen(lid);
+
+                CDEBUG(D_DENTRY, "fidmap resolved "DLID4"->"DLID4"\n",
+                       OLID4(id), OLID4(lid));
+
+        } else if (id_ino(id)) {
+                ino = (unsigned long)id_ino(id);
+                generation = (__u32)id_gen(id);
+        } else {
+                CERROR("invalid id for lookup "
+                       DLID4"\n", OLID4(id));
+        }
 
         if (ino == 0)
                 RETURN(ERR_PTR(-ESTALE));
@@ -346,7 +369,7 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
                ino, generation, mds->mds_sb);
 
         /* under ext3 this is neither supposed to return bad inodes nor NULL
-           inodes. */
+         * inodes. */
         result = ll_lookup_one_len(idname, mds->mds_id_de, 
                                    strlen(idname));
         if (IS_ERR(result))
@@ -365,7 +388,7 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
 
         /* here we disabled generation check, as root inode i_generation
          * of cache mds and real mds are different. */
-        if (inode->i_ino != id_ino(&mds->mds_rootid) && generation &&
+        if (id_fid(id) != id_fid(&mds->mds_rootid) && generation != 0 &&
             inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
                 if (id_group(id) != mds->mds_num) {
@@ -1577,8 +1600,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 
                         dchild = mds_id2locked_dentry(obd, &body->id1, NULL,
                                                       LCK_PR, parent_lockh,
-                                                      &update_mode,
-                                                      NULL, 0, 
+                                                      &update_mode, NULL, 0, 
                                                       MDS_INODELOCK_UPDATE);
                         if (IS_ERR(dchild)) {
                                 CERROR("can't find inode with id "DLID4", err = %d\n", 
@@ -1987,92 +2009,6 @@ out:
         req->rq_status = rc;
         return 0;
 }
-
-/* update master MDS ID, which is stored in local inode EA. */
-int mds_update_mid(struct obd_device *obd, struct lustre_id *id,
-                   void *data, int data_len)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct dentry *dentry;
-        void *handle;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(id);
-        LASSERT(obd);
-        
-        dentry = mds_id2dentry(obd, id, NULL);
-        if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
-
-        if (!dentry->d_inode) {
-                CERROR("Can't find object "DLID4".\n",
-                       OLID4(id));
-                GOTO(out_dentry, rc = -EINVAL);
-        }
-
-        handle = fsfilt_start(obd, dentry->d_inode,
-                              FSFILT_OP_SETATTR, NULL);
-        if (IS_ERR(handle))
-                GOTO(out_dentry, rc = PTR_ERR(handle));
-
-        rc = mds_update_inode_mid(obd, dentry->d_inode, handle,
-                                  (struct lustre_id *)data);
-        if (rc) {
-                CERROR("Can't update inode "DLID4" master id, "
-                       "error = %d.\n", OLID4(id), rc);
-                GOTO(out_commit, rc);
-        }
-
-        EXIT;
-out_commit:
-        fsfilt_commit(obd, mds->mds_sb, dentry->d_inode,
-                      handle, 0);
-out_dentry:
-        l_dput(dentry);
-out:
-        return rc;
-}
-EXPORT_SYMBOL(mds_update_mid);
-
-/* read master MDS ID, which is stored in local inode EA. */
-int mds_read_mid(struct obd_device *obd, struct lustre_id *id,
-                 void *data, int data_len)
-{
-        struct dentry *dentry;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(id);
-        LASSERT(obd);
-        
-        dentry = mds_id2dentry(obd, id, NULL);
-        if (IS_ERR(dentry))
-                GOTO(out, rc = PTR_ERR(dentry));
-
-        if (!dentry->d_inode) {
-                CERROR("Can't find object "DLID4".\n",
-                       OLID4(id));
-                GOTO(out_dentry, rc = -EINVAL);
-        }
-
-        down(&dentry->d_inode->i_sem);
-        rc = mds_read_inode_mid(obd, dentry->d_inode,
-                                (struct lustre_id *)data);
-        up(&dentry->d_inode->i_sem);
-        if (rc) {
-                CERROR("Can't read inode "DLID4" master id, "
-                       "error = %d.\n", OLID4(id), rc);
-                GOTO(out_dentry, rc);
-        }
-
-        EXIT;
-out_dentry:
-        l_dput(dentry);
-out:
-        return rc;
-}
-EXPORT_SYMBOL(mds_read_mid);
 
 int mds_read_md(struct obd_device *obd, struct lustre_id *id, 
                 char **data, int *datalen)
@@ -2517,6 +2453,7 @@ repeat:
         new->d_fsdata = (void *)&dp;
         dp.p_inum = 0;
         dp.p_ptr = req;
+        
         dp.p_fid = fid;
         dp.p_group = mds->mds_num;
 
@@ -2648,6 +2585,16 @@ repeat:
 
         EXIT;
 cleanup:
+        if (rc == 0 && (body->oa.o_flags & OBD_FL_REINT)) {
+                rc = mds_fidmap_add(obd, &id);
+                if (rc < 0) {
+                        CERROR("can't create fid->ino mapping, "
+                               "err %d\n", rc);
+                } else {
+                        rc = 0;
+                }
+        }
+                
         switch (cleanup_phase) {
         case 2: /* object has been created, but we'll may want to replay it later */
                 if (rc == 0)
@@ -2678,11 +2625,33 @@ static int mdt_get_info(struct ptlrpc_request *req)
 
         if ((keylen < strlen("mdsize") || strcmp(key, "mdsize") != 0) &&
             (keylen < strlen("mdsnum") || strcmp(key, "mdsnum") != 0) &&
+            (keylen < strlen("lovdesc") || strcmp(key, "lovdesc") != 0) &&
+            (keylen < strlen("getext") || strcmp(key, "getext") != 0) &&
             (keylen < strlen("rootid") || strcmp(key, "rootid") != 0))
                 RETURN(-EPROTO);
 
         if (keylen >= strlen("rootid") && !strcmp(key, "rootid")) {
                 struct lustre_id *reply;
+                int size = sizeof(*reply);
+                
+                rc = lustre_pack_reply(req, 1, &size, NULL);
+                if (rc)
+                        RETURN(rc);
+
+                reply = lustre_msg_buf(req->rq_repmsg, 0, size);
+                rc = obd_get_info(exp, keylen, key, (__u32 *)&size, reply);
+        } else if (keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) {
+                struct lov_desc *reply;
+                int size = sizeof(*reply);
+                
+                rc = lustre_pack_reply(req, 1, &size, NULL);
+                if (rc)
+                        RETURN(rc);
+
+                reply = lustre_msg_buf(req->rq_repmsg, 0, size);
+                rc = obd_get_info(exp, keylen, key, (__u32 *)&size, reply);
+        } else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
+                struct fid_extent *reply;
                 int size = sizeof(*reply);
                 
                 rc = lustre_pack_reply(req, 1, &size, NULL);
@@ -2723,23 +2692,7 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
         }
 
         mds = &obd->u.mds;
-        if (keylen >= strlen("mds_type") &&
-             memcmp(key, "mds_type", keylen) == 0) {
-                int valsize;
-                __u32 group;
-                
-                CDEBUG(D_IOCTL, "set mds type to %x\n", *(int*)val);
-                
-                mds->mds_obd_type = *(int*)val;
-                group = FILTER_GROUP_FIRST_MDS + mds->mds_obd_type;
-                valsize = sizeof(group);
-                
-                /* mds number has been changed, so the corresponding obdfilter
-                 * exp need to be changed too. */
-                rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"),
-                                  "mds_conn", valsize, &group);
-                RETURN(rc);
-        } else if (keylen == 5 && memcmp(key, "audit", 5) == 0) {
+        if (keylen == 5 && memcmp(key, "audit", 5) == 0) {
                 rc = mds_set_audit(obd, val);
                 RETURN(rc);
         } else if (keylen >= strlen("ids") && memcmp(key, "ids", keylen) == 0) {
@@ -2785,7 +2738,28 @@ out_put:
                 rc = mds_set_crypto_type(obd, val, vallen); 
                 RETURN(rc);
         }
+        
+        if (keylen >= strlen("setext") && !memcmp(key, "setext", keylen)) {
+                struct fid_extent *ext = val;
 
+                CDEBUG(D_IOCTL, "set last fid to extent ["LPD64"-"LPD64"]\n",
+                       ext->fe_start, ext->fe_width);
+
+                /* set lastfid into fid extent start. All next object creates
+                 * will use that fid. */
+                mds_set_last_fid(obd, ext->fe_start);
+
+                /* setting the same extent to OSC to avoid ids intersecting in
+                 * object ids, as all cache MDSs have the same group 0. */
+                rc = obd_set_info(mds->mds_dt_exp, strlen("setext"),
+                                  "setext", sizeof(*ext), ext);
+                if (rc) {
+                        CERROR("can't set extent ["LPD64"-"LPD64"] to %s, "
+                               "err %d\n", ext->fe_start, ext->fe_width,
+                               mds->mds_dt_exp->exp_obd->obd_name, rc);
+                }
+                RETURN(rc);
+        }
         CDEBUG(D_IOCTL, "invalid key\n");
         RETURN(-EINVAL);
 }
@@ -2804,9 +2778,7 @@ static int mdt_set_info(struct ptlrpc_request *req)
         }
         keylen = req->rq_reqmsg->buflens[0];
 
-        if ((keylen == strlen("mds_type") &&
-            memcmp(key, "mds_type", keylen) == 0) ||
-            (keylen == strlen("crypto_type") &&
+        if ((keylen == strlen("crypto_type") &&
             memcmp(key, "crypto_type", keylen) == 0)) {
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
@@ -2851,6 +2823,18 @@ static int mdt_set_info(struct ptlrpc_request *req)
 
                 rc = obd_set_info(exp, keylen, key, vallen, ids);
                 req->rq_repmsg->status = rc;
+                RETURN(rc);
+        } else if (keylen == strlen("setext") && 
+                   memcmp(key, "setext", keylen) == 0) {
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                if (rc)
+                        RETURN(rc);
+                
+                val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
+                vallen = req->rq_reqmsg->buflens[1];
+
+                rc = obd_set_info(exp, keylen, key, vallen, val);
+                req->rq_repmsg->status = 0;
                 RETURN(rc);
         }
 
@@ -3548,61 +3532,6 @@ int mds_update_inode_ids(struct obd_device *obd, struct inode *inode,
         RETURN(rc);
 }
 
-/* 
- * reads inode id on master MDS. This is usualy done by CMOBD to update requests
- * to master MDS by correct store cookie, needed to find inode on master MDS
- * quickly.
- */
-int mds_read_inode_mid(struct obd_device *obd, struct inode *inode,
-                       struct lustre_id *id)
-{
-        int rc;
-        ENTRY;
-
-        LASSERT(id != NULL);
-        LASSERT(obd != NULL);
-        LASSERT(inode != NULL);
-
-        rc = fsfilt_get_md(obd, inode, id, sizeof(*id), EA_MID);
-        if (rc < 0) {
-                CERROR("fsfilt_get_md() failed, rc = %d\n", rc);
-                RETURN(rc);
-        } else if (!rc) {
-                rc = -ENODATA;
-                RETURN(rc);
-        } else {
-                rc = 0;
-        }
-
-        RETURN(rc);
-}
-
-/*
- * updates master inode id. Usualy this is done by CMOBD after an inode is
- * created and relationship between cache MDS and master one should be
- * established.
- */
-int mds_update_inode_mid(struct obd_device *obd, struct inode *inode,
-                         void *handle, struct lustre_id *id)
-{
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(id != NULL);
-        LASSERT(obd != NULL);
-        LASSERT(inode != NULL);
-        
-        rc = fsfilt_set_md(obd, inode, handle, id,
-                           sizeof(*id), EA_MID);
-        if (rc) {
-                CERROR("fsfilt_set_md() failed, "
-                       "rc = %d\n", rc);
-                RETURN(rc);
-        }
-
-        RETURN(rc);
-}
-
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 {
@@ -3647,7 +3576,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         /* we have to know mdsnum before touching underlying fs -bzzz */
         atomic_set(&mds->mds_open_count, 0);
         sema_init(&mds->mds_md_sem, 1);
-        sema_init(&mds->mds_create_sem, 1);
         mds->mds_md_connected = 0;
         mds->mds_md_name = NULL;
 
@@ -3706,8 +3634,11 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
+        mds->mds_fidext_thumb = 0;
         sema_init(&mds->mds_epoch_sem, 1);
         atomic_set(&mds->mds_real_clients, 0);
+        spin_lock_init(&mds->mds_fidext_lock);
+        spin_lock_init(&mds->mds_fidmap_lock);
         spin_lock_init(&mds->mds_transno_lock);
         spin_lock_init(&mds->mds_last_fid_lock);
         sema_init(&mds->mds_orphan_recovery_sem, 1);
@@ -3733,7 +3664,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
 
                 GOTO(err_fs, rc);
-
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0 && lustre_cfg_buf(lcfg, 3) &&
             strncmp(lustre_cfg_string(lcfg, 3), "dumb", 
@@ -4598,6 +4528,19 @@ static int mds_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
         
+        if (keylen >= strlen("getext") && strcmp(key, "getext") == 0) {
+                struct fid_extent *ext = val;
+                *valsize = sizeof(*ext);
+
+                spin_lock(&mds->mds_fidext_lock);
+                ext->fe_width = MDS_FIDEXT_SIZE;
+                ext->fe_start = mds->mds_fidext_thumb + 1;
+                mds->mds_fidext_thumb += MDS_FIDEXT_SIZE;
+                spin_unlock(&mds->mds_fidext_lock);
+                
+                RETURN(0);
+        }
+        
         rc = fsfilt_get_info(obd, mds->mds_sb, NULL, keylen, key, valsize, val);
         if (rc)
                 CDEBUG(D_IOCTL, "invalid key\n");
@@ -4610,10 +4553,10 @@ struct lvfs_callback_ops mds_lvfs_ops = {
 };
 
 int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
-                int objcount, struct obd_ioobj *obj,
-                int niocount, struct niobuf_remote *nb,
-                struct niobuf_local *res,
-                struct obd_trans_info *oti);
+               int objcount, struct obd_ioobj *obj,
+               int niocount, struct niobuf_remote *nb,
+               struct niobuf_local *res,
+               struct obd_trans_info *oti);
 
 int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                  int objcount, struct obd_ioobj *obj, int niocount,

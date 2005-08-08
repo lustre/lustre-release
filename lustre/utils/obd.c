@@ -2493,12 +2493,19 @@ int jt_obd_reint_sync(int argc, char **argv)
         if (argc != 1)
                return CMD_HELP; 
         IOC_PACK(argv[0], data);
+
+        /* flush all buffers to disk to make sure that cache is coherent and all
+         * files are closed. */
+        sync();
+
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CMOBD_SYNC, buf);
        
-        if (rc) {
+        if (rc < 0) {
                 fprintf(stderr, "OBD_IOC_CMOBD_SYNC failed: %s\n",
                         strerror(errno));
-        }
+        } else {
+		rc = 0;
+	}
         return rc;  
                
 }
@@ -2512,15 +2519,23 @@ int jt_obd_cache_on(int argc, char **argv)
         if (argc != 1)
                return CMD_HELP; 
         IOC_PACK(argv[0], data);
+
+        /* flush all buffers to disk to make sure that cache is coherent and all
+         * files are closed. */
+        sync();
+
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_CON, buf);
        
-        if (rc) {
+        if (rc < 0) {
                 fprintf(stderr, "OBD_IOC_COBD_CON failed: %s\n",
                         strerror(errno));
-        }
+        } else {
+		rc = 0;
+	}
         return rc;  
                
 }
+
 int jt_obd_cache_off(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2530,13 +2545,21 @@ int jt_obd_cache_off(int argc, char **argv)
         if (argc != 1)
                return CMD_HELP; 
         IOC_PACK(argv[0], data);
+
+        /* flush all buffers to disk to make sure that cache is coherent and all
+         * files are closed. */
+        sync();
+
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_COBD_COFF, buf);
-        if (rc) {
+        if (rc < 0) {
                 fprintf(stderr, "OBD_IOC_COBD_COFF failed: %s\n",
                         strerror(errno));
-        }
+        } else {
+		rc = 0;
+	}
         return rc;  
 }
+
 int jt_obd_snap_add(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2560,10 +2583,12 @@ int jt_obd_snap_add(int argc, char **argv)
         rc = l_ioctl(SMFS_DEV_ID, OBD_IOC_SMFS_SNAP_ADD, buf);
         
         unregister_ioc_dev(SMFS_DEV_ID);       
-        if (rc) {
+        if (rc < 0) {
                 fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%s\n", 
                         strerror(errno));
-        }
+        } else {
+		rc = 0;
+	}
  
         return rc;
 }

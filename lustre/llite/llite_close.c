@@ -195,8 +195,10 @@ static int ll_close_thread(void *arg)
                 iput(inode);
         }
 
-        complete(&lcq->lcq_comp);
-        RETURN(0);
+        EXIT;
+
+        /* SMF-safe way to finish threads */
+        complete_and_exit(&lcq->lcq_comp, 0);
 }
 
 int ll_close_thread_start(struct ll_close_queue **lcq_ret)
@@ -224,7 +226,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
         return 0;
 }
 
-void ll_close_thread_shutdown(struct ll_close_queue *lcq)
+void ll_close_thread_stop(struct ll_close_queue *lcq)
 {
         init_completion(&lcq->lcq_comp);
         lcq->lcq_list.next = NULL;

@@ -29,11 +29,6 @@
 
 #include <linux/obd_class.h>
 
-#define OBD_OST_DEVICENAME "ost"
-#define OBD_OSC_DEVICENAME "osc"
-#define OBD_SANOSC_DEVICENAME "sanosc"
-#define OBD_SANOST_DEVICENAME "sanost"
-
 struct osc_brw_async_args {
         struct obdo     *aa_oa;
         int              aa_requested_nob;

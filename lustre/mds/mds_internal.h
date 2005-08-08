@@ -23,6 +23,9 @@ struct mds_filter_data {
 #define MDS_EXPECT_SPLIT        1
 #define MDS_NO_SPLITTABLE       2
 
+/* 1048576 should be enough for one client pool */
+#define MDS_FIDEXT_SIZE (1 << 20)
+
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
         return &req->rq_export->exp_obd->u.mds;
@@ -178,11 +181,10 @@ void mds_dt_update_objids(struct obd_device *obd, obd_id *ids);
 void mds_dt_save_objids(struct obd_device *obd, obd_id *ids);
 
 /* mds/mds_open.c */
-int
-mds_create_object(struct obd_device *obd, struct ptlrpc_request *req,
-                  int offset, struct mds_update_record *rec,
-                  struct dentry *dchild, void **handle,
-                  obd_id *ids);
+int mds_create_object(struct obd_device *obd, struct ptlrpc_request *req,
+                      int offset, struct mds_update_record *rec,
+                      struct dentry *dchild, void **handle,
+                      obd_id *ids);
 int mds_destroy_object(struct obd_device *obd,
                        struct inode *inode, int async);
 int mds_query_write_access(struct inode *inode);
@@ -198,6 +200,28 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
                       struct mds_body *body, struct iattr *iattr);
 
 /* mds/mds_fs.c */
+int mds_fidmap_init(struct obd_device *obd, int size);
+int mds_fidmap_cleanup(struct obd_device *obd);
+
+struct fidmap_entry *
+mds_fidmap_find(struct obd_device *obd, __u64 fid);
+
+struct lustre_id *
+mds_fidmap_lookup(struct obd_device *obd,
+                  struct lustre_id *id);
+
+void mds_fidmap_insert(struct obd_device *obd,
+                       struct fidmap_entry *entry);
+
+void mds_fidmap_remove(struct obd_device *obd,
+                       struct fidmap_entry *entry);
+
+int mds_fidmap_add(struct obd_device *obd,
+                   struct lustre_id *id);
+
+void mds_fidmap_del(struct obd_device *obd,
+                    struct lustre_id *id);
+
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_off);
 int mds_client_free(struct obd_export *exp, int clear_client);
@@ -238,12 +262,6 @@ int mds_read_inode_sid(struct obd_device *, struct inode *,
                        struct lustre_id *);
 
 int mds_read_inode_pid(struct obd_device *, struct inode *,
-                       struct lustre_id *);
-
-int mds_update_inode_mid(struct obd_device *, struct inode *,
-                         void *, struct lustre_id *);
-
-int mds_read_inode_mid(struct obd_device *, struct inode *,
                        struct lustre_id *);
 
 void mds_commit_last_fid_cb(struct obd_device *, __u64 fid,
@@ -290,7 +308,8 @@ int mds_md_disconnect(struct obd_device *obd, int flags);
 int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
                          int, int);
 int mds_md_get_attr(struct obd_device *, struct inode *, struct mea **, int *);
-int mds_choose_mdsnum(struct obd_device *, const char *, int, int, struct ptlrpc_peer *, struct inode *);
+int mds_choose_mdsnum(struct obd_device *, const char *, int, int,
+                      struct ptlrpc_peer *, struct inode *, int);
 int mds_md_postsetup(struct obd_device *);
 int mds_splitting_expected(struct obd_device *, struct dentry *);
 int mds_lock_slave_objs(struct obd_device *, struct dentry *,

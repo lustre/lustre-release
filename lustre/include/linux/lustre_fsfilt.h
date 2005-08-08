@@ -44,10 +44,15 @@ enum ea_type {
         EA_LOV   = (1 << 0),
         EA_MEA   = (1 << 1),
         EA_SID   = (1 << 2),
-        EA_MID   = (1 << 3),
-        EA_KEY   = (1 << 4),
-        EA_PID   = (1 << 5),
+        EA_KEY   = (1 << 3),
+        EA_PID   = (1 << 4),
 };
+
+#define XATTR_LUSTRE_MDS_LOV_EA "lov"
+#define XATTR_LUSTRE_MDS_MEA_EA "mea"
+#define XATTR_LUSTRE_MDS_SID_EA "sid"
+#define XATTR_LUSTRE_MDS_KEY_EA "key"
+#define XATTR_LUSTRE_MDS_PID_EA "pid"
 
 struct fsfilt_operations {
         struct list_head fs_list;

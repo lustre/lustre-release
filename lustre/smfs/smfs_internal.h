@@ -150,10 +150,10 @@ extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
 extern int smfs_process_rec(struct super_block *sb, int count,
                             char *dir, int flags);
 
-/*mds_kml.c*/
-int mds_rec_pack_init(struct smfs_super_info *smb);
-/*ost_kml.c*/
-int ost_rec_pack_init(struct smfs_super_info *smb);
+extern int mds_rec_pack(int, char *, struct dentry *, struct inode *,
+                        void *, void *);
+extern int ost_rec_pack(int, char *, struct dentry *, struct inode *,
+                        void *, void *);
 
 /*smfs_llog.c*/
 extern int smfs_llog_setup(struct dentry **, struct dentry **);
@@ -247,6 +247,36 @@ struct kml_buffer {
         char *buf;
         int   buf_size;
 }; 
+
+#ifdef __KERNEL__
+static inline void
+smfs_inode2id(struct lustre_id *id, struct inode *inode)
+{
+        mdc_pack_id(id, inode->i_ino, inode->i_generation,
+                    (inode->i_mode & S_IFMT), 0, 0);
+}
+
+static inline void 
+smfs_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+                      struct inode *i2, const char *name, int namelen,
+                      int mode)
+{
+        LASSERT(i1);
+
+        smfs_inode2id(&data->id1, i1);
+        if (i2)
+                smfs_inode2id(&data->id2, i2);
+        else
+                memset(&data->id2, 0, sizeof(data->id2));
+
+	data->valid = 0;
+        data->name = name;
+        data->namelen = namelen;
+        data->create_mode = mode;
+        data->mod_time = LTIME_S(CURRENT_TIME);
+}
+#endif
+
 #if CONFIG_SNAPFS
 int smfs_cow_init(struct super_block *sb);
 int smfs_cow_cleanup(struct smfs_super_info *smb);

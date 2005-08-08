@@ -764,9 +764,9 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         gmd.gum_nid = import->imp_connection->c_peer.peer_id.nid;
 
         obdtype = import->imp_obd->obd_type->typ_name;
-        if (!strcmp(obdtype, "mdc"))
+        if (!strcmp(obdtype, OBD_MDC_DEVICENAME))
                 gmd.gum_svc = LUSTRE_GSS_SVC_MDS;
-        else if (!strcmp(obdtype, "osc"))
+        else if (!strcmp(obdtype, OBD_OSC_DEVICENAME))
                 gmd.gum_svc = LUSTRE_GSS_SVC_OSS;
         else {
                 CERROR("gss on %s?\n", obdtype);

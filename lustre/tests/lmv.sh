@@ -28,6 +28,7 @@ STRIPE_BYTES=65536
 STRIPES_PER_OBJ=0
 
 MOUNT=${MOUNT:-/mnt/lustre}
+MOUNT2=${MOUNT2:-/mnt/lustre2}
 
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}

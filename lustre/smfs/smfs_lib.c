@@ -184,28 +184,28 @@ static void smfs_filter_flags(struct filter_obd * filt, struct inode * o_dir)
         }
 }
 
-static void smfs_mds_flags(struct mds_obd * mds, struct inode * root)
+static void smfs_mds_flags(struct mds_obd *mds, struct inode *root)
 {
-        struct inode * pend = mds->mds_pending_dir->d_inode;
+        struct inode *pend = mds->mds_pending_dir->d_inode;
         
         CDEBUG(D_SUPER,"MDS OBD post_setup\n");
+
         /* enable plugins for all in ROOT */        
         SMFS_SET(I2SMI(root)->smi_flags, SMFS_PLG_ALL);
+
         /* the same for PENDING */
         SMFS_SET(I2SMI(pend)->smi_flags, SMFS_PLG_ALL);
 }
-                        
 
 extern int (*audit_id2name_superhack) (struct obd_device *obd, char **name,
                                        int *namelen, struct lustre_id *id);
 
 int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
-                    struct dentry * root_dentry)
+                    struct dentry *root_dentry)
 {
         struct lvfs_run_ctxt saved, *current_ctxt = NULL;
         struct smfs_super_info *smb = S2SMI(mnt->mnt_sb);
         int rc = 0;
-        
         ENTRY;
 
         /* XXX to register id2name function of mds in smfs */
@@ -226,33 +226,29 @@ int smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt,
         push_ctxt(&saved, smb->smsi_ctxt, NULL);
 
         rc = smfs_llog_setup(&smb->smsi_logs_dir, &smb->smsi_objects_dir);
-        if (!rc) {
+        if (!rc)
                 rc = SMFS_PLG_HELP(mnt->mnt_sb, PLG_START, obd);
-        }
 
         pop_ctxt(&saved, smb->smsi_ctxt, NULL);
 
         /* enable plugins for directories on MDS or OST */
         if (obd && obd->obd_type && obd->obd_type->typ_name) {
-                if (!strcmp(obd->obd_type->typ_name, "obdfilter")) {
+                if (!strcmp(obd->obd_type->typ_name, OBD_FILTER_DEVICENAME)) {
                         struct filter_obd *filt = &obd->u.filter;
- 
                         smfs_filter_flags(filt, root_dentry->d_inode);
-                }
-                else if (!strcmp(obd->obd_type->typ_name, "mds")) {
+                } else if (!strcmp(obd->obd_type->typ_name, OBD_MDS_DEVICENAME)) {
                         struct mds_obd * mds = &obd->u.mds;
-                        
                         smfs_mds_flags(mds, root_dentry->d_inode);
                         SMFS_SET_HND_IBLOCKS(smb);
-                }
-                else
+                } else {
                         CDEBUG(D_SUPER,"Unknown OBD (%s) post_setup\n",
                                obd->obd_type->typ_name);
+                }
         }
 
         if (rc)
                 OBD_FREE(current_ctxt, sizeof(*current_ctxt));
-  
+        
         RETURN(rc);
 }
 

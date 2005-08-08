@@ -173,25 +173,17 @@ out:
 
 typedef int (*ost_pack_rec_func)(char *buffer, struct dentry *dentry,
                                  struct inode *dir, void *data1, void *data2);
+
 static ost_pack_rec_func ost_kml_pack[REINT_MAX + 1] = {
         [REINT_SETATTR] ost_rec_setattr_pack,
         [REINT_CREATE]  ost_rec_create_pack,
         [REINT_WRITE]   ost_rec_write_pack,
 };
 
-int ost_rec_pack(char *buffer, struct dentry *dentry, struct inode *dir,
-                 void *data1, void *data2, int op)
+int ost_rec_pack(int op, char *buffer, struct dentry *dentry,
+                 struct inode *dir, void *data1, void *data2)
 {
-        if (op == REINT_SETATTR || op == REINT_CREATE || op == REINT_WRITE) {
+        if (op == REINT_SETATTR || op == REINT_CREATE || op == REINT_WRITE)
                 return ost_kml_pack[op](buffer, dentry, dir, data1, data2);
-        }
         return 0;
 }
-#if 0
-int ost_rec_pack_init(struct smfs_super_info *smsi)
-{
-
-        smsi->smsi_pack_rec[PACK_OST] = ost_rec_pack;
-        return 0;
-}
-#endif

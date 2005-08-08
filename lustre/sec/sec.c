@@ -1036,10 +1036,9 @@ int ptlrpcs_import_get_sec(struct obd_import *imp)
                 RETURN(0);
 
         /* find actual flavor for client obd. right now server side
-         * obd (reverse imp, etc) will simply use NULL.
-         */
-        if (!strcmp(imp->imp_obd->obd_type->typ_name, "mdc") ||
-            !strcmp(imp->imp_obd->obd_type->typ_name, "osc")) {
+         * obd (reverse imp, etc) will simply use NULL. */
+        if (!strcmp(imp->imp_obd->obd_type->typ_name, OBD_MDC_DEVICENAME) ||
+            !strcmp(imp->imp_obd->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 struct client_obd *cli = &imp->imp_obd->u.cli;
 
                 switch (SEC_FLAVOR_MAJOR(cli->cl_sec_flavor)) {
@@ -1057,7 +1056,8 @@ int ptlrpcs_import_get_sec(struct obd_import *imp)
                         pipedir = imp->imp_obd->obd_name;
                         break;
                 default:
-                        CWARN("unknown security flavor for %s(%s), use null\n",
+                        CWARN("unknown security flavor for %s(%s), "
+                              "use null\n",
                               imp->imp_obd->obd_type->typ_name,
                               imp->imp_obd->obd_name);
                 }

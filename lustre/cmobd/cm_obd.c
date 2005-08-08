@@ -51,24 +51,6 @@ static int cmobd_detach(struct obd_device *obd)
         return lprocfs_obd_detach(obd);
 }
 
-static inline int cmobd_md_obd(struct obd_device *obd)
-{
-        if (!strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) ||
-            !strcmp(obd->obd_type->typ_name, OBD_LMV_DEVICENAME))
-                return 1;
-
-        return 0;
-}
-
-static inline int cmobd_dt_obd(struct obd_device *obd)
-{
-        if (!strcmp(obd->obd_type->typ_name, OBD_LOV_DEVICENAME) ||
-            !strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME))
-                return 1;
-
-        return 0;
-}
-
 static int cmobd_init_dt_desc(struct obd_device *obd)
 {
         struct cm_obd *cmobd = &obd->u.cm;
@@ -139,8 +121,6 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lustre_handle conn = { 0 };
         struct cm_obd *cmobd = &obd->u.cm;
         struct lustre_cfg* lcfg = buf;
-        struct lustre_id mid, lid;
-        __u32 valsize;
         int rc;
         ENTRY;
 
@@ -200,7 +180,7 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 GOTO(put_cache, rc);
         }
 
-        if (cmobd_dt_obd(cmobd->master_exp->exp_obd)) {
+        if (obd_dt_type(cmobd->master_exp->exp_obd)) {
                 /* for master dt device remove the recovery flag. */
                 rc = obd_set_info(cmobd->master_exp, strlen("unrecovery"),
                                   "unrecovery", 0, NULL); 
@@ -212,7 +192,10 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                         GOTO(put_cache, rc);
         }
 
-        if (cmobd_md_obd(cmobd->master_exp->exp_obd)) {
+        if (obd_md_type(cmobd->master_exp->exp_obd)) {
+                __u32 size = sizeof(struct fid_extent);
+                struct fid_extent ext;
+                
                 rc = cmobd_init_ea_size(obd);
                 if (rc) {
                         CERROR("can't init MD layer EA size, "
@@ -221,38 +204,31 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
                 }
                 cmobd->write_srv = NULL;
 
-                /* requesting master obd to have its root inode store cookie to
-                 * be able to save it to local root inode EA. */
-                valsize = sizeof(struct lustre_id);
-        
-                rc = obd_get_info(cmobd->master_exp, strlen("rootid"),
-                                  "rootid", &valsize, &mid);
+                /* getting fid pool from master to set it on cache */
+                rc = obd_get_info(cmobd->master_exp, strlen("getext"),
+                                  "getext", &size, &ext);
                 if (rc) {
-                        CERROR("can't get rootid from master MDS %s, "
-                               "err= %d.\n", master_uuid.uuid, rc);
+                        CERROR("can't get fids extent from master, "
+                               "err %d\n", rc);
                         GOTO(put_cache, rc);
                 }
 
-                /* getting rootid from cache MDS. It is needed to update local
-                 * (cache) root inode by rootid value from master obd. */
-                rc = obd_get_info(cmobd->cache_exp, strlen("rootid"),
-                                  "rootid", &valsize, &lid);
-                if (rc) {
-                        CERROR("can't get rootid from local MDS %s, "
-                               "err= %d.\n", cache_uuid.uuid, rc);
-                        GOTO(put_cache, rc);
+                /* simple checks for validness */
+                if (!ext.fe_start || !ext.fe_width || ext.fe_start == ext.fe_width) {
+                        CERROR("invalid fids extent from master, ["LPD64"-"LPD64"]\n", 
+			       ext.fe_start, ext.fe_width);
+                        GOTO(put_cache, rc = -EINVAL);
                 }
 
-                /* storing master MDS rootid to local root inode EA. */
-                CWARN("storing "DLID4" to local inode "DLID4".\n",
-                      OLID4(&mid), OLID4(&lid));
-
-                rc = mds_update_mid(cmobd->cache_exp->exp_obd, &lid,
-                                    &mid, sizeof(mid));
+                CWARN("setting master fids extent ["LPD64"-"LPD64
+                      "] -> %s\n", ext.fe_start, ext.fe_width,
+                      cmobd->cache_exp->exp_obd->obd_name);
+                
+                rc = obd_set_info(cmobd->cache_exp, strlen("setext"),
+                                  "setext", size, &ext); 
                 if (rc) {
-                        CERROR("can't update local root inode by ID "
-                               "from master MDS %s, err = %d.\n",
-                               master_uuid.uuid, rc);
+                        CERROR("can't set fids extent to cache, "
+                               "err %d\n", rc);
                         GOTO(put_cache, rc);
                 }
         }
@@ -297,7 +273,11 @@ static int cmobd_iocontrol(unsigned int cmd, struct obd_export *exp,
         ENTRY;
         
         switch (cmd) {
-        case OBD_IOC_CMOBD_SYNC: /* trigger reintegration */
+        case OBD_IOC_CMOBD_SYNC:
+                /* here would be nice to make sure somehow that all data is in
+                 * cache and there are no outstanding requests, as otherwise
+                 * cahce is not coherent. But how to check that from CMOBD? I do
+                 * not know. --umka */
                 rc = cmobd_reintegrate(obd);
                 break;
         default:
@@ -334,8 +314,8 @@ static int __init cmobd_init(void)
         if (rc)
                 RETURN(rc);
         cmobd_extent_slab = kmem_cache_create("cmobd_extents",
-                                               sizeof(struct cmobd_extent_info), 0,
-                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
+                                              sizeof(struct cmobd_extent_info), 0,
+                                              SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (cmobd_extent_slab == NULL) {
                 class_unregister_type(OBD_CMOBD_DEVICENAME);
                 RETURN(-ENOMEM);

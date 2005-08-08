@@ -110,14 +110,16 @@ int cmobd_reintegrate(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
 
-        /* use the already opened log handle instead of 
-         * reopen a new log handle */
+        /* use the already opened log handle instead of reopen a new log
+         * handle */
         llh = ctxt ? ctxt->loc_handle : NULL;
-        if (llh == NULL)
-                RETURN(-EFAULT);
+        if (llh == NULL) {
+                CERROR("reint log is not found, wrong fstype "
+                       "or smfs plugin is used.\n");
+                RETURN(-EINVAL);
+        }
 
-        /* FIXME should we insert a LLOG_GEN_REC before process log ? */
+        /* FIXME: should we insert a LLOG_GEN_REC before process log? */
         rc = llog_cat_process(llh, (llog_cb_t)cmobd_reint_cb, obd);
-
         RETURN(rc);
 }

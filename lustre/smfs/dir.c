@@ -555,7 +555,6 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s (%p),dir=%lu/%u\n",
                dentry->d_name.len, dentry->d_name.name, dentry,
                dir->i_ino, dir->i_generation);
-
         
         cache_parent = pre_smfs_dentry(NULL, parent, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);

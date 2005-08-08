@@ -99,11 +99,11 @@ out:
 
 static int cmobd_create_reint(struct obd_device *obd, void *rec)
 {
-        struct obdo *oa = (struct obdo *)rec;
         struct cm_obd *cmobd = &obd->u.cm;
         struct obd_export *exp = cmobd->master_exp;
-        struct lov_stripe_md *lsm;
+        struct obdo *oa = (struct obdo *)rec;
         struct obd_trans_info oti = { 0 };
+        struct lov_stripe_md *lsm;
         int rc;
         ENTRY;
          
@@ -114,17 +114,20 @@ static int cmobd_create_reint(struct obd_device *obd, void *rec)
         if (cmobd->master_group != oa->o_gr) {
                 int group = oa->o_gr;
                 int valsize = sizeof(group);
-                rc = obd_set_info(exp, strlen("mds_conn"), "mds_conn",
-                                  valsize, &group);
+
+                rc = obd_set_info(exp, strlen("mds_conn"),
+                                  "mds_conn", valsize, &group);
                 if (rc)
-                        GOTO(out, rc = -EINVAL);
+                        GOTO(out, rc);
                 cmobd->master_group = oa->o_gr;
         }
-        rc = obd_create(exp, oa, NULL, 0, &lsm, &oti);
 
+        oti.oti_flags |= OBD_MODE_CROW;
+        rc = obd_create(exp, oa, NULL, 0, &lsm, &oti);
         cmobd_free_lsm(&lsm);
+        EXIT;
 out:
-        RETURN(rc);
+        return rc;
 }
 
 /* direct cut-n-paste of filter_blocking_ast() */
@@ -132,7 +135,7 @@ static int cache_blocking_ast(struct ldlm_lock *lock,
                               struct ldlm_lock_desc *desc,
                               void *data, int flag)
 {
-        int do_ast;
+        int rc, do_ast;
         ENTRY;
 
         if (flag == LDLM_CB_CANCELING) {
@@ -143,7 +146,7 @@ static int cache_blocking_ast(struct ldlm_lock *lock,
         /* XXX layering violation!  -phil */
         lock_res_and_lock(lock);
         
-        /* Get this: if filter_blocking_ast is racing with ldlm_intent_policy,
+        /* get this: if filter_blocking_ast() is racing with ldlm_intent_policy,
          * such that filter_blocking_ast is called just before l_i_p takes the
          * ns_lock, then by the time we get the lock, we might not be the
          * correct blocking function anymore.  So check, and return early, if
@@ -159,8 +162,6 @@ static int cache_blocking_ast(struct ldlm_lock *lock,
 
         if (do_ast) {
                 struct lustre_handle lockh;
-                int rc;
-
                 LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
                 ldlm_lock2handle(lock, &lockh);
                 rc = ldlm_cli_cancel(&lockh);
@@ -227,12 +228,6 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
                 RETURN(rc);
         
         /* construct the pseudo lsm */
-
-        /*
-         * it is not good to access lov fields like @desc directly. This is
-         * layering violation. It should be accessed via some interface method,
-         * like llite does. --umka
-         */
         rc = cmobd_dummy_lsm(&lsm, cmobd->master_desc.ld_tgt_count, oa,
                              (__u32)cmobd->master_desc.ld_default_stripe_size);
         if (rc)
@@ -250,8 +245,8 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
         rc = obd_cancel(cmobd->master_exp, lsm, LCK_PW, &lockh_dst);
         if (rc)
                 GOTO(out_lsm, rc);
-        /* XXX in fact, I just want to cancel the only lockh_dst 
-         *     instantly. */
+
+        /* XXX in fact, I just want to cancel the only lockh_dst instantly. */
         rc = obd_cancel_unused(cmobd->master_exp, lsm, 0, NULL);
         if (err)
                 rc = err;
@@ -264,8 +259,8 @@ out_lock:
 
 static int cmobd_write_reint(struct obd_device *obd, void *rec)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
         struct obdo *oa = (struct obdo *)rec;
+        struct cm_obd *cmobd = &obd->u.cm;
         struct ldlm_extent *extent = NULL; 
         char *extents_buf = NULL;
         struct obd_device *cache;

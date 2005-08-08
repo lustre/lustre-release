@@ -33,6 +33,32 @@
 # include <linux/mount.h>
 #endif
 
+#define OBD_MDS_DEVICENAME         "mds"
+#define OBD_MDT_DEVICENAME         "mdt"
+#define OBD_MDC_DEVICENAME         "mdc"
+#define OBD_LMV_DEVICENAME         "lmv"
+#define OBD_LOV_DEVICENAME         "lov"
+#define OBD_OST_DEVICENAME         "ost"
+#define OBD_OSC_DEVICENAME         "osc"
+
+#define OBD_LDLM_DEVICENAME        "ldlm"
+#define OBD_CACHE_DEVICENAME       "cobd"
+#define OBD_CMOBD_DEVICENAME       "cmobd"
+#define OBD_CONF_DEVICENAME        "confobd"
+
+#define OBD_SANOSC_DEVICENAME      "sanosc"
+#define OBD_SANOST_DEVICENAME      "sanost"
+
+#define OBD_ECHO_DEVICENAME        "obdecho"
+#define OBD_ECHO_CLIENT_DEVICENAME "echo_client"
+
+#define OBD_FILTER_DEVICENAME      "obdfilter"
+#define OBD_FILTER_SAN_DEVICENAME  "sanobdfilter"
+
+#define OBD_MGMTCLI_DEVICENAME     "mgmt_cli"
+#define OBD_PTLBD_SV_DEVICENAME    "ptlbd_server"
+#define OBD_PTLBD_CL_DEVICENAME    "ptlbd_client"
+
 #include <linux/lvfs.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
@@ -181,7 +207,6 @@ struct obd_service_time {
         __u32           st_num;
         __u64           st_total_us;
 };
-
 
 struct ost_server_data;
 
@@ -407,10 +432,19 @@ struct mds_obd {
         /* security related */
         char                            *mds_mds_sec;
         char                            *mds_ost_sec;
+
         /* which secure flavor from remote to this mds is denied */
         spinlock_t                      mds_denylist_lock;
         struct list_head                mds_denylist;
-        struct semaphore                mds_create_sem;
+
+        /* fid->ino mapping related fields */
+        spinlock_t                      mds_fidmap_lock;
+        struct hlist_head              *mds_fidmap_table;
+        unsigned long                   mds_fidmap_size;
+
+        /* cache fid extents stuff */
+        spinlock_t                      mds_fidext_lock;
+        __u64                           mds_fidext_thumb;
         int                             mds_crypto_type;
 };
 
@@ -478,6 +512,7 @@ struct cache_obd {
         int                     refcount;
         int                     cache_on;
         struct semaphore        sem;
+        struct lov_desc         dt_desc; /* data lovdesc */
 };
 
 struct cm_obd {
@@ -985,6 +1020,24 @@ static inline void obd_transno_commit_cb(struct obd_device *obd,
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);
         }
+}
+
+static inline int obd_md_type(struct obd_device *obd)
+{
+        if (!strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) ||
+            !strcmp(obd->obd_type->typ_name, OBD_LMV_DEVICENAME))
+                return 1;
+
+        return 0;
+}
+
+static inline int obd_dt_type(struct obd_device *obd)
+{
+        if (!strcmp(obd->obd_type->typ_name, OBD_LOV_DEVICENAME) ||
+            !strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME))
+                return 1;
+
+        return 0;
 }
 
 #endif /* __OBD_H */

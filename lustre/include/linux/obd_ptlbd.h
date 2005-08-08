@@ -9,9 +9,6 @@
  * See the file COPYING in this distribution
  */
 
-#define OBD_PTLBD_SV_DEVICENAME "ptlbd_server"
-#define OBD_PTLBD_CL_DEVICENAME "ptlbd_client"
-
 /* XXX maybe this isn't the best header to be dumping all this in.. */
 
 extern int ptlbd_blk_init(void);

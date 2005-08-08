@@ -94,13 +94,13 @@ struct smfs_super_info {
         char                     *smsi_ftype;       /* file system type */
 	struct obd_export	 *smsi_exp;	    /* file system obd exp */
 	struct snap_super_info	 *smsi_snap_info;   /* snap table cow */
-        //smfs_pack_rec_func   	 smsi_pack_rec[PACK_MAX]; /* sm_pack_rec type ops */
-        struct rw_semaphore      plg_sem; /*rw semaphore to protect plg operations */
-        __u32                    plg_flags;        /* flags */
+
+        struct rw_semaphore      plg_sem;           /* rw semaphore to protect
+                                                     * plg operations */
+        __u32                    plg_flags;         /* flags */
         __u32                    smsi_flags;
         __u32                    smsi_ops_check;
         struct list_head         smsi_plg_list;
-        //kmem_cache_t *           smsi_inode_cachep;  /*inode_cachep*/
 };
 
 
@@ -469,12 +469,13 @@ static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
         if (!parent_dentry)
                 cache_dentry->d_parent = cache_dentry;
         
+        //defines d_delete op to force killing dentry
+        cache_dentry->d_op = &sm_dop;
+
         if (cache_inode) {
                 atomic_inc(&cache_inode->i_count); //d_instantiate suppose that
                 d_add(cache_dentry, cache_inode);
         }
-        //defines d_delete op to force killing dentry
-        cache_dentry->d_op = &sm_dop;
         
         RETURN(cache_dentry);
 }

@@ -1869,13 +1869,13 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
         }
 
         lmv = &obd->u.lmv;
-        if (keylen == 6 && memcmp(key, "mdsize", 6) == 0) {
+        if (keylen == strlen("mdsize") && !strcmp(key, "mdsize")) {
                 __u32 *mdsize = val;
                 *vallen = sizeof(__u32);
                 *mdsize = sizeof(struct lustre_id) * lmv->desc.ld_tgt_count
                         + sizeof(struct mea);
                 RETURN(0);
-        } else if (keylen == 6 && memcmp(key, "mdsnum", 6) == 0) {
+        } else if (keylen == strlen("mdsnum") && !strcmp(key, "mdsnum")) {
                 struct obd_uuid *cluuid = &lmv->cluuid;
                 struct lmv_tgt_desc *tgts;
                 __u32 *mdsnum = val;
@@ -1889,7 +1889,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                         }
                 }
                 LASSERT(0);
-        } else if (keylen == 6 && memcmp(key, "rootid", 6) == 0) {
+        } else if (keylen == strlen("rootid") && !strcmp(key, "rootid")) {
                 rc = lmv_check_connect(obd);
                 if (rc)
                         RETURN(rc);
@@ -1898,12 +1898,11 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val);
                 RETURN(rc);
-        } else if (keylen >= strlen("lmvdesc") && strcmp(key, "lmvdesc") == 0) {
+        } else if (keylen >= strlen("lmvdesc") && !strcmp(key, "lmvdesc")) {
                 struct lmv_desc *desc_ret = val;
                 *desc_ret = lmv->desc;
                 RETURN(0);
-        } else if (keylen == strlen("remote_flag") &&
-                   !strcmp(key, "remote_flag")) {
+        } else if (keylen >= strlen("remote_flag") && !strcmp(key, "remote_flag")) {
                 struct lmv_tgt_desc *tgts;
                 int i;
 
@@ -1926,7 +1925,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                 }
                 RETURN(-EINVAL);
-        } else if (keylen >= strlen("lovdesc") && strcmp(key, "lovdesc") == 0) {
+        } else if (keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) {
                 rc = lmv_check_connect(obd);
                 if (rc)
                         RETURN(rc);
@@ -1936,6 +1935,30 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val);
                 RETURN(rc);
+        } else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
+                struct lmv_tgt_desc *tgts;
+                int i;
+
+                rc = lmv_check_connect(obd);
+                if (rc)
+                        RETURN(rc);
+
+                LASSERT(*vallen == sizeof(struct fid_extent));
+                for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count;
+                     i++, tgts++) {
+
+                        /* all tgts should be connected when this get called. */
+                        if (!tgts || !tgts->ltd_exp) {
+                                CERROR("target not setup?\n");
+                                continue;
+                        }
+
+                        rc = obd_get_info(tgts->ltd_exp, keylen, key,
+                                          vallen, val);
+                        if (rc)
+                                RETURN(rc);
+                }
+                RETURN(0);
         }
 
         CDEBUG(D_IOCTL, "invalid key\n");

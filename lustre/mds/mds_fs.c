@@ -52,6 +52,221 @@
 #define LAST_FID  "last_fid"
 #define VIRT_FID  "virt_fid"
 
+struct fidmap_entry {
+        struct hlist_node fm_hash;
+        struct lustre_id  fm_id;
+};
+
+int mds_fidmap_init(struct obd_device *obd, int size)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct hlist_head *head;
+        int i = 0;
+        ENTRY;
+
+        LASSERT(size > sizeof(sizeof(struct hlist_head)));
+        mds->mds_fidmap_size = size / sizeof(struct hlist_head);
+
+        CWARN("allocating %lu fid mapping entries\n",
+              (unsigned long)mds->mds_fidmap_size);
+
+        OBD_ALLOC(mds->mds_fidmap_table, size);
+        if (!mds->mds_fidmap_table)
+                RETURN(-ENOMEM);
+
+        i = mds->mds_fidmap_size;
+        head = mds->mds_fidmap_table;
+        do {
+                INIT_HLIST_HEAD(head);
+                head++;
+                i--;
+        } while(i);
+
+        RETURN(0);
+}
+
+int mds_fidmap_cleanup(struct obd_device *obd)
+{
+        struct hlist_node *node = NULL, *tmp = NULL;
+        struct mds_obd *mds = &obd->u.mds;
+        struct fidmap_entry *entry;
+        struct hlist_head *head;
+        int i = 0;
+        ENTRY;
+
+        spin_lock(&mds->mds_fidmap_lock);
+        for (i = 0, head = mds->mds_fidmap_table;
+             i < mds->mds_fidmap_size; i++, head++) {
+                hlist_for_each_safe(node, tmp, head) {
+                        entry = hlist_entry(node, struct fidmap_entry, fm_hash);
+                        hlist_del_init(&entry->fm_hash);
+                        OBD_FREE(entry, sizeof(*entry));
+                }
+        }
+        spin_unlock(&mds->mds_fidmap_lock);
+        OBD_FREE(mds->mds_fidmap_table, mds->mds_fidmap_size *
+                 sizeof(struct hlist_head));
+        RETURN(0);
+}
+
+static inline unsigned long
+const hashfn(struct obd_device *obd, __u64 fid)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        return (unsigned long)(fid & (mds->mds_fidmap_size - 1));
+}
+
+static struct fidmap_entry *
+__mds_fidmap_find(struct obd_device *obd, __u64 fid)
+{
+        struct fidmap_entry *entry = NULL;
+        struct mds_obd *mds = &obd->u.mds;
+        struct hlist_node *node = NULL;
+        struct hlist_head *head;
+        ENTRY;
+
+        head = mds->mds_fidmap_table + hashfn(obd, fid);
+        hlist_for_each(node, head) {
+                entry = hlist_entry(node, struct fidmap_entry, fm_hash);
+                if (id_fid(&entry->fm_id) == fid)
+                        RETURN(entry);
+        }
+        RETURN(NULL);
+}
+
+struct fidmap_entry *
+mds_fidmap_find(struct obd_device *obd, __u64 fid)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct fidmap_entry *entry;
+        ENTRY;
+
+        spin_lock(&mds->mds_fidmap_lock);
+        entry = __mds_fidmap_find(obd, fid);
+        spin_unlock(&mds->mds_fidmap_lock);
+        
+        RETURN(entry);
+}
+
+static void __mds_fidmap_insert(struct obd_device *obd,
+                                struct fidmap_entry *entry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct hlist_head *head;
+        unsigned long idx;
+        ENTRY;
+
+        idx = hashfn(obd, id_fid(&entry->fm_id));
+        head = mds->mds_fidmap_table + idx;
+        hlist_add_head(&entry->fm_hash, head);
+        
+        EXIT;
+}
+
+void mds_fidmap_insert(struct obd_device *obd,
+                       struct fidmap_entry *entry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        ENTRY;
+        
+        spin_lock(&mds->mds_fidmap_lock);
+        __mds_fidmap_insert(obd, entry);
+        spin_unlock(&mds->mds_fidmap_lock);
+        
+        EXIT;
+}
+
+static void __mds_fidmap_remove(struct obd_device *obd,
+                                struct fidmap_entry *entry)
+{
+        ENTRY;
+        hlist_del_init(&entry->fm_hash);
+        EXIT;
+}
+
+void mds_fidmap_remove(struct obd_device *obd,
+                       struct fidmap_entry *entry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        ENTRY;
+        
+        spin_lock(&mds->mds_fidmap_lock);
+        __mds_fidmap_remove(obd, entry);
+        spin_unlock(&mds->mds_fidmap_lock);
+
+        EXIT;
+}
+
+/* creates new mapping remote fid -> local inode store cookie. Both are saved in
+ * lustre_id for better usability, as all mds function use lustre_id as input
+ * params.*/
+int mds_fidmap_add(struct obd_device *obd,
+                   struct lustre_id *id)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct fidmap_entry *entry;
+        ENTRY;
+
+        OBD_ALLOC(entry, sizeof(*entry));
+        if (!entry)
+                RETURN(-ENOMEM);
+
+        entry->fm_id = *id;
+        
+        spin_lock(&mds->mds_fidmap_lock);
+        if (!__mds_fidmap_find(obd, id_fid(id))) {
+                __mds_fidmap_insert(obd, entry);
+                spin_unlock(&mds->mds_fidmap_lock);
+                CDEBUG(D_INODE, "added mapping to "DLID4"\n",
+                       OLID4(id));
+                RETURN(1);
+        }
+        spin_unlock(&mds->mds_fidmap_lock);
+        OBD_FREE(entry, sizeof(*entry));
+        
+        RETURN(0);
+}
+
+/* removes mapping using fid component from passed @id */
+void mds_fidmap_del(struct obd_device *obd,
+                    struct lustre_id *id)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct fidmap_entry *entry;
+        ENTRY;
+
+        spin_lock(&mds->mds_fidmap_lock);
+        entry = __mds_fidmap_find(obd, id_fid(id));
+        if (entry) {
+                __mds_fidmap_remove(obd, entry);
+                spin_unlock(&mds->mds_fidmap_lock);
+                OBD_FREE(entry, sizeof(*entry));
+                CDEBUG(D_INODE, "removed mapping to "DLID4"\n",
+                       OLID4(id));
+                goto out;
+        }
+        spin_unlock(&mds->mds_fidmap_lock);
+out:
+        EXIT;
+}
+
+struct lustre_id *mds_fidmap_lookup(struct obd_device *obd,
+                                    struct lustre_id *id)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct fidmap_entry *entry;
+        ENTRY;
+
+        spin_lock(&mds->mds_fidmap_lock);
+        entry = __mds_fidmap_find(obd, id_fid(id));
+        spin_unlock(&mds->mds_fidmap_lock);
+
+        if (!entry)
+                RETURN(NULL);
+        
+        RETURN(&entry->fm_id);
+}
+
 /* Add client data to the MDS.  We use a bitmap to locate a free space
  * in the last_rcvd file if cl_off is -1 (i.e. a new client).
  * Otherwise, we have just read the data from the last_rcvd file and
@@ -454,17 +669,22 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         LASSERT(dentry->d_inode);
 
         rc = mds_pack_inode2id(obd, &mds->mds_rootid, inode, 1);
-        if (rc < 0) {
+        if (rc && rc != -ENODATA)
+                GOTO(out_dentry, rc);
+
+        if (rc) {
                 if (rc != -ENODATA)
                         GOTO(out_dentry, rc);
         } else {
-                /*
-                 * rootid is filled by mds_read_inode_sid(), so we do not need
-                 * to allocate it and update. The only thing we need to check is
-                 * mds_num.
-                 */
+                /* rootid is filled by mds_read_inode_sid(), so we do not need
+                 * to allocate it and update. */
                 LASSERT(id_group(&mds->mds_rootid) == mds->mds_num);
                 mds_set_last_fid(obd, id_fid(&mds->mds_rootid));
+
+                rc = mds_fidmap_add(obd, &mds->mds_rootid);
+                if (rc > 0)
+                        rc = 0;
+                
                 GOTO(out_dentry, rc);
         }
 
@@ -485,6 +705,12 @@ int mds_fs_setup_rootid(struct obd_device *obd)
                 GOTO(out_dentry, rc);
         }
 
+        rc = mds_fidmap_add(obd, &mds->mds_rootid);
+        if (rc < 0)
+                GOTO(out_dentry, rc);
+	else
+		rc = 0;
+        
         rc = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
         if (rc)
                 CERROR("fsfilt_commit() failed, rc = %d\n", rc);
@@ -587,6 +813,12 @@ int mds_fs_setup_virtid(struct obd_device *obd)
                 RETURN(rc);
         }
 
+        rc = mds_fidmap_add(obd, &sid);
+        if (rc < 0)
+                RETURN(rc);
+	else
+		rc = 0;
+        
         rc = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
         if (rc) {
                 CERROR("fsfilt_commit() failed, rc = %d\n", rc);
@@ -595,6 +827,8 @@ int mds_fs_setup_virtid(struct obd_device *obd)
 
         RETURN(rc);
 }
+
+#define MDS_FIDMAP_SIZE (2*PAGE_SIZE)
 
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
@@ -764,6 +998,16 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                        file->f_dentry->d_inode->i_mode);
                 GOTO(err_lov_objid, rc = -ENOENT);
         }
+
+        /* reint fidext thumb by last fid after root and virt are initialized */
+        mds->mds_fidext_thumb = mds->mds_last_fid;
+                
+        rc = mds_fidmap_init(obd, MDS_FIDMAP_SIZE);
+        if (rc) {
+                CERROR("cannot init fid mapping tables, err %d\n", rc);
+                GOTO(err_lov_objid, rc);
+        }
+        
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc;
@@ -817,7 +1061,8 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
         class_disconnect_exports(obd, flags); /* cleans up client info too */
         target_cleanup_recovery(obd);
         mds_server_free_data(mds);
-
+        mds_fidmap_cleanup(obd);
+        
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (mds->mds_virtid_filp) {
                 rc = filp_close(mds->mds_virtid_filp, 0);

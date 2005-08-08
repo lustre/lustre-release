@@ -5,6 +5,4 @@
 #ifndef _OBD_LMV_H__
 #define _OBD_LMV_H__
 
-#define OBD_LMV_DEVICENAME "lmv"
-
 #endif

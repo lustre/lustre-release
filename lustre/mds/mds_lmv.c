@@ -920,13 +920,18 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 }
 
 int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int flags,
-                        struct ptlrpc_peer *peer, struct inode *parent)
+                      struct ptlrpc_peer *peer, struct inode *parent, int local)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lmv_obd *lmv;
-        int i = mds->mds_num;
         char peer_str[PTL_NALFMT_SIZE];
-        if (flags & REC_REINT_CREATE) { 
+        int i = mds->mds_num;
+        struct lmv_obd *lmv;
+        ENTRY;
+
+        if (local)
+                RETURN(mds->mds_num);
+        
+        if (flags & REC_REINT_CREATE) {
                 i = mds->mds_num;
         } else if (mds->mds_md_exp != NULL && peer != NULL) {
                 LASSERT(parent != NULL);

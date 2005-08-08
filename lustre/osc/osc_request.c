@@ -3041,6 +3041,16 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
+        if (keylen == strlen("setext") &&
+            memcmp(key, "setext", keylen) == 0) {
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+                struct osc_creator *oscc = &cli->cl_oscc;
+                struct fid_extent *ext = val;
+
+                oscc->oscc_next_id = (obd_id)ext->fe_start;
+                RETURN(0);
+        }
+
         if (keylen < strlen("mds_conn") ||
             memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);

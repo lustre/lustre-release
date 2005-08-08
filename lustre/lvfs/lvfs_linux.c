@@ -444,7 +444,7 @@ static int lvfs_memdbg_init(int size)
         LASSERT(size > sizeof(sizeof(struct hlist_head)));
         obd_memtable_size = size / sizeof(struct hlist_head);
 
-        CWARN("allocating %lu malloc entries...\n",
+        CWARN("allocating %lu malloc entries\n",
               (unsigned long)obd_memtable_size);
 
         obd_memtable = kmalloc(size, GFP_KERNEL);

@@ -2222,6 +2222,21 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 }
 
                 RETURN(0);
+        } else if (KEY_IS("setext")) {
+                struct lov_tgt_desc *tgt;
+                int rc = 0, i;
+
+                for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count;
+                     i++, tgt++) {
+                        if (!tgt->ltd_exp)
+                                continue;
+                        rc = obd_set_info(tgt->ltd_exp,
+                                          keylen, key, vallen, val);
+                        if (rc)
+                                RETURN(rc);
+                }
+
+                RETURN(0);
         } else {
                 RETURN(-EINVAL);
         }

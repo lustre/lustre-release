@@ -759,7 +759,7 @@ void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
 void lustre_init_msg (struct lustre_msg *msg, int count, 
                       int *lens, char **bufs);
 void *mdc_setattr_pack(struct lustre_msg *msg, int offset,
-                       struct mdc_op_data *data, struct iattr *iattr,
+                       struct mdc_op_data *op_data, struct iattr *iattr,
                        void *ea, int ealen, void *ea2, int ea2len, 
                        void *ea3, int ea3len);
 void *mdc_create_pack(struct lustre_msg *msg, int offset,
@@ -852,33 +852,6 @@ void mdc_pack_id(struct lustre_id *id, obd_id ino,
                 id_gen((id)) = cpu_to_le32(id_gen((id)));               \
                 id_type((id)) = cpu_to_le32(id_type((id)));             \
         } while (0)
-
-#ifdef __KERNEL__
-static inline void
-mdc_inode2id(struct lustre_id *id, struct inode *inode)
-{
-        mdc_pack_id(id, inode->i_ino, inode->i_generation,
-                    (inode->i_mode & S_IFMT), 0, 0);
-}
-
-static inline void 
-mdc_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
-                     struct inode *i2, const char *name, int namelen,
-                     int mode)
-{
-        LASSERT(i1);
-
-        mdc_inode2id(&data->id1, i1);
-        if (i2)
-                mdc_inode2id(&data->id2, i2);
-
-	data->valid = 0;
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = LTIME_S(CURRENT_TIME);
-}
-#endif
 
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
