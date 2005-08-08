@@ -9,7 +9,7 @@ mds3_HOST=$mds1_HOST
 ost_HOST=${ost_HOST:-$OSTNODE}
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 client_HOST=${client_HOST:-$CLIENT}
-gsk_HOST=${gsk_HOST:-$MDSNODE}
+gks_HOST=${gks_HOST:-$MDSNODE}
 
 NETTYPE=${NETTYPE:-tcp}
 

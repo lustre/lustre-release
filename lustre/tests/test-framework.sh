@@ -377,25 +377,25 @@ del_ost() {
     shift
     do_lmc --delete ost --node ${facet}_facet --ost ${facet}_svc $*
 }
-start_gsk() {
+start_gks() {
     facet=$1
     shift
     rm -f ${facet}active
     add_facet $facet
     do_facet $facet $LCONF --node ${facet}_facet  --ptldebug $PTLDEBUG $* $XMLCONFIG 
 }
-stop_gsk() {
+stop_gks() {
     facet=$1
     shift
     do_facet $facet $LCONF --node ${facet}_facet  --cleanup $* $XMLCONFIG 
 }
 
-add_gsk() {
+add_gks() {
     facet=$1
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add gss --gss ${facet}_svc --node ${facet}_facet $*
+    do_lmc --add gks --gks ${facet}_svc --node ${facet}_facet $*
 }
 add_cmobd() {
     facet=$1

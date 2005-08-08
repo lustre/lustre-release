@@ -45,8 +45,8 @@ gen_config() {
     fi
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_gsk gsk     
-    add_client client $MDS --lov lov1 --gss gsk_svc --path $MOUNT
+    add_gks gks     
+    add_client client $MDS --lov lov1 --gks gks_svc --path $MOUNT
 }
 
 build_test_filter
@@ -63,7 +63,7 @@ cleanup() {
     umount $MOUNT || true
     rmmod llite
 
-    stop_gsk gsk 
+    stop_gks gks 
     for mds in `mds_list`; do
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
@@ -95,7 +95,7 @@ setup() {
 	start $mds --reformat $MDSLCONFARGS
     done
     set -vx 
-    start_gsk gsk || exit 4
+    start_gks gks || exit 4
     set -e
     grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
     grep " $MOUNT2 " /proc/mounts || zconf_mount `hostname` $MOUNT2
