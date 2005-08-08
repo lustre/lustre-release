@@ -578,11 +578,10 @@ int ll_mks_create_key(struct inode *inode, struct lookup_intent *it)
 
 int ll_mks_init_it(struct inode *parent, struct lookup_intent *it)
 {
-        struct obd_export *gs_exp = ll_i2gsexp(parent);
         int rc = 0;
         ENTRY;
  
-        if (!gs_exp || !it)
+        if (!it)
                 RETURN(0);
 
         ll_gs_intent_init(it);
@@ -595,24 +594,26 @@ int ll_mks_init_it(struct inode *parent, struct lookup_intent *it)
 int ll_mks_decrypt_key(struct inode *inode, struct lookup_intent *it)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_export *gs_exp = ll_i2gsexp(inode);
         struct lustre_key *lkey =  NULL;
         struct posix_acl *acl = NULL;
         int rc = 0;
         
         ENTRY;
  
-        if (!gs_exp)
-                RETURN(rc);
-       
         rc = ll_get_acl_key(inode, &acl, &lkey);
         if (rc || !lkey)
-                RETURN(rc);      
+                GOTO(out, rc);      
         spin_lock(&lli->lli_lock); 
         SET_DECRYPTED(lkey->lk_flags); 
         spin_unlock(&lli->lli_lock); 
+out:
+        if (acl)
+                posix_acl_release(acl);
+        if (lkey)
+                lustre_key_release(lkey); 
         RETURN(rc);
 }
+
 struct crypto_helper_ops ll_cmd_ops = { 
        .init_it_key     = ll_mks_init_it,
        .init_inode_key  = ll_gs_init_inode_key, 
