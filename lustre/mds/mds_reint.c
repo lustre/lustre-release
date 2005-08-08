@@ -3269,11 +3269,6 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
         CDEBUG(D_OTHER, "%s: request to create name %s for "DLID4"\n",
                obd->obd_name, rec->ur_tgt, OLID4(rec->ur_id1));
 
-        /* get parent id: ldlm lock on the parent protects ea */
-        rc = mds_read_inode_sid(obd, de_tgtdir->d_inode, &ids[1]);
-        if (rc)
-                GOTO(cleanup, rc);
-
         /* first, lookup the target */
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_id2, parent_lockh,
                                          &de_tgtdir, LCK_PW, MDS_INODELOCK_UPDATE,
@@ -3283,6 +3278,11 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
         if (rc)
                 GOTO(cleanup, rc);
 
+        /* get parent id: ldlm lock on the parent protects ea */
+        rc = mds_read_inode_sid(obd, de_tgtdir->d_inode, &ids[1]);
+
+        if (rc)
+                GOTO(cleanup, rc);
         cleanup_phase = 1;
 
         LASSERT(de_tgtdir);
