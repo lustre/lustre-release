@@ -311,6 +311,7 @@ out:
         RETURN(rc);
 }
 
+#define ROOT_FID        1
 struct name_item {
         struct list_head link;
         char             name[NAME_MAX + 1];
@@ -318,8 +319,7 @@ struct name_item {
 
 int 
 mds_id2name(struct obd_device *obd, struct lustre_id *id, 
-            struct lustre_id *rootid, struct list_head *list, 
-            struct lustre_id *lastid)
+            struct list_head *list, struct lustre_id *lastid)
 {
         struct name_item *item;
         struct parseid_pkg *pkg;
@@ -331,7 +331,7 @@ mds_id2name(struct obd_device *obd, struct lustre_id *id,
                 RETURN(-ENOMEM);
 
         pkg->pp_id1 = *id;
-        while (!id_equal(&pkg->pp_id1, rootid)) {
+        while (id_fid(&pkg->pp_id1) != ROOT_FID) {
                 
                 rc = parse_id(obd, pkg);
                 if (rc) {
@@ -516,31 +516,19 @@ mds_audit_id2name(struct obd_device *obd, char **name, int *namelen,
         int rc = 0;
         struct list_head list, *pos, *n;
         struct name_item *item;
-        struct lustre_id parent_id, cur_id, rootid;
+        struct lustre_id parent_id, cur_id;
         ENTRY;
 
         *namelen = 0;
         INIT_LIST_HEAD(&list);
 
-        if (obd->u.mds.mds_num) {
-                int valsize = sizeof(rootid);
-                rc = obd_get_info(obd->u.mds.mds_md_exp, strlen("rootid"),
-                                  "rootid", &valsize, &rootid);
-                if (rc) {
-                        CERROR("cann't get rootid!\n");
-                        RETURN(rc);
-                }
-        } else {
-                rootid = obd->u.mds.mds_rootid;
-        }
-        
         cur_id = *id;
-        if (id_equal(&cur_id, &rootid))
+        if (id_fid(&cur_id) == ROOT_FID)
                 RETURN(0);
 next:
         memset(&parent_id, 0, sizeof(parent_id));
 
-        rc = mds_id2name(obd, &cur_id, &rootid, &list, &parent_id);
+        rc = mds_id2name(obd, &cur_id, &list, &parent_id);
         if (rc == -ENOENT) {
                 /* can't reconstruct name from id, turn to audit log */
                 LASSERT(id_fid(&parent_id));
