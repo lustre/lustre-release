@@ -1542,8 +1542,9 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                  * XXX nikita: this assertion should be adjusted when lustre
                  * starts using PG_writeback for pages being written out.
                  */
+#if defined(__KERNEL__)
                 LASSERT(PageLocked(oap->oap_page));
-
+#endif
                 /* If there is a gap at the start of this page, it can't merge
                  * with any previous page, so we'll hand the network a
                  * "fragmented" page array that it can't transfer in 1 RDMA */
