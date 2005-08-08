@@ -950,7 +950,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         case S_IFDIR: {
-                int i, nstripes = 0;
+                int i;
                 
                 /*
                  * as Peter asked, mkdir() should distribute new directories
@@ -974,28 +974,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 GOTO(cleanup, rc);
                         }
 
-                        if (rec->ur_eadata)
-                                nstripes = *(u16 *)rec->ur_eadata;
-
-                        if (rc == 0 && nstripes) {
-                                /*
-                                 * we pass LCK_EX to split routine to signal,
-                                 * that we have exclusive access to the
-                                 * directory. Simple because nobody knows it
-                                 * already exists -bzzz
-                                 */
-                                rc = mds_try_to_split_dir(obd, dchild,
-                                                          NULL, nstripes,
-                                                          LCK_EX);
-                                if (rc > 0) {
-                                        /* dir got splitted */
-                                        rc = 0;
-                                } else if (rc < 0) {
-                                        /* an error occured during
-                                         * splitting. */
-                                        GOTO(cleanup, rc);
-                                }
-                        }
                 } else if (!DENTRY_VALID(dchild)) {
                         /* inode will be created on another MDS */
                         struct obdo *oa = NULL;
@@ -1187,7 +1165,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 /* take care of default stripe inheritance */
                 if (type == S_IFDIR) {
                         struct lov_mds_md lmm;
-                        int lmm_size = sizeof(lmm);
+                        int lmm_size = sizeof(lmm), nstripes = 0;
 
                         rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1, 0);
                         if (rc > 0) {
@@ -1201,6 +1179,30 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                        rc);
                                 rc = 0;
                         }
+                        
+                        if (rec->ur_eadata)
+                                nstripes = *(u16 *)rec->ur_eadata;
+                        
+                        if (nstripes) {
+                                /*
+                                 * we pass LCK_EX to split routine to signal,
+                                 * that we have exclusive access to the
+                                 * directory. Simple because nobody knows it
+                                 * already exists -bzzz
+                                 */
+                                rc = mds_try_to_split_dir(obd, dchild,
+                                                          NULL, nstripes,
+                                                          LCK_EX);
+                                if (rc > 0) {
+                                        /* dir got splitted */
+                                        rc = 0;
+                                } else if (rc < 0) {
+                                        /* an error occured during
+                                         * splitting. */
+                                        GOTO(cleanup, rc);
+                                }
+                        }
+
                 }
                 
                 mds_pack_inode2body(obd, body, inode, 1);
