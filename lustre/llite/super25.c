@@ -35,13 +35,6 @@
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
 
-struct super_block * lustre_get_sb(struct file_system_type *fs_type,
-                               int flags, const char *devname, void * data)
-{
-        /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
-}
-
 static kmem_cache_t *ll_inode_cachep;
 
 static struct inode *ll_alloc_inode(struct super_block *sb)
@@ -102,13 +95,6 @@ struct super_operations lustre_super_operations =
         .remount_fs    = ll_remount_fs,
 };
 
-struct file_system_type lustre_fs_type = {
-        .owner        = THIS_MODULE,
-        .name         = "lustre",
-        .get_sb       = lustre_get_sb,
-        .kill_sb      = kill_anon_super,
-        .fs_flags     = FS_BINARY_MOUNTDATA,
-};
 
 static int __init init_lustre_lite(void)
 {
@@ -129,21 +115,16 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ?
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
-        lustre_register_client_fill_super(ll_fill_super);
-
         ll_register_cache(&ll_cache_definition);
-
-        rc = register_filesystem(&lustre_fs_type);
-        if (rc) {
-                ll_unregister_cache(&ll_cache_definition);
-        }
-
+        
+        lustre_register_client_fill_super(ll_fill_super);
+        
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
-        unregister_filesystem(&lustre_fs_type);
+        lustre_register_client_fill_super(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
 

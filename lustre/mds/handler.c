@@ -1475,7 +1475,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 /* We already mounted in lustre_fill_super */
                 mnt = lmi->lmi_mnt;
         } else {
-                /* old path */
+                /* old path - used for llog writing from mkfs.lustre */
+                CERROR("Using old MDS mount method\n");
                 page = __get_free_page(GFP_KERNEL);
                 if (!page)
                         RETURN(-ENOMEM);

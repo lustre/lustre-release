@@ -216,7 +216,6 @@ struct lustre_mount_info {
 #ifdef __KERNEL__
 
 /* obd_mount.c */
-int lustre_fill_super(struct super_block *sb, void *data, int silent);
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
 int class_manual_cleanup(struct obd_device *obd, char *flags);

@@ -40,16 +40,6 @@
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
-static struct super_block *lustre_read_super(struct super_block *sb,
-                                             void *data, int silent)
-{
-        int err;
-        ENTRY;
-        err = lustre_fill_super(sb, data, silent);
-        if (err)
-                RETURN(NULL);
-        RETURN(sb);
-}
 
 /* exported operations */
 struct super_operations lustre_super_operations =
@@ -63,13 +53,6 @@ struct super_operations lustre_super_operations =
         .fh_to_dentry   = ll_fh_to_dentry,
         .dentry_to_fh   = ll_dentry_to_fh,
         .remount_fs     = ll_remount_fs,
-};
-
-static struct file_system_type lustre_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "lustre",
-        .fs_flags       = FS_NFSEXP_FSID,
-        .read_super     = lustre_read_super,
 };
 
 static int __init init_lustre_lite(void)
@@ -87,24 +70,17 @@ static int __init init_lustre_lite(void)
         if (proc_lustre_root)
                 proc_lustre_fs_root = proc_mkdir("llite", proc_lustre_root);
 
-        // FIXME register_filesystem should be in obd_mount init, not here.
-        // here we just have: 
-        lustre_register_client_fill_super(ll_fill_super);
-
         ll_register_cache(&ll_cache_definition);
 
-        rc = register_filesystem(&lustre_fs_type);
-        if (rc) {
-                ll_unregister_cache(&ll_cache_definition);
-        }
+        lustre_register_client_fill_super(ll_fill_super);
 
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
-        unregister_filesystem(&lustre_fs_type);
-
+        lustre_register_client_fill_super(NULL);
+        
         ll_unregister_cache(&ll_cache_definition);
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,

@@ -106,12 +106,14 @@ static int load_modules(struct lustre_mount_data *lmd)
 {
         int rc = 0;
 
+        rc = load_module("_lustre");
+
         if (lmd_is_client(lmd)) {
-                rc = load_module("lustre");
+                rc = load_module("llite");
         } else {
                 rc = load_module("mds");
                 if (rc) return rc;
-                rc = load_module("oss");
+                rc = load_module("ost");
         }
         return rc;
 }
@@ -472,8 +474,8 @@ int main(int argc, char *const argv[])
                    does not. */
                 rc = mount(source, target, "lustre", flags, (void *)&lmd);
         if (rc) {
-                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
-                        target, progname, strerror(errno));
+                fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname, 
+                        source, target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");

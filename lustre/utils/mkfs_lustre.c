@@ -918,7 +918,6 @@ int main(int argc , char *const argv[])
                 {"fsname",1, 0, 'n'},
                 {"failover", 1, 0, 'f'},
                 {"help", 0, 0, 'h'},
-                {"index", 1, 0, 'I'},
                 {"mdt", 0, 0, 'M'},
                 {"mgmt", 0, 0, 'G'},
                 {"mgmtnode", 1, 0, 'm'},
@@ -930,6 +929,7 @@ int main(int argc , char *const argv[])
                 {"stripe_count", 1, 0, 'c'},
                 {"stripe_size", 1, 0, 's'},
                 {"stripe_index", 1, 0, 'i'},
+                {"index", 1, 0, 'i'},
                 {"timeout", 1, 0, 't'},
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
@@ -1077,15 +1077,14 @@ int main(int argc , char *const argv[])
         strcpy(mop.mo_device, argv[optind]);
         
         /* These are the permanent mount options. */ 
-        if (mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) {
+        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
+            (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
-                if (IS_OST(&mop.mo_ldd))
-                        strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
-        } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
-                sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
+                // extents,mballoc? 
                 if (IS_MDT(&mop.mo_ldd))
-                        // FIXME ext3 also
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
+                if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
+                        strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
         } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",
                         mop.mo_device);

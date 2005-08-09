@@ -46,6 +46,7 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_disk.h>
+#include <linux/lustre_net.h>
 //#include <linux/lprocfs_status.h>
 #include "mgc_internal.h"
 

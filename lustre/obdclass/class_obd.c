@@ -661,6 +661,7 @@ int init_obdclass(void)
         struct obd_device *obd;
 #ifdef __KERNEL__
         struct proc_dir_entry *entry;
+        int lustre_register_fs(void);
 #endif
         int err;
         int i;
@@ -712,6 +713,8 @@ int init_obdclass(void)
                 RETURN(-ENOMEM);
         }
         entry->proc_fops = &obd_device_list_fops;
+
+        lustre_register_fs();
 #endif
         return 0;
 }
@@ -724,7 +727,10 @@ static void cleanup_obdclass(void)
 {
         int i;
         int leaked;
+        int lustre_unregister_fs(void);
         ENTRY;
+
+        lustre_unregister_fs();
 
         misc_deregister(&obd_psdev);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
