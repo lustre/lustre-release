@@ -61,34 +61,34 @@ char* portals_command[17]=
 int main(int argc, char **argv)
 {
         int rc=0;
-	int fd,rec_number;
-	
-	struct llog_log_hdr* llog_buf=NULL;
-	struct llog_rec_hdr** recs_buf=NULL;
-		
+        int fd,rec_number;
+        
+        struct llog_log_hdr* llog_buf=NULL;
+        struct llog_rec_hdr** recs_buf=NULL;
+                
 
         setlinebuf(stdout);
-	
-	if(argc != 2 ){
-		printf("Usage: llog_reader filename \n");
+        
+        if(argc != 2 ){
+                printf("Usage: llog_reader filename \n");
                 return -1;
         }
-	
-	fd = open(argv[1],O_RDONLY);
-	if (fd < 0){
-		printf("Could not open the file %s \n",argv[1]);
-		goto out;
-	}
-	rc = llog_pack_buffer(fd,&llog_buf,&recs_buf,&rec_number);
-		
+        
+        fd = open(argv[1],O_RDONLY);
+        if (fd < 0){
+                printf("Could not open the file %s \n",argv[1]);
+                goto out;
+        }
+        rc = llog_pack_buffer(fd, &llog_buf, &recs_buf, &rec_number);
+                
         if(llog_buf == NULL )
                 printf("error");
-	print_llog_header(llog_buf);
-	
-	print_records(recs_buf,rec_number);
+        print_llog_header(llog_buf);
+        
+        print_records(recs_buf,rec_number);
 
-	llog_unpack_buffer(fd,llog_buf,recs_buf);
-	close(fd);
+        llog_unpack_buffer(fd,llog_buf,recs_buf);
+        close(fd);
 out:
         return rc;
 }
@@ -96,86 +96,85 @@ out:
 
 
 int llog_pack_buffer(int fd, struct llog_log_hdr** llog, 
-			struct llog_rec_hdr*** recs, 
-			int* recs_number)
+                     struct llog_rec_hdr*** recs, 
+                     int* recs_number)
 {
-	int rc=0,recs_num,rd;
-	off_t file_size;
-	struct stat st;
-	char  *file_buf=NULL, *recs_buf=NULL;
+        int rc=0,recs_num,rd;
+        off_t file_size;
+        struct stat st;
+        char  *file_buf=NULL, *recs_buf=NULL;
         struct llog_rec_hdr** recs_pr=NULL;
-	char* ptr=NULL;
+        char* ptr=NULL;
+        int cur_idx,i;
+        
+        rc = fstat(fd,&st);
+        if (rc < 0){
+                printf("Get file stat error.\n");
+                goto out;
+        }       
+        file_size = st.st_size;
+        
+        file_buf = malloc(file_size);
+        if (file_buf == NULL){
+                printf("Memory Alloc for file_buf error.\n");
+                rc = -ENOMEM;
+                goto out;
+        }       
+        *llog = (struct llog_log_hdr*)file_buf;
 
-	int cur_idx,i;
-	
-	rc = fstat(fd,&st);
-	if (rc < 0){
-		printf("Get file stat error.\n");
-		goto out;
-	}	
-	file_size = st.st_size;
-	
-	file_buf = malloc(file_size);
-	if (file_buf == NULL){
-		printf("Memory Alloc for file_buf error.\n");
-		rc = -ENOMEM;
-		goto out;
-	}	
-	*llog = (struct llog_log_hdr*)file_buf;
-
-	rd = read(fd,file_buf,file_size);
-	if (rd < file_size){
-		printf("Read file error.\n");
-		rc = -EIO; /*FIXME*/
-		goto clear_file_buf;
-	}	
+        rd = read(fd,file_buf,file_size);
+        if (rd < file_size){
+                printf("Read file error.\n");
+                rc = -EIO; /*FIXME*/
+                goto clear_file_buf;
+        }       
 
         /* the llog header not countable here.*/
-	recs_num = le32_to_cpu((*llog)->llh_count)-1;
-	
-	recs_buf = malloc(recs_num*sizeof(struct llog_rec_hdr*));
-	if (recs_buf == NULL){
-		printf("Memory Alloc for recs_buf error.\n");
-		rc = -ENOMEM;
-		goto clear_file_buf;
-	}	
-	recs_pr = (struct llog_rec_hdr **)recs_buf;
-	
-	ptr = file_buf + le32_to_cpu((*llog)->llh_hdr.lrh_len);
-	cur_idx = 1;
-	i = 0;
-	while (i < recs_num){	
-		struct llog_rec_hdr* cur_rec=(struct llog_rec_hdr*)ptr;
+        recs_num = le32_to_cpu((*llog)->llh_count)-1;
+        
+        recs_buf = malloc(recs_num*sizeof(struct llog_rec_hdr*));
+        if (recs_buf == NULL){
+                printf("Memory Alloc for recs_buf error.\n");
+                rc = -ENOMEM;
+                goto clear_file_buf;
+        }       
+        recs_pr = (struct llog_rec_hdr **)recs_buf;
+        
+        ptr = file_buf + le32_to_cpu((*llog)->llh_hdr.lrh_len);
+        cur_idx = 1;
+        i = 0;
+        while (i < recs_num){   
+                struct llog_rec_hdr* cur_rec=(struct llog_rec_hdr*)ptr;
 
-		while (! ext2_test_bit(cur_idx,(*llog)->llh_bitmap) ){
-			cur_idx++;
-			ptr+=cur_rec->lrh_len;
-			if ((ptr-file_buf) > file_size){
-				printf("The log is corrupted. \n");
-				rc = -EINVAL;
-				goto clear_recs_buf;
-			}	
-		}
-		recs_pr[i] = cur_rec;
-		ptr+=cur_rec->lrh_len;
-		i++;
+                while(!ext2_test_bit(cur_idx,(*llog)->llh_bitmap)){
+                        cur_idx++;
+                        ptr += cur_rec->lrh_len;
+                        if ((ptr-file_buf) > file_size){
+                                printf("The log is corrupted. \n");
+                                rc = -EINVAL;
+                                goto clear_recs_buf;
+                        }       
+                }
+                recs_pr[i] = cur_rec;
+                ptr+=cur_rec->lrh_len;
+                i++;
                 cur_idx++;
-	}
+        }
         
         *recs = recs_pr;
-	*recs_number=recs_num;
+        *recs_number=recs_num;
 
 out:
-	return rc;
+        return rc;
 
 clear_recs_buf:
-	free(recs_buf);
+        free(recs_buf);
 
 clear_file_buf:
-	free(file_buf);
+        free(file_buf);
 
         *llog=NULL;
-	goto out;
+        goto out;
 
 }
 
@@ -190,228 +189,140 @@ void llog_unpack_buffer(int fd,struct llog_log_hdr* llog_buf,struct llog_rec_hdr
 
 void print_llog_header(struct llog_log_hdr* llog_buf)
 {
-	time_t t;
+        time_t t;
 
-	printf("\n      **The LOGS Header Informations**\n");
+        printf("Header size : %d \n",
+        //              le32_to_cpu(llog_buf->llh_hdr.lrh_len));
+                llog_buf->llh_hdr.lrh_len);
 
-	printf("        Hearder size : %d \n",
-	//		le32_to_cpu(llog_buf->llh_hdr.lrh_len));
-			llog_buf->llh_hdr.lrh_len);
+        t = le64_to_cpu(llog_buf->llh_timestamp);
+        printf("Time : %s", ctime(&t));
 
-	t = le64_to_cpu(llog_buf->llh_timestamp);
-	printf("        Time : %s ", ctime(&t));
+        printf("Number of records: %d\n",
+               le32_to_cpu(llog_buf->llh_count)-1);
 
-	printf("        Number of records: %d \n",
-			le32_to_cpu(llog_buf->llh_count)-1);
+        printf("Target uuid : %s \n",
+               (char *)(&llog_buf->llh_tgtuuid));
 
-	printf("        Target uuid : %s \n",
-                        (char *)(&llog_buf->llh_tgtuuid));
+        /* Add the other infor you want to view here*/
 
-	/* Add the other infor you want to view here*/
-	
-	return;
+        printf("-----------------------\n");
+        return;
 }
+
+static void print_1_cfg(struct lustre_cfg *lcfg)
+{
+        int i;
+        for (i = 0; i <  lcfg->lcfg_bufcount; i++)
+                printf("%d:%s ", i, lustre_cfg_string(lcfg, i));
+        return;
+}
+
 void print_lustre_cfg(struct lustre_cfg *lcfg)
 {
-	enum lcfg_command_type cmd = le32_to_cpu(lcfg->lcfg_command);
-        char * ptr = (char *)lcfg + LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
+        enum lcfg_command_type cmd = le32_to_cpu(lcfg->lcfg_command);
         
-	switch(cmd){
-	case(LCFG_ATTACH):{
-                if (lustre_cfg_string(lcfg, 0))
-        		printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-		printf("        attach ");
-                if (lustre_cfg_string(lcfg, 1))
-		        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 0))
-		        printf("%s \n", lustre_cfg_string(lcfg, 0));
-                if (lustre_cfg_string(lcfg, 2))
-		        printf("%s \n", lustre_cfg_string(lcfg, 2));
-		printf("\n");
-		break;
-	}
-	case(LCFG_SETUP):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("        setup ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 2))
-                        printf("%s \n", lustre_cfg_string(lcfg, 2));
-                if (lustre_cfg_string(lcfg, 3))
-                        printf("%s \n", lustre_cfg_string(lcfg, 3));
-                if (lustre_cfg_string(lcfg, 4))
-                        printf("%s \n", lustre_cfg_string(lcfg, 4));
-		printf("\n");
-		break;
-	}
+        switch(cmd){
+        case(LCFG_ATTACH):{
+                printf("attach   ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_SETUP):{
+                printf("setup    ");
+                print_1_cfg(lcfg);
+                break;
+        }
         case(LCFG_DETACH):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        detach ");
-                printf("\n");
+                printf("detach   ");
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_CLEANUP):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        cleanup ");
-		if (lustre_cfg_string(lcfg, 1)){
-			if(!strncmp(lustre_cfg_string(lcfg, 1), "F", 1))
-                                printf("force ");
-			if(!strncmp(lustre_cfg_string(lcfg, 1), "A", 1))
-                                printf("failover ");
-                }
-                printf("\n");
+                printf("cleanup  ");
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_ADD_UUID):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        add_uuid ");
-		if (lustre_cfg_string(lcfg, 1))
-			printf(" ( uuid: %s, ", lustre_cfg_string(lcfg, 1));
-                printf("nid: %x, ", lcfg->lcfg_nid);
-                printf("nal type: %d )", lcfg->lcfg_nal);
-                printf("\n");
+                printf("add_uuid ");
+                printf("nid=%x ", (unsigned int)lcfg->lcfg_nid);
+                printf("nal_type=%d ", lcfg->lcfg_nal);
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_DEL_UUID):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        del_uuid ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                printf("\n");
-                break;
-        }
-        case(LCFG_LOV_ADD_OBD):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("        lov_add_obd ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 2))
-                        printf("%s \n", lustre_cfg_string(lcfg, 2));
-                if (lustre_cfg_string(lcfg, 3))
-                        printf("%s \n", lustre_cfg_string(lcfg, 3));
-                printf("\n");
-                break;
-        }
-        case(LCFG_LOV_DEL_OBD):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        lov_del_obd ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 2))
-                        printf("%s \n", lustre_cfg_string(lcfg, 2));
-                if (lustre_cfg_string(lcfg, 3))
-                        printf("%s \n", lustre_cfg_string(lcfg, 3));
-                printf("\n");
-                break;
-        }
-        case(LCFG_MOUNTOPT):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        mount_option ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 2))
-                        printf("%s \n", lustre_cfg_string(lcfg, 2));
-                if (lustre_cfg_string(lcfg, 3))
-                        printf("%s \n", lustre_cfg_string(lcfg, 3));
-                printf("\n");
-                break;
-        }
-        case(LCFG_DEL_MOUNTOPT):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        del_mount_option ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                printf("\n");
-                break;
-        }
-        case(LCFG_SET_TIMEOUT):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        set_timeout %d", lcfg->lcfg_num);
-                printf("\n");
-                break;
-        }
-        case(LCFG_SET_UPCALL):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        set_lustre_upcall ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                printf("\n");
+                printf("del_uuid ");
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_ADD_CONN):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        add_conn ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                if (lustre_cfg_string(lcfg, 2))
-                        printf("%s \n", lustre_cfg_string(lcfg, 2));
-                printf("\n");
+                printf("add_conn ");
+                print_1_cfg(lcfg);
                 break;
         }
         case(LCFG_DEL_CONN):{
-                if (lustre_cfg_string(lcfg, 0))
-                        printf(" dev:%s \n", lustre_cfg_string(lcfg, 0));
-                printf("\n ");
-                printf("        del_conn ");
-                if (lustre_cfg_string(lcfg, 1))
-                        printf("%s \n", lustre_cfg_string(lcfg, 1));
-                printf("\n");
+                printf("del_conn ");
+                print_1_cfg(lcfg);
                 break;
         }
-	default:
-		printf("not support this command, cmd_code = %x\n",cmd);
-	}
-	return;
+        case(LCFG_LOV_ADD_OBD):{
+                printf("lov_modify_tgts add ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_LOV_DEL_OBD):{
+                printf("lov_modify_tgts del ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_MOUNTOPT):{
+                printf("mount_option ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_DEL_MOUNTOPT):{
+                printf("del_mount_option ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_SET_TIMEOUT):{
+                printf("set_timeout=%d ", lcfg->lcfg_num);
+                print_1_cfg(lcfg);
+                break;
+        }
+        case(LCFG_SET_UPCALL):{
+                printf("set_lustre_upcall ");
+                print_1_cfg(lcfg);
+                break;
+        }
+        default:
+                printf("unsupported cmd_code = %x\n",cmd);
+        }
+        printf("\n");
+        return;
 }
 
 void print_records(struct llog_rec_hdr** recs,int rec_number)
 {
         __u32 lopt;
-	int i;
+        int i;
         
-	for(i=0;i<rec_number;i++){
+        for(i=0;i<rec_number;i++){
         
-	        printf("      %d:", le32_to_cpu(recs[i]->lrh_index));
+                printf("#%.2d ", le32_to_cpu(recs[i]->lrh_index));
 
                 lopt = le32_to_cpu(recs[i]->lrh_type);
 
                 if (lopt == OBD_CFG_REC){
-	                struct lustre_cfg *lcfg;
-                        printf("LUSTRE"); 
-	        	lcfg = (struct lustre_cfg *)
+                        struct lustre_cfg *lcfg;
+                        printf("L "); 
+                        lcfg = (struct lustre_cfg *)
                                 ((char*)(recs[i]) + sizeof(struct llog_rec_hdr));
-               		print_lustre_cfg(lcfg);
+                        print_lustre_cfg(lcfg);
                 }
 
                 if (lopt == PTL_CFG_REC){
-	                struct portals_cfg *pcfg;
-                        printf("PORTALS"); 
-                        pcfg = (struct portals_cfg *)
-                                ((char*)(recs[i]) + sizeof(struct llog_rec_hdr));
-                        printf(" Command: %s \n",
-                               portals_command[pcfg->pcfg_command- PTL_CMD_BASE]);
+                        printf("Portals - unknown type\n"); 
                 }
-	}
+        }
 }
