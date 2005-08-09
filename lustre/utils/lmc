@@ -227,10 +227,13 @@ def panic(cmd, msg):
     print msg
     sys.exit(1)
 
-    
 def warning(*args):
     msg = string.join(map(str,args))
-    print "Warning: ", msg
+    sys.stderr.write("WARNING: %s\n" % (msg))
+
+def info(*args):
+    msg = string.join(map(str,args))
+    sys.stderr.write("INFO: %s\n" % (msg))
     
 #
 # manage names and uuids
@@ -890,8 +893,8 @@ def add_lov(gen, lustre, options):
     stripe_sz = get_option_int(options, 'stripe_sz')
     stripe_cnt = get_option_int(options, 'stripe_cnt')
     if stripe_cnt == 0:
-        print "default stripe count (0) - will use %d stripe(s) per file" \
-                % DEFAULT_STRIPE_CNT
+        info("default stripe count (0) - will use %d stripe(s) per file" \
+                % DEFAULT_STRIPE_CNT)
     pattern = get_option_int(options, 'stripe_pattern')
     uuid = new_uuid(name)
 
