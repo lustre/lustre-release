@@ -1,4 +1,16 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.5
+       * bug fixes
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7264
+Description: Mounting an ldiskfs file system with mballoc may crash OST node.
+Details    : ldiskfs mballoc code may reference an uninitialized buddy struct
+             at startup during orphan unlinking.  Instead, skip buddy update
+             before setup, as it will be regenerated after recovery is complete.
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
 
