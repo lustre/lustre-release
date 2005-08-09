@@ -346,6 +346,26 @@ out:
                 OBD_FREE(ckey, ck_size);
         RETURN(rc); 
 }
+static void get_real_parameters(struct inode *inode, struct iattr *iattr,
+                                mode_t *mode,   __u32 *uid, __u32 *gid)
+{ 
+        LASSERT(iattr);
+
+        if (iattr->ia_valid & ATTR_MODE)
+                *mode = iattr->ia_mode;
+        else
+                *mode = inode->i_mode;
+
+        if (iattr->ia_valid & ATTR_UID)
+                *uid = iattr->ia_uid;
+        else 
+                *uid = inode->i_uid;
+
+        if (iattr->ia_valid & ATTR_GID)
+                *gid = iattr->ia_gid;
+        else
+                *gid = inode->i_gid;
+}
 
 int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value, 
                    int size, void **key, int *key_size)
@@ -359,6 +379,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         struct posix_acl *acl = NULL, *new_acl = NULL; 
         int rc = 0,  kperm_size = 0, kcontext_size = 0; 
         mode_t mac_mode;
+        __u32 uid, gid;
         int acl_count = 0;
         
         ENTRY;
@@ -382,7 +403,6 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                             acl, inode->i_mode, GKS_GET_MAC, iattr->ia_valid);
         spin_unlock(&lli->lli_lock);
         if (value) {
-                new_acl = posix_acl_from_xattr(value, size);
                 if (IS_ERR(new_acl)) {
                         rc = PTR_ERR(new_acl);
                         CERROR("convert from xattr to acl error: %d",rc);
@@ -396,15 +416,11 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                         }
                 }
         } 
-        acl_count = acl ? acl->a_count : 0;  
+        acl_count = new_acl ? new_acl->a_count : 0;  
         kperm_size = crypto_kperm_size(acl_count);
         OBD_ALLOC(kperm, kperm_size);
-        if (iattr->ia_valid & ATTR_MODE)
-                mac_mode = iattr->ia_mode;
-        else
-                mac_mode = inode->i_mode; 
-        ll_init_key_perm(kperm, new_acl, iattr->ia_uid, iattr->ia_gid, 
-                         mac_mode);
+        get_real_parameters(inode, iattr, &mac_mode, &uid, &gid);
+        ll_init_key_perm(kperm, new_acl, uid, gid, mac_mode);
         kparms.context = kcontext;
         kparms.context_size = kcontext_size;
         kparms.perm = kperm;       
@@ -414,7 +430,6 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         OBD_ALLOC(*key, *key_size);
         if (!*key)
                 GOTO(out, rc = -ENOMEM);
- 
         /*GET an encrypt key from GS server*/
         rc = obd_get_info(gs_exp, sizeof(struct key_parms), (void *)&kparms,
                           key_size, *key);
@@ -422,6 +437,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                 CERROR("decrypt key error rc %d \n", rc);
                 GOTO(out, rc);
         }
+                        printk("come here 5\n"); 
         /*copy the decrypt key from kcontext to the lustre key*/
         spin_lock(&lli->lli_lock);
         memcpy(&lkey->lk_ck, *key, *key_size);

@@ -1910,7 +1910,7 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         attr.ia_attr_flags = flags;
 
         if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0) {
-                rc = ll_crypto_get_mac(inode, NULL, (void *)value, size, 
+                rc = ll_crypto_get_mac(inode, &attr, (void *)value, size, 
                                        &key, &key_size);
         }
 
