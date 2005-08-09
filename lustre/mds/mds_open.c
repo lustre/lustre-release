@@ -87,7 +87,7 @@ struct mds_file_data *mds_mfd_new(void)
         return mfd;
 }
 
-static struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
+struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
 {
         ENTRY;
         LASSERT(handle != NULL);
@@ -678,7 +678,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */
-static int accmode(int flags)
+int accmode(int flags)
 {
         int res = 0;
 
@@ -766,9 +766,28 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 up(&dchild->d_inode->i_sem);
                 RETURN(rc);
         }
+
+        if (S_ISREG(mode)) {
+                struct lustre_capa capa = {
+                        .lc_uid   = rec->ur_uc.luc_uid,
+                        .lc_op    = capa_op(rec->ur_flags),
+                        .lc_ino   = dchild->d_inode->i_ino,
+                        .lc_mdsid = mds->mds_num,
+                };
+
+                rc = mds_pack_capa(obd, NULL, &capa, req->rq_repmsg,
+                                   &reply_off, body);
+                if (rc < 0) {
+                        CERROR("mds_pack_capa: rc = %d\n", rc);
+                        up(&dchild->d_inode->i_sem);
+                        RETURN(rc);
+                }
+        } else {
+                reply_off++;
+        }
+
         /* If the inode has no EA data, then MDSs hold size, mtime */
-        if (S_ISREG(dchild->d_inode->i_mode) &&
-            !(body->valid & OBD_MD_FLEASIZE)) {
+        if (S_ISREG(mode) && !(body->valid & OBD_MD_FLEASIZE)) {
                 body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                 OBD_MD_FLATIME | OBD_MD_FLMTIME);
         }

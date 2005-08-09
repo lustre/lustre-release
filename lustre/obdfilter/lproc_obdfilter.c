@@ -134,6 +134,32 @@ int lprocfs_filter_wr_readcache(struct file *file, const char *buffer,
         return count;
 }
 
+int lprocfs_filter_rd_capa_stat(char *page, char **start, off_t off, int count,
+                                int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%d\n",
+                      obd->u.filter.fo_capa_stat);
+        return rc;
+}
+
+int lprocfs_filter_wr_capa_stat(struct file *file, const char *buffer,
+                                unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.filter.fo_capa_stat = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -154,6 +180,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "capa",         lprocfs_filter_rd_capa_stat,
+                          lprocfs_filter_wr_capa_stat, 0 },
         { 0 }
 };
 

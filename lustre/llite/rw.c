@@ -167,7 +167,7 @@ void ll_truncate(struct inode *inode)
         up(&lli->lli_size_sem);
         
         rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
-                       OBD_OBJECT_EOF, NULL);
+                       OBD_OBJECT_EOF, NULL, lli->lli_trunc_capa);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
@@ -227,6 +227,9 @@ int ll_prepare_write(struct file *file, struct page *page,
 
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
                 OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+
+        oa->o_fsuid = current->fsuid;
+        oa->o_valid |= OBD_MD_FLFSUID;
 
         rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode),
                      oa, lsm, 1, &pga, NULL);
@@ -384,6 +387,7 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 
         llap = LLAP_FROM_COOKIE(data);
         ll_inode_fill_obdo(llap->llap_page->mapping->host, cmd, oa);
+        oa->o_fsuid = llap->llap_fsuid;
         EXIT;
 }
 
@@ -527,6 +531,8 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
         exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 RETURN(-EINVAL);
+
+        llap->llap_fsuid = current->fsuid;
 
         /* queue a write for some time in the future the first time we
          * dirty the page */

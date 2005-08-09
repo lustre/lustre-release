@@ -791,7 +791,7 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj,
                 int niocount, struct niobuf_remote *nb,
                 struct niobuf_local *res,
-                struct obd_trans_info *oti)
+                struct obd_trans_info *oti, struct lustre_capa *capa)
 {
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = NULL;

@@ -38,6 +38,7 @@
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
+extern struct timer_list ll_capa_timer;
 
 static struct super_block *ll_read_super(struct super_block *sb,
                                          void *data, int silent)
@@ -116,7 +117,6 @@ static int __init init_lustre_lite(void)
                 return -ENOMEM;
         }
 
-
         proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
 
         rc = register_filesystem(&lustre_lite_fs_type);
@@ -132,6 +132,15 @@ static int __init init_lustre_lite(void)
         rc = ll_gns_start_thread();
         if (rc)
                 goto out;
+
+        ll_capa_timer.function = ll_capa_timer_callback;
+        ll_capa_timer.data = 0;
+        init_timer(&ll_capa_timer);        
+
+        rc = ll_capa_start_thread();
+        if (rc)
+                goto out;
+
         return 0;
 
  out:
@@ -141,6 +150,7 @@ static int __init init_lustre_lite(void)
         case 1:
                 unregister_filesystem(&lustre_lite_fs_type);
         case 0:
+                kmem_cache_destroy(ll_intent_slab);
                 kmem_cache_destroy(ll_file_data_slab);
         }
         return rc;
@@ -151,6 +161,8 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
 
+        del_timer(&ll_capa_timer);
+        ll_capa_stop_thread();
         ll_gns_stop_thread();
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,

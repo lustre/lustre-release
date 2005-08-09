@@ -178,6 +178,15 @@ static int __init init_lustre_lite(void)
         rc = ll_gns_start_thread();
         if (rc)
                 goto out;
+
+        ll_capa_timer.function = ll_capa_timer_callback;
+        ll_capa_timer.data = 0;
+        init_timer(&ll_capa_timer);        
+
+        rc = ll_capa_start_thread();
+        if (rc)
+                goto out;
+
         return 0;
 out:
         switch (cleanup) {
@@ -196,6 +205,8 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
 
+        del_timer(&ll_capa_timer);
+        ll_capa_stop_thread();
         ll_gns_stop_thread();
         ll_destroy_inodecache();
         

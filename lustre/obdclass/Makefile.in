@@ -3,7 +3,7 @@ MODULES := obdclass llog_test confobd
 obdclass-objs := llog_obd.o class_obd.o llog_swab.o
 obdclass-objs += debug.o genops.o sysctl.o uuid.o llog_ioctl.o
 obdclass-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
-obdclass-objs += statfs_pack.o obdo.o obd_config.o mea.o
+obdclass-objs += statfs_pack.o obdo.o obd_config.o mea.o capa.o
 
 ifeq ($(PATCHLEVEL),6)
 

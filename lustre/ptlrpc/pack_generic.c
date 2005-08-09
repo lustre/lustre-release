@@ -919,6 +919,24 @@ void lustre_swab_remote_perm(struct mds_remote_perm *p)
         __swab16s(&p->mrp_perm);
 }
 
+void lustre_swab_lustre_capa(struct lustre_capa *c)
+{
+        __swab32s (&c->lc_uid);
+        __swab32s (&c->lc_op);
+        __swab64s (&c->lc_ino);
+        __swab32s (&c->lc_mdsid);
+        __swab32s (&c->lc_keyid);
+        __swab64s (&c->lc_expiry);
+        __swab32s (&c->lc_flags);
+}
+
+void lustre_swab_lustre_capa_key (struct lustre_capa_key *k)
+{
+        __swab32s (&k->lk_mdsid);
+        __swab32s (&k->lk_keyid);
+        __swab64s (&k->lk_expiry);
+}
+
 void lustre_swab_audit_msg (struct audit_msg *r)
 {
         lustre_swab_lustre_id(&r->id);

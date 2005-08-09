@@ -118,7 +118,7 @@ check_obdo(void)
         CHECK_MEMBER(obdo, o_easize);
         CHECK_MEMBER(obdo, o_mds);
         CHECK_MEMBER(obdo, o_mds);
-        CHECK_MEMBER(obdo, o_padding);
+        CHECK_MEMBER(obdo, o_fsuid);
         CHECK_MEMBER(obdo, o_inline);
 
         CHECK_VALUE(OBD_MD_FLID);
@@ -673,6 +673,32 @@ check_llogd_conn_body(void)
 }
 
 void
+check_lustre_capa(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_capa);
+        CHECK_MEMBER(lustre_capa, lc_uid);
+        CHECK_MEMBER(lustre_capa, lc_op);
+        CHECK_MEMBER(lustre_capa, lc_ino);
+        CHECK_MEMBER(lustre_capa, lc_mdsid);
+        CHECK_MEMBER(lustre_capa, lc_keyid);
+        CHECK_MEMBER(lustre_capa, lc_expiry);
+        CHECK_MEMBER(lustre_capa, lc_flags);
+        CHECK_MEMBER(lustre_capa, lc_hmac);
+}
+
+void
+check_lustre_capa_key(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_capa_key);
+        CHECK_MEMBER(lustre_capa_key, lk_mdsid);
+        CHECK_MEMBER(lustre_capa_key, lk_keyid);
+        CHECK_MEMBER(lustre_capa_key, lk_expiry);
+        CHECK_MEMBER(lustre_capa_key, lk_key);
+}
+
+void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -892,6 +918,8 @@ main(int argc, char **argv)
         check_llog_cookie();
         check_llogd_body();
         check_llogd_conn_body();
+        check_lustre_capa();
+        check_lustre_capa_key();
 
         printf("}\n\n");
 

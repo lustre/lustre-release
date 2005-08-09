@@ -120,7 +120,8 @@ extern struct ldlm_valblock_ops filter_lvbo;
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct obd_ioobj *, int niocount, struct niobuf_remote *,
-                  struct niobuf_local *, struct obd_trans_info *);
+                  struct niobuf_local *, struct obd_trans_info *,
+                  struct lustre_capa *capa);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
@@ -193,5 +194,11 @@ static inline void  filter_tally_read(struct filter_obd *filter,
                                       {}
 static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
+
+/* filter_capa.c */
+int filter_init_capa_keys(struct obd_device *obd);
+void filter_free_capa_keys(struct filter_obd *filter);
+int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
+int filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa);
 
 #endif

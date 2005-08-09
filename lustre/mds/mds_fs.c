@@ -51,6 +51,7 @@
 #define LOV_OBJID "lov_objid"
 #define LAST_FID  "last_fid"
 #define VIRT_FID  "virt_fid"
+#define CAPA_KEYS  "capa_key"
 
 struct fidmap_entry {
         struct hlist_node fm_hash;
@@ -751,8 +752,7 @@ static int mds_update_virtid_fid(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mds_read_virtid_fid(struct obd_device *obd,
-                               struct file *file)
+static int mds_read_virtid_fid(struct obd_device *obd, struct file *file)
 {
         int rc = 0;
         loff_t off = 0;
@@ -990,7 +990,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
-                GOTO(err_last_fid, rc = PTR_ERR(file));
+                GOTO(err_virtid_fid, rc = PTR_ERR(file));
         }
         mds->mds_dt_objid_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
@@ -999,19 +999,45 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_lov_objid, rc = -ENOENT);
         }
 
+        /* open and test capa keyid file */
+        file = filp_open(CAPA_KEYS, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n",
+                       CAPA_KEYS, rc);
+                GOTO(err_lov_objid, rc = PTR_ERR(file));
+        }
+        mds->mds_capa_keys_filp = file;
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n",
+                       CAPA_KEYS, file->f_dentry->d_inode->i_mode);
+                GOTO(err_capa_keyid, rc = -ENOENT);
+        }
+
+#if 0
+        rc = mds_read_capa_key(obd, file);
+        if (rc) {
+                CERROR("cannot read %s: rc = %d\n", CAPA_KEYS, rc);
+                GOTO(err_capa_keyid, rc);
+        }
+#endif
+
         /* reint fidext thumb by last fid after root and virt are initialized */
         mds->mds_fidext_thumb = mds->mds_last_fid;
                 
         rc = mds_fidmap_init(obd, MDS_FIDMAP_SIZE);
         if (rc) {
                 CERROR("cannot init fid mapping tables, err %d\n", rc);
-                GOTO(err_lov_objid, rc);
+                GOTO(err_capa_keyid, rc);
         }
         
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         return rc;
 
+err_capa_keyid:
+        if (mds->mds_capa_keys_filp && filp_close(mds->mds_capa_keys_filp, 0))
+                CERROR("can't close %s after error\n", CAPA_KEYS);
 err_lov_objid:
         if (mds->mds_dt_objid_filp && filp_close(mds->mds_dt_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
@@ -1087,6 +1113,12 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                 mds->mds_dt_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
+        }
+        if (mds->mds_capa_keys_filp) {
+                rc = filp_close(mds->mds_capa_keys_filp, 0);
+                mds->mds_capa_keys_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc=%d\n", CAPA_KEYS, rc);
         }
         if (mds->mds_unnamed_dir != NULL) {
                 l_dput(mds->mds_unnamed_dir);

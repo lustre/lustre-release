@@ -61,7 +61,6 @@
 
 #include <linux/lustre_smfs.h>
 #include <linux/lustre_sec.h>
-#include <linux/lustre_audit.h>
 #include "filter_internal.h"
 
 /* Group 0 is no longer a legal group, to catch uninitialized IDs */
@@ -101,6 +100,7 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
         /* we don't allocate new transnos for replayed requests */
         if (oti->oti_transno == 0) {
                 spin_lock(&filter->fo_translock);
+                last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_transno) + 1;
                 last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_transno) + 1;
                 filter->fo_fsd->fsd_last_transno = cpu_to_le64(last_rcvd);
                 spin_unlock(&filter->fo_translock);
@@ -927,6 +927,7 @@ static int filter_prep_groups(struct obd_device *obd)
         return rc;
 }
 
+
 /* setup the object store with correct subdirectories */
 static int filter_prep(struct obd_device *obd)
 {
@@ -1016,6 +1017,7 @@ static void filter_post(struct obd_device *obd)
 
         filter_cleanup_groups(obd);
         filter_free_server_data(filter);
+        filter_free_capa_keys(filter);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 }
 
@@ -1442,6 +1444,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct filter_obd *filter = &obd->u.filter;
         struct lvfs_obd_ctxt *lvfs_ctxt = NULL;
         struct vfsmount *mnt;
+        struct crypto_tfm *tfm;
         char *str;
         char ns_name[48];
         int rc = 0, i;
@@ -1502,9 +1505,18 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         sema_init(&filter->fo_init_lock, 1);
         filter->fo_committed_group = 0;
+
+        tfm = crypto_alloc_tfm(CAPA_HMAC_ALG, 0);
+        if (!tfm)
+                GOTO(err_mntput, rc = -ENOSYS);
+
+        filter->fo_capa_hmac = tfm;
+        INIT_LIST_HEAD(&filter->fo_capa_keys);
+        spin_lock_init(&filter->fo_capa_lock);
+
         rc = filter_prep(obd);
         if (rc)
-                GOTO(err_mntput, rc);
+                GOTO(err_capa, rc);
 
         filter->fo_destroys_in_progress = 0;
         for (i = 0; i < 32; i++)
@@ -1550,6 +1562,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
 err_post:
         filter_post(obd);
+err_capa:
+        crypto_free_tfm(filter->fo_capa_hmac);
 err_mntput:
         unlock_kernel();
         lvfs_umount_fs(filter->fo_lvfs_ctxt);
@@ -2735,9 +2749,9 @@ cleanup:
 
 /* NB start and end are used for punch, but not truncate */
 static int filter_truncate(struct obd_export *exp, struct obdo *oa,
-                           struct lov_stripe_md *lsm,
-                           obd_off start, obd_off end,
-                           struct obd_trans_info *oti)
+                           struct lov_stripe_md *lsm, obd_off start,
+                           obd_off end, struct obd_trans_info *oti,
+                           struct lustre_capa *capa)
 {
         int error;
         ENTRY;
@@ -2748,6 +2762,10 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPU64", "
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
+        error = filter_verify_capa(OBD_BRW_WRITE, exp, capa);
+        if (error)
+                RETURN(error);
+
         oa->o_size = start;
         error = filter_setattr(exp, oa, NULL, oti);
         RETURN(error);
@@ -2844,11 +2862,14 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                 f_dput(dentry);
 
                 RETURN(rc);
+        } else if (keylen == 8 && memcmp(key, "capa_key", 8) == 0) {
+                struct lustre_capa_key *lkey = val;
+                rc = filter_update_capa_key(obd, lkey);
+                RETURN(rc);
         }
 
-
         if (rc)
-                CDEBUG(D_IOCTL, "invalid key\n");
+                CDEBUG(D_IOCTL, "invalid key '%s'\n", (char *)key);
         
         RETURN(rc);
 }
@@ -3109,8 +3130,8 @@ static int filter_llog_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
-static struct dentry *filter_lvfs_id2dentry(__u64 id, __u32 gen, 
-					    __u64 gr, void *data)
+static struct dentry *filter_lvfs_id2dentry(__u64 id, __u32 gen,
+                                            __u64 gr, void *data)
 {
         return filter_id2dentry(data, NULL, gr, id);
 }

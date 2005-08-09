@@ -376,14 +376,15 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
         ll_inode2id(&pid, parent);
- 
+
         /*ONLY need key for open_create file*/
         rc = ll_crypto_init_it_key(parent, it);
         if (rc != 0) 
                 GOTO(out, retval = ERR_PTR(rc)); 
         
-        rc = md_intent_lock(ll_i2mdexp(parent), &pid, (char *)dentry->d_name.name,
-                            dentry->d_name.len, NULL, 0, NULL, it, flags, &req,
+        rc = md_intent_lock(ll_i2mdexp(parent), &pid,
+                            (char *)dentry->d_name.name, dentry->d_name.len,
+                            NULL, 0, NULL, it, flags, &req,
                             ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));

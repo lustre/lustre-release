@@ -224,7 +224,7 @@ int mdc_enqueue(struct obd_export *exp,
         int reqsize[6] = {[MDS_REQ_SECDESC_OFF] = 0,
                           [MDS_REQ_INTENT_LOCKREQ_OFF] = sizeof(*lockreq),
                           [MDS_REQ_INTENT_IT_OFF] = sizeof(*lit)};
-        int repsize[5] = {sizeof(struct ldlm_reply),
+        int repsize[8] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize};
         int req_buffers = 3, reply_buffers = 0;
@@ -276,6 +276,7 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[reply_buffers++] = xattr_acl_size(LL_ACL_MAX_ENTRIES);
                 repsize[reply_buffers++] = sizeof(int);
                 repsize[reply_buffers++] = sizeof(struct crypto_key);
+                repsize[reply_buffers++] = sizeof(struct lustre_capa);
                 req->rq_replen = lustre_msg_size(reply_buffers, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
                 __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE |
@@ -414,9 +415,9 @@ int mdc_enqueue(struct obd_export *exp,
                   LUSTRE_IT(it)->it_disposition, LUSTRE_IT(it)->it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
-        LASSERT(reply_buffers == 5 || reply_buffers == 4 || 
-                reply_buffers == 3 || reply_buffers == 1 || 
-                reply_buffers == 6 || reply_buffers == 7);
+        LASSERT(reply_buffers == 1 || reply_buffers == 3 || 
+                reply_buffers == 5 || reply_buffers == 7 || 
+                reply_buffers == 8);
         if (reply_buffers >= 3) {
                 struct mds_body *body;
 
@@ -451,6 +452,16 @@ int mdc_enqueue(struct obd_export *exp,
                                 /* If this isn't the last buffer, we might
                                  * have to shift other data around. */
                         }
+                }
+
+                /* just swab out capa to check here, and for future use */
+                if (body->valid & OBD_MD_CAPA) {
+                        struct lustre_capa *capa;
+
+                        LASSERT(it->it_op & IT_OPEN);
+                        capa = lustre_swab_repbuf(req, 7, sizeof(*capa),
+                                                  lustre_swab_lustre_capa);
+                        LASSERT(capa);
                 }
         }
 

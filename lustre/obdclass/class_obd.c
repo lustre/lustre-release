@@ -568,6 +568,9 @@ struct file_operations obd_device_list_fops = {
 };
 #endif
 
+extern int capa_cache_init(void);
+extern void capa_cache_cleanup(void);
+
 #ifdef __KERNEL__
 static int __init init_obdclass(void)
 #else
@@ -603,6 +606,10 @@ int init_obdclass(void)
                 obd->obd_minor = i;
 
         err = obd_init_caches();
+        if (err)
+                return err;
+
+        err = capa_cache_init();
         if (err)
                 return err;
 
@@ -649,6 +656,7 @@ static void cleanup_obdclass(void)
                 }
         }
 
+        capa_cache_cleanup();
         obd_cleanup_caches();
         obd_sysctl_clean();
 #ifdef LPROCFS

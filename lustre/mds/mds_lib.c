@@ -52,6 +52,7 @@
 #include <linux/lustre_ucache.h>
 #include <linux/lustre_gs.h>
 #include <linux/lustre_fsfilt.h>
+
 #include "mds_internal.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
@@ -245,7 +246,7 @@ int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg,
         void *buf;
         int size, rc = 0;
         ENTRY;
-
+ 
         sizep = lustre_msg_buf(repmsg, (*offset)++, 4);
         if (!sizep) {
                 CERROR("can't locate returned ckey size buf\n");
@@ -264,6 +265,7 @@ int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg,
                 if (size < 0) 
                         CERROR("Can not get gskey from MDS ino %lu rc %d\n",
                                 inode->i_ino, size);
+                (*offset) += 2; /* XXX: ignore crypto in case size == 0 */
                 GOTO(out, rc = size); 
         }
         if (le32_to_cpu(md_key->md_magic) != MD_KEY_MAGIC) {
@@ -1280,3 +1282,4 @@ void mds_exit_ucred(struct lvfs_ucred *ucred)
         drop_ucred_lsd(ucred);
         EXIT;
 }
+

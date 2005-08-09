@@ -471,7 +471,7 @@ static int ll_ioctl_getfacl(struct inode *inode,
         ll_inode2id(&id, inode);
         rc = md_getattr(ll_i2sbi(inode)->ll_md_exp, &id, OBD_MD_FLXATTR,
                         XATTR_NAME_LUSTRE_ACL,
-                        cmd, ioc->cmd_len, ioc->res_len, &req);
+                        cmd, ioc->cmd_len, ioc->res_len, NULL, &req);
         if (rc < 0) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
@@ -685,7 +685,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ll_inode2id(&id, inode);
                 rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL, 0,
                                 obd_size_diskmd(sbi->ll_dt_exp, NULL),
-                                &request);
+                                NULL, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr failed: rc = %d\n", rc);
                         RETURN(rc);

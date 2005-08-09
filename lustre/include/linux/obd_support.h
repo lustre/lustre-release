@@ -91,6 +91,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_OPEN_CREATE         0x12b
 #define OBD_FAIL_MDS_ACCESS_CHECK_NET    0x12c
 #define OBD_FAIL_MDS_ACCESS_CHECK_PACK   0x12d
+#define OBD_FAIL_MDS_PACK_CAPA           0x12e
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -161,6 +162,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_SVCGSS_INIT_REP         0x781
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
+
+#define OBD_FAIL_FILTER_VERIFY_CAPA      0x900
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

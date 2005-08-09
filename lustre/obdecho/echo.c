@@ -277,7 +277,7 @@ echo_page_debug_check(struct page *page, obd_id id,
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj, int niocount,
                 struct niobuf_remote *nb, struct niobuf_local *res,
-                struct obd_trans_info *oti)
+                struct obd_trans_info *oti, struct lustre_capa *capa)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;

@@ -488,7 +488,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         void *handle = NULL;
         struct mds_logcancel_data *mlcd = NULL;
         int rc = 0, cleanup_phase = 0, err;
-        int repsize = sizeof(*body), locked = 0;
+        int repcnt = 1, repsize[2] = { sizeof(*body) };
+        int locked = 0, do_trunc = 0;
         ENTRY;
 
         LASSERT(offset == 1);
@@ -503,7 +504,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 return mds_reint_remote_setfacl(obd, med, rec, req);
         }
 
-        rc = lustre_pack_reply(req, 1, &repsize, NULL);
+        if (rec->ur_iattr.ia_valid & ATTR_SIZE) {
+                repsize[repcnt++] = sizeof(struct lustre_capa);
+                do_trunc = 1; /* XXX: ATTR_SIZE will be cleared from ia_valid */
+        }
+
+        rc = lustre_pack_reply(req, repcnt, repsize, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -667,6 +673,24 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 body->valid |= OBD_MD_FLMTIME;
         if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
+
+        if (do_trunc) {
+                struct lustre_capa capa = {
+                        .lc_uid   = rec->ur_uc.luc_uid,
+                        .lc_op    = MAY_WRITE,
+                        .lc_ino   = inode->i_ino,
+                        .lc_mdsid = mds->mds_num,
+                };
+                int offset = 1;
+
+                LASSERT(capa.lc_mdsid == mds->mds_num);
+                rc = mds_pack_capa(obd, NULL, &capa, req->rq_repmsg, &offset,
+                                   body);
+                if (rc < 0) {
+                        CERROR("mds_pack_capa: rc = %d\n", rc);
+                        RETURN(rc);
+                }
+        }
 
         mds_body_do_reverse_map(med, body);
 

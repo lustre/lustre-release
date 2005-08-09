@@ -196,8 +196,10 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                   int unlink_orphan);
 int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
+struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle);
 int mds_validate_size(struct obd_device *obd, struct inode *inode,
                       struct mds_body *body, struct iattr *iattr);
+int accmode(int flags);
 
 /* mds/mds_fs.c */
 int mds_fidmap_init(struct obd_device *obd, int size);
@@ -342,5 +344,17 @@ struct upcall_cache *__mds_get_global_rmtacl_upcall_cache(void);
 int mds_init_rmtacl_upcall_cache(void);
 void mds_cleanup_rmtacl_upcall_cache(void);
 void mds_do_remote_acl_upcall(struct rmtacl_upcall_desc *desc);
+
+/* mds_capa.c */
+extern struct timer_list mds_eck_timer;
+
+int mds_read_capa_key(struct obd_device *obd, struct file *file);
+void mds_capa_keys_cleanup(struct obd_device *obd);
+void mds_capa_key_timer_callback(unsigned long data);
+int mds_capa_key_start_thread(void);
+void mds_capa_key_stop_thread(void);
+int mds_pack_capa(struct obd_device *obd, struct mds_body *req_body,
+                  struct lustre_capa *req_capa, struct lustre_msg *repmsg,
+                  int *offset, struct mds_body *body);
 
 #endif /* _MDS_INTERNAL_H */

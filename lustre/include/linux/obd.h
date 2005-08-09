@@ -63,6 +63,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_export.h>
+#include <linux/lustre_sec.h>
 
 /* this is really local to the OSC */
 struct loi_oap_pages {
@@ -283,9 +284,15 @@ struct filter_obd {
         spinlock_t               fo_llog_list_lock;
 
         /* which secure flavor from remote is denied */
-        spinlock_t              fo_denylist_lock;
-        struct list_head        fo_denylist;
+        spinlock_t               fo_denylist_lock;
+        struct list_head         fo_denylist;
 
+        /* capability related */
+        int                      fo_capa_stat;
+        struct crypto_tfm       *fo_capa_hmac;
+        spinlock_t               fo_capa_lock;
+
+        struct list_head         fo_capa_keys;
 };
 
 struct mds_server_data;
@@ -446,6 +453,16 @@ struct mds_obd {
         spinlock_t                      mds_fidext_lock;
         __u64                           mds_fidext_thumb;
         int                             mds_crypto_type;
+
+        /* capability related */
+        int                              mds_capa_stat;     /* 1: on, 0: off */
+        struct crypto_tfm               *mds_capa_hmac;
+        unsigned long                    mds_capa_timeout;  /* sec */
+
+        struct mds_capa_key              mds_capa_keys[2];  /* red & black key */
+        int                              mds_capa_key_idx;  /* the red key index */
+        struct file                     *mds_capa_keys_filp;
+        unsigned long                    mds_capa_key_timeout; /* sec */
 };
 
 struct echo_obd {
@@ -859,7 +876,8 @@ struct obd_ops {
                             obd_off size, int shrink);
         int (*o_punch)(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, obd_size start,
-                       obd_size end, struct obd_trans_info *oti);
+                       obd_size end, struct obd_trans_info *oti,
+                       struct lustre_capa *capa);
         int (*o_sync)(struct obd_export *exp, struct obdo *oa,
                       struct lov_stripe_md *ea, obd_size start, obd_size end);
         int (*o_migrate)(struct lustre_handle *conn, struct lov_stripe_md *dst,
@@ -874,7 +892,8 @@ struct obd_ops {
         int (*o_preprw)(int cmd, struct obd_export *exp, struct obdo *oa,
                         int objcount, struct obd_ioobj *obj,
                         int niocount, struct niobuf_remote *remote,
-                        struct niobuf_local *local, struct obd_trans_info *oti);
+                        struct niobuf_local *local, struct obd_trans_info *oti,
+                        struct lustre_capa *capa);
         int (*o_commitrw)(int cmd, struct obd_export *exp, struct obdo *oa,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
@@ -952,7 +971,8 @@ struct md_ops {
                          ldlm_blocking_callback, void *);
         int (*m_getattr)(struct obd_export *, struct lustre_id *,
                          __u64, const char *, const void *, unsigned int,
-                         unsigned int, struct ptlrpc_request **);
+                         unsigned int, struct obd_capa *,
+                         struct ptlrpc_request **);
         int (*m_access_check)(struct obd_export *, struct lustre_id *,
                               struct ptlrpc_request **);
         int (*m_getattr_lock)(struct obd_export *, struct lustre_id *,

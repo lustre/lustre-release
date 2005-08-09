@@ -200,6 +200,8 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
+EXPORT_SYMBOL(lustre_swab_lustre_capa);
+EXPORT_SYMBOL(lustre_swab_lustre_capa_key);
 EXPORT_SYMBOL(lustre_swab_key_context);
 EXPORT_SYMBOL(lustre_swab_key_perms);
 EXPORT_SYMBOL(mdc_create_pack);

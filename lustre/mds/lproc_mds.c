@@ -133,6 +133,78 @@ static int lprocfs_rd_group(char *page, char **start, off_t off,
                         (unsigned long)mds->mds_num);
 }
 
+static int lprocfs_rd_capa(char *page, char **start, off_t off,
+                           int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n",
+                        obd->u.mds.mds_capa_stat);
+}
+
+static int lprocfs_wr_capa(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_capa_stat = val;
+        return count;
+}
+
+static int lprocfs_rd_capa_timeout(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.mds.mds_capa_timeout);
+}
+
+static int lprocfs_wr_capa_timeout(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_capa_timeout = val;
+        return count;
+}
+
+static int lprocfs_rd_capa_key_timeout(char *page, char **start, off_t off,
+                                           int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%lu\n",
+                        obd->u.mds.mds_capa_key_timeout);
+}
+
+static int lprocfs_wr_capa_key_timeout(struct file *file, const char *buffer,
+                                           unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd->u.mds.mds_capa_key_timeout = val;
+        return count;
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
@@ -146,10 +218,16 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "last_fid",     lprocfs_rd_last_fid,    0, 0 },
         { "group",        lprocfs_rd_group,       0, 0 },
-        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
-        { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
+        { "recovery_status",  lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "evict_client", 0,  lprocfs_mds_wr_evict_client, 0 },
         { "config_update", 0, lprocfs_mds_wr_config_update, 0 },
-        { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
+        { "num_exports",      lprocfs_rd_num_exports, 0, 0 },
+        { "capa",             lprocfs_rd_capa,
+                              lprocfs_wr_capa, 0 },
+        { "capa_timeout",     lprocfs_rd_capa_timeout,
+                              lprocfs_wr_capa_timeout, 0 },
+        { "capa_key_timeout", lprocfs_rd_capa_key_timeout,
+                              lprocfs_wr_capa_key_timeout, 0 },
         { 0 }
 };
 

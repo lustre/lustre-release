@@ -318,7 +318,7 @@ static int lustre_init_root_inode(struct super_block *sb)
         /* make root inode */
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_rootid,
                          (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID),
-                         NULL, NULL, 0, 0, &request);
+                         NULL, NULL, 0, 0, NULL, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out, err);
@@ -1177,8 +1177,12 @@ void ll_clear_inode(struct inode *inode)
                 lli->lli_remote_acl = NULL;
         }
 
-        lli->lli_inode_magic = LLI_INODE_DEAD;
+        if (lli->lli_trunc_capa) {
+                OBD_FREE(lli->lli_trunc_capa, sizeof(struct lustre_capa));
+                lli->lli_trunc_capa = NULL;
+        }
 
+        lli->lli_inode_magic = LLI_INODE_DEAD;
         EXIT;
 }
 
@@ -1202,6 +1206,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data *op_data;
+        struct lustre_capa *trunc_capa = NULL;
         int ia_valid = attr->ia_valid;
         int err, rc = 0;
         ENTRY;
@@ -1244,9 +1249,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        LTIME_S(CURRENT_TIME));
 
-        if (lsm)
-                attr->ia_valid &= ~ATTR_SIZE;
-
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
@@ -1282,6 +1284,24 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
+                }
+
+                if (attr->ia_valid & ATTR_SIZE) {
+                        /* XXX: hack for truncate capa */
+                        rc = mdc_req2lustre_capa(request, 0, &trunc_capa);
+                        if (rc) {
+                                ptlrpc_req_finished(request);
+                                RETURN(rc);
+                        }
+
+                        spin_lock(&lli->lli_lock);
+                        if (trunc_capa) {
+                                if (lli->lli_trunc_capa)
+                                        OBD_FREE(lli->lli_trunc_capa,
+                                                 sizeof(*trunc_capa));
+                                lli->lli_trunc_capa = trunc_capa;
+                        }
+                        spin_unlock(&lli->lli_lock);
                 }
 
                 /* We call inode_setattr to adjust timestamps, but we first
@@ -1322,6 +1342,9 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                         RETURN(-EPERM);
                         }
                 }
+
+                if (lsm)
+                        attr->ia_valid &= ~ATTR_SIZE;
 
                 /* won't invoke vmtruncate, as we already cleared ATTR_SIZE */
                 err = inode_setattr(inode, attr);
@@ -2191,8 +2214,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 struct mds_body *body;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL, 0, 0,
-                                &req);
+                rc = md_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL,
+                                0, 0, NULL, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));

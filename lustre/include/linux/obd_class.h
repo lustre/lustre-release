@@ -723,7 +723,8 @@ static inline int obd_sync(struct obd_export *exp, struct obdo *oa,
 
 static inline int obd_punch(struct obd_export *exp, struct obdo *oa,
                             struct lov_stripe_md *ea, obd_size start,
-                            obd_size end, struct obd_trans_info *oti)
+                            obd_size end, struct obd_trans_info *oti,
+                            struct lustre_capa *capa)
 {
         int rc;
         ENTRY;
@@ -731,7 +732,7 @@ static inline int obd_punch(struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_OP(exp, punch);
         OBD_COUNTER_INCREMENT(exp->exp_obd, punch);
 
-        rc = OBP(exp->exp_obd, punch)(exp, oa, ea, start, end, oti);
+        rc = OBP(exp->exp_obd, punch)(exp, oa, ea, start, end, oti, capa);
         RETURN(rc);
 }
 
@@ -883,7 +884,8 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
                              int niocount, struct niobuf_remote *remote,
                              struct niobuf_local *local,
-                             struct obd_trans_info *oti)
+                             struct obd_trans_info *oti,
+                             struct lustre_capa *capa)
 {
         int rc;
         ENTRY;
@@ -892,7 +894,7 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         OBD_COUNTER_INCREMENT(exp->exp_obd, preprw);
 
         rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, niocount,
-                                       remote, local, oti);
+                                       remote, local, oti, capa);
         RETURN(rc);
 }
 
@@ -1180,7 +1182,7 @@ static inline int md_delete_inode(struct obd_export *exp,
 static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
                              __u64 valid, const char *xattr_name,
                              const void *xattr_data, unsigned int xattr_datalen,
-                             unsigned int ea_size,
+                             unsigned int ea_size, struct obd_capa *ocapa,
                              struct ptlrpc_request **request)
 {
         int rc;
@@ -1189,7 +1191,7 @@ static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr);
         rc = MDP(exp->exp_obd, getattr)(exp, id, valid, xattr_name,
                                         xattr_data, xattr_datalen,
-                                        ea_size, request);
+                                        ea_size, ocapa, request);
         RETURN(rc);
 }
 
@@ -1307,7 +1309,8 @@ static inline int md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
 static inline int md_intent_lock(struct obd_export *exp,
                                  struct lustre_id *pid, const char *name,
                                  int len, void *lmm, int lmmsize,
-                                 struct lustre_id *cid, struct lookup_intent *it,
+                                 struct lustre_id *cid,
+                                 struct lookup_intent *it,
                                  int flags, struct ptlrpc_request **reqp,
                                  ldlm_blocking_callback cb_blocking)
 {
@@ -1315,8 +1318,8 @@ static inline int md_intent_lock(struct obd_export *exp,
         ENTRY;
         EXP_CHECK_MD_OP(exp, intent_lock);
         MD_COUNTER_INCREMENT(exp->exp_obd, intent_lock);
-        rc = MDP(exp->exp_obd, intent_lock)(exp, pid, name, len,
-                                            lmm, lmmsize, cid, it, flags,
+        rc = MDP(exp->exp_obd, intent_lock)(exp, pid, name, len, lmm,
+                                            lmmsize, cid, it, flags,
                                             reqp, cb_blocking);
         RETURN(rc);
 }

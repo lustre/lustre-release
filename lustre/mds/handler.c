@@ -56,10 +56,11 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/lustre_acl.h>
-#include <linux/lustre_gs.h>
-#include "mds_internal.h"
 #include <linux/lustre_sec.h>
+#include <linux/lustre_gs.h>
 #include <linux/lustre_audit.h>
+
+#include "mds_internal.h"
 
 extern int mds_audit_auth(struct ptlrpc_request *, struct lvfs_ucred *,
                           audit_op, struct lustre_id *,
@@ -1112,6 +1113,7 @@ int mds_pack_posix_acl(struct lustre_msg *repmsg, int *offset,
 
         buflen = repmsg->buflens[pack_off];
         buf = lustre_msg_buf(repmsg, pack_off++, buflen);
+        *offset = pack_off;
 
         size = inode->i_op->getxattr(&de, XATTR_NAME_ACL_ACCESS, buf, buflen);
         if (size == -ENODATA || size == -EOPNOTSUPP)
@@ -1122,8 +1124,6 @@ int mds_pack_posix_acl(struct lustre_msg *repmsg, int *offset,
         body->valid |= OBD_MD_FLACL;
 
         *sizep = cpu_to_le32(size);
-        
-        *offset = pack_off;
         RETURN(0);
 }
 
@@ -1139,6 +1139,7 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int *reply_off,
         LASSERT(inode->i_op->permission);
         LASSERT(req->rq_export->exp_mds_data.med_remote);
 
+        pack_off++; /* XXX: ignore the place for acl count */
         perm = (struct mds_remote_perm *)
                        lustre_msg_buf(req->rq_repmsg, pack_off++, sizeof(perm));
         if (!perm)
@@ -1259,6 +1260,25 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         }
         
         mds_pack_audit(obd, inode, body);
+
+        if (reqbody->valid & OBD_MD_CAPA) {
+                struct lustre_capa *req_capa;
+
+                LASSERT(!(reqbody->valid & ~OBD_MD_CAPA));
+                LASSERT(S_ISREG(inode->i_mode));
+
+                req_capa = lustre_swab_reqbuf(req, req_off + 1,
+                                              sizeof(*req_capa),
+                                              lustre_swab_lustre_capa);
+                if (req_capa == NULL) {
+                        CERROR("Can't unpack capa\n");
+                        RETURN(-EFAULT);
+                }
+
+                offset = reply_off + 1;
+                rc = mds_pack_capa(obd, reqbody, req_capa, req->rq_repmsg,
+                                   &offset, body);
+        }
 
         if (rc == 0)
                 mds_body_do_reverse_map(med, body);
@@ -1385,6 +1405,9 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
                 size[bufcount++] = sizeof(int);
                 size[bufcount++] = sizeof(struct crypto_key);
         }
+
+        if (body->valid & OBD_MD_CAPA)
+                size[bufcount++] = sizeof(struct lustre_capa);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("failed MDS_GETATTR_PACK test\n");
@@ -3542,6 +3565,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         struct vfsmount *mnt;
         char ns_name[48];
         unsigned long page;
+        struct crypto_tfm *tfm = NULL;
         int rc = 0;
         ENTRY;
 
@@ -3653,11 +3677,19 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
+        tfm = crypto_alloc_tfm(CAPA_HMAC_ALG, 0);
+        if (!tfm)
+                GOTO(err_ns, rc = -ENOSYS);
+
+        mds->mds_capa_hmac = tfm;
+        mds->mds_capa_timeout = CAPA_TIMEOUT;
+        mds->mds_capa_key_timeout = CAPA_KEY_TIMEOUT;
+        
         rc = mds_fs_setup(obd, mnt);
         if (rc) {
                 CERROR("%s: MDS filesystem method init failed: rc = %d\n",
                        obd->obd_name, rc);
-                GOTO(err_ns, rc);
+                GOTO(err_capa, rc);
         }
 
         rc = llog_start_commit_thread();
@@ -3714,6 +3746,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd, 0);
+err_capa:
+        crypto_free_tfm(mds->mds_capa_hmac);
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
@@ -3976,6 +4010,10 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         }
         spin_unlock(&mds->mds_denylist_lock);
 
+        mds_capa_keys_cleanup(obd);
+
+        if (mds->mds_capa_hmac)
+                crypto_free_tfm(mds->mds_capa_hmac);
         RETURN(0);
 }
 
@@ -4108,25 +4146,28 @@ static int mds_intent_prepare_reply_buffers(struct ptlrpc_request *req,
 {
         struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
         int rc, reply_buffers;
-        int repsize[5] = {sizeof(struct ldlm_reply),
+        int repsize[8] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           mds->mds_max_mdsize};
         ENTRY;       
  
         reply_buffers = 3;
         if (it->opc & ( IT_OPEN | IT_GETATTR | IT_LOOKUP | IT_CHDIR )) {
-                if (req->rq_export->exp_mds_data.med_remote) {
-                        repsize[reply_buffers++] = 
-                                sizeof(struct mds_remote_perm);
-                } else {
-                        repsize[reply_buffers++] = sizeof(int);
-                        repsize[reply_buffers++] = 
+                repsize[reply_buffers++] = sizeof(int);
+                /* XXX: mds_remote_perm is stored here too, and for it
+                 *      the 'size' is ignored */
+                repsize[reply_buffers++] = 
                                 xattr_acl_size(LL_ACL_MAX_ENTRIES);
-                }
+
                 /*FIXME: ugly here, should be optimize for there 
                  * is no crypto key*/
                 repsize[reply_buffers++] = sizeof(int);
                 repsize[reply_buffers++] = sizeof(struct crypto_key); 
+
+                /* XXX: if new buffer is to be added, capability reply
+                 *      buffer should always been reserved. */
+                if (it->opc & IT_OPEN)
+                        repsize[reply_buffers++] = sizeof(struct lustre_capa);
         }
 
         rc = lustre_pack_reply(req, reply_buffers, repsize, NULL);
@@ -4553,10 +4594,10 @@ struct lvfs_callback_ops mds_lvfs_ops = {
 };
 
 int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
-               int objcount, struct obd_ioobj *obj,
-               int niocount, struct niobuf_remote *nb,
-               struct niobuf_local *res,
-               struct obd_trans_info *oti);
+                int objcount, struct obd_ioobj *obj,
+                int niocount, struct niobuf_remote *nb,
+                struct niobuf_local *res,
+                struct obd_trans_info *oti, struct lustre_capa *capa);
 
 int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                  int objcount, struct obd_ioobj *obj, int niocount,
@@ -4602,6 +4643,8 @@ static struct obd_ops mdt_obd_ops = {
 static int __init mds_init(void)
 {
         struct lprocfs_static_vars lvars;
+        int rc = 0;
+        ENTRY;
 
         mds_init_lsd_cache();
         mds_init_rmtacl_upcall_cache();
@@ -4613,11 +4656,23 @@ static int __init mds_init(void)
         class_register_type(&mdt_obd_ops, NULL, lvars.module_vars,
                             OBD_MDT_DEVICENAME);
 
-        return 0;
+        rc = mds_capa_key_start_thread();
+        if (rc) {
+                class_unregister_type(OBD_MDT_DEVICENAME);
+                class_unregister_type(OBD_MDS_DEVICENAME);
+                mds_cleanup_lsd_cache();
+        }
+                
+        mds_eck_timer.function = mds_capa_key_timer_callback;
+        mds_eck_timer.data = 0;
+        init_timer(&mds_eck_timer);
+
+        RETURN(rc);
 }
 
 static void /*__exit*/ mds_exit(void)
 {
+        mds_capa_key_stop_thread();
         mds_cleanup_rmtacl_upcall_cache();
         mds_cleanup_lsd_cache();
 

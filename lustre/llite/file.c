@@ -28,6 +28,7 @@
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #include <linux/lustre_acl.h>
+#include <linux/lustre_sec.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/lustre_compat25.h>
 #endif
@@ -146,6 +147,8 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         EXIT;
 out:
         mdc_clear_open_replay_data(md_exp, och);
+        if (och->och_capa)
+                capa_put(och->och_capa, CLIENT_CAPA);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         OBD_FREE(och, sizeof *och);
         return rc;
@@ -341,12 +344,14 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         RETURN(rc);
 }
 
-void ll_och_fill(struct inode *inode, struct lookup_intent *it,
+int ll_och_fill(struct inode *inode, struct lookup_intent *it,
                  struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct mds_body *body;
+        int rc = 0;
+        ENTRY;
         LASSERT(och);
 
         body = lustre_msg_buf (req->rq_repmsg, 1, sizeof (*body));
@@ -358,16 +363,24 @@ void ll_och_fill(struct inode *inode, struct lookup_intent *it,
         lli->lli_io_epoch = body->io_epoch;
         mdc_set_open_replay_data(ll_i2mdexp(inode), och, 
 				 LUSTRE_IT(it)->it_data);
+
+        if (S_ISREG(inode->i_mode) && (body->valid & OBD_MD_CAPA))
+                rc = ll_set_och_capa(inode, it, och);
+        RETURN(rc);
 }
 
 int ll_local_open(struct file *file, struct lookup_intent *it,
                   struct obd_client_handle *och)
 {
         struct ll_file_data *fd;
+        int rc = 0;
         ENTRY;
 
-        if (och)
-                ll_och_fill(file->f_dentry->d_inode, it, och);
+        if (och) {
+                rc = ll_och_fill(file->f_dentry->d_inode, it, och);
+                if (rc)
+                        RETURN(rc);
+        }
 
         LASSERTF(file->private_data == NULL, "file %.*s/%.*s ino %lu/%u (%o)\n",
                  file->f_dentry->d_name.len, file->f_dentry->d_name.name,
@@ -482,7 +495,12 @@ int ll_file_open(struct inode *inode, struct file *file)
                                 RETURN(-ENOMEM);
                         }
 
-                        ll_och_fill(inode, it, och);
+                        rc = ll_och_fill(inode, it, och);
+                        if (rc) {
+                                up(&lli->lli_och_sem);
+                                RETURN(rc);
+                        }
+                        
                         /* ll_md_och_close() will free och */
                         ll_md_och_close(ll_i2mdexp(inode), inode, och, 0);
                 }
@@ -534,7 +552,6 @@ int ll_file_open(struct inode *inode, struct file *file)
          * different kind of OPEN lock for this same inode gets cancelled by
          * ldlm_cancel_lru
          */
-
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);
 
@@ -1981,7 +1998,7 @@ int ll_getxattr_internal(struct inode *inode, const char *name,
 
         ll_inode2id(&id, inode);
         rc = md_getattr(sbi->ll_md_exp, &id, valid, name, NULL, 0,
-                        size, &request);
+                        size, NULL, &request);
         if (rc) {
                 if (rc != -ENODATA && rc != -EOPNOTSUPP)
                         CERROR("rc = %d\n", rc);

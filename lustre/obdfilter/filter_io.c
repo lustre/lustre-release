@@ -637,8 +637,14 @@ cleanup:
 int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   int objcount, struct obd_ioobj *obj, int niocount,
                   struct niobuf_remote *nb, struct niobuf_local *res,
-                  struct obd_trans_info *oti)
+                  struct obd_trans_info *oti, struct lustre_capa *capa)
 {
+        int rc;
+
+        rc = filter_verify_capa(cmd, exp, capa);
+        if (rc)
+                return rc;
+
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
                                            niocount, nb, res, oti);
@@ -933,7 +939,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         obdo_to_ioobj(oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti);
+        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti,NULL);
         if (ret != 0)
                 GOTO(out, ret);
 

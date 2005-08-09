@@ -39,6 +39,7 @@
 #include <linux/lustre_sec.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_acl.h>
+#include <linux/lustre_lite.h>
 #include <linux/lustre_gs.h>
 #include "mdc_internal.h"
 
@@ -101,6 +102,62 @@ int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid)
                               LUSTRE_IMP_FULL, 0);
 }
 
+int
+mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
+{
+        struct mds_body *body = NULL;
+        struct lustre_capa *capa = NULL;
+        unsigned long expiry;
+        ENTRY;
+
+        if (rc) {
+                DEBUG_REQ(D_ERROR, req,
+                          "async getattr failed: rc = %d", rc);
+                RETURN(rc);
+        }
+
+        body = lustre_swab_repbuf(req, 0, sizeof (*body), lustre_swab_mds_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack mds_body\n");
+                RETURN(-EPROTO);
+        }
+
+        if (!(body->valid & OBD_MD_CAPA)) {
+                CDEBUG(D_INFO, "MDS has disabled capability\n");
+                RETURN(0);
+        }
+
+        capa = lustre_swab_repbuf(req, 1, sizeof(*capa),
+                                  lustre_swab_lustre_capa);
+        if (capa == NULL && rc != 0) {
+                CERROR ("Can't unpack lustre_capa\n");
+                RETURN(-EPROTO);
+        }
+
+        rc = capa_renew(capa, CLIENT_CAPA);
+        if (rc)
+                RETURN(rc);
+
+        expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
+        if (time_before(expiry, ll_capa_timer.expires) ||
+            !timer_pending(&ll_capa_timer))
+                mod_timer(&ll_capa_timer, expiry);
+
+        RETURN(rc);
+}
+
+int mdc_getattr_async(struct obd_export *exp, struct ptlrpc_request *req)
+{
+        int repsize[2] = {sizeof(struct mds_body), sizeof(struct lustre_capa)};
+        ENTRY;
+
+        req->rq_replen = lustre_msg_size(1, repsize);
+        req->rq_interpret_reply = mdc_interpret_getattr;
+        ptlrpcd_add_req(req);
+
+        RETURN (0);
+}
+
 int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        struct ptlrpc_request *req)
 {
@@ -125,6 +182,9 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         if (reqbody->valid & OBD_MD_FLKEY) {
                 repsize[bufcount++] = 5;
                 repsize[bufcount++] = sizeof(struct lustre_key);
+        } else if (reqbody->valid & OBD_MD_CAPA) {
+                LASSERT(ea_size == 0);
+                repsize[bufcount++] = sizeof(struct lustre_capa);
         }
 
         req->rq_replen = lustre_msg_size(bufcount, repsize);
@@ -175,7 +235,8 @@ static int mdc_cancel_unused(struct obd_export *exp,
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 __u64 valid, const char *xattr_name,
                 const void *xattr_data, unsigned int xattr_datalen,
-                unsigned int ea_size, struct ptlrpc_request **request)
+                unsigned int ea_size, struct obd_capa *ocapa,
+                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
@@ -194,8 +255,13 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                         LASSERT(xattr_data);
                         size[bufcount++] = xattr_datalen;
                 }
-        } else
+        } else if (valid & OBD_MD_CAPA) {
+                LASSERT(valid  == OBD_MD_CAPA);
+                LASSERT(ocapa);
+                size[bufcount++] = sizeof(*ocapa);
+        } else {
                 LASSERT(!xattr_data && !xattr_datalen);
+        }
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_GETATTR, bufcount, size, NULL);
@@ -217,10 +283,20 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                                xattr_data, xattr_datalen);
         }
 
-        rc = mdc_getattr_common(exp, ea_size, req);
-        if (rc != 0) {
-                ptlrpc_req_finished (req);
-                req = NULL;
+        if (valid & OBD_MD_CAPA) {
+                /* renew capability */
+                memcpy(&body->handle, &ocapa->c_handle, sizeof(body->handle));
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 2, sizeof(ocapa->c_capa)),
+                       &ocapa->c_capa, sizeof(ocapa->c_capa));
+
+                rc = mdc_getattr_async(exp, req);
+                req = NULL;     /* ptlrpcd will finish request */
+        } else {
+                rc = mdc_getattr_common(exp, ea_size, req);
+                if (rc != 0) {
+                        ptlrpc_req_finished (req);
+                        req = NULL;
+                }
         }
  out:
         *request = req;
@@ -328,6 +404,34 @@ int mdc_store_inode_generation(struct obd_export *exp,
         return 0;
 }
 
+int mdc_req2lustre_capa(struct ptlrpc_request *req, unsigned int offset,
+                        struct lustre_capa **capa)
+{
+        struct mds_body *body;
+        struct lustre_capa *lcapa;
+
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+        if (!body)
+                RETURN(-ENOMEM);
+
+        if (!(body->valid & OBD_MD_CAPA)) {
+                *capa = NULL;
+                RETURN(0);
+        }
+
+        lcapa = (struct lustre_capa *)lustre_swab_repbuf(req, offset + 1,
+                                        sizeof(*capa), lustre_swab_lustre_capa);
+        if (!lcapa)
+                RETURN(-ENOMEM);
+                
+        OBD_ALLOC(*capa, sizeof(**capa));
+        if (!*capa)
+                RETURN(-ENOMEM);
+        memcpy(*capa, lcapa, sizeof(**capa));
+
+        RETURN(0);
+}
+
 static int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
                           unsigned int *offset, struct lustre_md *md)
 {
@@ -342,7 +446,7 @@ static int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req
         if (md->body->valid & OBD_MD_FLACL) {
                 acl_off = *offset;
                 if (md->body->valid & OBD_MD_FLRMTACL) {
-                        
+                        acl_off++; /* XXX: pass place where acl size is stored */
                         buf = lustre_swab_repbuf(req, acl_off++, sizeof(*perm),
                                                  lustre_swab_remote_perm);
                         if (buf == NULL) {
@@ -379,6 +483,7 @@ static int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req
         }
         RETURN(rc);
 }
+
 static int mdc_unpack_gskey(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
                             unsigned int *offset, struct lustre_md *md)
 { 
@@ -398,6 +503,7 @@ static int mdc_unpack_gskey(struct obd_export *exp_lmv, struct ptlrpc_request *r
         }  
         RETURN(rc);
 }
+
 int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
                       unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md)
@@ -1318,6 +1424,7 @@ static int mdc_llog_finish(struct obd_device *obd,
         rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT));
         RETURN(rc);
 }
+
 static struct obd_device *mdc_get_real_obd(struct obd_export *exp,
                                            struct lustre_id *id)
 {
@@ -1673,6 +1780,7 @@ MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_req2lustre_md);
+EXPORT_SYMBOL(mdc_req2lustre_capa);
 EXPORT_SYMBOL(mdc_change_cbdata);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getattr);

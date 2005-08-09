@@ -342,8 +342,19 @@ int mds_dt_connect(struct obd_device *obd, char *lov_name)
         if (!obd->obd_recovering) {
                 CDEBUG(D_OTHER, "call mds_postrecov_common()\n");
                 rc = mds_postrecov_common(obd);
-                if (rc > 0) 
-                        rc = 0;
+                if (rc < 0)
+                        GOTO(err_reg, rc);
+                rc = 0;
+        }
+
+        for (i = 0; i < 2; i++) {
+                if (!mds->mds_capa_keys[i].k_key)
+                        break;
+                rc = obd_set_info(mds->mds_dt_exp, strlen("capa_key"),
+                                  "capa_key", sizeof(struct lustre_capa_key),
+                                  mds->mds_capa_keys[i].k_key);
+                if (rc)
+                        GOTO(err_reg, rc);
         }
         RETURN(rc);
 
@@ -615,11 +626,8 @@ int mds_dt_synchronize(void *data)
         struct obd_uuid *uuid;
         obd_id vals[2];
         unsigned long flags;
-        __u32  vallen;
-        __u32  group;
-        int old_count;
-        int count;
-        int index;
+        __u32  vallen, group;
+        int old_count, count, index, i;
         int rc;
         char name[32] = "CATLIST";
 
@@ -668,6 +676,16 @@ int mds_dt_synchronize(void *data)
                           "last_id", &vallen, &vals[1]);
         if (rc)
                 GOTO(cleanup, rc);
+
+        for (i = 0; i < 2; i++) {
+                if (!mds->mds_capa_keys[i].k_key)
+                        break;
+                rc = obd_set_info(mds->mds_dt_exp, strlen("capa_key"),
+                                  "capa_key", sizeof(struct lustre_capa_key),
+                                  mds->mds_capa_keys[i].k_key);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 
         /* we don't set next id manually, instead OSCs will set them
          * during own recovery from DELORPHAN reply -bzzz */

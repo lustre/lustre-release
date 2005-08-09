@@ -166,6 +166,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
+        struct lustre_capa *capa = NULL;
         int rc, size = sizeof(*repbody);
         ENTRY;
 
@@ -177,6 +178,15 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
             (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS))
                 RETURN(-EINVAL);
 
+        if (body->oa.o_valid & OBD_MD_CAPA) {
+                capa = lustre_swab_reqbuf(req, 1, sizeof(*capa),
+                                          lustre_swab_lustre_capa);
+                if (capa == NULL) {
+                        CERROR("Missing/short capa\n");
+                        RETURN(-EFAULT);
+                }
+        }
+
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc)
                 RETURN(rc);
@@ -184,7 +194,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_punch(exp, &repbody->oa, NULL, repbody->oa.o_size,
-                                   repbody->oa.o_blocks, oti);
+                                   repbody->oa.o_blocks, oti, capa);
         RETURN(0);
 }
 
@@ -389,6 +399,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         struct niobuf_local     *local_nb;
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
+        struct lustre_capa      *capa = NULL;
         struct l_wait_info       lwi;
         struct obd_trans_info    oti = { 0 };
         int                      size[1] = { sizeof(*body) };
@@ -397,7 +408,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         int                      npages;
         int                      nob = 0;
         int                      rc;
-        int                      i;
+        int                      i, bufcnt = 0;
         struct timeval           start;
         ENTRY;
 
@@ -407,20 +418,32 @@ static int ost_brw_read(struct ptlrpc_request *req)
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
+        body = lustre_swab_reqbuf(req, bufcnt++, sizeof(*body),
+                                  lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR("Missing/short ost_body\n");
                 GOTO(out, rc = -EFAULT);
         }
 
-        ioo = lustre_swab_reqbuf(req, 1, sizeof(*ioo), lustre_swab_obd_ioobj);
+        ioo = lustre_swab_reqbuf(req, bufcnt++, sizeof(*ioo),
+                                 lustre_swab_obd_ioobj);
         if (ioo == NULL) {
                 CERROR("Missing/short ioobj\n");
                 GOTO(out, rc = -EFAULT);
         }
 
+        if (body->oa.o_valid & OBD_MD_CAPA) {
+                capa = lustre_swab_reqbuf(req, bufcnt++, sizeof(*capa),
+                                          lustre_swab_lustre_capa);
+                if (capa == NULL) {
+                        CERROR("Missing/short capa\n");
+                        GOTO(out, rc = -EFAULT);
+                }
+        }
+
         niocount = ioo->ioo_bufcnt;
-        remote_nb = lustre_swab_reqbuf(req, 2, niocount * sizeof(*remote_nb),
+        remote_nb = lustre_swab_reqbuf(req, bufcnt++,
+                                       niocount * sizeof(*remote_nb),
                                        lustre_swab_niobuf_remote);
         if (remote_nb == NULL) {
                 CERROR("Missing/short niobuf\n");
@@ -452,7 +475,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
 
         do_gettimeofday(&start);
         rc = obd_preprw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
-                        ioo, npages, pp_rnb, local_nb, &oti);
+                        ioo, npages, pp_rnb, local_nb, &oti, capa);
         ost_stime_record(req, &start, 0, 0);
         if (rc != 0)
                 GOTO(out_bulk, rc);
@@ -577,13 +600,14 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct niobuf_remote    *pp_rnb;
         struct niobuf_local     *local_nb;
         struct obd_ioobj        *ioo;
+        struct lustre_capa      *capa = NULL;
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
         __u32                   *rcs;
         int                      size[2] = { sizeof(*body) };
         int                      objcount, niocount, npages;
         int                      comms_error = 0;
-        int                      rc, swab, i, j;
+        int                      rc, swab, i, j, bufcnt = 0;
         struct timeval           start;        
         ENTRY;
 
@@ -595,7 +619,8 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                          (obd_timeout + 1) / 4);
 
         swab = lustre_msg_swabbed(req->rq_reqmsg);
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
+        body = lustre_swab_reqbuf(req, bufcnt++, sizeof(*body),
+                                  lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR("Missing/short ost_body\n");
                 GOTO(out, rc = -EFAULT);
@@ -607,7 +632,8 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 CERROR("Missing/short ioobj\n");
                 GOTO(out, rc = -EFAULT);
         }
-        ioo = lustre_msg_buf (req->rq_reqmsg, 1, objcount * sizeof(*ioo));
+        ioo = lustre_msg_buf(req->rq_reqmsg, bufcnt++,
+                             objcount * sizeof(*ioo));
         LASSERT (ioo != NULL);
         for (niocount = i = 0; i < objcount; i++) {
                 if (swab)
@@ -619,7 +645,17 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 niocount += ioo[i].ioo_bufcnt;
         }
 
-        remote_nb = lustre_swab_reqbuf(req, 2, niocount * sizeof(*remote_nb),
+        if (body->oa.o_valid & OBD_MD_CAPA) {
+                capa = lustre_swab_reqbuf(req, bufcnt++, sizeof(*capa),
+                                          lustre_swab_lustre_capa);
+                if (capa == NULL) {
+                        CERROR("Missing/short capa\n");
+                        GOTO(out, rc = -EFAULT);
+                }
+        }
+
+        remote_nb = lustre_swab_reqbuf(req, bufcnt++,
+                                       niocount * sizeof(*remote_nb),
                                        lustre_swab_niobuf_remote);
         if (remote_nb == NULL) {
                 CERROR("Missing/short niobuf\n");
@@ -660,7 +696,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         do_gettimeofday(&start);
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
-                        ioo, npages, pp_rnb, local_nb, oti);
+                        ioo, npages, pp_rnb, local_nb, oti, capa);
         ost_stime_record(req, &start, 1, 0);
         if (rc != 0)
                 GOTO(out_bulk, rc);
@@ -881,18 +917,23 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(rc);
 
         val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
+        if (val == NULL) {
+                CERROR("val for setinfo can't be NULL\n");
+                RETURN(-EFAULT);
+        }
         
         if (keylen == 8 && memcmp(key, "auditlog", 8) == 0) {
                 lustre_swab_reqbuf(req, 1, sizeof(struct audit_msg),
                                    lustre_swab_audit_msg);
-        }
-        else if (keylen == 5 && strcmp(key, "audit") == 0) {
+        } else if (keylen == 5 && strcmp(key, "audit") == 0) {
                 lustre_swab_reqbuf(req, 1, sizeof(struct audit_attr_msg),
                                    lustre_swab_audit_attr);
-        }
-        else if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
+        } else if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
                 lustre_swab_reqbuf(req, 1, sizeof(struct obdo),
                                    lustre_swab_obdo);
+        } else if (keylen == 8 && strcmp(key, "capa_key") == 0) {
+                lustre_swab_reqbuf(req, 1, sizeof(struct lustre_capa_key),
+                                   lustre_swab_lustre_capa_key);
         }
 
         rc = obd_set_info(exp, keylen, key, req->rq_reqmsg->buflens[1], val);

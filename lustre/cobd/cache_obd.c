@@ -852,7 +852,8 @@ static int cobd_dt_teardown_async_page(struct obd_export *exp,
 
 static int cobd_dt_punch(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, obd_size start,
-                         obd_size end, struct obd_trans_info *oti)
+                         obd_size end, struct obd_trans_info *oti,
+                         struct lustre_capa *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -865,7 +866,7 @@ static int cobd_dt_punch(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        rc = obd_punch(cobd_exp, oa, ea, start, end, oti);
+        rc = obd_punch(cobd_exp, oa, ea, start, end, oti, capa);
         RETURN(rc);
 }
 
@@ -992,7 +993,8 @@ static int cobd_dt_preprw(int cmd, struct obd_export *exp,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_remote *nb,
                           struct niobuf_local *res,
-                          struct obd_trans_info *oti)
+                          struct obd_trans_info *oti,
+                          struct lustre_capa *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1006,7 +1008,7 @@ static int cobd_dt_preprw(int cmd, struct obd_export *exp,
         }
         cobd_exp = cobd_get_exp(obd);
         rc = obd_preprw(cmd, cobd_exp, oa, objcount, obj,
-                        niocount, nb, res, oti);
+                          niocount, nb, res, oti, capa);
         RETURN(rc);
 }
 
@@ -1180,7 +1182,7 @@ static int cobd_md_getstatus(struct obd_export *exp,
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                            __u64 valid, const char *xattr_name,
                            const void *xattr_data, unsigned int xattr_datalen,
-                           unsigned int ea_size,
+                           unsigned int ea_size, struct obd_capa *ocapa,
                            struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -1194,8 +1196,8 @@ static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
                 RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        rc = md_getattr(cobd_exp, id, valid, xattr_name,
-                        xattr_data, xattr_datalen, ea_size, request);
+        rc = md_getattr(cobd_exp, id, valid, xattr_name, xattr_data,
+                          xattr_datalen, ea_size, ocapa, request);
         RETURN(rc);
 }
 

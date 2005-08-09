@@ -121,6 +121,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         if (ealen == sizeof(XATTR_NAME_LUSTRE_ACL) &&
             !strncmp((char *) ea, XATTR_NAME_LUSTRE_ACL, ealen)) {
                 size[bufcount++] = LUSTRE_ACL_SIZE_MAX;
+        } else if (iattr->ia_valid & ATTR_SIZE) {
+                size[bufcount++] = sizeof(struct lustre_capa);
         }
 
         req->rq_replen = lustre_msg_size(bufcount, size);

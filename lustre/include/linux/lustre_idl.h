@@ -333,8 +333,8 @@ struct obdo {
         __u32                   o_easize;       /* epoch in ost writes */
         __u32                   o_mds;
         __u64                   o_fid;
-        __u32                   o_padding;
-        char                    o_inline[OBD_INLINESZ];
+        obd_uid                 o_fsuid;        /* fsuid, used by capability */
+        char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
 };
 
 #define o_dirty   o_blocks
@@ -426,14 +426,17 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLRMTACL (0x0000000800000000LL)    /* remote acl */
 #define OBD_MD_FLKEY    (0x0000001000000000LL)    /* mds key extended attributes */
 #define OBD_MD_FLAUDIT  (0x0000002000000000LL)    /* audit setting */
+#define OBD_MD_CAPA     (0x0000004000000000LL)    /* capability */
+#define OBD_MD_FLFSUID  (0x0000008000000000LL)    /* fsuid */
 
-#define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
-                           OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
-                           OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
-                           OBD_MD_FLXATTR | OBD_MD_FLXATTRLIST |        \
-                           OBD_MD_FLACL | OBD_MD_FLKEY |                \
-                           OBD_MD_MDS | OBD_MD_FLAUDIT))
+#define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME    |        \
+                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE    |        \
+                           OBD_MD_FLCKSUM  | OBD_MD_FLQOS       |        \
+                           OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE    |        \
+                           OBD_MD_FLXATTR  | OBD_MD_FLXATTRLIST |        \
+                           OBD_MD_FLACL    | OBD_MD_MDS         |        \
+                           OBD_MD_FLKEY    | OBD_MD_FLAUDIT     |        \
+                           OBD_MD_CAPA     | OBD_MD_FLFSUID))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
@@ -1030,6 +1033,31 @@ struct ptlbd_rsp {
 };
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
+
+#define CAPA_KEY_LEN           16
+#define CAPA_DIGEST_SIZE       16
+
+struct lustre_capa {
+        __u32   lc_uid;       /* uid */
+        __u32   lc_op;        /* operations allowed */
+        __u64   lc_ino;       /* inode# */
+        __u32   lc_mdsid;     /* mds# */
+        __u32   lc_keyid;     /* key used for the capability */
+        __u64   lc_expiry;    /* expiry time (sec): servers have clocks */
+        __u32   lc_flags;     /* security features for capability */
+        __u8    lc_hmac[CAPA_DIGEST_SIZE]; /* HMAC */
+} __attribute__((packed));
+
+extern void lustre_swab_lustre_capa (struct lustre_capa *c);
+
+struct lustre_capa_key {
+        __u32   lk_mdsid;     /* mds# */
+        __u32   lk_keyid;     /* key# */
+        __u64   lk_expiry;    /* expiry (sec) */
+        __u8    lk_key[CAPA_KEY_LEN];  /* key */
+};
+
+extern void lustre_swab_lustre_capa_key (struct lustre_capa_key *k);
 
 /*
  * Opcodes for management/monitoring node.

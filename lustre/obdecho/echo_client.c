@@ -938,7 +938,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 memset(oti, 0, sizeof(*oti));
                 ioo.ioo_bufcnt = npages;
 
-                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
+                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb,
+                                 oti, NULL);
                 if (ret != 0)
                         GOTO(out, ret);
 

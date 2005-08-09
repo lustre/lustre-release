@@ -310,7 +310,7 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
                 rc = md_getattr(lmv->tgts[id_group(id)].ltd_exp,
-                                id, valid, NULL, NULL, 0, mealen, &req);
+                                id, valid, NULL, NULL, 0, mealen, NULL, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));

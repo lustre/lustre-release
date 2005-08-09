@@ -117,7 +117,10 @@ struct ll_inode_info {
         __u64                   lli_open_fd_exec_count;
         struct posix_acl       *lli_posix_acl;
         struct remote_acl      *lli_remote_acl;
+
         struct lustre_key      *lli_key_info;
+
+        struct lustre_capa     *lli_trunc_capa; /* capabiliity for truncate */
 };
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
@@ -193,5 +196,6 @@ struct lustre_intent_data {
          (struct ll_async_page *)(c))
 
 #include <lustre/lustre_user.h>
+#include <linux/lustre_sec.h>
 
 #endif

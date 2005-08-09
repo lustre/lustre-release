@@ -111,6 +111,10 @@ struct ll_sb_info {
         /* mount object entry name */
         char                      ll_gns_oname[PATH_MAX];
         void                      *ll_crypto_info;
+
+        /* TODO: to support multi mount for capability */
+        struct list_head          ll_capa_list;
+        struct timer_list         ll_capa_timer;
 };
 
 struct ll_gns_ctl {
@@ -172,6 +176,7 @@ struct ll_readahead_state {
 
 extern kmem_cache_t *ll_file_data_slab;
 extern kmem_cache_t *ll_intent_slab;
+
 struct lustre_handle;
 
 struct ll_file_data {
@@ -212,15 +217,18 @@ struct it_cb_data {
 #define LLAP_MAGIC 98764321
 
 struct ll_async_page {
-        int             llap_magic;
+        int              llap_magic;
         void            *llap_cookie;
         struct page     *llap_page;
         struct list_head llap_pending_write;
-         /* only trust these if the page lock is providing exclusion */
+        /* only trust these if the page lock is providing exclusion */
         unsigned         llap_write_queued:1,
                          llap_defer_uptodate:1,
                          llap_origin:3,
                          llap_ra_used:1;
+
+        /* used to find proper capability */
+        uid_t            llap_fsuid;
 
         struct list_head llap_proc_item;
 };
@@ -333,8 +341,8 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                     struct obd_client_handle *och, int dirty);
-void ll_och_fill(struct inode *inode, struct lookup_intent *it,
-                 struct obd_client_handle *och);
+int ll_och_fill(struct inode *inode, struct lookup_intent *it,
+                struct obd_client_handle *och);
 int ll_set_audit(struct inode *, __u64);
 int ll_audit_log(struct inode *, audit_op, int);
 
@@ -345,6 +353,13 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 #endif
 void ll_stime_record(struct ll_sb_info *sbi, struct timeval *start,
                      struct obd_service_time *stime);
+
+/* llite_capa.c */
+void ll_capa_timer_callback(unsigned long unused);
+int ll_capa_start_thread(void);
+void ll_capa_stop_thread(void);
+int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
+                           struct obd_client_handle *och);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);

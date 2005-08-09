@@ -36,11 +36,14 @@
 #include <linux/obd.h>
 #endif
 #include <linux/lprocfs_status.h>
+#include <linux/lustre_sec.h>
 
 extern struct list_head obd_types;
 static spinlock_t obd_types_lock = SPIN_LOCK_UNLOCKED;
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
+
+extern kmem_cache_t *capa_cachep;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
@@ -351,6 +354,11 @@ void obd_cleanup_caches(void)
                          "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
+        if (capa_cachep) {
+                LASSERTF(kmem_cache_destroy(capa_cachep) == 0,
+                         "Cannot destory capa_cache\n");
+                capa_cachep = NULL;
+        }
         EXIT;
 }
 
@@ -368,6 +376,13 @@ int obd_init_caches(void)
                                           sizeof(struct obd_import),
                                           0, 0, NULL, NULL);
         if (!import_cachep)
+                GOTO(out, -ENOMEM);
+
+        LASSERT(capa_cachep == NULL);
+        capa_cachep = kmem_cache_create("capa_cache",
+                                        sizeof(struct obd_capa),
+                                        0, 0, NULL, NULL);
+        if (!capa_cachep)
                 GOTO(out, -ENOMEM);
 
         RETURN(0);

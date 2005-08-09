@@ -296,7 +296,7 @@ static int cmobd_write_extent(struct obd_device *obd,
         ioo.ioo_bufcnt = oa_bufs;
 
         ret = obd_preprw(OBD_BRW_READ, cmobd->cache_exp, oa, 1, &ioo, 
-                         oa_bufs, rnb, lnb, NULL);
+                         oa_bufs, rnb, lnb, NULL, NULL);
         if (ret)
                 GOTO(out, rc = ret);
 

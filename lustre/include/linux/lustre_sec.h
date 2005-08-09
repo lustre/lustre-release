@@ -22,6 +22,8 @@
 #ifndef __LINUX_SEC_H_
 #define __LINUX_SEC_H_
 
+//#include <linux/lustre_idl.h>
+
 enum ptlrpcs_major_flavors {
         PTLRPCS_FLVR_MAJOR_NULL         = 0,
         PTLRPCS_FLVR_MAJOR_GSS          = 1,
@@ -503,6 +505,146 @@ void svcsec_free_reply_state(struct ptlrpc_reply_state *rs);
 int svcsec_null_init(void);
 int svcsec_null_exit(void);
 
+/* capability */
+#include <linux/crypto.h>
+
+#define NR_CAPAHASH 32
+#define CAPA_TIMEOUT 1800                /* sec, == 30 min */
+#define CAPA_KEY_TIMEOUT (24 * 60 * 60)  /* sec, == 1 day */
+#define CAPA_CACHE_SIZE 1000             /* for MDS & OST */
+#define CAPA_HMAC_ALG "sha1"
+
+struct lustre_capa_data {
+        __u32   lc_uid;       /* uid */
+        __u32   lc_op;        /* operations allowed */
+        __u64   lc_ino;       /* inode# */
+        __u32   lc_mdsid;     /* mds# */
+        __u32   lc_keyid;     /* key used for the capability */
+        __u64   lc_expiry;    /* expiry time: servers have clocks */
+        __u32   lc_flags;     /* security features for capability */
+} __attribute__((packed));
+
+struct client_capa {
+        struct inode             *inode;      /* this should be always valid
+                                               * if c_refc > 0 */
+        struct lustre_handle      handle;     /* handle of mds_file_data */
+        struct list_head         *list;       /* the capa list belong to this client */
+        struct timer_list        *timer;      /* timer belong to this client */
+};
+
+struct filter_capa {
+        int                       bvalid;     /* black key here valid or not */
+        __u32                     bkeyid;     /* black key id */
+        __u8                      bhmac[CAPA_DIGEST_SIZE]; /* black key */
+};
+
+struct obd_capa {
+        struct hlist_node         c_hash;
+        struct list_head          c_list;
+
+        struct lustre_capa        c_capa;        /* capa */
+        int                       c_type;
+        atomic_t                  c_refc;
+
+        union {
+                struct client_capa       client;
+                struct filter_capa       filter;
+        } u;
+};
+
+#define c_inode   u.client.inode
+#define c_handle  u.client.handle
+#define c_bvalid  u.filter.bvalid
+#define c_bkeyid  u.filter.bkeyid
+#define c_bhmac   u.filter.bhmac
+
+enum lustre_capa_type {
+        CLIENT_CAPA = 0,
+        MDS_CAPA    = 1,
+        FILTER_CAPA = 2,
+};
+
+extern spinlock_t capa_lock;
+extern struct hlist_head *capa_hash;
+extern struct list_head capa_list[];
+extern struct timer_list ll_capa_timer;
+
+/* obdclass/capa.c */
+int capa_op(int flags);
+void __capa_get(struct obd_capa *ocapa);
+struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
+                          unsigned long ino, int type,
+                          struct lustre_capa *capa, struct inode *inode,
+                          struct lustre_handle *handle);
+void capa_put(struct obd_capa *ocapa, int type);
+int capa_renew(struct lustre_capa *capa, int type);
+void capa_hmac(struct crypto_tfm *tfm, u8 *key, struct lustre_capa *capa);
+void capa_dup(void *dst, struct obd_capa *ocapa);
+void capa_dup2(void *dst, struct lustre_capa *capa);
+int capa_expired(struct lustre_capa *capa);
+int __capa_is_to_expire(struct obd_capa *ocapa);
+int capa_is_to_expire(struct obd_capa *ocapa);
+
+#define CAPA_EXPIRY_SHIFT 10 /* 1024 sec */
+#define CAPA_EXPIRY       (1UL << PAGE_SHIFT)
+#define CAPA_EXPIRY_MASK  (~(CAPA_EXPIRY-1))
+
+#define CAPA_PRE_EXPIRY_NOROUND 3       /* sec */
+#define CAPA_PRE_EXPIRY         300     /* sec */
+
+/* struct lustre_capa.lc_flags */
+#define CAPA_FL_NOROUND   0x001 /* capa expiry not rounded */
+
+static inline unsigned long capa_pre_expiry(struct lustre_capa *capa)
+{
+        return (capa->lc_flags & CAPA_FL_NOROUND) ? 
+                        CAPA_PRE_EXPIRY_NOROUND : CAPA_PRE_EXPIRY;
+}
+
+static inline __u64
+round_expiry(__u32 timeout)
+{
+        struct timeval tv;
+        __u64 expiry;
+
+        do_gettimeofday(&tv);
+        expiry = tv.tv_sec + timeout;
+
+        if (timeout > CAPA_EXPIRY)
+                expiry = (expiry + CAPA_EXPIRY - 1) & CAPA_EXPIRY_MASK;
+
+        return expiry;
+}
+
+static inline int
+capa_key_cmp(struct lustre_capa_key *k1, struct lustre_capa_key *k2)
+{
+        return le32_to_cpu(k1->lk_keyid) - le32_to_cpu(k2->lk_keyid);
+}
+
+static inline unsigned long
+expiry_to_jiffies(__u64 expiry)
+{
+        /* sec -> jiffies */
+        struct timeval tv;
+
+        do_gettimeofday(&tv);
+        return jiffies + ((unsigned long)expiry - tv.tv_sec) * HZ;
+}
+
 #endif /* __KERNEL__ */
+
+struct mds_capa_key {
+        struct list_head        k_list;
+
+        struct lustre_capa_key *k_key;
+        struct obd_device      *k_obd;
+};
+
+struct filter_capa_key {
+        struct list_head        k_list;
+
+        struct lustre_capa_key  k_key;
+};
 
 #endif /* __LINUX_SEC_H_ */

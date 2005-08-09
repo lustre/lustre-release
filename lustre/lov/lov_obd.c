@@ -1097,8 +1097,9 @@ static int lov_revalidate_md(struct obd_export *exp, struct obdo *src_oa,
  * we can send this 'punch' to just the authoritative node and the nodes
  * that the punch will affect. */
 static int lov_punch(struct obd_export *exp, struct obdo *oa,
-                     struct lov_stripe_md *lsm,
-                     obd_off start, obd_off end, struct obd_trans_info *oti)
+                     struct lov_stripe_md *lsm, obd_off start,
+                     obd_off end, struct obd_trans_info *oti,
+                     struct lustre_capa *capa)
 {
         struct lov_request_set *set;
         struct lov_obd *lov;
@@ -1123,7 +1124,7 @@ static int lov_punch(struct obd_export *exp, struct obdo *oa,
 
                 rc = obd_punch(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa, 
                                NULL, req->rq_extent.start, 
-                               req->rq_extent.end, NULL);
+                               req->rq_extent.end, NULL, capa);
                 err = lov_update_punch_set(set, req, rc);
                 if (err) {
                         CERROR("error: punch objid "LPX64" subobj "LPX64
@@ -2207,7 +2208,8 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 }
                 
                 RETURN(rc);           
-        } else if (KEY_IS("flush_cred") || KEY_IS("crypto_cb")) {
+        } else if (KEY_IS("flush_cred") || KEY_IS("crypto_cb") ||
+                   KEY_IS("capa_key")) {
                 struct lov_tgt_desc *tgt;
                 int rc = 0, i;
 
