@@ -71,7 +71,7 @@ int ll_check_audit(struct inode * inode, audit_op op, int ret)
                 return 0;
 
         //if audit is only for failures?
-        if (!ret && IS_AUDIT_OP(mask, AUDIT_FAIL))
+        if (ret >= 0 && IS_AUDIT_OP(mask, AUDIT_FAIL))
                 return 0;
         
         return (IS_AUDIT_OP(mask,op));

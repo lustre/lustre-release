@@ -40,6 +40,29 @@
 #include <linux/lustre_audit.h>
 #include "smfs_internal.h"
 
+static inline int audit_fill_id_rec (char **pbuf, struct inode * inode)
+{
+        struct fsfilt_operations *fsfilt = I2FOPS(inode);
+        struct audit_id_record * rec = (void*)(*pbuf);
+        int len = sizeof(*rec);
+        struct lustre_fid fid;
+        int rc = 0;
+        
+        rec->au_num = inode->i_ino;
+        rec->au_type = (S_IFMT & inode->i_mode);
+        rec->au_gen = inode->i_generation;
+        
+        //fid & mdsnum
+        rc = fsfilt->fs_get_md(I2CI(inode), &fid, sizeof(fid), EA_SID);
+        if (rc > 0) {
+                rec->au_fid = fid.lf_id;
+                rec->au_mds = fid.lf_group;
+        }
+        
+        *pbuf += len;
+        return len;
+}
+
 int static audit_mds_create_rec(struct inode * parent, void * arg,
                                 struct audit_priv * priv, char * buffer,
                                 __u32 * type)

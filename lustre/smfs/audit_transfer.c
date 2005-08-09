@@ -112,7 +112,7 @@ const char *opstr[AUDIT_MAX] = {
 };
 
 #define construct_header(buf, size, rec, id_rec)                        \
-        snprintf(buf, size, "AUDIT:"LPU64":%u/%u:%s:%d:"DLID4":",       \
+        snprintf(buf, size, "AUDIT:"LPX64":%u/%u:%s:%d:"DLID4":",       \
         rec->nid, rec->uid, rec->gid, opstr[rec->opcode], (__s16)rec->result,\
         (unsigned long)id_rec->au_fid, (unsigned long)id_rec->au_mds, \
         (unsigned long)id_rec->au_num, (unsigned long)id_rec->au_gen);

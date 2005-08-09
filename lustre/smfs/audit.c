@@ -123,12 +123,13 @@ struct inode * get_inode_from_hook(hook_op hook, void * msg)
 
         return inode;
 }
-
+/* is called also from fsfilt_smfs_get_info */
 int smfs_get_audit(struct super_block * sb, struct inode * parent,
                    struct inode * inode,  __u64 * mask)
 {
         struct smfs_super_info * smb = S2SMI(sb);
         struct fsfilt_operations *fsfilt = smb->sm_fsfilt;
+        struct obd_device * obd = smb->smsi_exp->exp_obd;
         int rc;
         struct audit_priv * priv = NULL;
         
@@ -139,7 +140,7 @@ int smfs_get_audit(struct super_block * sb, struct inode * parent,
         
         priv = smfs_get_plg_priv(S2SMI(sb), SMFS_PLG_AUDIT);
               
-        //omit __iopen__ dir
+        /* omit __iopen__ dir */
         if (parent->i_ino == SMFS_IOPEN_INO)
                 RETURN(-ENOENT);
         
@@ -147,16 +148,20 @@ int smfs_get_audit(struct super_block * sb, struct inode * parent,
                 RETURN(-ENOENT);
         
         if (IS_AUDIT(priv->a_mask)) {
+                /* no audit for directories on OSS */
+                if (inode && S_ISDIR(inode->i_mode) &&
+                    !strcmp(obd->obd_type->typ_name, OBD_FILTER_DEVICENAME))
+                        RETURN(-EINVAL);
                 (*mask) = priv->a_mask;
                 RETURN(0);
         }
-        //get inode audit EA
+        /* get inode audit EA */
         rc = fsfilt->fs_get_xattr(parent, AUDIT_ATTR_EA,
                                   mask, sizeof(*mask));
         if (rc <= 0)
                 RETURN(-ENODATA);
         
-        //check if parent has audit
+        /* check if parent has audit */
         if (IS_AUDIT(*mask))
                 RETURN(0);
         
@@ -526,6 +531,8 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
         struct timeval cur_time;
         //char name[32];
         struct audit_priv * priv;
+        
+        ENTRY;
         
         do_gettimeofday(&cur_time);
         
