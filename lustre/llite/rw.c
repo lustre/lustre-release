@@ -156,9 +156,10 @@ void ll_truncate(struct inode *inode)
 
         oa->o_id = lsm->lsm_object_id;
         oa->o_gr = lsm->lsm_object_gr;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLIFID;
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        memcpy(obdo_id(oa), &lli->lli_id, sizeof(lli->lli_id));
 
         obd_adjust_kms(ll_i2dtexp(inode), lsm, inode->i_size, 1);
 
