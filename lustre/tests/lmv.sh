@@ -42,6 +42,9 @@ ${LMC} -m $config --add node --node localhost || exit 10
 ${LMC} -m $config --add net --node client --nid '*' --nettype tcp || exit 12
 ${LMC} -m $config --add net --node localhost --nid `hostname` --nettype tcp || exit 11
 
+[ "x$MDS_MOUNT_OPTS" != "x" ] &&
+    MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
+
 # configure mds server
 ${LMC} -m $config --add lmv --lmv lmv1 || exit 12
 
@@ -49,8 +52,12 @@ for num in `seq $MDSCOUNT`; do
     MDSDEV=$TMP/mds${num}-`hostname`
     ${LMC} -m $config --format --add mds --node localhost --mds mds${num} \
         --lmv lmv1 --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE --dev $MDSDEV \
-        --size $MDSSIZE || exit 13
+        $MDS_MOUNT_OPTS --size $MDSSIZE || exit 13
 done
+
+[ "x$OST_MOUNT_OPTS" != "x" ] &&
+    OST_MOUNT_OPTS="--mountfsoptions $OST_MOUNT_OPTS"
+
 
 ${LMC} -m $config --add lov --lov lov1 --lmv lmv1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
 
@@ -59,7 +66,9 @@ for num in `seq $OSTCOUNT`; do
     OST=ost$num
     DEVPTR=OSTDEV$num
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
-    ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --backfstype $OST_BACKFSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
+    ${LMC} -m $config --add ost --node localhost --lov lov1 --ost $OST \
+    --fstype $FSTYPE --backfstype $OST_BACKFSTYPE --dev ${!DEVPTR} \
+    $OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
 done
 
 ${LMC} -m $config --add mtpt --node localhost --path $MOUNT --mds lmv1 --clientoptions async --lov lov1 || exit 40
