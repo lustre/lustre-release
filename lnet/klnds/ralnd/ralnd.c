@@ -1200,9 +1200,15 @@ kranal_stop_listener(int clear_acceptq)
         }
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
 int
 kranal_listener_procint(ctl_table *table, int write, struct file *filp,
                         void *buffer, size_t *lenp)
+#else
+int
+kranal_listener_procint(ctl_table *table, int write, struct file *filp,
+                        void *buffer, size_t *lenp, loff_t *ppos)
+#endif
 {
         int   *tunable = (int *)table->data;
         int    old_val;
@@ -1218,7 +1224,11 @@ kranal_listener_procint(ctl_table *table, int write, struct file *filp,
                  tunable == &kranal_tunables.kra_backlog);
         old_val = *tunable;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
         rc = proc_dointvec(table, write, filp, buffer, lenp);
+#else
+        rc = proc_dointvec(table, write, filp, buffer, lenp, ppos);
+#endif
 
         if (write &&
             (*tunable != old_val ||

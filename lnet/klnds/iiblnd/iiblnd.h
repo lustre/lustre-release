@@ -162,7 +162,7 @@ typedef struct
         __u32             md_lkey;
         __u32             md_rkey;
         __u64             md_addr;
-} kib_md_t __attribute__((packed));
+} kib_md_t;
 
 typedef struct
 {
