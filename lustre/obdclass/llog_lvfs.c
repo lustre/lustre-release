@@ -45,6 +45,7 @@
 #include <libcfs/list.h>
 #include <linux/lvfs.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_disk.h>
 #include "llog_internal.h"
 
 #ifdef __KERNEL__
@@ -573,7 +574,8 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         ENTRY;
 
         fdentry = handle->lgh_file->f_dentry;
-        if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
+        if (strcmp(fdentry->d_parent->d_name.name, MOUNT_CONFIGS_DIR) == 0) {
+                /* CONFIGS files aren't really "lustre" objects - special case*/
                 struct obd_device *obd = handle->lgh_ctxt->loc_exp->exp_obd;
                 struct inode *inode = fdentry->d_parent->d_inode;
                 struct lvfs_run_ctxt saved;

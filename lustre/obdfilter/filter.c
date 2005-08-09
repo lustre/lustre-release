@@ -369,7 +369,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         LASSERT (offsetof(struct filter_client_data, fcd_padding) +
                  sizeof(fcd->fcd_padding) == FILTER_LR_CLIENT_SIZE);
         LASSERT(FILTER_LR_CLIENT_SIZE == LR_CLIENT_SIZE);
-        LASSERT(FILTER_LR_CLIENT_START == LR_CLIENT_SIZE);
+        LASSERT(FILTER_LR_CLIENT_START == LR_CLIENT_START);
 
         OBD_ALLOC(fsd, sizeof(*fsd));
         if (!fsd)

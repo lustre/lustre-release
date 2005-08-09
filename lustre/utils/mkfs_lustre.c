@@ -308,6 +308,7 @@ int write_local_files(struct mkfs_opts *mop)
 
         if (mop->mo_flags & MO_IS_LOOP) {
                 /* ext3 can't understand iopen_nopriv, others */
+                // FIXME ext3 on 2.6 can't. So use ldiskfs on 2.6
                 if (strlen(mop->mo_ldd.ldd_mount_opts)) 
                         snprintf(local_mount_opts, sizeof(local_mount_opts),
                                  "loop,%s", mop->mo_ldd.ldd_mount_opts);
@@ -326,7 +327,7 @@ int write_local_files(struct mkfs_opts *mop)
 
         /* Set up initial directories */
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_CONFIGS_DIR);
-        ret = mkdir(filepnm, 0755);
+        ret = mkdir(filepnm, 0777);
         if (ret) {
                 fprintf(stderr, "Can't make configs dir %s (%d)\n", 
                         filepnm, ret);
@@ -1083,6 +1084,7 @@ int main(int argc , char *const argv[])
         } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
                 if (IS_MDT(&mop.mo_ldd))
+                        // FIXME ext3 also
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
         } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",

@@ -415,7 +415,7 @@ static void server_put_super(struct super_block *sb)
         err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
                        mgcobd->mgc_vfsmnt, &dentry_list);
         if (err)
-                CERROR("Can't read LOGS dir, %d\n", err);
+                CERROR("Can't read %s dir, %d\n", MOUNT_CONFIGS_DIR, err);
                                                                                        
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 char *logname;
@@ -650,7 +650,7 @@ int lustre_process_logs(struct super_block *sb,
         err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
                        mgcobd->mgc_vfsmnt, &dentry_list);
         if (err) {
-                CERROR("Can't read LOGS dir\n");
+                CERROR("Can't read %s dir, rc=%d\n", MOUNT_CONFIGS_DIR, err);
                 return(err);
         }
                                                                                        

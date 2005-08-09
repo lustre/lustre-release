@@ -35,8 +35,8 @@
 
 /* Persistent mount data are stored on the disk in this file.
    Used before the setup llog can be read. */
-#define MOUNT_CONFIGS_DIR "CONFIGS/"
-#define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"mountdata"
+#define MOUNT_CONFIGS_DIR "CONFIGS"
+#define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
 
 #define LDD_MAGIC 0xbabb0001
 
