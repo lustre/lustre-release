@@ -1228,8 +1228,7 @@ got_child:
                 mds_inode2id(obd, &body->id1, inode, fid);
                 mds_update_inode_ids(obd, dchild->d_inode, handle, &body->id1, &sid);
 
-                if ((rec->ur_flags & MDS_OPEN_HAS_KEY) || 
-                     mds->mds_crypto_type == MKS_TYPE) {
+                if ((rec->ur_flags & MDS_OPEN_HAS_KEY)) { 
                         rc = mds_set_gskey(obd, handle, dchild->d_inode, 
                                            rec->ur_ea2data, rec->ur_ea2datalen, 
                                            ATTR_KEY | ATTR_MAC);

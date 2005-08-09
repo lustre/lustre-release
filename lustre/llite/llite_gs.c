@@ -477,11 +477,12 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         CDEBUG(D_INFO, "data_key is "LPU64" \n", data_key);
         /*encrypt the data*/
         ptr = (char *)kmap(page);
+        key_ptr = ptr;
         ptr += offset; 
         CDEBUG(D_INFO, "ptr is %s \n", ptr);
         for (i = 0; i < count; i++) 
-                *ptr++ ^= data_key; 
-        CDEBUG(D_INFO, "encrypted ptr is %s \n", ptr);
+                *ptr++ ^= (__u8)data_key; 
+        CDEBUG(D_INFO, "encrypted ptr is %s \n", key_ptr);
         kunmap(page);
         
         RETURN(0); 
@@ -570,7 +571,8 @@ int ll_mks_create_key(struct inode *inode, struct lookup_intent *it)
                 OBD_FREE(lustre_data->it_key, sizeof(struct crypto_key));
         }
         OBD_ALLOC(crypto_key, sizeof(struct crypto_key));
-        
+       
+        crypto_key->ck_type = MKS_TYPE;
         lustre_data->it_key = crypto_key; 
         lustre_data->it_key_size = sizeof(struct crypto_key); 
         RETURN(rc);

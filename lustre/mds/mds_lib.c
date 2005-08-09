@@ -239,17 +239,12 @@ void mds_inode2id(struct obd_device *obd, struct lustre_id *id,
 int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg, 
                   int *offset, struct mds_body *body, struct inode *inode)
 {
-        struct mds_obd *mds = &obd->u.mds;
         struct crypto_key_md *md_key;
         struct crypto_key *ckey;
         __u32 buflen, *sizep;
         void *buf;
         int size, rc = 0;
         ENTRY;
- 
-        if ((mds->mds_crypto_type != MKS_TYPE && 
-             mds->mds_crypto_type != GKS_TYPE))
-                RETURN(rc);
 
         sizep = lustre_msg_buf(repmsg, (*offset)++, 4);
         if (!sizep) {
@@ -265,9 +260,10 @@ int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg,
 
         size = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
                            EA_KEY);
-        if (size < 0) {
-                CERROR("Can not get gskey from MDS ino %lu rc %d\n", 
-                       inode->i_ino, size);
+        if (size <= 0) {
+                if (size < 0) 
+                        CERROR("Can not get gskey from MDS ino %lu rc %d\n",
+                                inode->i_ino, size);
                 GOTO(out, rc = size); 
         }
         if (le32_to_cpu(md_key->md_magic) != MD_KEY_MAGIC) {
@@ -287,12 +283,12 @@ out:
         RETURN(rc);
 }
 
-static int mds_get_gskey(struct inode *inode, struct crypto_key_md *mkey)
+static int mds_get_gskey(struct inode *inode, struct crypto_key *ckey)
 {
-        LASSERT(mkey);
+        LASSERT(ckey);
         /*tmp create gs key here*/
-        get_random_bytes(mkey->md_ck.ck_key, KEY_SIZE);       
-        mkey->md_ck.ck_type = MKS_TYPE; 
+        LASSERT(ckey->ck_type == MKS_TYPE); 
+        get_random_bytes(ckey->ck_key, KEY_SIZE);       
         RETURN(0); 
 }
 
@@ -302,48 +298,44 @@ int mds_set_gskey(struct obd_device *obd, void *handle,
 {
         struct crypto_key_md *md_key = NULL;
         struct crypto_key *ckey = (struct crypto_key *)key; 
-        struct mds_obd *mds = &obd->u.mds;
         int rc = 0;       
         ENTRY;
 
-        if ((mds->mds_crypto_type != MKS_TYPE && 
-             mds->mds_crypto_type != GKS_TYPE)) {
-                CDEBUG(D_INFO, "mds_crypto_type %d \n", mds->mds_crypto_type); 
-                RETURN(rc);
-        }        
+        if (!ckey) 
+                RETURN(0);
+
+        LASSERT(ckey->ck_type == MKS_TYPE || ckey->ck_type == GKS_TYPE);   
+        
         OBD_ALLOC(md_key, sizeof(*md_key)); 
-        if (mds->mds_crypto_type == MKS_TYPE) { 
-                mds_get_gskey(inode, md_key);
-        } else {
-                LASSERT(ckey != NULL);
-        }
+        if (ckey->ck_type == MKS_TYPE) { 
+                mds_get_gskey(inode, ckey);
+        } 
+
         rc = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
                            EA_KEY);
         if (rc < 0)
                 GOTO(free, rc);
         LASSERT(le32_to_cpu(md_key->md_magic) == MD_KEY_MAGIC || 
                 md_key->md_magic == 0);
+        
         if (le32_to_cpu(md_key->md_magic) == MD_KEY_MAGIC) {
                 CDEBUG(D_INFO, "reset key %s mac %s", md_key->md_ck.ck_mac,
                        md_key->md_ck.ck_key);
         } 
  
         md_key->md_magic = cpu_to_le32(MD_KEY_MAGIC);
-        if (mds->mds_crypto_type == GKS_TYPE) {
                 /*get key and mac from request buffer*/
-                if (valid & ATTR_MAC) { 
-                        memcpy(md_key->md_ck.ck_mac, ckey->ck_mac, MAC_SIZE);
+        if (valid & ATTR_MAC) { 
+                memcpy(md_key->md_ck.ck_mac, ckey->ck_mac, MAC_SIZE);
                         CDEBUG(D_INFO, "set mac %s for ino %lu \n",
                                         md_key->md_ck.ck_mac, inode->i_ino);
-                }
-                if (valid & ATTR_KEY) { 
-                        memcpy(md_key->md_ck.ck_key, ckey->ck_key, KEY_SIZE);
-                        CDEBUG(D_INFO, "set key %s for ino %lu \n",
-                                        md_key->md_ck.ck_key, inode->i_ino);
-                }
         }
-        rc = fsfilt_set_md(obd, inode, handle, md_key,
-                           sizeof(*md_key), EA_KEY);
+        if (valid & ATTR_KEY) { 
+                memcpy(md_key->md_ck.ck_key, ckey->ck_key, KEY_SIZE);
+                       CDEBUG(D_INFO, "set key %s for ino %lu \n",
+                                        md_key->md_ck.ck_key, inode->i_ino);
+        }
+        rc = fsfilt_set_md(obd, inode, handle, md_key, sizeof(*md_key), EA_KEY);
 free:
         if (md_key)
                 OBD_FREE(md_key, sizeof(*md_key));
@@ -354,7 +346,6 @@ int mds_set_crypto_type(struct obd_device *obd, void *val, __u32 vallen)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;       
- 
         if (vallen >= strlen("mks") &&
              memcmp(val, "mks", vallen) == 0) {
                 mds->mds_crypto_type = MKS_TYPE;         

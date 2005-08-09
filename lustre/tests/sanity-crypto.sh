@@ -17,10 +17,16 @@ build_test_filter
 
 assert_env MDSCOUNT
 
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
+DIR1=${DIR1:-$MOUNT1}
+DIR2=${DIR2:-$MOUNT2}
+CRYPT_TYPE=${CRYPT_TYPE:-"gks"}
+RUN_UID=${RUN_UID:-1000}
 if [ `using_krb5_sec $SECURITY` == 'n' ] ; then
     ALWAYS_EXCEPT="0c $ALWAYS_EXCEPT"
 fi
-
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -79,8 +85,6 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
-SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
     gen_config
@@ -106,7 +110,85 @@ $SETUP
 if [ "$ONLY" == "setup" ]; then
     exit 0
 fi
+disable_encrypt() {
+	NAME=$1
+    	grep " $MOUNT " /proc/mounts && umount  $MOUNT
+	zconf_mount `hostname` $NAME	
+}
+enable_encrypt() {
+	NAME=$1
+    	grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+	$LCTL set_crypt $MOUNT $CRYPT_TYPE
+}
 
 mkdir -p $DIR
+
+test_1a() {
+	rm -rf $DIR1/1a*
+	enable_encrypt $MOUNT
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/1a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/1a1
+	diff -u $DIR1/1a0 $DIR2/1a1 || error "files are different"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/1a0 $DIR2/1a1 && error "write encryption failed"
+}
+run_test 1a "read/write encryption============="
+
+test_2a() {
+	rm -rf $DIR1/2a*
+	enable_encrypt $MOUNT
+	touch $DIR1/2a0
+        setfacl -m u:bin:rw $DIR1/2a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/2a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/2a1
+	diff -u $DIR1/2a0 $DIR2/2a1 || error "files are different"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/2a0 $DIR2/2a1 && error "write encryption failed"
+}
+run_test 2a "read/write encryption with acl============="
+
+test_3a() {
+	rm -rf $DIR1/3a*
+	enable_encrypt $MOUNT	
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/3a1
+	chown $RUN_UID $DIR1/3a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a0 || error "chown write error"
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a1 	
+	diff -u $DIR1/3a0 $DIR2/3a1 || error "files are different"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/3a0 $DIR2/3a1 && error "write encryption failed"
+}
+run_test 3a "write chmod encryption============="
+
+test_4a() {
+	rm -rf $DIR1/4a*
+	enable_encrypt $MOUNT	
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/4a1
+        setfacl -m u:bin:rw $DIR1/4a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a0 || error "chown write error"
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a1 	
+	diff -u $DIR1/4a0 $DIR2/4a1 || error "files are different"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/4a0 $DIR2/4a1 && error "write encryption failed"
+}
+run_test 4a "write chacl encryption============="
+
+test_5a() {
+	rm -rf $DIR1/5a*
+	enable_encrypt $MOUNT	
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/5a1
+        setfacl -m u:bin:rw $DIR1/5a0
+	chown $RUN_UID $DIR1/3a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0 || error "chown write error"
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a1 	
+	diff -u $DIR1/5a0 $DIR2/5a1 || error "files are different"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/5a0 $DIR2/5a1 && error "write encryption failed"
+}
+run_test 5a "write chacl encryption============="
+
 $CLEANUP
 

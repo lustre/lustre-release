@@ -333,7 +333,7 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *result;
         struct inode *inode;
-        unsigned long ino;
+        unsigned long ino = 0;
         __u32 generation;
         char idname[32];
 
