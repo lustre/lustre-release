@@ -434,14 +434,15 @@ static struct file *llog_filp_open(char* fsname, char *name,
                 return ERR_PTR(-ENOMEM); 
 //FIXME: Need to changing mkfs
 //        if (fsname)
-//              len = snprintf(logname, PATH_MAX, "CONFIGS/%s/%s", fsname, name);
+//              len = snprintf(logname, PATH_MAX, "%s/%s/%s", MOUNT_CONFIGS_DIR, fsname, name);
 //        else
-              len = snprintf(logname, PATH_MAX, "CONFIGS/%s", name);
+              len = snprintf(logname, PATH_MAX, "%s/%s", 
+                             MOUNT_CONFIGS_DIR, name);
 
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
-                printk("logname = %s\n", logname);
+                CERROR("logname = %s\n", logname);
                 filp = l_filp_open(logname, flags, mode);
                 if (IS_ERR(filp))
                         CERROR("logfile creation %s: %ld\n", logname,
@@ -626,7 +627,10 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
+        if (!count) {
+                CERROR("Empty catalog?\n");
+                RETURN(0);
+        }
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -668,8 +672,11 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
 
-        LASSERT(count);
-
+        if (!count) {
+                CERROR("Empty catalog?\n");
+                RETURN(0);
+        }
+        
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {

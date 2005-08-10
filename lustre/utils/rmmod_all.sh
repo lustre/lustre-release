@@ -9,6 +9,7 @@ rmmod fsfilt_ext3
 rmmod fsfilt_ldiskfs
 rmmod ldiskfs
 rmmod mgc
+rmmod mgs
 rmmod ost
 rmmod mds
 rmmod ptlrpc

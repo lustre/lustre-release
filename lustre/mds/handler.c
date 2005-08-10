@@ -1597,6 +1597,7 @@ err_put:
         if (lmi) {
                 lustre_put_mount(obd->obd_name);
         } else {
+                /* old method */
                 unlock_kernel();
                 mntput(mds->mds_vfsmnt);
                 lock_kernel();
@@ -1776,6 +1777,7 @@ static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         lvfs_sbdev_type save_dev;
+        int must_put = 0;
         int must_relock = 0;
         ENTRY;
 
@@ -1807,14 +1809,18 @@ static int mds_cleanup(struct obd_device *obd)
                 CERROR("%s: mount busy, mnt_count %d != 2\n", obd->obd_name,
                        atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
 
+        must_put = lustre_put_mount(obd->obd_name);
+
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
         if (kernel_locked()) {
                 unlock_kernel();
                 must_relock++;
         }
-
-        mntput(mds->mds_vfsmnt);
+        
+        if (must_put) 
+                /* In case we didn't mount with lustre_get_mount -- old method*/
+                mntput(mds->mds_vfsmnt);
         mds->mds_sb = NULL;
 
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);

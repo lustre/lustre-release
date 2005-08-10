@@ -51,16 +51,16 @@
 #include "mgc_internal.h"
 
           
-static int mgc_fs_setup(struct super_block *sb, struct vfsmount *mnt)
+static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
+                        struct vfsmount *mnt)
 {
         struct lvfs_run_ctxt saved;
         struct lustre_sb_info *sbi = s2sbi(sb);
-        struct obd_device *obd = sbi->lsi_mgc;
         struct mgc_obd *mgcobd = &obd->u.mgc;
         struct dentry *dentry;
         int err = 0;
 
-        LASSERT(obd);
+        LASSERT(sbi);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(sbi->lsi_ldd));
         if (IS_ERR(obd->obd_fsops)) {
@@ -70,7 +70,9 @@ static int mgc_fs_setup(struct super_block *sb, struct vfsmount *mnt)
         }
 
         mgcobd->mgc_vfsmnt = mnt;
-        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb; // is this different than sb? */
+        mgcobd->mgc_sb = mnt->mnt_root->d_inode->i_sb;
+        // FIXME which one? - filter_common_setup also 
+        CERROR("SB's: fill=%p mnt=%p root=%p\n", sb, mnt->mnt_sb, mnt->mnt_root->d_inode->i_sb);
         fsfilt_setup(obd, mgcobd->mgc_sb);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
@@ -113,10 +115,7 @@ static int mgc_fs_cleanup(struct obd_device *obd)
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         }
 
-        if (mgc->mgc_vfsmnt)
-                // FIXME mntput should not be done by real server, only us 
-                // FIXME or mntcount on sbi?
-                mntput(mgc->mgc_vfsmnt);
+        mgc->mgc_vfsmnt = NULL;
         mgc->mgc_sb = NULL;
         
         if (obd->obd_fsops) 
@@ -135,17 +134,16 @@ static int mgc_cleanup(struct obd_device *obd)
         if (rc != 0)
                 CERROR("failed to cleanup llogging subsystems\n");
 
-
-        if (mgc->mgc_sb)
-                /* if we're a server, eg. something's mounted */
-                mgc_fs_cleanup(obd);
-
         //lprocfs_obd_cleanup(obd);
         
         //rc = mgc_obd_cleanup(obd);
-        
-        if (!lustre_put_mount(obd->obd_name))
-             CERROR("mount_put failed\n");
+
+        if (mgc->mgc_vfsmnt) {
+                /* if we're a server, eg. something's mounted */
+                mgc_fs_cleanup(obd);
+                if ((rc = lustre_put_mount(obd->obd_name)))
+                     CERROR("mount_put failed %d\n", rc);
+        }
 
         ptlrpcd_decref();
         
@@ -157,7 +155,6 @@ static int mgc_cleanup(struct obd_device *obd)
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_mount_info *lmi;
-        struct lustre_sb_info *sbi;
         struct mgc_obd *mgc = &obd->u.mgc;
         //struct lprocfs_static_vars lvars;
         int rc;
@@ -185,21 +182,18 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         lmi = lustre_get_mount(obd->obd_name);
-        if (!lmi) {
-                CERROR("No mount registered!");
-                mgc_cleanup(obd);
-                RETURN(-ENOENT);
-        }
-
-        sbi = s2sbi(lmi->lmi_sb);
-        sbi->lsi_mgc = obd; 
-
-        rc = mgc_fs_setup(lmi->lmi_sb, lmi->lmi_mnt);
-        if (rc) {
-                CERROR("fs setup failed %d\n", rc);
-                mgc_cleanup(obd);
-                RETURN(-ENOENT);
-                GOTO(err_rpc_lock, rc);
+        if (lmi) {
+                CERROR("mgc has local disk\n");
+                /* there's a local disk, we must get access */
+                rc = mgc_fs_setup(obd, lmi->lmi_sb, lmi->lmi_mnt);
+                if (rc) {
+                        CERROR("fs setup failed %d\n", rc);
+                        mgc_cleanup(obd);
+                        RETURN(-ENOENT);
+                        GOTO(err_rpc_lock, rc);
+                }                                                                                                     
+        } else {
+                CERROR("mgc does not have local disk (client only)\n");
         }
 
         RETURN(rc);
@@ -248,7 +242,6 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #endif
         /* ORIGinator context */
         case OBD_IOC_DUMP_LOG: {
-                struct lvfs_run_ctxt saved;
                 ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);

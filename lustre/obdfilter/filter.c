@@ -1205,6 +1205,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
+        struct lustre_mount_info *lmi;
         char *str;
         char ns_name[48];
         int rc = 0;
@@ -1218,9 +1219,16 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
-
-        mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),MS_NOATIME|MS_NODIRATIME,
-                            lustre_cfg_string(lcfg, 1), option);
+        
+        lmi = lustre_get_mount(obd->obd_name);
+        if (lmi) {
+                /* We already mounted in lustre_fill_super */
+                mnt = lmi->lmi_mnt;
+        } else {
+                mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),
+                                    MS_NOATIME|MS_NODIRATIME,
+                                    lustre_cfg_string(lcfg, 1), option);       
+        }
         rc = PTR_ERR(mnt);
         if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
@@ -1329,10 +1337,15 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 err_post:
         filter_post(obd);
 err_mntput:
-        unlock_kernel();
-        mntput(mnt);
+        if (lmi) {
+                lustre_put_mount(obd->obd_name);
+        } else {
+                /* old method */
+                unlock_kernel();
+                mntput(mnt);
+                lock_kernel();
+        }
         filter->fo_sb = 0;
-        lock_kernel();
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
         return rc;
@@ -1448,7 +1461,7 @@ static int filter_cleanup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         lvfs_sbdev_type save_dev;
-        int must_relock = 0;
+        int must_relock = 0, must_put = 0;
         ENTRY;
 
         if (obd->obd_fail)
@@ -1488,6 +1501,8 @@ static int filter_cleanup(struct obd_device *obd)
                        obd->obd_name, filter->fo_vfsmnt,
                        atomic_read(&filter->fo_vfsmnt->mnt_count));
 
+        must_put = lustre_put_mount(obd->obd_name);
+
         /* We can only unlock kernel if we are in the context of sys_ioctl,
            otherwise we never called lock_kernel */
         if (kernel_locked()) {
@@ -1495,7 +1510,8 @@ static int filter_cleanup(struct obd_device *obd)
                 must_relock++;
         }
         
-        mntput(filter->fo_vfsmnt);
+        if (must_put) 
+                mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
 

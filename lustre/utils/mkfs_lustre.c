@@ -426,6 +426,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 }           
 
                 if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
+                        /* Choose our own default journal size */
                         long journal_sz = 0;
                         if (device_sz > 1024 * 1024) 
                                 journal_sz = (device_sz / 102400) * 4;
@@ -437,23 +438,44 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
 
+                /* Default is block size */
                 if (strstr(mop->mo_mkfsopts, "-i") == NULL) {
-                        long inode_sz = 0;
+                        long bytes_per_inode = 0;
+                                        
+                        if (IS_MDT(&mop->mo_ldd)) 
+                                bytes_per_inode = 4096;
+
+                        /* Allocate fewer inodes on large OST devices.  Most
+                           filesystems can be much more aggressive than even 
+                           this. */
+                        if ((IS_OST(&mop->mo_ldd) && (device_sz > 1000000))) 
+                                bytes_per_inode = 16384;
                         
-                       /* The larger the bytes-per-inode ratio, the fewer
-                          inodes will  be  created. */
-                        if (mop->mo_stripe_count > 77)
-                                inode_sz = 4096;
-                        else if (mop->mo_stripe_count > 35)
-                                inode_sz = 2048;
-                        else if (IS_MDT(&mop->mo_ldd)) 
-                                inode_sz = 1024;
-                        else if ((IS_OST(&mop->mo_ldd) && (device_sz > 1000000))) 
-                                  inode_sz = 16384;
-                        if (inode_sz > 0) {
-                                sprintf(buf, " -i %ld", inode_sz);
+                        if (bytes_per_inode > 0) {
+                                sprintf(buf, " -i %ld", bytes_per_inode);
                                 strcat(mop->mo_mkfsopts, buf);
                         }
+                }
+                
+                /* This is an undocumented mke2fs option. Default is 128. */
+                if (strstr(mop->mo_mkfsopts, "-I") == NULL) {
+                        long inode_size = 0;
+                        if (IS_MDT(&mop->mo_ldd)) {
+                                if (mop->mo_stripe_count > 77)
+                                        inode_size = 512; /* bz 7241 */
+                                else if (mop->mo_stripe_count > 34)
+                                        inode_size = 2048;
+                                else if (mop->mo_stripe_count > 13)
+                                        inode_size = 1024;
+                                else 
+                                        inode_size = 512;
+                        }
+                        
+                        if (inode_size > 0) {
+                                sprintf(buf, " -I %ld", inode_size);
+                                strcat(mop->mo_mkfsopts, buf);
+                        }
+                        
                 }
 
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b 4096 -L %s ",
@@ -671,6 +693,11 @@ int write_llog_files(struct mkfs_opts *mop)
         if ((ret = jt_setup()))
                 return ret;
         
+        /* debug info */
+        if (verbose >= 2) {
+                do_jt_noret(jt_dbg_modules, "modules", 0);
+        }
+
         dev = mop->mo_device;
         if (mop->mo_flags & MO_IS_LOOP) {
                 ret = loop_setup(mop);

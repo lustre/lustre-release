@@ -51,19 +51,19 @@ if [ `grep -c lustre $MODFILE` -eq 0 ]; then
     echo Modifying $MODFILE
     echo "# Lustre modules added by $0" >> $MODFILE
     if [ $KVER -eq 24 ]; then
-	echo alias _lustre portals >> $MODFILE
-	echo add above _lustre ksocknal $FSFLT >> $MODFILE
-	echo add below mds _lustre osc >> $MODFILE
+	echo alias _lustre ksocknal >> $MODFILE
+	echo add above _lustre mgc $FSFLT portals >> $MODFILE
+	echo add below mds _lustre osc lov >> $MODFILE
 	echo add below ost _lustre >> $MODFILE
-	echo add below llite _lustre osc mdc >> $MODFILE
+	echo add below llite _lustre osc mdc lov >> $MODFILE
 	echo alias lustre llite >> $MODFILE
     else
 	echo "install kptlrouter $MP portals && $MPI kptlrouter" >> $MODFILE
-	echo "install _lustre $MP portals && $MP lvfs && $MP obdclass && $MP ptlrpc" >> $MODFILE
+	echo "install _lustre $MP portals && $MP lvfs && $MP obdclass && $MP ptlrpc && $MP mgc" >> $MODFILE
 	echo "install obdfilter $MP _lustre && $MP ost && $MP ldiskfs && $MP $FSFLT && $MPI obdfilter" >> $MODFILE
 	echo "install ost $MP _lustre && $MPI ost" >> $MODFILE
-	echo "install mds $MP _lustre && $MP osc && $MPI mds" >> $MODFILE
-	echo "install llite $MP _lustre && $MP osc && $MP mdc && $MPI llite" >> $MODFILE
+	echo "install mds $MP _lustre && $MP osc && $MP lov && $MPI mds" >> $MODFILE
+	echo "install llite $MP _lustre && $MP osc && $MP mdc && $MP lov && $MPI llite" >> $MODFILE
 	echo "alias lustre llite" >> $MODFILE
     fi
     echo "# end Lustre modules" >> $MODFILE
