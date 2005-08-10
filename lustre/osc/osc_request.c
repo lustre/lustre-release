@@ -283,7 +283,8 @@ out:
 }
 
 static int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *md, struct obd_trans_info *oti)
+                             struct lov_stripe_md *md,
+                             struct obd_trans_info *oti)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
@@ -557,7 +558,9 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                        cli->cl_dirty, cli->cl_dirty_max);
                 oa->o_undirty = 0;
         } else {
-                oa->o_undirty = cli->cl_dirty_max - oa->o_dirty;
+                long max_in_flight = (cli->cl_max_pages_per_rpc << PAGE_SHIFT)*
+                                (cli->cl_max_rpcs_in_flight + 1);
+                oa->o_undirty = max(cli->cl_dirty_max, max_in_flight);
         }
         oa->o_grant = cli->cl_avail_grant;
         oa->o_dropped = cli->cl_lost_grant;
@@ -1119,8 +1122,7 @@ static void sort_brw_pages(struct brw_page *array, int num)
         } while (stride > 1);
 }
 
-static obd_count
-max_unfragmented_pages(struct brw_page *pg, obd_count pages)
+static obd_count max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 {
         int count = 1;
         int offset;
@@ -1130,17 +1132,17 @@ max_unfragmented_pages(struct brw_page *pg, obd_count pages)
 
 	for (;;) {
 		pages--;
-		if (pages == 0)                 /* that's all */
+		if (pages == 0)         /* that's all */
                         return count;
 
-                if (offset + pg->count < PAGE_SIZE) /* doesn't end on page boundary */
-			return count;
-		
+                if (offset + pg->count < PAGE_SIZE)
+			return count;   /* doesn't end on page boundary */
+
 		pg++;
                 offset = pg->off & (PAGE_SIZE - 1);
-		if (offset != 0)                /* doesn't start on page boundary */
+		if (offset != 0)        /* doesn't start on page boundary */
 			return count;
-		
+
 		count++;
 	}
 }
@@ -1557,7 +1559,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 list_del_init(&oap->oap_urgent_item);
 
                 if (page_count == 0)
-                        starting_offset = (oap->oap_obj_off + oap->oap_page_off) &
+                        starting_offset = (oap->oap_obj_off+oap->oap_page_off) &
                                           (PTLRPC_MAX_BRW_SIZE - 1);
 
                 /* ask the caller for the size of the io as the rpc leaves. */
@@ -1639,7 +1641,6 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         list_splice(&rpc_list, &aa->aa_oaps);
         INIT_LIST_HEAD(&rpc_list);
 
-#ifdef LPROCFS
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
@@ -1652,7 +1653,6 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
                                       starting_offset/PAGE_SIZE + 1);
         }
-#endif
 
         spin_lock(&cli->cl_loi_list_lock);
 
@@ -1715,7 +1715,7 @@ static int lop_makes_rpc(struct client_obd *cli, struct loi_oap_pages *lop,
                 if (!list_empty(&cli->cl_cache_waiters))
                         RETURN(1);
 
-                /* *2 to avoid triggering rpcs that would want to include pages
+                /* +16 to avoid triggering rpcs that would want to include pages
                  * that are being queued but which can't be made ready until
                  * the queuer finishes with the page. this is a wart for
                  * llite::commit_write() */
@@ -1910,7 +1910,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
                 osc_check_rpcs(cli);
                 spin_unlock(&cli->cl_loi_list_lock);
 
-                CDEBUG(0, "sleeping for cache space\n");
+                CDEBUG(D_CACHE, "sleeping for cache space\n");
                 l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
 
                 spin_lock(&cli->cl_loi_list_lock);
@@ -2026,6 +2026,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
             !list_empty(&oap->oap_rpc_item))
                 RETURN(-EBUSY);
 
+#ifdef HAVE_QUOTA_SUPPORT
         /* check if the file's owner/group is over quota */
         if (cmd == OBD_BRW_WRITE){
                 struct obd_async_page_ops *ops;
@@ -2044,6 +2045,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                 if (rc)
                         RETURN(rc);
         }
+#endif
 
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
@@ -2742,7 +2744,7 @@ static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
 {
         ENTRY;
 
-        if (mode == LCK_GROUP)
+        if (unlikely(mode == LCK_GROUP))
                 ldlm_lock_decref_and_cancel(lockh, mode);
         else
                 ldlm_lock_decref(lockh, mode);
@@ -2818,14 +2820,13 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 {
         struct lov_user_md lum, *lumk;
-        int rc, lum_size;
+        int rc = 0, lum_size;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
-        rc = copy_from_user(&lum, lump, sizeof(lum));
-        if (rc)
+        if (copy_from_user(&lum, lump, sizeof(lum)))
                 RETURN(-EFAULT);
 
         if (lum.lmm_magic != LOV_USER_MAGIC)
@@ -2933,7 +2934,8 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 err = osc_poll_quotacheck(exp, (struct if_quotacheck *)karg);
                 GOTO(out, err);
         default:
-                CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n", cmd, current->comm);
+                CDEBUG(D_INODE, "unrecognised ioctl %#x by %s\n",
+                       cmd, current->comm);
                 GOTO(out, err = -ENOTTY);
         }
 out:

@@ -17,6 +17,15 @@ Description: If an OST is inactive, its locks might reference stale inodes.
 Details    : lov_change_cbdata() must iterate over all namespaces, even if
              they are inactive to clear inode references from the lock.
 
+Severity   : enhancement
+Frequency  : occasional, if non-standard max_dirty_mb used
+Bugzilla   : 7138
+Description: Client will block write RPCs if not enough grant
+Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
+             then the client will block writes while waiting for another RPC
+             to complete instead of consuming its dirty limit.  With change
+             we get improved performance when max_dirty_mb is small.
+
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
