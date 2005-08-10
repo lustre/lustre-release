@@ -106,13 +106,13 @@ static void llu_fsop_gone(struct filesys *fs)
         
                 lustre_cfg_bufs_reset(&bufs, obd->obd_name);
                 lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-                err = class_process_config(lcfg);
+                err = class_process_config(&lcfg);
                 if (err) {
                         CERROR("cleanup failed: %s\n", obd->obd_name);
                 }
                 
                 lcfg->lcfg_command = LCFG_DETACH; 
-                err = class_process_config(lcfg);
+                err = class_process_config(&lcfg);
                 lustre_cfg_free(lcfg);
                 if (err) {
                         CERROR("detach failed: %s\n", obd->obd_name);
@@ -346,11 +346,10 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         RETURN(0);
 }
 
-static struct inode *llu_new_inode(struct filesys *fs,
+static struct inode* llu_new_inode(struct filesys *fs,
                                    struct lustre_id *id)
 {
 	struct inode *inode;
-        struct intnl_stat stat;
         struct llu_inode_info *lli;
 
         OBD_ALLOC(lli, sizeof(*lli));
@@ -370,13 +369,15 @@ static struct inode *llu_new_inode(struct filesys *fs,
 
         memcpy(&lli->lli_id, id, sizeof(*id));
 
-#warning "fill @stat by desired attributes of new inode before using_sysio_i_new()"
-        memset(&stat, 0, sizeof(stat));
-        stat.st_ino = id_ino(id);
-        
         /* file identifier is needed by functions like _sysio_i_find() */
 	inode = _sysio_i_new(fs, &lli->lli_sysio_fid,
-                             &stat, 0, &llu_inode_ops, lli);
+#ifndef AUTOMOUNT_FILE_NAME
+	 	       	     id->li_stc.u.e3s.l3s_type & S_IFMT,
+#else
+			     id->li_stc.u.e3s.l3s_type, /* all of the bits! */
+#endif
+                             0, 0,
+			     &llu_inode_ops, lli);
 
 	if (!inode)
 		OBD_FREE(lli, sizeof(*lli));
@@ -445,10 +446,8 @@ static int llu_inode_revalidate(struct inode *inode)
                         valid |= OBD_MD_FLEASIZE;
                 }
                 ll_inode2id(&id, inode);
-
-                /* XXX: capa is NULL here, is it correct? */
-                rc = mdc_getattr(sbi->ll_md_exp, &id, valid, NULL, NULL,
-                                 0, ealen, NULL, &req);
+                rc = mdc_getattr(sbi->ll_md_exp, &id, valid, NULL, 0,
+                                 NULL, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %lu\n", rc, lli->lli_st_ino);
                         RETURN(-abs(rc));
@@ -490,9 +489,10 @@ static int llu_inode_revalidate(struct inode *inode)
         RETURN(llu_glimpse_size(inode));
 }
 
-static void copy_stat_buf_lli(struct llu_inode_info *lli,
-                              struct intnl_stat *b)
+static void copy_stat_buf(struct inode *ino, struct intnl_stat *b)
 {
+        struct llu_inode_info *lli = llu_i2info(ino);
+
         b->st_dev = lli->lli_st_dev;
         b->st_ino = lli->lli_st_ino;
         b->st_mode = lli->lli_st_mode;
@@ -506,12 +506,6 @@ static void copy_stat_buf_lli(struct llu_inode_info *lli,
         b->st_atime = lli->lli_st_atime;
         b->st_mtime = lli->lli_st_mtime;
         b->st_ctime = lli->lli_st_ctime;
-}
-
-static void copy_stat_buf(struct inode *ino, struct intnl_stat *b)
-{
-        struct llu_inode_info *lli = llu_i2info(ino);
-        copy_stat_buf_lli(lli, b);
 }
 
 static int llu_iop_getattr(struct pnode *pno,
@@ -696,7 +690,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 llu_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = mdc_setattr(sbi->ll_md_exp, &op_data,
-                                 attr, NULL, 0, NULL, 0, NULL, 0, &request);
+                                 attr, NULL, 0, NULL, 0, &request);
                 
                 if (rc) {
                         ptlrpc_req_finished(request);
@@ -883,10 +877,8 @@ static int llu_readlink_internal(struct inode *inode,
         }
 
         ll_inode2id(&id, inode);
-
-        /* XXX: capa is NULL here, is it correct? */
-        rc = mdc_getattr(sbi->ll_md_exp, &id, OBD_MD_LINKNAME, NULL, 0,
-                         0, symlen, NULL, request);
+        rc = mdc_getattr(sbi->ll_md_exp, &id,
+                         OBD_MD_LINKNAME, NULL, 0, NULL, symlen, request);
         if (rc) {
                 CERROR("inode %lu: rc = %d\n", lli->lli_st_ino, rc);
                 RETURN(rc);
@@ -1538,10 +1530,10 @@ llu_fsswop_mount(const char *source,
         CDEBUG(D_SUPER, "rootid "LPU64"\n", rootid.li_stc.u.e3s.l3s_ino);
         sbi->ll_rootino = rootid.li_stc.u.e3s.l3s_ino;
 
-        /* XXX: capa is NULL here, is it correct? */
+        /* fetch attr of root inode */
         err = mdc_getattr(sbi->ll_md_exp, &rootid,
-                          (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS), NULL, 0,
-                          0, 0, NULL, &request);
+                          OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, NULL, 0,
+                          NULL, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lov, err);

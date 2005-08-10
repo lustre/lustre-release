@@ -408,9 +408,8 @@ static void llu_truncate(struct inode *inode)
                oa.o_id, lli->lli_st_size);
 
         /* truncate == punch from new size to absolute end of file */
-        /* XXX: capa is NULL here, is it correct? */
         err = obd_punch(llu_i2dtexp(inode), &oa, lsm, lli->lli_st_size,
-                        OBD_OBJECT_EOF, NULL, NULL);
+                        OBD_OBJECT_EOF, NULL);
         if (err)
                 CERROR("obd_truncate fails (%d) ino %lu\n", err, lli->lli_st_ino);
         else

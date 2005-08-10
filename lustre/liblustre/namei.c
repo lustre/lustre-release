@@ -385,8 +385,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
-#warning "fix l_lock() using here!"
-//        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (lock->l_ast_data) {
                 inode = (struct inode *)lock->l_ast_data;
@@ -394,7 +393,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
         } else
                 inode = NULL;
 
-//        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
 }
 

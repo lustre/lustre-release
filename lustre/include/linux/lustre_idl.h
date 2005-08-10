@@ -1288,6 +1288,7 @@ typedef enum {
         GKS_GET_MAC      = 704,
 } gks_cmd_t;
 
+#ifdef __KERNEL__
 #define KEY_SIZE        16 
 #define MAC_SIZE        16 
 
@@ -1296,14 +1297,6 @@ struct crypto_key {
         __u8    ck_key[KEY_SIZE];
         __u32   ck_type;
 };
-
-#ifndef __KERNEL__
-struct posix_acl_entry {
-        short           e_tag;
-        unsigned short  e_perm;
-        unsigned int    e_id;
-};
-#endif
 
 struct key_perm {
         uid_t    kp_uid;       
@@ -1319,11 +1312,11 @@ struct key_context {
         __u32  kc_valid;
         struct key_perm kc_perm;
 }; 
-typedef int (*crypt_cb_t)(struct page *page, __u64 offset,
-                          __u64 count, int flags);
-
+typedef int (*crypt_cb_t)(struct page *page, __u64 offset, __u64 count, 
+                          int flags);
 extern void lustre_swab_key_context (struct key_context *kctxt);
 extern void lustre_swab_key_perms (struct key_perm *kperm);
+#endif /*for define __KERNEL*/
 
 extern void lustre_swab_lustre_id(struct lustre_id *id);
 extern void lustre_swab_lov_desc(struct lov_desc *desc);

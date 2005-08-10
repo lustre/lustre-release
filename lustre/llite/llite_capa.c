@@ -196,7 +196,7 @@ void ll_capa_stop_thread(void)
 }
 
 int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
-            	    struct obd_client_handle *och)
+                           struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
         struct ll_inode_info *lli = ll_i2info(inode);

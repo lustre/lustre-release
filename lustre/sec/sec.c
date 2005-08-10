@@ -1112,13 +1112,12 @@ int __init ptlrpc_sec_init(void)
         return 0;
 }
 
-#if defined __KERNEL__ && defined ENABLE_GSS
 static void __exit ptlrpc_sec_exit(void)
 {
         svcsec_null_exit();
         ptlrpcs_null_exit();
 }
-#endif
+
 
 EXPORT_SYMBOL(ptlrpcs_register);
 EXPORT_SYMBOL(ptlrpcs_unregister);

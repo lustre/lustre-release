@@ -35,8 +35,10 @@
 #include <linux/namei.h>
 #include <linux/lustre_compat25.h>
 #include <linux/lvfs_linux.h>
-#else
-#include <liblustre.h>
+#endif
+
+#ifdef LIBLUSTRE
+#include <lvfs_user_fs.h>
 #endif
 
 struct mds_grp_hash_entry;

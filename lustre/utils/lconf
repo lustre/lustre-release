@@ -2963,9 +2963,6 @@ class Mountpoint(Module):
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s,gkc=%s,mds_sec=%s,oss_sec=%s%s %s %s" % \
               (self.vosc.get_name(), self.vmdc.get_name(), gkc_name, self.mds_sec,
 	       self.oss_sec, self.clientoptions, config.config, self.path)
-	log("mount -t lustre_lite -o osc=%s,mdc=%s,gkc=%s,mds_sec=%s,oss_sec=%s%s %s %s" % \
-            (self.vosc.get_name(), self.vmdc.get_name(), gkc_name, self.mds_sec,
-	     self.oss_sec, self.clientoptions, config.config, self.path))
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:

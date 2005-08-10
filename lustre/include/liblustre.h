@@ -70,56 +70,6 @@ typedef unsigned short umode_t;
 #define smp_processor_id() 0
 #endif
 
-#ifndef smp_mb
-#define smp_mb() do {} while (0)
-#endif
-
-#ifndef might_sleep_if
-#define might_sleep_if(cond) do {} while (0)
-#endif
-
-#ifndef might_sleep
-#define might_sleep() do {} while (0)
-#endif
-
-#ifndef signal_pending
-#define signal_pending(proc) 0
-#endif
-
-#ifndef MAY_EXEC
-#define MAY_EXEC 1
-#endif
-
-#ifndef MAY_WRITE
-#define MAY_WRITE 2
-#endif
-
-#ifndef MAY_READ
-#define MAY_READ 4
-#endif
-
-#ifndef MAY_APPEND
-#define MAY_APPEND 8
-#endif
-
-#ifndef FMODE_READ
-#define FMODE_READ 1
-#endif
-
-#ifndef FMODE_WRITE
-#define FMODE_WRITE 2
-#endif
-
-#ifndef FMODE_EXEC
-#define FMODE_EXEC 4
-#endif
-
-#define LBUG()                                                          \
-        do {                                                            \
-                printf("!!!LBUG at %s:%d\n", __FILE__, __LINE__);       \
-                sleep(1000000);                                         \
-        } while (0)
-
 /* always adopt 2.5 definitions */
 #define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
 #define LINUX_VERSION_CODE (2*200+5*10+0)
@@ -172,7 +122,7 @@ static inline void *kmalloc(int size, int prot)
 
 typedef struct {
         void *cwd;
-} mm_segment_t;
+}mm_segment_t;
 
 typedef int (read_proc_t)(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
@@ -229,16 +179,6 @@ static __inline__ int test_bit(int nr, long * addr)
 	addr += nr >> 5;
 	mask = 1 << (nr & 0x1f);
 	return ((mask & *addr) != 0);
-}
-
-static __inline__ int test_and_set_bit(int nr, long * addr)
-{
-	int	res;
-
-        res = test_bit(nr, addr);
-        set_bit(nr, addr);
-        
-        return res;
 }
 
 static __inline__ int ext2_set_bit(int nr, void *addr)
@@ -592,78 +532,6 @@ struct semaphore {
         int count;
 };
 
-struct crypto_tfm;
-
-struct scatterlist {
-    struct page		*page;
-    unsigned int	offset;
-    __u32		dma_address;
-    unsigned int	length;
-};
-
-struct cipher_tfm {
-        void *cit_iv;
-        unsigned int cit_ivsize;
-        __u32 cit_mode;
-        int (*cit_setkey)(struct crypto_tfm *tfm,
-                          const __u8 *key, unsigned int keylen);
-        int (*cit_encrypt)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes);
-        int (*cit_encrypt_iv)(struct crypto_tfm *tfm,
-                              struct scatterlist *dst,
-                              struct scatterlist *src,
-                              unsigned int nbytes, __u8 *iv);
-        int (*cit_decrypt)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes);
-        int (*cit_decrypt_iv)(struct crypto_tfm *tfm,
-                           struct scatterlist *dst,
-                           struct scatterlist *src,
-                           unsigned int nbytes, __u8 *iv);
-        void (*cit_xor_block)(__u8 *dst, const __u8 *src);
-};
-
-struct digest_tfm {
-        void (*dit_init)(struct crypto_tfm *tfm);
-        void (*dit_update)(struct crypto_tfm *tfm,
-                           struct scatterlist *sg, unsigned int nsg);
-        void (*dit_update_kernel)(struct crypto_tfm *tfm,
-                                  const void *data, size_t count);
-        void (*dit_final)(struct crypto_tfm *tfm, __u8 *out);
-        void (*dit_digest)(struct crypto_tfm *tfm, struct scatterlist *sg,
-                           unsigned int nsg, __u8 *out);
-        int (*dit_setkey)(struct crypto_tfm *tfm,
-                          const __u8 *key, unsigned int keylen);
-#ifdef CONFIG_CRYPTO_HMAC
-        void *dit_hmac_block;
-#endif
-};
-
-struct compress_tfm {
-        int (*cot_compress)(struct crypto_tfm *tfm,
-                            const __u8 *src, unsigned int slen,
-                            __u8 *dst, unsigned int *dlen);
-        int (*cot_decompress)(struct crypto_tfm *tfm,
-                              const __u8 *src, unsigned int slen,
-                              __u8 *dst, unsigned int *dlen);
-};
-
-struct crypto_tfm {
-
-        __u32 crt_flags;
-
-        union {
-                struct cipher_tfm cipher;
-                struct digest_tfm digest;
-                struct compress_tfm compress;
-        } crt_u;
-
-        struct crypto_alg *__crt_alg;
-};
-
 /* use the macro's argument to avoid unused warnings */
 #define down(a) do { (void)a; } while (0)
 #define up(a) do { (void)a; } while (0)
@@ -673,25 +541,16 @@ struct crypto_tfm {
 #define up_write(a) do { (void)a; } while (0)
 #define sema_init(a,b) do { (void)a; } while (0)
 #define init_rwsem(a) do { (void)a; } while (0)
-
 #define DECLARE_MUTEX(name)     \
         struct semaphore name = { 1 }
-
 static inline void init_MUTEX (struct semaphore *sem)
 {
         sema_init(sem, 1);
 }
 
-struct rpc_pipe_msg {
-        struct list_head list;
-        void *data;
-        size_t len;
-        size_t copied;
-        int error;
-};
 
 typedef struct  {
-        struct list_head task_list;
+        struct list_head sleepers;
 } wait_queue_head_t;
 
 typedef struct  {
@@ -721,7 +580,6 @@ struct task_struct {
         int ngroups;
         gid_t *groups;
         __u32 cap_effective;
-        __u32 pag;
 
         struct fs_struct __fs;
 };
@@ -739,15 +597,15 @@ static inline int capable(int cap)
 #define set_current_state(foo) do { current->state = foo; } while (0)
 
 #define init_waitqueue_entry(q,p) do { (q)->process = p; } while (0)
-#define add_wait_queue(q,p) do {  list_add(&(q)->task_list, &(p)->sleeping); } while (0)
+#define add_wait_queue(q,p) do {  list_add(&(q)->sleepers, &(p)->sleeping); } while (0)
 #define del_wait_queue(p) do { list_del(&(p)->sleeping); } while (0)
 #define remove_wait_queue(q,p) do { list_del(&(p)->sleeping); } while (0)
 
 #define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
         wait_queue_head_t HEAD = {                              \
-                .task_list = LIST_HEAD_INIT(HEAD.task_list)       \
+                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
         }
-#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->task_list)
+#define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
@@ -844,7 +702,6 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
-#define atomic_dec_and_lock(a, l) atomic_dec_and_test(a)
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
@@ -891,6 +748,14 @@ static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
 static inline void portals_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
+
+#define LBUG()                                                          \
+        do {                                                            \
+                printf("!!!LBUG at %s:%d\n", __FILE__, __LINE__);       \
+                sleep(1000000);                                         \
+        } while (0)
+
+
 
 /* completion */
 struct completion {
