@@ -70,7 +70,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         pg.pg = page;
         pg.off = ((obd_off)page->index) << PAGE_SHIFT;
 
-        if (cmd == OBD_BRW_WRITE && (pg.off + PAGE_SIZE > inode->i_size))
+        if ((cmd & OBD_BRW_WRITE) && (pg.off + PAGE_SIZE > inode->i_size))
                 pg.count = inode->i_size % PAGE_SIZE;
         else
                 pg.count = PAGE_SIZE;
@@ -87,7 +87,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 
         pg.flag = flags;
 
-        if (cmd == OBD_BRW_WRITE)
+        if (cmd & OBD_BRW_WRITE)
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_WRITE, pg.count);
         else
@@ -266,7 +266,7 @@ static int ll_ap_make_ready(void *data, int cmd)
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
 
-        LASSERT(cmd != OBD_BRW_READ);
+        LASSERT(!(cmd & OBD_BRW_READ));
 
         /* we're trying to write, but the page is locked.. come back later */
         if (TryLockPage(page))
@@ -343,7 +343,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         oa->o_id = lsm->lsm_object_id;
         oa->o_valid = OBD_MD_FLID;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
-        if (cmd == OBD_BRW_WRITE) {
+        if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
                 mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
@@ -580,14 +580,14 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         unsigned long size_index = inode->i_size >> PAGE_SHIFT;
         struct obd_io_group *oig;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int rc;
+        int rc, noquot = capable(CAP_SYS_RESOURCE) ? OBD_BRW_NOQUOTA : 0;
         ENTRY;
 
         /* _make_ready only sees llap once we've unlocked the page */
         llap->llap_write_queued = 1;
         rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
-                                llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 0,
-                                async_flags);
+                                llap->llap_cookie, OBD_BRW_WRITE | noquot,
+                                0, 0, 0, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
                 //llap_write_pending(inode, llap);
@@ -632,8 +632,8 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         }
 
         rc = obd_queue_group_io(exp, ll_i2info(inode)->lli_smd, NULL, oig,
-                                llap->llap_cookie, OBD_BRW_WRITE, 0, to, 0,
-                                ASYNC_READY | ASYNC_URGENT |
+                                llap->llap_cookie, OBD_BRW_WRITE | noquot,
+                                0, to, 0, ASYNC_READY | ASYNC_URGENT |
                                 ASYNC_COUNT_STABLE | ASYNC_GROUP_SYNC);
         if (rc)
                 GOTO(free_oig, rc);
@@ -762,11 +762,11 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
 
-        if (cmd == OBD_BRW_READ && llap->llap_defer_uptodate)
+        if (cmd & OBD_BRW_READ && llap->llap_defer_uptodate)
                 ll_ra_count_put(ll_i2sbi(page->mapping->host), 1);
 
         if (rc == 0)  {
-                if (cmd == OBD_BRW_READ) {
+                if (cmd & OBD_BRW_READ) {
                         if (!llap->llap_defer_uptodate)
                                 SetPageUptodate(page);
                 } else {
@@ -774,7 +774,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 }
                 ClearPageError(page);
         } else {
-                if (cmd == OBD_BRW_READ) {
+                if (cmd & OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
                 } else {
                         ll_redirty_page(page);
@@ -784,7 +784,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         unlock_page(page);
 
-        if (0 && cmd == OBD_BRW_WRITE) {
+        if (0 && cmd & OBD_BRW_WRITE) {
                 llap_write_complete(page->mapping->host, llap);
                 ll_try_done_writing(page->mapping->host);
         }
@@ -891,8 +891,8 @@ static int ll_issue_page_read(struct obd_export *exp,
         llap->llap_ra_used = 0;
         rc = obd_queue_group_io(exp, ll_i2info(page->mapping->host)->lli_smd,
                                 NULL, oig, llap->llap_cookie, OBD_BRW_READ, 0,
-                                PAGE_SIZE, 0, ASYNC_COUNT_STABLE | ASYNC_READY
-                                              | ASYNC_URGENT);
+                                PAGE_SIZE, 0, ASYNC_COUNT_STABLE | ASYNC_READY |
+                                              ASYNC_URGENT);
         if (rc) {
                 LL_CDEBUG_PAGE(D_ERROR, page, "read queue failed: rc %d\n", rc);
                 page_cache_release(page);

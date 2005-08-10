@@ -146,29 +146,7 @@ struct it_cb_data {
         obd_id hash;
 };
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        struct intnl_stat *st = llu_i2stat(i1);
-
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(st->st_gid))
-                ctxt->gid1 = st->st_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                st = llu_i2stat(i2);
-                if (in_group_p(st->st_gid))
-                        ctxt->gid2 = st->st_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else 
-                ctxt->gid2 = 0;
-}
-
+void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
                                 struct inode *parent, struct pnode *pnode, 

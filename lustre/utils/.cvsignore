@@ -16,6 +16,7 @@ lload
 wirecheck
 lfs
 llmount
+l_getgroups
 mount.lustre
 wiretest
 .*.cmd

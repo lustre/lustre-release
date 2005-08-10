@@ -26,6 +26,13 @@ Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
              to complete instead of consuming its dirty limit.  With change
              we get improved performance when max_dirty_mb is small.
 
+Severity   : enhancement
+Bugzilla   : 3389, 6253
+Description: Add support for supplementary groups on the MDS.
+Details    : The MDS has an upcall /proc/fs/lustre/mds/{mds}/group_upcall
+             (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
+             lookups for user supplementary groups into a cache.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
@@ -266,6 +273,11 @@ Details    : The interpretation of the default stripe count (0, to lfs
              OST, rather than all available.  For general usage we have
              found a stripe count of 1 or 2 works best.
 
+Severity   : enhancement
+Description: Add support for compiling against Cray portals.
+Details    : Conditional compiling for some areas that are different
+             on Cray Portals.
+
 Severity   : major
 Frequency  : occasional
 Bugzilla   : 6409, 6834
@@ -312,7 +324,7 @@ Severity   : minor
 Bugzilla   : 6147
 Description: Changes the "SCSI I/O Stats" kernel patch to default to "enabled"
 
-------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2

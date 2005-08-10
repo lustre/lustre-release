@@ -835,7 +835,8 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -957,7 +958,8 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                                         pno->p_base->pb_name.len,
                                         0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
-                                 current->fsuid, current->fsgid, dev, &request);
+                                 current->fsuid, current->fsgid,
+                                 current->cap_effective, dev, &request);
                 ptlrpc_req_finished(request);
                 break;
         case S_IFDIR:
@@ -1181,7 +1183,8 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
 
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0, mode,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }

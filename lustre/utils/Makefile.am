@@ -14,7 +14,8 @@ bin_scripts = lfind lstripe
 
 if UTILS
 rootsbin_SCRIPTS = mount.lustre
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount
+sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount  \
+                l_getgroups
 bin_PROGRAMS = lfs
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)

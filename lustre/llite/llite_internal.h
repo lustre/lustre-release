@@ -224,31 +224,13 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 #endif
 }
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(i1->i_gid))
-                ctxt->gid1 = i1->i_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                if (in_group_p(i2->i_gid))
-                        ctxt->gid2 = i2->i_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else
-                ctxt->gid2 = 0;
-}
-
 struct it_cb_data {
         struct inode *icbd_parent;
         struct dentry **icbd_childp;
         obd_id hash;
 };
+
+void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 #define LLAP_MAGIC 98764321
 

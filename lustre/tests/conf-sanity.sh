@@ -120,6 +120,11 @@ check_mount2() {
 
 build_test_filter
 
+if [ "$ONLY" == "setup" ]; then
+	setup
+	exit
+fi
+
 if [ "$ONLY" == "cleanup" ]; then
 	cleanup
 	exit
@@ -217,8 +222,6 @@ run_test 5 "force cleanup mds, then cleanup"
 
 test_5b() {
 	start_ost
-	start_mds
-	stop_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null

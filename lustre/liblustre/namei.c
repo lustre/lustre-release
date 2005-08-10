@@ -215,9 +215,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
-        struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -253,8 +252,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         }
 
         exp = llu_i2mdcexp(pb->pb_ino);
-        ll_inode2fid(&pfid, pnode->p_parent->p_base->pb_ino);
-        ll_inode2fid(&cfid, pb->pb_ino);
         icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
         icbd.icbd_child = pnode;
 
@@ -263,12 +260,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 it->it_op_release = ll_intent_release;
         }
 
-        ll_i2uctxt(&ctxt, pnode->p_parent->p_base->pb_ino, pb->pb_ino);
+        llu_prepare_mdc_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
+                                pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
-        rc = mdc_intent_lock(exp, &ctxt, &pfid,
-                             pb->pb_name.name, pb->pb_name.len,
-                             NULL, 0, &cfid, it, flags, &req,
-                             llu_mdc_blocking_ast);
+        rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, flags,
+                             &req, llu_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -411,8 +407,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
-        struct ll_fid pfid;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -429,18 +424,16 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
 
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
-        icbd.icbd_child = pnode;
-        ll_inode2fid(&pfid, parent);
-        ll_i2uctxt(&ctxt, parent, NULL);
 
-        rc = mdc_intent_lock(llu_i2mdcexp(parent), &ctxt, &pfid,
-                             pnode->p_base->pb_name.name,
-                             pnode->p_base->pb_name.len,
-                             NULL, 0, NULL, it, flags, &req,
-                             llu_mdc_blocking_ast);
+        llu_prepare_mdc_op_data(&op_data, parent, NULL,
+                                pnode->p_base->pb_name.name,
+                                pnode->p_base->pb_name.len, flags);
+
+        rc = mdc_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
+                             flags, &req, llu_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, rc);
-        
+
         rc = lookup_it_finish(req, 1, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);

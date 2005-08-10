@@ -332,7 +332,7 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         oa->o_id = lsm->lsm_object_id;
         oa->o_valid = OBD_MD_FLID;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
-        if (cmd == OBD_BRW_WRITE)
+        if (cmd & OBD_BRW_WRITE)
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
         obdo_from_inode(oa, inode, valid_flags);
@@ -351,7 +351,7 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         page = llap->llap_page;
 
         if (rc != 0) {
-                if (cmd == OBD_BRW_WRITE)
+                if (cmd & OBD_BRW_WRITE)
                         CERROR("writeback error on page %p index %ld: %d\n", 
                                page, page->index, rc);
         }

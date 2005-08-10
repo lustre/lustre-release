@@ -122,6 +122,12 @@ This program configures a node following directives in the <XML-config-file>.
 <arg> The group of devices to cleanup/configure.
 \layout Description
 
+--group_upcall\SpecialChar ~
+<arg> Pathname to the MDS upcall to resolve secondary group membership.
+ Defaults to NONE, meaning that the MDS will use whatever group the client
+ supplies, but this is limited to a single supplementary group.
+\layout Description
+
 -h,--help Print help.
 \layout Description
 

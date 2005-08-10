@@ -30,12 +30,12 @@
 
 int read_proc_entry(char *proc_path, char *buf, int len)
 {
-        int rcnt = -1, fd;
+        int rcnt = -2, fd;
 
         if ((fd = open(proc_path, O_RDONLY)) == -1) {
                 fprintf(stderr, "open('%s') failed: %s\n",
                         proc_path, strerror(errno));
-                rcnt = -1;
+                rcnt = -3;
         } else if ((rcnt = read(fd, buf, len)) <= 0) {
                 fprintf(stderr, "read('%s') failed: %s\n",
                         proc_path, strerror(errno));
@@ -59,56 +59,65 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         char buf[128];
         char lov_path[PATH_MAX];
         char tmp_path[PATH_MAX];
-        int i;
+        int i, rc;
 
-        if (read_proc_entry("/proc/fs/lustre/llite/fs0/lov/common_name",
-                            buf, sizeof(buf)) <= 0)
-                return -1;
+        rc = read_proc_entry("/proc/fs/lustre/llite/fs0/lov/common_name",
+                             buf, sizeof(buf)) <= 0;
+        if (rc < 0)
+                return -rc;
 
         snprintf(lov_path, sizeof(lov_path) - 1, "/proc/fs/lustre/lov/%s", buf);
 
         stripe_count = (int)lum_dir->lmm_stripe_count;
-        if (stripe_count == 0) {
+        if (stripe_count == 0 || stripe_count == (__u16)-1) {
                 snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount", lov_path);
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
-                        return -1;
+                        return 4;
 
                 stripe_count = atoi(buf);
+        }
+
+        snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
+        if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
+                return 6;
+
+        ost_count = atoi(buf);
+        stripe_count = stripe_count ? stripe_count : ost_count;
+
+        if (lum_file1->lmm_stripe_count != stripe_count) {
+                fprintf(stderr, "stripe count %d != %d\n",
+                        lum_file1->lmm_stripe_count, stripe_count);
+                return 7;
         }
 
         stripe_size = (int)lum_dir->lmm_stripe_size;
         if (stripe_size == 0) {
                 snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripesize", lov_path);
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
-                        return -1;
+                        return 5;
 
                 stripe_size = atoi(buf);
         }
 
-        snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
-        if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
-                return -1;
-
-        ost_count = atoi(buf);
-        stripe_count = stripe_count ? stripe_count : ost_count;
-
-        if ((lum_file1->lmm_stripe_count != stripe_count) ||
-            (lum_file1->lmm_stripe_size != stripe_size))
-                return -1;
+        if (lum_file1->lmm_stripe_size != stripe_size) {
+                fprintf(stderr, "stripe size %d != %d\n",
+                        lum_file1->lmm_stripe_size, stripe_size);
+                return 8;
+        }
 
         stripe_offset = (short int)lum_dir->lmm_stripe_offset;
         if (stripe_offset != -1) {
                 for (i = 0; i < stripe_count; i++)
                         if (lum_file1->lmm_objects[i].l_ost_idx !=
                             (stripe_offset + i) % ost_count)
-                                return -1;
+                                return 9;
         } else if (lum_file2 != NULL) {
                 int next, idx;
                 next = (lum_file1->lmm_objects[stripe_count-1].l_ost_idx + 1)
                        % ost_count;
                 idx = lum_file2->lmm_objects[0].l_ost_idx;
                 if (idx != next)
-                        return -1;
+                        return 10;
         }
 
         return 0;
@@ -129,7 +138,7 @@ int main(int argc, char **argv)
         }
 
         dir = opendir(argv[1]);
-        if (dir  == NULL) {
+        if (dir == NULL) {
                 fprintf(stderr, "%s opendir failed\n", argv[1]);
                 return errno;
         }

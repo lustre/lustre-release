@@ -42,6 +42,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_ucache.h>
 
 #include "mds_internal.h"
 
@@ -218,7 +219,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
-                if (rec->ur_fsuid != inode->i_uid &&
+                if (rec->ur_uc.luc_fsuid != inode->i_uid &&
                     (error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
         }
@@ -727,10 +728,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
         }
 
-        if (dir->i_mode & S_ISGID) {
-                if (S_ISDIR(rec->ur_mode))
-                        rec->ur_mode |= S_ISGID;
-        }
+        if (dir->i_mode & S_ISGID && S_ISDIR(rec->ur_mode))
+                rec->ur_mode |= S_ISGID;
 
         dchild->d_fsdata = (void *)&dp;
         dp.p_inum = (unsigned long)rec->ur_fid2->id;
@@ -798,11 +797,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
-                iattr.ia_uid = rec->ur_fsuid;
+                iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
                 if (dir->i_mode & S_ISGID)
                         iattr.ia_gid = dir->i_gid;
                 else
-                        iattr.ia_gid = rec->ur_fsgid;
+                        iattr.ia_gid = current->fsgid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
 
@@ -2076,16 +2075,39 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
+#if CRAY_PORTALS
+        rec->ur_uc.luc_fsuid = req->rq_uid;
+#endif
+
+        /* get group info of this user */
+        rec->ur_uc.luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
+                                                    rec->ur_uc.luc_fsuid,
+                                                    rec->ur_uc.luc_fsgid, 2,
+                                                    &rec->ur_uc.luc_suppgid1);
+
+        if (IS_ERR(rec->ur_uc.luc_uce)) {
+                rc = PTR_ERR(rec->ur_uc.luc_uce);
+                rec->ur_uc.luc_uce = NULL;
+                RETURN(rc);
+        }
+
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
+
+#if CRAY_PORTALS
+        if (rec->ur_uc.luc_uce)
+                rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
+#endif
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
+        upcall_cache_put_entry(mds->mds_group_hash, rec->ur_uc.luc_uce);
         RETURN(rc);
 }

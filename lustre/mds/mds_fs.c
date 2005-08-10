@@ -597,14 +597,13 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         char fidname[LL_FID_NAMELEN];
         void *handle;
-        struct lvfs_ucred ucred;
+        struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
         ENTRY;
 
         /* the owner of object file should always be root */
-        memset(&ucred, 0, sizeof(ucred));
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
-        
+
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
@@ -680,14 +679,13 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
-        struct lvfs_ucred ucred;
+        struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
         ENTRY;
 
-        memset(&ucred, 0, sizeof(ucred));
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
@@ -715,7 +713,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-        
+
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",

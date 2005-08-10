@@ -195,6 +195,45 @@ int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                                       opaque));
 }
 
+/* Pack the required supplementary groups into the supplied groups array.
+ * If we don't need to use the groups from the target inode(s) then we
+ * instead pack one or more groups from the user's supplementary group
+ * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
+void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
+{
+        int i;
+
+        LASSERT(i1 != NULL);
+        LASSERT(suppgids != NULL);
+
+        if (in_group_p(i1->i_gid))
+                suppgids[0] = i1->i_gid;
+        else
+                suppgids[0] = -1;
+
+        if (i2) {
+                if (in_group_p(i2->i_gid))
+                        suppgids[1] = i2->i_gid;
+                else
+                        suppgids[1] = -1;
+        } else {
+                suppgids[1] = -1;
+        }
+
+        for (i = 0; i < current_ngroups; i++) {
+                if (suppgids[0] == -1) {
+                        if (current_groups[i] != suppgids[1])
+                                suppgids[0] = current_groups[i];
+                        continue;
+                }
+                if (suppgids[1] == -1) {
+                        if (current_groups[i] != suppgids[0])
+                                suppgids[1] = current_groups[i];
+                        continue;
+                }
+                break;
+        }
+}
 
 void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
                             struct inode *i2, const char *name, int namelen,
@@ -202,11 +241,13 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *data, struct inode *i1,
 {
         LASSERT(i1);
 
-        ll_i2uctxt(&data->ctxt, i1, i2);
+        ll_i2gids(data->suppgids, i1, i2);
         ll_inode2fid(&data->fid1, i1);
 
         if (i2)
                 ll_inode2fid(&data->fid2, i2);
+        else
+                memset(&data->fid2, 0, sizeof(data->fid2));
 
         data->name = name;
         data->namelen = namelen;
@@ -348,8 +389,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                    struct lookup_intent *it, int lookup_flags)
 {
         struct dentry *save = dentry, *retval;
-        struct ll_fid pfid;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -370,14 +410,15 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
-        ll_inode2fid(&pfid, parent);
-        ll_i2uctxt(&ctxt, parent, NULL);
+
+        ll_prepare_mdc_op_data(&op_data, parent, NULL, dentry->d_name.name,
+                               dentry->d_name.len, lookup_flags);
 
         it->it_create_mode &= ~current->fs->umask;
 
-        rc = mdc_intent_lock(ll_i2mdcexp(parent), &ctxt, &pfid,
-                             dentry->d_name.name, dentry->d_name.len, NULL, 0,
-                             NULL, it, lookup_flags, &req, ll_mdc_blocking_ast);
+        rc = mdc_intent_lock(ll_i2mdcexp(parent), &op_data, NULL, 0, it,
+                             lookup_flags, &req, ll_mdc_blocking_ast);
+
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
@@ -541,7 +582,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
                                        nd->last.len, 0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
-                                 rdev, &request);
+                                 current->cap_effective, rdev, &request);
                 if (err == 0)
                         ll_update_times(request, 0, dir);
                 ptlrpc_req_finished(request);
@@ -583,7 +624,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                                        dchild->d_name.len, 0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                  current->fsuid, current->fsgid,
-                                 rdev, &request);
+                                 current->cap_effective, rdev, &request);
                 if (err)
                         GOTO(out_err, err);
 
@@ -624,7 +665,8 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
                                nd->last.len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         if (err == 0)
                 ll_update_times(request, 0, dir);
 
@@ -674,7 +716,8 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         ll_prepare_mdc_op_data(&op_data, dir, NULL, nd->last.name,
                                nd->last.len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         if (err == 0)
                 ll_update_times(request, 0, dir);
 

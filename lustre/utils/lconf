@@ -1791,6 +1791,9 @@ class MDSDEV(Module):
 
             lctl.newdev("mds", self.name, self.uuid,
                         setup ="%s %s %s %s" %(blkdev, self.fstype, self.name, mountfsoptions))
+            self.group_upcall = self.db.get_val('group_upcall','')
+            sys_set_group_upcall(self.name, self.group_upcall)
+
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +
@@ -3079,7 +3082,7 @@ def validate_upcall(upcall):
         print "WARNING invalid upcall script specified: %s" % upcall
 
 def sys_set_lustre_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.lustre_upcall:
         upcall = config.lustre_upcall
     elif config.upcall:
@@ -3089,7 +3092,7 @@ def sys_set_lustre_upcall(upcall):
         lctl.set_lustre_upcall(upcall)
 
 def sys_set_portals_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.portals_upcall:
         upcall = config.portals_upcall
     elif config.upcall:
@@ -3097,6 +3100,20 @@ def sys_set_portals_upcall(upcall):
     if upcall:
         validate_upcall(upcall)
         sysctl('portals/upcall', upcall)
+
+def sys_set_group_upcall(mds, upcall):
+    if config.noexec:
+        return
+    # the command line overrides the value in the MDS config
+    if config.group_upcall:
+        upcall = config.group_upcall
+    if upcall:
+        validate_upcall(upcall)
+        debug("setting MDS", mds, "upcall to:", upcall)
+        path = "/proc/fs/lustre/mds/" + mds + "/group_upcall"
+        fp = open(path, 'w')
+        fp.write(upcall)
+        fp.close()
 
 def sys_set_timeout(timeout):
     # the command overrides the value in the node config
@@ -3266,6 +3283,7 @@ lconf_options = [
     ('upcall',  "Set both portals and lustre upcall script", PARAM),
     ('lustre_upcall', "Set lustre upcall script", PARAM),
     ('portals_upcall', "Set portals upcall script", PARAM),
+    ('group_upcall', "Set supplementary group upcall program", PARAM),
     ('lctl_dump', "Save lctl ioctls to the dumpfile argument", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Set the portals debug subsystem",  PARAM),

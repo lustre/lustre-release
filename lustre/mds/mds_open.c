@@ -963,11 +963,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
-                iattr.ia_uid = rec->ur_fsuid;
+                iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
                 if (dparent->d_inode->i_mode & S_ISGID)
                         iattr.ia_gid = dparent->d_inode->i_gid;
                 else
-                        iattr.ia_gid = rec->ur_fsgid;
+                        iattr.ia_gid = current->fsgid;
 
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;

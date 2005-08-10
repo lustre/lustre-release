@@ -270,6 +270,7 @@ check_niobuf_remote(void)
         CHECK_VALUE(OBD_BRW_WRITE);
         CHECK_VALUE(OBD_BRW_SYNC);
         CHECK_VALUE(OBD_BRW_FROM_GRANT);
+        CHECK_VALUE(OBD_BRW_NOQUOTA);
 }
 
 void

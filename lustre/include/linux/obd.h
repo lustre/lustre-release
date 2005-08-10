@@ -366,6 +366,7 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
+        struct upcall_cache             *mds_group_hash;
         struct lustre_quota_info         mds_quota_info;
         struct lustre_quota_ctxt         mds_quota_ctxt;
         atomic_t                         mds_quotachecking;

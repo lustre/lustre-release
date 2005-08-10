@@ -235,8 +235,8 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 CERROR("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
-        if (obd_ioctl_packlen(data) != data->ioc_len) {
-                CERROR("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+        if (obd_ioctl_packlen(data) > data->ioc_len) {
+                CERROR("OBD ioctl: packlen exceeds ioc_len (%d > %d)\n",
                        obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }

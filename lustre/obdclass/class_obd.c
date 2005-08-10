@@ -692,6 +692,9 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
+#else
+        CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
+               BUILD_VERSION", info@clusterfs.com\n");
 #endif
 
         err = obd_init_checks();

@@ -25,11 +25,15 @@
 #define __LVFS_H__
 
 #include <libcfs/kp30.h>
+#include <linux/lustre_ucache.h>
 
 #define LL_FID_NAMELEN (16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
+#include <linux/lustre_compat25.h>
 #include <linux/lvfs_linux.h>
+#else
+struct group_info { /* unused */ };
 #endif
 
 #ifdef LIBLUSTRE
@@ -37,7 +41,9 @@
 #endif
 
 /* simple.c */
+
 struct lvfs_ucred {
+        struct upcall_cache_entry *luc_uce;
         __u32 luc_fsuid;
         __u32 luc_fsgid;
         __u32 luc_cap;
@@ -53,14 +59,19 @@ struct lvfs_callback_ops {
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
 #define OBD_CTXT_DEBUG          /* development-only debugging */
 struct lvfs_run_ctxt {
-        struct vfsmount *pwdmnt;
-        struct dentry   *pwd;
-        mm_segment_t     fs;
-        struct lvfs_ucred luc;
-        int              ngroups;
+        struct vfsmount         *pwdmnt;
+        struct dentry           *pwd;
+        mm_segment_t             fs;
+        struct lvfs_ucred        luc;
+        int                      ngroups;
         struct lvfs_callback_ops cb_ops;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+        struct group_info       *group_info;
+#else
+        struct group_info        group_info;
+#endif
 #ifdef OBD_CTXT_DEBUG
-        __u32            magic;
+        __u32                    magic;
 #endif
 };
 

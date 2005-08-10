@@ -76,7 +76,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
                 return str;
         }
 
-        switch(nal){
+        switch(NALID_FROM_IFACE(nal)){
 #if !CRAY_PORTALS
         case TCPNAL:
                 /* userspace NAL */
@@ -90,6 +90,11 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case GMNAL:
                 snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
+                break;
+#else
+        case PTL_IFACE_SS:
+        case PTL_IFACE_SS_ACCEL:
+                snprintf(str, PTL_NALFMT_SIZE, "%u", (__u32)nid);
                 break;
 #endif
         default:
@@ -131,7 +136,7 @@ static int get_ipv4_addr()
         if (hptr == NULL ||
             hptr->h_addrtype != AF_INET ||
             *hptr->h_addr_list == NULL) {
-                printf("LibLustre: Warning: fail to get local IPv4 address\n");
+                CWARN("Warning: fail to get local IPv4 address\n");
                 return 0;
         }
 
@@ -197,8 +202,8 @@ static void init_capability(int *res)
 
         syscap = cap_get_proc();
         if (!syscap) {
-                printf("Liblustre: Warning: failed to get system capability, "
-                       "set to minimal\n");
+                CWARN("Warning: failed to get system capability, "
+                      "set to minimal\n");
                 return;
         }
 

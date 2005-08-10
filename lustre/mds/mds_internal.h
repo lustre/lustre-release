@@ -125,6 +125,9 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 /* mds/mds_lib.c */
 int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
+int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
+                   int offset);
+void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
 
 /* mds/mds_unlink_open.c */
 int mds_cleanup_orphans(struct obd_device *obd);
