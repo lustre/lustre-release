@@ -21,6 +21,11 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
+
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+
 #ifdef __KERNEL__
 # include <linux/config.h>
 # include <linux/module.h>
@@ -88,6 +93,7 @@ int ptlrpc_init_import(struct obd_import *imp)
 
         return 0;
 }
+EXPORT_SYMBOL(ptlrpc_init_import);
 
 #define UUID_STR "_UUID"
 static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
@@ -377,6 +383,7 @@ out:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpc_connect_import);
 
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {

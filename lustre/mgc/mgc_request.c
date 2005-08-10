@@ -46,8 +46,8 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_disk.h>
-#include <linux/lustre_net.h>
 //#include <linux/lprocfs_status.h>
+
 #include "mgc_internal.h"
 
           
@@ -560,10 +560,7 @@ struct obd_ops mgc_obd_ops = {
 
 int __init mgc_init(void)
 {
-        struct lprocfs_static_vars lvars;
-        lprocfs_init_vars(mgc, &lvars);
-        return class_register_type(&mgc_obd_ops, lvars.module_vars,
-                                   LUSTRE_MGC_NAME);
+        return class_register_type(&mgc_obd_ops, NULL, LUSTRE_MGC_NAME);
 }
 
 #ifdef __KERNEL__
