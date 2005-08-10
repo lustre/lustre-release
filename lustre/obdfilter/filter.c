@@ -1253,7 +1253,7 @@ static int filter_iobuf_pool_init(struct filter_obd *filter, int count)
 {
         void **pool;
         int i;
-        int result;
+        int result = 0;
 
         ENTRY;
 

@@ -26,7 +26,7 @@ Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
              to complete instead of consuming its dirty limit.  With change
              we get improved performance when max_dirty_mb is small.
 
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
 
@@ -98,6 +98,24 @@ Description: Unusual file access patterns on the MDS may result in inode
 Details    : Bad interaction between the ea-in-inode patch and the "no-read"
              code in the 2.6 kernel caused the inode and/or EA data not to
              be read from disk, causing single-file corruption.
+
+Severity   : critical
+Bugzilla   : 6998
+Frequency  : rare, only 2.6 filesystems using extents
+Description: Heavy concurrent write and delete load may cause data corruption.
+Details    : It was possible under high-load situations to have an extent
+             metadata block in the block device cache from a just-unlinked
+             file overwrite a newly-allocated data block.  We now unmap any
+             metadata buffers that alias just-allocated data blocks.
+
+Severity   : minor
+Bugzilla   : 7241
+Frequency  : filesystems with default stripe_count larger than 77 
+Description: lconf+mke2fs fail when formatting filesystem with > 77 stripes
+Details    : lconf specifies an inode size of 4096 bytes when the default
+             stripe_count is larger than 77.  This conflicts with the default
+             inode density of 1 per 4096 bytes.  Allocate smaller inodes in
+             this case to avoid pinning too much memory for large EAs.
 
 ------------------------------------------------------------------------------
 

@@ -1724,7 +1724,7 @@ class MDSDEV(Module):
             else:
                 stripe_count = 1
             if stripe_count > 77:
-                self.inode_size = 4096
+                self.inode_size = 512
             elif stripe_count > 34:
                 self.inode_size = 2048
             elif stripe_count > 13:
@@ -2933,7 +2933,7 @@ def doClumanager(lustreDB, hosts):
             if not node_db:
                 panic("No node entry for " + node_uuid + " was found.")
 
-            new_services += add_clumanager_node(node_db, nodes, services)
+            new_services = new_services + append(add_clumanager_node(node_db, nodes, services))
 
     nodenames = []
     for node in nodes.keys():
@@ -2956,7 +2956,7 @@ def doClumanager(lustreDB, hosts):
     i = 0
     for node in nodenames:
         print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, node)
-        i += 1
+        i = i + 1
 
     print "  </members>\n  <failoverdomains>"
 
@@ -2967,7 +2967,7 @@ def doClumanager(lustreDB, hosts):
     for service in servicekeys:
         svcdb = lustreDB.lookup(service)
         print "    <failoverdomain id=\"%d\" name=\"%s\" ordered=\"yes\" restricted=\"yes\">" % (i, svcdb.getName())
-        i += 1
+        i = i + 1
 
         j = 0
         active_uuid = get_active_target(svcdb)
@@ -2980,7 +2980,7 @@ def doClumanager(lustreDB, hosts):
             svc_nodedb = lustreDB.lookup(svc_node_uuid)
 
             print "      <failoverdomainnode id=\"%d\" name=\"%s\"/>" % (j, svc_nodedb.getName())
-            j += 1
+            j = j + 1
 
         print "    </failoverdomain>"
 
@@ -2998,7 +2998,7 @@ def doClumanager(lustreDB, hosts):
         print "    <service checkinterval=\"30\" failoverdomain=\"%s\" id=\"%d\" name=\"%s\" userscript=\"%s/%s\">" \
               % ( svcdb.getName(), i, svcdb.getName(), config.service_scripts, svcdb.getName())
         print "      <service_ipaddresses/>\n    </service>"
-        i += 1
+        i = i + 1
 
     print "  </services>\n</cluconfig>"
 
