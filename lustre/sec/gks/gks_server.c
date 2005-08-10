@@ -250,6 +250,7 @@ static int gks_mac_verification(struct ptlrpc_request *req,
                 OBD_FREE(tmp_mac, MAC_SIZE);
                 RETURN(0); 
         }
+        CERROR("new_created %s EA is %s \n", tmp_mac, key->ck_mac);
         OBD_FREE(tmp_mac, MAC_SIZE);
         RETURN(-EPERM);
 }
@@ -328,6 +329,7 @@ static int gks_get_mac(struct ptlrpc_request *req, int offset)
 
         memcpy(ckey, &kctxt->kc_ck, sizeof(*ckey));
 
+        ckey->ck_type = GKS_TYPE;
         rc = crypto_get_gks_mac(req, kperm, ckey->ck_mac);
         if (rc != 0) {
                 CERROR("get new mac error %d \n", rc);

@@ -71,7 +71,8 @@ static int gkc_get_key(struct obd_export *exp, struct key_parms *kparms,
 
         memcpy(ckey, rep_key, sizeof(*rep_key));
 
-        CDEBUG(D_INFO, "get enkey %s, mac %s\n", ckey->ck_key, ckey->ck_mac); 
+        CDEBUG(D_INFO, "get enkey %s, mac %s type %d\n", ckey->ck_key, ckey->ck_mac, 
+               ckey->ck_type); 
         ptlrpc_req_finished(req);
         
         RETURN(rc);

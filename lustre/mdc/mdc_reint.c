@@ -78,7 +78,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
         struct mds_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
-        int rc, bufcount = 2, size[4] = {0, sizeof(*rec), ealen, ea2len};
+        int rc, bufcount = 2, size[5] = {0, sizeof(*rec), ealen, ea2len, 
+                                         ea3len};
         ENTRY;
 
         LASSERT(iattr != NULL);

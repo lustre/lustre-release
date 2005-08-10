@@ -4153,14 +4153,16 @@ static int mds_intent_prepare_reply_buffers(struct ptlrpc_request *req,
  
         reply_buffers = 3;
         if (it->opc & ( IT_OPEN | IT_GETATTR | IT_LOOKUP | IT_CHDIR )) {
+                /*Ugly here, Actually, we should prepare the reply buffer 
+                 *after we know whether these stuff exist or not, which should
+                 * be fixed in future, Now each item is in the fix position,
+                 * the sequence is lsm, acl, crypto ea, capa.*/
                 repsize[reply_buffers++] = sizeof(int);
                 /* XXX: mds_remote_perm is stored here too, and for it
                  *      the 'size' is ignored */
                 repsize[reply_buffers++] = 
                                 xattr_acl_size(LL_ACL_MAX_ENTRIES);
-
-                /*FIXME: ugly here, should be optimize for there 
-                 * is no crypto key*/
+                
                 repsize[reply_buffers++] = sizeof(int);
                 repsize[reply_buffers++] = sizeof(struct crypto_key); 
 

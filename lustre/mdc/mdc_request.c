@@ -480,6 +480,8 @@ static int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req
                         }
                         md->posix_acl = acl;
                 }
+        } else {
+                *offset += 2;         
         }
         RETURN(rc);
 }
@@ -500,7 +502,9 @@ static int mdc_unpack_gskey(struct obd_export *exp_lmv, struct ptlrpc_request *r
                        buf, key_off, size);
                 md->key = (struct lustre_key *)buf; 
                 *offset = key_off; 
-        }  
+        } else {
+                *offset += 2;
+        } 
         RETURN(rc);
 }
 

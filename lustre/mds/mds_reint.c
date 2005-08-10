@@ -655,9 +655,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         int keylen;
                         LASSERT(rec->ur_eadatalen || rec->ur_ea3datalen); 
                         LASSERT(rec->ur_eadata || rec->ur_ea3data); 
-                        key = rec->ur_eadata ? rec->ur_eadata : rec->ur_ea3data;
-                        keylen = rec->ur_eadatalen ? rec->ur_eadatalen : 
-                                                     rec->ur_ea3datalen;
+                        key = rec->ur_ea3data ? rec->ur_ea3data : rec->ur_eadata;
+                        keylen = rec->ur_ea3datalen ? rec->ur_ea3datalen : 
+                                                     rec->ur_eadatalen;
                         mds_set_gskey(obd, handle, inode, key, keylen, 
                                       rec->ur_iattr.ia_valid); 
                 }

@@ -347,14 +347,20 @@ out:
         RETURN(rc); 
 }
 static void get_real_parameters(struct inode *inode, struct iattr *iattr,
-                                mode_t *mode,   __u32 *uid, __u32 *gid)
+                                struct posix_acl *new_acl, mode_t *mode,   
+                                __u32 *uid, __u32 *gid)
 { 
         LASSERT(iattr);
 
-        if (iattr->ia_valid & ATTR_MODE)
+        if (iattr->ia_valid & ATTR_MODE) {
                 *mode = iattr->ia_mode;
-        else
+        } else {
                 *mode = inode->i_mode;
+                if (new_acl) {
+                        posix_acl_equiv_mode(new_acl, mode);
+                        CDEBUG(D_INFO, "get new mode %d \n", *mode);
+                } 
+        }
 
         if (iattr->ia_valid & ATTR_UID)
                 *uid = iattr->ia_uid;
@@ -403,6 +409,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                             acl, inode->i_mode, GKS_GET_MAC, iattr->ia_valid);
         spin_unlock(&lli->lli_lock);
         if (value) {
+                new_acl = posix_acl_from_xattr(value, size); 
                 if (IS_ERR(new_acl)) {
                         rc = PTR_ERR(new_acl);
                         CERROR("convert from xattr to acl error: %d",rc);
@@ -419,7 +426,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         acl_count = new_acl ? new_acl->a_count : 0;  
         kperm_size = crypto_kperm_size(acl_count);
         OBD_ALLOC(kperm, kperm_size);
-        get_real_parameters(inode, iattr, &mac_mode, &uid, &gid);
+        get_real_parameters(inode, iattr, new_acl, &mac_mode, &uid, &gid);
         ll_init_key_perm(kperm, new_acl, uid, gid, mac_mode);
         kparms.context = kcontext;
         kparms.context_size = kcontext_size;
