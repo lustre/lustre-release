@@ -52,6 +52,7 @@ endif # MODULES
 
 DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \
 	lvfs_internal.h lvfs_linux.c lvfs_userfs.c \
+	upcall_cache.c \
         # quotacheck_test.c quotactl_test.c fsfilt_ext3_quota.h
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
