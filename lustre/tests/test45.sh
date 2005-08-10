@@ -78,8 +78,9 @@ ${LMC} -m $config --add filesystem --filesystem $FS_NODE2 || exit 1
 ${LMC} -m $config --add filesystem --filesystem $FS_MASTER || exit 1
 
 # node 1
-${LMC} -m $config --add node --node $NODE1 || exit 1
+${LMC} -m $config --add net --node client --nid "*" --nettype $NETTYPE  || exit 1
 
+${LMC} -m $config --add node --node $NODE1 || exit 1
 ${LMC} -m $config --add net --node $NODE1 --nid `h2$NIDTYPE $NODE1` \
 --nettype $NETTYPE || exit 1
 
@@ -119,7 +120,6 @@ ${LMC} -m $config --add cmobd --node $NODE1 --cmobd $CMOBD_OST1 \
 
 # node 2
 ${LMC} -m $config --add node --node $NODE2 || exit 1
-
 ${LMC} -m $config --add net --node $NODE2 --nid `h2$NIDTYPE $NODE2` \
 --nettype $NETTYPE || exit 1
 

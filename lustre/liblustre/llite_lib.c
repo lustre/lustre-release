@@ -124,16 +124,16 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
         lcfg->lcfg_nal = nal;
-        err = class_process_config(&lcfg);
+        err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 1, OBD_MDC_DEVICENAME);
         lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        err = class_process_config(&lcfg);
+        err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_del_uuid, err);
@@ -142,7 +142,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         lustre_cfg_bufs_set_string(&bufs, 1, g_zconf_mdsname);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        err = class_process_config(&lcfg);
+        err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
@@ -175,7 +175,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
 out_cleanup:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-        err = class_process_config(&lcfg);
+        err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);
@@ -183,7 +183,7 @@ out_cleanup:
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
-        err = class_process_config(&lcfg);
+        err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
         if (err < 0)
                 GOTO(out, err);

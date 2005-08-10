@@ -128,8 +128,6 @@ __u32 ptlrpcs_name2flavor(const char *name);
 char *ptlrpcs_flavor2name(__u32 flavor);
 
 
-#ifdef __KERNEL__
-
 /* forward declaration */
 struct obd_import;
 struct ptlrpc_request;
@@ -137,7 +135,6 @@ struct ptlrpc_cred;
 struct ptlrpc_credops;
 struct ptlrpc_sec;
 struct ptlrpc_secops;
-
 
 typedef struct {
         struct list_head        list;
@@ -506,7 +503,9 @@ int svcsec_null_init(void);
 int svcsec_null_exit(void);
 
 /* capability */
+#ifdef __KERNEL__
 #include <linux/crypto.h>
+#endif
 
 #define NR_CAPAHASH 32
 #define CAPA_TIMEOUT 1800                /* sec, == 30 min */
@@ -578,7 +577,7 @@ struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
                           struct lustre_handle *handle);
 void capa_put(struct obd_capa *ocapa, int type);
 int capa_renew(struct lustre_capa *capa, int type);
-void capa_hmac(struct crypto_tfm *tfm, u8 *key, struct lustre_capa *capa);
+void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);
 void capa_dup(void *dst, struct obd_capa *ocapa);
 void capa_dup2(void *dst, struct lustre_capa *capa);
 int capa_expired(struct lustre_capa *capa);
@@ -632,8 +631,6 @@ expiry_to_jiffies(__u64 expiry)
         return jiffies + ((unsigned long)expiry - tv.tv_sec) * HZ;
 }
 
-#endif /* __KERNEL__ */
-
 struct mds_capa_key {
         struct list_head        k_list;
 
@@ -643,7 +640,6 @@ struct mds_capa_key {
 
 struct filter_capa_key {
         struct list_head        k_list;
-
         struct lustre_capa_key  k_key;
 };
 

@@ -384,17 +384,11 @@ out_copy:
 struct gss_sec {
         struct ptlrpc_sec       gs_base;
         struct gss_api_mech    *gs_mech;
-#ifdef __KERNEL__
         spinlock_t              gs_lock;
         struct list_head        gs_upcalls;
         char                   *gs_pipepath;
         struct dentry          *gs_depipe;
-#endif
 };
-
-#ifdef __KERNEL__
-
-static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
 
 struct gss_upcall_msg_data {
         __u64                           gum_pag;
@@ -415,6 +409,8 @@ struct gss_upcall_msg {
         struct gss_upcall_msg_data      gum_data;
 };
 
+#ifdef __KERNEL__
+static rwlock_t gss_ctx_lock = RW_LOCK_UNLOCKED;
 /**********************************************
  * rpc_pipe upcall helpers                    *
  **********************************************/
@@ -436,10 +432,11 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
 #else
         /* XXX */
         if (!list_empty(&gmsg->gum_base.list)) {
+                int error = gmsg->gum_base.errno;
+                
                 CWARN("msg %p: list: %p/%p/%p, copied %d, err %d, wq %d\n",
-                      gmsg, &gmsg->gum_base.list,
-                      gmsg->gum_base.list.prev, gmsg->gum_base.list.next,
-                      gmsg->gum_base.copied, gmsg->gum_base.errno,
+                      gmsg, &gmsg->gum_base.list, gmsg->gum_base.list.prev,
+                      gmsg->gum_base.list.next, gmsg->gum_base.copied, error,
                       list_empty(&gmsg->gum_waitq.task_list));
                 LBUG();
         }
@@ -522,10 +519,11 @@ static void gss_init_upcall_msg(struct gss_upcall_msg *gmsg,
 }
 #endif /* __KERNEL__ */
 
+/* this seems to be used only from userspace code */
+#ifndef __KERNEL__
 /********************************************
  * gss cred manipulation helpers            *
  ********************************************/
-#if 0
 static
 int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
 {
@@ -543,7 +541,7 @@ int gss_cred_is_uptodate_ctx(struct ptlrpc_cred *cred)
 #endif
 
 static inline
-struct gss_cl_ctx * gss_get_ctx(struct gss_cl_ctx *ctx)
+struct gss_cl_ctx *gss_get_ctx(struct gss_cl_ctx *ctx)
 {
         atomic_inc(&ctx->gc_refcount);
         return ctx;
@@ -880,8 +878,7 @@ out:
 }
 #else /* !__KERNEL__ */
 extern int lgss_handle_krb5_upcall(uid_t uid, __u32 dest_ip,
-                                   char *obd_name,
-                                   char *buf, int bufsize,
+                                   char *obd_name, char *buf, int bufsize,
                                    int (*callback)(char*, unsigned long));
 
 static int gss_cred_refresh(struct ptlrpc_cred *cred)
@@ -892,11 +889,11 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         struct gss_sec         *gsec;
         struct gss_api_mech    *mech;
         struct gss_cl_ctx      *ctx = NULL;
-        struct vfs_cred         vcred = { 0 };
         ptl_nid_t               peer_nid;
         __u32                   dest_ip;
         __u32                   subflavor;
         int                     rc, gss_err;
+        struct gss_upcall_msg_data gmd = { 0 };
 
         LASSERT(cred);
         LASSERT(cred->pc_sec);
@@ -909,9 +906,9 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         imp = cred->pc_sec->ps_import;
         peer_nid = imp->imp_connection->c_peer.peer_id.nid;
         dest_ip = (__u32) (peer_nid & 0xFFFFFFFF);
-        subflavor = cred->pc_sec->ps_flavor.subflavor;
+        subflavor = cred->pc_sec->ps_flavor;
 
-        if (subflavor != PTLRPC_SEC_GSS_KRB5I) {
+        if (subflavor != PTLRPCS_SUBFLVR_KRB5I) {
                 CERROR("unknown subflavor %u\n", subflavor);
                 GOTO(err_out, rc = -EINVAL);
         }
@@ -930,7 +927,8 @@ static int gss_cred_refresh(struct ptlrpc_cred *cred)
         gsec = container_of(cred->pc_sec, struct gss_sec, gs_base);
         mech = gsec->gs_mech;
         LASSERT(mech);
-        rc = gss_parse_init_downcall(mech, &obj, &ctx, &vcred, &dest_ip,
+
+        rc = gss_parse_init_downcall(mech, &obj, &ctx, &gmd,
                                      &gss_err);
         if (rc || gss_err) {
                 CERROR("parse init downcall: rpc %d, gss 0x%x\n", rc, gss_err);
@@ -1671,10 +1669,11 @@ struct ptlrpc_sec* gss_create_sec(__u32 flavor,
 {
         struct gss_sec *gsec;
         struct ptlrpc_sec *sec;
+        uid_t save_uid;
+
 #ifdef __KERNEL__
         char *pos;
         int   pipepath_len;
-        uid_t save_uid;
 #endif
         ENTRY;
 

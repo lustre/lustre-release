@@ -46,13 +46,6 @@
 #define CRYPTO_UNSPEC			0
 #define CRYPTO_MAX_ALG_NAME		64
 
-struct scatterlist {
-    struct page		*page;
-    unsigned int	offset;
-    __u32		dma_address;
-    unsigned int	length;
-};
-
 static inline struct crypto_tfm *
 crypto_alloc_tfm(const char *name, __u32 flags)
 {
