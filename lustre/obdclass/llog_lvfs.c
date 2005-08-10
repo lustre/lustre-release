@@ -432,14 +432,16 @@ static struct file *llog_filp_open(char* fsname, char *name,
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM); 
-        if (fsname)
-              len = snprintf(logname, PATH_MAX, "CONFIGS/%s/%s", fsname, name);
-        else
+//FIXME: Need to changing mkfs
+//        if (fsname)
+//              len = snprintf(logname, PATH_MAX, "CONFIGS/%s/%s", fsname, name);
+//        else
               len = snprintf(logname, PATH_MAX, "CONFIGS/%s", name);
 
         if (len >= PATH_MAX - 1) {
                 filp = ERR_PTR(-ENAMETOOLONG);
         } else {
+                printk("logname = %s\n", logname);
                 filp = l_filp_open(logname, flags, mode);
                 if (IS_ERR(filp))
                         CERROR("logfile creation %s: %ld\n", logname,

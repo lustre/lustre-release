@@ -71,6 +71,7 @@ int lustre_register_mount(char *name, struct super_block *sb,
                 OBD_FREE(lmi, sizeof(*lmi));
                 return -ENOMEM;
         }
+        memcpy(name_cp, name, strlen(name));
 
         down(&lustre_mount_info_lock);
         if (lustre_find_mount(name)) {
@@ -417,7 +418,7 @@ int lustre_process_logs(struct super_block *sb,
         obd = sbi->lsi_mgc;
         LASSERT(obd);
         mgcobd = &obd->u.mgc;
-                                                                                                                                                                              
+
         /* Find all the logs in the local CONFIGS directory */
         err = dentry_readdir(obd, mgcobd->mgc_configs_dir,
                        mgcobd->mgc_vfsmnt, &dentry_list);
@@ -447,6 +448,7 @@ int lustre_process_logs(struct super_block *sb,
                 CERROR("starting log %s\n", logname);
                 ioc_data.ioc_inllen1 = len + 1;
                 ioc_data.ioc_inlbuf1 = logname;
+
                 err = obd_iocontrol(OBD_IOC_START, obd->obd_self_export,
                                     sizeof ioc_data, &ioc_data, NULL);
                 if (err) {
@@ -502,34 +504,33 @@ static int do_lcfg(char *cfgname, ptl_nid_t nid, int cmd,
 }
 
 /* Set up a mgcobd to process startup logs */
-static int lustre_start_mgc(char *mcname, struct super_block *sb)
+static int lustre_start_mgc(char *mgcname, struct super_block *sb)
 {
         struct config_llog_instance cfg;
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct obd_device *obd;
         int err = 0;
 
-        cfg.cfg_instance = mcname;
-        snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mcname);
+        cfg.cfg_instance = mgcname;
+        snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mgcname);
  
-        err = do_lcfg(mcname, 0, LCFG_ATTACH, LUSTRE_MGC_NAME, cfg.cfg_uuid.uuid, 0, 0);
+        err = do_lcfg(mgcname, 0, LCFG_ATTACH, LUSTRE_MGC_NAME, cfg.cfg_uuid.uuid, 0, 0);
         if (err)
                 goto out_free;
                                                                                        
-        err = do_lcfg(mcname, 0, LCFG_SETUP, 0, 0, 0, 0);
+        err = do_lcfg(mgcname, 0, LCFG_SETUP, 0, 0, 0, 0);
         if (err) {
                 CERROR("mgcobd setup error %d\n", err);
-                do_lcfg(mcname, 0, LCFG_DETACH, 0, 0, 0, 0);
+                do_lcfg(mgcname, 0, LCFG_DETACH, 0, 0, 0, 0);
                 goto out_free;
         }
-        
-        obd = class_name2obd(mcname);
+
+        obd = class_name2obd(mgcname);
         if (!obd) {
-                CERROR("Can't find mgcobd %s\n", mcname);
+                CERROR("Can't find mgcobd %s\n", mgcname);
                 err = -ENOTCONN;
                 goto out_free;
         }
-        sbi->lsi_mgc = obd;
         
 out_free:
         return err;

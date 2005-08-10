@@ -157,6 +157,7 @@ static int mgc_cleanup(struct obd_device *obd)
 static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_mount_info *lmi;
+        struct lustre_sb_info *sbi;
         struct mgc_obd *mgc = &obd->u.mgc;
         //struct lprocfs_static_vars lvars;
         int rc;
@@ -190,6 +191,9 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-ENOENT);
         }
 
+        sbi = s2sbi(lmi->lmi_sb);
+        sbi->lsi_mgc = obd; 
+
         rc = mgc_fs_setup(lmi->lmi_sb, lmi->lmi_mnt);
         if (rc) {
                 CERROR("fs setup failed %d\n", rc);
@@ -213,6 +217,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_device *obd = exp->exp_obd;
         struct obd_ioctl_data *data = karg;
         struct llog_ctxt *ctxt;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -265,10 +270,13 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 }
                 sprintf(conf_prof, "%s-conf", name);
 
+                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
                 ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 rc = class_config_parse_llog(ctxt, conf_prof, NULL);
                 if (rc < 0)
                         CERROR("Unable to process log: %s\n", conf_prof);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 OBD_FREE(conf_prof, len);
 
                 RETURN(rc);

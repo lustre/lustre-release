@@ -8,6 +8,7 @@ rmmod obdfilter
 rmmod fsfilt_ext3
 rmmod fsfilt_ldiskfs
 rmmod ldiskfs
+rmmod mgc
 rmmod ost
 rmmod mds
 rmmod ptlrpc

@@ -181,8 +181,10 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_unlock(&obd->obd_dev_lock);
 
         exp = class_new_export(obd);
-        if (exp == NULL)
-                RETURN(err);
+        if (!exp){
+                CERROR("Fail to build export.\n");
+                RETURN(-ENOMEM);
+        }
         memcpy(&exp->exp_client_uuid, &obd->obd_uuid,
                sizeof(exp->exp_client_uuid));
         obd->obd_self_export = exp;
