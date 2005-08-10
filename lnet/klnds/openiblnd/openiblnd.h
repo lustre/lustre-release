@@ -226,12 +226,12 @@ typedef struct kib_svcrsp                       /* service response */
         __u64             ibsr_svc_id;          /* service's id */
         __u8              ibsr_svc_gid[16];     /* service's gid */
         __u16             ibsr_svc_pkey;        /* service's pkey */
-} kib_svcrsp_t;
+} WIRE_ATTR kib_svcrsp_t;
 
 typedef struct kib_connparams
 {
         __u32             ibcp_queue_depth;
-} kib_connparams_t;
+} WIRE_ATTR kib_connparams_t;
 
 typedef struct
 {
@@ -249,26 +249,26 @@ typedef struct
         __u32             rd_key;               /* remote key */
         __u32             rd_nob;               /* # of bytes */
         __u64             rd_addr;              /* remote io vaddr */
-} kib_rdma_desc_t;
+} WIRE_ATTR kib_rdma_desc_t;
 
 typedef struct
 {
         ptl_hdr_t         ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
-} kib_immediate_msg_t;
+} WIRE_ATTR kib_immediate_msg_t;
 
 typedef struct
 {
         ptl_hdr_t         ibrm_hdr;             /* portals header */
         __u64             ibrm_cookie;          /* opaque completion cookie */
         kib_rdma_desc_t   ibrm_desc;            /* where to suck/blow */
-} kib_rdma_msg_t;
+} WIRE_ATTR kib_rdma_msg_t;
 
 typedef struct
 {
         __u64             ibcm_cookie;          /* opaque completion cookie */
         __u32             ibcm_status;          /* completion status */
-} kib_completion_msg_t;
+} WIRE_ATTR kib_completion_msg_t;
 
 typedef struct
 {
@@ -290,8 +290,8 @@ typedef struct
                 kib_immediate_msg_t   immediate;
                 kib_rdma_msg_t        rdma;
                 kib_completion_msg_t  completion;
-        }                    ibm_u;
-} kib_msg_t;
+        } WIRE_ATTR       ibm_u;
+} WIRE_ATTR kib_msg_t;
 
 #define IBNAL_MSG_MAGIC  PTL_PROTO_OPENIB_MAGIC /* unique magic */
 #define IBNAL_MSG_VERSION              2        /* current protocol version */

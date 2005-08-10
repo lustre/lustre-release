@@ -163,7 +163,7 @@ typedef struct
         __u32             md_lkey;
         __u32             md_rkey;
         __u64             md_addr;
-} WIRE_ATTR kib_md_t;
+} kib_md_t;
 
 typedef struct
 {
