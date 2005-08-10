@@ -455,7 +455,7 @@ static int bind_socket(manager m,unsigned short port)
     addr.sin_port        = htons(port);
 
     if (bind(m->bound,(struct sockaddr *)&addr,alen)<0){
-        perror ("tcpnal bind"); 
+        fprintf(stderr, "tcpnal bind: %s port %u\n", strerror(errno), port); 
         return(0);
     }
     
