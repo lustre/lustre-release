@@ -10,6 +10,13 @@ Details    : ldiskfs mballoc code may reference an uninitialized buddy struct
              at startup during orphan unlinking.  Instead, skip buddy update
              before setup, as it will be regenerated after recovery is complete.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 7039
+Description: If an OST is inactive, its locks might reference stale inodes.
+Details    : lov_change_cbdata() must iterate over all namespaces, even if
+             they are inactive to clear inode references from the lock.
+
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
