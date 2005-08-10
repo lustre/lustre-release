@@ -59,10 +59,10 @@
 #define SOCKNAL_BUFFER_SIZE     (8<<20)         /* default socket buffer size */
 #define SOCKNAL_NAGLE            0              /* enable/disable NAGLE? */
 #define SOCKNAL_IRQ_AFFINITY     1              /* enable/disable IRQ affinity? */
-#define SOCKNAL_KEEPALIVE_IDLE   30             /* # seconds idle before 1st probe */
+#define SOCKNAL_KEEPALIVE_IDLE   35             /* # seconds idle before 1st probe */
 
-#define SOCKNAL_KEEPALIVE_COUNT  10             /* # unanswered probes to determine peer death */
-#define SOCKNAL_KEEPALIVE_INTVL  2              /* seconds between probes */
+#define SOCKNAL_KEEPALIVE_COUNT  5             /* # unanswered probes to determine peer death */
+#define SOCKNAL_KEEPALIVE_INTVL  5              /* seconds between probes */
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
