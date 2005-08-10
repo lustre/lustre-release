@@ -1972,6 +1972,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
         struct lmv_tgt_desc    *tgt;
         struct obd_device      *obd;
         struct lmv_obd         *lmv;
+        int rc = 0;
         ENTRY;
 
         obd = class_exp2obd(exp);
@@ -1993,7 +1994,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
             (keylen == strlen("sec_flags") && strcmp(key, "sec_flags") == 0) ||
             (keylen == strlen("nllu") && strcmp(key, "nllu") == 0)) {
                 struct obd_export *exp;
-                int rc = 0, err, i;
+                int err, i;
 
                 spin_lock(&lmv->lmv_lock);
                 for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
@@ -2029,7 +2030,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
         if (keylen == 5 && strcmp(key, "audit") == 0) {
                 struct audit_attr_msg * msg = val;
                 int mds = id_group(&msg->id);
-                int i, rc = 0;
+                int i;
                 LASSERT(mds < lmv->desc.ld_tgt_count);
                 
                 if (IS_AUDIT_OP(msg->attr, AUDIT_FS)) {
@@ -2075,7 +2076,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
              strcmp(key, "flush_cred") == 0)) || 
              ((keylen == strlen("crypto_type") &&
              strcmp(key, "crypto_type") == 0))) {
-                int rc = 0, i;
+                int i;
 
                 for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
                      i++, tgt++) {
@@ -2088,6 +2089,18 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 }
 
                 RETURN(0);
+        }
+        
+        if (keylen == strlen("ids") && memcmp(key, "ids", keylen) == 0) {
+                struct lustre_id *id = (struct lustre_id *)val;
+                
+                rc = lmv_check_connect(obd);
+                if (rc)
+                        RETURN(rc);
+
+                rc = obd_set_info(lmv->tgts[id_group(id)].ltd_exp, 
+                                  keylen, key, vallen, val); 
+                RETURN(rc);
         }
 
         RETURN(-EINVAL);

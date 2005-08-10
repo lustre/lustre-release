@@ -2728,7 +2728,7 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                 de = mds_id2dentry(obd, ids, NULL);
                 if (IS_ERR(de)) {
                         rc = PTR_ERR(de);
-                        CERROR("lookup by an id error %d\n", rc);
+                        CERROR("lookup by an id error rc=%d\n ", rc);
                         RETURN(rc);
                 }
                 inode = de->d_inode;
@@ -2839,10 +2839,10 @@ static int mdt_set_info(struct ptlrpc_request *req)
                         RETURN(rc);
                 id = lustre_swab_reqbuf(req, 1, sizeof(struct lustre_id), 
                                         lustre_swab_lustre_id);
-                ids[1] = *id;
+                ids[0] = *id;
                 id = lustre_swab_reqbuf(req, 2, sizeof(struct lustre_id),
                                         lustre_swab_lustre_id);
-                ids[2] = *id;
+                ids[1] = *id;
 
                 rc = obd_set_info(exp, keylen, key, vallen, ids);
                 req->rq_repmsg->status = rc;

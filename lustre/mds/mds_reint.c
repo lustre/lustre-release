@@ -3319,8 +3319,7 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
                 GOTO(cleanup, rc);
 
         ids[0] = *(rec->ur_id1);
-        rc = obd_set_info(mds->mds_md_obd->u.lmv.tgts[id_group(rec->ur_id1)].ltd_exp, 
-                          strlen("ids"), "ids", 
+        rc = obd_set_info(mds->mds_md_exp, strlen("ids"), "ids", 
                           sizeof(struct lustre_id) * 2, ids);
  
         EXIT;
@@ -3610,8 +3609,6 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         if (de_old->d_flags & DCACHE_CROSS_REF) {
                 struct lustre_id old_id;
-                struct obd_export *tgt_exp = 
-                        mds->mds_md_obd->u.lmv.tgts[de_old->d_mdsnum].ltd_exp;
 
                 
                 mds_pack_dentry2id(obd, &old_id, de_old, 1);
@@ -3627,7 +3624,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
                 
                 ids[0] = old_id;
-                rc = obd_set_info(tgt_exp, strlen("ids"), "ids", 
+                rc = obd_set_info(mds->mds_md_exp, strlen("ids"), "ids", 
                                   sizeof(struct lustre_id) * 2, ids);
 
                 GOTO(cleanup, rc);
