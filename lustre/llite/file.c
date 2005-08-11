@@ -1923,7 +1923,7 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         if (key && key_size) 
                 OBD_FREE(key, key_size);
         if (rc) {
-                CERROR("md_setattr fails: rc = %d\n", rc);
+                CDEBUG(D_SEC, "md_setattr fails: rc = %d\n", rc);
                 GOTO(out, rc);
         }
 out:
