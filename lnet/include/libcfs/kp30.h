@@ -15,6 +15,8 @@
 #error Unsupported operating system
 #endif
 
+#include <portals/types.h>
+
 #ifdef __KERNEL__
 
 # ifndef DEBUG_SUBSYSTEM

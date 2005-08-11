@@ -265,4 +265,136 @@ static inline void list_splice_init(struct list_head *list,
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif /* list_for_each_entry_safe */
 
+#ifndef list_for_each_entry_reverse
+/**
+ * list_for_each_entry_reverse - iterate backwards over list of given type.
+ * @pos:        the type * to use as a loop counter.
+ * @head:       the head for your list.
+ * @member:     the name of the list_struct within the struct.
+ */
+#define list_for_each_entry_reverse(pos, head, member)                  \
+        for (pos = list_entry((head)->prev, typeof(*pos), member),      \
+                     prefetch(pos->member.prev);                        \
+             &pos->member != (head);                                    \
+             pos = list_entry(pos->member.prev, typeof(*pos), member),  \
+                     prefetch(pos->member.prev))
+#endif
+
+#ifndef NULL
+#define NULL ((void *)0)
+#endif
+
+/* hlist stuff */
+#define HLIST_HEAD_INIT { .first = NULL }
+#define HLIST_HEAD(name) struct hlist_head name = {  .first = NULL }
+#define INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL)
+#define INIT_HLIST_NODE(ptr) ((ptr)->next = NULL, (ptr)->pprev = NULL)
+
+#define hlist_entry(ptr, type, member) container_of(ptr,type,member)
+
+#ifndef hlist_for_each
+#define hlist_for_each(pos, head) \
+        for (pos = (head)->first; pos && ({ prefetch(pos->next); 1; }); \
+             pos = pos->next)
+#endif
+
+#ifndef hlist_for_each_entry_safe
+/**
+ * hlist_for_each_entry_safe - iterate over list of given type safe against removal of list entry
+ * @tpos:       the type * to use as a loop counter.
+ * @pos:        the &struct hlist_node to use as a loop counter.
+ * @n:          another &struct hlist_node to use as temporary storage
+ * @head:       the head for your list.
+ * @member:     the name of the hlist_node within the struct.
+ */
+#define hlist_for_each_entry_safe(tpos, pos, n, head, member)            \
+        for (pos = (head)->first;                                        \
+             pos && ({ n = pos->next; 1; }) &&                           \
+                ({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
+             pos = n)
+#endif
+
+#ifndef hlist_for_each_safe
+#define hlist_for_each_safe(pos, n, head) \
+        for (pos = (head)->first; pos && ({ n = pos->next; 1; }); \
+             pos = n)
+#endif
+
+#ifndef hlist_for_each_entry
+/**
+ * hlist_for_each_entry - iterate over list of given type
+ * @tpos:       the type * to use as a loop counter.
+ * @pos:        the &struct hlist_node to use as a loop counter.
+ * @head:       the head for your list.
+ * @member:     the name of the hlist_node within the struct.
+ */
+#define hlist_for_each_entry(tpos, pos, head, member)                    \
+        for (pos = (head)->first;                                        \
+             pos && ({ prefetch(pos->next); 1;}) &&                      \
+                ({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
+             pos = pos->next)
+#endif
+
+/*
+ * These are non-NULL pointers that will result in page faults
+ * under normal circumstances, used to verify that nobody uses
+ * non-initialized list entries.
+ */
+#define LIST_POISON1  ((void *) 0x00100100)
+#define LIST_POISON2  ((void *) 0x00200200)
+
+#ifndef __KERNEL__
+struct hlist_head {
+        struct hlist_node *first;
+};
+
+struct hlist_node {
+        struct hlist_node *next, **pprev;
+};
+
+static inline int hlist_unhashed(const struct hlist_node *h)
+{
+        return !h->pprev;
+}
+
+static inline int hlist_empty(const struct hlist_head *h)
+{
+        return !h->first;
+}
+
+static inline void __hlist_del(struct hlist_node *n)
+{
+        struct hlist_node *next = n->next;
+        struct hlist_node **pprev = n->pprev;
+        *pprev = next;
+        if (next)
+                next->pprev = pprev;
+}
+
+static inline void hlist_del(struct hlist_node *n)
+{
+        __hlist_del(n);
+        n->next = LIST_POISON1;
+        n->pprev = LIST_POISON2;
+}
+
+static inline void hlist_del_init(struct hlist_node *n)
+{
+        if (n->pprev)  {
+                __hlist_del(n);
+                INIT_HLIST_NODE(n);
+        }
+}
+
+static inline void hlist_add_head(struct hlist_node *n, struct hlist_head *h)
+{
+        struct hlist_node *first = h->first;
+        n->next = first;
+        if (first)
+                first->pprev = &n->next;
+        h->first = n;
+        n->pprev = &h->first;
+}
+#endif
+
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */
