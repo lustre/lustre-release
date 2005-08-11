@@ -947,8 +947,6 @@ reset_enospc() {
 	sysctl -w lustre.fail_loc=$FAIL_LOC
 }
 
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
-
 exhaust_precreations() {
 	OSTIDX=$1
 	OST=$(head -n $((OSTIDX + 1)) $LPROC/lov/${LOVNAME}/target_obd |\
@@ -2440,9 +2438,14 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	chgrp $RUNAS_ID $DIR/d67
 	$RUNAS -u $RUNAS_ID -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67
 	RC=$?
-	GROUP_UPCALL=`cat /proc/fs/lustre/mds/$MDS/group_upcall`
-	[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && error "no-upcall passwd" || true
-	[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && error "upcall failed" || true
+	if [ "$MDS" ]; then
+		# can't tell which is correct otherwise
+		GROUP_UPCALL=`cat /proc/fs/lustre/mds/$MDS/group_upcall`
+		[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
+			error "no-upcall passed" || true
+		[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
+			error "upcall failed" || true
+	fi
 }
 run_test 67 "supplementary group failure (should return error) ="
 
