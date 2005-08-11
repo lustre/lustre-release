@@ -285,6 +285,7 @@ static inline void list_splice_init(struct list_head *list,
 #endif
 
 /* hlist stuff */
+#ifndef __KERNEL__
 #define HLIST_HEAD_INIT { .first = NULL }
 #define HLIST_HEAD(name) struct hlist_head name = {  .first = NULL }
 #define INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL)
@@ -395,6 +396,7 @@ static inline void hlist_add_head(struct hlist_node *n, struct hlist_head *h)
         h->first = n;
         n->pprev = &h->first;
 }
-#endif
+#endif /* __KERNEL__ */
+#endif /* HLIST_HEAD */
 
 #endif /* __LIBCFS_LUSTRE_LIST_H__ */
