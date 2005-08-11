@@ -501,6 +501,12 @@ translate_lookup_intent(struct intent *intent, const char *path)
         if (it->it_flags & O_CREAT) {
                 it->it_op |= IT_CREAT;
                 it->it_create_mode = *((int*)intent->int_arg1);
+                /* XXX libsysio hack. For O_EXCL, libsysio depends on
+                   this lookup to return negative result, but then there is no
+                   way to find out original intent in ll_iop_open(). So we just
+                   clear O_EXCL from libsysio flags here to avoid checking
+                   for negative result. O_EXCL would be enforced by MDS. */
+                *((int*)intent->int_arg2) &= ~O_EXCL;
         }
 
         if (intent->int_opmask & INT_GETATTR)

@@ -33,6 +33,12 @@ Details    : The MDS has an upcall /proc/fs/lustre/mds/{mds}/group_upcall
              (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
              lookups for user supplementary groups into a cache.
 
+Severity   : minor
+Bugzilla   : 7278
+Description: O_CREAT|O_EXCL open flags in liblustre always return -EEXIST
+Details    : Make libsysio to not enforce O_EXCL by clearing the flag,
+             for liblustre O_EXCL is enforced by MDS.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
