@@ -841,9 +841,9 @@ test_42() {
     sysctl -w portals.debug=-1
     facet_failover ost
     
-    # osc is evicted, fs is smaller
-    blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
-    [ $blocks_after -lt $blocks ] || return 1
+    # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
+    #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
+    #[ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     sysctl -w $DEBUG42
@@ -852,9 +852,8 @@ test_42() {
 }
 run_test 42 "recovery after ost failure"
 
-# b=2530
 # timeout in MDS/OST recovery RPC will LBUG MDS
-test_43() {
+test_43() { # bug 2530
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
@@ -913,9 +912,7 @@ test_46() {
 }
 run_test 46 "Don't leak file handle after open resend (3325)"
 
-# b=2824
-test_47() {
-
+test_47() { # bug 2824
     # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
@@ -939,7 +936,6 @@ test_47() {
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
-
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
