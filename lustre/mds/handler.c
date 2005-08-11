@@ -1139,11 +1139,12 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int *reply_off,
         LASSERT(inode->i_op->permission);
         LASSERT(req->rq_export->exp_mds_data.med_remote);
 
-        pack_off++; /* XXX: ignore the place for acl count */
         perm = (struct mds_remote_perm *)
                        lustre_msg_buf(req->rq_repmsg, pack_off++, sizeof(perm));
-        if (!perm)
+        if (!perm) {
+                CERROR("no remote perm buf at offset %d\n", pack_off - 1);
                 return -EINVAL;
+        }
 
         memset(perm, 0, sizeof(*perm));
 
@@ -1776,6 +1777,7 @@ out_pop:
         mds_exit_ucred(&uc);
         return rc;
 }
+
 static int mds_access_check(struct ptlrpc_request *req, int offset)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
