@@ -15,8 +15,9 @@ obdbarrier
 lload
 wirecheck
 lfs
-llmount
-mount.lustre
+mkfs_lustre
+mount_lustre
+llog_reader
 wiretest
 .*.cmd
 .*.d

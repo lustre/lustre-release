@@ -92,6 +92,9 @@ int mds_lov_write_objids(struct obd_device *obd)
         int i, rc, size = mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id);
         ENTRY;
 
+        if (!mds->mds_lov_desc.ld_tgt_count)
+                RETURN(0);
+
         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
                 CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
                        mds->mds_lov_objids[i], i);

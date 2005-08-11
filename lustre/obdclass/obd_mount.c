@@ -749,9 +749,11 @@ static void server_put_super(struct super_block *sb)
                 list_del(&dirent->lld_list);
                 
                 logname = dirent->lld_name;
+                CERROR("file: %s\n", logname);
+
                 /* Confobd start adds "-conf" */
                 len = strlen(logname) - 5;
-                if ((len < 1) || strcmp(logname, "-conf")) {
+                if ((len < 1) || (strcmp(logname + len, "-conf") != 0)) {
                         CDEBUG(D_CONFIG, "ignoring %s\n", logname);
                         OBD_FREE(dirent, sizeof(*dirent));
                         continue;
