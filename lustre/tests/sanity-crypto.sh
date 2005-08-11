@@ -117,25 +117,26 @@ disable_encrypt() {
 }
 enable_encrypt() {
 	NAME=$1
-    	grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    	grep " $MOUNT " /proc/mounts && umount  $MOUNT
+    	zconf_mount `hostname` $MOUNT
 	$LCTL set_crypt $MOUNT $CRYPT_TYPE
 }
 
 mkdir -p $DIR
 
 test_1a() {
-	rm -rf $DIR1/1a*
 	enable_encrypt $MOUNT
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/1a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/1a1
 	diff -u $DIR1/1a0 $DIR2/1a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/1a0 $DIR2/1a1 && error "write encryption failed"
+	enable_encrypt $MOUNT
+	diff -u $DIR1/1a0 $DIR2/1a1 || error "files are different"
 }
 run_test 1a "read/write encryption============="
 
 test_2a() {
-	rm -rf $DIR1/2a*
 	enable_encrypt $MOUNT
 	touch $DIR1/2a0
         setfacl -m u:bin:rw $DIR1/2a0
@@ -144,6 +145,8 @@ test_2a() {
 	diff -u $DIR1/2a0 $DIR2/2a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/2a0 $DIR2/2a1 && error "write encryption failed"
+	enable_encrypt $MOUNT
+	diff -u $DIR1/2a0 $DIR2/2a1 || error "files are different"
 }
 run_test 2a "read/write encryption with acl============="
 
@@ -158,6 +161,8 @@ test_3a() {
 	diff -u $DIR1/3a0 $DIR2/3a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/3a0 $DIR2/3a1 && error "write encryption failed"
+	enable_encrypt $MOUNT	
+	diff -u $DIR1/3a0 $DIR2/3a1 || error "files are different"
 }
 run_test 3a "write chmod encryption============="
 
@@ -172,6 +177,8 @@ test_4a() {
 	diff -u $DIR1/4a0 $DIR2/4a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/4a0 $DIR2/4a1 && error "write encryption failed"
+	enable_encrypt $MOUNT	
+	diff -u $DIR1/4a0 $DIR2/4a1 || error "files are different"
 }
 run_test 4a "write chacl encryption============="
 
@@ -181,12 +188,15 @@ test_5a() {
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/5a1
         setfacl -m u:bin:rw $DIR1/5a0
-	chown $RUN_UID $DIR1/3a0
+	chown $RUN_UID $DIR1/5a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0 || error "chown write error"
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a1 	
 	diff -u $DIR1/5a0 $DIR2/5a1 || error "files are different"
+	echo "enable crypt read success"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/5a0 $DIR2/5a1 && error "write encryption failed"
+	enable_encrypt $MOUNT	
+	diff -u $DIR1/5a0 $DIR2/5a1 || error "files are different"
 }
 run_test 5a "write chacl encryption============="
 

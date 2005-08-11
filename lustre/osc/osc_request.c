@@ -868,7 +868,9 @@ get_capa:
                          pg_prev->disk_offset);
 
                 if (opc == OST_WRITE) {
-                        osc_encrypt_page(pg->pg, pg->page_offset, pg->count);
+                        rc = osc_encrypt_page(pg->pg, pg->page_offset, pg->count);
+                        if (rc)
+                                GOTO(out, rc);
                 }
 
                 ptlrpc_prep_bulk_page(desc, pg->pg,

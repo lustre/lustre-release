@@ -49,6 +49,7 @@ struct lustre_key {
         atomic_t            lk_refcount;
         __u32               lk_key_type;
         __u32               lk_flags; 
+        __u8                lk_dk[KEY_SIZE];
 };
  
 static inline struct lustre_key *

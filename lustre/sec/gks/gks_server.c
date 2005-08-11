@@ -226,7 +226,7 @@ static int gks_create_key(struct ptlrpc_request *req, int offset)
         
         ckey->ck_type = GKS_TYPE;
         
-        CDEBUG(D_INFO, "get key %s\n", ckey->ck_key);
+        CDEBUG(D_INFO, "original decrypt key %s\n", ckey->ck_key);
 
         crypto_encrypt_gks_key(req, ckey->ck_key, KEY_SIZE);
 
@@ -289,12 +289,14 @@ static int gks_decrypt_key(struct ptlrpc_request *req, int offset)
         ckey = (struct crypto_key *)lustre_msg_buf(req->rq_repmsg, 0, 
                                                    sizeof (*ckey));
         memcpy(ckey, &kctxt->kc_ck, sizeof(*ckey));
-
+        
+        CDEBUG(D_INFO, "encrypt key %s mac %s \n", ckey->ck_key, ckey->ck_mac);
         rc = crypto_decrypt_gks_key(req, ckey->ck_key, KEY_SIZE);
         if (rc != 0) {
                 CERROR("permssion check failed\n");
                 RETURN(rc);
         }
+        CDEBUG(D_INFO, "decrypt key %s mac %s \n", ckey->ck_key, ckey->ck_mac);
         
         RETURN(0); 
 }

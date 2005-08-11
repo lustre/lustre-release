@@ -240,7 +240,7 @@ int ll_gks_init_it(struct inode *parent, struct lookup_intent *it)
                 RETURN(rc);
 
         ll_gs_intent_init(it);
-        if (!(it->it_op & IT_CREAT))
+        if (!(it->it_flags & O_CREAT)) 
                 RETURN(rc);
 
         LASSERT(it->d.fs_data != NULL); 
@@ -330,7 +330,7 @@ int ll_gks_decrypt_key(struct inode *inode, struct lookup_intent *it)
         /*copy the decrypt key from kcontext to the lustre key*/
         
         spin_lock(&lli->lli_lock); 
-        memcpy(&lkey->lk_ck, ckey, sizeof(*ckey));
+        memcpy(&lkey->lk_dk, ckey->ck_key, KEY_SIZE);
         SET_DECRYPTED(lkey->lk_flags);
         spin_unlock(&lli->lli_lock); 
 out:
@@ -382,6 +382,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         struct key_perm *kperm = NULL;
         struct key_parms kparms;
         struct lustre_key *lkey =  NULL;
+        struct crypto_key *ckey = NULL;
         struct posix_acl *acl = NULL, *new_acl = NULL; 
         int rc = 0,  kperm_size = 0, kcontext_size = 0; 
         mode_t mac_mode;
@@ -422,7 +423,9 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                                 GOTO(out, rc);
                         }
                 }
-        } 
+        } else {
+                new_acl = acl;
+        }
         acl_count = new_acl ? new_acl->a_count : 0;  
         kperm_size = crypto_kperm_size(acl_count);
         OBD_ALLOC(kperm, kperm_size);
@@ -434,22 +437,18 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         kparms.perm_size = kperm_size; 
 
         *key_size = sizeof(struct crypto_key);
-        OBD_ALLOC(*key, *key_size);
-        if (!*key)
+        OBD_ALLOC(ckey, sizeof(struct crypto_key));
+        if (!ckey)
                 GOTO(out, rc = -ENOMEM);
         /*GET an encrypt key from GS server*/
         rc = obd_get_info(gs_exp, sizeof(struct key_parms), (void *)&kparms,
-                          key_size, *key);
+                          key_size, ckey);
         if (rc) {
                 CERROR("decrypt key error rc %d \n", rc);
                 GOTO(out, rc);
         }
-                        printk("come here 5\n"); 
-        /*copy the decrypt key from kcontext to the lustre key*/
-        spin_lock(&lli->lli_lock);
-        memcpy(&lkey->lk_ck, *key, *key_size);
+        *key = ckey;
         iattr->ia_valid |= ATTR_MAC;
-        spin_unlock(&lli->lli_lock);
 out:
         if (acl)
                 posix_acl_release(acl);
@@ -464,6 +463,17 @@ out:
         RETURN(rc); 
 }
 
+static int ll_crypt_permission_check(struct lustre_key *lkey,
+                                     int flags)
+{
+        if (!IS_DECRYPTED(lkey->lk_flags)) 
+                RETURN(-EFAULT);
+        if (flags == ENCRYPT_DATA && !IS_ENABLE_ENCRYPT(lkey->lk_flags)) 
+                RETURN(-EFAULT);
+        if (flags == DECRYPT_DATA && !IS_ENABLE_DECRYPT(lkey->lk_flags)) 
+                RETURN(-EFAULT);
+        RETURN(0);
+}
 /*key function for calculate the key for countermode method*/
 static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
                        int flags)
@@ -475,23 +485,19 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         char *key_ptr;
         int index = page->index;
         __u64 data_key = 0; 
-        int i;
+        int i, rc = 0;
         ENTRY;
 
         if (!lkey)
                 RETURN(0);
-        if (!IS_DECRYPTED(lkey->lk_flags))
-                RETURN(-EFAULT);
-        if (flags == ENCRYPT_DATA && !IS_ENABLE_ENCRYPT(lkey->lk_flags))
-                RETURN(-EFAULT);
-        if (flags == DECRYPT_DATA && !IS_ENABLE_DECRYPT(lkey->lk_flags))
-                RETURN(-EFAULT);
-        
-        /*FIXME: tmp calculate method, should calculate 
-          the key according to KEY_TYPE*/
-        
         spin_lock(&lli->lli_lock);
-        key_ptr = &lkey->lk_ck.ck_key[0];
+        rc = ll_crypt_permission_check(lkey, flags);
+        if (rc) {
+                spin_unlock(&lli->lli_lock);
+                RETURN(rc);
+        }
+        
+        key_ptr = &lkey->lk_dk[0];
         for (i=0; i < KEY_SIZE; i++) 
                 data_key += *key_ptr++; 
         spin_unlock(&lli->lli_lock);
@@ -508,7 +514,7 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         CDEBUG(D_INFO, "encrypted ptr is %s \n", key_ptr);
         kunmap(page);
         
-        RETURN(0); 
+        RETURN(rc); 
 } 
 
 int ll_gs_init_inode_key(struct inode *inode, void  *mkey)
@@ -533,25 +539,25 @@ int ll_gs_init_inode_key(struct inode *inode, void  *mkey)
                 spin_lock(&lli->lli_lock);
                 lli->lli_key_info = lkey; 
                 spin_unlock(&lli->lli_lock);
+                CDEBUG(D_INFO, "set key %s mac %s in inode %lu \n", 
+                       lli->lli_key_info->lk_ck.ck_key, 
+                       lli->lli_key_info->lk_ck.ck_mac, 
+                       inode->i_ino);
         } else {
                 lkey = lustre_key_get(lli->lli_key_info);
-                if (!IS_DECRYPTED(lkey->lk_flags)) {
-                        if (memcmp(&lkey->lk_ck, key, sizeof(*key))) {
-                                CWARN("already have key_info %p in ino %ld \n",
-                                      lli->lli_key_info, inode->i_ino);
-                        }
-                } else {
-                        spin_lock(&lli->lli_lock);
+                LASSERTF(!memcmp(lkey->lk_ck.ck_key, key->ck_key, KEY_SIZE), 
+                         "old key %s != new key %s\n", lkey->lk_ck.ck_key, 
+                         key->ck_key);
+                spin_lock(&lli->lli_lock);
+                if (memcmp(lkey->lk_ck.ck_mac, key->ck_mac, MAC_SIZE)){
+                        CDEBUG(D_INFO, "reset mac %s to %s ino %ld \n",
+                               lkey->lk_ck.ck_mac, key->ck_mac, inode->i_ino);
+                        memcpy(lkey->lk_ck.ck_mac, key->ck_mac, MAC_SIZE);
                         SET_UNDECRYPTED(lkey->lk_flags); 
-                        memcpy(&lkey->lk_ck, key, sizeof(*key));
-                        spin_unlock(&lli->lli_lock);
                 }
+                spin_unlock(&lli->lli_lock);
                 lustre_key_release(lkey);
         }
-        CDEBUG(D_INFO, "set key %s mac %s in inode %lu \n", 
-               lli->lli_key_info->lk_ck.ck_mac, 
-               lli->lli_key_info->lk_ck.ck_key, 
-               inode->i_ino);
         RETURN(0);
 }
 
