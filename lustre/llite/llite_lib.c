@@ -153,6 +153,9 @@ static int lustre_connect_mds(struct super_block *sb, char *lmv,
         obd_set_info(md_obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
+        if (mds_security == NULL)
+                mds_security = "null";
+        
         err = obd_set_info(md_obd->obd_self_export, strlen("sec"), "sec",
                            strlen(mds_security), mds_security);
         
@@ -230,6 +233,7 @@ out_disconnect:
 out:
         RETURN(err);
 }
+
 static int lustre_connect_ost(struct super_block *sb, char *lov, 
                               struct obd_connect_data *data, 
                               char *oss_security, int async, int pag)

@@ -599,24 +599,27 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         char *name;
                         int type;
                         
-                        /* tmp fix for cmobd set md reint */
                         LASSERT(rec->ur_eadata != NULL);
                         LASSERT(rec->ur_ea2data != NULL);
                         name = rec->ur_eadata;
-                        
-                        CDEBUG(D_INFO, "set %s EA for cmobd \n", name);
 
+                        /* XXX: tmp fix for setting LOV EA from CMOBD */
                         type = mds_get_md_type(name);
-                        if (type != 0) {
+
+                        if (type == EA_LOV) {
+                                CDEBUG(D_INFO, "set %s EA for cmobd \n", name);
+
                                 rc = fsfilt_set_md(obd, inode, handle, 
                                                    rec->ur_ea2data,
-                                                   rec->ur_ea2datalen, type);
+                                                   rec->ur_ea2datalen,
+                                                   type);
+                                if (rc)
+                                        GOTO(cleanup, rc);
                         }
-                        if (rc)
-                                GOTO(cleanup, rc);               
                 } else if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                            !((rec->ur_iattr.ia_valid & ATTR_KEY) || 
                              (rec->ur_iattr.ia_valid & ATTR_MAC))) {
+                        
                         struct lov_stripe_md *lsm = NULL;
                         struct lov_user_md *lum = NULL;
 
@@ -648,11 +651,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                                                 GOTO(cleanup, rc);
                                 }
                         }
-                }   
-                if ((rec->ur_iattr.ia_valid & ATTR_KEY) || 
-                    (rec->ur_iattr.ia_valid & ATTR_MAC)) {
+                }
+                
+                if ((rec->ur_iattr.ia_valid & ATTR_KEY) || (rec->ur_iattr.ia_valid & ATTR_MAC)) {
                         void *key;
                         int keylen;
+                        
                         LASSERT(rec->ur_eadatalen || rec->ur_ea3datalen); 
                         LASSERT(rec->ur_eadata || rec->ur_ea3data); 
                         key = rec->ur_ea3data ? rec->ur_ea3data : rec->ur_eadata;
