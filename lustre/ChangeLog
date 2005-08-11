@@ -39,6 +39,12 @@ Description: O_CREAT|O_EXCL open flags in liblustre always return -EEXIST
 Details    : Make libsysio to not enforce O_EXCL by clearing the flag,
              for liblustre O_EXCL is enforced by MDS.
 
+Severity   : minor
+Bugzilla   : 6455
+Description: readdir never returns NULL in liblustre.
+Details    : Corrected llu_iop_getdirentries logic, to return offset of next
+             dentry in struct dirent.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
