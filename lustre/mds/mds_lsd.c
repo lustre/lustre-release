@@ -63,8 +63,8 @@ static struct upcall_cache _lsd_cache;
 static struct list_head _lsd_hashtable[MDS_LSD_HASHSIZE];
 
 #define MDS_LSD_UPCALL_PATH             "/usr/sbin/lsd_upcall"
-#define MDS_LSD_ACQUIRE_EXPIRE          (5)
-#define MDS_LSD_ENTRY_EXPIRE            (5 * 60)
+#define MDS_LSD_ACQUIRE_EXPIRE          (10)
+#define MDS_LSD_ENTRY_EXPIRE            (10 * 60)
 #define MDS_LSD_ERR_ENTRY_EXPIRE        (30)
 
 struct upcall_cache *__mds_get_global_lsd_cache()
@@ -136,7 +136,8 @@ static int lsd_make_upcall(struct upcall_cache *cache,
                        "/proc/fs/lustre/mds/lsd_upcall\n",
                        argv[0], argv[1], rc);
         } else {
-                CDEBUG(D_SEC, "Invoked upcall %s %s\n", argv[0], argv[1]);
+                CWARN("%lu: lsd %p Invoked upcall %s %s\n",
+                      get_seconds(), entry, argv[0], argv[1]);
         }
         RETURN(rc);
 }
@@ -189,7 +190,8 @@ static int lsd_parse_downcall(struct upcall_cache *cache,
         lsd->lsd_ginfo = ginfo;
         lsd->lsd_nperms = lsd_args->nperms;
 
-        CWARN("LSD: %d:%d, ngrps %u, nperms %u\n", lsd->lsd_uid, lsd->lsd_gid,
+        CWARN("LSD (%p): %d:%d, ngrps %u, nperms %u\n",
+              lentry, lsd->lsd_uid, lsd->lsd_gid,
               lsd->lsd_ginfo ? lsd->lsd_ginfo->ngroups : 0, lsd->lsd_nperms);
 
         RETURN(0);

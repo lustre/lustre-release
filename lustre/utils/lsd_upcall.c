@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
+#include <syslog.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
@@ -353,6 +354,14 @@ void show_result(struct lsd_downcall_args *dc)
                         dc->perms[i].nid, dc->perms[i].perm);
 }
 
+#define log_msg(testing, fmt, args...)                  \
+        {                                               \
+                if (testing)                            \
+                        printf(fmt, ## args);           \
+                else                                    \
+                        syslog(LOG_ERR, fmt, ## args);  \
+        }
+
 void usage(char *prog)
 {
         printf("Usage: %s [-t] uid\n", prog);
@@ -409,11 +418,18 @@ do_downcall:
         } else {
                 dc_fd = open(dc_name, O_WRONLY);
                 if (dc_fd < 0) {
-                        printf("can't open device %s\n", dc_name);
+                        log_msg(testing, "can't open device %s: %s\n",
+                                dc_name, strerror(errno));
+
                         return -errno;
                 }
 
                 rc = write(dc_fd, &ioc_data, sizeof(ioc_data));
+                if (rc != sizeof(ioc_data)) {
+                        log_msg(testing, "partial write ret %d: %s\n",
+                                rc, strerror(errno));
+                }
+
                 return (rc != sizeof(ioc_data));
         }
 }
