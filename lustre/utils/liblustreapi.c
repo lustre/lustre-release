@@ -32,9 +32,9 @@
 #include <string.h>
 #include <stddef.h>
 #include <sys/ioctl.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <dirent.h>
 #include <stdarg.h>
 #include <sys/stat.h>
@@ -55,7 +55,6 @@
 #include <linux/lustre_acl.h>
 #include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
-
 #include <portals/ptlctl.h>
 
 static void err_msg(char *fmt, ...)

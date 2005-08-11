@@ -36,8 +36,6 @@
 #include <linux/lustre_sec.h>
 #include <linux/lustre_audit.h>
 #include <linux/fcntl.h>
-#include <linux/posix_acl.h>
-
 
 #define HDR_SIZE(count) \
     size_round(offsetof (struct lustre_msg, buflens[(count)]))
@@ -966,6 +964,7 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
 void lustre_assert_wire_constants(void)
 {
 }
+
 /* for gks key rec */
 void lustre_swab_key_perms(struct key_perm *kperm)
 {
@@ -980,9 +979,10 @@ void lustre_swab_key_perms(struct key_perm *kperm)
                 __swab32s(&kperm->kp_acls[i].e_id); 
         }  
 }
+
 void lustre_swab_key_context (struct key_context *kctxt)
 {
-        __swab32s (&kctxt->kc_command);
-        __swab32s (&kctxt->kc_valid); /* for use with open */
+        __swab32s(&kctxt->kc_command);
+        __swab32s(&kctxt->kc_valid); /* for use with open */
         lustre_swab_key_perms(&kctxt->kc_perm);
 }

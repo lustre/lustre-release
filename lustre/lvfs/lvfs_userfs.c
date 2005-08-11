@@ -24,9 +24,8 @@
  */
 
 #include <liblustre.h>
-#include <linux/lvfs.h>
-
 #include <linux/obd.h>
+#include <linux/lvfs.h>
 #include <linux/lustre_lib.h>
 
 /* XXX currently ctxt functions should not be used ?? */

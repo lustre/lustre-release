@@ -28,6 +28,7 @@
 
 #define DEBUG_SUBSYSTEM S_SEC
 
+#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <asm/unistd.h>
@@ -39,7 +40,12 @@
 #include <linux/lustre_debug.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_sec.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <libcfs/list.h>
+#include <linux/lustre_sec.h>
 
 kmem_cache_t *capa_cachep = NULL;
 
@@ -147,20 +153,19 @@ static void destroy_capa(struct obd_capa *ocapa)
 
 int capa_cache_init(void)
 {
-        int order = 0, nr_hash, i;
+        int nr_hash, i;
 
-        capa_hash = (struct hlist_head *)
-                                __get_free_pages(GFP_ATOMIC, order);
+        OBD_ALLOC(capa_hash, PAGE_SIZE);
         if (!capa_hash)
-                panic("Cannot create capa_hash hash table");
+                return -ENOMEM;
 
-        nr_hash = (1UL << order) * PAGE_SIZE / sizeof(struct hlist_head);
+        nr_hash = PAGE_SIZE / sizeof(struct hlist_head);
         LASSERT(nr_hash > NR_CAPAHASH);
 
         for (i = 0; i < NR_CAPAHASH; i++)
                 INIT_HLIST_HEAD(capa_hash + i);
 
-        for (i =0; i < 3; i++)
+        for (i = 0; i < 3; i++)
                 INIT_LIST_HEAD(&capa_list[i]);
 
         return 0;
@@ -224,7 +229,9 @@ get_new_capa_locked(struct hlist_head *head, uid_t uid, int capa_op,__u64 mdsid,
                 ocapa->c_type = type;
                 if (type == CLIENT_CAPA) {
                         LASSERT(inode);
+#ifdef __KERNEL__
                         igrab(inode);
+#endif
                         ocapa->c_inode = inode;
                         memcpy(&ocapa->c_handle, handle, sizeof(*handle));
                 }
@@ -304,7 +311,9 @@ void capa_put(struct obd_capa *ocapa, int type)
         if (ocapa) {
                 if (atomic_dec_and_lock(&ocapa->c_refc, &capa_lock)) {
                         if (type == CLIENT_CAPA) {
+#ifdef __KERNEL__
                                 iput(ocapa->c_inode);
+#endif
                                 __capa_put(ocapa, type);
                                 destroy_capa(ocapa);
                         }
@@ -349,7 +358,7 @@ int capa_renew(struct lustre_capa *capa, int type)
         return update_capa_locked(capa, type);
 }
 
-void capa_hmac(struct crypto_tfm *tfm, u8 *key, struct lustre_capa *capa)
+void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
 {
         int keylen = CAPA_KEY_LEN;
         struct scatterlist sl = {

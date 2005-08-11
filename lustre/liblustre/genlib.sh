@@ -53,7 +53,7 @@ build_sysio_obj_list() {
   _objs=`$AR -t $1`
   mkdir -p $sysio_tmp
   cd $sysio_tmp
-  $AR -x ../$1
+  $AR -x $1
   cd ..
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$sysio_tmp/$_lib ";

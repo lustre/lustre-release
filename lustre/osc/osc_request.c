@@ -778,8 +778,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         struct client_obd       *cli = &imp->imp_obd->u.cli;
         struct ost_body         *body;
         struct lustre_id        *raw_id = obdo_id(oa);
-        struct obd_capa         *ocapa;
-        struct lustre_capa      *capa;
+        struct obd_capa         *ocapa = NULL;
+        struct lustre_capa      *capa = NULL;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
         int                      niocount;
