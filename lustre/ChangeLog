@@ -45,6 +45,13 @@ Description: readdir never returns NULL in liblustre.
 Details    : Corrected llu_iop_getdirentries logic, to return offset of next
              dentry in struct dirent.
 
+Severity   : minor
+Bugzilla   : 7138
+Frequency  : liblustre only, depends on application IO pattern
+Description: liblustre clients evicted if not contacting servers
+Details    : Don't put liblustre clients into the ping_evictor list, so
+             they will not be evicted by the pinger ever.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes

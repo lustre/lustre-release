@@ -700,9 +700,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
         spin_unlock_irqrestore(&export->exp_lock, flags);
 
-        /* request from liblustre? */
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
+        /* request from liblustre?  Don't evict it for not pinging. */
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 export->exp_libclient = 1;
+                list_del_init(&export->exp_obd_chain_timed);
+        }
 
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
