@@ -1729,28 +1729,34 @@ err_llog:
 int mds_lov_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
-
+        struct obd_device *osc = mds->mds_osc_obd;
+        char flags[3]="";
+        ENTRY;
+ 
         if (mds->mds_profile) {
-                char * cln_prof;
-                struct config_llog_instance cfg;
-                struct lvfs_run_ctxt saved;
-                int len = strlen(mds->mds_profile) + sizeof("-clean") + 1;
-
-                OBD_ALLOC(cln_prof, len);
-                sprintf(cln_prof, "%s-clean", mds->mds_profile);
-
-                cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
-                                        cln_prof, &cfg);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                OBD_FREE(cln_prof, len);
+                class_del_profile(mds->mds_profile);
                 OBD_FREE(mds->mds_profile, strlen(mds->mds_profile) + 1);
                 mds->mds_profile = NULL;
         }
+
+        /* There better be a lov */
+        if (!osc)
+                RETURN(0);
+
+        obd_register_observer(osc, NULL);
+
+        /* Give lov our same shutdown flags */
+        /* Could probably use osc->obd_force = obd->obd_force safely */
+        if (obd->obd_force)
+                strcat(flags, "F");
+        if (obd->obd_fail)
+                strcat(flags, "A");
+        
+        /* Cleanup the lov */
+        obd_disconnect(mds->mds_osc_exp);
+        class_manual_cleanup(osc, flags);
+        mds->mds_osc_exp = NULL;
+
         RETURN(0);
 }
 
@@ -1761,11 +1767,9 @@ static int mds_precleanup(struct obd_device *obd, int stage)
 
         switch (stage) {
         case 1:
-                mds_lov_set_cleanup_flags(obd);
                 target_cleanup_recovery(obd);
                 break;
         case 2:
-                mds_lov_disconnect(obd);
                 mds_lov_clean(obd);
                 llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
                 rc = obd_llog_finish(obd, 0);

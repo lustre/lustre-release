@@ -218,7 +218,6 @@ struct lustre_mount_info {
 /* obd_mount.c */
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb));
 void lustre_common_put_super(struct super_block *sb);
-int class_manual_cleanup(struct obd_device *obd, char *flags);
 struct lustre_mount_info *lustre_get_mount(char *name);
 int lustre_put_mount(char *name);
 

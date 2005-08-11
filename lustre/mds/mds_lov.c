@@ -241,55 +241,6 @@ err_discon:
         RETURN(rc);
 }
 
-int mds_lov_disconnect(struct obd_device *obd)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        int rc = 0;
-        ENTRY;
-
-        if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
-                obd_register_observer(mds->mds_osc_obd, NULL);
-
-                /* The actual disconnect of the mds_lov will be called from
-                 * class_disconnect_exports from mds_lov_clean. So we have to
-                 * ensure that class_cleanup doesn't fail due to the extra ref
-                 * we're holding now. The mechanism to do that already exists -
-                 * the obd_force flag. We'll drop the final ref to the
-                 * mds_osc_exp in mds_cleanup. */
-                mds->mds_osc_obd->obd_force = 1;
-        }
-
-        RETURN(rc);
-}
-
-/* for consistency, let's make the lov and the lov's
- * osc's see the same cleanup flags as our mds */
-void mds_lov_set_cleanup_flags(struct obd_device *obd)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct lov_obd *lov;
-
-        if (IS_ERR(mds->mds_osc_obd) || (mds->mds_osc_exp == NULL))
-                return;
-
-        lov = &mds->mds_osc_obd->u.lov;
-        mds->mds_osc_obd->obd_force = obd->obd_force;
-        mds->mds_osc_obd->obd_fail = obd->obd_fail;
-        if (lov->tgts) {
-                struct obd_export *osc_exp;
-                int i;
-                spin_lock(&lov->lov_lock);
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (lov->tgts[i].ltd_exp != NULL) {
-                                osc_exp = lov->tgts[i].ltd_exp;
-                                osc_exp->exp_obd->obd_force = obd->obd_force;
-                                osc_exp->exp_obd->obd_fail = obd->obd_fail;
-                        }
-                }
-                spin_unlock(&lov->lov_lock);
-        }
-}
-
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)
 {

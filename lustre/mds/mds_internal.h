@@ -143,8 +143,6 @@ int mds_llog_finish(struct obd_device *obd, int count);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
-int mds_lov_disconnect(struct obd_device *obd);
-void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_nextid(struct obd_device *obd);
@@ -198,7 +196,7 @@ int lustre_dquot_init(void);
 void lustre_dquot_exit(void);
 int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc);
 void mds_adjust_qunit(struct obd_device *obd, uid_t cuid, gid_t cgid, 
-		      uid_t puid, gid_t pgid, int rc);
+                      uid_t puid, gid_t pgid, int rc);
 int init_admin_quotafiles(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_on(struct obd_device *obd, struct obd_quotactl *oqctl);
 int mds_quota_off(struct obd_device *obd, struct obd_quotactl *oqctl);

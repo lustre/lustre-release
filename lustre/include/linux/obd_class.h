@@ -155,9 +155,7 @@ int class_disconnect(struct obd_export *exp);
 void class_fail_export(struct obd_export *exp);
 void class_disconnect_exports(struct obd_device *obddev);
 void class_disconnect_stale_exports(struct obd_device *obddev);
-/* generic operations shared by various OBD types */
-int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
-int class_multi_cleanup(struct obd_device *obddev);
+void class_manual_cleanup(struct obd_device *obd, char *flags);
 
 /* obdo.c */
 #ifdef __KERNEL__

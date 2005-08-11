@@ -563,31 +563,6 @@ static void lustre_stop_mgc(struct super_block *sb)
                 class_manual_cleanup(obd, NULL);
 }
           
-//FIXME move to obd_config.c
-int class_manual_cleanup(struct obd_device *obd, char *flags)
-{
-        int err, rc = 0;
-        
-        if (!obd)
-                return 0;
-
-        err = do_lcfg(obd->obd_name, 0, LCFG_CLEANUP, flags, 0, 0, 0);
-        if (err) {
-                CERROR("cleanup failed (%d): %s\n", err, obd->obd_name);
-                rc = err;
-        }
-        
-        err = do_lcfg(obd->obd_name, 0, LCFG_DETACH, 0, 0, 0, 0);
-        if (err) {
-                CERROR("detach failed (%d): %s\n", err, obd->obd_name);
-                if (!rc) 
-                        rc = err;
-        }
-
-        return(rc);
-}
-
-
 /***************** mount **************/
 
 struct lustre_sb_info *lustre_init_sbi(struct super_block *sb)
@@ -767,10 +742,8 @@ static void server_put_super(struct super_block *sb)
                 }
                                                                                        
                 CERROR("stopping %s\n", logname);
-                err = class_manual_cleanup(obd, flags);
-                if (err) {
-                        CERROR("failed to cleanup %s: %d\n", logname, err);
-                }
+                class_manual_cleanup(obd, flags);
+
                 OBD_FREE(dirent, sizeof(*dirent));
         }
                                                                                        
@@ -1054,7 +1027,6 @@ int lustre_unregister_fs(void)
 EXPORT_SYMBOL(lustre_register_client_fill_super);
 EXPORT_SYMBOL(lustre_common_put_super);
 EXPORT_SYMBOL(lustre_get_process_log);
-EXPORT_SYMBOL(class_manual_cleanup);
 EXPORT_SYMBOL(lustre_get_mount);
 EXPORT_SYMBOL(lustre_put_mount);
 
