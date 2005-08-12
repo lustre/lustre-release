@@ -2993,8 +2993,8 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
         struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
         struct llog_ctxt *ctxt;
-        int rc, size = keylen;
-        char *bufs[1] = {key};
+        int rc, size[2] = {keylen, vallen};
+        char *bufs[2] = {key, val};
         ENTRY;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
@@ -3037,11 +3037,11 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (!KEY_IS("mds_conn"))
+        if (!KEY_IS("mds_conn") && !KEY_IS("evict_by_nid"))
                 RETURN(-EINVAL);
 
 
-        req = ptlrpc_prep_req(imp, OST_SET_INFO, 1, &size, bufs);
+        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, &size, bufs);
         if (req == NULL)
                 RETURN(-ENOMEM);
 

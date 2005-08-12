@@ -2046,6 +2046,20 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(rc);
         }
 
+        if (KEY_IS("evict_by_nid")) {
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        /* OST was disconnected or is inactive */
+                        if (!lov->tgts[i].ltd_exp || !lov->tgts[i].active)
+                                continue;
+
+                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
+                                           vallen, val);
+                        if (!rc)
+                                rc = err;
+                }
+                RETURN(rc);
+        }
+
         if (KEY_IS("mds_conn") || KEY_IS("unlinked")) {
                 if (vallen != 0)
                         RETURN(-EINVAL);

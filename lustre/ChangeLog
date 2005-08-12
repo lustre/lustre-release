@@ -52,6 +52,14 @@ Description: liblustre clients evicted if not contacting servers
 Details    : Don't put liblustre clients into the ping_evictor list, so
              they will not be evicted by the pinger ever.
 
+Severity   : enhancement
+Bugzilla   : 6902
+Description: Add ability to evict clients by NID from MDS>
+Details    : By echoing "nid:$NID" string into
+             /proc/fs/lustre/mds/.../evict_client client with nid that equals to
+             $NID would be instantly evicted from this MDS and from all active
+             OSTs connected to it.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes

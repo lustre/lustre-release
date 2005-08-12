@@ -463,32 +463,12 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                             unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *doomed_exp = NULL;
-        struct obd_uuid doomed;
-        struct list_head *p;
-        char tmpbuf[sizeof(doomed)];
+        char tmpbuf[sizeof(struct obd_uuid)];
 
         sscanf(buffer, "%40s", tmpbuf);
-        obd_str2uuid(&doomed, tmpbuf);
 
-        spin_lock(&obd->obd_dev_lock);
-        list_for_each(p, &obd->obd_exports) {
-                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
-                if (obd_uuid_equals(&doomed, &doomed_exp->exp_client_uuid)) {
-                        class_export_get(doomed_exp);
-                        break;
-                }
-                doomed_exp = NULL;
-        }
-        spin_unlock(&obd->obd_dev_lock);
+        obd_export_evict_by_uuid(obd, tmpbuf);
 
-        if (doomed_exp == NULL) {
-                CERROR("can't disconnect %s: no export found\n", doomed.uuid);
-        } else {
-                CERROR("evicting %s at adminstrative request\n", doomed.uuid);
-                class_fail_export(doomed_exp);
-                class_export_put(doomed_exp);
-        }
         return count;
 }
 EXPORT_SYMBOL(lprocfs_wr_evict_client);

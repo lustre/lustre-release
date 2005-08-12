@@ -46,6 +46,30 @@ static int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n",obd->u.mds.mds_vfsmnt->mnt_devname);
 }
 
+static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mds_obd *mds = &obd->u.mds;
+        char tmpbuf[sizeof(struct obd_uuid)];
+        int rc;
+
+        sscanf(buffer, "%40s", tmpbuf);
+
+        if (strncmp(tmpbuf, "nid:", 4) != 0) {
+                return lprocfs_wr_evict_client(file, buffer, count, data);
+        }
+
+        obd_export_evict_by_nid(obd, tmpbuf+4);
+
+        rc = obd_set_info(mds->mds_osc_exp, strlen("evict_by_nid"),
+                          "evict_by_nid", strlen(tmpbuf+4) + 1, tmpbuf+4);
+        if (rc)
+                CERROR("Failed to evict nid %s from OSTs\n", tmpbuf+4);
+
+        return count;
+}
+
 static int lprocfs_wr_group_info(struct file *file, const char *buffer,
                                  unsigned long count, void *data)
 {
@@ -211,7 +235,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
-        { "evict_client",    0,                    lprocfs_wr_evict_client, 0 },
+        { "evict_client",    0,                lprocfs_mds_wr_evict_client, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
 #ifdef HAVE_QUOTA_SUPPORT
         { "quota_bunit_sz",  lprocfs_mds_rd_bunit, lprocfs_mds_wr_bunit, 0 },

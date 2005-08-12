@@ -241,11 +241,11 @@ void liblustre_set_nal_nid()
         if (ip == 0)
                 get_random_bytes(&ip, sizeof(ip));
         pid = getpid() & 0xffffffff;
-        tcpnal_mynid = ((uint64_t)ip << 32) | pid;
+        tcpnal_mynid = ((uint64_t)pid << 32) | ip;
 
         in.s_addr = htonl(ip);
-        CDEBUG(D_RPCTRACE | D_VFSTRACE, "TCPNAL NID: %016Lx (%s:%u)\n",
-               (long long)tcpnal_mynid, inet_ntoa(in), pid);
+        CDEBUG(D_RPCTRACE | D_VFSTRACE, "TCPNAL NID: %016Lx (%u:%s)\n",
+               (long long)tcpnal_mynid, pid, inet_ntoa(in));
 #else
         pid_t pid;
         uint32_t ip;

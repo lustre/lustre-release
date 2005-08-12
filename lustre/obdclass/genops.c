@@ -1265,3 +1265,78 @@ char *obd_export_nid2str(struct obd_export *exp, char *ipbuf)
 
         return ipbuf;
 }
+
+int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
+{
+        struct obd_export *doomed_exp = NULL;
+        struct list_head *p;
+        int exports_evicted = 0;
+
+search_again:
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                char ipbuf[PTL_NALFMT_SIZE];
+
+                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
+                obd_export_nid2str(doomed_exp, ipbuf);
+
+                if (strcmp(ipbuf, nid) == 0) {
+                        class_export_get(doomed_exp);
+                        break;
+                }
+                doomed_exp = NULL;
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        if (doomed_exp == NULL) {
+                goto out;
+        } else {
+                CERROR("evicting %s at adminstrative request\n",
+                       doomed_exp->exp_client_uuid.uuid);
+                class_fail_export(doomed_exp);
+                class_export_put(doomed_exp);
+                exports_evicted++;
+                goto search_again;
+        }
+
+out:
+        if (!exports_evicted)
+                CERROR("can't disconnect %s: no exports found\n", nid);
+        return exports_evicted;
+}
+EXPORT_SYMBOL(obd_export_evict_by_nid);
+
+int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
+{
+        struct obd_export *doomed_exp = NULL;
+        struct list_head *p;
+        struct obd_uuid doomed;
+        int exports_evicted = 0;
+
+        obd_str2uuid(&doomed, uuid);
+
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
+
+                if (obd_uuid_equals(&doomed, &doomed_exp->exp_client_uuid)) {
+                        class_export_get(doomed_exp);
+                        break;
+                }
+                doomed_exp = NULL;
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        if (doomed_exp == NULL) {
+                CERROR("can't disconnect %s: no exports found\n", uuid);
+        } else {
+                CERROR("evicting %s at adminstrative request\n",
+                       doomed_exp->exp_client_uuid.uuid);
+                class_fail_export(doomed_exp);
+                class_export_put(doomed_exp);
+                exports_evicted++;
+        }
+
+        return exports_evicted;
+}
+EXPORT_SYMBOL(obd_export_evict_by_uuid);
