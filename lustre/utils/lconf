@@ -2936,7 +2936,7 @@ def doClumanager(lustreDB, hosts):
             if not node_db:
                 panic("No node entry for " + node_uuid + " was found.")
 
-            new_services = new_services + append(add_clumanager_node(node_db, nodes, services))
+            new_services.append(add_clumanager_node(node_db, nodes, services))
 
     nodenames = []
     for node in nodes.keys():
