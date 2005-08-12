@@ -1995,6 +1995,11 @@ int jt_set_lkey_type(int argc, char **argv)
 
         IOC_INIT(data);
 
+        if (strcmp(type, "gks") && strcmp(type, "mks")) {
+                fprintf(stderr, "Invalid type %s Only support gks or mks \n",
+                        type);
+                return -EINVAL; 
+        }
         data.ioc_inllen1 = strlen(type) + 1;
         data.ioc_inlbuf1 = type;
 
