@@ -101,7 +101,6 @@ int filter_finish_transno(struct obd_export *exp, struct obd_trans_info *oti,
         if (oti->oti_transno == 0) {
                 spin_lock(&filter->fo_translock);
                 last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_transno) + 1;
-                last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_transno) + 1;
                 filter->fo_fsd->fsd_last_transno = cpu_to_le64(last_rcvd);
                 spin_unlock(&filter->fo_translock);
                 oti->oti_transno = last_rcvd;
