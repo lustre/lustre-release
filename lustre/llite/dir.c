@@ -233,7 +233,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
                 if (op_data == NULL)
                         return ERR_PTR(-ENOMEM);
 
-                ll_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
+                ll_inode2mdc_data(op_data, dir, (OBD_MD_FLID | OBD_MD_MEA));
 
                 rc = ll_intent_alloc(&it);
                 if (rc)
@@ -426,7 +426,7 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
         OBD_ALLOC(op_data, sizeof(*op_data));
         if (op_data == NULL)
                 GOTO(out, err = -ENOMEM);
-        ll_prepare_mdc_data(op_data, inode, NULL, name,lums.lums_namelen,0);
+        ll_prepare_mdc_data(op_data, inode, NULL, name, lums.lums_namelen, 0);
         err = md_create(sbi->ll_md_exp, op_data, &nstripes, sizeof(nstripes),
                         mode, current->fsuid, current->fsgid, 0, &request);
         OBD_FREE(op_data, sizeof(*op_data));
@@ -500,7 +500,7 @@ static int ll_ioctl_setfacl(struct inode *inode,
                             struct ll_acl_ioctl_data *ioc)
 {
         struct ptlrpc_request *req = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_body *body;
         struct iattr attr;
         char *cmd;
@@ -522,12 +522,18 @@ static int ll_ioctl_setfacl(struct inode *inode,
         attr.ia_valid |= ATTR_EA;
         attr.ia_attr_flags = 0;
 
-        ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (!op_data)
+                GOTO(out, rc = -ENOMEM);
+        
+        ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
-        rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, &op_data, &attr,
-                        (void*) XATTR_NAME_LUSTRE_ACL,
+        rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, &attr,
+                        (void *)XATTR_NAME_LUSTRE_ACL,
                         sizeof(XATTR_NAME_LUSTRE_ACL),
-                        (void*) cmd, ioc->cmd_len, NULL, 0, &req);
+                        (void *)cmd, ioc->cmd_len, NULL, 0, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
+        
         if (rc) {
                 CERROR("md_setattr fails: rc = %d\n", rc);
                 GOTO(out, rc);
@@ -658,7 +664,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 
-                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
+                ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
                 rc = md_setattr(sbi->ll_md_exp, op_data, &attr, &lum,
                                 sizeof(lum), NULL, 0, NULL, 0, &request);

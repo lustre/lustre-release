@@ -85,7 +85,7 @@ int class_process_config(struct lustre_cfg *lcfg);
 
 /* Passed as data param to class_config_parse_handler() */
 struct config_llog_instance {
-        char * cfg_instance;
+        char *cfg_instance;
         struct obd_uuid cfg_uuid;
         ptl_nid_t cfg_local_nid;
 };
@@ -1236,7 +1236,8 @@ static inline int md_change_cbdata_name(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int md_close(struct obd_export *exp, struct obdo *obdo,
+static inline int md_close(struct obd_export *exp,
+                           struct mdc_op_data *op_data,
                            struct obd_client_handle *och,
                            struct ptlrpc_request **request)
 {
@@ -1244,7 +1245,7 @@ static inline int md_close(struct obd_export *exp, struct obdo *obdo,
         ENTRY;
         EXP_CHECK_MD_OP(exp, close);
         MD_COUNTER_INCREMENT(exp->exp_obd, close);
-        rc = MDP(exp->exp_obd, close)(exp, obdo, och, request);
+        rc = MDP(exp->exp_obd, close)(exp, op_data, och, request);
         RETURN(rc);
 }
 

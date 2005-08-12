@@ -66,7 +66,10 @@ static int smfs_init_snap_super_info(struct smfs_super_info *smfs_info)
                 char *snap_cache_ftype = NULL;
                 int   tmp = strlen(smfs_info->smsi_cache_ftype) + strlen("_snap");
                 
-                OBD_ALLOC(snap_cache_ftype, tmp + 1);  
+                OBD_ALLOC(snap_cache_ftype, tmp + 1);
+                if (!snap_cache_ftype)
+                        GOTO(exit, rc = -ENOMEM);
+                        
                 sprintf(snap_cache_ftype, "%s_snap", smfs_info->smsi_cache_ftype);
                 snap_sinfo->snap_cache_fsfilt = fsfilt_get_ops(snap_cache_ftype);
                 OBD_FREE(snap_cache_ftype, tmp + 1);
@@ -81,6 +84,9 @@ static int smfs_init_snap_super_info(struct smfs_super_info *smfs_info)
                 int   tmp = strlen(smfs_info->smsi_ftype) + strlen("_snap");
                 
                 OBD_ALLOC(snap_ftype, tmp + 1);  
+                if (!snap_ftype)
+                        GOTO(exit, rc = -ENOMEM);
+
                 sprintf(snap_ftype, "%s_snap", smfs_info->smsi_ftype);
                 snap_sinfo->snap_fsfilt = fsfilt_get_ops(snap_ftype);
                 OBD_FREE(snap_ftype, tmp + 1);

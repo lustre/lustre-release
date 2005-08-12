@@ -349,8 +349,8 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                              struct ptlrpc_request *open_req);
 int mdc_clear_open_replay_data(struct obd_export *exp, 
                                struct obd_client_handle *och);
-int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
-              struct ptlrpc_request **);
+int mdc_close(struct obd_export *, struct mdc_op_data *,
+              struct obd_client_handle *, struct ptlrpc_request **);
 int mdc_readpage(struct obd_export *exp, struct lustre_id *id,
                  __u64, struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,

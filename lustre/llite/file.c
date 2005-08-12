@@ -77,8 +77,9 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                     struct obd_client_handle *och, int dirty)
 {
         struct ptlrpc_request *req = NULL;
-        struct obdo *obdo = NULL;
+        struct mdc_op_data *op_data;
         struct obd_device *obd;
+        obd_valid valid;
         int rc;
         ENTRY;
 
@@ -86,55 +87,47 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         if (obd == NULL) {
                 CERROR("Invalid MDC connection handle "LPX64"\n",
                        md_exp->exp_handle.h_cookie);
-                EXIT;
-                return 0;
+                RETURN(0);
         }
 
-        /*
-         * here we check if this is forced umount. If so this is called on
+        /* here we check if this is forced umount. If so this is called on
          * canceling "open lock" and we do not call md_close() in this case , as
-         * it will not successful, as import is already deactivated.
-         */
+         * it will not successful, as import is already deactivated. */
         if (obd->obd_no_recov)
                 GOTO(out, rc = 0);
 
-        /* closing opened file */
-        obdo = obdo_alloc();
-        if (obdo == NULL)
+        /* prepare @op_data for close request */
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (!op_data)
                 RETURN(-ENOMEM);
 
-        obdo->o_id = inode->i_ino;
-        obdo->o_generation = inode->i_generation;
-        obdo->o_valid = OBD_MD_FLID;
-        obdo_from_inode(obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                      OBD_MD_FLCTIME));
-        if (0 /* ll_is_inode_dirty(inode) */) {
-                obdo->o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                obdo->o_valid |= OBD_MD_FLFLAGS;
-        }
-        obdo->o_fid = id_fid(&ll_i2info(inode)->lli_id);
-        obdo->o_mds = id_group(&ll_i2info(inode)->lli_id);
+        memset(op_data, 0, sizeof(*op_data));
 
-        obdo->o_valid |= OBD_MD_FLEPOCH;
-        obdo->o_easize = ll_i2info(inode)->lli_io_epoch;
+        valid = (OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                 OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLEPOCH |
+                 OBD_MD_FLID);
+        
+        ll_inode2mdc_data(op_data, inode, valid);
+
+        if (0 /* ll_is_inode_dirty(inode) */) {
+                op_data->flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                op_data->valid |= OBD_MD_FLFLAGS;
+        }
 
         if (dirty) {
                 /* we modified data through this handle */
-                obdo->o_flags |= MDS_BFLAG_DIRTY_EPOCH;
-                obdo->o_valid |= OBD_MD_FLFLAGS;
-                if (ll_validate_size(inode, &obdo->o_size, &obdo->o_blocks))
-                        obdo->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                op_data->flags |= MDS_BFLAG_DIRTY_EPOCH;
+                op_data->valid |= OBD_MD_FLFLAGS;
+                if (ll_validate_size(inode, &op_data->size, &op_data->blocks))
+                        op_data->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         }
 
-        rc = md_close(md_exp, obdo, och, &req);
-        obdo_free(obdo);
+        rc = md_close(md_exp, op_data, och, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (rc == EAGAIN) {
-                /*
-                 * we are the last writer, so the MDS has instructed us to get
-                 * the file size and any write cookies, then close again.
-                 */
+                /* we are the last writer, so the MDS has instructed us to get
+                 * the file size and any write cookies, then close again. */
 
                 //ll_queue_done_writing(inode);
                 rc = 0;
@@ -1267,15 +1260,14 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                                     int flags, struct lov_user_md *lum,
                                     int lum_size)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct file *f;
-        struct obd_export *exp = ll_i2dtexp(inode);
-        struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *req = NULL;
-        int rc = 0;
-        struct lustre_md md;
         struct obd_client_handle *och;
+        struct lov_stripe_md *lsm;
+        struct lustre_md md;
+        struct file *f;
+        int rc = 0;
         ENTRY;
 
         
@@ -1317,16 +1309,21 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mdc_req2lustre_md(ll_i2mdexp(inode), req, 1, exp, &md);
+        rc = mdc_req2lustre_md(ll_i2mdexp(inode), req, 1,
+                               ll_i2dtexp(inode), &md);
         if (rc)
                 GOTO(out, rc);
         ll_update_inode(f->f_dentry->d_inode, &md);
 
         OBD_ALLOC(och, sizeof(struct obd_client_handle));
+        if (!och)
+                GOTO(out, rc = -ENOMEM);
+        
+         /* actually ll_local_open() cannot fail! */
         rc = ll_local_open(f, &oit, och);
-        if (rc) { /* Actually ll_local_open cannot fail! */
+        if (rc)
                 GOTO(out, rc);
-        }
+
         if (LUSTRE_IT(&oit)->it_lock_mode) {
                 ldlm_lock_decref_and_cancel((struct lustre_handle *)
                                             &LUSTRE_IT(&oit)->it_lock_handle,
@@ -1336,9 +1333,9 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 
         ll_intent_release(&oit);
 
-        /* ll_file_release will decrease the count, but won't free anything
-           because we have at least one more reference coming from actual open
-         */
+        /* ll_file_release() will decrease the count, but won't free anything
+         * because we have at least one more reference coming from actual
+         * open. */
         down(&lli->lli_och_sem);
         lli->lli_open_fd_write_count++;
         up(&lli->lli_och_sem);
@@ -1347,7 +1344,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         /* Now also destroy our supplemental och */
         ll_md_och_close(ll_i2mdexp(inode), f->f_dentry->d_inode, och, 0);
         EXIT;
- out:
+out:
         ll_intent_release(&oit);
         if (f)
                 put_filp(f);
@@ -1361,37 +1358,35 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
                         unsigned long arg)
 {
         int flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
-        struct lov_user_md  *lump;
         int lum_size = sizeof(struct lov_user_md) +
                 sizeof(struct lov_user_ost_data);
+        struct lov_user_md  *lump;
         int rc;
         ENTRY;
 
-        if (!capable (CAP_SYS_ADMIN))
+        if (!capable(CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
         OBD_ALLOC(lump, lum_size);
-        if (lump == NULL) {
+        if (lump == NULL)
                 RETURN(-ENOMEM);
-        }
+        
         rc = copy_from_user(lump, (struct lov_user_md  *)arg, lum_size);
-        if (rc) {
-                OBD_FREE(lump, lum_size);
-                RETURN(-EFAULT);
-        }
+        if (rc)
+                GOTO(out_free_lump, rc = -EFAULT);
 
         rc = ll_lov_setstripe_ea_info(inode, file, flags, lump, lum_size);
-
+        EXIT;
+out_free_lump:
         OBD_FREE(lump, lum_size);
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_lov_setstripe(struct inode *inode, struct file *file,
                             unsigned long arg)
 {
         struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
-        int rc;
-        int flags = FMODE_WRITE;
+        int rc, flags = FMODE_WRITE;
         ENTRY;
 
         /* Bug 1152: copy properly when this is no longer true */
@@ -1893,7 +1888,7 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct iattr attr;
         void *key = NULL;
         int rc = 0, key_size = 0;
@@ -1914,11 +1909,15 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
                                        &key, &key_size);
         }
 
-        ll_prepare_mdc_data(&op_data, inode, NULL, NULL, 0, 0);
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (!op_data)
+                RETURN(-ENOMEM);
+        
+        ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
-        rc = md_setattr(sbi->ll_md_exp, &op_data, &attr,
-                        (void*) name, strnlen(name, XATTR_NAME_MAX) + 1, 
-                        (void*) value,  size, key, key_size, &request);
+        rc = md_setattr(sbi->ll_md_exp, op_data, &attr,
+                        (void *)name, strnlen(name, XATTR_NAME_MAX) + 1, 
+                        (void *)value,  size, key, key_size, &request);
         
         if (key && key_size) 
                 OBD_FREE(key, key_size);

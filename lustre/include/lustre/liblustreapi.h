@@ -36,7 +36,8 @@ extern int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
                       int verbose, int quiet, int showfid);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
 extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
-extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
+extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp,
+                               __u32 *obdgens, int *ost_count);
 extern int llapi_is_lustre_mnttype(char *type);
 extern int llapi_getfacl(char *dir, char *cmd);
 extern int llapi_setfacl(char *dir, char *cmd);

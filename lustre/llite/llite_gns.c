@@ -173,8 +173,8 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         path = d_path(dentry, mnt, pathpage, PAGE_SIZE);
         if (IS_ERR(path)) {
                 CERROR("can't build mount object path, err %d\n",
-                       (int)PTR_ERR(dchild));
-                GOTO(cleanup, rc = PTR_ERR(dchild));
+                       (int)PTR_ERR(path));
+                GOTO(cleanup, rc = PTR_ERR(path));
         }
 
         /* synchronizing with possible /proc/fs/...write */

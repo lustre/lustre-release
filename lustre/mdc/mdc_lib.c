@@ -108,41 +108,44 @@ void mdc_getattr_pack(struct lustre_msg *msg, int offset,
         }
 }
 
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-                    __u64 valid, struct obd_client_handle *och)
+void mdc_close_pack(struct ptlrpc_request *req, int offset,
+                    struct mdc_op_data *op_data,
+                    struct obd_client_handle *och)
 {
+        obd_valid valid = op_data->valid;
         struct mds_body *body;
 
-        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
-        mdc_pack_id(&body->id1, oa->o_id, oa->o_generation, oa->o_mode, 0, 0);
+        body = lustre_msg_buf(req->rq_reqmsg, offset,
+                              sizeof(*body));
+        body->id1 = op_data->id1;
 
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        if (oa->o_valid & OBD_MD_FLATIME) {
-                body->atime = oa->o_atime;
+        if (valid & OBD_MD_FLATIME) {
+                body->atime = op_data->atime;
                 body->valid |= OBD_MD_FLATIME;
         }
-        if (oa->o_valid & OBD_MD_FLMTIME) {
-                body->mtime = oa->o_mtime;
+        if (valid & OBD_MD_FLMTIME) {
+                body->mtime = op_data->mtime;
                 body->valid |= OBD_MD_FLMTIME;
         }
-        if (oa->o_valid & OBD_MD_FLCTIME) {
-                body->ctime = oa->o_ctime;
+        if (valid & OBD_MD_FLCTIME) {
+                body->ctime = op_data->ctime;
                 body->valid |= OBD_MD_FLCTIME;
         }
-        if (oa->o_valid & OBD_MD_FLSIZE) {
-                body->size = oa->o_size;
+        if (valid & OBD_MD_FLSIZE) {
+                body->size = op_data->size;
                 body->valid |= OBD_MD_FLSIZE;
         }
-        if (oa->o_valid & OBD_MD_FLBLOCKS) {
-                body->blocks = oa->o_blocks;
+        if (valid & OBD_MD_FLBLOCKS) {
+                body->blocks = op_data->blocks;
                 body->valid |= OBD_MD_FLBLOCKS;
         }
-        if (oa->o_valid & OBD_MD_FLFLAGS) {
-                body->flags = oa->o_flags;
+        if (valid & OBD_MD_FLFLAGS) {
+                body->flags = op_data->flags;
                 body->valid |= OBD_MD_FLFLAGS;
         }
-        if (oa->o_valid & OBD_MD_FLEPOCH) {
-                body->io_epoch = oa->o_easize;
+        if (valid & OBD_MD_FLEPOCH) {
+                body->io_epoch = op_data->io_epoch;
                 body->valid |= OBD_MD_FLEPOCH;
         }
 }

@@ -255,12 +255,14 @@ int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg,
         *sizep = cpu_to_le32(sizeof(*ckey));
 
         OBD_ALLOC(md_key, sizeof(*md_key));
+        if (!md_key)
+                RETURN(-ENOMEM);
       
         buflen = repmsg->buflens[*offset];
         buf = lustre_msg_buf(repmsg, (*offset)++, buflen);
 
         size = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
-                           EA_KEY);
+                             EA_KEY);
         if (size <= 0) {
                 if (size < 0) 
                         CERROR("Can not get gskey from MDS ino %lu rc %d\n",
@@ -309,9 +311,8 @@ int mds_set_gskey(struct obd_device *obd, void *handle,
         LASSERT(ckey->ck_type == MKS_TYPE || ckey->ck_type == GKS_TYPE);   
         
         OBD_ALLOC(md_key, sizeof(*md_key)); 
-        if (ckey->ck_type == MKS_TYPE) { 
+        if (ckey->ck_type == MKS_TYPE)
                 mds_get_gskey(inode, ckey);
-        } 
 
         rc = fsfilt_get_md(obd, inode, md_key, sizeof(*md_key), 
                            EA_KEY);

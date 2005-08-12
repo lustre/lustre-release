@@ -397,7 +397,9 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
                dirent->lld_off = offset; 
 
         OBD_ALLOC(dirent, sizeof(*dirent));
-
+        if (!dirent)
+                return -ENOMEM;
+        
         list_add_tail(&dirent->lld_list, buf->lrc_list);
 
         buf->lrc_dirent = dirent;

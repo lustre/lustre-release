@@ -417,7 +417,9 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
                 OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
-
+                if (!it.d.fs_data)
+                        GOTO(cleanup, rc = -ENOMEM);
+                        
                 rc = md_intent_lock(lmv->tgts[id_group(&id)].ltd_exp, &id,
                                     NULL, 0, NULL, 0, &id, &it, 0, &req,
                                     lmv_dirobj_blocking_ast);
@@ -672,6 +674,9 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 cb = lmv_dirobj_blocking_ast;
 
                 OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
+                if (!it.d.fs_data)
+                        GOTO(cleanup, rc = -ENOMEM);
+                        
                 if (id_equal_fid(&id, &obj->id)) {
                         if (master_valid) {
                                 /* lmv_intent_getattr() already checked

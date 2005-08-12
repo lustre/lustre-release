@@ -752,9 +752,8 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         spin_unlock(&open_req->rq_lock);
 }
 
-int mdc_close(struct obd_export *exp, struct obdo *oa,
-              struct obd_client_handle *och,
-              struct ptlrpc_request **request)
+int mdc_close(struct obd_export *exp, struct mdc_op_data *op_data,
+              struct obd_client_handle *och, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_import *imp = class_exp2cliimp(exp);
@@ -779,10 +778,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                 GOTO(out, rc = -ENOMEM);
         req->rq_request_portal = MDS_CLOSE_PORTAL;
 
-        //reqsize[0] = lustre_secdesc_size();
-        //lustre_pack_secdesc(req, reqsize[0]);
-
-        /* Ensure that this close's handle is fixed up during replay. */
+        /* ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
         mod = och->och_mod;
         if (likely(mod != NULL)) {
@@ -794,7 +790,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
                        "expecting close error\n");
         }
 
-        mdc_close_pack(req, 1, oa, oa->o_valid, och);
+        mdc_close_pack(req, 1, op_data, och);
 
         req->rq_replen = lustre_msg_size(3, repsize);
         req->rq_commit_cb = mdc_commit_close;
@@ -1554,8 +1550,8 @@ out_req:
 }
 
 int mdc_obj_create(struct obd_export *exp, struct obdo *oa,
-                   void *acl, int acl_size,
-                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
+                   void *acl, int acl_size, struct lov_stripe_md **ea,
+                   struct obd_trans_info *oti)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;

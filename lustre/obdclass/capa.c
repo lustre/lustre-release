@@ -181,6 +181,8 @@ void capa_cache_cleanup(void)
                 list_del(&ocapa->c_list);
                 OBD_FREE(ocapa, sizeof(*ocapa));
         }
+
+        OBD_FREE(capa_hash, PAGE_SIZE);
 }
 
 

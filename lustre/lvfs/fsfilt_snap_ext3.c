@@ -376,7 +376,6 @@ static void ext3_copy_meta(handle_t *handle, struct inode *dst, struct inode *sr
 			if (attrlen < 0)
 				continue;
 			OBD_ALLOC(buf, attrlen);
-				break;
 			if (!buf) {
                                 CERROR("No MEM\n");
                                 break;

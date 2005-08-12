@@ -35,10 +35,13 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
                    struct mdc_op_data *op_data, __u32 mode,
                    __u64 rdev, __u32 flags, const void *lmm,
                    int lmmlen, void *key, int keylen);
+
+void mdc_close_pack(struct ptlrpc_request *req, int offset,
+                    struct mdc_op_data *op_data,
+                    struct obd_client_handle *och);
+
 void mdc_readdir_pack(struct ptlrpc_request *req, int req_offset,
                       __u64 offset, __u32 size, struct lustre_id *mdc_id);
-void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-		    __u64 valid, struct obd_client_handle *och);
 
 struct mdc_open_data {
         struct obd_client_handle *mod_och;

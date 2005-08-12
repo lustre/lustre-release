@@ -834,10 +834,9 @@ static int lustre_process_profile(struct super_block *sb,
                                   char **lov, char **lmv, char **gkc)  
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct lustre_profile *lprof;
         struct config_llog_instance cfg;
+        struct lustre_profile *lprof;
         int len, err = 0;
-        
         ENTRY;
 
         if (!lmd->lmd_profile)
@@ -855,8 +854,8 @@ static int lustre_process_profile(struct super_block *sb,
                 GOTO(out, err = -ENOMEM);
         memcpy(sbi->ll_lmd, lmd, sizeof(*lmd));
 
-        /* generate a string unique to this super, let's try
-         the address of the super itself.*/
+        /* generate a string unique to this super, let's try the address of the
+         * super itself. */
         len = (sizeof(sb) * 2) + 1;
         OBD_ALLOC(sbi->ll_instance, len);
         if (sbi->ll_instance == NULL)
@@ -880,19 +879,36 @@ static int lustre_process_profile(struct super_block *sb,
 
         OBD_ALLOC(*lov, strlen(lprof->lp_lov) +
                   strlen(sbi->ll_instance) + 2);
+        if (*lov = NULL)
+                GOTO(out, err = -ENOMEM);
+        
         sprintf(*lov, "%s-%s", lprof->lp_lov, sbi->ll_instance);
 
         OBD_ALLOC(*lmv, strlen(lprof->lp_lmv) +
                   strlen(sbi->ll_instance) + 2);
+        if (*lmv == NULL)
+                GOTO(out_free_lov, err = -ENOMEM);
+
         sprintf(*lmv, "%s-%s", lprof->lp_lmv, sbi->ll_instance);
 
         if (lprof->lp_gkc) {
                OBD_ALLOC(*gkc, strlen(lprof->lp_gkc) +
-                               strlen(sbi->ll_instance) + 2);
+                         strlen(sbi->ll_instance) + 2);
+               if (*gkc == NULL)
+                       GOTO(out_free_lmv, err = -ENOMEM);
+               
                sprintf(*gkc, "%s-%s", lprof->lp_gkc, sbi->ll_instance); 
         }
+        
+        RETURN(err);
+out_free_lmv:
+        OBD_FREE(*lmv, strlen(lprof->lp_lmv) +
+                 strlen(sbi->ll_instance) + 2);
+out_free_lov:
+        OBD_FREE(*lov, strlen(lprof->lp_lov) +
+                 strlen(sbi->ll_instance) + 2);
 out: 
-        RETURN(err); 
+        return err; 
 }
 
 static int lustre_clean_profile(struct ll_sb_info *sbi, int force_umount)
@@ -919,6 +935,12 @@ static int lustre_clean_profile(struct ll_sb_info *sbi, int force_umount)
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
 
                 OBD_ALLOC(cl_prof, len);
+                if (!cl_prof) {
+                        CERROR("can't allocate memory, "
+                               "skipping processing cleanup profile.\n");
+                        GOTO(free_lmd, err = -ENOMEM);
+                }
+                
                 sprintf(cl_prof, "%s-clean", lmd->lmd_profile);
                 err = lustre_process_log(lmd, cl_prof, &cfg, 0);
                 if (err < 0) {
@@ -927,11 +949,12 @@ static int lustre_clean_profile(struct ll_sb_info *sbi, int force_umount)
                 }
                 OBD_FREE(cl_prof, len);
         }
+        EXIT;
 free_lmd:
         if (sbi->ll_instance)
                 OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance) + 1);
         OBD_FREE(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
-        RETURN(err);
+        return err;
 }
 
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
@@ -970,7 +993,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
         if (err)
                 GOTO(out_free, err);
-        
+
+        EXIT;
 out_dev:
         if (lmv)
                 OBD_FREE(lmv, strlen(lmv) + 1);
@@ -979,11 +1003,11 @@ out_dev:
         if (gkc)
                 OBD_FREE(gkc, strlen(gkc) + 1);
         
-        RETURN(err);
+        return err;
 out_free:
         lustre_clean_profile(sbi, 0);
         lustre_free_sbi(sb);
-        GOTO(out_dev, err);
+        goto out_dev;
 
 } /* lustre_fill_super */
 
@@ -1264,7 +1288,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 OBD_ALLOC(op_data, sizeof(*op_data));
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
+                ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
                 if (ia_valid & (ATTR_UID | ATTR_GID)) {
                         rc = ll_crypto_get_mac(inode, attr, NULL, 0, &key, 
@@ -2256,7 +2280,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         obdo_free(oa);
                         RETURN(-ENOMEM);
                 }
-                ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
+                ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
                 memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;

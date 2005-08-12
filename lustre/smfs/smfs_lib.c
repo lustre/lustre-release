@@ -280,9 +280,9 @@ static int smfs_mount_cache(struct smfs_super_info *smb, char *devstr,
         
         mnt = do_kern_mount(typestr, 0, devstr, (void *)opts);
         if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: rc = %ld\n", 
-                       PTR_ERR(mnt));
-                GOTO(err_out, err = PTR_ERR(mnt));
+                CERROR("do_kern_mount failed: rc = %d\n", 
+                       (int)PTR_ERR(mnt));
+                RETURN(PTR_ERR(mnt));
         }
 
         smb->smsi_sb = mnt->mnt_sb;
@@ -291,36 +291,53 @@ static int smfs_mount_cache(struct smfs_super_info *smb, char *devstr,
         smfs_init_sm_ops(smb);
 
         OBD_ALLOC(smb->smsi_cache_ftype, strlen(typestr) + 1);
+        if (!smb->smsi_cache_ftype)
+                GOTO(err_umount_cache, err = -ENOMEM);
+
         memcpy(smb->smsi_cache_ftype, typestr, strlen(typestr));
 
         OBD_ALLOC(smb->smsi_ftype, strlen(SMFS_TYPE) + 1);
+        if (!smb->smsi_ftype)
+                GOTO(err_free_cache_fstype, err = -ENOMEM);
+        
         memcpy(smb->smsi_ftype, SMFS_TYPE, strlen(SMFS_TYPE));
         
         err = smfs_init_fsfilt_ops(smb);
-err_out:
         RETURN(err);
+err_free_cache_fstype:
+        OBD_FREE(smb->smsi_cache_ftype, strlen(typestr) + 1);
+err_umount_cache:
+        mntput(mnt);
+err_out:
+        return err;
 }
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
+        ENTRY;
+        
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);
         smfs_cleanup_fsfilt_ops(smb);
 
-        if (smb->smsi_cache_ftype)
+        if (smb->smsi_cache_ftype) {
                 OBD_FREE(smb->smsi_cache_ftype,
                          strlen(smb->smsi_cache_ftype) + 1);
-        if (smb->smsi_ftype)
-                OBD_FREE(smb->smsi_ftype, strlen(smb->smsi_ftype) + 1);
-               
-        return 0;
+                smb->smsi_cache_ftype = NULL;
+        }
+        if (smb->smsi_ftype) {
+                OBD_FREE(smb->smsi_ftype,
+                         strlen(smb->smsi_ftype) + 1);
+                smb->smsi_ftype = NULL;
+        }
+
+        RETURN(0);
 }
 
 /* This function initializes plugins in SMFS 
  * @flags: are filled while options parsing 
  * @sb: smfs super block
  */
-
 static int smfs_init_plugins(struct super_block * sb, int flags)
 {
         struct smfs_super_info * smb = S2SMI(sb);

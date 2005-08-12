@@ -477,6 +477,11 @@ static int filldir(void * __buf, const char * name, int namlen,
         }
         
         OBD_ALLOC(n, namlen + 1);
+
+        /* XXX: should be memory allocation checked here in some more smart
+         * manner? */
+        LASSERT(n != NULL);
+
         memcpy(n, name, namlen);
         n[namlen] = (char) 0;
         
@@ -1012,10 +1017,16 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
         it.it_op = IT_UNLINK;
 
         OBD_ALLOC(it.d.fs_data, sizeof(struct lustre_intent_data));
+        if (!it.d.fs_data) {
+                OBD_FREE(*rlockh, handle_size);
+                OBD_FREE(op_data, sizeof(*op_data));
+                RETURN(-ENOMEM);
+        }
 
         rc = md_enqueue(mds->mds_md_exp, LDLM_IBITS, &it, LCK_EX,
                         op_data, *rlockh, NULL, 0, ldlm_completion_ast,
                         mds_blocking_ast, NULL);
+        
         OBD_FREE(op_data, sizeof(*op_data));
         OBD_FREE(it.d.fs_data, sizeof(struct lustre_intent_data));
         EXIT;

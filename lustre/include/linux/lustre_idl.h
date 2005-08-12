@@ -739,7 +739,7 @@ struct lustre_md {
         struct mea             *mea;
         struct posix_acl       *posix_acl;
         struct mds_remote_perm *remote_perm;
-        struct lustre_key *key; 
+        struct lustre_key      *key; 
 };
 
 void lustre_swab_remote_perm(struct mds_remote_perm *p);
@@ -753,8 +753,17 @@ struct mdc_op_data {
         __u32            create_mode;
         struct mea      *mea1;       /* mea of inode1 */
         struct mea      *mea2;       /* mea of inode2 */
-        __u64            valid;
-        __u32            flags;
+        obd_valid        valid;
+        obd_flags        flags;
+
+        /* fields needed for md_close() */
+        __u64            io_epoch;
+        obd_size         size;
+        obd_blocks       blocks;
+        obd_time         mtime;
+        obd_time         atime;
+        obd_time         ctime;
+        obd_mode         mode;
 };
 
 #define MDS_MODE_DONT_LOCK      (1 << 30)

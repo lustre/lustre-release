@@ -94,15 +94,17 @@ static int ll_get_acl_key(struct inode *inode, struct posix_acl **acl,
         *acl = posix_acl_dup(lli->lli_posix_acl);
         *lkey =  lustre_key_get(lli->lli_key_info);
         spin_unlock(&lli->lli_lock);
+        EXIT;
 out:
         if (req)
                 ptlrpc_req_finished(req);        
-        RETURN(rc);
+        return rc;
 }
 
 static int ll_init_key_perm(struct key_perm *kperm, struct posix_acl *acl, 
                             __u32 uid, __u32 gid, int mode) 
 {
+        ENTRY;
         if (acl) {
                 kperm->kp_acl_count = acl->a_count;
                 memcpy(kperm->kp_acls, acl->a_entries, 
@@ -170,11 +172,12 @@ static int ll_get_default_acl(struct inode *inode, struct posix_acl **acl,
                 }
         }
         
-        rc = posix_acl_create_masq(*acl, &mode); 
+        rc = posix_acl_create_masq(*acl, &mode);
+        EXIT;
 out:
         if (buf) 
                 OBD_FREE(buf, buf_size);
-        RETURN(rc);
+        return rc;
 }
 
 int ll_gks_create_key(struct inode *dir, mode_t mode, void **key, 
@@ -182,9 +185,9 @@ int ll_gks_create_key(struct inode *dir, mode_t mode, void **key,
 {
         struct obd_export *gs_exp = ll_i2gsexp(dir);
         struct key_context *kcontext = NULL;
-        struct key_parms   kparms;
         struct posix_acl *default_acl = NULL;       
-        int    rc = 0;  
+        struct key_parms kparms;
+        int rc = 0;  
         ENTRY;
  
         OBD_ALLOC(kcontext, sizeof(struct key_context));
@@ -207,7 +210,7 @@ int ll_gks_create_key(struct inode *dir, mode_t mode, void **key,
         if (!*key)
                 GOTO(out, rc = -ENOMEM);
  
-        /*GET an encrypt key from GS server*/
+        /* GET an encrypt key from GS server */
         rc = obd_get_info(gs_exp, sizeof(struct key_parms), (void *)&kparms,
                           key_size, *key);
         if (rc) {
@@ -218,12 +221,13 @@ int ll_gks_create_key(struct inode *dir, mode_t mode, void **key,
                (char*)((struct crypto_key *)(*key))->ck_key, 
                (char*)((struct crypto_key *)(*key))->ck_mac, 
                gs_exp);
+        EXIT;
 out:
         if (kcontext)
                 OBD_FREE(kcontext, sizeof(struct key_context));
         if (default_acl)
                 posix_acl_release(default_acl);
-        RETURN(rc);
+        return rc;
 
 }
  
@@ -257,13 +261,14 @@ int ll_gks_init_it(struct inode *parent, struct lookup_intent *it)
                 GOTO(out, rc);
 
         lustre_data->it_key = key; 
-        lustre_data->it_key_size = key_size; 
+        lustre_data->it_key_size = key_size;
+        EXIT;
 out:
         if (rc) {
                 if (key && key_size)
                         OBD_FREE(key, key_size);
         }
-        RETURN(rc); 
+        return rc; 
 }
 
 int ll_gks_decrypt_key(struct inode *inode, struct lookup_intent *it)
@@ -305,6 +310,9 @@ int ll_gks_decrypt_key(struct inode *inode, struct lookup_intent *it)
         spin_unlock(&lli->lli_lock); 
         
         OBD_ALLOC(kperm, sizeof(struct key_perm));
+        if (!kperm)
+                GOTO(out, rc = -ENOMEM);
+            
         ll_init_key_perm(kperm, NULL, current->uid, current->gid, 0);
     
         kparms.context = kcontext;
@@ -332,7 +340,8 @@ int ll_gks_decrypt_key(struct inode *inode, struct lookup_intent *it)
         spin_lock(&lli->lli_lock); 
         memcpy(&lkey->lk_dk, ckey->ck_key, KEY_SIZE);
         SET_DECRYPTED(lkey->lk_flags);
-        spin_unlock(&lli->lli_lock); 
+        spin_unlock(&lli->lli_lock);
+        EXIT;
 out:
         if (acl)
                 posix_acl_release(acl);
@@ -344,8 +353,9 @@ out:
                 OBD_FREE(kcontext, kcontext_size);
         if (ckey)
                 OBD_FREE(ckey, ck_size);
-        RETURN(rc); 
+        return rc; 
 }
+
 static void get_real_parameters(struct inode *inode, struct iattr *iattr,
                                 struct posix_acl *new_acl, mode_t *mode,   
                                 __u32 *uid, __u32 *gid)
@@ -429,6 +439,9 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         acl_count = new_acl ? new_acl->a_count : 0;  
         kperm_size = crypto_kperm_size(acl_count);
         OBD_ALLOC(kperm, kperm_size);
+        if (!kperm)
+                GOTO(out, rc = -ENOMEM);
+                
         get_real_parameters(inode, iattr, new_acl, &mac_mode, &uid, &gid);
         ll_init_key_perm(kperm, new_acl, uid, gid, mac_mode);
         kparms.context = kcontext;
@@ -449,6 +462,7 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
         }
         *key = ckey;
         iattr->ia_valid |= ATTR_MAC;
+        EXIT;
 out:
         if (acl)
                 posix_acl_release(acl);
@@ -460,12 +474,13 @@ out:
                 OBD_FREE(kperm, kperm_size);
         if (kcontext)
                 OBD_FREE(kcontext, kcontext_size);
-        RETURN(rc); 
+        return rc; 
 }
 
 static int ll_crypt_permission_check(struct lustre_key *lkey,
                                      int flags)
 {
+        ENTRY;
         if (!IS_DECRYPTED(lkey->lk_flags)) 
                 RETURN(-EFAULT);
         if (flags == ENCRYPT_DATA && !IS_ENABLE_ENCRYPT(lkey->lk_flags)) 
@@ -596,10 +611,12 @@ int ll_mks_create_key(struct inode *inode, struct lookup_intent *it)
         LASSERT(it->d.fs_data != NULL); 
         lustre_data = (struct lustre_intent_data *)it->d.fs_data;
        
-        if (lustre_data->it_key) {
+        if (lustre_data->it_key)
                 OBD_FREE(lustre_data->it_key, sizeof(struct crypto_key));
-        }
+
         OBD_ALLOC(crypto_key, sizeof(struct crypto_key));
+        if (!crypto_key)
+                RETURN(-ENOMEM);
        
         crypto_key->ck_type = MKS_TYPE;
         lustre_data->it_key = crypto_key; 
@@ -628,7 +645,6 @@ int ll_mks_decrypt_key(struct inode *inode, struct lookup_intent *it)
         struct lustre_key *lkey =  NULL;
         struct posix_acl *acl = NULL;
         int rc = 0;
-        
         ENTRY;
  
         rc = ll_get_acl_key(inode, &acl, &lkey);
@@ -636,13 +652,14 @@ int ll_mks_decrypt_key(struct inode *inode, struct lookup_intent *it)
                 GOTO(out, rc);      
         spin_lock(&lli->lli_lock); 
         SET_DECRYPTED(lkey->lk_flags); 
-        spin_unlock(&lli->lli_lock); 
+        spin_unlock(&lli->lli_lock);
+        EXIT;
 out:
         if (acl)
                 posix_acl_release(acl);
         if (lkey)
                 lustre_key_release(lkey); 
-        RETURN(rc);
+        return rc;
 }
 
 struct crypto_helper_ops ll_cmd_ops = { 
@@ -665,24 +682,26 @@ static int ll_register_cops(struct ll_crypto_info *llci, char *type,
         list_for_each_entry(tmp, list, clist) {
                 if (!strcmp(type, tmp->ctype)) {
                         CWARN("%s is already registered\n", type);
-                        rc = -EEXIST;
-                        GOTO(exit, rc); 
+                        RETURN(-EEXIST);
                 }
         }
         
         OBD_ALLOC(opi, sizeof(*opi));
+        if (!opi)
+                RETURN(-ENOMEM);
        
-        OBD_ALLOC(opi_name, strlen(type) + 1); 
+        OBD_ALLOC(opi_name, strlen(type) + 1);
+        if (!opi_name) {
+                OBD_FREE(opi, sizeof(*opi));
+                RETURN(-ENOMEM);
+        }
        
-        LASSERT(opi && opi_name);
-
         memcpy(opi_name, type, strlen(type));
 
         opi->ctype = opi_name;
         opi->cops = cops;
   
         list_add_tail(&opi->clist, list);
-exit:
         RETURN(rc);
 }
 
@@ -693,7 +712,6 @@ static int ll_init_sb_crypto(struct super_block *sb)
         ENTRY;
 
         OBD_ALLOC(llci, sizeof(*llci));
-        
         if (!llci)
                 RETURN(-ENOMEM);
 
@@ -711,6 +729,7 @@ static int ll_unregister_cops(struct ll_crypto_info *llci)
 {
         struct list_head *list = &llci->ll_cops_list;
         struct crypto_ops_item *tmp, *item;
+        ENTRY;
 
         list_for_each_entry_safe(item, tmp, list, clist) {       
                 list_del_init(&item->clist);       
@@ -771,10 +790,11 @@ int lustre_init_crypto(struct super_block *sb, char *gkc,
                 GOTO(out, rc);
         }
         ll_s2crpi(sb)->ll_gt_exp = class_conn2export(&gt_conn);
+        EXIT;
 out:
         if (rc)
                 lustre_destroy_crypto(sb); 
-        RETURN(rc);
+        return rc;
 }
 struct crypto_helper_ops *
 ll_gks_find_ops(struct ll_crypto_info *llc_info, char *type)

@@ -958,9 +958,8 @@ struct md_ops {
         int (*m_change_cbdata_name)(struct obd_export *, struct lustre_id *,
                                     char *, int, struct lustre_id *,
                                     ldlm_iterator_t, void *);
-        int (*m_close)(struct obd_export *, struct obdo *,
-                       struct obd_client_handle *,
-                       struct ptlrpc_request **);
+        int (*m_close)(struct obd_export *, struct mdc_op_data *,
+                       struct obd_client_handle *, struct ptlrpc_request **);
         int (*m_create)(struct obd_export *, struct mdc_op_data *,
                         const void *, int, int, __u32, __u32,
                         __u64, struct ptlrpc_request **);

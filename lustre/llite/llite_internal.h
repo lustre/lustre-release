@@ -576,26 +576,95 @@ ll_inode2id(struct lustre_id *id, struct inode *inode)
 }
 
 static inline void
-ll_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+ll_inode2mdc_data(struct mdc_op_data *op_data,
+                  struct inode *inode,
+                  obd_valid valid)
+{
+        obd_valid newvalid = 0;
+        
+        LASSERT(op_data != NULL);
+        LASSERT(inode != NULL);
+
+        /* put object id there all the time. */
+        if (valid & OBD_MD_FLID) {
+                ll_inode2id(&op_data->id1, inode);
+                newvalid |= OBD_MD_FLID;
+        }
+        
+        /* it could be directory with mea */
+        if (valid & OBD_MD_MEA) {
+                op_data->mea1 = ll_i2info(inode)->lli_mea;
+                if (op_data->mea1)
+                        newvalid |= OBD_MD_MEA;
+        }
+
+        if (valid & OBD_MD_FLSIZE) {
+                op_data->size = inode->i_size;
+                newvalid |= OBD_MD_FLSIZE;
+        }
+        if (valid & OBD_MD_FLBLOCKS) {
+                op_data->blocks = inode->i_blocks;
+                newvalid |= OBD_MD_FLBLOCKS;
+        }
+        if (valid & OBD_MD_FLFLAGS) {
+                op_data->flags = inode->i_flags;
+                newvalid |= OBD_MD_FLFLAGS;
+        }
+        if (valid & OBD_MD_FLATIME) {
+                op_data->atime = LTIME_S(inode->i_atime);
+                newvalid |= OBD_MD_FLATIME;
+        }
+        if (valid & OBD_MD_FLMTIME) {
+                op_data->mtime = LTIME_S(inode->i_mtime);
+                newvalid |= OBD_MD_FLMTIME;
+        }
+        if (valid & OBD_MD_FLCTIME) {
+                op_data->ctime = LTIME_S(inode->i_ctime);
+                newvalid |= OBD_MD_FLCTIME;
+        }
+        if (valid & OBD_MD_FLEPOCH) {
+                op_data->io_epoch = ll_i2info(inode)->lli_io_epoch;
+                newvalid |= OBD_MD_FLEPOCH;
+        }
+
+        if (valid & OBD_MD_FLTYPE) {
+                op_data->mode = (op_data->mode & S_IALLUGO) |
+                        (inode->i_mode & S_IFMT);
+                newvalid |= OBD_MD_FLTYPE;
+        }
+
+        if (valid & OBD_MD_FLMODE) {
+                op_data->mode = (op_data->mode & S_IFMT) |
+                        (inode->i_mode & S_IALLUGO);
+                newvalid |= OBD_MD_FLMODE;
+        }
+
+        op_data->valid |= newvalid;
+}
+
+static inline void
+ll_prepare_mdc_data(struct mdc_op_data *op_data, struct inode *i1,
                     struct inode *i2, const char *name, int namelen,
                     int mode)
 {
-        LASSERT(i1);
-        ll_inode2id(&data->id1, i1);
+        LASSERT(op_data != NULL);
+        LASSERT(i1 != NULL);
+        
+        ll_inode2id(&op_data->id1, i1);
 
         /* it could be directory with mea */
-        data->mea1 = ll_i2info(i1)->lli_mea;
+        op_data->mea1 = ll_i2info(i1)->lli_mea;
 
         if (i2) {
-                ll_inode2id(&data->id2, i2);
-                data->mea2 = ll_i2info(i2)->lli_mea;
+                ll_inode2id(&op_data->id2, i2);
+                op_data->mea2 = ll_i2info(i2)->lli_mea;
         }
 
-	data->valid = 0;
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = LTIME_S(CURRENT_TIME);
+	op_data->valid = 0;
+        op_data->name = name;
+        op_data->namelen = namelen;
+        op_data->create_mode = mode;
+        op_data->mod_time = LTIME_S(CURRENT_TIME);
 }
 
 struct crypto_helper_ops {

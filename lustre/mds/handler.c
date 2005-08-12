@@ -3915,6 +3915,12 @@ int mds_dt_clean(struct obd_device *obd)
                 int len = strlen(mds->mds_profile) + sizeof("-clean") + 1;
 
                 OBD_ALLOC(cln_prof, len);
+                if (!cln_prof) {
+                        CERROR("can't allocate memory, processing cleanup "
+                               "profile is skipped\n");
+                        goto out;
+                }
+                
                 sprintf(cln_prof, "%s-clean", mds->mds_profile);
 
                 cfg.cfg_instance = NULL;
@@ -3927,6 +3933,7 @@ int mds_dt_clean(struct obd_device *obd)
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 OBD_FREE(cln_prof, len);
+        out:
                 OBD_FREE(mds->mds_profile, strlen(mds->mds_profile) + 1);
                 mds->mds_profile = NULL;
         }

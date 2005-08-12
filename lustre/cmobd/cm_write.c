@@ -318,6 +318,7 @@ static int cmobd_write_extent(struct obd_device *obd,
         if (wakeup)
                 wake_up(&set->es_waitq);
 
+        EXIT;
 out: 
         if (lnb)
                 OBD_FREE(lnb, oa_bufs * sizeof(struct niobuf_local));
@@ -326,7 +327,7 @@ out:
         if (oa)
                 obdo_free(oa);
 
-        RETURN(rc);
+        return rc;
 }
 
 static struct cmobd_extent_info* get_next_ei(struct cmobd_write_service *ws)

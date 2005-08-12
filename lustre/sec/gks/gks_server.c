@@ -243,7 +243,8 @@ static int gks_mac_verification(struct ptlrpc_request *req,
         ENTRY;
 
         OBD_ALLOC(tmp_mac, MAC_SIZE);
-
+        if (!tmp_mac)
+                RETURN(-ENOMEM);
         crypto_get_gks_mac(req, kperm, tmp_mac);
 
         if (!memcmp(tmp_mac, key->ck_mac, MAC_SIZE)) {

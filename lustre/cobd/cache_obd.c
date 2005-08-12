@@ -1396,7 +1396,7 @@ static int cobd_md_readpage(struct obd_export *exp,
         RETURN(rc);
 }
 
-static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
+static int cobd_md_close(struct obd_export *exp, struct mdc_op_data *op_data,
                          struct obd_client_handle *och, 
                          struct ptlrpc_request **request)
 {
@@ -1411,7 +1411,7 @@ static int cobd_md_close(struct obd_export *exp, struct obdo *obdo,
                 RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        rc = md_close(cobd_exp, obdo, och, request);
+        rc = md_close(cobd_exp, op_data, och, request);
         RETURN(rc);
 }
 

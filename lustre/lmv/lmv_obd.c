@@ -855,13 +855,13 @@ static int lmv_valid_attrs(struct obd_export *exp, struct lustre_id *id)
         RETURN(rc);
 }
 
-static int lmv_close(struct obd_export *exp, struct obdo *obdo,
+static int lmv_close(struct obd_export *exp, struct mdc_op_data *op_data,
                      struct obd_client_handle *och,
                      struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        int rc, i = obdo->o_mds;
+        int rc, i = id_group(&op_data->id1);
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -869,9 +869,8 @@ static int lmv_close(struct obd_export *exp, struct obdo *obdo,
                 RETURN(rc);
 
         LASSERT(i < lmv->desc.ld_tgt_count);
-        CDEBUG(D_OTHER, "CLOSE %lu/%lu/%lu\n", (unsigned long)obdo->o_mds,
-               (unsigned long)obdo->o_id, (unsigned long)obdo->o_generation);
-        rc = md_close(lmv->tgts[i].ltd_exp, obdo, och, request);
+        CDEBUG(D_OTHER, "CLOSE "DLID4"\n", OLID4(&op_data->id1));
+        rc = md_close(lmv->tgts[i].ltd_exp, op_data, och, request);
         RETURN(rc);
 }
 

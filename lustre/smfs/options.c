@@ -88,7 +88,10 @@ int get_opt(struct option **option, char **pos)
         if (!left)
                 left = opt_left + strlen(opt_left);
 
-        OBD_ALLOC(tmp_opt, sizeof(struct option));
+        OBD_ALLOC(tmp_opt, sizeof(*tmp_opt));
+        if (!tmp_opt)
+                return -ENOMEM;
+        
         tmp_opt->opt = NULL;
         tmp_opt->value = NULL;
 
@@ -98,6 +101,11 @@ int get_opt(struct option **option, char **pos)
                 tmp++;
         }
         OBD_ALLOC(name, length + 1);
+        if (!name) {
+                OBD_GREE(tmp_opt, sizeof(*tmp_opt));
+                return -ENOMEM;
+        }
+                
         tmp_opt->opt = name;
         while (opt_left != tmp) *name++ = *opt_left++;
 
