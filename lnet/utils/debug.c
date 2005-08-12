@@ -275,7 +275,7 @@ static void print_saved_records(struct list_head *list, FILE *out)
                 list_del(&line->chain);
 
                 hdr = line->hdr;
-                fprintf(out, "%06x:%06x:%u:%u.%06Lu:%u:%u:%u:(%s:%u:%s()) %s",
+                fprintf(out, "%07x:%06x:%u:%u.%06Lu:%u:%u:%u:(%s:%u:%s()) %s",
                         hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
                         hdr->ph_sec, (unsigned long long)hdr->ph_usec,
                         hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
