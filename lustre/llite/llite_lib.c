@@ -879,7 +879,7 @@ static int lustre_process_profile(struct super_block *sb,
 
         OBD_ALLOC(*lov, strlen(lprof->lp_lov) +
                   strlen(sbi->ll_instance) + 2);
-        if (*lov = NULL)
+        if (*lov == NULL)
                 GOTO(out, err = -ENOMEM);
         
         sprintf(*lov, "%s-%s", lprof->lp_lov, sbi->ll_instance);
