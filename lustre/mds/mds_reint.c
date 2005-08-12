@@ -2447,6 +2447,9 @@ cleanup:
                         ldlm_lock_decref(parent_lockh, LCK_PW);
                 else
                         ptlrpc_save_lock(req, parent_lockh, LCK_PW);
+                if (dchild->d_inode && rc && (dchild->d_inode->i_nlink == 0 ||
+                                mds_inode_is_orphan(dchild->d_inode)))
+                        CDEBUG(D_ERROR, "unlink, but return %d\n", rc);
                 l_dput(dchild);
                 l_dput(dchild);
                 l_dput(dparent);
