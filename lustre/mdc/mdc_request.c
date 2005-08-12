@@ -323,7 +323,10 @@ int mdc_access_check(struct obd_export *exp, struct lustre_id *id,
         body = lustre_msg_buf(req->rq_reqmsg, MDS_REQ_REC_OFF, sizeof (*body));
         memcpy(&body->id1, id, sizeof(*id));
 
+        size[0] = sizeof(*body);
+        size[1] = sizeof(struct mds_remote_perm);
         req->rq_replen = lustre_msg_size(2, size);
+
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
         mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
@@ -432,58 +435,57 @@ int mdc_req2lustre_capa(struct ptlrpc_request *req, unsigned int offset,
         RETURN(0);
 }
 
-static int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
-                          unsigned int *offset, struct lustre_md *md)
+static
+int mdc_unpack_acl(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
+                   unsigned int offset, struct lustre_md *md)
 {
         struct posix_acl *acl;
         struct mds_remote_perm *perm;
-        int    size, acl_off = 0, rc = 0;       
-        void   *buf;
+        int    size, rc;
+        void  *buf;
+        ENTRY;
  
-        /* if anything wrong when unpacking md, we don't check acl
-         * stuff, for simplicity
-         */
-        if (md->body->valid & OBD_MD_FLACL) {
-                acl_off = *offset;
-                if (md->body->valid & OBD_MD_FLRMTACL) {
-                        acl_off++; /* XXX: pass place where acl size is stored */
-                        buf = lustre_swab_repbuf(req, acl_off++, sizeof(*perm),
-                                                 lustre_swab_remote_perm);
-                        if (buf == NULL) {
-                                CERROR("Can't unpack remote perm\n");
-                                RETURN(0);
-                        }
-                        OBD_ALLOC(perm, sizeof(*perm));
-                        if (!perm)
-                                RETURN(-ENOMEM);
-                        memcpy(perm, buf, sizeof(*perm));
-                        md->remote_perm = perm;
-                        *offset = acl_off; 
-                } else {
-                        size = le32_to_cpu(*(__u32 *) lustre_msg_buf(
-                                           req->rq_repmsg, acl_off++, 4));
-                        buf = lustre_msg_buf(req->rq_repmsg, acl_off++, size);
+        if (!(md->body->valid & OBD_MD_FLACL))
+                RETURN(0);
 
-                        acl = posix_acl_from_xattr(buf, size);
-                        *offset = acl_off;
-                        if (IS_ERR(acl)) {
-                                rc = PTR_ERR(acl);
-                                CERROR("convert xattr to acl failed: %d\n", rc);
-                                RETURN(0);
-                        } else if (acl) {
-                                rc = posix_acl_valid(acl);
-                                if (rc) {
-                                        CERROR("acl valid error: %d\n", rc);
-                                        posix_acl_release(acl);
-                                        RETURN(0);
-                                }
-                        }
-                        md->posix_acl = acl;
+        if (md->body->valid & OBD_MD_FLRMTACL) {
+                offset++; /* first 'size' is not used */
+
+                buf = lustre_swab_repbuf(req, offset, sizeof(*perm),
+                                         lustre_swab_remote_perm);
+                if (buf == NULL) {
+                        CERROR("Can't unpack remote perm\n");
+                        RETURN(-EFAULT);
                 }
+
+                OBD_ALLOC(perm, sizeof(*perm));
+                if (!perm)
+                        RETURN(-ENOMEM);
+                memcpy(perm, buf, sizeof(*perm));
+                md->remote_perm = perm;
         } else {
-                *offset += 2;         
+                size = le32_to_cpu(*(__u32 *) lustre_msg_buf(
+                                   req->rq_repmsg, offset, 4));
+                buf = lustre_msg_buf(req->rq_repmsg, offset + 1, size);
+
+                acl = posix_acl_from_xattr(buf, size);
+                if (IS_ERR(acl)) {
+                        rc = PTR_ERR(acl);
+                        CERROR("convert xattr to acl failed: %d\n", rc);
+                        RETURN(rc);
+                } else if (acl) {
+                        rc = posix_acl_valid(acl);
+                        if (rc) {
+                                CERROR("acl valid error: %d\n", rc);
+                                posix_acl_release(acl);
+                                RETURN(rc);
+                        }
+                }
+
+                md->posix_acl = acl;
         }
-        RETURN(rc);
+
+        RETURN(0);
 }
 
 static int mdc_unpack_gskey(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
@@ -577,13 +579,20 @@ int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req,
                         S_ISSOCK(md->body->mode));
         }
 
+        /* if anything wrong when unpacking md, we don't check acl
+         * stuff, for simplicity
+         */
+        if (rc)
+                RETURN(rc);
+
         reply_off = (md->body->valid & OBD_MD_FLEASIZE) ?
                                 (offset + 2) : (offset + 1);
-        rc = mdc_unpack_acl(exp_lmv, req, &reply_off, md);
+        rc = mdc_unpack_acl(exp_lmv, req, reply_off, md);
         if (rc) {
                 CERROR("upack acl error %d \n", rc);
                 RETURN(rc);
         }
+        reply_off += 2;
         
         rc = mdc_unpack_gskey(exp_lmv, req, &reply_off, md);
         if (rc)

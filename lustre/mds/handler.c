@@ -1093,27 +1093,26 @@ int mds_pack_xattr_list(struct dentry *dentry, struct ptlrpc_request *req,
 }
 
 static
-int mds_pack_posix_acl(struct lustre_msg *repmsg, int *offset,
+int mds_pack_posix_acl(struct lustre_msg *repmsg, int offset,
                        struct mds_body *body, struct inode *inode)
 {
         struct dentry de = { .d_inode = inode };
         __u32 buflen, *sizep;
         void *buf;
-        int size, pack_off = *offset;
+        int size;
         ENTRY;
 
-        sizep = lustre_msg_buf(repmsg, pack_off++, 4);
+        if (!inode->i_op->getxattr)
+                RETURN(0);
+
+        sizep = lustre_msg_buf(repmsg, offset, 4);
         if (!sizep) {
                 CERROR("can't locate returned acl size buf\n");
                 RETURN(-EPROTO);
         }
-        
-        if (!inode->i_op->getxattr)
-                RETURN(0);
 
-        buflen = repmsg->buflens[pack_off];
-        buf = lustre_msg_buf(repmsg, pack_off++, buflen);
-        *offset = pack_off;
+        buflen = repmsg->buflens[offset + 1];
+        buf = lustre_msg_buf(repmsg, offset + 1, buflen);
 
         size = inode->i_op->getxattr(&de, XATTR_NAME_ACL_ACCESS, buf, buflen);
         if (size == -ENODATA || size == -EOPNOTSUPP)
@@ -1121,18 +1120,18 @@ int mds_pack_posix_acl(struct lustre_msg *repmsg, int *offset,
         if (size < 0)
                 RETURN(size);
         LASSERT(size);
-        body->valid |= OBD_MD_FLACL;
 
         *sizep = cpu_to_le32(size);
+        body->valid |= OBD_MD_FLACL;
+
         RETURN(0);
 }
 
-int mds_pack_remote_perm(struct ptlrpc_request *req, int *reply_off,
+int mds_pack_remote_perm(struct ptlrpc_request *req, int reply_off,
                          struct mds_body *body, struct inode *inode)
 {
         struct lustre_sec_desc *lsd;
         struct mds_remote_perm *perm;
-        int pack_off = *reply_off;
         __u32 lsd_perms;
 
         LASSERT(inode->i_op);
@@ -1140,9 +1139,9 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int *reply_off,
         LASSERT(req->rq_export->exp_mds_data.med_remote);
 
         perm = (struct mds_remote_perm *)
-                       lustre_msg_buf(req->rq_repmsg, pack_off++, sizeof(perm));
+                       lustre_msg_buf(req->rq_repmsg, reply_off, sizeof(perm));
         if (!perm) {
-                CERROR("no remote perm buf at offset %d\n", pack_off - 1);
+                CERROR("no remote perm buf at offset %d\n", reply_off);
                 return -EINVAL;
         }
 
@@ -1179,13 +1178,11 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int *reply_off,
                 perm->mrp_perm |= MAY_READ;
 
         body->valid |= (OBD_MD_FLACL | OBD_MD_FLRMTACL);
-        
-        *reply_off = pack_off;
 
         RETURN(0);
 }
 
-int mds_pack_acl(struct ptlrpc_request *req, int *reply_off,
+int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
                  struct mds_body *body, struct inode *inode)
 {
         int rc;
@@ -1193,7 +1190,7 @@ int mds_pack_acl(struct ptlrpc_request *req, int *reply_off,
         if (!req->rq_export->exp_mds_data.med_remote)
                 rc = mds_pack_posix_acl(req->rq_repmsg, reply_off, body, inode);
         else
-                rc = mds_pack_remote_perm(req, reply_off, body, inode);
+                rc = mds_pack_remote_perm(req, reply_off + 1, body, inode);
 
         return rc;
 }
@@ -1252,7 +1249,8 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         
         offset = reply_off + ((reqbody->valid & OBD_MD_FLEASIZE) ? 2 : 1);
         if (reqbody->valid & OBD_MD_FLACL) {
-                rc = mds_pack_acl(req, &offset, body, inode);
+                rc = mds_pack_acl(req, offset, body, inode);
+                offset += 2;
         }                
 
         if (reqbody->valid & OBD_MD_FLKEY) {
@@ -1395,6 +1393,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct dentry *de,
         /* may co-exist with OBD_MD_FLEASIZE */
         if (body->valid & OBD_MD_FLACL) {
                 if (req->rq_export->exp_mds_data.med_remote) {
+                        size[bufcount++] = sizeof(int);
                         size[bufcount++] = sizeof(struct mds_remote_perm);
                 } else {
                         size[bufcount++] = sizeof(int);
@@ -1788,7 +1787,7 @@ static int mds_access_check(struct ptlrpc_request *req, int offset)
         struct lvfs_ucred uc;
         int rep_size[2] = {sizeof(*body),
                            sizeof(struct mds_remote_perm)};
-        int rc = 0, rep_offset;
+        int rc = 0;
         ENTRY;
 
         if (!req->rq_export->exp_mds_data.med_remote) {
@@ -1834,8 +1833,7 @@ static int mds_access_check(struct ptlrpc_request *req, int offset)
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
         LASSERT(body);
 
-        rep_offset = 1;
-        rc = mds_pack_remote_perm(req, &rep_offset, body, de->d_inode);
+        rc = mds_pack_remote_perm(req, 1, body, de->d_inode);
 
         EXIT;
 
@@ -4147,6 +4145,7 @@ static int mds_intent_prepare_reply_buffers(struct ptlrpc_request *req,
                                             struct ldlm_intent *it)
 {
         struct mds_obd *mds = &req->rq_export->exp_obd->u.mds;
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         int rc, reply_buffers;
         int repsize[8] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
@@ -4160,9 +4159,11 @@ static int mds_intent_prepare_reply_buffers(struct ptlrpc_request *req,
                  * be fixed in future, Now each item is in the fix position,
                  * the sequence is lsm, acl, crypto ea, capa.*/
                 repsize[reply_buffers++] = sizeof(int);
-                /* XXX: mds_remote_perm is stored here too, and for it
-                 *      the 'size' is ignored */
-                repsize[reply_buffers++] = 
+                if (med->med_remote)
+                        repsize[reply_buffers++] =
+                                sizeof(struct mds_remote_perm);
+                else
+                        repsize[reply_buffers++] = 
                                 xattr_acl_size(LL_ACL_MAX_ENTRIES);
                 
                 repsize[reply_buffers++] = sizeof(int);

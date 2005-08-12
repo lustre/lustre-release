@@ -751,7 +751,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         }
 
         reply_off = 3;
-        rc = mds_pack_acl(req, &reply_off, body, dchild->d_inode);
+        rc = mds_pack_acl(req, reply_off, body, dchild->d_inode);
+        reply_off += 2;
 
         if (rc < 0) {
                 CERROR("pack posix acl: rc = %d\n", rc);

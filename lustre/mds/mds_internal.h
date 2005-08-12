@@ -286,7 +286,7 @@ int mds_pack_xattr(struct dentry *dentry, struct ptlrpc_request *req,
                    struct mds_body *repbody, int req_off, int reply_off);
 int mds_pack_xattr_list(struct dentry *dentry, struct ptlrpc_request *req,
                         struct mds_body *repbody, int reply_off);
-int mds_pack_acl(struct ptlrpc_request *req, int *reply_off,
+int mds_pack_acl(struct ptlrpc_request *req, int reply_off,
                  struct mds_body *body, struct inode *inode);
 
 int mds_pack_inode2id(struct obd_device *, struct lustre_id *,
