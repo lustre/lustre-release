@@ -1918,6 +1918,7 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         rc = md_setattr(sbi->ll_md_exp, op_data, &attr,
                         (void *)name, strnlen(name, XATTR_NAME_MAX) + 1, 
                         (void *)value,  size, key, key_size, &request);
+        OBD_FREE(op_data, sizeof(*op_data));
         
         if (key && key_size) 
                 OBD_FREE(key, key_size);
