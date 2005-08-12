@@ -57,7 +57,7 @@
 static struct upcall_cache _rmtacl_upcall_cache;
 static struct list_head _rmtacl_upcall_hashtable[RMTACL_UPCALL_HASHSIZE];
 
-#define RMTACL_UPCALL_PATH              "/usr/bin/lacl_upcall"
+#define RMTACL_UPCALL_PATH              "/usr/sbin/lacl_upcall"
 #define RMTACL_ACQUIRE_EXPIRE           (20)
 #define RMTACL_ENTRY_EXPIRE             (0)
 #define RMTACL_ERR_ENTRY_EXPIRE         (0)
