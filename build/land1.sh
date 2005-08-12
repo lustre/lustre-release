@@ -106,7 +106,8 @@ $CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date $dir
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."
-if $CVS update | grep '^C' > $CONFLICTS; then
+$CVS update | awk '/^C/ { print $2 }' > $CONFLICTS
+if [ -s $CONFLICTS ] ; then
     echo "Conflicts found, fix before committing."
     cat $CONFLICTS
 else 
