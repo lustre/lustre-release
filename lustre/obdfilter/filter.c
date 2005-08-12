@@ -1138,8 +1138,10 @@ static void filter_parent_unlock(struct dentry *dparent, void *lock)
 struct dentry *filter_parent(struct obd_device *obd, obd_gr group, obd_id objid)
 {
         struct filter_obd *filter = &obd->u.filter;
-        LASSERT(group < filter->fo_group_count);
-        LASSERT(group > 0);
+        LASSERTF(group < filter->fo_group_count,
+                 "group %d < filter->fo_group_count %d failed\n",
+                 (int)group, (int)filter->fo_group_count);
+        LASSERTF(group > 0, "group %d > 0 failed\n", (int)group);
 
         if (filter->fo_subdir_count == 0)
                 return filter->fo_groups[group];
