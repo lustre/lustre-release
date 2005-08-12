@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
+#include <syslog.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
@@ -40,6 +41,16 @@
 
 #include <portals/ptlctl.h>
 #include <portals/types.h>
+
+static int g_testing = 0;
+
+#define log_msg(fmt, args...)                           \
+        {                                               \
+                if (g_testing)                          \
+                        printf(fmt, ## args);           \
+                else                                    \
+                        syslog(LOG_ERR, fmt, ## args);  \
+        }
 
 int switch_user_identity(uid_t uid)
 {
@@ -51,8 +62,10 @@ int switch_user_identity(uid_t uid)
         int             i;
 
         /* originally must be root */
-        if (getuid() != 0 || geteuid() != 0)
+        if (getuid() != 0 || geteuid() != 0) {
+                log_msg("non-root: %u/%u\n", getuid(), geteuid());
                 return -EPERM;
+        }
 
         /* nothing more is needed for root */
         if (uid == 0)
@@ -64,12 +77,16 @@ int switch_user_identity(uid_t uid)
          */
         maxgroups = sysconf(_SC_NGROUPS_MAX);
         groups = malloc(maxgroups * sizeof(gid_t));
-        if (!groups)
+        if (!groups) {
+                log_msg("memory alloc failure\n");
                 return -ENOMEM;
+        }
 
         pw = getpwuid(uid);
-        if (!pw)
+        if (!pw) {
+                log_msg("no such uid %u\n", uid);
                 return -EPERM;
+        }
 
         gid = pw->pw_gid;
 
@@ -88,16 +105,19 @@ int switch_user_identity(uid_t uid)
         endgrent();
 
         if (setgroups(ngroups, groups) == -1) {
+                log_msg("set %d groups: %s\n", ngroups, strerror(errno));
                 free(groups);
                 return -EPERM;
         }
         free(groups);
 
         if (setgid(gid) == -1) {
+                log_msg("setgid %u: %s\n", gid, strerror(errno));
                 return -EPERM;
         }
 
         if (setuid(uid) == -1) {
+                log_msg("setuid %u: %s\n", uid, strerror(errno));
                 return -EPERM;
         }
 
@@ -163,6 +183,7 @@ void do_acl_command(uid_t uid, char *lroot, char *cmdline)
         }
 
         if (chdir(lroot) < 0) {
+                log_msg("chdir to %s: %s\n", lroot, strerror(errno));
                 printf("MDS: can't change dir\n");
                 return;
         }
@@ -195,11 +216,19 @@ int main (int argc, char **argv)
         int      pipeout[2], pipeerr[2], pid;
         int      output_size, rd, childret;
 
-        if (argc != 6)
+        if (argc != 6) {
+                log_msg("invalid argc %d\n", argc);
                 return -1;
+        }
 
-        if (strcmp(argv[4], "get") && strcmp(argv[4], "set"))
+        /* XXX temp for debugging */
+        log_msg("enter: %s %s %s %s %s\n",
+                argv[1], argv[2], argv[3], argv[4], argv[5]);
+
+        if (strcmp(argv[4], "get") && strcmp(argv[4], "set")) {
+                log_msg("invalid arg 4: %s\n", argv[4]);
                 return -1;
+        }
 
         dc_args.key = strtoull(argv[1], NULL, 16);
         dc_args.res = output;
@@ -300,10 +329,19 @@ wait_child:
 
 downcall:
         dc_fd = open(dc_name, O_WRONLY);
-        if (dc_fd != -1) {
-                write(dc_fd, &dc_args, sizeof(dc_args));
+        if (dc_fd < 0) {
+                log_msg("can't open %s: %s\n", dc_name, strerror(errno));
+        } else {
+                int rc;
+
+                rc = write(dc_fd, &dc_args, sizeof(dc_args));
+                if (rc != sizeof(dc_args))
+                        log_msg("write error: ret %d\n", rc);
+
                 close(dc_fd);
         }
 
+        /* XXX temp for debugging */
+        log_msg("finished upcall\n");
         return 0;
 }

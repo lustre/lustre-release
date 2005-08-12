@@ -410,7 +410,6 @@ int main (int argc, char **argv)
                 fclose(conf_fp);
         }
 
-
 do_downcall:
         if (testing) {
                 show_result(&ioc_data);
@@ -428,8 +427,9 @@ do_downcall:
                 if (rc != sizeof(ioc_data)) {
                         log_msg(testing, "partial write ret %d: %s\n",
                                 rc, strerror(errno));
+                        return 1;
                 }
 
-                return (rc != sizeof(ioc_data));
+                return 0;
         }
 }

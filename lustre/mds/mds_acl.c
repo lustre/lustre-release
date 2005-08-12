@@ -58,7 +58,7 @@ static struct upcall_cache _rmtacl_upcall_cache;
 static struct list_head _rmtacl_upcall_hashtable[RMTACL_UPCALL_HASHSIZE];
 
 #define RMTACL_UPCALL_PATH              "/usr/bin/lacl_upcall"
-#define RMTACL_ACQUIRE_EXPIRE           (15)
+#define RMTACL_ACQUIRE_EXPIRE           (20)
 #define RMTACL_ENTRY_EXPIRE             (0)
 #define RMTACL_ERR_ENTRY_EXPIRE         (0)
 
@@ -132,8 +132,8 @@ static int rmtacl_make_upcall(struct upcall_cache *cache,
                        "/proc/fs/lustre/mds/lacl_upcall\n",
                        argv[0], rc);
         } else {
-                CDEBUG(D_SEC, "Invoked upcall %s %s %s %s\n",
-                       argv[0], argv[1], argv[2], argv[3]);
+                CDEBUG(D_SEC, "Invoked upcall %s %s %s %s %s %s\n",
+                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
         }
         return rc;
 }
@@ -166,6 +166,7 @@ static int rmtacl_parse_downcall(struct upcall_cache *cache,
                 goto out;
 
         if (copy_from_user(desc->res, rargs->res, rargs->reslen)) {
+                CERROR("can't copy from userspace\n");
                 desc->upcall_status = -EFAULT;
                 goto out;
         }

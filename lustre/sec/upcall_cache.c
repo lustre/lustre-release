@@ -68,7 +68,7 @@ static void free_entry(struct upcall_cache_entry *entry)
         LASSERT(cache->free_entry);
         LASSERT(atomic_read(&entry->ue_refcount) == 0);
 
-        CDEBUG(D_SEC, "destroy %s entry %p for key "LPU64"\n",
+        CDEBUG(D_SEC, "%s: destroy entry %p for key "LPU64"\n",
                cache->uc_name, entry, entry->ue_key);
 
         list_del(&entry->ue_hash);
@@ -139,7 +139,6 @@ __get_entry(struct upcall_cache *cache, unsigned int hash, __u64 key,
         ENTRY;
 
         LASSERT(hash < cache->uc_hashsize);
-
         head = &cache->uc_hashtable[hash];
 
 find_again:
@@ -222,12 +221,12 @@ find_again:
                         /* we're interrupted or upcall failed
                          * in the middle
                          */
-                        CERROR("entry %p not refreshed: cur %lu, key "LPU64", "
-                               "ref %d fl %u, ac %ld, ex %ld\n",
-                               entry, get_seconds(), entry->ue_key,
+                        CERROR("%s: entry %p not refreshed: key "LPU64", "
+                               "ref %d fl %u, cur %lu, ex %ld/%ld\n",
+                               cache->uc_name, entry, entry->ue_key,
                                atomic_read(&entry->ue_refcount),
-                               entry->ue_flags, entry->ue_acquire_expire,
-                               entry->ue_expire);
+                               entry->ue_flags, get_seconds(),
+                               entry->ue_acquire_expire, entry->ue_expire);
                         put_entry(entry);
                         write_unlock(&cache->uc_hashlock);
                         CERROR("Interrupted? Or check whether %s is in place\n",
@@ -287,7 +286,8 @@ void upcall_cache_put_entry(struct upcall_cache_entry *entry)
 
         write_lock(&cache->uc_hashlock);
         LASSERTF(atomic_read(&entry->ue_refcount) > 0,
-                 "entry %p: ref %d\n", entry, atomic_read(&entry->ue_refcount));
+                 "%s: entry %p: ref %d\n", cache->uc_name, entry,
+                 atomic_read(&entry->ue_refcount));
         put_entry(entry);
         write_unlock(&cache->uc_hashlock);
 }
@@ -316,7 +316,8 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
         if (!found) {
                 /* haven't found, it's possible */
                 write_unlock(&cache->uc_hashlock);
-                CWARN("key "LPU64" entry dosen't found\n", key);
+                CWARN("%s: key "LPU64" entry dosen't found\n",
+                      cache->uc_name, key);
                 RETURN(-EINVAL);
         }
 
@@ -325,28 +326,31 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
                         /* This should not happen, just give a warning
                          * at this moment.
                          */
-                        CWARN("entry %p(key "LPU64", ac %ld, ex %ld): "
-                              "already valid???\n", entry, entry->ue_key,
+                        CWARN("%s: entry %p(key "LPU64", cur %lu, ex %ld/%ld) "
+                              "already valid\n", cache->uc_name,
+                              entry, entry->ue_key, get_seconds(),
                               entry->ue_acquire_expire, entry->ue_expire);
                         GOTO(out, rc = 0);
                 }
 
-                CWARN("stale entry %p: cur %lu, key "LPU64", ref %d, "
-                      "fl %u, ac %ld, ex %ld\n",
-                       entry, get_seconds(), entry->ue_key,
-                       atomic_read(&entry->ue_refcount), entry->ue_flags,
-                       entry->ue_acquire_expire, entry->ue_expire);
+                CWARN("%s: stale entry %p: key "LPU64", ref %d, fl %u, "
+                      "cur %lu, ex %ld/%ld\n",
+                      cache->uc_name, entry, entry->ue_key,
+                      atomic_read(&entry->ue_refcount),
+                      entry->ue_flags, get_seconds(),
+                      entry->ue_acquire_expire, entry->ue_expire);
                 GOTO(out, rc = -EINVAL);
         }
 
         if (!UC_CACHE_IS_ACQUIRING(entry) ||
             UC_CACHE_IS_INVALID(entry) ||
             UC_CACHE_IS_EXPIRED(entry)) {
-                CWARN("stale entry %p: cur %lu, key "LPU64", ref %d, "
-                      "fl %u, ac %ld, ex %ld\n",
-                       entry, get_seconds(), entry->ue_key,
-                       atomic_read(&entry->ue_refcount), entry->ue_flags,
-                       entry->ue_acquire_expire, entry->ue_expire);
+                CWARN("%s: invalid entry %p: key "LPU64", ref %d, fl %u, "
+                      "cur %lu, ex %ld/%ld\n",
+                      cache->uc_name, entry, entry->ue_key,
+                      atomic_read(&entry->ue_refcount),
+                      entry->ue_flags, get_seconds(), 
+                      entry->ue_acquire_expire, entry->ue_expire);
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -367,8 +371,8 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args)
         }
 
         UC_CACHE_SET_VALID(entry);
-        CDEBUG(D_SEC, "create ucache entry %p(key "LPU64")\n",
-               entry, entry->ue_key);
+        CDEBUG(D_SEC, "%s: create ucache entry %p(key "LPU64")\n",
+               cache->uc_name, entry, entry->ue_key);
 out:
         wake_up_all(&entry->ue_waitq);
         write_unlock(&cache->uc_hashlock);
@@ -386,7 +390,6 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key)
 
         hash = cache->hash(cache, key);
         LASSERT(hash < cache->uc_hashsize);
-
         head = &cache->uc_hashtable[hash];
 
         write_lock(&cache->uc_hashlock);
@@ -398,6 +401,12 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key)
         }
 
         if (found) {
+                CWARN("%s: flush entry %p: key "LPU64", ref %d, fl %x, "
+                      "cur %lu, ex %ld/%ld\n",
+                      cache->uc_name, entry, entry->ue_key,
+                      atomic_read(&entry->ue_refcount), entry->ue_flags,
+                      get_seconds(), entry->ue_acquire_expire,
+                      entry->ue_expire);
                 UC_CACHE_SET_EXPIRED(entry);
                 if (!atomic_read(&entry->ue_refcount))
                         free_entry(entry);
