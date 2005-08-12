@@ -320,10 +320,12 @@ static int smfs_audit_post_op(hook_op code, struct inode * inode, void * msg,
         rec->nid = current->user->nid;
         rec->time = cur_time.tv_sec * USEC_PER_SEC + cur_time.tv_usec;
         
-        
         len = handler[code](inode, msg, priv, (char*)rec,
                                            &llh->lrh_type);
         
+        LASSERT(llh->lrh_type == SMFS_AUDIT_GEN_REC ||
+                llh->lrh_type == SMFS_AUDIT_NAME_REC);
+
         llh->lrh_len = size_round(len);
 
         rc = llog_cat_add_rec(priv->audit_ctxt->loc_handle, llh, NULL,

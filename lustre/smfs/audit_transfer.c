@@ -196,7 +196,7 @@ static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 {
         struct obd_device *obd = llh->lgh_ctxt->loc_obd;
         struct audit_record *ad_rec;
-        
+        struct llog_cookie cookie;
         ENTRY;
         
         if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
@@ -213,9 +213,15 @@ static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         
         LASSERT(ad_rec->opcode < AUDIT_MAX);
 
+        cookie.lgc_lgl = llh->lgh_id;
+        cookie.lgc_subsys = LLOG_AUDIT_ORIG_CTXT;
+        cookie.lgc_index = le32_to_cpu(rec->lrh_index);
+
         transfer_record(obd, ad_rec, rec->lrh_type, data);
         
-        RETURN(LLOG_DEL_RECORD);
+        llog_cancel(llh->lgh_ctxt, 1, &cookie, 0, NULL);
+
+        RETURN(LLOG_PROC_BREAK);
 }
 
 static int audit_transfer(struct transfer_item *ti)
@@ -225,7 +231,7 @@ static int audit_transfer(struct transfer_item *ti)
         ENTRY;
 
         rc = llog_cat_process(llh, (llog_cb_t)&transfer_cb, ti->id2name);
-        if (rc)
+        if (rc != LLOG_PROC_BREAK)
                 CERROR("process catalog log failed: rc(%d)\n", rc);
 
         RETURN(0);

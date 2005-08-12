@@ -281,8 +281,17 @@ static int parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
                 struct lmv_obd *lmv = &obd->u.mds.mds_md_obd->u.lmv;
                 struct parseid_pkg *body;
                 int size = sizeof(*body);
-                struct obd_export *exp = lmv->tgts[mds_num].ltd_exp;
+                struct obd_export *exp;
                 
+                /* make sure connection established */
+                rc = obd_set_info(obd->u.mds.mds_md_exp, strlen("chkconnect"),
+                                  "chkconnect", 0, NULL);
+                if (rc)
+                        RETURN(rc);
+
+                exp = lmv->tgts[mds_num].ltd_exp;
+                LASSERT(exp);
+
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), 
                                       LUSTRE_MDS_VERSION, MDS_PARSE_ID, 1, 
                                       &size, NULL);
@@ -462,8 +471,17 @@ scan_audit_log(struct obd_device *obd, struct lustre_id *cur_id,
                 struct lmv_obd *lmv = &obd->u.mds.mds_md_obd->u.lmv;
                 struct parseid_pkg *body;
                 int size = sizeof(*body);
-                struct obd_export *exp = lmv->tgts[mds_num].ltd_exp;
+                struct obd_export *exp;
                 
+                /* make sure connection established */
+                rc = obd_set_info(obd->u.mds.mds_md_exp, strlen("chkconnect"),
+                                  "chkconnect", 0, NULL);
+                if (rc)
+                        RETURN(rc);
+
+                exp = lmv->tgts[mds_num].ltd_exp;
+                LASSERT(exp);
+
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), 
                                       LUSTRE_MDS_VERSION, MDS_PARSE_ID, 1, 
                                       &size, NULL);
