@@ -526,8 +526,8 @@ command_t cmdlist[] = {
          "flush the client side credential.\n"
          "usage: flush_cred [mountpoint]..."},
         {"set_crypt", jt_set_lkey_type, 0,
-         "set lustre key management type, only support gsk and mdk\n"
-         "usage: set_crypt [dir] [gsk|mdk]...."},
+         "set lustre key management type, only support gks and mks\n"
+         "usage: set_crypt [dir] [gks|mks]...."},
         
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
