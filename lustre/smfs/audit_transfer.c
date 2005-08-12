@@ -221,7 +221,7 @@ static int transfer_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         
         llog_cancel(llh->lgh_ctxt, 1, &cookie, 0, NULL);
 
-        RETURN(LLOG_PROC_BREAK);
+        RETURN(0);
 }
 
 static int audit_transfer(struct transfer_item *ti)
@@ -231,7 +231,7 @@ static int audit_transfer(struct transfer_item *ti)
         ENTRY;
 
         rc = llog_cat_process(llh, (llog_cb_t)&transfer_cb, ti->id2name);
-        if (rc != LLOG_PROC_BREAK)
+        if (rc)
                 CERROR("process catalog log failed: rc(%d)\n", rc);
 
         RETURN(0);
