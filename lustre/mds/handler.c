@@ -1130,6 +1130,7 @@ int mds_pack_posix_acl(struct lustre_msg *repmsg, int offset,
 int mds_pack_remote_perm(struct ptlrpc_request *req, int reply_off,
                          struct mds_body *body, struct inode *inode)
 {
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct lustre_sec_desc *lsd;
         struct mds_remote_perm *perm;
         __u32 lsd_perms;
@@ -1166,6 +1167,9 @@ int mds_pack_remote_perm(struct ptlrpc_request *req, int reply_off,
                 perm->mrp_allow_setgid = 1;
 
         mds_put_lsd(lsd);
+
+        if (mds_remote_perm_do_reverse_map(med, perm))
+                RETURN(-EPERM);
 
         /* permission bits of current user
          * XXX this is low efficient, could we do it in one blow?

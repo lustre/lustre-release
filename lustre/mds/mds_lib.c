@@ -1054,6 +1054,34 @@ void mds_body_do_reverse_map(struct mds_export_data *med,
         EXIT;
 }
 
+/*
+ * return error if can't find mapping, it's a error so should not
+ * fall into nllu/nllg.
+ */
+int mds_remote_perm_do_reverse_map(struct mds_export_data *med,
+                                   struct mds_remote_perm *perm)
+{
+        uid_t uid;
+        gid_t gid;
+
+        LASSERT(med->med_remote);
+
+        uid = mds_idmap_lookup_uid(med->med_idmap, 1, perm->mrp_auth_uid);
+        if (uid == MDS_IDMAP_NOTFOUND) {
+                CERROR("no map for uid %u\n", perm->mrp_auth_uid);
+                return -EPERM;
+        }
+        gid = mds_idmap_lookup_gid(med->med_idmap, 1, perm->mrp_auth_gid);
+        if (gid == MDS_IDMAP_NOTFOUND) {
+                CERROR("no map for uid %u\n", perm->mrp_auth_uid);
+                return -EPERM;
+        }
+
+        perm->mrp_auth_uid = uid;
+        perm->mrp_auth_gid = gid;
+        return 0;
+}
+
 /**********************
  * MDS ucred handling *
  **********************/

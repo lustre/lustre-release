@@ -132,6 +132,8 @@ struct mds_idmap_table *mds_idmap_alloc(void);
 void mds_idmap_free(struct mds_idmap_table *tbl);
 void mds_body_do_reverse_map(struct mds_export_data *med,
                              struct mds_body *body);
+int mds_remote_perm_do_reverse_map(struct mds_export_data *med,
+                                   struct mds_remote_perm *perm);
 int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                    struct mds_req_sec_desc *rsd);
 void mds_exit_ucred(struct lvfs_ucred *ucred);
