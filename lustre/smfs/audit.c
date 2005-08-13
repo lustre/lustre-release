@@ -552,18 +552,18 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
         
         llh = (void*)buffer;
         llh->lrh_type = SMFS_AUDIT_GEN_REC;
-        pbuf = buffer + sizeof(*llh);
 
         //fill common fields
-        rec = (void*)(pbuf);
+        rec = (void*)buffer + sizeof(*llh);
         rec->opcode = msg->code;
         rec->result = msg->result;
         rec->uid = msg->uid;
         rec->gid = msg->gid;
         rec->nid = msg->nid;
         rec->time = cur_time.tv_sec * USEC_PER_SEC + cur_time.tv_usec;
-        pbuf += sizeof(*rec);
-        
+        len = sizeof(*rec);
+        pbuf = (char*)rec + len;
+
         CDEBUG(D_VFSTRACE, "AUDITLOG:"DLID4"\n", OLID4(&msg->id));
 
         switch (msg->code) {
@@ -572,7 +572,7 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
                 case AUDIT_MMAP:
                 case AUDIT_OPEN:
                 case AUDIT_STAT:
-                        len = audit_rec_from_id(&pbuf, &msg->id);
+                        len += audit_rec_from_id(&pbuf, &msg->id);
                         break;
                 default:
                         CERROR("Unknown code %i in audit_msg\n", msg->code);
