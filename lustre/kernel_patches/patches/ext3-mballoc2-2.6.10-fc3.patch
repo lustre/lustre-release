@@ -1873,24 +1873,24 @@ Index: linux-2.6.10/fs/ext3/super.c
  	int i;
  
 +	ext3_mb_release(sb);
-  	ext3_ext_release(sb);
+ 	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
 @@ -592,7 +593,7 @@
- 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
  	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_pdirops,
   	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
 -	Opt_extents, Opt_extdebug,
 +	Opt_extents, Opt_extdebug, Opt_mballoc, Opt_mbfactor,
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
  };
  
+ static match_table_t tokens = {
 @@ -646,6 +647,8 @@
   	{Opt_iopen_nopriv,  "iopen_nopriv"},
-   	{Opt_extents, "extents"},
-   	{Opt_extdebug, "extdebug"},
+  	{Opt_extents, "extents"},
+  	{Opt_extdebug, "extdebug"},
 +	{Opt_mballoc, "mballoc"},
-+	{Opt_mballoc, "mbfactor=%u"},
++	{Opt_mbfactor, "mbfactor=%u"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
  };
@@ -1915,9 +1915,9 @@ Index: linux-2.6.10/fs/ext3/super.c
  	percpu_counter_mod(&sbi->s_dirs_counter,
  		ext3_count_dirs(sb));
  
-  	ext3_ext_init(sb);
+ 	ext3_ext_init(sb);
 +	ext3_mb_init(sb, needs_recovery);
-  
+ 
  	return 0;
  
  cantfind_ext3:
@@ -1925,13 +1925,14 @@ Index: linux-2.6.10/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.10.orig/fs/ext3/Makefile	2005-02-25 17:27:00.228757768 +0200
 +++ linux-2.6.10/fs/ext3/Makefile	2005-02-25 17:28:41.863306968 +0200
-@@ -5,7 +5,7 @@
+@@ -5,8 +5,8 @@
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o iopen.o \
 -	   extents.o
 +	   extents.o mballoc.o
- ext3-$(CONFIG_EXT3_FS_XATTR)   += xattr.o xattr_user.o xattr_trusted.o extents-in-ea.o
+ 
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
  ext3-$(CONFIG_EXT3_FS_SECURITY)	 += xattr_security.o
 Index: linux-2.6.10/fs/ext3/balloc.c
@@ -2131,8 +2132,8 @@ Index: linux-2.6.10/include/linux/ext3_fs.h
   */
 @@ -365,6 +373,7 @@
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
- #define EXT3_MOUNT_EXTENTS		0x100000	/* Extents support */
- #define EXT3_MOUNT_EXTDEBUG		0x200000	/* Extents debug */
+ #define EXT3_MOUNT_EXTENTS		0x100000/* Extents support */
+ #define EXT3_MOUNT_EXTDEBUG		0x200000/* Extents debug */
 +#define EXT3_MOUNT_MBALLOC		0x400000/* Buddy allocation support */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */

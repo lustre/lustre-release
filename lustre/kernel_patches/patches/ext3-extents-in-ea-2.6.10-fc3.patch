@@ -44,7 +44,7 @@ Index: linux-2.6.10/fs/ext3/extents-in-ea.c
 +#include <linux/quotaops.h>
 +#include <linux/string.h>
 +#include <linux/ext3_extents.h>
-+#include <linux/ext3_xattr.h>
++#include <xattr.h>
 +#include <linux/slab.h>
 +#include <asm/uaccess.h>
 +
@@ -128,7 +128,7 @@ Index: linux-2.6.10/fs/ext3/extents-in-ea.c
 +	err = ext3_extent_tree_init(handle, &tree);
 +	ext3_release_tree_in_ea_desc(&tree);
 +out:
-+	ext3_journal_stop(handle, inode);
++	ext3_journal_stop(handle);
 +	kfree(root);
 +	return err;
 +}
@@ -151,24 +151,24 @@ Index: linux-2.6.10/fs/ext3/extents-in-ea.c
 +	up(&EXT3_I(inode)->truncate_sem);
 +	handle = ext3_journal_start(tree->inode, needed + 10);
 +	if (IS_ERR(handle)) {
-+		down_write(&EXT3_I(inode)->truncate_sem);
++		down(&EXT3_I(inode)->truncate_sem);
 +		return PTR_ERR(handle);
 +	}
 +
 +	if (tgen != EXT_GENERATION(tree)) {
 +		/* the tree has changed. so path can be invalid at moment */
-+		ext3_journal_stop(handle, inode);
-+		down_write(&EXT3_I(inode)->truncate_sem);
++		ext3_journal_stop(handle);
++		down(&EXT3_I(inode)->truncate_sem);
 +		return EXT_REPEAT;
 +	}
 +
-+	down_write(&EXT3_I(inode)->truncate_sem);
++	down(&EXT3_I(inode)->truncate_sem);
 +
 +	/* insert new extent */
 +	newex->ee_start = 0;
 +	err = ext3_ext_insert_extent(handle, tree, path, newex);
 +	if (!err)
-+		ext3_journal_stop(handle, tree->inode);
++		ext3_journal_stop(handle);
 +
 +	return err;
 +}
@@ -182,11 +182,11 @@ Index: linux-2.6.10/fs/ext3/extents-in-ea.c
 +
 +	err = ext3_init_tree_in_ea_desc(&tree, inode, name_index, eaname);
 +	if (err == 0) {
-+		down_write(&EXT3_I(inode)->truncate_sem);	
++		down(&EXT3_I(inode)->truncate_sem);	
 +		err = ext3_ext_walk_space(&tree, from, num,
 +						ext3_ext_in_ea_new_extent);
 +		ext3_release_tree_in_ea_desc(&tree);
-+		up_write(&EXT3_I(inode)->truncate_sem);
++		up(&EXT3_I(inode)->truncate_sem);
 +	}
 +	return err;
 +}
@@ -351,10 +351,11 @@ Index: linux-2.6.10/fs/ext3/Makefile
 ===================================================================
 --- linux-2.6.10.orig/fs/ext3/Makefile	2005-04-05 12:27:00.597875304 +0800
 +++ linux-2.6.10/fs/ext3/Makefile	2005-04-05 12:28:26.989741744 +0800
-@@ -7,6 +7,6 @@
+@@ -7,7 +7,7 @@
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  	   ioctl.o namei.o super.o symlink.o hash.o resize.o iopen.o \
  	   extents.o
+ 
 -ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
 +ext3-$(CONFIG_EXT3_FS_XATTR)   += xattr.o xattr_user.o xattr_trusted.o extents-in-ea.o
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o

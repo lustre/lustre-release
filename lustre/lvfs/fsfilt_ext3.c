@@ -369,14 +369,17 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
 static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
 {
+        journal_t *journal = EXT3_JOURNAL(inode);
         tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
-        if (is_journal_aborted(EXT3_JOURNAL(inode)))
+        if (unlikely(is_journal_aborted(journal)))
                 return -EIO;
 
         log_wait_commit(EXT3_JOURNAL(inode), tid);
 
+        if (unlikely(is_journal_aborted(journal)))
+                return -EIO;
         return 0;
 }
 
@@ -724,6 +727,14 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
+#if defined(EXT3_MULTIBLOCK_ALLOCATOR) && (!defined(EXT3_EXT_CACHE_NO) || defined(EXT_CACHE_MARK))
+#warning "kernel code has old extents/mballoc patch, disabling"
+#undef EXT3_MULTIBLOCK_ALLOCATOR
+#endif
+#ifndef EXT3_EXTENTS_FL
+#define EXT3_EXTENTS_FL			0x00080000 /* Inode uses extents */
+#endif
+
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ext3_up_truncate_sem(inode)  up_write(&EXT3_I(inode)->truncate_sem);
@@ -752,18 +763,19 @@ struct bpointers {
         int init_num;
         int create;
 };
+
 static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
-                                unsigned long block, int *aflags)
+                              unsigned long block, int *aflags)
 {
         struct ext3_inode_info *ei = EXT3_I(inode);
         unsigned long bg_start;
         unsigned long colour;
         int depth;
-                                                                                                                                                                                                     
+
         if (path) {
                 struct ext3_extent *ex;
                 depth = path->p_depth;
-                                                                                                                                                                                                     
+
                 /* try to predict block placement */
                 if ((ex = path[depth].p_ext)) {
 #if 0
@@ -772,57 +784,56 @@ static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
                          * request will fit into.  This can fragment data
                          * block allocation and prevents our lovely 1M I/Os
                          * from reaching the disk intact. */
-
                         if (ex->ee_block + ex->ee_len == block)
                                 *aflags |= 1;
 #endif
                         return ex->ee_start + (block - ex->ee_block);
                 }
-                                                                                                                                                                                                     
+
                 /* it looks index is empty
                  * try to find starting from index itself */
                 if (path[depth].p_bh)
                         return path[depth].p_bh->b_blocknr;
         }
-                                                                                                                                                                                                     
+
         /* OK. use inode's group */
         bg_start = (ei->i_block_group * EXT3_BLOCKS_PER_GROUP(inode->i_sb)) +
                 le32_to_cpu(EXT3_SB(inode->i_sb)->s_es->s_first_data_block);
         colour = (current->pid % 16) *
-                        (EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
+                (EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
         return bg_start + colour + block;
 }
 
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
-                                  struct ext3_extent *newex, int exist)
+                                  struct ext3_ext_cache *cex)
 {
         struct inode *inode = tree->inode;
         struct bpointers *bp = tree->private;
+        struct ext3_extent nex;
         int count, err, goal;
         unsigned long pblock;
-        unsigned long tgen;
         loff_t new_i_size;
         handle_t *handle;
         int i, aflags = 0;
-        
+
         i = EXT_DEPTH(tree);
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
-        
-        if (exist) {
+
+       	if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
                 goto map;
         }
-        
+
         if (bp->create == 0) {
                 i = 0;
-                if (newex->ee_block < bp->start)
-                        i = bp->start - newex->ee_block;
-                if (i >= newex->ee_len)
+                if (cex->ec_block < bp->start)
+                        i = bp->start - cex->ec_block;
+                if (i >= cex->ec_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->ee_len);
-                for (; i < newex->ee_len && bp->num; i++) {
+                                        i, cex->ec_len);
+                for (; i < cex->ec_len && bp->num; i++) {
                         *(bp->created) = 0;
                         bp->created++;
                         *(bp->blocks) = 0;
@@ -830,78 +841,92 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                         bp->num--;
                         bp->start++;
                 }
-                                                                                                                                                                                                     
+
                 return EXT_CONTINUE;
         }
-        tgen = EXT_GENERATION(tree);
+
         count = ext3_ext_calc_credits_for_insert(tree, path);
-        ext3_up_truncate_sem(inode);
+
         lock_24kernel();
-        handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
+        handle = journal_start(EXT3_JOURNAL(inode), count+EXT3_ALLOC_NEEDED+1);
         unlock_24kernel();
-        if (IS_ERR(handle)) {
-                ext3_down_truncate_sem(inode);
+        if (IS_ERR(handle))
                 return PTR_ERR(handle);
-        }
-        
-        if (tgen != EXT_GENERATION(tree)) {
-                /* the tree has changed. so path can be invalid at moment */
-                lock_24kernel();
-                journal_stop(handle);
-                unlock_24kernel();
-                ext3_down_truncate_sem(inode);
-                return EXT_REPEAT;
-        }
-        ext3_down_truncate_sem(inode);
-        count = newex->ee_len;
-        goal = ext3_ext_find_goal(inode, path, newex->ee_block, &aflags);
+
+        count = cex->ec_len;
+        goal = ext3_ext_find_goal(inode, path, cex->ec_block, &aflags);
         aflags |= 2; /* block have been already reserved */
+        lock_24kernel();
         pblock = ext3_mb_new_blocks(handle, inode, goal, &count, aflags, &err);
+        unlock_24kernel();
         if (!pblock)
                 goto out;
-        EXT_ASSERT(count <= newex->ee_len);
-                                                                                                                                                                                                     
+        EXT_ASSERT(count <= cex->ec_len);
+
         /* insert new extent */
-        newex->ee_start = pblock;
-        newex->ee_len = count;
-        err = ext3_ext_insert_extent(handle, tree, path, newex);
+        nex.ee_block = cex->ec_block;
+        nex.ee_start = pblock;
+        nex.ee_len = count;
+        err = ext3_ext_insert_extent(handle, tree, path, &nex);
         if (err)
                 goto out;
-                                                                                                                                                                                                     
+
+        /*
+         * Putting len of the actual extent we just inserted,
+         * we are asking ext3_ext_walk_space() to continue
+         * scaning after that block
+         */
+        cex->ec_len = nex.ee_len;
+        cex->ec_start = nex.ee_start;
+        BUG_ON(nex.ee_len == 0);
+        BUG_ON(nex.ee_block != cex->ec_block);
+
         /* correct on-disk inode size */
-        if (newex->ee_len > 0) {
-                new_i_size = (loff_t) newex->ee_block + newex->ee_len;
+        if (nex.ee_len > 0) {
+                new_i_size = (loff_t) nex.ee_block + nex.ee_len;
                 new_i_size = new_i_size << inode->i_blkbits;
                 if (new_i_size > EXT3_I(inode)->i_disksize) {
                         EXT3_I(inode)->i_disksize = new_i_size;
                         err = ext3_mark_inode_dirty(handle, inode);
                 }
         }
+
 out:
         lock_24kernel();
         journal_stop(handle);
         unlock_24kernel();
 map:
         if (err >= 0) {
+                struct block_device *bdev = inode->i_sb->s_bdev;
+
                 /* map blocks */
                 if (bp->num == 0) {
                         CERROR("hmm. why do we find this extent?\n");
                         CERROR("initial space: %lu:%u\n",
                                 bp->start, bp->init_num);
                         CERROR("current extent: %u/%u/%u %d\n",
-                                newex->ee_block, newex->ee_len,
-                                newex->ee_start, exist);
+                                cex->ec_block, cex->ec_len,
+                                cex->ec_start, cex->ec_type);
                 }
                 i = 0;
-                if (newex->ee_block < bp->start)
-                        i = bp->start - newex->ee_block;
-                if (i >= newex->ee_len)
+                if (cex->ec_block < bp->start)
+                        i = bp->start - cex->ec_block;
+                if (i >= cex->ec_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->ee_len);
-                for (; i < newex->ee_len && bp->num; i++) {
-                        *(bp->created) = (exist == 0 ? 1 : 0);
+                                        i, cex->ec_len);
+                for (; i < cex->ec_len && bp->num; i++) {
+                        *(bp->blocks) = cex->ec_start + i;
+                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
+                                *(bp->created) = 0;
+                        } else {
+                                *(bp->created) = 1;
+                                /* unmap any possible underlying metadata from
+                                 * the block device mapping.  bug 6998.
+                                 * This only compiles on 2.6, but there are
+                                 * no users of mballoc on 2.4. */
+                                unmap_underlying_metadata(bdev, *(bp->blocks));
+                        }
                         bp->created++;
-                        *(bp->blocks) = newex->ee_start + i;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
@@ -909,18 +934,18 @@ map:
         }
         return err;
 }
-                                                                                                                                                                                                     
+
 int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                        unsigned long num, unsigned long *blocks,
                        int *created, int create)
 {
         struct ext3_extents_tree tree;
         struct bpointers bp;
-        int err, i;
-                                                                                                                                                                                                     
+        int err;
+
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                 block, block + num, (unsigned) inode->i_ino);
-                                                                                                                                                                                                     
+
         ext3_init_tree_desc(&tree, inode);
         tree.private = &bp;
         bp.blocks = blocks;
@@ -928,21 +953,10 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.start = block;
         bp.init_num = bp.num = num;
         bp.create = create;
-        
-        ext3_down_truncate_sem(inode);
+
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
         ext3_ext_invalidate_cache(&tree);
-        ext3_up_truncate_sem(inode);
 
-        /* unmap underlying pages/buffers from blockdevice mapping */
-        if (create) {
-                struct block_device *bdev = inode->i_sb->s_bdev;
-                for (i = 0; i < num; i++) {
-                        if (created[i] == 0)
-                                continue;
-                        unmap_underlying_metadata(bdev, blocks[i]);
-                }
-        }
         return err;
 }
 
@@ -1108,7 +1122,7 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err = 0, block_count = 0, blocksize, size, boffs;
+        int err, block_count = 0, blocksize, size, boffs;
 
         /* Determine how many transaction credits are needed */
         blocksize = 1 << inode->i_blkbits;
@@ -1338,6 +1352,7 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
 }
 
 
+#if 0
 #define EXTENTS_EA "write_extents"
 #define EXTENTS_EA_SIZE 64
 
@@ -1398,6 +1413,7 @@ static int fsfilt_ext3_get_write_extents_num(struct inode *inode, int *size)
                                             EXTENTS_EA, size);
         return rc; 
 } 
+#endif
 
 static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_type                    = "ext3",
@@ -1427,11 +1443,13 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_get_op_len              = fsfilt_ext3_get_op_len,
         .fs_add_dir_entry           = fsfilt_ext3_add_dir_entry,
         .fs_del_dir_entry           = fsfilt_ext3_del_dir_entry,
+#if 0
         .fs_init_extents_ea         = fsfilt_ext3_init_extents_ea,
         .fs_insert_extents_ea       = fsfilt_ext3_insert_extents_ea,
         .fs_remove_extents_ea       = fsfilt_ext3_remove_extents_ea,
         .fs_get_inode_write_extents = fsfilt_ext3_get_inode_write_extents,
         .fs_get_write_extents_num   = fsfilt_ext3_get_write_extents_num,
+#endif
 };
 
 static int __init fsfilt_ext3_init(void)
