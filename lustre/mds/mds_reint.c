@@ -607,14 +607,17 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         type = mds_get_md_type(name);
 
                         if (type == EA_LOV) {
-                                CDEBUG(D_INFO, "set %s EA for cmobd \n", name);
+                                CDEBUG(D_INFO, "set %s EA for cmobd\n", name);
 
                                 rc = fsfilt_set_md(obd, inode, handle, 
                                                    rec->ur_ea2data,
                                                    rec->ur_ea2datalen,
                                                    type);
-                                if (rc)
+                                if (rc) {
+                                        CERROR("fsfilt_set_md() failed, err %d\n",
+                                               rc);
                                         GOTO(cleanup, rc);
+                                }
                         }
                 } else if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                            !((rec->ur_iattr.ia_valid & ATTR_KEY) || 
@@ -974,15 +977,25 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CDEBUG(D_INFO, "set lsm %p, len %d to inode %lu \n", 
                                rec->ur_eadata, rec->ur_eadatalen, 
                                dchild->d_inode->i_ino); 
-                        fsfilt_set_md(obd, dchild->d_inode, handle, rec->ur_eadata,
-                                      rec->ur_eadatalen, EA_LOV);  
+                        rc = fsfilt_set_md(obd, dchild->d_inode, handle,
+                                           rec->ur_eadata, rec->ur_eadatalen,
+                                           EA_LOV);
+                        if (rc) {
+                                CERROR("fsfilt_set_md() failed, err %d\n",
+                                       rc);
+                                GOTO(cleanup, rc);
+                        }
                     } else {
                         /* assumption: when ur_eadata is not NULL, 
                          * ur_eadata is crypto key, should fix it later, 
                          * --wangdi */
-                        mds_set_gskey(obd, handle, dchild->d_inode, 
-                                      rec->ur_eadata, rec->ur_eadatalen, 
-                                      ATTR_MAC | ATTR_KEY); 
+                        rc = mds_set_gskey(obd, handle, dchild->d_inode, 
+                                           rec->ur_eadata, rec->ur_eadatalen, 
+                                           ATTR_MAC | ATTR_KEY);
+                        if (rc) {
+                                CWARN("mds_set_gskey() failed, err %d\n",
+                                      rc);
+                        }
                     }
                 }
                 break;
@@ -1002,7 +1015,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                  * LMV is fixed. --umka */
                 i = mds_choose_mdsnum(obd, rec->ur_name, rec->ur_namelen - 1, 
                                       rec->ur_flags, &req->rq_peer, dir,
-                                      (rec->ur_flags & MDS_REINT_REQ));
+                                      (rec->ur_flags & MDS_REINT_REQ) ? 1 : 0);
                 
                 if (i == mds->mds_num) {
                         /* inode will be created locally */

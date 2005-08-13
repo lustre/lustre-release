@@ -18,12 +18,16 @@ CMOBD_OST2=${CMOBD_OST2:-"cmobd-ost2"}
 MASTER_LMV=${MASTER_LMV:-master-lmv1}
 MASTER_MDS1=${MASTER_MDS1:-"master-mds1"}
 MASTER_MDS2=${MASTER_MDS2:-"master-mds2"}
+MASTER_MDS3=${MASTER_MDS3:-"master-mds3"}
+MASTER_MDS4=${MASTER_MDS4:-"master-mds4"}
 
 CACHE_MDS1=${CACHE_MDS1:-"cache-mds1"}
 CACHE_MDS2=${CACHE_MDS2:-"cache-mds2"}
 
 MDS1_MASTER_DEV=$TMP/mds1-master-localhost
 MDS2_MASTER_DEV=$TMP/mds2-master-localhost
+MDS3_MASTER_DEV=$TMP/mds3-master-localhost
+MDS4_MASTER_DEV=$TMP/mds4-master-localhost
 
 MDS1_CACHE_DEV=$TMP/mds1-cache-localhost
 MDS2_CACHE_DEV=$TMP/mds2-cache-localhost
@@ -104,6 +108,14 @@ ${LMC} -m $config --add mds --node $NODE1 --mds $MASTER_MDS1 \
 
 ${LMC} -m $config --add mds --node $NODE1 --mds $MASTER_MDS2 \
 --fstype $BACK_FSTYPE --dev $MDS2_MASTER_DEV --size $MDSSIZE \
+--lmv $MASTER_LMV --format --filesystem $FS_MASTER || exit 10
+
+${LMC} -m $config --add mds --node $NODE1 --mds $MASTER_MDS3 \
+--fstype $BACK_FSTYPE --dev $MDS3_MASTER_DEV --size $MDSSIZE \
+--lmv $MASTER_LMV --format --filesystem $FS_MASTER || exit 10
+
+${LMC} -m $config --add mds --node $NODE1 --mds $MASTER_MDS4 \
+--fstype $BACK_FSTYPE --dev $MDS4_MASTER_DEV --size $MDSSIZE \
 --lmv $MASTER_LMV --format --filesystem $FS_MASTER || exit 10
 
 ${LMC} -m $config --add lov --lov $MASTER_LOV --lmv $MASTER_LMV \
