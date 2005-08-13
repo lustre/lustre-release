@@ -703,6 +703,11 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                                        group, dir, rc);
                                 GOTO(cleanup, rc);
                         }
+
+                        /* turn on smfs plugins if any */
+                        fsfilt_set_fs_flags(obd, tmp_subdirs->dentry[i]->d_inode,
+                                            SM_ALL_PLG);
+
                         CDEBUG(D_INODE, "got/created O/%d/%s: %p\n", group, dir,
                                tmp_subdirs->dentry[i]);
                 }

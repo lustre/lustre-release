@@ -173,7 +173,7 @@ static void smfs_filter_flags(struct filter_obd * filt, struct inode * o_dir)
         
         CDEBUG(D_SUPER,"OST OBD post_setup\n");
         /* enable plugins for all in O */
-        SMFS_SET(I2SMI(o_dir)->smi_flags, SMFS_PLG_ALL);
+        /* SMFS_SET(I2SMI(o_dir)->smi_flags, SMFS_PLG_ALL); */
         /* enable plugins for all already created d<n> dirs */
         for (j = 1; j < filt->fo_group_count; j++) {
                 for (i = 0; i < filt->fo_subdir_count; i++) {
@@ -194,7 +194,7 @@ static void smfs_mds_flags(struct mds_obd *mds, struct inode *root)
         SMFS_SET(I2SMI(root)->smi_flags, SMFS_PLG_ALL);
 
         /* the same for PENDING */
-        SMFS_SET(I2SMI(pend)->smi_flags, SMFS_PLG_ALL);
+        /* SMFS_SET(I2SMI(pend)->smi_flags, SMFS_PLG_ALL); */
 }
 
 extern int (*audit_id2name_superhack) (struct obd_device *obd, char **name,
