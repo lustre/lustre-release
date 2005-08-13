@@ -634,6 +634,8 @@ struct obd_trans_info {
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
         int                      oti_flags;
+        /* save nid for security purposes like audit */
+        __u64                    oti_nid; 
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)

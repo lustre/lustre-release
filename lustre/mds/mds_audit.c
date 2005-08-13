@@ -52,68 +52,68 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
 #include <linux/lustre_acl.h>
-#include <linux/lustre_audit.h>
 #include "mds_internal.h"
 
 int mds_audit_stat(struct ptlrpc_request *req, struct lustre_id * id,
-                   struct dentry * dentry, int ret)
+                   struct inode *inode, char *name, int namelen, int ret)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct inode * inode = dentry->d_inode;
         ptl_nid_t nid = req->rq_peer.peer_id.nid;
-        struct audit_info info;
+        struct audit_info info = {
+                .name = NULL,
+                .namelen = 0,
+        };
         int rc = 0, len = sizeof(info);
+        
         ENTRY;
         
         LASSERT(inode);
         LASSERT(id);
-        memcpy(&info.m.id, id, sizeof(*id));
+        info.m.id = *id;
         info.m.nid = nid;
         info.m.uid = current->uid;
         info.m.gid = current->gid;
         info.m.result = ret;
         info.m.code = AUDIT_STAT;
-   
-        //send info to local fs
+        if (ret) {
+                info.name = name;
+                info.namelen = namelen;
+        }
+        // send info to local fs
         fsfilt_set_info(obd, inode->i_sb, inode,
                         10, "audit_info", len, (void*)&info);
 
         RETURN(rc);
 }
 
-int mds_audit_open(struct ptlrpc_request *req, struct mds_update_record * rec,
-                   int ret)
+int mds_audit_open(struct ptlrpc_request *req, struct lustre_id * id,
+                   struct inode *inode, char *name, int namelen, int ret)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct inode * inode = NULL;
         ptl_nid_t nid = req->rq_peer.peer_id.nid;
-        struct audit_info info;
+        struct audit_info info = {
+                .name = NULL,
+                .namelen = 0,
+        };
         int rc = 0, len = sizeof(info);
         
-        struct dentry * dparent = NULL;
-        
-        dparent = mds_id2dentry(obd, rec->ur_id1, NULL);
-        if (IS_ERR(dparent)) {
-                rc = PTR_ERR(dparent);
-                RETURN(rc);
-        }
-        inode = dparent->d_inode;
-        
-        info.m.id = *(rec->ur_id1);
+        ENTRY;
+
+        LASSERT(inode);        
+        info.m.id = (*id);
         info.m.nid = nid;
-        info.m.uid = rec->ur_uc.luc_uid;
-        info.m.gid = rec->ur_uc.luc_gid;
+        info.m.uid = current->uid;
+        info.m.gid = current->gid;
         info.m.result = ret;
         info.m.code = AUDIT_OPEN;
-        info.name = rec->ur_name;
-        info.namelen = rec->ur_namelen;
+        if (ret) {
+                info.name = name;
+                info.namelen = namelen;
+        }
         
-        //send info to local fs
         fsfilt_set_info(obd, inode->i_sb, inode,
                         10, "audit_info", len, (void*)&info);
-
-        l_dput(dparent);
-
+        
         RETURN(rc);
 }
 

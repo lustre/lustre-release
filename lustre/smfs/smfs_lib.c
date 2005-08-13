@@ -308,7 +308,7 @@ err_free_cache_fstype:
         OBD_FREE(smb->smsi_cache_ftype, strlen(typestr) + 1);
 err_umount_cache:
         mntput(mnt);
-err_out:
+
         return err;
 }
 

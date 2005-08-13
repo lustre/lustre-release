@@ -1443,6 +1443,22 @@ cleanup_no_trans:
                 } else if (created) {
                         mds_lock_new_child(obd, dchild->d_inode, NULL);
                 }
+                /* audit stuff for OPEN */
+                if (offset == 3 && (dchild->d_inode || dparent)) {
+                        struct lustre_id au_id;
+                        struct inode * au_inode = dchild->d_inode;
+
+                        if (au_inode == NULL)
+                                au_inode = dparent->d_inode;
+                        
+                        if (fid)
+                                mds_inode2id(obd, &au_id, au_inode, fid);
+                        else
+                                au_id = *(rec->ur_id1);
+                        mds_audit_open(req, &au_id, au_inode, 
+                                       rec->ur_name, rec->ur_namelen, rc);
+                }
+
                 l_dput(dchild);
         case 1:
                 if (dparent == NULL)

@@ -2206,7 +2206,9 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
 
         filter = &exp->exp_obd->u.filter;
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-
+        /* pass nid through */
+        current->user->nid = oti->oti_nid;
+        
         /* make sure that object is allocated. */
         dentry = filter_crow_object(exp->exp_obd, oa);
         if (IS_ERR(dentry))
@@ -2439,8 +2441,8 @@ struct dentry *
 filter_crow_object(struct obd_device *obd, struct obdo *oa)
 {
         struct dentry *dentry;
-        obd_uid uid;
-        obd_gid gid;
+        /* obd_uid uid; */
+        /* obd_gid gid; */
         int rc = 0;
         ENTRY;
 
@@ -2456,10 +2458,10 @@ filter_crow_object(struct obd_device *obd, struct obdo *oa)
         CDEBUG(D_INODE, "OSS object "LPU64"/"LPU64
                " does not exists - allocate it now\n",
                oa->o_id, oa->o_gr);
-
+        /*
         uid = oa->o_valid & OBD_MD_FLUID ? oa->o_uid : 0;
         gid = oa->o_valid & OBD_MD_FLGID ? oa->o_gid : 0;
-
+        */
         rc = filter_create_object(obd, oa);
         if (rc) {
                 CERROR("cannot create OSS object "LPU64"/"LPU64
@@ -2837,12 +2839,11 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
         }
 
         if (keylen == 8 && memcmp(key, "auditlog", 8) == 0) {
-                                               
                 rc = fsfilt_set_info(obd, obd->u.filter.fo_sb, NULL,
                                      8, "auditlog", vallen, val);
                 RETURN(rc);
         } else if (keylen == 5 && strcmp(key, "audit") == 0) {
-                //set audit for whole FS on OSS
+                /* set audit for whole FS on OSS */
                 struct audit_attr_msg * msg = val;
 
                 rc = fsfilt_set_info(obd, obd->u.filter.fo_sb, NULL,
@@ -2919,7 +2920,6 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
                 RETURN(0);
         }
         if (keylen >= strlen("cache_sb") && memcmp(key, "cache_sb", 8) == 0) {
-                /*Get log_context handle*/
                 unsigned long *sb = val;
                 *vallen = sizeof(unsigned long);
                 *sb = (unsigned long)obd->u.filter.fo_sb;

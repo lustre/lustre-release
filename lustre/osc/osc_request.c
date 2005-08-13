@@ -2929,7 +2929,7 @@ static int osc_get_info(struct obd_export *exp, __u32 keylen,
         out:
                 ptlrpc_req_finished(req);
                 RETURN(rc);
-        } else if (keylen >= strlen("client_nid") &&
+        } else if (keylen == 10 &&
                    strcmp(key, "client_nid") == 0) {
                 struct ptlrpc_connection * conn;
                 ptl_nid_t * nid = val;
@@ -2939,7 +2939,7 @@ static int osc_get_info(struct obd_export *exp, __u32 keylen,
                 if (!conn) 
                         RETURN(-ENOTCONN);
                 
-                nid = &conn->c_peer.peer_id.nid;
+                *nid = &conn->c_peer.peer_id.nid;
                 
                 RETURN(0);
         }

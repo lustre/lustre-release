@@ -236,6 +236,7 @@ int audit_mds_special_rec(struct inode * inode, void * arg,
         {
                 case AUDIT_OPEN:
                 case AUDIT_CREATE:
+                case AUDIT_STAT:
                         if (info->name && info->namelen > 0) { 
                                 len += audit_fill_name_rec(&pbuf,
                                                            info->name,

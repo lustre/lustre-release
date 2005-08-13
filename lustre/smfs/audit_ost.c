@@ -120,9 +120,13 @@ int static audit_ost_rw_rec(struct inode * inode, void * arg,
         struct audit_record * rec = (void*)buffer;
         char * pbuf = buffer + sizeof(*rec); 
         int len = sizeof(*rec);
+        struct lustre_id id;
+
+        if (audit_ost_get_id(inode, &id) < 0) 
+                CERROR("Cannot get lustre id from object EA\n");
 
         rec->opcode = msg->write ? AUDIT_WRITE : AUDIT_READ;
-        len += audit_rec_from_id(&pbuf, msg->id);
+        len += audit_rec_from_id(&pbuf, &id);
         *type = SMFS_AUDIT_GEN_REC;
         
         return len;
@@ -131,6 +135,8 @@ int static audit_ost_rw_rec(struct inode * inode, void * arg,
 static audit_get_op audit_ost_record[HOOK_MAX] = {
         [HOOK_SI_READ]      audit_ost_rw_rec,
         [HOOK_SI_WRITE]     audit_ost_rw_rec,
+        [HOOK_READ]         audit_ost_rw_rec,
+        [HOOK_WRITE]        audit_ost_rw_rec,
         [HOOK_CREATE]       NULL, /* audit_ost_create_rec, */
         [HOOK_UNLINK]       audit_ost_unlink_rec,
         [HOOK_SETATTR]      audit_ost_setattr_rec,

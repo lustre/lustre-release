@@ -6,6 +6,7 @@
 #define _MDS_INTERNAL_H
 
 #include <linux/lustre_mds.h>
+#include <linux/lustre_audit.h>
 
 #define MDS_SERVICE_WATCHDOG_TIMEOUT 30000
 
@@ -340,6 +341,12 @@ int mds_parse_id(struct ptlrpc_request *req);
 /* mds_audit.c */
 int mds_set_audit(struct obd_device * obd, void * val);
 int mds_pack_audit(struct obd_device *, struct inode *, struct mds_body *);
+int mds_audit_auth(struct ptlrpc_request *, struct lvfs_ucred *,
+                   audit_op, struct lustre_id *, char *, int);
+int mds_audit_stat(struct ptlrpc_request *, struct lustre_id *,
+                   struct inode *, char*, int, int);
+int mds_audit_open(struct ptlrpc_request *, struct lustre_id *,
+                   struct inode *, char*, int, int);
 
 /* mds_acl.c */
 struct upcall_cache *__mds_get_global_rmtacl_upcall_cache(void);

@@ -58,17 +58,7 @@
 #include <linux/lustre_acl.h>
 #include <linux/lustre_sec.h>
 #include <linux/lustre_gs.h>
-#include <linux/lustre_audit.h>
-
 #include "mds_internal.h"
-
-extern int mds_audit_auth(struct ptlrpc_request *, struct lvfs_ucred *,
-                          audit_op, struct lustre_id *,
-                          char *, int);
-extern int mds_audit_stat(struct ptlrpc_request *, struct lustre_id *,
-                          struct dentry *, int);
-extern int mds_audit_open(struct ptlrpc_request *, struct mds_update_record *,
-                          int);
 
 static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
@@ -1698,6 +1688,17 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         GOTO(cleanup, rc);
 
  cleanup:
+        /* audit stuff for getattr */
+        if (resent_req == 0 && (dparent || dchild)) {
+                struct inode * au_inode = NULL;
+                
+                if (dchild && dchild->d_inode)
+                        au_inode = dchild->d_inode;
+                else
+                        au_inode = dparent->d_inode;
+                
+                mds_audit_stat(req, &body->id1, au_inode, name, namesize, rc);
+        }
         switch (cleanup_phase) {
         case 2:
                 if (resent_req == 0) {
@@ -1711,10 +1712,6 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 #endif
                         if (dparent)
                                 l_dput(dparent);
-
-                        /* audit stuff for getattr */
-                        if (dchild->d_inode)
-                                mds_audit_stat(req, &body->id1, dchild, rc);
                 }
                 l_dput(dchild);
         case 1:
@@ -2151,11 +2148,7 @@ int mds_reint(struct ptlrpc_request *req, int offset,
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
 
-        /* audit stuff for OPEN */
-        if (offset == 3 && rec->ur_opcode == REINT_OPEN)
-                mds_audit_open(req, rec, rc);
-
- out:
+out:
         mds_exit_ucred(&rec->ur_uc);
         OBD_FREE(rec, sizeof(*rec));
         RETURN(rc);

@@ -71,9 +71,11 @@ static audit_op hook2audit(hook_op hook)
                         return AUDIT_SETATTR;
                         
                 case HOOK_SI_WRITE:
+                case HOOK_WRITE:
                         return AUDIT_WRITE;
                         
                 case HOOK_SI_READ:
+                case HOOK_READ:
                         return AUDIT_READ;
 
                 case HOOK_READDIR:
@@ -562,6 +564,8 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
         rec->time = cur_time.tv_sec * USEC_PER_SEC + cur_time.tv_usec;
         pbuf += sizeof(*rec);
         
+        CDEBUG(D_VFSTRACE, "AUDITLOG:"DLID4"\n", OLID4(&msg->id));
+
         switch (msg->code) {
                 case AUDIT_READ:    
                 case AUDIT_WRITE:

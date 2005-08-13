@@ -84,7 +84,6 @@ int ll_check_audit(struct inode * inode, audit_op op, int ret)
 int ll_audit_log (struct inode * inode, audit_op code, int ret)
 {
         struct audit_msg msg;
-        //struct lustre_id * id = &msg.id;
         struct obd_export * exp = ll_i2dtexp(inode);
         int rc = 0;
         
@@ -92,9 +91,9 @@ int ll_audit_log (struct inode * inode, audit_op code, int ret)
                 msg.id = ll_i2info(inode)->lli_id;
                 msg.code = code;
                 msg.result = ret;
-                msg.uid = current->fsuid;
-                msg.gid = current->fsgid;
-                msg.nid = 0xFEED;
+                msg.uid = current->uid;
+                msg.gid = current->gid;
+                msg.nid = 0;
                 
                 rc = obd_set_info(exp, 8, "auditlog", sizeof(msg), &msg);
         }

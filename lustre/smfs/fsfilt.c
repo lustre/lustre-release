@@ -387,12 +387,12 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
         struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
         int     rc = -EIO;
-        /*
         struct hook_rw_msg  msg = {
                 .write = create,
         };
-        */
+        hook_op hook = create ? HOOK_WRITE : HOOK_READ;
         ENTRY;
+        
         
         if (!cache_fsfilt)
                 RETURN(-EINVAL);
@@ -405,13 +405,13 @@ int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
         if (!cache_fsfilt->fs_map_inode_pages)
                 RETURN(-ENOSYS);
 
+        SMFS_PRE_HOOK(inode, hook, &msg);
         down(&cache_inode->i_sem);
-        //SMFS_PRE_HOOK(inode, HOOK_MAP_PAGES, &msg);
 
         rc = cache_fsfilt->fs_map_inode_pages(cache_inode, page, pages, blocks,
                                               created, create, sem);
-
         up(&cache_inode->i_sem);
+        SMFS_POST_HOOK(inode, hook, &msg, rc);
 
         RETURN(rc);
 }

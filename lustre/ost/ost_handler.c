@@ -52,7 +52,7 @@ void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
         if (oti == NULL)
                 return;
         memset(oti, 0, sizeof *oti);
-
+        oti->oti_nid = req->rq_peer.peer_id.nid;
         if (req->rq_repmsg && req->rq_reqmsg != 0)
                 oti->oti_transno = req->rq_repmsg->transno;
 }

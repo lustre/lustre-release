@@ -162,6 +162,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
                 int namelen = 0;
         
                 REC2ID(id_rec, &id);
+                
                 rc = audit_id2name(obd, &name, &namelen, &id);
                 if (rc < 0) {
                         strncat(buf, "unknown", PAGE_SIZE - n);
