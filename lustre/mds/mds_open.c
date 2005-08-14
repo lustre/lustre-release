@@ -581,7 +581,13 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return; /* error looking up parent or child */
         }
 
-        if (rec->ur_namelen == 1) {
+        /* first, we try to open the file by fid. by the time of this
+         * request, inode can be an orphan and parent can disappear */
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                CDEBUG(D_HA, "OPEN by fid "DLID4" (RESENT|REPLAY)\n",
+                       OLID4(rec->ur_id2));
+                dchild = mds_id2dentry(obd, rec->ur_id2, NULL);
+        } else if (rec->ur_namelen == 1) {
                 CDEBUG(D_HA, "OPEN by fid "DLID4" (RESENT)\n",
                        OLID4(rec->ur_id1));
                 dchild = mds_id2dentry(obd, rec->ur_id1, NULL);

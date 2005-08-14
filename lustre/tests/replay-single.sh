@@ -40,12 +40,9 @@ gen_config() {
 	MDS=lmv1
     else
         add_mds $SINGLEMDS --dev $MDSDEV --size $MDSSIZE
-        if [ ! -z "$$SINGLEMDSfailover_HOST" ]; then
-	     add_mdsfailover $SINGLEMDS --dev $MDSDEV --size $MDSSIZE
-        fi
 	add_lov lov1 $SINGLEMDS --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	MDS=$SINGLEMDS_svc
+	MDS=$SINGLEMDS
     fi
     
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
@@ -1296,6 +1293,25 @@ test_56() {
     return 0
 }
 run_test 56 "let MDS_CHECK_RESENT return the original return code instead of 0"
+
+#b7312 LASSERT(!IS_ERR(parent)) in reconstruct_open()
+test_57() {
+    mkdir $DIR/$tdir || return 1
+    touch $DIR/$tdir/$tfile || return 2
+    multiop $DIR/$tdir/$tfile o_ &
+    MULTIPID=$!
+    sleep 1
+    rm -f $DIR/$tdir/$tfile || return 3
+    rm -rf $DIR/$tdir || return 4
+    # drop first reint reply
+    sysctl -w lustre.fail_loc=0x0000030c
+    facet_failover $SINGLEMDS
+    df $MOUNT || return 1
+    kill -USR1 $MULTIPID || return 5
+    wait $MULTIPID || return 6
+    sysctl -w lustre.fail_loc=0
+}
+run_test 57 "open orphan in reconstruct_open()"
 
 equals_msg test complete, cleaning up
 $CLEANUP
