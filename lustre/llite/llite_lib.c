@@ -582,6 +582,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_exec_count = 0;
         lli->lli_audit_mask = AUDIT_OFF;
         lli->lli_key_info = NULL;
+        init_waitqueue_head(&lli->lli_dirty_wait);
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -1158,6 +1159,7 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
+        LASSERT(ll_is_inode_dirty(inode) == 0);
         ll_inode2id(&id, inode);
         
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));

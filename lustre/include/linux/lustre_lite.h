@@ -121,6 +121,8 @@ struct ll_inode_info {
         struct lustre_key      *lli_key_info;
 
         struct lustre_capa     *lli_trunc_capa; /* capabiliity for truncate */
+
+        wait_queue_head_t       lli_dirty_wait;
 };
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff

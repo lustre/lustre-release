@@ -52,6 +52,8 @@ void llap_write_complete(struct inode *inode, struct ll_async_page *llap)
         spin_lock(&lli->lli_lock);
         if (!list_empty(&llap->llap_pending_write))
                 list_del_init(&llap->llap_pending_write);
+        if (list_empty(&lli->lli_pending_write_llaps))
+                wake_up(&lli->lli_dirty_wait);
         spin_unlock(&lli->lli_lock);
 }
 
@@ -148,12 +150,14 @@ static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 
         spin_lock(&lcq->lcq_lock);
 
-        if (lcq->lcq_list.next == NULL)
-                lli = ERR_PTR(-1);
-        else if (!list_empty(&lcq->lcq_list)) {
+        /* first, check for queued request. otherwise, we would
+         * leak them upon umount */
+        if (!list_empty(&lcq->lcq_list)) {
                 lli = list_entry(lcq->lcq_list.next, struct ll_inode_info,
                                  lli_close_item);
                 list_del_init(&lli->lli_close_item);
+        } else if (lcq->lcq_stop != 0) {
+                lli = ERR_PTR(-1);
         }
 
         spin_unlock(&lcq->lcq_lock);
@@ -210,6 +214,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
         if (lcq == NULL)
                 return -ENOMEM;
 
+        lcq->lcq_stop = 0;
         spin_lock_init(&lcq->lcq_lock);
         INIT_LIST_HEAD(&lcq->lcq_list);
         init_waitqueue_head(&lcq->lcq_waitq);
@@ -229,7 +234,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 void ll_close_thread_stop(struct ll_close_queue *lcq)
 {
         init_completion(&lcq->lcq_comp);
-        lcq->lcq_list.next = NULL;
+        lcq->lcq_stop = 1;
         wake_up(&lcq->lcq_waitq);
         wait_for_completion(&lcq->lcq_comp);
         OBD_FREE(lcq, sizeof(*lcq));
