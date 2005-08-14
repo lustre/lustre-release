@@ -43,6 +43,7 @@
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
+#include <linux/writeback.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -75,12 +76,28 @@ static int ll_releasepage(struct page *page, int gfp_mask)
         return 1;
 }
 
+static int ll_writepages(struct address_space *mapping,
+                         struct writeback_control *wbc)
+{
+        int rc;
+        rc =  generic_writepages(mapping, wbc);
+        if (rc == 0 && wbc->sync_mode == WB_SYNC_ALL) {
+                /* as we don't use Writeback bit to track pages
+                 * under I/O, filemap_fdatawait() doesn't work
+                 * for us. let's wait for I/O completion here */
+                struct ll_inode_info *lli = ll_i2info(mapping->host);
+                wait_event(lli->lli_dirty_wait,
+                           ll_is_inode_dirty(mapping->host) == 0);
+        }
+        return rc;
+}
+
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
 //        .readpages      = ll_readpages,
 //        .direct_IO      = ll_direct_IO_26,
         .writepage      = ll_writepage_26,
-        .writepages     = generic_writepages,
+        .writepages     = ll_writepages,
         .set_page_dirty = __set_page_dirty_nobuffers,
         .sync_page      = NULL,
         .prepare_write  = ll_prepare_write,
