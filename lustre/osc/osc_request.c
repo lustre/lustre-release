@@ -2929,17 +2929,20 @@ static int osc_get_info(struct obd_export *exp, __u32 keylen,
         out:
                 ptlrpc_req_finished(req);
                 RETURN(rc);
-        } else if (keylen == 10 &&
-                   strcmp(key, "client_nid") == 0) {
+        } else if (keylen == 10 && strcmp(key, "client_nid") == 0) {
                 struct ptlrpc_connection * conn;
                 ptl_nid_t * nid = val;
                 *vallen = sizeof(*nid);
-                
+                ptl_process_id_t id;
+                int rc;
                 conn = class_exp2cliimp(exp)->imp_connection;
-                if (!conn) 
+                
+                if (!conn || !conn->c_peer.peer_ni) 
                         RETURN(-ENOTCONN);
                 
-                *nid = &conn->c_peer.peer_id.nid;
+                rc = PtlGetId(conn->c_peer.peer_ni->pni_ni_h, &id);
+                if (rc == PTL_OK)
+                        *nid = id.nid;
                 
                 RETURN(0);
         }
