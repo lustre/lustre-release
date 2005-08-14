@@ -391,8 +391,10 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
                                loghandle->lgh_id.lgl_ogen, *curr_offset);
                         RETURN(-EINVAL);
                 }
-                if (le32_to_cpu(tail->lrt_index) < next_idx)
+                if (le32_to_cpu(tail->lrt_index) < next_idx) {
+                        memset(buf, 0, len);
                         continue;
+                }
 
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
