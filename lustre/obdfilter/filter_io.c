@@ -790,9 +790,9 @@ int filter_do_cow(struct obd_export *exp, struct obd_ioobj *obj,
         }
         
         flags = fsfilt_get_fs_flags(exp->exp_obd, dentry);
-        if (!(flags & SM_DO_COW)) {
+        if (!(flags & SM_DO_COW))
                 GOTO(cleanup, rc);
-        }
+
         OBD_ALLOC(extents, obj->ioo_bufcnt * sizeof(struct write_extents)); 
         if (!extents) {
                 CERROR("No Memory\n");
@@ -850,9 +850,8 @@ int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj, int nobj
         }
         
         flags = fsfilt_get_fs_flags(exp->exp_obd, dentry);
-        if (!(flags & SM_DO_REC)) {
+        if (!(flags & SM_DO_REC))
                 GOTO(cleanup, rc);
-        }
 
         for (i = 0, lnb = local; i < obj->ioo_bufcnt; i++, lnb++) {
                 if (len == 0) {

@@ -695,8 +695,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                         char dir[20];
                         snprintf(dir, sizeof(dir), "d%u", i);
 
-                        tmp_subdirs->dentry[i] =
-                                simple_mkdir(dentry, dir, 0700, 1);
+                        tmp_subdirs->dentry[i] = simple_mkdir(dentry, dir, 0700, 1);
                         if (IS_ERR(tmp_subdirs->dentry[i])) {
                                 rc = PTR_ERR(tmp_subdirs->dentry[i]);
                                 CERROR("can't lookup/create O/%d/%s: rc = %d\n",
@@ -1409,28 +1408,6 @@ static int filter_post_fs_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
-#if 0
-static int filter_group_set_fs_flags(struct obd_device *obd, int group)
-{
-        struct filter_obd *filter = &obd->u.filter;
-        int rc = 0, i = 0;
-        ENTRY;        
-        
-        /* zero group is not longer valid. */
-        if (group== 0)
-                RETURN(rc); 
-        for (i = 0; i < filter->fo_subdir_count; i++) {
-                struct dentry *dentry;
-                dentry = (filter->fo_subdirs + group)->dentry[i];
-                rc = fsfilt_set_fs_flags(obd, dentry->d_inode, 
-                                         SM_DO_REC | SM_DO_COW);
-                if (rc)
-                        RETURN(rc);
-        }
-        RETURN(rc);
-}
-#endif
-
 static int filter_post_fs_setup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
@@ -1827,13 +1804,6 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                 CERROR("can't read group %u\n", group);
                 GOTO(cleanup, rc);
         }
-#if 0
-        rc = filter_group_set_fs_flags(obd, group);
-        if (rc != 0) {
-                CERROR("can't set kml flags %u\n", group);
-                GOTO(cleanup, rc);
-        }
-#endif
 cleanup:
         if (rc) {
                 if (fcd)
@@ -2402,7 +2372,6 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa)
                 CWARN("create object without lustre id!\n");
                 portals_debug_dumpstack(NULL);
         }
-
 
         fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC);
 

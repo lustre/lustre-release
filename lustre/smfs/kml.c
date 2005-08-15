@@ -350,6 +350,7 @@ static int smfs_remove_all_extents_ea(struct inode *inode)
         rc = fsfilt->fs_remove_extents_ea(inode, 0, 0xffffffff);        
         RETURN(rc);
 }
+
 static int  smfs_init_extents_ea(struct inode *inode)
 {
         struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
@@ -360,6 +361,7 @@ static int  smfs_init_extents_ea(struct inode *inode)
         
         RETURN(rc);
 }
+
 static int smfs_set_dirty_flags(struct inode *inode, int flags)
 {
         struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;

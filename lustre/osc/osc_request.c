@@ -2932,9 +2932,10 @@ static int osc_get_info(struct obd_export *exp, __u32 keylen,
         } else if (keylen == 10 && strcmp(key, "client_nid") == 0) {
                 struct ptlrpc_connection * conn;
                 ptl_nid_t * nid = val;
-                *vallen = sizeof(*nid);
                 ptl_process_id_t id;
                 int rc;
+
+                *vallen = sizeof(*nid);
                 conn = class_exp2cliimp(exp)->imp_connection;
                 
                 if (!conn || !conn->c_peer.peer_ni) 

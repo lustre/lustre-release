@@ -42,7 +42,7 @@
 
 static int smfs_ost_get_id(obd_id *id, char *data, int size)
 {
-        /*for obdfilter obdid is the name of the filename*/
+        /* for obdfilter obdid is the name of the filename */
         char end;
         char *endp = &end;
         if (data)
@@ -100,18 +100,20 @@ static int ost_rec_create_pack(char *buffer, struct dentry *dentry,
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLTYPE |
                         OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
                 oa->o_size = 0;
-                obdo_from_inode(oa, dentry->d_inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
-                                OBD_MD_FLMTIME| OBD_MD_FLCTIME);
-                rc = smfs_ost_get_id(&oa->o_id, (char*)dentry->d_name.name,
+                obdo_from_inode(oa, dentry->d_inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                rc = smfs_ost_get_id(&oa->o_id, (char *)dentry->d_name.name,
                                      dentry->d_name.len);
                 if (rc) {
-                        CERROR("Can not find id of node %lu\n", dentry->d_inode->i_ino);
-                        GOTO(out, rc = -ENOMEM);
+                        CERROR("can not find id of inode %lu, name %s\n",
+                               dentry->d_inode->i_ino, (char *)dentry->d_name.name);
+                        GOTO(out, rc);
                 }
                 rc = smfs_ost_get_group(dentry, oa);
                 if (rc) {
-                        CERROR("Can not find group node %lu\n", dentry->d_inode->i_ino);
-                        GOTO(out, rc = -ENOMEM); 
+                        CERROR("can not find group inode %lu, name %s\n",
+                               dentry->d_inode->i_ino, (char *)dentry->d_name.name);
+                        GOTO(out, rc); 
                 }
         } 
         rc = sizeof(*oa) + sizeof(int);

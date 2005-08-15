@@ -166,14 +166,16 @@ void smfs_cleanup_fsfilt_ops(struct smfs_super_info *smb)
                 fsfilt_put_ops(smb->sm_fsfilt);
 }
 
-static void smfs_filter_flags(struct filter_obd * filt, struct inode * o_dir)
+static void smfs_filter_flags(struct filter_obd *filt, struct inode *o_dir)
 {
         struct dentry * dentry = NULL;
         int i,j;
         
         CDEBUG(D_SUPER,"OST OBD post_setup\n");
+
         /* enable plugins for all in O */
         /* SMFS_SET(I2SMI(o_dir)->smi_flags, SMFS_PLG_ALL); */
+
         /* enable plugins for all already created d<n> dirs */
         for (j = 1; j < filt->fo_group_count; j++) {
                 for (i = 0; i < filt->fo_subdir_count; i++) {
@@ -186,15 +188,10 @@ static void smfs_filter_flags(struct filter_obd * filt, struct inode * o_dir)
 
 static void smfs_mds_flags(struct mds_obd *mds, struct inode *root)
 {
-        struct inode *pend = mds->mds_pending_dir->d_inode;
-        
         CDEBUG(D_SUPER,"MDS OBD post_setup\n");
-
+        
         /* enable plugins for all in ROOT */        
         SMFS_SET(I2SMI(root)->smi_flags, SMFS_PLG_ALL);
-
-        /* the same for PENDING */
-        /* SMFS_SET(I2SMI(pend)->smi_flags, SMFS_PLG_ALL); */
 }
 
 extern int (*audit_id2name_superhack) (struct obd_device *obd, char **name,
@@ -308,7 +305,6 @@ err_free_cache_fstype:
         OBD_FREE(smb->smsi_cache_ftype, strlen(typestr) + 1);
 err_umount_cache:
         mntput(mnt);
-
         return err;
 }
 
