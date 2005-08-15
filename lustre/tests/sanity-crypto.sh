@@ -51,8 +51,13 @@ gen_config() {
     fi
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_gks gks     
-    add_client client $MDS --lov lov1 --gks gks_svc --path $MOUNT
+    if [ $CRYPT_TYPE == "gks" ]; then 
+    	add_gks gks     
+    	add_client client $MDS --lov lov1 --gks gks_svc --path $MOUNT
+    else
+    	add_client client $MDS --lov lov1 --path $MOUNT
+    fi
+	
 }
 
 build_test_filter
@@ -68,8 +73,9 @@ cleanup() {
     umount $MOUNT2 || true
     umount $MOUNT || true
     rmmod llite
-
-    stop_gks gks 
+    if [ $CRYPT_TYPE == "gks" ]; then
+    	stop_gks gks 
+    fi
     for mds in `mds_list`; do
 	stop $mds ${FORCE} $MDSLCONFARGS
     done
@@ -98,9 +104,9 @@ setup() {
     for mds in `mds_list`; do
 	start $mds --reformat $MDSLCONFARGS
     done
-    set -vx 
-    start_gks gks || exit 4
-    set -e
+    if [ $CRYPT_TYPE == "gks" ]; then
+    	start_gks gks || exit 4
+    fi
     grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
     grep " $MOUNT2 " /proc/mounts || zconf_mount `hostname` $MOUNT2
 }

@@ -652,6 +652,7 @@ int ll_mks_decrypt_key(struct inode *inode, struct lookup_intent *it)
                 GOTO(out, rc);      
         spin_lock(&lli->lli_lock); 
         SET_DECRYPTED(lkey->lk_flags); 
+        memcpy(&lkey->lk_dk, lkey->lk_ck.ck_key, KEY_SIZE);
         spin_unlock(&lli->lli_lock);
         EXIT;
 out:
