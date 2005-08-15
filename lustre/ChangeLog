@@ -60,6 +60,12 @@ Details    : By echoing "nid:$NID" string into
              $NID would be instantly evicted from this MDS and from all active
              OSTs connected to it.
 
+Severity   : minor
+Bugzilla   : 7198
+Description: Do not query file size twice, somewhat slowing stat(2) calls.
+Details    : lookup_it_finish() used to query file size from OSTs that was not
+             needed.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes

@@ -352,23 +352,14 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                        inode, inode->i_ino, inode->i_generation);
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
 
-                /* If this is a stat, get the authoritative file size */
-                if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
-                    ll_i2info(inode)->lli_smd != NULL) {
-                        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                        ldlm_error_t rc;
-
-                        LASSERT(lsm->lsm_object_id != 0);
-
-                        /* bug 2334: drop MDS lock before acquiring OST lock */
-                        ll_intent_drop_lock(it);
-
-                        rc = ll_glimpse_size(inode);
-                        if (rc) {
-                                iput(inode);
-                                RETURN(rc);
-                        }
-                }
+                /* We used to query real size from OSTs here, but actually
+                   this is not needed. For stat() calls size would be updated
+                   from subsequent do_revalidate()->ll_inode_revalidate_it() in
+                   2.4 and
+                   vfs_getattr_it->ll_getattr()->ll_inode_revalidate_it() in 2.6
+                   Everybody else who needs correct file size would call
+                   ll_glimpse_size or some equivalent themselves anyway.
+                   Also see bug 7198. */
 
                 *de = ll_find_alias(inode, *de);
         } else {
