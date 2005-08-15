@@ -1622,7 +1622,9 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         if (IS_ERR(dchild)) {
                                 CERROR("can't find inode with id "DLID4", err = %d\n", 
                                        OLID4(&body->id1), (int)PTR_ERR(dchild));
-                                GOTO(cleanup, rc = PTR_ERR(dchild));
+                                rc = PTR_ERR(dchild);
+                                dchild = NULL;
+                                GOTO(cleanup, rc);
                         }
                         memcpy(child_lockh, parent_lockh, sizeof(parent_lockh[0]));
                 }
