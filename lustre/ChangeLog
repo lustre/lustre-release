@@ -66,6 +66,13 @@ Description: Do not query file size twice, somewhat slowing stat(2) calls.
 Details    : lookup_it_finish() used to query file size from OSTs that was not
              needed.
 
+Severity   : minor
+Bugzilla   : 6237
+Description: service threads change working directory to that of init
+Details    : Starting lustre service threads may pin the working directory
+             of the parent thread, making that filesystem busy.  Threads
+             now change to the working directory of init to avoid this.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes

@@ -397,7 +397,7 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
         spin_lock_irqsave(&svc->srv_lock, flags);
 
         svc->srv_n_active_reqs--;
-        list_add (&req->rq_list, &rqbd->rqbd_reqs);
+        list_add(&req->rq_list, &rqbd->rqbd_reqs);
 
         refcount = --(rqbd->rqbd_refcount);
         if (refcount == 0) {
@@ -533,8 +533,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                   request->rq_export->exp_conn_cnt);
                         goto put_conn;
                 }
-                if (request->rq_export->exp_obd
-                    && request->rq_export->exp_obd->obd_fail) {
+                if (request->rq_export->exp_obd &&
+                    request->rq_export->exp_obd->obd_fail) {
                         /* Failing over, don't handle any more reqs, send
                            error response instead. */
                         CDEBUG(D_HA, "Dropping req %p for failed obd %s\n",
@@ -761,6 +761,7 @@ void ptlrpc_daemonize(void)
 {
         exit_mm(current);
         lustre_daemonize_helper();
+        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
         exit_files(current);
         reparent_to_init();
 }
