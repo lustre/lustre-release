@@ -379,12 +379,15 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-        
+
         dirent = buf->lrc_dirent;
         if (dirent)
-               dirent->lld_off = offset; 
+               dirent->lld_off = offset;
 
         OBD_ALLOC(dirent, sizeof(*dirent));
+
+        if (!dirent)
+                return -ENOMEM;
 
         list_add_tail(&dirent->lld_list, buf->lrc_list);
 
