@@ -263,10 +263,14 @@ AC_DEFUN([LB_CONFIG_TESTS],
 AC_ARG_ENABLE([tests],
 	AC_HELP_STRING([--disable-tests],
 			[disable building of Lustre tests]),
-	[],[enable_tests='yes'])
-if test x$cray_portals = xyes ; then
-	enable_tests='no'
-fi
+	[],
+	[
+		if test x$cray_portals = xyes ; then
+			enable_tests='no'
+		else
+			enable_tests='yes'
+		fi
+	])
 AC_MSG_RESULT([$enable_tests])
 ])
 
