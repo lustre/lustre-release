@@ -3041,7 +3041,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
 
 
-        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, &size, bufs);
+        req = ptlrpc_prep_req(imp, OST_SET_INFO, 2, size, bufs);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
