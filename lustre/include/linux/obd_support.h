@@ -162,6 +162,13 @@ extern wait_queue_head_t obd_race_waitq;
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 
+
+#define OBD_FAIL_MGS                     0x900
+#define OBD_FAIL_MGS_CONNECT_NET         0x117
+#define OBD_FAIL_MGS_DISCONNECT_NET      0x11a
+#define OBD_FAIL_MGS_ALL_REPLY_NET       0x122
+#define OBD_FAIL_MGS_ALL_REQUEST_NET     0x123
+
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
@@ -169,6 +176,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAILED           0x40000000
 #define OBD_FAIL_MDS_ALL_NET 0x01000000
 #define OBD_FAIL_OST_ALL_NET 0x02000000
+#define OBD_FAIL_MGS_ALL_NET 0x01000000
 
 #define OBD_FAIL_CHECK(id)   (((obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
                               ((id) & OBD_FAIL_MASK_LOC)) &&                   \

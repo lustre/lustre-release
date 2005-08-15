@@ -472,7 +472,7 @@ maybe_clean()
 get_option "$@"
 
 # some default definitions
-LMC=${LMC:-"/usr/sbin/lmc"}
+LMC=${LMC:-"./lmc"}
 
 CONFIG_FILE=${CONFIG_FILE:-"lwizard.xml"}
 

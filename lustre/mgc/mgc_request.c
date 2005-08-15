@@ -167,15 +167,7 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ptlrpcd_addref();
 
-        //mgc_obd_setup(obd, len, buf);
-        //lprocfs_init_vars(mgc, &lvars);
-        //lprocfs_obd_setup(obd, lvars.obd_vars);
-        
-        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
-        //need ORIG and REPL rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
-       //                 &llog_client_ops);
-        //rc = obd_llog_init(obd, obd, 0, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_rpc_lock, rc);
@@ -194,6 +186,9 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 }                                                                                                     
         } else {
                 CERROR("mgc does not have local disk (client only)\n");
+                rc = mgc_obd_setup(obd, len, buf);
+                if (rc)
+                        GOTO(err_rpc_lock, rc);
         }
 
         RETURN(rc);
@@ -269,6 +264,7 @@ static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = class_config_parse_llog(ctxt, conf_prof, NULL);
                 if (rc < 0)
                         CERROR("Unable to process log: %s\n", conf_prof);
+
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 OBD_FREE(conf_prof, len);
 
@@ -324,9 +320,14 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
+        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
+                        &llog_lvfs_ops);
+        if (rc)
+                RETURN(rc);
+
         rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
-        if (rc == 0) {
+        if (!rc) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.mgc.mgc_import;
         }
@@ -355,15 +356,11 @@ int mgc_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        if (strcmp(name, LUSTRE_MGC_NAME) == 0) {
-                rq_portal = MGS_REQUEST_PORTAL;
-                rp_portal = MGC_REPLY_PORTAL;
-                connect_op = MGS_CONNECT;
-        } else {
-                CERROR("wrong client OBD type \"%s\", can't setup\n",
-                       name);
-                RETURN(-EINVAL);
-        }
+        LASSERT(!strcmp(name, LUSTRE_MGC_NAME)); 
+                
+        rq_portal = MGS_REQUEST_PORTAL;
+        rp_portal = MGC_REPLY_PORTAL;
+        connect_op = MGS_CONNECT;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("requires a TARGET UUID\n");

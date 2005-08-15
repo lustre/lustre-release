@@ -113,6 +113,13 @@
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 
+#define MGT_MAX_THREADS 8UL
+#define MGT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
+                                  MGT_MAX_THREADS), 2UL)
+#define MGS_NBUFS       (64 * smp_num_cpus)
+#define MGS_BUFSIZE     (8 * 1024)
+#define MGS_MAXREQSIZE  (5 * 1024)
+
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)

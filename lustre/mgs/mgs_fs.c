@@ -39,10 +39,11 @@
 #include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
+#include <linux/lustre_disk.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_commit_confd.h>
 #include <libcfs/list.h>
-
 #include "mgs_internal.h"
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
@@ -72,7 +73,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
-        if (IS_ERR(dentry)) 
+        if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create %s directory: rc = %d\n", 
                        MOUNT_CONFIGS_DIR, rc);
@@ -81,7 +82,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         mgs->mgs_configs_dir = dentry;
      
-        INIT_LIST_HEAD(&mgs->mgs_opens_logs);
+        INIT_LIST_HEAD(&mgs->mgs_open_llogs);
 
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

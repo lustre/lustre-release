@@ -451,7 +451,6 @@ int lustre_process_logs(struct super_block *sb,
                 list_del(&dirent->lld_list);
                 logname = dirent->lld_name;
                                                                                        
-                CERROR("file: %s\n", logname);
                 /* mgcobd start adds "-conf" */
                 len = strlen(logname) - 5;
                 if ((len < 1) || (strcmp(logname + len, "-conf") != 0)) {
