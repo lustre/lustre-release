@@ -736,7 +736,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
-        rc = obd_connect(&md_conn, obd, &lmv_uuid, NULL, 0);
+        rc = obd_connect(&md_conn, obd, &lmv_uuid, NULL, OBD_OPT_REAL_CLIENT);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, rc);
                 GOTO(out_cleanup, rc);
