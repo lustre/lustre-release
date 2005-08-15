@@ -477,10 +477,12 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab64s (&os->os_blocks);
         __swab64s (&os->os_bfree);
         __swab64s (&os->os_bavail);
+        __swab64s (&os->os_files);
         __swab64s (&os->os_ffree);
         /* no need to swap os_fsid */
         __swab32s (&os->os_bsize);
         __swab32s (&os->os_namelen);
+        __swab64s (&os->os_maxbytes);
         /* no need to swap os_spare */
 }
 
