@@ -596,7 +596,6 @@ find_existing_lock(struct obd_export *exp, struct lustre_handle *remote_hdl)
         return NULL;
 }
 
-
 int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         ldlm_completion_callback completion_callback,
                         ldlm_blocking_callback blocking_callback,
@@ -614,9 +613,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
-        dlm_req = lustre_swab_reqbuf (req, MDS_REQ_INTENT_LOCKREQ_OFF,
-                                      sizeof (*dlm_req),
-                                      lustre_swab_ldlm_request);
+        dlm_req = lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                     sizeof (*dlm_req),
+                                     lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");
                 GOTO(out, rc = -EFAULT);

@@ -1354,6 +1354,10 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
                 osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
         }
 
+        /* no write RPCs in flight, reset the time */
+        if (request->rq_reqmsg->opc == OST_WRITE && cli->cl_w_in_flight == 0)
+                do_gettimeofday(&cli->cl_last_write_time);
+
         osc_wake_cache_waiters(cli);
         osc_check_rpcs(cli);
         spin_unlock(&cli->cl_loi_list_lock);
@@ -1438,6 +1442,9 @@ out:
         RETURN(req);
 }
 
+/* strange write gap too long (15s) */
+#define CLI_ODD_WRITE_GAP 15000000
+
 static void lop_update_pending(struct client_obd *cli,
                                struct loi_oap_pages *lop, int cmd, int delta)
 {
@@ -1446,6 +1453,12 @@ static void lop_update_pending(struct client_obd *cli,
                 cli->cl_pending_w_pages += delta;
         else
                 cli->cl_pending_r_pages += delta;
+}
+
+static long timeval_sub(struct timeval *large, struct timeval *small)
+{
+        return (large->tv_sec - small->tv_sec) * 1000000 +
+                (large->tv_usec - small->tv_usec);
 }
 
 /* the loi lock is held across this function but it's allowed to release
@@ -1601,10 +1614,27 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 
         spin_lock(&cli->cl_loi_list_lock);
 
+        /* collect write gaps and sum of them */
+        if (cmd == OBD_BRW_WRITE && cli->cl_w_in_flight == 0) {
+                struct timeval now;
+                long diff;
+        
+                do_gettimeofday(&now);
+
+                if (cli->cl_last_write_time.tv_sec) {
+                        diff = timeval_sub(&now, &cli->cl_last_write_time);
+                        if (diff < CLI_ODD_WRITE_GAP) {
+                                cli->cl_write_gap_sum += diff;
+                                cli->cl_write_gaps++;
+                        }
+                }
+        }        
+
         if (cmd == OBD_BRW_READ)
                 cli->cl_r_in_flight++;
         else
                 cli->cl_w_in_flight++;
+        
         /* queued sync pages can be torn down while the pages
          * were between the pending list and the rpc */
         list_for_each(pos, &aa->aa_oaps) {
@@ -1618,11 +1648,11 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         }
 
         CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %dr/%dw in flight\n",
-                        request, page_count, aa, cli->cl_r_in_flight,
-                        cli->cl_w_in_flight);
+               request, page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight);
 
         oap->oap_request = ptlrpc_request_addref(request);
         request->rq_interpret_reply = brw_interpret_oap;
+
         ptlrpcd_add_req(request);
         RETURN(1);
 }

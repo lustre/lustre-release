@@ -357,6 +357,11 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_close_lock;
         struct osc_creator       cl_oscc;
         int                      cl_async:1;
+
+        /* debug stuff */
+        struct timeval           cl_last_write_time;
+        long                     cl_write_gap_sum;
+        long                     cl_write_gaps;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we

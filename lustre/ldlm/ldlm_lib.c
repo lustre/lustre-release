@@ -254,6 +254,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
 
+        memset(&cli->cl_last_write_time, 0,
+               sizeof(cli->cl_last_write_time));
+        cli->cl_write_gap_sum = 0;
+        cli->cl_write_gaps = 0;
+
         if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
@@ -374,8 +379,14 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         class_import_put(cli->cl_import);
         cli->cl_import = NULL;
 
-        ldlm_put_ref(flags & OBD_OPT_FORCE);
+        if (cli->cl_write_gap_sum) {
+                CWARN("%s: %lu write gaps: %lu av. (usec), %lu total "
+                      "(usec)\n", obddev->obd_name, cli->cl_write_gaps,
+                      cli->cl_write_gap_sum / cli->cl_write_gaps,
+                      cli->cl_write_gap_sum);
+        }
 
+        ldlm_put_ref(flags & OBD_OPT_FORCE);
         RETURN(0);
 }
 

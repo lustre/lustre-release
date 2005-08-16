@@ -821,6 +821,7 @@ cleanup:
         RETURN(rc);
 
 }
+
 int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj, int nobj,
                          int niocount, struct niobuf_local *local, int rc)
 {
@@ -941,7 +942,8 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         obdo_to_ioobj(oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti,NULL);
+        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb,
+                            lnb, oti, NULL);
         if (ret != 0)
                 GOTO(out, ret);
 
