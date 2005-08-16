@@ -336,7 +336,7 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
         }
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "io time (jiffies)     rpcs   %% cum %% |");
+        seq_printf(seq, "io time (jiffies = 1/%ds)     rpcs   %% cum %% |", HZ);
         seq_printf(seq, "       rpcs   %% cum %%\n");
 
         read_tot = lprocfs_oh_sum(&filter->fo_r_io_time);
