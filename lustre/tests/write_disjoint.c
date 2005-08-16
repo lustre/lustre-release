@@ -49,19 +49,19 @@ int main (int argc, char *argv[]) {
          struct stat stat_buf;
          ssize_t ret;
          char *filename = "/mnt/lustre/write_disjoint";
+         int numloops = 1000;
 
         error = MPI_Init(&argc, &argv);
         if (error != MPI_SUCCESS)
                 rprintf(-1, -1, "MPI_Init failed: %d\n", error);
         /* Parse command line options */
-        while (1) {
-                c = getopt(argc, argv, "f:");
-                if (c == -1)
-                        break;
-
+        while ((c = getopt(argc, argv, "f:n:")) != EOF) {
                 switch (c) {
                 case 'f':
                         filename = optarg;
+                        break;
+                case 'n':
+                        numloops = strtoul(optarg, NULL, 0);
                         break;
                 }
         }
@@ -88,7 +88,7 @@ int main (int argc, char *argv[]) {
          if (fd < 0)
                  rprintf(rank, -1, "open() returned %s\n", strerror(errno));
          
-         for (n=0; n < 1000 ; n++) {
+         for (n=0; n < numloops; n++) {
                  /* reset the environment */
                  if (rank == 0) {
                          ret = truncate(filename, 0);
