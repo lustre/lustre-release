@@ -135,13 +135,14 @@ __get_entry(struct upcall_cache *cache, unsigned int hash, __u64 key,
 {
         struct list_head *head;
         struct upcall_cache_entry *entry, *next, *new = NULL;
-        int found = 0, rc;
+        int found, rc;
         ENTRY;
 
         LASSERT(hash < cache->uc_hashsize);
         head = &cache->uc_hashtable[hash];
 
 find_again:
+        found = 0;
         write_lock(&cache->uc_hashlock);
         list_for_each_entry_safe(entry, next, head, ue_hash) {
                 if (check_unlink_entry(entry))
@@ -186,6 +187,9 @@ find_again:
                 UC_CACHE_CLEAR_NEW(entry);
                 entry->ue_acquire_expire = get_seconds() +
                                            cache->uc_acquire_expire;
+                CWARN("%s: %p: cur %lu(%lu), cache ex %ld\n",
+                      cache->uc_name, entry, get_seconds(), jiffies,
+                      entry->ue_acquire_expire); //XXX
 
                 write_unlock(&cache->uc_hashlock);
                 rc = refresh_entry(entry);
@@ -206,6 +210,7 @@ find_again:
          * this item, just wait it complete
          */
         if (UC_CACHE_IS_ACQUIRING(entry)) {
+                signed long tmp1;
                 wait_queue_t wait;
 
                 init_waitqueue_entry(&wait, current);
@@ -213,7 +218,7 @@ find_again:
                 set_current_state(TASK_INTERRUPTIBLE);
                 write_unlock(&cache->uc_hashlock);
 
-                schedule_timeout(cache->uc_acquire_expire * HZ);
+                tmp1 = schedule_timeout(cache->uc_acquire_expire * HZ);
 
                 write_lock(&cache->uc_hashlock);
                 remove_wait_queue(&entry->ue_waitq, &wait);
@@ -221,6 +226,9 @@ find_again:
                         /* we're interrupted or upcall failed
                          * in the middle
                          */
+                        CERROR("cur %lu(%ld), scheduled %ld, sigpending %d\n",
+                               get_seconds(), jiffies, tmp1,
+                               signal_pending(current)); //XXX
                         CERROR("%s: entry %p not refreshed: key "LPU64", "
                                "ref %d fl %u, cur %lu, ex %ld/%ld\n",
                                cache->uc_name, entry, entry->ue_key,
