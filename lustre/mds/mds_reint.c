@@ -714,6 +714,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                if (rc != -ENAMETOOLONG)
                 CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
@@ -1630,11 +1631,18 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 3; /* locks */
 
+        if (mds_inode_is_orphan(de_src->d_inode)) {
+                CDEBUG(D_INODE, "an attempt to link an orphan inode %lu/%u\n",
+                       de_src->d_inode->i_ino,
+                       de_src->d_inode->i_generation);
+                GOTO(cleanup, rc = -ENOENT);
+        }
+
         /* Step 3: Lookup the child */
         dchild = ll_lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                if (rc != -EPERM && rc != -EACCES)
+                if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
                         CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
@@ -1791,6 +1799,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
+                if (rc != -ENAMETOOLONG)
                 CERROR("new child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
