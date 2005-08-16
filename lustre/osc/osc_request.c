@@ -1648,7 +1648,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         }
 
         CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %dr/%dw in flight\n",
-               request, page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight);
+                        request, page_count, aa, cli->cl_r_in_flight,
+                        cli->cl_w_in_flight);
 
         oap->oap_request = ptlrpc_request_addref(request);
         request->rq_interpret_reply = brw_interpret_oap;

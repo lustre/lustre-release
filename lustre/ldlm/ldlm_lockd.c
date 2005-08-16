@@ -613,9 +613,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
-        dlm_req = lustre_swab_reqbuf(req, MDS_REQ_INTENT_LOCKREQ_OFF,
-                                     sizeof (*dlm_req),
-                                     lustre_swab_ldlm_request);
+        dlm_req = lustre_swab_reqbuf (req, MDS_REQ_INTENT_LOCKREQ_OFF,
+                                      sizeof (*dlm_req),
+                                      lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");
                 GOTO(out, rc = -EFAULT);
