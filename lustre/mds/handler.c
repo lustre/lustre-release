@@ -1492,7 +1492,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         struct dentry *dparent = NULL, *dchild = NULL;
         struct lvfs_ucred uc = {NULL, NULL,};
         struct lustre_handle parent_lockh[2] = {{0}, {0}};
-        unsigned int namesize;
+        unsigned int namesize = 0;
         int rc = 0, cleanup_phase = 0, resent_req = 0, update_mode, reply_offset;
         char *name = NULL;
         ENTRY;
