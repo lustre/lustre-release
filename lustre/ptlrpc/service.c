@@ -536,7 +536,8 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                request->rq_peer.peer_ni->pni_name,
                request->rq_peerstr,
                request->rq_reqmsg->opc);
-
+                        
+        do_gettimeofday(&request->rq_rpcd_start);
         request->rq_svc = svc;
         rc = svc->srv_handler(request);
         request->rq_svc = NULL;
