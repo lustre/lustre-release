@@ -1412,7 +1412,7 @@ static int target_recovery_thread(void *arg)
                 atomic_sub(stale, &obd->obd_lock_replay_clients);
                 abort_req_replay_queue(obd);
                 /* XXX for debuggin tests 11 and 17 */
-                //LBUG();
+                LBUG();
         }
 
         /* The second stage: replay locks */
