@@ -150,6 +150,22 @@ lov_tgt_incref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
         lov_tgts_unlock(lov);
 }
 
+static inline int
+lov_tgt_pending(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
+{
+        int rc = 0;
+        lov_tgts_lock(lov);
+
+        if (((gen == 0) || (gen == tgt->ltd_gen)) &&
+            (tgt->ltd_flags &(LTD_ACTIVE|LTD_DEL_PENDING)) == LTD_DEL_PENDING) {
+                tgt->ltd_refcount++;
+                rc = 1;
+        }
+
+        lov_tgts_unlock(lov);
+        return rc;
+}
+
 struct lov_async_page {
         int                             lap_magic;
         int                             lap_stripe;

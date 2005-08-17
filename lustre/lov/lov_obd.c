@@ -1632,8 +1632,11 @@ static int lov_teardown_async_page(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen))
-                RETURN(-EIO);
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
+            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+                 RETURN(-EIO);
+
+        lov_tgt_incref(lov,tgt);
 
         rc = obd_teardown_async_page(tgt->ltd_exp, lsm, loi,
                                      lap->lap_sub_cookie);
