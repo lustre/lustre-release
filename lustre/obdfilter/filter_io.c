@@ -498,13 +498,13 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                struct obd_trans_info *oti)
 {
         int rc = 0, i, tot_bytes = 0, cleanup_phase = 0;
+        struct obd_device *obd = exp->exp_obd;
         struct niobuf_local *lnb = res;
         struct dentry *dentry = NULL;
         unsigned long now = jiffies;
         struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
         struct fsfilt_objinfo fso;
-        struct obd_device *obd;
         obd_size left;
         obd_uid uid;
         obd_gid gid;

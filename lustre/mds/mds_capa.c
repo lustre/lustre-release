@@ -62,7 +62,7 @@ static int mds_write_capa_key(struct obd_device *obd, int force_sync)
         struct file *filp = mds->mds_capa_keys_filp;
         struct lvfs_run_ctxt saved;
         loff_t off = 0;
-        int i, rc;
+        int i, rc = 0;
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

@@ -325,7 +325,7 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
         struct dentry *result;
         struct inode *inode;
         unsigned long ino = 0;
-        __u32 generation;
+        __u32 generation = 0;
         char idname[32];
 
         if (!id_ino(id) && id_fid(id)) {
@@ -349,6 +349,7 @@ struct dentry *mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
         } else {
                 CERROR("invalid id for lookup "
                        DLID4"\n", OLID4(id));
+                LBUG();
         }
 
         if (ino == 0)
