@@ -1630,10 +1630,13 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 }
         }        
 
-        if (cmd == OBD_BRW_READ)
+        if (cmd == OBD_BRW_READ) {
                 cli->cl_r_in_flight++;
-        else
+                cli->cl_read_num++;
+        } else {
                 cli->cl_w_in_flight++;
+                cli->cl_write_num++;
+        }
         
         /* queued sync pages can be torn down while the pages
          * were between the pending list and the rpc */
