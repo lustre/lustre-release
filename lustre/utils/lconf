@@ -1107,11 +1107,16 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     elif net_type == 'lo':
         fixme("automatic local address for loopback")
     elif net_type == 'gm':
-        gmnalnid = '/usr/sbin/gmnalnid'
-        if os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK):
-            (rc, local) = run(gmnalnid, "-l")
-        else:
+        found=0
+        paths = ['/usr/sbin', config.portals + "/utils"]
+        for path in paths:
+            gmnalnid = path + '/gmnalnid'
+            if (os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK)):
+                found=1
+                break
+        if not found:
             panic (gmnalnid, " not found or not executable on node with GM networking")
+        (rc, local) = run(gmnalnid, "-l")
         if rc:
             panic (gmnalnid, " failed")
         local=string.rstrip(local[0])
