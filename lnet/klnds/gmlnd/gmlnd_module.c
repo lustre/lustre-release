@@ -22,7 +22,7 @@
 #include "gmnal.h"
 
 
-int gmnal_small_msg_size = GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t) + PTL_MTU + 928;
+int gmnal_small_msg_size = sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t) + PTL_MTU + 928;
 /*
  *      -1 indicates default value.
  *      This is 1 thread per cpu
@@ -54,21 +54,21 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
 		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
 
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
                 gm_status = gm_host_name_to_node_id_ex(nal_data->gm_port, 0,
                                                        name, &nid);
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
                 if (gm_status != GM_SUCCESS) {
                         CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) "
                                "failed[%d]\n", name, gm_status);
                         return (-1);
                 } else
 		        CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_status = gm_node_id_to_global_id(nal_data->gm_port,
 						    nid, &gnid);
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		if (gm_status != GM_SUCCESS) {
 			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n",
 			       gm_status);

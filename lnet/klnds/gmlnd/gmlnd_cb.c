@@ -48,7 +48,7 @@ ptl_err_t gmnal_cb_recv(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		 *  side occurrence of filling pkmap_count[].
 		 */
 		buffer = srxd->buffer;
-		buffer += GMNAL_MSGHDR_SIZE;
+		buffer += sizeof(gmnal_msghdr_t);
 		buffer += sizeof(ptl_hdr_t);
 
 		while(niov--) {
@@ -99,7 +99,7 @@ ptl_err_t gmnal_cb_recv_pages(lib_nal_t *libnal, void *private,
                 size_t          nob;
 
 		buffer = srxd->buffer;
-		buffer += GMNAL_MSGHDR_SIZE;
+		buffer += sizeof(gmnal_msghdr_t);
 		buffer += sizeof(ptl_hdr_t);
 
 		/*
@@ -163,7 +163,7 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		CDEBUG(D_INFO, "nal_data [%p]\n", nal_data);
 	}
 
-	if (GMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
+	if (gmnal_is_small_msg(nal_data, niov, iov, len)) {
                 size_t msglen = len;
                 size_t nob;
 
@@ -175,7 +175,7 @@ ptl_err_t gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie,
 		stxd = gmnal_get_stxd(nal_data, 1);
 		CDEBUG(D_INFO, "stxd [%p]\n", stxd);
 		/* Set the offset of the data to copy into the buffer */
-		buffer = stxd->buffer + GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t);
+		buffer = stxd->buffer + sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t);
 		while(niov--) {
 			if (offset >= iov->iov_len) {
 				offset -= iov->iov_len;
@@ -235,9 +235,9 @@ ptl_err_t gmnal_cb_send_pages(lib_nal_t *libnal, void *private,
 	stxd = gmnal_get_stxd(nal_data, 1);
 	CDEBUG(D_INFO, "stxd [%p]\n", stxd);
 	/* Set the offset of the data to copy into the buffer */
-	buffer = stxd->buffer + GMNAL_MSGHDR_SIZE + sizeof(ptl_hdr_t);
+	buffer = stxd->buffer + sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t);
 
-	if (GMNAL_IS_SMALL_MESSAGE(nal_data, 0, NULL, len)) {
+	if (gmnal_is_small_msg(nal_data, 0, NULL, len)) {
                 size_t msglen = len;
                 size_t nob;
 

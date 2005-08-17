@@ -90,10 +90,10 @@ gmnal_api_shutdown(nal_t *nal)
 	gmnal_stop_ctthread(nal_data);
 	gmnal_free_txd(nal_data);
 	gmnal_free_srxd(nal_data);
-	GMNAL_GM_LOCK(nal_data);
+	spin_lock(&nal_data->gm_lock);
 	gm_close(nal_data->gm_port);
 	gm_finalize();
-	GMNAL_GM_UNLOCK(nal_data);
+	spin_unlock(&nal_data->gm_lock);
         if (nal_data->sysctl)
                 unregister_sysctl_table (nal_data->sysctl);
         /* Don't free 'nal'; it's a static struct */
@@ -150,10 +150,19 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));
 		return(PTL_NO_SPACE);
 	}
+
 	memset(libnal, 0, sizeof(lib_nal_t));
+        libnal->libnal_send = gmnal_cb_send;
+        libnal->libnal_send_pages = gmnal_cb_send_pages;
+        libnal->libnal_recv = gmnal_cb_recv;
+        libnal->libnal_recv_pages = gmnal_cb_recv_pages;
+        libnal->libnal_map = NULL;
+        libnal->libnal_unmap = NULL;
+        libnal->libnal_dist = gmnal_cb_dist;
+        libnal->libnal_data = NULL;
+
 	CDEBUG(D_INFO, "Allocd and reset libnal[%p]\n", libnal);
 
-	GMNAL_INIT_NAL_CB(libnal);
 	/*
 	 *	String them all together
 	 */
@@ -161,7 +170,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	nal_data->nal = nal;
 	nal_data->libnal = libnal;
 
-	GMNAL_GM_LOCK_INIT(nal_data);
+	spin_lock_init(&nal_data->gm_lock);
 
 
 	/*
@@ -177,13 +186,13 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 
 	CDEBUG(D_NET, "Calling gm_open with port [%d], "
-	       "name [%s], version [%d]\n", GMNAL_GM_PORT_ID,
+	       "name [%s], version [%d]\n", gm_port_id,
 	       "gmnal", GM_API_VERSION);
 
-	GMNAL_GM_LOCK(nal_data);
-	gm_status = gm_open(&nal_data->gm_port, 0, GMNAL_GM_PORT_ID, "gmnal",
+	spin_lock(&nal_data->gm_lock);
+	gm_status = gm_open(&nal_data->gm_port, 0, gm_port_id, "gmnal",
 			    GM_API_VERSION);
-	GMNAL_GM_UNLOCK(nal_data);
+	spin_unlock(&nal_data->gm_lock);
 
 	CDEBUG(D_INFO, "gm_open returned [%d]\n", gm_status);
 	if (gm_status == GM_SUCCESS) {
@@ -210,9 +219,9 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
                                gm_status);
 			break;
 		}	
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -225,10 +234,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	if (gmnal_alloc_srxd(nal_data) != GMNAL_STATUS_OK) {
 		CERROR("Failed to allocate small rx descriptors\n");
 		gmnal_free_txd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -242,11 +251,11 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	while((srxd = gmnal_get_srxd(nal_data, 0))) {
 		CDEBUG(D_NET, "giving [%p] to gm_provide_recvive_buffer\n", 
 		       srxd->buffer);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_provide_receive_buffer_with_tag(nal_data->gm_port, 
 						   srxd->buffer, srxd->gmsize, 
 						   GM_LOW_PRIORITY, 0);
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 	}
 	
 	/*
@@ -254,10 +263,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	 */
 	if (gmnal_alloc_txd(nal_data) != GMNAL_STATUS_OK) {
 		CERROR("Failed to allocate small tx descriptors\n");
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -267,19 +276,19 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	 *	Initialise the portals library
 	 */
 	CDEBUG(D_NET, "Getting node id\n");
-	GMNAL_GM_LOCK(nal_data);
+	spin_lock(&nal_data->gm_lock);
 	gm_status = gm_get_node_id(nal_data->gm_port, &local_nid);
-	GMNAL_GM_UNLOCK(nal_data);
+	spin_unlock(&nal_data->gm_lock);
 	if (gm_status != GM_SUCCESS) {
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
 		CERROR("can't determine node id\n");
 		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -288,20 +297,20 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	nal_data->gm_local_nid = local_nid;
 	CDEBUG(D_INFO, "Local node id is [%u]\n", local_nid);
 
-	GMNAL_GM_LOCK(nal_data);
+	spin_lock(&nal_data->gm_lock);
 	gm_status = gm_node_id_to_global_id(nal_data->gm_port, local_nid, 
 					    &global_nid);
-	GMNAL_GM_UNLOCK(nal_data);
+	spin_unlock(&nal_data->gm_lock);
 	if (gm_status != GM_SUCCESS) {
 		CERROR("failed to obtain global id\n");
 		gmnal_stop_rxthread(nal_data);
 		gmnal_stop_ctthread(nal_data);
 		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -327,10 +336,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gmnal_stop_ctthread(nal_data);
 		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -360,10 +369,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 		gmnal_stop_ctthread(nal_data);
 		gmnal_free_txd(nal_data);
 		gmnal_free_srxd(nal_data);
-		GMNAL_GM_LOCK(nal_data);
+		spin_lock(&nal_data->gm_lock);
 		gm_close(nal_data->gm_port);
 		gm_finalize();
-		GMNAL_GM_UNLOCK(nal_data);
+		spin_unlock(&nal_data->gm_lock);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
 		PORTAL_FREE(libnal, sizeof(lib_nal_t));
 		return(PTL_FAIL);
@@ -390,9 +399,13 @@ int gmnal_init(void)
 {
         int    rc;
 
-	memset(&the_gm_nal, 0, sizeof(nal_t));
 	CDEBUG(D_INFO, "reset nal[%p]\n", &the_gm_nal);
-	GMNAL_INIT_NAL(&the_gm_nal);
+
+        the_gm_nal = (nal_t) {
+                .nal_ni_init = gmnal_api_startup,
+                .nal_ni_fini = gmnal_api_shutdown,
+                .nal_data = NULL,
+        };
 
         rc = ptl_register_nal(GMNAL, &the_gm_nal);
         if (rc != PTL_OK)

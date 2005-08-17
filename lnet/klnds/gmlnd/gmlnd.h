@@ -71,6 +71,13 @@
 #include "portals/nal.h"
 #include "portals/lib-p30.h"
 
+/* undefine these before including the GM headers which clash */
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
+
 #define GM_STRONG_TYPES 1
 #ifdef VERSION
 #undef VERSION
@@ -89,23 +96,17 @@
  *	insmod can set small_msg_size
  *	which is used to populate nal_data.small_msg_size
  */
+#define GMNAL_MAGIC			0x1234abcd
+
 #define GMNAL_SMALL_MESSAGE		1078
 #define GMNAL_LARGE_MESSAGE_INIT	1079
-#define GMNAL_LARGE_MESSAGE_ACK	1080
+#define GMNAL_LARGE_MESSAGE_ACK	        1080
 #define GMNAL_LARGE_MESSAGE_FINI	1081
 
 extern  int gmnal_small_msg_size;
 extern  int num_rx_threads;
 extern  int num_stxds;
 extern  int gm_port_id;
-#define GMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
-#define GMNAL_IS_SMALL_MESSAGE(n,a,b,c)	gmnal_is_small_msg(n, a, b, c)
-#define GMNAL_MAGIC				0x1234abcd
-/*
- *	The gm_port to use for gmnal
- */
-#define GMNAL_GM_PORT_ID	gm_port_id
-
 
 /*
  *	Small Transmit Descriptor
@@ -178,7 +179,6 @@ typedef struct	_gmnal_msghdr {
 	__s32		niov;
 	gm_remote_ptr_t	stxd_remote_ptr; /* 64 bits */
 } WIRE_ATTR gmnal_msghdr_t;
-#define GMNAL_MSGHDR_SIZE	sizeof(gmnal_msghdr_t)
 
 /*
  *	the caretaker thread (ct_thread) gets receive events
@@ -275,55 +275,6 @@ extern gmnal_data_t	*global_nal_data;
  */
 
 /*
- *	Locking macros
- */
-
-/*
- *	For the Small tx and rx descriptor lists
- */
-#define GMNAL_TXD_LOCK_INIT(a)		spin_lock_init(&a->stxd_lock);
-#define GMNAL_TXD_LOCK(a)		spin_lock(&a->stxd_lock);
-#define GMNAL_TXD_UNLOCK(a)		spin_unlock(&a->stxd_lock);
-#define GMNAL_TXD_TOKEN_INIT(a, n)	sema_init(&a->stxd_token, n);
-#define GMNAL_TXD_GETTOKEN(a)		down(&a->stxd_token);
-#define GMNAL_TXD_TRYGETTOKEN(a)	down_trylock(&a->stxd_token)
-#define GMNAL_TXD_RETURNTOKEN(a)	up(&a->stxd_token);
-
-#define GMNAL_RXT_TXD_LOCK_INIT(a)	spin_lock_init(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_LOCK(a)		spin_lock(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_UNLOCK(a)	        spin_unlock(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_TOKEN_INIT(a, n)	sema_init(&a->rxt_stxd_token, n);
-#define GMNAL_RXT_TXD_GETTOKEN(a)	down(&a->rxt_stxd_token);
-#define GMNAL_RXT_TXD_TRYGETTOKEN(a)	down_trylock(&a->rxt_stxd_token)
-#define GMNAL_RXT_TXD_RETURNTOKEN(a)	up(&a->rxt_stxd_token);
-
-#define GMNAL_LTXD_LOCK_INIT(a)		spin_lock_init(&a->ltxd_lock);
-#define GMNAL_LTXD_LOCK(a)		spin_lock(&a->ltxd_lock);
-#define GMNAL_LTXD_UNLOCK(a)		spin_unlock(&a->ltxd_lock);
-#define GMNAL_LTXD_TOKEN_INIT(a, n)	sema_init(&a->ltxd_token, n);
-#define GMNAL_LTXD_GETTOKEN(a)		down(&a->ltxd_token);
-#define GMNAL_LTXD_TRYGETTOKEN(a)	down_trylock(&a->ltxd_token)
-#define GMNAL_LTXD_RETURNTOKEN(a)	up(&a->ltxd_token);
-
-#define GMNAL_RXD_LOCK_INIT(a)		spin_lock_init(&a->srxd_lock);
-#define GMNAL_RXD_LOCK(a)		spin_lock(&a->srxd_lock);
-#define GMNAL_RXD_UNLOCK(a)		spin_unlock(&a->srxd_lock);
-#define GMNAL_RXD_TOKEN_INIT(a, n)	sema_init(&a->srxd_token, n);
-#define GMNAL_RXD_GETTOKEN(a)		down(&a->srxd_token);
-#define GMNAL_RXD_TRYGETTOKEN(a)	down_trylock(&a->srxd_token)
-#define GMNAL_RXD_RETURNTOKEN(a)	up(&a->srxd_token);
-
-#define GMNAL_GM_LOCK_INIT(a)		spin_lock_init(&a->gm_lock);
-#define GMNAL_GM_LOCK(a)		spin_lock(&a->gm_lock);
-#define GMNAL_GM_UNLOCK(a)		spin_unlock(&a->gm_lock);
-#define GMNAL_CB_LOCK_INIT(a)		spin_lock_init(&a->cb_lock);
-
-
-/*
- *	Memory Allocator
- */
-
-/*
  *	API NAL
  */
 int gmnal_api_startup(nal_t *, ptl_pid_t, 
@@ -340,13 +291,6 @@ void gmnal_api_yield(nal_t *, unsigned long *, int);
 void gmnal_api_lock(nal_t *, unsigned long *);
 
 void gmnal_api_unlock(nal_t *, unsigned long *);
-
-
-#define GMNAL_INIT_NAL(a)	do { 	\
-                                (a)->nal_ni_init = gmnal_api_startup; \
-				(a)->nal_ni_fini = gmnal_api_shutdown; \
-				(a)->nal_data = NULL; \
-				} while (0)
 
 
 /*
@@ -370,19 +314,6 @@ int gmnal_cb_dist(lib_nal_t *, ptl_nid_t, unsigned long *);
 int gmnal_init(void);
 
 void  gmnal_fini(void);
-
-
-
-#define GMNAL_INIT_NAL_CB(a)	do {	\
-				a->libnal_send = gmnal_cb_send; \
-				a->libnal_send_pages = gmnal_cb_send_pages; \
-				a->libnal_recv = gmnal_cb_recv; \
-				a->libnal_recv_pages = gmnal_cb_recv_pages; \
-				a->libnal_map = NULL; \
-				a->libnal_unmap = NULL; \
-				a->libnal_dist = gmnal_cb_dist; \
-				a->libnal_data = NULL; \
-				} while (0)
 
 
 /*
