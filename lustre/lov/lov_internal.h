@@ -142,6 +142,14 @@ lov_tgt_decref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
                 wake_up(&lov->lov_tgt_waitq);
 }
 
+static inline void
+lov_tgt_incref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
+{
+        lov_tgts_lock(lov);
+        ++tgt->ltd_refcount;
+        lov_tgts_unlock(lov);
+}
+
 struct lov_async_page {
         int                             lap_magic;
         int                             lap_stripe;
