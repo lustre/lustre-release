@@ -139,7 +139,6 @@ Object creation command summary:
   --filesystem filesystem name
  
 --delete ost
-  --node node_name
   --ost ost_name
   --migrate
   
@@ -469,8 +468,9 @@ class GenConfig:
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
         osd.appendChild(self.ref("node", node_uuid))
-	osd.appendChild(self.dev(devname)) 
 
+        if devname:
+            osd.appendChild(self.dev(devname)) 
 	if fstype:
             self.addElement(osd, "fstype", fstype)
         if backfstype:
@@ -662,19 +662,23 @@ class GenConfig:
         new.setAttribute("version", version)
         return new
 
-    def add(self, lov, ost, index, gen):
-        new = self.doc.createElement("add")
+    def info(self):
+        new = self.doc.createElement("info")
+        return new
+
+    def lov_add(self, lov, ost, index, gen):
+        new = self.doc.createElement("lov_add")
         new.setAttribute("lov_uuidref", lov)
         new.setAttribute("ost_uuidref", ost)
         new.setAttribute("index", index)
         new.setAttribute("generation", gen)
         return new
 
-    def delete(self, lov, ost, index, gen, options):
+    def lov_delete(self, lov, ost, index, gen, options):
         if options.delete:
-            new = self.doc.createElement("delete")
+            new = self.doc.createElement("lov_delete")
         else:
-            new = self.doc.createElement("deactivate")
+            new = self.doc.createElement("lov_deactivate")
         new.setAttribute("lov_uuidref", lov)
         new.setAttribute("ost_uuidref", ost)
         new.setAttribute("index", index)
@@ -708,19 +712,6 @@ def findLastUpdate(lustre):
     return node
 
 def addUpdate(gen, lustre, node):
-    update = findLastUpdate(lustre)
-    if not update:
-        return
-    #add_record = update.getElementsByTagName('add')
-    #if not add_record:
-    #    add_record = gen.add()
-    #    update.appendChild(add_record)
-    #else:
-    #    add_record = add_record[0]
-    #add_record.appendChild(node)
-    update.appendChild(node)
-
-def delUpdate(gen, lustre, node):
     update = findLastUpdate(lustre)
     if not update:
         return
@@ -780,23 +771,22 @@ def get_net_uuid(lustre, node_name):
 
 def lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options):
     tgt.setAttribute('uuidref', osc_uuid)
-    if options.migrate:
-        gener = int(tgt.getAttribute('generation'))
-    else:
-        gener = int(tgt.getAttribute('generation')) + 1
+    gener = int(tgt.getAttribute('generation'))
+    if not options.migrate:
+        gener = str(int(gener) + 1)
     tgt.setAttribute('generation', str(gener))
     tgt.setAttribute('active', '1')
     lov_index = int(tgt.getAttribute('index'))
-    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
-              str(gener)))
+    add_rec = gen.lov_add(getUUID(lov), osc_uuid, str(lov_index), str(gener))
+    addUpdate(gen, lustre, add_rec)
     return
 
-def lov_add_obd(gen, lustre, lov, osc_uuid, options):
+def lov_add_osc(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
     lov_uuid = getUUID(lov)
     if options.index:
         lov_index = get_option_int(options, 'index')
-        for tgt in lustre.getElementsByTagName('lov_tgt'):
+        for tgt in lov.getElementsByTagName('lov_tgt'):
             if str(lov_index) == tgt.getAttribute('index'):
                 uuidref = tgt.getAttribute('uuidref')
                 if uuidref != '':
@@ -806,7 +796,7 @@ def lov_add_obd(gen, lustre, lov, osc_uuid, options):
                 return
     else:
          lov_index = 0
-         for tgt in lustre.getElementsByTagName('lov_tgt'):
+         for tgt in lov.getElementsByTagName('lov_tgt'):
              uuidref = tgt.getAttribute('uuidref')
              tmp = int(tgt.getAttribute('index'))
              own_lov_uuid = tgt.getAttribute('lov_uuid')
@@ -818,13 +808,14 @@ def lov_add_obd(gen, lustre, lov, osc_uuid, options):
      	     lov_index = lov_index + 1
 
     lov.appendChild(gen.lov_tgt(osc_uuid, lov_uuid, str(lov_index), '1'))
-    addUpdate(gen, lustre, gen.add(getUUID(lov), lov_uuid, str(lov_index), '1'))
+    addrec = gen.lov_add(lov_uuid, osc_uuid, str(lov_index), '1')
+    addUpdate(gen, lustre, addrec)
 
-def lov_del_obd(gen, lustre, lov, osc_uuid, options):
+def lov_del_osc(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
     if options.index:
         lov_index = get_option_int(options, 'index')
-        for tgt in lustre.getElementsByTagName('lov_tgt'):
+        for tgt in lov.getElementsByTagName('lov_tgt'):
             index = tgt.getAttribute('index')
             if index == lov_index:
                 uuidref = tgt.getAttribute('uuidref')
@@ -834,37 +825,36 @@ def lov_del_obd(gen, lustre, lov, osc_uuid, options):
                 if options.delete:
                     tgt.setAttribute('uuidref', '')
 
-                # bump the generation just in case...
-                if options.migrate:
-                    gen = int(tgt.getAttribute('generation'))
-                else:
-                    gen = int(tgt.getAttribute('generation')) + 1
+                gener = tgt.getAttribute('generation')
+                if not options.migrate:
+                    # bump the generation just in case...
+                    gener = str(int(gener) + 1)
 
                 tgt.setAttribute('active', '0')
-                tgt.setAttribute('generation', str(gen))
-                return
+                tgt.setAttribute('generation', gener)
+                return None
         raise OptionError("%s --index %d not in use by %s." %
                           (lov_name, lov_index, osc_uuid))
 
-    for tgt in lustre.getElementsByTagName('lov_tgt'):
+    for tgt in lov.getElementsByTagName('lov_tgt'):
         uuidref = tgt.getAttribute('uuidref')
         if uuidref == osc_uuid:
-            genera = int(tgt.getAttribute('generation'))
-            delete_rec = gen.delete(getUUID(lov),
-                                    osc_uuid,tgt.getAttribute('index'),
-                                    str(genera), options)
-            delUpdate(gen, lustre, delete_rec)
+            index = tgt.getAttribute('index')
+            gener = tgt.getAttribute('generation')
+            delete_rec = gen.lov_delete(getUUID(lov), osc_uuid, index, gener,
+                                        options)
+            addUpdate(gen, lustre, delete_rec)
 
             if options.delete:
                 tgt.setAttribute('uuidref', '')
             if not options.migrate:
-                genera = genera + 1
+                gener = str(int(gener) + 1)
             tgt.setAttribute('active', '0')
-            tgt.setAttribute('generation', str(genera))
+            tgt.setAttribute('generation', gener)
 
 def lmv_add_obd(gen, lmv, mdc_uuid):
     lmv.appendChild(gen.lmv_tgt(mdc_uuid))
-                            
+
 def ref_exists(profile, uuid):
     elist = profile.childNodes
     for e in elist:
@@ -1190,7 +1180,7 @@ def add_ost(gen, lustre, options):
         lov = findByName(lustre, lovname, "lov")
         if not lov:
             error('add_ost:', '"'+lovname+'"', "lov element not found.")
-        lov_add_obd(gen, lustre, lov, ost_uuid, options)
+        lov_add_osc(gen, lustre, lov, ost_uuid, options)
 
     if options.failover:
         ost.setAttribute('failover', "1")
@@ -1225,28 +1215,62 @@ def del_ost(gen, lustre, options):
         lov = findByName(lustre, lovname, "lov")
         if not lov:
             error('del_ost:', '"'+lovname+'"', "lov element not found.")
-        lov_del_obd(gen, lustre, lov, ost_uuid, options)
+        lov_del_osc(gen, lustre, lov, ost_uuid, options)
         # if the user specified a speficic LOV don't delete the OST itself
         return
 
     # remove OSD references from all LOVs
-    for n in lustre.getElementsByTagName('lov'):
-        lov_del_obd(gen, lustre, n, ost_uuid, options)
-    if not options.migrate:
-        return
-    # delete the OSDs
-    for osd in lustre.getElementsByTagName('osd'):
-        if ref_exists(osd, ost_uuid):
-            osd_uuid = osd.getAttribute('uuid')
-            # delete all profile references to this OSD
-            for profile in lustre.getElementsByTagName('profile'):
-                for osd_ref in profile.getElementsByTagName('osd_ref'):
-                    if osd_uuid == osd_ref.getAttribute('uuidref'):
-                        profile.removeChild(osd_ref)
-            lustre.removeChild(osd)
+    for lov in lustre.getElementsByTagName('lov'):
+        lov_del_osc(gen, lustre, lov, ost_uuid, options)
 
-    # delete the OST
+    info = gen.info()
+
+    # move the OST description to the update record
     lustre.removeChild(ost)
+    info.appendChild(ost)
+
+    active_ref = ost.getElementsByTagName('active_ref')
+    if not active_ref:
+        error('ost has no osd ref:', ostname)
+
+    # move the OSD description to the update record
+    osd_uuid = active_ref[0].getAttribute('uuidref')
+    osd = lookup(lustre, osd_uuid)
+    lustre.removeChild(osd)
+    info.appendChild(osd)
+
+    # make a copy of the OSS description in the update record
+    # XXX - should check to make sure one doesn't already exist.
+    node_ref = osd.getElementsByTagName('node_ref')
+    if not node_ref:
+        error('osd has no node ref:', ostname)
+    node_uuid = node_ref[0].getAttribute('uuidref')
+    node = lookup(lustre, node_uuid)
+    if not node:
+        error('unable to locate node for node ref:', node_uuid)
+
+    node_rec = node.cloneNode(1)
+    info.appendChild(node_rec)
+
+    prof_ref = node.getElementsByTagName('profile_ref')
+    if not prof_ref:
+        error('node has no profile ref:', node)
+    profile_uuid = prof_ref[0].getAttribute('uuidref')
+
+    # make a copy of the OSS's profile in the update record
+    # XXX - should check to make sure one doesn't already exist.
+    profile = lookup(lustre, profile_uuid)
+    profile_rec = profile.cloneNode(1)
+    info.appendChild(profile_rec)
+
+    # delete all references to this OSD in the OSS's current profile
+    for osd_ref in profile.getElementsByTagName('osd_ref'):
+        if osd_uuid == osd_ref.getAttribute('uuidref'):
+            profile.removeChild(osd_ref)
+
+    # XXX - We should cleanup the node and profile elements if they
+    #       no longer serve a purpose.
+    addUpdate(gen, lustre, info)
 
 def add_cmobd(gen, lustre, options):
     node_name = get_option(options, 'node')
@@ -1614,7 +1638,7 @@ def add_mtpt(gen, lustre, options):
             if not ost_uuid:
                 error('add_mtpt:', '"'+ost_name+'"', "ost element not found.")
             lov = findByName(lustre, lov_name, "lov")
-            lov_add_obd(gen, lustre, lov, ost_uuid, options)
+            lov_add_osc(gen, lustre, lov, ost_uuid, options)
 
     if fs_name == '':
 	fs_name = new_name("FS_fsname")

@@ -99,7 +99,7 @@ static int llu_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock
         rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe);
         if (rc != 0) {
                 CERROR("obd_get_info: rc = %d\n", rc);
-                LBUG();
+                RETURN(rc);
         }
         LASSERT(stripe < lsm->lsm_stripe_count);
         RETURN(stripe);
@@ -185,8 +185,13 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         /* First, find out which stripe index this lock corresponds to. */
-        if (lli->lli_smd->lsm_stripe_count > 1)
+        if (lli->lli_smd->lsm_stripe_count > 1) {
                 stripe = llu_lock_to_stripe_offset(inode, lock);
+                if (stripe < 0) {
+                        CWARN("lock on inode without such object\n");
+                        GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
+                }
+        }
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {

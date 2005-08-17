@@ -114,28 +114,39 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
                lsm->lsm_stripe_count, lsm->lsm_object_id, ost_idx);
 
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
+                struct lov_tgt_desc *tgt = lov->tgts + ost_idx;
                 struct lov_request *req;
                 
                 ++ost_start_idx;
-                if (lov->tgts[ost_idx].active == 0) {
+                if (!lov_tgt_active(lov, tgt, 0)) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
                         continue;
                 }
 
                 OBD_ALLOC(req, sizeof(*req));
-                if (req == NULL)
+                if (req == NULL) {
+                        lov_tgt_decref(lov, tgt);
                         GOTO(out, rc = -ENOMEM);
+                }
                 
                 req->rq_buflen = sizeof(*req->rq_md);
                 OBD_ALLOC(req->rq_md, req->rq_buflen);
-                if (req->rq_md == NULL)
+                if (req->rq_md == NULL) {
+                        OBD_FREE(req, sizeof(*req));
+                        lov_tgt_decref(lov, tgt);
                         GOTO(out, rc = -ENOMEM);
+                }
                 
                 req->rq_oa = obdo_alloc();
-                if (req->rq_oa == NULL)
+                if (req->rq_oa == NULL) {
+                        OBD_FREE(req->rq_md, sizeof(*req->rq_md));
+                        OBD_FREE(req, sizeof(*req));
+                        lov_tgt_decref(lov, tgt);
                         GOTO(out, rc = -ENOMEM);
+                }
                 
                 req->rq_idx = ost_idx;
+                req->rq_gen = tgt->ltd_gen;
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
                 memcpy(req->rq_oa, src_oa, sizeof(*req->rq_oa));

@@ -63,6 +63,7 @@ int cmobd_dummy_lsm(struct lov_stripe_md **lsmp, int stripe_cnt,
                         (*lsmp)->lsm_object_gr = oa->o_gr;
                 }
                 (*lsmp)->lsm_oinfo[i].loi_ost_idx = i;
+                (*lsmp)->lsm_oinfo[i].loi_ost_gen = 1;
                 (*lsmp)->lsm_stripe_size = stripe_size;
         }
         RETURN(0);

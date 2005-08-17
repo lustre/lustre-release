@@ -353,7 +353,7 @@ extern void lustre_swab_obdo (struct obdo *o);
 #define LOV_PATTERN_CMOBD 0x200  
  
 #define lov_ost_data lov_ost_data_v1
-struct lov_ost_data_v1 {          /* per-stripe data structure (little-endian)*/
+struct lov_ost_data {          /* per-stripe data structure (little-endian)*/
         __u64 l_object_id;        /* OST object ID */
         __u64 l_object_gr;        /* OST object group (creating MDS number) */
         __u32 l_ost_gen;          /* generation of this l_ost_idx */

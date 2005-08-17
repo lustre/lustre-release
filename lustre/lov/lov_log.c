@@ -84,9 +84,18 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
          * file 1 on ost_idx [1, 2, 3, 4] and file 2 on ost_idx [3, 4, 1, 2] */
         down(&lov->lov_llog_sem);
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                struct obd_device *child =
-                        lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd;
+                struct obd_device *child;
                 struct llog_ctxt *cctxt;
+                struct lov_tgt_desc *tgt;
+
+                tgt = lov->tgts + loi->loi_ost_idx;
+                if (!lov_tgt_active(lov, tgt, loi->loi_ost_gen)) {
+                        CWARN("lov_llog_origin_add: ost idx %d inactive.\n",
+                              loi->loi_ost_idx);
+                        continue;
+                }
+
+                child = tgt->ltd_exp->exp_obd;
                 cctxt = llog_get_context(&child->obd_llogs, ctxt->loc_idx);
 
                 lur->lur_oid = loi->loi_id;
@@ -95,6 +104,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                 rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc,
                                numcookies - rc, NULL,
                                lock != NULL ? lock + rc : NULL, lock_count);
+                lov_tgt_decref(lov, tgt);
         }
         up(&lov->lov_llog_sem);
         OBD_FREE(lur, sizeof(*lur));
@@ -117,15 +127,19 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
 
-                if (!tgt->active)
+                if (!lov_tgt_active(lov, tgt, 0))
                         continue;
-                child = tgt->ltd_exp->exp_obd;
 
+                child = tgt->ltd_exp->exp_obd;
                 cctxt = llog_get_context(&child->obd_llogs, ctxt->loc_idx);
-                if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].uuid))
+
+                if (uuid && !obd_uuid_equals(uuid, &tgt->uuid)) {
+                        lov_tgt_decref(lov, tgt);
                         continue;
+                }
 
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
+                lov_tgt_decref(lov, tgt);
                 if (rc) {
                         CERROR("error osc_llog_connect %d\n", i);
                         break;
@@ -153,14 +167,24 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, int count,
         loi = lsm->lsm_oinfo;
         lov = &obd->u.lov;
         for (i = 0; i < count; i++, cookies++, loi++) {
-                struct obd_device *child =
-                        lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                struct lov_tgt_desc *tgt = lov->tgts + loi->loi_ost_idx;
+                struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 int err;
 
+                if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) {
+                        CWARN("warning: LOV OST idx %d: inactive.\n",
+                              loi->loi_ost_idx);
+                        continue;
+                }
+
+                child = tgt->ltd_exp->exp_obd; 
                 cctxt = llog_get_context(&child->obd_llogs, ctxt->loc_idx);
                 err = llog_cancel(cctxt, 1, cookies, flags, NULL);
-                if (err && lov->tgts[loi->loi_ost_idx].active) {
+                lov_tgt_decref(lov, tgt);
+
+                if (err && lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) {
+                        lov_tgt_decref(lov, tgt);
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
                                loi->loi_id, loi->loi_ost_idx, err);
@@ -202,10 +226,12 @@ int lov_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
                 struct obd_device *child;
 
-                if (!ctgt->active)
+                if (!lov_tgt_active(lov, ctgt, 0))
                         continue;
+
                 child = ctgt->ltd_exp->exp_obd;
                 rc = obd_llog_init(child, &child->obd_llogs, tgt, 1, logid + i);
+                lov_tgt_decref(lov, ctgt);
                 if (rc) {
                         CERROR("error osc_llog_init %d\n", i);
                         break;
@@ -237,10 +263,12 @@ int lov_llog_finish(struct obd_device *obd, struct obd_llogs *llogs, int count)
         for (i = 0, tgt = lov->tgts; i < count; i++, tgt++) {
                 struct obd_device *child;
 
-                if (!tgt->active)
+                if (!lov_tgt_active(lov, tgt, 0))
                         continue;
+
                 child = tgt->ltd_exp->exp_obd;
                 rc = obd_llog_finish(child, &child->obd_llogs, 1);
+                lov_tgt_decref(lov, tgt);
                 if (rc) {
                         CERROR("osc_llog_finish error; index=%d; rc=%d\n",
                                i, rc);

@@ -300,6 +300,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
+        (*lsmp)->lsm_oinfo[0].loi_ost_gen = ~0;
 
         for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++)
                 loi_init(loi);
@@ -339,7 +340,7 @@ int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
                         le64_to_cpu(lmm->lmm_objects[ost_offset].l_object_id);
                 /* loi->loi_gr = 0; implicit */
                 loi->loi_ost_idx = ost_offset;
-                /* loi->loi_ost_gen = 0; implicit */
+                loi->loi_ost_gen = 1;
                 loi++;
         }
 
@@ -503,6 +504,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(rc);
 
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
+        /* XXX - what about loi_ost_gen ? */
         (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
         (*lsmp)->lsm_xfersize = lum.lmm_stripe_size * stripe_count;
 
@@ -519,10 +521,20 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         obd_id last_id = 0;
 
         for (i = 0; i < lump->lmm_stripe_count; i++) {
+                struct lov_tgt_desc *tgt;
                 __u32 len = sizeof(last_id);
-                oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;
+
+                tgt = lov->tgts + lump->lmm_objects[i].l_ost_idx;
+                if (!lov_tgt_active(lov, tgt, lump->lmm_objects[i].l_ost_gen)) {
+                        CERROR("Object on ost idx %d: osc inactive.\n",
+                               lump->lmm_objects[i].l_ost_idx);
+                        continue;
+                }
+
+                oexp = tgt->ltd_exp;
                 rc = obd_get_info(oexp, strlen("last_id"), "last_id",
                                   &len, &last_id);
+                lov_tgt_decref(lov, tgt);
                 if (rc)
                         RETURN(rc);
                 if (lump->lmm_objects[i].l_object_id > last_id) {
@@ -541,6 +553,8 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 (*lsmp)->lsm_oinfo[i].loi_ost_idx =
                         lump->lmm_objects[i].l_ost_idx;
+                (*lsmp)->lsm_oinfo[i].loi_ost_gen =
+                        lump->lmm_objects[i].l_ost_gen;
                 (*lsmp)->lsm_oinfo[i].loi_id = lump->lmm_objects[i].l_object_id;
                 (*lsmp)->lsm_oinfo[i].loi_gr = lump->lmm_objects[i].l_object_gr;
         }

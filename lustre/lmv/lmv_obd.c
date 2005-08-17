@@ -600,6 +600,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
                 OBD_FREE(lmv->tgts, lmv->tgts_size);
+                RETURN(rc);
         }
 
         tgt_obd = class_find_client_obd(&lmv->tgts->uuid, OBD_MDC_DEVICENAME,
@@ -607,6 +608,11 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!tgt_obd) {
                 CERROR("Target %s not attached\n", lmv->tgts->uuid.uuid);
                 RETURN(-EINVAL);
+        }
+
+        rc = obd_llog_init(obd, &obd->obd_llogs, tgt_obd, 0, NULL);
+        if (rc) {
+                CERROR("lmv_setup failed to setup llogging subsystems\n");
         }
 
         RETURN(rc);

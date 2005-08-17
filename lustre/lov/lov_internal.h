@@ -23,6 +23,7 @@ struct lov_request {
         struct list_head         rq_link;
         struct ldlm_extent       rq_extent;
         int                      rq_idx;        /* index in lov->tgts array */
+        int                      rq_gen;        /* lov target generation # */
         int                      rq_stripe;     /* stripe number */
         int                      rq_complete;
         int                      rq_rc;
@@ -54,9 +55,91 @@ struct lov_request_set {
 
 #define LOV_MAX_TGT_COUNT 1024
 
-static inline int lov_tgt_changed(struct lov_obd *lov, struct lov_oinfo *loi)
+#define lov_tgts_lock(lov)      spin_lock(&lov->lov_lock);
+#define lov_tgts_unlock(lov)    spin_unlock(&lov->lov_lock);
+
+static inline void
+lov_tgt_set_flags(struct lov_obd *lov, struct lov_tgt_desc *tgt, int flags)
 {
-        return lov->tgts[loi->loi_ost_idx].ltd_gen != loi->loi_ost_gen;
+        lov_tgts_lock(lov);
+        if ((flags & LTD_ACTIVE) && ((tgt->ltd_flags & LTD_ACTIVE) == 0))
+                lov->desc.ld_active_tgt_count++;
+        tgt->ltd_flags |= flags;
+        lov_tgts_unlock(lov);
+}
+
+static inline void
+lov_tgt_clear_flags(struct lov_obd *lov, struct lov_tgt_desc *tgt, int flags)
+{
+        ENTRY;
+
+        lov_tgts_lock(lov);
+        if ((flags & LTD_ACTIVE) && (tgt->ltd_flags & LTD_ACTIVE))
+                lov->desc.ld_active_tgt_count--;
+        tgt->ltd_flags &= ~flags;
+        lov_tgts_unlock(lov);
+        EXIT;
+}
+
+static inline int
+lov_tgt_changed(struct lov_obd *lov, struct lov_oinfo *loi)
+{
+        int changed;
+
+        lov_tgts_lock(lov);
+        changed = lov->tgts[loi->loi_ost_idx].ltd_gen != loi->loi_ost_gen;
+        lov_tgts_unlock(lov);
+
+        return changed;
+}
+
+static inline int
+lov_tgt_active(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
+{
+        int rc = 0;
+        lov_tgts_lock(lov);
+
+        if (((gen == 0) || (gen == tgt->ltd_gen)) &&
+            ((tgt->ltd_flags &(LTD_ACTIVE|LTD_DEL_PENDING)) == LTD_ACTIVE)) {
+                tgt->ltd_refcount++;
+                rc = 1;
+        }
+
+        lov_tgts_unlock(lov);
+        return rc;
+}
+
+static inline int
+lov_tgt_ready(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
+{
+        int rc = 0;
+
+        lov_tgts_lock(lov);
+
+        if (((gen == 0) || (gen == tgt->ltd_gen)) &&
+            (tgt->ltd_flags & LTD_ACTIVE)) {
+                tgt->ltd_refcount++;
+                rc = 1;
+        }
+
+        lov_tgts_unlock(lov);
+        return rc;
+}
+
+static inline void
+lov_tgt_decref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
+{
+        int do_wakeup = 0;
+
+        lov_tgts_lock(lov);
+
+        if ((--tgt->ltd_refcount == 0) && (tgt->ltd_flags & LTD_DEL_PENDING)) {
+                do_wakeup = 1;
+        } 
+
+        lov_tgts_unlock(lov);
+        if (do_wakeup)
+                wake_up(&lov->lov_tgt_waitq);
 }
 
 struct lov_async_page {

@@ -1049,16 +1049,6 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
                 RETURN(0);
         }
 
-        rc = obd_cancel_unused(sbi->ll_md_exp, NULL,
-                               LDLM_FL_CONFIG_CHANGE, NULL);
-        if (rc != 0)
-                CWARN("obd_cancel_unused(mdc): %d\n", rc);
-
-        rc = obd_cancel_unused(sbi->ll_dt_exp, NULL,
-                               LDLM_FL_CONFIG_CHANGE, NULL);
-        if (rc != 0)
-                CWARN("obd_cancel_unused(lov): %d\n", rc);
-
         cfg.cfg_instance = sbi->ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
         cfg.cfg_local_nid = lmd->lmd_local_nid;

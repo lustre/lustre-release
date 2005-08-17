@@ -557,11 +557,17 @@ struct conf_obd {
         struct lvfs_obd_ctxt    *cfobd_lvfs_ctxt;
 };
 
+enum lov_tgt_flags {
+        LTD_ACTIVE      = 0x1, /* is this target up for requests   */
+        LTD_DEL_PENDING = 0x2, /* delete event pending for this tgt */
+};
+
 struct lov_tgt_desc {
         struct obd_uuid         uuid;
         __u32                   ltd_gen;
         struct obd_export      *ltd_exp;
-        int                     active;   /* is this target up for requests */
+        unsigned int            ltd_flags;
+        int                     ltd_refcount;
 };
 
 struct lov_obd {
@@ -572,6 +578,7 @@ struct lov_obd {
         int                     lo_catalog_loaded:1, async:1;
         struct semaphore        lov_llog_sem;
         unsigned long           lov_connect_flags;
+        wait_queue_head_t       lov_tgt_waitq;
         struct lov_tgt_desc    *tgts;
 };
 

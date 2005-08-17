@@ -3254,6 +3254,7 @@ static int osc_import_event(struct obd_device *obd,
 {
         struct client_obd *cli;
         int rc = 0;
+        ENTRY;
 
         LASSERT(imp->imp_obd == obd);
 

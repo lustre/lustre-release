@@ -226,9 +226,9 @@ class DaemonHandler:
             	    os.kill(pid, 15)
 		else:
 		    log("was unable to find pid of " + self.command)
-                #time.sleep(1) # let daemon die
             except OSError, e:
                 log("unable to kill", self.command, e)
+            time.sleep(5) # let daemon die
             if self.running():
                 log("unable to kill", self.command)
 
@@ -650,19 +650,18 @@ class LCTLInterface:
 
     # create an lov
     def lov_setup(self, name, uuid, desc_uuid, stripe_cnt,
-                  stripe_sz, stripe_off, pattern, devlist = None):
+                  stripe_sz, stripe_off, pattern):
         cmds = """
   attach lov %s %s
-  lov_setup %s %d %d %d %s %s
-  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off,
-             pattern, devlist)
+  lov_setup %s %d %d %d %s
+  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off, pattern)
         self.run(cmds)
 
-    # add an OBD to a LOV
-    def lov_add_obd(self, name, uuid, obd_uuid, index, gen):
+    # add an OSC to a LOV
+    def lov_add_osc(self, name, ost_uuid, index, gen):
         cmds = """
   lov_modify_tgts add %s %s %s %s
-  quit""" % (name, obd_uuid, index, gen)
+  quit""" % (name, ost_uuid, index, gen)
         self.run(cmds)
 
     # create an lmv
@@ -673,14 +672,14 @@ class LCTLInterface:
   quit""" % (name, uuid, desc_uuid, devlist)
         self.run(cmds)
 
-    # delete an OBD from a LOV
-    def lov_del_obd(self, name, uuid, obd_uuid, index, gen):
+    # delete an OSC from a LOV
+    def lov_del_osc(self, name, ost_uuid, index, gen):
         cmds = """
   lov_modify_tgts del %s %s %s %s
-  quit""" % (name, obd_uuid, index, gen)
+  quit""" % (name, ost_uuid, index, gen)
         self.run(cmds)
 
-    # deactivate an OBD
+    # deactivate an OSC
     def deactivate(self, name):
         cmds = """
   device $%s
@@ -1639,8 +1638,7 @@ class LOV(Module):
                   self.stripe_off, self.pattern, self.devlist,
                   self.mds_name)
         lctl.lov_setup(self.name, self.uuid, self.desc_uuid,  self.stripe_cnt,
-                       self.stripe_sz, self.stripe_off, self.pattern,
-		       string.join(self.obdlist))
+                       self.stripe_sz, self.stripe_off, self.pattern)
         for (osc, index, gen, active) in self.osclist:
             target_uuid = osc.target_uuid
             try:
@@ -1651,7 +1649,7 @@ class LOV(Module):
             except CommandError, e:
                 print "Error preparing OSC %s\n" % osc.uuid
                 raise e
-            lctl.lov_add_obd(self.name, self.uuid, target_uuid, index, gen)
+            lctl.lov_add_osc(self.name, target_uuid, index, gen)
 
     def cleanup(self):
         for (osc, index, gen, active) in self.osclist:
@@ -1678,7 +1676,7 @@ class LMV(Module):
         Module.__init__(self, 'LMV', db)
         if name_override != None:
             self.name = "lmv_%s" % name_override
-	    
+
         self.devlist = self.db.get_lmv_tgts('lmv_tgt')
 	if self.devlist == None:
     	    self.devlist = self.db.get_refs('mds')
@@ -1698,7 +1696,7 @@ class LMV(Module):
 	         panic('mdc not found:', mds_uuid)
 
     def prepare(self):
-        if is_prepared(self.name):
+        if config.record and is_prepared(self.name):
             return
 	    
 	self.info();
@@ -2039,7 +2037,7 @@ class CONFDEV(Module):
             client.prepare()
             lctl.mount_option(self.target.getName(), client.get_name(), "", "")
             lctl.end_record()
-
+            process_updates(self.db, self.name, self.target.getName(), client) 
             config.cleanup = 1
             lctl.clear_log(self.name, self.target.getName() + '-clean')
             lctl.record(self.name, self.target.getName() + '-clean')
@@ -2197,8 +2195,14 @@ class MDSDEV(Module):
  	# add CONFDEV modules
  	if self.confobd != None:
             self.confobd.add_module(manager)
-	    
+
     def write_conf(self):
+        if config.write_conf:
+            if not self.active:
+                debug(self.uuid, "not active")
+            else:
+                self.confobd.write_conf()
+            return
         if is_prepared(self.name):
             return
         if not self.active:
@@ -2470,6 +2474,17 @@ class Client(Module):
         self.backup_targets = []
 	self.module = module
         self.db = tgtdb
+        self.uuid = uuid
+        self.module = module
+        self.module_name = string.upper(module)
+        self.fs_name = fs_name
+        if not self_name:
+            self.name = '%s_%s_%s_%s' % (self.module_name, socket.gethostname(),
+                                         self.target_name, fs_name)
+        else:
+            self.name = self_name
+        if not self.module_dir:
+            self.module_dir = module
 
         self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:
@@ -2477,27 +2492,15 @@ class Client(Module):
 
         self._server = None
         self._connected = 0
-
-        self.module = module
-        self.module_name = string.upper(module)
-        if not self_name:
-            self.name = '%s_%s_%s_%s' % (self.module_name, socket.gethostname(),
-                                         self.target_name, fs_name)
-        else:
-            self.name = self_name
-        self.uuid = uuid
-        self.lookup_server(self.tgt_dev_uuid)
+        self.lookup_server(tgtdb, self.tgt_dev_uuid)
         self.lookup_backup_targets()
-        self.fs_name = fs_name
-        if not self.module_dir:
-            self.module_dir = module
 
     def add_module(self, manager):
         manager.add_lustre_module(self.module_dir, self.module)
 
-    def lookup_server(self, srv_uuid):
+    def lookup_server(self, db, srv_uuid):
         """ Lookup a server's network information """
-        self._server_nets = get_ost_net(self.db, srv_uuid)
+        self._server_nets = get_ost_net(db, srv_uuid)
         if len(self._server_nets) == 0:
             panic ("Unable to find a server for:", srv_uuid)
 	    
@@ -3017,7 +3020,7 @@ def get_ost_net(self, osd_uuid):
     node = self.lookup(node_uuid)
     if not node:
         panic("unable to find node for osd_uuid:", osd_uuid,
-              " node_ref:", node_uuid_)
+              " node_ref:", node_uuid)
     for net_uuid in node.get_networks():
         db = node.lookup(net_uuid)
         srv_list.append(Network(db))
@@ -3076,8 +3079,8 @@ def getServices(self):
 #
 # OSC is no longer in the xml, so we have to fake it.
 # this is getting ugly and begging for another refactoring
-def get_osc(ost_db, uuid, fs_name):
-    osc = OSC(ost_db, uuid, fs_name)
+def get_osc(db, ost_uuid, fs_name):
+    osc = OSC(db, ost_uuid, fs_name)
     return osc
 
 def get_mdc(db, fs_name, mds_uuid):
@@ -3254,47 +3257,73 @@ def for_each_profile(db, prof_list, operation):
         services = getServices(prof_db)
         operation(services)
 
-def magic_get_osc(db, rec, lov):
-    if lov:
-        lov_uuid = lov.get_uuid()
-        lov_name = lov.osc.fs_name
-    else:
-        lov_uuid = rec.getAttribute('lov_uuidref')
+def get_fs_name(db, rec, tag, uuid):
         # FIXME: better way to find the mountpoint?
         filesystems = db.root_node.getElementsByTagName('filesystem')
         fsuuid = None
         for fs in filesystems:
-            ref = fs.getElementsByTagName('obd_ref')
-            if ref[0].getAttribute('uuidref') == lov_uuid:
+            ref = fs.getElementsByTagName(tag)
+            if ref[0].getAttribute('uuidref') == uuid:
                 fsuuid = fs.getAttribute('uuid')
                 break
 
         if not fsuuid:
-            panic("malformed xml: lov uuid '" + lov_uuid + "' referenced in 'add' record is not used by any filesystems.")
+            panic("malformed xml: uuid '" + uuid + "' referenced in '" + \
+                  rec.nodeName + "' record is not used by any filesystems.")
 
         mtpts = db.root_node.getElementsByTagName('mountpoint')
-        lov_name = None
+        fs_name = None
         for fs in mtpts:
             ref = fs.getElementsByTagName('filesystem_ref')
             if ref[0].getAttribute('uuidref') == fsuuid:
-                lov_name = fs.getAttribute('name')
+                fs_name = fs.getAttribute('name')
                 break
 
-        if not lov_name:
-            panic("malformed xml: 'add' record references lov uuid '" + lov_uuid + "', which references filesystem uuid '" + fsuuid + "', which does not reference a mountpoint.")
+        if not fs_name:
+            panic("malformed xml: '" + rec.nodeName + \
+                  "' record references uuid '" + uuid + \
+                  "', which references filesystem uuid '" + fsuuid + \
+                  "', which does not reference a mountpoint.")
+
+        return fs_name
+
+def magic_get_osc(db, rec, lov):
+    if lov:
+        lov_uuid = lov.get_uuid()
+	fs_name = lov.osc.fs_name
+        lov_name = lov.osc.name
+    else:
+        lov_uuid = rec.getAttribute('lov_uuidref')
+        fs_name = get_fs_name(db, rec, 'obd_ref', lov_uuid)
+        lov_name = "lov_" + fs_name
 
     print "lov_uuid: " + lov_uuid + "; lov_name: " + lov_name
 
     ost_uuid = rec.getAttribute('ost_uuidref')
-    obd = db.lookup(ost_uuid)
 
+    if rec.nodeName == 'lov_delete':
+        #
+        # Use the update as a subtree in case a new OST is created with the
+        # same name as the one that we deleted or other info about the OSS
+        # has changed since the delete.
+        # XXX - Not sure if this is the way this is supposed to be done.
+        #
+        info = rec.parentNode.getElementsByTagName('info')
+        if not info:
+            print "delete record missing info !"
+        tgtdb = Lustre.LustreDB_XML(info[0], info[0])
+    else:
+        tgtdb = db
+
+    obd = tgtdb.lookup(ost_uuid)
     if not obd:
-        panic("malformed xml: 'add' record references ost uuid '" + ost_uuid + "' which cannot be found.")
-
-    osc = get_osc(obd, lov_uuid, lov_name)
+        panic("malformed xml: '" + rec.nodeName + \
+              "' record references ost uuid '" + ost_uuid + \
+              "' which cannot be found.")
+    osc = get_osc(obd, lov_uuid, fs_name)
     if not osc:
         panic('osc not found:', obd_uuid)
-    return osc
+    return lov_name, lov_uuid, osc
 
 # write logs for update records.  sadly, logs of all types -- and updates in
 # particular -- are something of an afterthought.  lconf needs rewritten with
@@ -3304,8 +3333,15 @@ def process_update_record(db, update, lov):
         if rec.nodeType != rec.ELEMENT_NODE:
             continue
 
-        log("found "+rec.nodeName+" record in update version " +
+        if rec.nodeName == 'info':
+            continue
+
+        log("found " + rec.nodeName + " record in update version " +
             str(update.getAttribute('version')))
+
+        if rec.nodeName != 'lov_add' and rec.nodeName != 'lov_delete' and \
+           rec.nodeName != 'lov_deactivate':
+                panic("unrecognized update record type '" + rec.nodeName + "'.")
 
         lov_uuid = rec.getAttribute('lov_uuidref')
         ost_uuid = rec.getAttribute('ost_uuidref')
@@ -3313,24 +3349,12 @@ def process_update_record(db, update, lov):
         gen = rec.getAttribute('generation')
 
         if not lov_uuid or not ost_uuid or not index or not gen:
-            panic("malformed xml: 'update' record requires lov_uuid, ost_uuid, index, and generation.")
+            panic("malformed xml: '" + rec.nodeName + "' record requires lov_uuid, ost_uuid, index, and generation.")
 
-        if not lov:
-            tmplov = db.lookup(lov_uuid)
-            if not tmplov:
-                panic("malformed xml: 'delete' record contains lov UUID '" + lov_uuid + "', which cannot be located.")
-            lov_name = tmplov.getName()
-        else:
-            lov_name = lov.osc.name
+        lov_name, lov_uuid, osc = magic_get_osc(db, rec, lov)
 
         # ------------------------------------------------------------- add
-        if rec.nodeName == 'add':
-            if config.cleanup:
-                lctl.lov_del_obd(lov_name, lov_uuid, ost_uuid, index, gen)
-                continue
-
-            osc = magic_get_osc(db, rec, lov)
-
+        if rec.nodeName == 'lov_add':
             try:
                 # Only ignore connect failures with --force, which
                 # isn't implemented here yet.
@@ -3339,15 +3363,10 @@ def process_update_record(db, update, lov):
                 print "Error preparing OSC %s\n" % osc.uuid
                 raise e
 
-            lctl.lov_add_obd(lov_name, lov_uuid, ost_uuid, index, gen)
+            lctl.lov_add_osc(lov_name, ost_uuid, index, gen)
 
         # ------------------------------------------------------ deactivate
-        elif rec.nodeName == 'deactivate':
-            if config.cleanup:
-                continue
-
-            osc = magic_get_osc(db, rec, lov)
-
+        elif rec.nodeName == 'lov_deactivate':
             try:
                 osc.deactivate()
             except CommandError, e:
@@ -3355,11 +3374,8 @@ def process_update_record(db, update, lov):
                 raise e
 
         # ---------------------------------------------------------- delete
-        elif rec.nodeName == 'delete':
-            if config.cleanup:
-                continue
-
-            osc = magic_get_osc(db, rec, lov)
+        elif rec.nodeName == 'lov_delete':
+            lctl.lov_del_osc(lov_name, ost_uuid, index, gen)
 
             try:
                 config.cleanup = 1
@@ -3369,9 +3385,12 @@ def process_update_record(db, update, lov):
                 print "Error cleaning up OSC %s\n" % osc.uuid
                 raise e
 
-            lctl.lov_del_obd(lov_name, lov_uuid, ost_uuid, index, gen)
-
 def process_updates(db, log_device, log_name, lov = None):
+    if not config.write_conf and not config.record:
+        return
+    if config.cleanup:
+        return
+
     updates = db.root_node.getElementsByTagName('update')
     for u in updates:
         if not u.childNodes:
@@ -3389,13 +3408,12 @@ def process_updates(db, log_device, log_name, lov = None):
         lctl.end_record()
 
 def doWriteconf(services):
-    #if config.nosetup:
-    #    return
     for s in services:
         if s[1].get_class() == 'mdsdev' or s[1].get_class() == 'osd':
             n = newService(s[1])
             n.write_conf()
-            n.cleanup()
+            if not config.nosetup:
+               n.cleanup()
 
 def doSetup(services):
     if config.nosetup:
@@ -3428,7 +3446,7 @@ def doLoadModules(services):
 def doUnloadModules(services):
     if config.nomod:
         return
-        
+
     # adding all needed modules from all services
     for s in services:
         n = newService(s[1])
@@ -3949,12 +3967,11 @@ def main():
 
     doHost(lustreDB, node_list)
 
-    if not config.record:
-        return
+    if config.record:
+        lctl.end_record()
+        process_updates(lustreDB, config.record_device, config.record_log)
 
-    lctl.end_record()
-
-    process_updates(lustreDB, config.record_device, config.record_log)
+    return
 
 if __name__ == "__main__":
     try:

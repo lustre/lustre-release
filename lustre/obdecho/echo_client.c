@@ -208,6 +208,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
 
                         lsm->lsm_oinfo[i].loi_ost_idx =
                                 (idx + i) % ec->ec_nstripes;
+                        lsm->lsm_oinfo[i].loi_ost_gen = 1;
                 }
         } else {
                 OBD_ALLOC(eco, sizeof(*eco));

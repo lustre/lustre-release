@@ -146,9 +146,9 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
         struct lov_tgt_desc *tgt = v;
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
-        int idx = tgt - &(lov->tgts[0]);
+        int idx = tgt - lov->tgts;
         return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->uuid.uuid,
-                          tgt->active ? "" : "IN");
+                          (tgt->ltd_flags & LTD_ACTIVE) ? "" : "IN");
 }
 
 struct seq_operations lov_tgt_sops = {

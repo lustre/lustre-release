@@ -342,20 +342,20 @@ int jt_lcfg_lov_setup(int argc, char **argv)
         struct lov_desc desc;
         int rc;
         char *end;
-                                                                                                                                                                                                     
+
         /* argv: lov_setup <LOV uuid> <stripe count> <stripe size>
-         *                 <stripe offset> <pattern> [ <max tgt index> ]
+         *                 <stripe offset> <pattern>
          */
-        if (argc <= 6)
+        if (argc != 6)
                 return CMD_HELP;
-                                                                                                                                                                                                     
+
         if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
                 fprintf(stderr,
                         "error: %s: LOV uuid '%s' longer than "LPSZ" chars\n",
                         jt_cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
                 return -EINVAL;
         }
-                                                                                                                                                                                                     
+
         memset(&desc, 0, sizeof(desc));
         obd_str2uuid(&desc.ld_uuid, argv[1]);
         desc.ld_default_stripe_count = strtoul(argv[2], &end, 0);
@@ -364,7 +364,7 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
         }
-                                                                                                                                                                                                     
+
         desc.ld_default_stripe_size = strtoull(argv[3], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe size '%s'\n",
@@ -383,31 +383,21 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), desc.ld_default_stripe_size);
                 return -EINVAL;
         }
+
         desc.ld_default_stripe_offset = strtoull(argv[4], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad default stripe offset '%s'\n",
                         jt_cmdname(argv[0]), argv[4]);
                 return CMD_HELP;
         }
+
         desc.ld_pattern = strtoul(argv[5], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: bad stripe pattern '%s'\n",
                         jt_cmdname(argv[0]), argv[5]);
                 return CMD_HELP;
         }
-                                                                                                                                                                                                     
-        if (argc > 7) {
-                desc.ld_tgt_count = argc - 6;
-                if (desc.ld_default_stripe_count > desc.ld_tgt_count) {
-                        fprintf(stderr,
-                                "error: %s: default stripe count %u > "
-                                "OST count %u\n", jt_cmdname(argv[0]),
-                                desc.ld_default_stripe_count,
-                                desc.ld_tgt_count);
-                        return -EINVAL;
-                }
-        }
-        
+
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);
         lustre_cfg_bufs_set(&bufs, 1, &desc, sizeof(desc));
 

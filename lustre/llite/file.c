@@ -850,8 +850,11 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = ll_lock_to_stripe_offset(inode, lock);
-                if (stripe < 0)
+                if (stripe < 0) {
+                        CERROR("ll_lock_to_stripe_offset failed: %d\n", stripe);
                         goto iput;
+                }
+
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
                 down(&lli->lli_size_sem);
@@ -901,8 +904,10 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side async enqueue: granted/glimpsed");
 
         stripe = ll_lock_to_stripe_offset(inode, lock);
-        if (stripe < 0)
+        if (stripe < 0) {
+                CERROR("ll_lock_to_stripe_offset failed: %d\n", stripe);
                 goto iput;
+        }
 
         if (lock->l_lvb_len) {
                 struct lov_stripe_md *lsm = lli->lli_smd;
@@ -954,8 +959,10 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
 
         /* First, find out which stripe index this lock corresponds to. */
         stripe = ll_lock_to_stripe_offset(inode, lock);
-        if (stripe < 0)
+        if (stripe < 0) {
+                CERROR("ll_lock_to_stripe_offset failed: %d\n", stripe);
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
+        }
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {
