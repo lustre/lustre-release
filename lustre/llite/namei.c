@@ -118,6 +118,9 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
         struct inode *inode;
+        struct timeval tstart, now;
+
+        do_gettimeofday(&tstart);
 
         LASSERT(hash != 0);
         inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode, md);
@@ -127,6 +130,16 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                         unlock_new_inode(inode);
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
                        inode->i_generation, inode);
+        }
+
+        /* XXX: debugging for 7346 -bzzz */
+        do_gettimeofday(&now);
+        if (now.tv_sec - tstart.tv_sec > obd_timeout) {
+                struct ll_inode_info *lli = ll_i2info(inode);
+                CDEBUG(D_ERROR, "waiting for inode 0x%p "DLID4" took %ds\n",
+                       inode, OLID4(&lli->lli_id),
+                       (int) (now.tv_sec - tstart.tv_sec));
+                portals_debug_dumplog();
         }
 
         return inode;
