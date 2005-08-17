@@ -91,6 +91,8 @@ int get_groups_local(struct mds_grp_downcall_data **grp)
         param->mgd_groups[param->mgd_ngroups++] = pw->pw_gid;
         *grp = param;
         while ((gr = getgrent())) {
+                if (gr->gr_gid == pw->pw_gid)
+                        continue;
                 if (!gr->gr_mem)
                         continue;
                 for (i = 0; gr->gr_mem[i]; i++) {
