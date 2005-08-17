@@ -53,6 +53,12 @@ if [ $UID -ne 0 ]; then
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+
+    # $RUNAS_ID may get set incorrectly somewhere else
+    if [ $RUNAS_ID -eq 0 ]; then
+       echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
+       exit 1
+    fi
 fi
 
 export NAME=${NAME:-local}
