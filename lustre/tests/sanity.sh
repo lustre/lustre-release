@@ -47,6 +47,7 @@ MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 
 if [ $UID -ne 0 ]; then
+    echo "Warning: running as non-root uid $UID"
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
