@@ -1388,7 +1388,7 @@ static int target_recovery_thread(void *arg)
               obd->obd_next_recovery_transno);
         while ((req = target_next_replay_req(obd))) {
                 LASSERT(trd->trd_processing_task == current->pid);
-                DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s: ", 
+                DEBUG_REQ(D_HA, req, "processing t"LPD64" from %s", 
                           req->rq_reqmsg->transno, 
                           ptlrpc_peernid2str(&req->rq_peer, peer_str));
                 (void)trd->trd_recovery_handler(req);
