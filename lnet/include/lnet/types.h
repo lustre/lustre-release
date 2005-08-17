@@ -37,7 +37,7 @@ typedef ptl_handle_any_t ptl_handle_me_t;
     ((const ptl_handle_any_t){.cookie = -1})
 #define PTL_EQ_NONE PTL_INVALID_HANDLE
 
-static inline int PtlHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
+static inline int LNetHandleIsEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
 {
 	return (h1.cookie == h2.cookie);
 }

@@ -53,20 +53,20 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
         switch (err) {
                 case 1:
                         /* Unlink any memory descriptors we may have used */
-                        if ((rc = PtlMDUnlink (client->md_out_head_h)))
-                                PDEBUG ("PtlMDUnlink", rc);
+                        if ((rc = LNetMDUnlink (client->md_out_head_h)))
+                                PDEBUG ("LNetMDUnlink", rc);
                 case 2:
-                        if ((rc = PtlMDUnlink (client->md_in_head_h)))
-                                PDEBUG ("PtlMDUnlink", rc);
+                        if ((rc = LNetMDUnlink (client->md_in_head_h)))
+                                PDEBUG ("LNetMDUnlink", rc);
 
                         /* Free the event queue */
-                        if ((rc = PtlEQFree (client->eq)))
-                                PDEBUG ("PtlEQFree", rc);
+                        if ((rc = LNetEQFree (client->eq)))
+                                PDEBUG ("LNetEQFree", rc);
 
-                        if ((rc = PtlMEUnlink (client->me)))
-                                PDEBUG ("PtlMEUnlink", rc);
+                        if ((rc = LNetMEUnlink (client->me)))
+                                PDEBUG ("LNetMEUnlink", rc);
                 case 3:
-                        PtlNIFini(nih);
+                        LNetNIFini(nih);
 
                 case 4:
                         /* Free our buffers */
@@ -142,18 +142,18 @@ pingcli_start(struct portal_ioctl_data *args)
                 return;
         }
 
-        rc = PtlNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &nih);
+        rc = LNetNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP)
         {
-                CERROR ("PtlNIInit: error %d\n", rc);
+                CERROR ("LNetNIInit: error %d\n", rc);
                 pingcli_shutdown (nih, 4);
                 return;
         }
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = PtlGetId (nih, &client->myid)))
+        if ((rc = LNetGetId (nih, &client->myid)))
         {
-                CERROR ("PtlGetId error %d\n", rc);
+                CERROR ("LNetGetId error %d\n", rc);
                 pingcli_shutdown (nih, 2);
                 return;
         }
@@ -166,19 +166,19 @@ pingcli_start(struct portal_ioctl_data *args)
         client->id_remote.nid = client->nid;
         client->id_remote.pid = 0;
 
-        if ((rc = PtlMEAttach (nih, PTL_PING_CLIENT,
+        if ((rc = LNetMEAttach (nih, PTL_PING_CLIENT,
                    client->id_local, 0, ~0, PTL_RETAIN,
                    PTL_INS_AFTER, &client->me)))
         {
-                CERROR ("PtlMEAttach error %d\n", rc);
+                CERROR ("LNetMEAttach error %d\n", rc);
                 pingcli_shutdown (nih, 2);
                 return;
         }
 
         /* Allocate the event queue for this network interface */
-        if ((rc = PtlEQAlloc (nih, 64, pingcli_callback, &client->eq)))
+        if ((rc = LNetEQAlloc (nih, 64, pingcli_callback, &client->eq)))
         {
-                CERROR ("PtlEQAlloc error %d\n", rc);
+                CERROR ("LNetEQAlloc error %d\n", rc);
                 pingcli_shutdown (nih, 2);
                 return;
         }
@@ -194,9 +194,9 @@ pingcli_start(struct portal_ioctl_data *args)
         memset (client->inbuf, 0, (client->size + STDSIZE) * count);
 
         /* Attach the incoming buffer */
-        if ((rc = PtlMDAttach (client->me, client->md_in_head,
+        if ((rc = LNetMDAttach (client->me, client->md_in_head,
                               PTL_UNLINK, &client->md_in_head_h))) {
-                CERROR ("PtlMDAttach error %d\n", rc);
+                CERROR ("LNetMDAttach error %d\n", rc);
                 pingcli_shutdown (nih, 1);
                 return;
         }
@@ -213,9 +213,9 @@ pingcli_start(struct portal_ioctl_data *args)
         count = 0;
 
         /* Bind the outgoing ping header */
-        if ((rc=PtlMDBind (nih, client->md_out_head,
+        if ((rc=LNetMDBind (nih, client->md_out_head,
                            PTL_UNLINK, &client->md_out_head_h))) {
-                CERROR ("PtlMDBind error %d\n", rc);
+                CERROR ("LNetMDBind error %d\n", rc);
                 pingcli_shutdown (nih, 1);
                 return;
         }
@@ -231,9 +231,9 @@ pingcli_start(struct portal_ioctl_data *args)
                 memcpy(client->outbuf+sizeof(unsigned)+sizeof(unsigned),&tv1,
                        sizeof(struct timeval));
 
-                if((rc = PtlPut (client->md_out_head_h, PTL_NOACK_REQ,
+                if((rc = LNetPut (client->md_out_head_h, PTL_NOACK_REQ,
                           client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
-                         PDEBUG ("PtlPut (header)", rc);
+                         PDEBUG ("LNetPut (header)", rc);
                          pingcli_shutdown (nih, 1);
                          return;
                 }

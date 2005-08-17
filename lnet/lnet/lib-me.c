@@ -27,7 +27,7 @@
 #include <portals/lib-p30.h>
 
 ptl_err_t
-PtlMEAttach(ptl_handle_ni_t interface, 
+LNetMEAttach(ptl_handle_ni_t interface, 
             ptl_pt_index_t portal,
             ptl_process_id_t match_id, 
             ptl_match_bits_t match_bits,
@@ -71,7 +71,7 @@ PtlMEAttach(ptl_handle_ni_t interface,
 }
 
 ptl_err_t 
-PtlMEInsert(ptl_handle_me_t current_meh, 
+LNetMEInsert(ptl_handle_me_t current_meh, 
             ptl_process_id_t match_id, 
             ptl_match_bits_t match_bits, 
             ptl_match_bits_t ignore_bits,
@@ -120,7 +120,7 @@ PtlMEInsert(ptl_handle_me_t current_meh,
 }
 
 ptl_err_t
-PtlMEUnlink(ptl_handle_me_t meh)
+LNetMEUnlink(ptl_handle_me_t meh)
 {
         unsigned long flags;
         ptl_me_t     *me;

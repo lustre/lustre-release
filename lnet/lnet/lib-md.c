@@ -78,7 +78,7 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
          * otherwise caller may only ptl_md_free() it.
          */
 
-        if (!PtlHandleIsEqual (umd->eq_handle, PTL_EQ_NONE)) {
+        if (!LNetHandleIsEqual (umd->eq_handle, PTL_EQ_NONE)) {
                 eq = ptl_handle2eq(&umd->eq_handle);
                 if (eq == NULL)
                         return PTL_EQ_INVALID;
@@ -192,7 +192,7 @@ ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd)
 }
 
 ptl_err_t
-PtlMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
+LNetMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
             ptl_unlink_t unlink, ptl_handle_md_t *handle)
 {
         ptl_me_t     *me;
@@ -238,7 +238,7 @@ PtlMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
 }
 
 ptl_err_t
-PtlMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
+LNetMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
           ptl_unlink_t unlink, ptl_handle_md_t *handle)
 {
         ptl_libmd_t  *md;
@@ -274,7 +274,7 @@ PtlMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
 }
 
 ptl_err_t
-PtlMDUnlink (ptl_handle_md_t mdh)
+LNetMDUnlink (ptl_handle_md_t mdh)
 {
         ptl_event_t      ev;
         ptl_libmd_t     *md;
@@ -314,75 +314,3 @@ PtlMDUnlink (ptl_handle_md_t mdh)
         return PTL_OK;
 }
 
-ptl_err_t
-PtlMDUpdate(ptl_handle_md_t mdh, 
-            ptl_md_t *oldumd, ptl_md_t *newumd, 
-            ptl_handle_eq_t testqh)
-{
-        ptl_libmd_t  *md;
-        ptl_eq_t     *test_eq = NULL;
-        unsigned long flags;
-        int           rc;
-
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
-
-        PTL_LOCK(flags);
-
-        md = ptl_handle2md(&mdh);
-        if (md == NULL) {
-                 rc = PTL_MD_INVALID;
-                 goto out;
-        }
-
-        if (oldumd != NULL)
-                ptl_md_deconstruct(md, oldumd);
-
-        if (newumd == NULL) {
-                rc = PTL_OK;
-                goto out;
-        }
-
-        /* XXX fttb, the new MD must be the same "shape" wrt fragmentation,
-         * since we simply overwrite the old lib-md */
-        if ((((newumd->options ^ md->md_options) &
-              (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0) ||
-            ((newumd->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0 &&
-             newumd->length != md->md_niov)) {
-                rc = PTL_IOV_INVALID;
-                goto out;
-        }
-
-        if (!PtlHandleIsEqual (testqh, PTL_EQ_NONE)) {
-                test_eq = ptl_handle2eq(&testqh);
-                if (test_eq == NULL) {
-                        rc = PTL_EQ_INVALID;
-                        goto out;
-                }
-        }
-
-        if (md->md_pending != 0) {
-                rc = PTL_MD_NO_UPDATE;
-                goto out;
-        }
-
-        if (test_eq == NULL ||
-            test_eq->eq_deq_seq == test_eq->eq_enq_seq) {
-                ptl_me_t *me = md->md_me;
-                int       unlink = (md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) ?
-                                   PTL_UNLINK : PTL_RETAIN;
-
-                // #warning this does not track eq refcounts properly
-                LBUG();
-                rc = lib_md_build(md, newumd, unlink);
-
-                md->md_me = me;
-        } else {
-                rc = PTL_MD_NO_UPDATE;
-        }
-
- out:
-        PTL_UNLOCK(flags);
-
-        return rc;
-}

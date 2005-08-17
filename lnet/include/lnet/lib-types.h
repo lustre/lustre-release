@@ -362,10 +362,10 @@ typedef struct                                  /* loopback descriptor */
 
 typedef struct
 {
-        /* Stuff initialised at PtlInit() */
-        int               apini_init;           /* PtlInit() called? */
-        int               apini_refcount;       /* PtlNIInit/PtlNIFini counter */
-        int               apini_niinit_self;    /* Have I called PtlNIInit myself? */
+        /* Stuff initialised at LNetInit() */
+        int               apini_init;           /* LNetInit() called? */
+        int               apini_refcount;       /* LNetNIInit/LNetNIFini counter */
+        int               apini_niinit_self;    /* Have I called LNetNIInit myself? */
         
         struct list_head  apini_nals;           /* registered NALs */
 
@@ -381,7 +381,7 @@ typedef struct
         pthread_mutex_t   apini_nal_mutex;
 #endif
 
-        /* Stuff initialised at PtlNIInit() */
+        /* Stuff initialised at LNetNIInit() */
 
         int               apini_nportals;       /* # portals */
         struct list_head *apini_portals;        /* the vector of portals */

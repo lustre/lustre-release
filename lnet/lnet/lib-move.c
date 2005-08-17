@@ -1130,7 +1130,7 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
 }
 
 ptl_err_t
-PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
+LNetPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
        ptl_process_id_t target, ptl_pt_index_t portal,
        ptl_ac_index_t ac, ptl_match_bits_t match_bits,
        ptl_size_t offset, ptl_hdr_data_t hdr_data)
@@ -1171,7 +1171,7 @@ PtlPut(ptl_handle_md_t mdh, ptl_ack_req_t ack,
                 return PTL_MD_INVALID;
         }
 
-        CDEBUG(D_NET, "PtlPut -> %s\n", libcfs_id2str(target));
+        CDEBUG(D_NET, "LNetPut -> %s\n", libcfs_id2str(target));
 
         memset (&hdr, 0, sizeof (hdr));
 
@@ -1287,7 +1287,7 @@ ptl_create_reply_msg (ptl_ni_t *ni, ptl_nid_t peer_nid, ptl_msg_t *getmsg)
 }
 
 ptl_err_t
-PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
+LNetGet(ptl_handle_md_t mdh, ptl_process_id_t target,
        ptl_pt_index_t portal, ptl_ac_index_t ac,
        ptl_match_bits_t match_bits, ptl_size_t offset)
 {
@@ -1327,7 +1327,7 @@ PtlGet(ptl_handle_md_t mdh, ptl_process_id_t target,
                 return PTL_MD_INVALID;
         }
 
-        CDEBUG(D_NET, "PtlGet -> %s\n", libcfs_id2str(target));
+        CDEBUG(D_NET, "LNetGet -> %s\n", libcfs_id2str(target));
 
         memset (&hdr, 0, sizeof (hdr));
 

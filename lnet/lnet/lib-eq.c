@@ -26,7 +26,7 @@
 #include <portals/lib-p30.h>
 
 ptl_err_t
-PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
+LNetEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
            ptl_eq_handler_t callback, ptl_handle_eq_t *handle)
 {
         ptl_eq_t      *eq;
@@ -83,7 +83,7 @@ PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 }
 
 ptl_err_t
-PtlEQFree(ptl_handle_eq_t eqh)
+LNetEQFree(ptl_handle_eq_t eqh)
 {
         ptl_eq_t      *eq;
         int            size;
@@ -154,25 +154,25 @@ lib_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 
 
 ptl_err_t
-PtlEQGet (ptl_handle_eq_t eventq, ptl_event_t *event)
+LNetEQGet (ptl_handle_eq_t eventq, ptl_event_t *event)
 {
         int which;
 
-        return PtlEQPoll(&eventq, 1, 0, 
+        return LNetEQPoll(&eventq, 1, 0, 
                          event, &which);
 }
 
 ptl_err_t
-PtlEQWait (ptl_handle_eq_t eventq, ptl_event_t *event)
+LNetEQWait (ptl_handle_eq_t eventq, ptl_event_t *event)
 {
         int which;
 
-        return PtlEQPoll(&eventq, 1, PTL_TIME_FOREVER,
+        return LNetEQPoll(&eventq, 1, PTL_TIME_FOREVER,
                          event, &which);
 }
 
 ptl_err_t
-PtlEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
+LNetEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
            ptl_event_t *event, int *which)
 {
         unsigned long    flags;

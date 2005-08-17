@@ -454,7 +454,7 @@ ptl_apini_init(ptl_pid_t requested_pid,
         ptl_apini.apini_actual_limits.max_md_iovecs = PTL_MD_MAX_IOV;
         ptl_apini.apini_actual_limits.max_me_list = INT_MAX;
 
-        /* We don't support PtlGetPut! */
+        /* We don't support LNetGetPut! */
         ptl_apini.apini_actual_limits.max_getput_md = 0;
 
         if (actual_limits != NULL)
@@ -798,7 +798,7 @@ extern ptl_nal_t tcpnal_nal;
 #endif
 
 ptl_err_t
-PtlInit(int *max_interfaces)
+LNetInit(int *max_interfaces)
 {
         LASSERT(!strcmp(ptl_err_str[PTL_MAX_ERRNO], "PTL_MAX_ERRNO"));
         ptl_assert_wire_constants ();
@@ -838,7 +838,7 @@ PtlInit(int *max_interfaces)
 }
 
 void
-PtlFini(void)
+LNetFini(void)
 {
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount == 0);
@@ -855,7 +855,7 @@ PtlFini(void)
 }
 
 ptl_err_t
-PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
+LNetNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
           ptl_ni_limits_t *requested_limits, ptl_ni_limits_t *actual_limits,
           ptl_handle_ni_t *handle)
 {
@@ -900,7 +900,7 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         ptl_apini.apini_refcount = 1;
 
         memset (handle, 0, sizeof(*handle));
-        LASSERT (!PtlHandleIsEqual(*handle, PTL_INVALID_HANDLE));
+        LASSERT (!LNetHandleIsEqual(*handle, PTL_INVALID_HANDLE));
         /* Handle can be anything; PTL_INVALID_HANDLE isn't wise though :) */
 
  out:
@@ -909,7 +909,7 @@ PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
 }
 
 ptl_err_t
-PtlNIFini(ptl_handle_ni_t ni)
+LNetNIFini(ptl_handle_ni_t ni)
 {
         PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
 
@@ -929,7 +929,7 @@ PtlNIFini(ptl_handle_ni_t ni)
 }
 
 int
-PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
+LNetNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
         struct list_head         *tmp;
@@ -986,7 +986,7 @@ PtlNICtl(ptl_handle_ni_t nih, unsigned int cmd, void *arg)
 }
 
 ptl_err_t
-PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
+LNetGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
 {
         ptl_ni_t         *ni;
         unsigned long     flags;
@@ -1018,7 +1018,7 @@ PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
 }
 
 ptl_err_t
-PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t *ni_out)
+LNetNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t *ni_out)
 {
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
@@ -1028,13 +1028,13 @@ PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t *ni_out)
 }
 
 void
-PtlSnprintHandle(char *str, int len, ptl_handle_any_t h)
+LNetSnprintHandle(char *str, int len, ptl_handle_any_t h)
 {
         snprintf(str, len, LPX64, h.cookie);
 }
 
 ptl_err_t
-PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
+LNetGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
 {
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
@@ -1044,7 +1044,7 @@ PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
 }
 
 ptl_err_t
-PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
+LNetNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
           unsigned long *distance_out)
 {
         LASSERT (ptl_apini.apini_init);
@@ -1054,7 +1054,7 @@ PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
 }
 
 ptl_err_t 
-PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
+LNetNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
             ptl_sr_value_t *status_out)
 {
         LASSERT (ptl_apini.apini_init);
@@ -1064,7 +1064,7 @@ PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
 }
 
 ptl_err_t
-PtlACEntry(ptl_handle_ni_t ni_in, ptl_ac_index_t index_in,
+LNetACEntry(ptl_handle_ni_t ni_in, ptl_ac_index_t index_in,
            ptl_process_id_t match_id_in, ptl_pt_index_t portal_in)
 {
         LASSERT (ptl_apini.apini_init);

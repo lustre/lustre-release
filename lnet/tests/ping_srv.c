@@ -51,19 +51,19 @@ static void *pingsrv_shutdown(int err)
         switch (err) {
                 case 1:
                         /* Unlink any memory descriptors we may have used */
-                        if ((rc = PtlMDUnlink (server->mdin_h)))
-                                PDEBUG ("PtlMDUnlink (out head buffer)", rc);
+                        if ((rc = LNetMDUnlink (server->mdin_h)))
+                                PDEBUG ("LNetMDUnlink (out head buffer)", rc);
                 case 2:
                         /* Free the event queue */
-                        if ((rc = PtlEQFree (server->eq)))
-                                PDEBUG ("PtlEQFree", rc);
+                        if ((rc = LNetEQFree (server->eq)))
+                                PDEBUG ("LNetEQFree", rc);
 
                         /* Unlink the client portal from the ME list */
-                        if ((rc = PtlMEUnlink (server->me)))
-                                        PDEBUG ("PtlMEUnlink", rc);
+                        if ((rc = LNetMEUnlink (server->me)))
+                                        PDEBUG ("LNetMEUnlink", rc);
 
                 case 3:
-                        PtlNIFini (server->ni);
+                        LNetNIFini (server->ni);
 
                 case 4:
                         
@@ -116,9 +116,9 @@ int pingsrv_thread(void *arg)
                 server->mdout.eq_handle = PTL_EQ_NONE;
        
                 /* Bind the outgoing buffer */
-                if ((rc = PtlMDBind (server->ni, server->mdout, 
+                if ((rc = LNetMDBind (server->ni, server->mdout, 
                                      PTL_UNLINK, &server->mdout_h))) {
-                         PDEBUG ("PtlMDBind", rc);
+                         PDEBUG ("LNetMDBind", rc);
                          pingsrv_shutdown (1);
                          return 1;
 	        }
@@ -131,15 +131,15 @@ int pingsrv_thread(void *arg)
                 server->mdin.user_ptr  = NULL;
                 server->mdin.eq_handle = server->eq;
         
-                if ((rc = PtlMDAttach (server->me, server->mdin,
+                if ((rc = LNetMDAttach (server->me, server->mdin,
                         PTL_UNLINK, &server->mdin_h))) {
-                        PDEBUG ("PtlMDAttach (bulk)", rc);
+                        PDEBUG ("LNetMDAttach (bulk)", rc);
                         CDEBUG (D_OTHER, "ping server resources allocated\n");
                 }
                 
-                if ((rc = PtlPut (server->mdout_h, PTL_NOACK_REQ,
+                if ((rc = LNetPut (server->mdout_h, PTL_NOACK_REQ,
                          server->evnt.initiator, PTL_PING_CLIENT, 0, 0, 0, 0)))
-                         PDEBUG ("PtlPut", rc);
+                         PDEBUG ("LNetPut", rc);
                 
                 atomic_dec (&pkt);
                 
@@ -186,16 +186,16 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->ni = PTL_INVALID_HANDLE;
 
        /* Aquire and initialize the proper nal for portals. */
-        rc = PtlNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
+        rc = LNetNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
         if (!(rc == PTL_OK || rc == PTL_IFACE_DUP)) {
-                CDEBUG (D_OTHER, "PtlNIInit: error %d\n", rc);
+                CDEBUG (D_OTHER, "LNetNIInit: error %d\n", rc);
                 return pingsrv_shutdown (4);
         }
 
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = PtlGetId (server->ni, &server->my_id))) {
-                PDEBUG ("PtlGetId", rc);
+        if ((rc = LNetGetId (server->ni, &server->my_id))) {
+                PDEBUG ("LNetGetId", rc);
                 return pingsrv_shutdown (2);
         }
 
@@ -203,17 +203,17 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->id_local.pid = PTL_PID_ANY;
 
         /* Attach a match entries for header packets */
-        if ((rc = PtlMEAttach (server->ni, PTL_PING_SERVER,
+        if ((rc = LNetMEAttach (server->ni, PTL_PING_SERVER,
             server->id_local,0, ~0,
             PTL_RETAIN, PTL_INS_AFTER, &server->me))) {
-                PDEBUG ("PtlMEAttach", rc);
+                PDEBUG ("LNetMEAttach", rc);
                 return pingsrv_shutdown (2);
         }
 
 
-        if ((rc = PtlEQAlloc (server->ni, 1024, &pingsrv_callback,
+        if ((rc = LNetEQAlloc (server->ni, 1024, &pingsrv_callback,
                                         &server->eq))) {
-                PDEBUG ("PtlEQAlloc (callback)", rc);
+                PDEBUG ("LNetEQAlloc (callback)", rc);
                 return pingsrv_shutdown (2);
         }
         
@@ -232,9 +232,9 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->mdin.eq_handle = server->eq;
         memset (server->in_buf, 0, STDSIZE);
         
-        if ((rc = PtlMDAttach (server->me, server->mdin,
+        if ((rc = LNetMDAttach (server->me, server->mdin,
                 PTL_UNLINK, &server->mdin_h))) {
-                    PDEBUG ("PtlMDAttach (bulk)", rc);
+                    PDEBUG ("LNetMDAttach (bulk)", rc);
                 CDEBUG (D_OTHER, "ping server resources allocated\n");
        }
  

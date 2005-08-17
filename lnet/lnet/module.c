@@ -45,18 +45,18 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 
                 if (initrc) {
                         rc--;
-                        PtlNIFini((ptl_handle_ni_t){0});
+                        LNetNIFini((ptl_handle_ni_t){0});
                 }
                 
                 return rc == 0 ? 0 : -EBUSY;
         }
         
-        initrc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
+        initrc = LNetNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
                            NULL, NULL, &nih);
         if (!(initrc == PTL_OK || initrc == PTL_IFACE_DUP))
                 RETURN (-ENETDOWN);
 
-        rc = PtlNICtl(nih, cmd, data);
+        rc = LNetNICtl(nih, cmd, data);
 
         if (initrc == PTL_OK) {
                 PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
@@ -64,7 +64,7 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
                 ptl_apini.apini_niinit_self = 1;
                 PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
         } else {
-                PtlNIFini(nih);
+                LNetNIFini(nih);
         }
         
         return rc;
@@ -77,9 +77,9 @@ static int init_kportals_module(void)
         int rc;
         ENTRY;
 
-        rc = PtlInit(NULL);
+        rc = LNetInit(NULL);
         if (rc != PTL_OK) {
-                CERROR("PtlInit: error %d\n", rc);
+                CERROR("LNetInit: error %d\n", rc);
                 RETURN(rc);
         }
 
@@ -90,10 +90,10 @@ static int init_kportals_module(void)
                 ptl_apini.apini_niinit_self = 1;
                 PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
 
-                rc = PtlNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
+                rc = LNetNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
                                NULL, NULL, &nih);
                 if (rc != PTL_OK) {
-                        /* Can't PtlFini or fail now if I loaded NALs */
+                        /* Can't LNetFini or fail now if I loaded NALs */
                         PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
                         ptl_apini.apini_niinit_self = 0;
                         PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
@@ -113,31 +113,31 @@ static void exit_kportals_module(void)
         rc = libcfs_deregister_ioctl(&kportal_ioctl_handler);
         LASSERT (rc == 0);
 
-        PtlFini();
+        LNetFini();
 }
 
 EXPORT_SYMBOL(ptl_register_nal);
 EXPORT_SYMBOL(ptl_unregister_nal);
 
 EXPORT_SYMBOL(ptl_err_str);
-EXPORT_SYMBOL(PtlMEAttach);
-EXPORT_SYMBOL(PtlMEInsert);
-EXPORT_SYMBOL(PtlMEUnlink);
-EXPORT_SYMBOL(PtlEQAlloc);
-EXPORT_SYMBOL(PtlMDAttach);
-EXPORT_SYMBOL(PtlMDUnlink);
-EXPORT_SYMBOL(PtlNIInit);
-EXPORT_SYMBOL(PtlNIFini);
-EXPORT_SYMBOL(PtlInit);
-EXPORT_SYMBOL(PtlFini);
-EXPORT_SYMBOL(PtlSnprintHandle);
-EXPORT_SYMBOL(PtlPut);
-EXPORT_SYMBOL(PtlGet);
-EXPORT_SYMBOL(PtlEQWait);
-EXPORT_SYMBOL(PtlEQFree);
-EXPORT_SYMBOL(PtlEQGet);
-EXPORT_SYMBOL(PtlGetId);
-EXPORT_SYMBOL(PtlMDBind);
+EXPORT_SYMBOL(LNetMEAttach);
+EXPORT_SYMBOL(LNetMEInsert);
+EXPORT_SYMBOL(LNetMEUnlink);
+EXPORT_SYMBOL(LNetEQAlloc);
+EXPORT_SYMBOL(LNetMDAttach);
+EXPORT_SYMBOL(LNetMDUnlink);
+EXPORT_SYMBOL(LNetNIInit);
+EXPORT_SYMBOL(LNetNIFini);
+EXPORT_SYMBOL(LNetInit);
+EXPORT_SYMBOL(LNetFini);
+EXPORT_SYMBOL(LNetSnprintHandle);
+EXPORT_SYMBOL(LNetPut);
+EXPORT_SYMBOL(LNetGet);
+EXPORT_SYMBOL(LNetEQWait);
+EXPORT_SYMBOL(LNetEQFree);
+EXPORT_SYMBOL(LNetEQGet);
+EXPORT_SYMBOL(LNetGetId);
+EXPORT_SYMBOL(LNetMDBind);
 EXPORT_SYMBOL(ptl_apini);
 EXPORT_SYMBOL(ptl_iov_nob);
 EXPORT_SYMBOL(ptl_copy_iov2buf);
