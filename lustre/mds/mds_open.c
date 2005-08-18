@@ -1454,13 +1454,15 @@ cleanup_no_trans:
                         struct lustre_id au_id;
                         struct inode * au_inode = dchild->d_inode;
 
-                        if (au_inode == NULL)
+                        if (au_inode == NULL) {
                                 au_inode = dparent->d_inode;
-                        
-                        if (fid)
-                                mds_inode2id(obd, &au_id, au_inode, fid);
-                        else
                                 au_id = *(rec->ur_id1);
+                        } else {
+                                if (fid == 0)
+                                        mds_read_inode_sid(obd, au_inode, &au_id);
+                                else
+                                        mds_inode2id(obd, &au_id, au_inode, fid);
+                        }
                         mds_audit_open(req, &au_id, au_inode, 
                                        rec->ur_name, rec->ur_namelen, rc);
                 }
