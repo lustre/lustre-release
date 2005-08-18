@@ -134,7 +134,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
         /* XXX: debugging for 7346 -bzzz */
         do_gettimeofday(&now);
-        if (now.tv_sec - tstart.tv_sec > obd_timeout) {
+        if (now.tv_sec - tstart.tv_sec > obd_timeout / 2) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 CDEBUG(D_ERROR, "waiting for inode 0x%p "DLID4" took %ds\n",
                        inode, OLID4(&lli->lli_id),

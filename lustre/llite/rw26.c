@@ -79,7 +79,9 @@ static int ll_releasepage(struct page *page, int gfp_mask)
 static int ll_writepages(struct address_space *mapping,
                          struct writeback_control *wbc)
 {
+        struct timeval tstart, now;
         int rc;
+        do_gettimeofday(&tstart);
         rc =  generic_writepages(mapping, wbc);
         if (rc == 0 && wbc->sync_mode == WB_SYNC_ALL) {
                 /* as we don't use Writeback bit to track pages
@@ -88,6 +90,13 @@ static int ll_writepages(struct address_space *mapping,
                 struct ll_inode_info *lli = ll_i2info(mapping->host);
                 wait_event(lli->lli_dirty_wait,
                            ll_is_inode_dirty(mapping->host) == 0);
+                do_gettimeofday(&now);
+                if (now.tv_sec - tstart.tv_sec > obd_timeout) {
+                        CDEBUG(D_ERROR, "synching inode 0x%p "DLID4" took %ds\n",
+                               mapping->host, OLID4(&lli->lli_id),
+                               (int) (now.tv_sec - tstart.tv_sec));
+                        portals_debug_dumplog();
+                }
         }
         return rc;
 }
