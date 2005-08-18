@@ -1475,6 +1475,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         LIST_HEAD(rpc_list);
         ENTRY;
 
+        LASSERT(lop != LP_POISON);
+
         /* first we find the pages we're allowed to work with */
         list_for_each_safe(pos, tmp, &lop->lop_pending) {
                 oap = list_entry(pos, struct osc_async_page, oap_pending_item);
@@ -1778,6 +1780,7 @@ static void osc_check_rpcs(struct client_obd *cli)
 
         while ((loi = osc_next_loi(cli)) != NULL) {
                 LOI_DEBUG(loi, "%lu in flight\n", rpcs_in_flight(cli));
+                LASSERT(loi->loi_ost_idx != LL_POISON);
 
                 if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)
                         break;
