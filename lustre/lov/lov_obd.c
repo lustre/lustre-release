@@ -1471,7 +1471,6 @@ static int lov_prep_async_page(struct obd_export *exp,
                                          lap->lap_sub_offset,
                                          &lov_async_page_ops, lap,
                                          &lap->lap_sub_cookie);
-                lov_tgt_decref(lov, tgt);
         } else {
                 rc = -EIO;
         }
@@ -1635,10 +1634,6 @@ static int lov_teardown_async_page(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
-            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
-                 RETURN(-EIO);
-
         rc = obd_teardown_async_page(tgt->ltd_exp, lsm, loi,
                                      lap->lap_sub_cookie);
         lov_tgt_decref(lov, tgt);
@@ -1770,11 +1765,6 @@ static int lov_change_cbdata(struct obd_export *exp,
                 struct lov_tgt_desc *tgt = lov->tgts + loi->loi_ost_idx;
                 struct lov_stripe_md submd;
 
-                if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
-                    !lov_tgt_pending(lov, tgt, loi->loi_ost_gen)) {
-                        continue;
-                }
-                
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
