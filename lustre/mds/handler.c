@@ -2953,6 +2953,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
         case MDS_DONE_WRITING:
         case MDS_PIN:
         case MDS_SYNC:
+        case MDS_PARSE_ID:
                 rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",

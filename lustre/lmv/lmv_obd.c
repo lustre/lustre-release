@@ -2109,7 +2109,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
         }
 
         if (keylen == strlen("chkconnect") && 
-            memcpy(key, "chkconnect", keylen) == 0) {
+            memcmp(key, "chkconnect", keylen) == 0) {
                 rc = lmv_check_connect(obd);
                 RETURN(rc);
         }
