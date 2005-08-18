@@ -22,7 +22,6 @@
 #include "gmnal.h"
 
 
-int gmnal_small_msg_size = sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t) + PTL_MTU + 928;
 /*
  *      -1 indicates default value.
  *      This is 1 thread per cpu
@@ -35,16 +34,16 @@ int gm_port_id = 4;
 int
 gmnal_cmd(struct portals_cfg *pcfg, void *private)
 {
-	gmnal_data_t	*nal_data = NULL;
+	gmnal_ni_t	*gmnalni = NULL;
 	char		*name = NULL;
 	int		nid = -2;
-	int		gnid;
+	int		gmid;
 	gm_status_t	gm_status;
 
 
 	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n",
 	       pcfg->pcfg_command, private);
-	nal_data = (gmnal_data_t*)private;
+	gmnalni = (gmnal_ni_t*)private;
 	switch(pcfg->pcfg_command) {
 	/*
 	 * just reuse already defined GET_NID. Should define GMNAL version
@@ -54,31 +53,31 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
 		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
 
-		spin_lock(&nal_data->gm_lock);
-		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
-                gm_status = gm_host_name_to_node_id_ex(nal_data->gm_port, 0,
+		spin_lock(&gmnalni->gmni_gm_lock);
+		//nid = gm_host_name_to_node_id(gmnalni->gmni_port, name);
+                gm_status = gm_host_name_to_node_id_ex(gmnalni->gmni_port, 0,
                                                        name, &nid);
-		spin_unlock(&nal_data->gm_lock);
+		spin_unlock(&gmnalni->gmni_gm_lock);
                 if (gm_status != GM_SUCCESS) {
-                        CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) "
+                        CDEBUG(D_NET, "gm_host_name_to_node_id_ex(...host %s) "
                                "failed[%d]\n", name, gm_status);
                         return (-1);
                 } else
-		        CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
-		spin_lock(&nal_data->gm_lock);
-		gm_status = gm_node_id_to_global_id(nal_data->gm_port,
-						    nid, &gnid);
-		spin_unlock(&nal_data->gm_lock);
+		        CDEBUG(D_NET, "Local node %s id is [%d]\n", name, nid);
+		spin_lock(&gmnalni->gmni_gm_lock);
+		gm_status = gm_node_id_to_global_id(gmnalni->gmni_port,
+						    nid, &gmid);
+		spin_unlock(&gmnalni->gmni_gm_lock);
 		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n",
+			CDEBUG(D_NET, "gm_node_id_to_global_id failed[%d]\n",
 			       gm_status);
 			return(-1);
 		}
-		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
-		copy_to_user(PCFG_PBUF(pcfg, 2), &gnid, pcfg->pcfg_plen2);
+		CDEBUG(D_NET, "Global node is is [%u][%x]\n", gmid, gmid);
+		copy_to_user(PCFG_PBUF(pcfg, 2), &gmid, pcfg->pcfg_plen2);
 	break;
 	default:
-		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
+		CDEBUG(D_NET, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
 		pcfg->pcfg_nid2 = -1;
 	}
 
@@ -94,16 +93,16 @@ gmnal_load(void)
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
 
-	CDEBUG(D_INFO, "Calling gmnal_init\n");
+	CDEBUG(D_NET, "Calling gmnal_init\n");
         status = gmnal_init();
 	if (status == PTL_OK) {
-		CDEBUG(D_INFO, "Portals GMNAL initialised ok\n");
+		CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
 	} else {
-		CDEBUG(D_INFO, "Portals GMNAL Failed to initialise\n");
+		CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
 		return(-ENODEV);
 	}
 
-	CDEBUG(D_INFO, "This is the end of the gmnal init routine");
+	CDEBUG(D_NET, "This is the end of the gmnal init routine");
 
 	return(0);
 }
@@ -121,7 +120,6 @@ module_init(gmnal_load);
 
 module_exit(gmnal_unload);
 
-MODULE_PARM(gmnal_small_msg_size, "i");
 MODULE_PARM(num_rx_threads, "i");
 MODULE_PARM(num_stxds, "i");
 MODULE_PARM(gm_port_id, "i");
