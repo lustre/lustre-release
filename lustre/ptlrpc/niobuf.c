@@ -342,7 +342,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
 
         rc = svcsec_authorize(req);
         if (rc) {
-                CERROR("Error wrap reply message "LPX64"\n", req->rq_xid);
+                CDEBUG(D_ERROR, "Error wrap reply message "LPX64"\n", req->rq_xid);
                 goto out;
         }
 
