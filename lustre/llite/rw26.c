@@ -79,10 +79,16 @@ static int ll_releasepage(struct page *page, int gfp_mask)
 static int ll_writepages(struct address_space *mapping,
                          struct writeback_control *wbc)
 {
-        struct timeval tstart, now;
         int rc;
+#if 0
+        struct timeval tstart, now;
         do_gettimeofday(&tstart);
+#endif
         rc =  generic_writepages(mapping, wbc);
+#if 0
+        /* this syncronization (even being implemented via Writeback)
+         * makes recovery much more sad, because iget() can get stuck
+         * on I_LOCK the kernel helds over ->writepages() -bzzz */
         if (rc == 0 && wbc->sync_mode == WB_SYNC_ALL) {
                 /* as we don't use Writeback bit to track pages
                  * under I/O, filemap_fdatawait() doesn't work
@@ -98,6 +104,7 @@ static int ll_writepages(struct address_space *mapping,
                         portals_debug_dumplog();
                 }
         }
+#endif
         return rc;
 }
 
