@@ -1476,6 +1476,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         ENTRY;
 
         LASSERT(lop != LP_POISON);
+        LASSERT(lop->lop_pending.next != LP_POISON);
 
         /* first we find the pages we're allowed to work with */
         list_for_each_safe(pos, tmp, &lop->lop_pending) {
