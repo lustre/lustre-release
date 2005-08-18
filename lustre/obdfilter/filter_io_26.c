@@ -353,7 +353,8 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct obd_device *obd = exp->exp_obd;
         struct inode *inode = dchild->d_inode;
         struct dio_request *dreq = iobuf;
-        int rc, rc2;
+        struct semaphore *sem = NULL;
+        int rc, rc2, create = 0;
         ENTRY;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
@@ -366,11 +367,16 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         if (dreq->dr_npages > OBDFILTER_CREATED_SCRATCHPAD_ENTRIES)
                 RETURN(-EINVAL);
         
+        if (rw == OBD_BRW_WRITE) {
+                create = 1;
+                sem = &obd->u.filter.fo_alloc_lock;
+        }
+
         rc = fsfilt_map_inode_pages(obd, inode,
                                     dreq->dr_pages, dreq->dr_npages,
                                     dreq->dr_blocks,
                                     obdfilter_created_scratchpad,
-                                    rw == OBD_BRW_WRITE, NULL);
+                                    create, sem);
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
