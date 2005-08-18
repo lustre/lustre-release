@@ -142,14 +142,6 @@ lov_tgt_decref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
                 wake_up(&lov->lov_tgt_waitq);
 }
 
-static inline void
-lov_tgt_incref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
-{
-        lov_tgts_lock(lov);
-        ++tgt->ltd_refcount;
-        lov_tgts_unlock(lov);
-}
-
 static inline int
 lov_tgt_pending(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
 {

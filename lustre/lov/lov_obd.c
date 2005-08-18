@@ -1506,8 +1506,9 @@ static int lov_queue_async_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen))
-                RETURN(-EIO);
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
+            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+                 RETURN(-EIO);
 
         rc = obd_queue_async_io(tgt->ltd_exp, lsm, loi, lap->lap_sub_cookie,
                                 cmd, off, count, brw_flags, async_flags);
@@ -1535,9 +1536,10 @@ static int lov_set_async_flags(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen))
-                RETURN(-EIO);
-
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
+            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+                 RETURN(-EIO);
+        
         rc = obd_set_async_flags(tgt->ltd_exp, lsm, loi, lap->lap_sub_cookie,
                                  async_flags);
 
@@ -1566,8 +1568,9 @@ static int lov_queue_group_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen))
-                RETURN(-EIO);
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
+            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+                 RETURN(-EIO);
 
         rc = obd_queue_group_io(tgt->ltd_exp, lsm, loi, oig,
                                 lap->lap_sub_cookie, cmd, off, count,
@@ -1635,8 +1638,6 @@ static int lov_teardown_async_page(struct obd_export *exp,
         if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
             !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
                  RETURN(-EIO);
-
-        lov_tgt_incref(lov,tgt);
 
         rc = obd_teardown_async_page(tgt->ltd_exp, lsm, loi,
                                      lap->lap_sub_cookie);
@@ -1769,7 +1770,11 @@ static int lov_change_cbdata(struct obd_export *exp,
                 struct lov_tgt_desc *tgt = lov->tgts + loi->loi_ost_idx;
                 struct lov_stripe_md submd;
 
-                lov_tgt_incref(lov, tgt);
+                if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
+                    !lov_tgt_pending(lov, tgt, loi->loi_ost_gen)) {
+                        continue;
+                }
+                
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
