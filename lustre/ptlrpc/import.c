@@ -768,20 +768,19 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         }
 
         spin_lock_irqsave(&imp->imp_lock, flags);
-        if (imp->imp_state != LUSTRE_IMP_FULL) {
+        if (imp->imp_state != LUSTRE_IMP_FULL)
                 GOTO(out, 0);
-        }
+
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
         if (request) {
-                /* For non-replayable connections, don't attempt
-                   reconnect if this fails */
-                if (!imp->imp_replayable) {
-                        request->rq_no_resend = 1;
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
-                        request->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                }
+                /* We are disconnecting, do not retry a failed DISCONNECT rpc if
+                 * it fails.  We can get through the above with a down server
+                 * if the client doesn't know the server is gone yet. */
+                request->rq_no_resend = 1;
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
+                request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 request->rq_replen = lustre_msg_size(0, NULL);
                 rc = ptlrpc_queue_wait(request);
                 ptlrpc_req_finished(request);

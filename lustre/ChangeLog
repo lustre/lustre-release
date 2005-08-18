@@ -54,7 +54,7 @@ Details    : Don't put liblustre clients into the ping_evictor list, so
 
 Severity   : enhancement
 Bugzilla   : 6902
-Description: Add ability to evict clients by NID from MDS>
+Description: Add ability to evict clients by NID from MDS.
 Details    : By echoing "nid:$NID" string into
              /proc/fs/lustre/mds/.../evict_client client with nid that equals to
              $NID would be instantly evicted from this MDS and from all active
@@ -72,6 +72,13 @@ Description: service threads change working directory to that of init
 Details    : Starting lustre service threads may pin the working directory
              of the parent thread, making that filesystem busy.  Threads
              now change to the working directory of init to avoid this.
+
+Severity   : minor
+Bugzilla   : 6827
+Frequency  : during shutdown only
+Description: shutdown with a failed MDS or OST can cause unmount to hang
+Details    : Don't resend DISCONNECT messages in ptlrpc_disconnect_import()
+             if server is down.
 
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4

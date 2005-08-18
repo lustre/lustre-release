@@ -554,8 +554,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         if (timediff / 1000000 > (long)obd_timeout) {
                 CERROR("Dropping timed-out opc %d request from %s"
                        ": %ld seconds old\n", request->rq_reqmsg->opc,
-                       request->rq_peerstr,
-                       timediff / 1000000);
+                       request->rq_peerstr, timediff / 1000000);
                 goto put_conn;
         }
 
@@ -596,11 +595,18 @@ put_conn:
 
         timediff = timeval_sub(&work_end, &work_start);
 
-        CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
-               "request "LPU64" opc %u from %s processed in %ldus "
-               "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
-               request->rq_peerstr,
-               timediff, timeval_sub(&work_end, &request->rq_arrival_time));
+        if (timediff / 1000000 > (long)obd_timeout)
+                CERROR("request "LPU64" opc %u from %s processed in %lds\n",
+                       request->rq_xid, request->rq_reqmsg->opc,
+                       request->rq_peerstr,
+                       timeval_sub(&work_end,
+                                   &request->rq_arrival_time) / 1000000);
+        else
+                CDEBUG(D_HA,"request "LPU64" opc %u from %s processed in %ldus "
+                       "(%ldus total)\n", request->rq_xid,
+                       request->rq_reqmsg->opc, request->rq_peerstr,
+                       timediff,
+                       timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL) {
                 int opc = opcode_offset(request->rq_reqmsg->opc);

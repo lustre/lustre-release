@@ -2311,7 +2311,7 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	DBG_SAVE=`cat /proc/sys/portals/debug`
+	DBG_SAVE=`sysctl -n portals.debug`
 	sysctl -w portals.debug=-1
 
 	# ensure we have a grant to do async writes
