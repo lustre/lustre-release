@@ -565,6 +565,10 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
         pbuf = (char*)rec + len;
 
         CDEBUG(D_VFSTRACE, "AUDITLOG:"DLID4"\n", OLID4(&msg->id));
+        /* check id is valid */
+        LASSERT(id_ino(&msg->id));
+        LASSERT(id_fid(&msg->id));
+        LASSERT(id_type(&msg->id) & S_IFMT);
 
         switch (msg->code) {
                 case AUDIT_READ:    

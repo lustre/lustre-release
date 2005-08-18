@@ -231,6 +231,11 @@ int audit_mds_special_rec(struct inode * inode, void * arg,
         rec->gid = msg->gid;
         rec->nid = msg->nid;
         
+        /* check id is valid */
+        LASSERT(id_ino(&msg->id));
+        LASSERT(id_fid(&msg->id));
+        LASSERT(id_type(&msg->id) & S_IFMT);
+        
         len += audit_rec_from_id(&pbuf, &msg->id);
         switch (rec->opcode)
         {

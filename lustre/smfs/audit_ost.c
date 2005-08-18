@@ -47,9 +47,10 @@ static int audit_ost_get_id(struct inode * inode, struct lustre_id * id)
         ENTRY;
         if(fsfilt->fs_get_md(inode, id, sizeof(*id), EA_SID) <= 0)
                 RETURN(-ENODATA);
+
         RETURN(0);        
 }
-
+#if 0
 static int audit_ost_create_rec(struct inode * parent, void * arg,
                                 struct audit_priv * priv, char * buffer,
                                 __u32 * type)
@@ -111,7 +112,7 @@ int static audit_ost_setattr_rec(struct inode * inode, void * arg,
                 
         return len;
 }
-
+#endif
 int static audit_ost_rw_rec(struct inode * inode, void * arg, 
                             struct audit_priv * priv, char * buffer,
                             __u32 * type)
@@ -138,9 +139,9 @@ static audit_get_op audit_ost_record[HOOK_MAX] = {
         [HOOK_READ]         audit_ost_rw_rec,
         [HOOK_WRITE]        audit_ost_rw_rec,
         [HOOK_CREATE]       NULL, /* audit_ost_create_rec, */
-        [HOOK_UNLINK]       audit_ost_unlink_rec,
-        [HOOK_SETATTR]      audit_ost_setattr_rec,
-        [HOOK_F_SETATTR]    audit_ost_setattr_rec
+        [HOOK_UNLINK]       NULL, //audit_ost_unlink_rec,
+        [HOOK_SETATTR]      NULL, //audit_ost_setattr_rec,
+        [HOOK_F_SETATTR]    NULL, //audit_ost_setattr_rec
 };
 
 int audit_ost_setup(struct obd_device * obd, struct super_block *sb,
