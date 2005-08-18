@@ -91,7 +91,7 @@ static int ll_writepages(struct address_space *mapping,
                 wait_event(lli->lli_dirty_wait,
                            ll_is_inode_dirty(mapping->host) == 0);
                 do_gettimeofday(&now);
-                if (now.tv_sec - tstart.tv_sec > obd_timeout) {
+                if (now.tv_sec - tstart.tv_sec > obd_timeout * 6) {
                         CDEBUG(D_ERROR, "synching inode 0x%p "DLID4" took %ds\n",
                                mapping->host, OLID4(&lli->lli_id),
                                (int) (now.tv_sec - tstart.tv_sec));
