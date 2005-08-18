@@ -170,7 +170,7 @@ test_3a() {
 	enable_encrypt $MOUNT	
 	diff -u $DIR1/3a0 $DIR2/3a1 || error "files are different"
 }
-run_test 3a "write chmod encryption============="
+run_test 3a "write chown encryption============="
 
 test_4a() {
 	rm -rf $DIR1/4a*
@@ -205,6 +205,24 @@ test_5a() {
 	diff -u $DIR1/5a0 $DIR2/5a1 || error "files are different"
 }
 run_test 5a "write chacl encryption============="
+
+test_6a() {
+	rm -rf $DIR1/6a*
+	enable_encrypt $MOUNT	
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/6a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/6a1
+	chown 0600 $DIR1/6a0
+        setfacl -m u:bin:rw $DIR1/6a0
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/6a0 || error "chown write error"
+	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/6a1 	
+	diff -u $DIR1/6a0 $DIR2/6a1 || error "files are different"
+	echo "enable crypt read success"
+	disable_encrypt $MOUNT
+	diff -u $DIR1/6a0 $DIR2/6a1 && error "write encryption failed"
+	enable_encrypt $MOUNT	
+	diff -u $DIR1/6a0 $DIR2/6a1 || error "files are different"
+}
+run_test 6a "write chmod/setfacl encryption============="
 
 $CLEANUP
 

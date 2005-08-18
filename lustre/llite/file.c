@@ -1914,6 +1914,10 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
         if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0) {
                 rc = ll_crypto_get_mac(inode, &attr, (void *)value, size, 
                                        &key, &key_size);
+                if (rc) {
+                        CERROR("can not get right mac, rc=%d\n", rc);
+                        GOTO(out, rc);
+                }
         }
 
         OBD_ALLOC(op_data, sizeof(*op_data));
@@ -1927,13 +1931,13 @@ int ll_setxattr_internal(struct inode *inode, const char *name,
                         (void *)value,  size, key, key_size, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         
-        if (key && key_size) 
-                OBD_FREE(key, key_size);
         if (rc) {
                 CDEBUG(D_SEC, "md_setattr fails: rc = %d\n", rc);
                 GOTO(out, rc);
         }
 out:
+        if (key && key_size) 
+                OBD_FREE(key, key_size);
         ptlrpc_req_finished(request);
         RETURN(rc);
 }

@@ -458,11 +458,11 @@ int ll_gks_get_mac(struct inode *inode, struct iattr *iattr, void *value,
                           key_size, ckey);
         if (rc) {
                 CERROR("decrypt key error rc %d \n", rc);
+                *key_size = 0;
                 GOTO(out, rc);
         }
         *key = ckey;
         iattr->ia_valid |= ATTR_MAC;
-        EXIT;
 out:
         if (acl)
                 posix_acl_release(acl);
@@ -474,7 +474,7 @@ out:
                 OBD_FREE(kperm, kperm_size);
         if (kcontext)
                 OBD_FREE(kcontext, kcontext_size);
-        return rc; 
+        RETURN(rc); 
 }
 
 static int ll_crypt_permission_check(struct lustre_key *lkey,

@@ -1282,9 +1282,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(-ENOMEM);
                 ll_inode2mdc_data(op_data, inode, (OBD_MD_FLID | OBD_MD_MEA));
 
-                if (ia_valid & (ATTR_UID | ATTR_GID)) {
+                if (ia_valid & (ATTR_UID | ATTR_GID | ATTR_MODE)) {
                         rc = ll_crypto_get_mac(inode, attr, NULL, 0, &key, 
                                                &key_size);
+                        if (rc) {
+                                CERROR("can not get right mac, rc=%d\n", rc);
+                                if (key && key_size)
+                                        OBD_FREE(key, key_size);
+                                RETURN(rc);
+                        }
                 }
                 rc = md_setattr(sbi->ll_md_exp, op_data,
                                 attr, key, key_size, NULL, 0, NULL, 
