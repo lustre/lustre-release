@@ -162,7 +162,7 @@ typedef struct
         __u32             md_lkey;
         __u32             md_rkey;
         __u64             md_addr;
-} kib_md_t __attribute__((packed));
+} kib_md_t;
 
 typedef struct
 {
@@ -249,13 +249,13 @@ typedef struct
 {
         __u32                 rd_nob;           /* # of bytes */
         __u64                 rd_addr;          /* remote io vaddr */
-} kib_rdma_desc_t __attribute__((packed));
+} WIRE_ATTR kib_rdma_desc_t;
 
 typedef struct
 {
         ptl_hdr_t         ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
-} kib_immediate_msg_t __attribute__((packed));
+} WIRE_ATTR kib_immediate_msg_t;
 
 /* these arrays serve two purposes during rdma.  they are built on the passive
  * side and sent to the active side as remote arguments.  On the active side
@@ -268,7 +268,7 @@ typedef struct
         __u32             ibrm_num_descs;       /* how many descs */
         __u32             rd_key;               /* remote key */
         kib_rdma_desc_t   ibrm_desc[0];         /* where to suck/blow */
-} kib_rdma_msg_t __attribute__((packed));
+} WIRE_ATTR kib_rdma_msg_t;
 
 #define kib_rdma_msg_len(num_descs) \
         offsetof(kib_msg_t, ibm_u.rdma.ibrm_desc[num_descs])
@@ -277,7 +277,7 @@ typedef struct
 {
         __u64             ibcm_cookie;          /* opaque completion cookie */
         __u32             ibcm_status;          /* completion status */
-} kib_completion_msg_t __attribute__((packed));
+} WIRE_ATTR kib_completion_msg_t;
 
 typedef struct
 {
@@ -293,8 +293,8 @@ typedef struct
                 kib_immediate_msg_t   immediate;
                 kib_rdma_msg_t        rdma;
                 kib_completion_msg_t  completion;
-        } ibm_u __attribute__((packed));
-} kib_msg_t __attribute__((packed));
+        } WIRE_ATTR ibm_u;
+} WIRE_ATTR kib_msg_t;
 
 #define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
 #define IBNAL_MSG_VERSION              1        /* current protocol version */

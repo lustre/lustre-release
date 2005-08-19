@@ -503,7 +503,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
                 if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
-                        CERROR("%s reconnecting\n", cluuid->uuid);
+                        CWARN("%s reconnecting\n", cluuid->uuid);
                         conn->cookie = exp->exp_handle.h_cookie;
                         /* target_handle_connect() treats EALREADY and
                          * -EALREADY differently */
@@ -545,12 +545,12 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         int size = sizeof(*data);
         ENTRY;
 
-        OBD_RACE(OBD_FAIL_TGT_CONN_RACE); 
+        OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
 
         LASSERT_REQSWAB (req, 0);
         str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad target UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -562,16 +562,16 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
-                       " for connect (%s)\n", str,
-                       !target ? "no target" : 
-                       (target->obd_stopping ? "stopping" : "not set up"));
+                          " for connect (%s)", str,
+                          !target ? "no target" :
+                          (target->obd_stopping ? "stopping" : "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
 
         LASSERT_REQSWAB (req, 1);
         str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
         if (str == NULL) {
-                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect\n");
+                DEBUG_REQ(D_ERROR, req, "bad client UUID for connect");
                 GOTO(out, rc = -EINVAL);
         }
 
@@ -700,9 +700,11 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export->exp_conn_cnt = req->rq_reqmsg->conn_cnt;
         spin_unlock_irqrestore(&export->exp_lock, flags);
 
-        /* request from liblustre? */
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
+        /* request from liblustre?  Don't evict it for not pinging. */
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 export->exp_libclient = 1;
+                list_del_init(&export->exp_obd_chain_timed);
+        }
 
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
@@ -1252,7 +1254,7 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
         } else {
                 DEBUG_REQ(D_NET, req, "sending reply");
         }
-        
+
         return (ptlrpc_send_reply(req, 1));
 }
 
@@ -1269,7 +1271,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         sni = req->rq_rqbd->rqbd_srv_ni;
         svc = sni->sni_service;
-        
+
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
                 /* no notifiers */
@@ -1358,8 +1360,7 @@ void target_committed_to_req(struct ptlrpc_request *req)
         if (!obd->obd_no_transno && req->rq_repmsg != NULL)
                 req->rq_repmsg->last_committed = obd->obd_last_committed;
         else
-                DEBUG_REQ(D_IOCTL, req,
-                          "not sending last_committed update");
+                DEBUG_REQ(D_IOCTL, req, "not sending last_committed update");
 
         CDEBUG(D_INFO, "last_committed "LPU64", xid "LPU64"\n",
                obd->obd_last_committed, req->rq_xid);

@@ -42,6 +42,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_ucache.h>
 
 #include "mds_internal.h"
 
@@ -202,9 +203,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
         int error;
         ENTRY;
 
-        /* only fix up attrs if the client VFS didn't already */
-        if (!(ia_valid & ATTR_RAW))
-                RETURN(0);
+        if (ia_valid & ATTR_RAW)
+                attr->ia_valid &= ~ATTR_RAW;
 
         if (!(ia_valid & ATTR_CTIME_SET))
                 LTIME_S(attr->ia_ctime) = now;
@@ -214,11 +214,11 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                 LTIME_S(attr->ia_mtime) = now;
 
         if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
-                RETURN(-EPERM);
+                RETURN((attr->ia_valid & ~ATTR_ATTR_FLAG) ? -EPERM : 0);
 
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
-                if (rec->ur_fsuid != inode->i_uid &&
+                if (rec->ur_uc.luc_fsuid != inode->i_uid &&
                     (error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
         }
@@ -228,7 +228,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         RETURN(error);
         }
 
-        if (ia_valid & ATTR_UID) {
+        if (ia_valid & (ATTR_UID | ATTR_GID)) {
                 /* chown */
                 error = -EPERM;
                 if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
@@ -237,7 +237,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         attr->ia_uid = inode->i_uid;
                 if (attr->ia_gid == (gid_t) -1)
                         attr->ia_gid = inode->i_gid;
-                attr->ia_mode = inode->i_mode;
+                if (!(ia_valid & ATTR_MODE))
+                        attr->ia_mode = inode->i_mode;
                 /*
                  * If the user or group of a non-directory has been
                  * changed by a non-root user, remove the setuid bit.
@@ -713,6 +714,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         dchild = ll_lookup_one_len(rec->ur_name, dparent, rec->ur_namelen - 1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
+                if (rc != -ENAMETOOLONG)
                 CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
@@ -727,10 +729,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EROFS);
         }
 
-        if (dir->i_mode & S_ISGID) {
-                if (S_ISDIR(rec->ur_mode))
-                        rec->ur_mode |= S_ISGID;
-        }
+        if (dir->i_mode & S_ISGID && S_ISDIR(rec->ur_mode))
+                rec->ur_mode |= S_ISGID;
 
         dchild->d_fsdata = (void *)&dp;
         dp.p_inum = (unsigned long)rec->ur_fid2->id;
@@ -798,11 +798,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_atime) = rec->ur_time;
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
-                iattr.ia_uid = rec->ur_fsuid;
+                iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
                 if (dir->i_mode & S_ISGID)
                         iattr.ia_gid = dir->i_gid;
                 else
-                        iattr.ia_gid = rec->ur_fsgid;
+                        iattr.ia_gid = current->fsgid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
 
@@ -1631,11 +1631,18 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 3; /* locks */
 
+        if (mds_inode_is_orphan(de_src->d_inode)) {
+                CDEBUG(D_INODE, "an attempt to link an orphan inode %lu/%u\n",
+                       de_src->d_inode->i_ino,
+                       de_src->d_inode->i_generation);
+                GOTO(cleanup, rc = -ENOENT);
+        }
+
         /* Step 3: Lookup the child */
         dchild = ll_lookup_one_len(rec->ur_name, de_tgt_dir, rec->ur_namelen-1);
         if (IS_ERR(dchild)) {
                 rc = PTR_ERR(dchild);
-                if (rc != -EPERM && rc != -EACCES)
+                if (rc != -EPERM && rc != -EACCES && rc != -ENAMETOOLONG)
                         CERROR("child lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
@@ -1792,6 +1799,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
         if (IS_ERR(*de_newp)) {
                 rc = PTR_ERR(*de_newp);
+                if (rc != -ENAMETOOLONG)
                 CERROR("new child lookup error (%.*s): %d\n",
                        old_len - 1, old_name, rc);
                 GOTO(cleanup, rc);
@@ -2076,16 +2084,39 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
+#if CRAY_PORTALS
+        rec->ur_uc.luc_fsuid = req->rq_uid;
+#endif
+
+        /* get group info of this user */
+        rec->ur_uc.luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
+                                                    rec->ur_uc.luc_fsuid,
+                                                    rec->ur_uc.luc_fsgid, 2,
+                                                    &rec->ur_uc.luc_suppgid1);
+
+        if (IS_ERR(rec->ur_uc.luc_uce)) {
+                rc = PTR_ERR(rec->ur_uc.luc_uce);
+                rec->ur_uc.luc_uce = NULL;
+                RETURN(rc);
+        }
+
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
+
+#if CRAY_PORTALS
+        if (rec->ur_uc.luc_uce)
+                rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
+#endif
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
+        upcall_cache_put_entry(mds->mds_group_hash, rec->ur_uc.luc_uce);
         RETURN(rc);
 }

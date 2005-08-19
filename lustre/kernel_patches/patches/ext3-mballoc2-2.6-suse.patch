@@ -1850,23 +1850,23 @@ Index: linux-stage/fs/ext3/mballoc.c
 +}
 +
 +
-+extern void ext3_free_blocks_old(handle_t *, struct inode *,
-+				unsigned long, unsigned long);
-+void ext3_free_blocks(handle_t *handle, struct inode * inode,
++extern void ext3_free_blocks_old(handle_t *handle, struct inode *inode,
++				 unsigned long block, unsigned long count);
++void ext3_free_blocks(handle_t *handle, struct inode *inode,
 +			unsigned long block, unsigned long count, int metadata)
 +{
 +	int freed;
 +
-+	if (!test_opt(inode->i_sb, MBALLOC))
++	if (!test_opt(inode->i_sb, MBALLOC) ||
++	    EXT3_SB(inode->i_sb)->s_buddy_blocks == NULL)
 +		ext3_free_blocks_old(handle, inode, block, count);
 +	else {
-+		ext3_mb_free_blocks(handle, inode, block, count, metadata, &freed);
++		ext3_mb_free_blocks(handle, inode, block,count,metadata,&freed);
 +		if (freed)
 +			DQUOT_FREE_BLOCK(inode, freed);
 +	}
 +	return;
 +}
-+
 Index: linux-stage/fs/ext3/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/super.c	2005-07-28 16:09:49.624822080 -0400

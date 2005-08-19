@@ -101,11 +101,11 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->sa_fsuid;
-        r->ur_fsgid = rec->sa_fsgid;
-        r->ur_cap = rec->sa_cap;
-        r->ur_suppgid1 = rec->sa_suppgid;
-        r->ur_suppgid2 = -1;
+        r->ur_uc.luc_fsuid = rec->sa_fsuid;
+        r->ur_uc.luc_fsgid = rec->sa_fsgid;
+        r->ur_uc.luc_cap = rec->sa_cap;
+        r->ur_uc.luc_suppgid1 = rec->sa_suppgid;
+        r->ur_uc.luc_suppgid2 = -1;
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = rec->sa_valid;
         attr->ia_mode = rec->sa_mode;
@@ -148,17 +148,17 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->cr_fsuid;
-        r->ur_fsgid = rec->cr_fsgid;
-        r->ur_cap = rec->cr_cap;
+        r->ur_uc.luc_fsuid = rec->cr_fsuid;
+        r->ur_uc.luc_fsgid = rec->cr_fsgid;
+        r->ur_uc.luc_cap = rec->cr_cap;
+        r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
+        r->ur_uc.luc_suppgid2 = -1;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->ur_suppgid1 = rec->cr_suppgid;
-        r->ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -194,11 +194,11 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->lk_fsuid;
-        r->ur_fsgid = rec->lk_fsgid;
-        r->ur_cap = rec->lk_cap;
-        r->ur_suppgid1 = rec->lk_suppgid1;
-        r->ur_suppgid2 = rec->lk_suppgid2;
+        r->ur_uc.luc_fsuid = rec->lk_fsuid;
+        r->ur_uc.luc_fsgid = rec->lk_fsgid;
+        r->ur_uc.luc_cap = rec->lk_cap;
+        r->ur_uc.luc_suppgid1 = rec->lk_suppgid1;
+        r->ur_uc.luc_suppgid2 = rec->lk_suppgid2;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
@@ -222,12 +222,12 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fsuid = rec->ul_fsuid;
-        r->ur_fsgid = rec->ul_fsgid;
-        r->ur_cap = rec->ul_cap;
+        r->ur_uc.luc_fsuid = rec->ul_fsuid;
+        r->ur_uc.luc_fsgid = rec->ul_fsgid;
+        r->ur_uc.luc_cap = rec->ul_cap;
+        r->ur_uc.luc_suppgid1 = rec->ul_suppgid;
+        r->ur_uc.luc_suppgid2 = -1;
         r->ur_mode = rec->ul_mode;
-        r->ur_suppgid1 = rec->ul_suppgid;
-        r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
         r->ur_time = rec->ul_time;
@@ -251,11 +251,11 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fsuid = rec->rn_fsuid;
-        r->ur_fsgid = rec->rn_fsgid;
-        r->ur_cap = rec->rn_cap;
-        r->ur_suppgid1 = rec->rn_suppgid1;
-        r->ur_suppgid2 = rec->rn_suppgid2;
+        r->ur_uc.luc_fsuid = rec->rn_fsuid;
+        r->ur_uc.luc_fsgid = rec->rn_fsgid;
+        r->ur_uc.luc_cap = rec->rn_cap;
+        r->ur_uc.luc_suppgid1 = rec->rn_suppgid1;
+        r->ur_uc.luc_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
         r->ur_time = rec->rn_time;
@@ -285,17 +285,17 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         if (rec == NULL)
                 RETURN (-EFAULT);
 
-        r->ur_fsuid = rec->cr_fsuid;
-        r->ur_fsgid = rec->cr_fsgid;
-        r->ur_cap = rec->cr_cap;
+        r->ur_uc.luc_fsuid = rec->cr_fsuid;
+        r->ur_uc.luc_fsgid = rec->cr_fsgid;
+        r->ur_uc.luc_cap = rec->cr_cap;
+        r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
+        r->ur_uc.luc_suppgid2 = -1;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
         r->ur_rdev = rec->cr_rdev;
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
-        r->ur_suppgid1 = rec->cr_suppgid;
-        r->ur_suppgid2 = -1;
 
         LASSERT_REQSWAB (req, offset + 1);
         r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
@@ -350,8 +350,47 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
 
         rec->ur_opcode = opcode;
         rc = mds_unpackers[opcode](req, offset, rec);
-#if CRAY_PORTALS
-        rec->ur_fsuid = req->rq_uid;
-#endif
+
         RETURN(rc);
+}
+
+int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
+                   int offset)
+{
+        struct mds_body *body = lustre_msg_buf(req->rq_reqmsg, offset,
+                                               sizeof(*body));
+        struct mds_obd *mds = mds_req2mds(req);
+        int rc;
+
+        LASSERT(body != NULL); /* previously verified & swabbed by caller */
+
+#if CRAY_PORTALS
+        ucred->luc_fsuid = req->rq_uid;
+#else
+        ucred->luc_fsuid = body->fsuid;
+        ucred->luc_fsgid = body->fsgid;
+        ucred->luc_cap = body->capability;
+#endif
+
+        ucred->luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
+                                                ucred->luc_fsuid,
+                                                ucred->luc_fsgid, 1,
+                                                &body->suppgid);
+        if (IS_ERR(ucred->luc_uce)) {
+                rc = PTR_ERR(ucred->luc_uce);
+                ucred->luc_uce = NULL;
+                return rc;
+        }
+
+#if CRAY_PORTALS
+        if (ucred->luc_uce)
+                ucred->luc_fsgid = ucred->luc_uce->ue_primary;
+#endif
+
+        return 0;
+}
+
+void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *mds)
+{
+        upcall_cache_put_entry(mds->mds_group_hash, ucred->luc_uce);
 }

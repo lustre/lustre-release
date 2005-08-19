@@ -1,5 +1,6 @@
 #!/bin/bash
 #set -xv
+set -e
 
 #
 # This script is to generate lib lustre library as a whole. It will leave

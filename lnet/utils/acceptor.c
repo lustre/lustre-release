@@ -81,18 +81,30 @@ char *pidfile_name(char *name_port)
         return pidfile;
 }
 
-void pidfile_create(char *name_port)
+int pidfile_create(char *name_port)
 {
         char *pidfile = pidfile_name(name_port);
-        FILE *fp;
+        int fd, rc;
 
-        if ((fp = fopen(pidfile, "w"))) {
-                fprintf(fp, "%d\n", getpid());
-                fclose(fp);
+        if ((fd = open(pidfile, O_CREAT | O_WRONLY)) >= 0) {
+                char pid[16];
+                int size = snprintf(pid, sizeof(pid), "%u\n", getpid());
+                if (write(fd, pid, size) != size) {
+                        /* hard error or short write */
+                        rc = errno ? : EIO;
+                } else {
+                        rc = 0;
+                }
+                close(fd);
         } else {
-                errlog(LOG_ERR, " error creating %s: %s\n",
-                       pidfile, strerror(errno));
+                rc = errno;
         }
+
+        if (rc)
+                errlog(LOG_ERR, " error creating %s: %s\n",
+                       pidfile, strerror(rc));
+
+        return rc;
 }
 
 int pidfile_cleanup(char *name_port)
@@ -104,6 +116,7 @@ int pidfile_cleanup(char *name_port)
         if (rc && errno != -ENOENT)
                 fprintf(stderr, "%s: error removing %s: %s\n",
                         progname, pidfile, strerror(errno));
+        errlog(LOG_NOTICE, "exiting\n");
 
         return errno;
 }
@@ -147,8 +160,12 @@ stale:
 
 void handler(int sig)
 {
-        pidfile_cleanup(name_port);
         exit(sig);
+}
+
+void atexit_handler(void)
+{
+        pidfile_cleanup(name_port);
 }
 
 void show_connection(int fd, __u32 net_ip)
@@ -272,7 +289,8 @@ int main(int argc, char **argv)
         signal(SIGTERM, handler);
 
         errlog(LOG_NOTICE, "started, listening on port %d\n", port);
-        pidfile_create(name_port);
+        if (pidfile_create(name_port) == 0)
+                atexit(atexit_handler);
 
         while (1) {
                 struct sockaddr_in clntaddr;
@@ -293,13 +311,12 @@ int main(int argc, char **argv)
                         //continue;
                 }
 
+                inet_ntop(AF_INET, &clntaddr.sin_addr, addrstr,INET_ADDRSTRLEN);
 #ifdef HAVE_LIBWRAP
                 /* libwrap access control */
                 request_init(&request, RQ_DAEMON, "lustre", RQ_FILE, cfd, 0);
                 sock_host(&request);
                 if (!hosts_access(&request)) {
-                        inet_ntop(AF_INET, &clntaddr.sin_addr,
-                                  addrstr, INET_ADDRSTRLEN);
                         errlog(LOG_WARNING, "unauthorized access from %s:%hd\n",
                                addrstr, ntohs(clntaddr.sin_port));
                         close (cfd);
@@ -309,8 +326,6 @@ int main(int argc, char **argv)
 
                 if (require_privports &&
                     ntohs(clntaddr.sin_port) >= IPPORT_RESERVED) {
-                        inet_ntop(AF_INET, &clntaddr.sin_addr,
-                                  addrstr, INET_ADDRSTRLEN);
                         errlog(LOG_ERR,
                                "closing non-privileged connection from %s:%d\n",
                                addrstr, ntohs(clntaddr.sin_port));
@@ -332,18 +347,17 @@ int main(int argc, char **argv)
                 data.ioc_plen1 = sizeof(pcfg);
 
                 if (ioctl(pfd, IOC_PORTAL_NAL_CMD, &data) < 0) {
-                        errlog(LOG_ERR,
-                               "portals ioctl failed: %s\n", strerror(errno));
+                        errlog(LOG_ERR, "portals ioctl failed for %s: %s\n",
+                               addrstr, strerror(errno));
                 } else {
-                        errlog(LOG_DEBUG, "client registered\n");
+                        errlog(LOG_DEBUG, "client %s registered\n", addrstr);
                 }
                 rc = close(cfd);
                 if (rc)
-                        perror ("close failed");
+                        perror("close failed");
         }
 
         closelog();
-        pidfile_cleanup(name_port);
 
         return (0);
 }

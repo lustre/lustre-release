@@ -313,13 +313,22 @@ name> Name of the node on which the MDS resides
 \layout Description
 
 --fstype\SpecialChar ~
-extN|ext3 Optional argument used to specify the file system type.
- Default is ext3.
+ldiskfs|ext3 Optional argument used to specify the file system type.
+ Default is ext3.  For 2.6 kernels the ldiskfs filesystem must be used.
 \layout Description
 
 --inode_size\SpecialChar ~
-<size> Specify new inode size for underlying ext3 file system.
+<size> Specify new inode size for underlying ext3 file system.  Must be a
+ power of 2 between 128 and 4096.  The default inode size is selected based
+ on the default number of stripes specified for the filesystem.
 \layout Description
+
+--group_upcall\SpecialChar ~
+<pathname> The group upcall program to call for resolving a user's secondary
+ groups.  The default value is NONE, which means that the MDS will use whatever
+ supplementary group is passed from the client.  The supplied upcall is
+ /usr/sbin/l_getgroups, which gets groups from the MDS's /etc/group file
+ based on the client-supplied UID.
 
 --mkfsoptions\SpecialChar ~
 <options> Optional argument to mkfs.
@@ -351,14 +360,14 @@ asyncdel
 
 --journal_size\SpecialChar ~
 <size> Optional arguement to specify the journal size for
- the ext2/ext3 file system.
+ the ext3 file system.
  The size should be in the units expected by 
 \series bold 
 mkfs
 \series default 
 , so for ext3 it should be in MB.
- If this is option is not used, the ext2/ext3 filesystem will be configured
- with the default journal size.
+ If this is option is not used, the ext3 filesystem will be configured
+ with a journal size dependent upon how large the filesystem is.
 \end_deeper 
 \layout Description
 
@@ -381,13 +390,13 @@ mds_name
 \layout Description
 
 --stripe_sz\SpecialChar ~
-<size> Specify the stripe size in bytes.
+<size> Specify the stripe size in bytes.  This much data is written to each
+ stripe before starting to write in the next stripe.  Default is 1048576.
 \layout Description
 
 --stripe_cnt\SpecialChar ~
-<count> A value of 0 for this means to stripe on all available
- OSTs.
- Default is 0.
+<count> A value of 0 for this means to use the currently optimal number
+ of stripes.  Default is 1 stripe per file.
 \layout Description
 
 --stripe_pattern\SpecialChar ~
@@ -478,14 +487,14 @@ asyncdel
 
 --journal_size\SpecialChar ~
 <size> Optional arguement to specify the journal size for
- the ext2/ext3 file system.
+ the ext3 file system.
  The size should be in the units expected by 
 \series bold 
 mkfs
 \series default 
 , so for ext3 it should be in MB.
- If this is option is not used, the ext2/ext3 filesystem will be configured
- with the default journal size.
+ If this is option is not used, the ext3 filesystem will be configured
+ with a journal size dependent upon how large the filesystem is.
 \end_deeper 
 \layout Description
 

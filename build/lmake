@@ -352,6 +352,7 @@ depend_kernel()
     perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}${TARGET_CONFIG}/" Makefile
     echo "Making depend in $PWD..."
     $MAKE "$MAKE_CC" mrproper || fatal 1 "Error running make mrproper"
+    rm -f rpm-release
     cp "$CONFIG_FILE" .config
     for oc in oldconfig_nonint silentoldconfig oldconfig ; do
 	if grep -q "$oc" Makefile ; then

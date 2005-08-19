@@ -577,6 +577,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         down(&inode->i_sem);
+        fsfilt_check_slow(now, obd_timeout, "i_sem");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {

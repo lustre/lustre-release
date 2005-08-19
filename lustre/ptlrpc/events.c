@@ -486,9 +486,7 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
          * the event queue.  In fact lustre never pulls events off this queue,
          * so it's only sized for some debug history. */
 # if CRAY_PORTALS
-        rc = PtlNIDebug(pni->pni_ni_h, 0xffffffff);
-        if (rc != PTL_OK)
-                CDEBUG(D_ERROR, "Can't enable Cray Portals Debug: rc %d\n", rc);
+        PtlNIDebug(pni->pni_ni_h, 0xffffffff);
 # endif
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, ptlrpc_master_callback,
                         &pni->pni_eq_h);

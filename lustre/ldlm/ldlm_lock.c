@@ -170,7 +170,7 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
         EXIT;
 }
 
-/* This used to have a 'strict' flact, which recovery would use to mark an
+/* This used to have a 'strict' flag, which recovery would use to mark an
  * in-use lock as needing-to-die.  Lest I am ever tempted to put it back, I
  * shall explain why it's gone: with the new hash table scheme, once you call
  * ldlm_lock_destroy, you can never drop your final references on this lock.

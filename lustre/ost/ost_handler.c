@@ -917,8 +917,8 @@ out:
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        char *key;
-        int keylen, rc = 0;
+        char *key, *val;
+        int keylen, vallen, rc = 0;
         ENTRY;
 
         key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
@@ -926,13 +926,24 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 DEBUG_REQ(D_HA, req, "no set_info key");
                 RETURN(-EFAULT);
         }
-        keylen = req->rq_reqmsg->buflens[0];
+        keylen = lustre_msg_buflen(req->rq_reqmsg,0);
 
         rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
-        rc = obd_set_info(exp, keylen, key, 0, NULL);
+        val = lustre_msg_buf(req->rq_reqmsg, 1, 1);
+        vallen = lustre_msg_buflen(req->rq_reqmsg,1);
+
+        if (KEY_IS("evict_by_nid")) {
+                if (val)
+                        obd_export_evict_by_nid(exp->exp_obd, val);
+
+                GOTO(out, rc = 0);
+        }
+
+        rc = obd_set_info(exp, keylen, key, vallen, val);
+out:
         req->rq_repmsg->status = 0;
         RETURN(rc);
 }

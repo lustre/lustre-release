@@ -11,6 +11,14 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71"
+
+case `uname -r` in
+2.4*) FSTYPE=${FSTYPE:-ext3} ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69";;
+*) error "unsupported kernel" ;;
+esac
+
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
 	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
 
@@ -18,11 +26,6 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
 
 TMP=${TMP:-/tmp}
-case `uname -r` in
-2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
-*) error "unsupported kernel" ;;
-esac
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -45,11 +48,18 @@ MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 
 if [ $UID -ne 0 ]; then
+    echo "Warning: running as non-root uid $UID"
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+
+    # $RUNAS_ID may get set incorrectly somewhere else
+    if [ $RUNAS_ID -eq 0 ]; then
+       echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
+       exit 1
+    fi
 fi
 
 export NAME=${NAME:-local}
@@ -193,6 +203,7 @@ STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
+MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
 [ -f $DIR/d52b/foo ] && chattr -i $DIR/d52b/foo
@@ -358,6 +369,15 @@ test_6g() {
 	$CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
 }
 run_test 6g "Is new dir in sgid dir inheriting group?"
+
+test_6h() { # bug 7331
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	touch $DIR/f6h || error "touch failed"
+	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
+	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
+	$CHECKSTAT -t file -u \#$RUNAS_ID -g \#$RUNAS_ID $DIR/f6h || error
+}
+run_test 6h "$RUNAS chown RUNAS_ID.0 .../f6h (should return error)"
 
 test_7a() {
 	mkdir $DIR/d7
@@ -802,6 +822,23 @@ test_26e() {
 }
 run_test 26e "unlink multiple component recursive symlink ======"
 
+# recursive symlinks (bug 7022)
+test_26f() {
+	mkdir $DIR/foo         || error "mkdir $DIR/foo failed"
+	cd $DIR/foo            || error "cd $DIR/foo failed"
+	mkdir -p bar/bar1      || error "mkdir bar/bar1 failed"
+	mkdir foo              || error "mkdir foo failed"
+	cd foo                 || error "cd foo failed"
+	ln -s .. dotdot        || error "ln dotdot failed"
+	ln -s dotdot/bar bar   || error "ln bar failed"
+	cd ../..               || error "cd ../.. failed"
+	output=`ls foo/foo/bar/bar1`
+	[ "$output" = bar1 ] && error "unexpected output"
+	rm -r foo              || error "rm foo failed"
+	$CHECKSTAT -a $DIR/foo || error "foo not gone"
+}
+run_test 26f "rm -r of a directory which has recursive symlink ="
+
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
@@ -924,8 +961,6 @@ reset_enospc() {
 	rmdir $DIR/d27/nospc
 	sysctl -w lustre.fail_loc=$FAIL_LOC
 }
-
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
 
 exhaust_precreations() {
 	OSTIDX=$1
@@ -2219,13 +2254,9 @@ run_test 58 "verify cross-platform wire constants =============="
 
 test_59() {
 	echo "touch 130 files"
-	for i in `seq 1 130` ; do
-		touch $DIR/59-$i
-	done
+	createmany -o $DIR/f59- 130
 	echo "rm 130 files"
-	for i in `seq 1 130` ; do
-		rm -f $DIR/59-$i
-	done
+	unlinkmany $DIR/f59- 130
 	sync
 	sleep 2
         # wait for commitment of removal
@@ -2241,7 +2272,7 @@ run_test 60 "llog sanity tests run from kernel module =========="
 test_60b() { # bug 6411
 	dmesg > $DIR/dmesg
 	LLOG_COUNT=`dmesg | grep -c llog_test`
-	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT broken" || true
+	[ $LLOG_COUNT -gt 50 ] && error "CDEBUG_LIMIT not limiting messages"|| true
 }
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
 
@@ -2288,7 +2319,7 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	DBG_SAVE=`cat /proc/sys/portals/debug`
+	DBG_SAVE=`sysctl -n portals.debug`
 	sysctl -w portals.debug=-1
 
 	# ensure we have a grant to do async writes
@@ -2420,7 +2451,16 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	mkdir $DIR/d67
 	chmod 771 $DIR/d67
 	chgrp $RUNAS_ID $DIR/d67
-	$RUNAS -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error ||true
+	$RUNAS -u $RUNAS_ID -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67
+	RC=$?
+	if [ "$MDS" ]; then
+		# can't tell which is correct otherwise
+		GROUP_UPCALL=`cat /proc/fs/lustre/mds/$MDS/group_upcall`
+		[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
+			error "no-upcall passed" || true
+		[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
+			error "upcall failed" || true
+	fi
 }
 run_test 67 "supplementary group failure (should return error) ="
 

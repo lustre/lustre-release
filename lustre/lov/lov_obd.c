@@ -1629,10 +1629,6 @@ static int lov_change_cbdata(struct obd_export *exp,
         lov = &exp->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        continue;
-                }
 
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
@@ -2044,6 +2040,20 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         /* hit all OSCs, even inactive ones */
                         err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
                                            vallen, ((obd_id*)val) + i);
+                        if (!rc)
+                                rc = err;
+                }
+                RETURN(rc);
+        }
+
+        if (KEY_IS("evict_by_nid")) {
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        /* OST was disconnected or is inactive */
+                        if (!lov->tgts[i].ltd_exp || !lov->tgts[i].active)
+                                continue;
+
+                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
+                                           vallen, val);
                         if (!rc)
                                 rc = err;
                 }

@@ -92,8 +92,6 @@ int LL_PROC_PROTO(proc_set_timeout)
         rc = ll_proc_dointvec(table, write, filp, buffer, lenp, ppos);
         if (ldlm_timeout >= obd_timeout)
                 ldlm_timeout = max(obd_timeout / 3, 1U);
-        else if (ldlm_timeout < 10 && obd_timeout >= ldlm_timeout * 4)
-                ldlm_timeout = min(obd_timeout / 3, 30U);
         return rc;
 }
 

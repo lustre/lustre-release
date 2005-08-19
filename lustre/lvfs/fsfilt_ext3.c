@@ -853,6 +853,8 @@ out:
         unlock_24kernel();
 map:
         if (err >= 0) {
+                struct block_device *bdev = inode->i_sb->s_bdev;
+
                 /* map blocks */
                 if (bp->num == 0) {
                         CERROR("hmm. why do we find this extent?\n");
@@ -869,12 +871,18 @@ map:
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
                                         i, cex->ec_len);
                 for (; i < cex->ec_len && bp->num; i++) {
-                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT)
-                                *(bp->created) = 0;
-                        else
-                                *(bp->created) = 1;
-                        bp->created++;
                         *(bp->blocks) = cex->ec_start + i;
+                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
+                                *(bp->created) = 0;
+                        } else {
+                                *(bp->created) = 1;
+                                /* unmap any possible underlying metadata from
+                                 * the block device mapping.  bug 6998.
+                                 * This only compiles on 2.6, but there are
+                                 * no users of mballoc on 2.4. */
+                                unmap_underlying_metadata(bdev, *(bp->blocks));
+                        }
+                        bp->created++;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;

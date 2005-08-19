@@ -6,6 +6,7 @@
 
 #define PORTAL_DEBUG
 #include <libcfs/libcfs.h>
+#include <portals/types.h>
 
 #if defined(__linux__)
 #include <libcfs/linux/kp30.h>
@@ -14,6 +15,8 @@
 #else
 #error Unsupported operating system
 #endif
+
+#include <portals/types.h>
 
 #ifdef __KERNEL__
 

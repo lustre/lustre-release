@@ -664,11 +664,12 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                             struct lustre_handle *child_lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct ldlm_reply *rep = NULL;
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
         struct dentry *dparent = NULL, *dchild = NULL;
-        struct lvfs_ucred uc;
+        struct lvfs_ucred uc = {NULL,};
         struct lustre_handle parent_lockh;
         int namesize;
         int rc = 0, cleanup_phase = 0, resent_req = 0;
@@ -683,16 +684,20 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                                   lustre_swab_mds_body);
         if (body == NULL) {
                 CERROR("Can't swab mds_body\n");
-                GOTO(cleanup, rc = -EFAULT);
+                RETURN(-EFAULT);
         }
 
         LASSERT_REQSWAB(req, offset + 1);
         name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (name == NULL) {
                 CERROR("Can't unpack name\n");
-                GOTO(cleanup, rc = -EFAULT);
+                RETURN(-EFAULT);
         }
-        namesize = req->rq_reqmsg->buflens[offset + 1];
+        namesize = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
+
+        rc = mds_init_ucred(&uc, req, offset);
+        if (rc)
+                GOTO(cleanup, rc);
 
         LASSERT (offset == 0 || offset == 2);
         /* if requests were at offset 2, the getattr reply goes back at 1 */
@@ -701,15 +706,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 offset = 1;
         }
 
-#if CRAY_PORTALS
-        uc.luc_fsuid = req->rq_uid;
-#else
-        uc.luc_fsuid = body->fsuid;
-#endif
-        uc.luc_fsgid = body->fsgid;
-        uc.luc_cap = body->capability;
-        uc.luc_suppgid1 = body->suppgid;
-        uc.luc_suppgid2 = -1;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         cleanup_phase = 1; /* kernel context */
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
@@ -802,7 +798,12 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 l_dput(dchild);
         case 1:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
-        default: ;
+        default:
+                mds_exit_ucred(&uc, mds);
+                if (req->rq_reply_state == NULL) {
+                        req->rq_status = rc;
+                        lustre_pack_reply(req, 0, NULL, NULL);
+                }
         }
         return rc;
 }
@@ -814,7 +815,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc;
+        struct lvfs_ucred uc = {NULL,};
         int rc = 0;
         ENTRY;
 
@@ -825,13 +826,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
-#if CRAY_PORTALS
-        uc.luc_fsuid = req->rq_uid;
-#else
-        uc.luc_fsuid = body->fsuid;
-#endif
-        uc.luc_fsgid = body->fsgid;
-        uc.luc_cap = body->capability;
+        rc = mds_init_ucred(&uc, req, offset);
+        if (rc)
+                GOTO(out_ucred, rc);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
@@ -851,6 +849,12 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         GOTO(out_pop, rc);
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+out_ucred:
+        if (req->rq_reply_state == NULL) {
+                req->rq_status = rc;
+                lustre_pack_reply(req, 0, NULL, NULL);
+        }
+        mds_exit_ucred(&uc, mds);
         return rc;
 }
 
@@ -953,13 +957,14 @@ out:
 static int mds_readpage(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct vfsmount *mnt;
         struct dentry *de;
         struct file *file;
         struct mds_body *body, *repbody;
         struct lvfs_run_ctxt saved;
         int rc, size = sizeof(*repbody);
-        struct lvfs_ucred uc;
+        struct lvfs_ucred uc = {NULL,};
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
@@ -975,13 +980,10 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (body == NULL)
                 GOTO (out, rc = -EFAULT);
 
-#if CRAY_PORTALS
-        uc.luc_fsuid = req->rq_uid;
-#else
-        uc.luc_fsuid = body->fsuid;
-#endif
-        uc.luc_fsgid = body->fsgid;
-        uc.luc_cap = body->capability;
+        rc = mds_init_ucred(&uc, req, 0);
+        if (rc)
+                GOTO(out, rc);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_fid2dentry(&obd->u.mds, &body->fid1, &mnt);
         if (IS_ERR(de))
@@ -1023,6 +1025,7 @@ out_file:
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 out:
+        mds_exit_ucred(&uc, mds);
         req->rq_status = rc;
         RETURN(0);
 }
@@ -1042,6 +1045,7 @@ int mds_reint(struct ptlrpc_request *req, int offset,
                 CERROR("invalid record\n");
                 GOTO(out, req->rq_status = -EINVAL);
         }
+
         /* rc will be used to interrupt a for loop over multiple records */
         rc = mds_reint_rec(rec, offset, req, lockh);
  out:
@@ -1548,6 +1552,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                            "mds_ldlm_client", &obd->obd_ldlm_client);
         obd->obd_replayable = 1;
 
+        mds->mds_group_hash = upcall_cache_init(obd->obd_name);
+        if (IS_ERR(mds->mds_group_hash)) {
+                rc = PTR_ERR(mds->mds_group_hash);
+                mds->mds_group_hash = NULL;
+                GOTO(err_fs, rc);
+        }
+
         mds_quota_setup(mds);
 
         rc = mds_postsetup(obd);
@@ -1587,6 +1598,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd);
+        upcall_cache_cleanup(mds->mds_group_hash);
+        mds->mds_group_hash = NULL;
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
@@ -1793,6 +1806,9 @@ static int mds_cleanup(struct obd_device *obd)
                          mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
         }
         mds_fs_cleanup(obd);
+
+        upcall_cache_cleanup(mds->mds_group_hash);
+        mds->mds_group_hash = NULL;
 
         /* 2 seems normal on mds, (may_umount() also expects 2
           fwiw), but we only see 1 at this point in obdfilter. */

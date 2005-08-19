@@ -692,6 +692,9 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
+#else
+        CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
+               BUILD_VERSION", info@clusterfs.com\n");
 #endif
 
         err = obd_init_checks();
@@ -782,7 +785,7 @@ static void cleanup_obdclass(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 32
+#define LUSTRE_MIN_VERSION 37
 #define LUSTRE_MAX_VERSION 47
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources

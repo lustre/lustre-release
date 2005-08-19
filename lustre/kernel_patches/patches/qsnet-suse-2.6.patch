@@ -91310,7 +91310,7 @@ Index: linux-2.6.5-7.191/include/linux/init_task.h
  	.map_base	= __TASK_UNMAPPED_BASE,				\
  	.io_wait	= NULL,						\
  	INIT_TASK_PAGG(tsk)						\
-+	INIT_TASK_PTRACK(tsk),						\
++	INIT_TASK_PTRACK(tsk)						\
  }
  
  
@@ -91650,10 +91650,10 @@ Index: linux-2.6.5-7.191/include/linux/ptrack.h
 +extern int     ptrack_call_callbacks (int phase, struct task_struct *child);
 +
 +#define INIT_TASK_PTRACK(tsk) \
-+	.ptrack_list = LIST_HEAD_INIT(tsk.ptrack_list)
++	.ptrack_list = LIST_HEAD_INIT(tsk.ptrack_list),
 +
 +#else
-+#define ptrack_call_callbacks (phase, child) (0)
++#define ptrack_call_callbacks(phase, child) (0)
 +
 +#define INIT_TASK_PTRACK(tsk)
 +

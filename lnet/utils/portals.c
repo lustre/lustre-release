@@ -410,7 +410,8 @@ __u64 ptl_nid2u64(ptl_nid_t nid)
         case 4:
                 return ((__u32)nid);
         default:
-                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %u\n", sizeof(nid));
+                fprintf(stderr, "Unexpected sizeof(ptl_nid_t) == %u\n",
+                        (int)sizeof(nid));
                 abort();
                 /* notreached */
                 return (-1);
@@ -1644,7 +1645,7 @@ lwt_control(int enable, int clear)
 }
 
 static int
-lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize, 
+lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
              lwt_event_t *events, int size)
 {
         struct portal_ioctl_data data;
@@ -1665,7 +1666,7 @@ lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
         if (data.ioc_nid2 != sizeof(lwt_event_t) ||
             data.ioc_nid3 != offsetof(lwt_event_t, lwte_where)) {
                 fprintf(stderr,"kernel/user LWT event mismatch %d(%d),%d(%d)\n",
-                        (int)data.ioc_nid2, sizeof(lwt_event_t),
+                        (int)data.ioc_nid2, (int)sizeof(lwt_event_t),
                         (int)data.ioc_nid3,
                         (int)offsetof(lwt_event_t, lwte_where));
                 return (-1);

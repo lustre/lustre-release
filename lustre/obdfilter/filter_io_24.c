@@ -41,19 +41,6 @@
 #include <linux/lustre_fsfilt.h>
 #include "filter_internal.h"
 
-/* We should only change the file mtime (and not the ctime, like
- * update_inode_times() in generic_file_write()) when we only change data. */
-void inode_update_time(struct inode *inode, int ctime_too)
-{
-        time_t now = CURRENT_TIME;
-        if (inode->i_mtime == now && (!ctime_too || inode->i_ctime == now))
-                return;
-        inode->i_mtime = now;
-        if (ctime_too)
-                inode->i_ctime = now;
-        mark_inode_dirty_sync(inode);
-}
-
 /* Bug 2254 -- this is better done in ext3_map_inode_page, but this
  * workaround will suffice until everyone has upgraded their kernels */
 static void check_pending_bhs(unsigned long *blocks, int nr_pages, dev_t dev,

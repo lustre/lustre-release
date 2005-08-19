@@ -1107,11 +1107,16 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     elif net_type == 'lo':
         fixme("automatic local address for loopback")
     elif net_type == 'gm':
-        gmnalnid = '/usr/sbin/gmnalnid'
-        if os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK):
-            (rc, local) = run(gmnalnid, "-l")
-        else:
+        found=0
+        paths = ['/usr/sbin', config.portals + "/utils"]
+        for path in paths:
+            gmnalnid = path + '/gmnalnid'
+            if (os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK)):
+                found=1
+                break
+        if not found:
             panic (gmnalnid, " not found or not executable on node with GM networking")
+        (rc, local) = run(gmnalnid, "-l")
         if rc:
             panic (gmnalnid, " failed")
         local=string.rstrip(local[0])
@@ -1724,7 +1729,7 @@ class MDSDEV(Module):
             else:
                 stripe_count = 1
             if stripe_count > 77:
-                self.inode_size = 4096
+                self.inode_size = 512
             elif stripe_count > 34:
                 self.inode_size = 2048
             elif stripe_count > 13:
@@ -1791,6 +1796,9 @@ class MDSDEV(Module):
 
             lctl.newdev("mds", self.name, self.uuid,
                         setup ="%s %s %s %s" %(blkdev, self.fstype, self.name, mountfsoptions))
+            self.group_upcall = self.db.get_val('group_upcall','')
+            sys_set_group_upcall(self.name, self.group_upcall)
+
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +
@@ -2933,7 +2941,7 @@ def doClumanager(lustreDB, hosts):
             if not node_db:
                 panic("No node entry for " + node_uuid + " was found.")
 
-            new_services += add_clumanager_node(node_db, nodes, services)
+            new_services.append(add_clumanager_node(node_db, nodes, services))
 
     nodenames = []
     for node in nodes.keys():
@@ -2956,7 +2964,7 @@ def doClumanager(lustreDB, hosts):
     i = 0
     for node in nodenames:
         print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, node)
-        i += 1
+        i = i + 1
 
     print "  </members>\n  <failoverdomains>"
 
@@ -2967,7 +2975,7 @@ def doClumanager(lustreDB, hosts):
     for service in servicekeys:
         svcdb = lustreDB.lookup(service)
         print "    <failoverdomain id=\"%d\" name=\"%s\" ordered=\"yes\" restricted=\"yes\">" % (i, svcdb.getName())
-        i += 1
+        i = i + 1
 
         j = 0
         active_uuid = get_active_target(svcdb)
@@ -2980,7 +2988,7 @@ def doClumanager(lustreDB, hosts):
             svc_nodedb = lustreDB.lookup(svc_node_uuid)
 
             print "      <failoverdomainnode id=\"%d\" name=\"%s\"/>" % (j, svc_nodedb.getName())
-            j += 1
+            j = j + 1
 
         print "    </failoverdomain>"
 
@@ -2998,7 +3006,7 @@ def doClumanager(lustreDB, hosts):
         print "    <service checkinterval=\"30\" failoverdomain=\"%s\" id=\"%d\" name=\"%s\" userscript=\"%s/%s\">" \
               % ( svcdb.getName(), i, svcdb.getName(), config.service_scripts, svcdb.getName())
         print "      <service_ipaddresses/>\n    </service>"
-        i += 1
+        i = i + 1
 
     print "  </services>\n</cluconfig>"
 
@@ -3079,7 +3087,7 @@ def validate_upcall(upcall):
         print "WARNING invalid upcall script specified: %s" % upcall
 
 def sys_set_lustre_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.lustre_upcall:
         upcall = config.lustre_upcall
     elif config.upcall:
@@ -3089,7 +3097,7 @@ def sys_set_lustre_upcall(upcall):
         lctl.set_lustre_upcall(upcall)
 
 def sys_set_portals_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.portals_upcall:
         upcall = config.portals_upcall
     elif config.upcall:
@@ -3097,6 +3105,20 @@ def sys_set_portals_upcall(upcall):
     if upcall:
         validate_upcall(upcall)
         sysctl('portals/upcall', upcall)
+
+def sys_set_group_upcall(mds, upcall):
+    if config.noexec:
+        return
+    # the command line overrides the value in the MDS config
+    if config.group_upcall:
+        upcall = config.group_upcall
+    if upcall:
+        validate_upcall(upcall)
+        debug("setting MDS", mds, "upcall to:", upcall)
+        path = "/proc/fs/lustre/mds/" + mds + "/group_upcall"
+        fp = open(path, 'w')
+        fp.write(upcall)
+        fp.close()
 
 def sys_set_timeout(timeout):
     # the command overrides the value in the node config
@@ -3266,6 +3288,7 @@ lconf_options = [
     ('upcall',  "Set both portals and lustre upcall script", PARAM),
     ('lustre_upcall', "Set lustre upcall script", PARAM),
     ('portals_upcall', "Set portals upcall script", PARAM),
+    ('group_upcall', "Set supplementary group upcall program", PARAM),
     ('lctl_dump', "Save lctl ioctls to the dumpfile argument", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Set the portals debug subsystem",  PARAM),

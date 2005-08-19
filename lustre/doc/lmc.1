@@ -115,11 +115,21 @@ Optional argument indicating the size (in KB) of the device to be created (used 
 --node <nodename> 
 Adds an MDS to the specified node. This requires a --node argument, and it must not be a profile node.
 .TP
---fstype extN|ext3 
+--fstype ldiskfs|ext3 
 Optional argument used to specify the file system type. Default is ext3.
+For 2.6 kernels the ldiskfs filesystem must be used.
 .TP
 --inode_size <size> 
-Specify new inode size for underlying ext3 file system.
+Specify new inode size for underlying ext3 file system.  Must be a power of 2
+between 128 and 4096.  The default inode size is selected based on the default
+number of stripes specified for the filesystem.
+.TP
+--group_upcall <pathname> 
+The group upcall program to call for resolving a user's secondary groups.
+The default value is NONE, which means that the MDS will use whatever
+supplementary group is passed from the client.  The supplied upcall is
+/usr/sbin/l_getgroups, which gets groups from the MDS's /etc/group file
+based on the client-supplied UID.
 .TP
 --mkfsoptions <options> 
 Optional argument to mkfs.
@@ -128,7 +138,7 @@ Optional argument to mkfs.
 Optional argument to mount fs. Mount options will be passed by this argument. For example, extents are to be enabled by adding ",extents" to the --mountfsoptions option. "errors=remount-ro" and "asyncdel" can also be added to it.
 .TP
 --journal_size <size> 
-Optional arguement to specify the journal size for the ext2/ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext2/ext3 filesystem will be configured with the default journal size.
+Optional arguement to specify the journal size for the ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext3 filesystem will be configured with the default journal size.
 .PP
 .B --add lov 
 Creates an LOV with the specified parameters. The mds_name must already exist in the descriptor.
@@ -140,10 +150,10 @@ Common name for the LOV
 Common name for the MDS
 .TP
 --stripe_sz <size>
-Stripe size
+Specify the stripe size in bytes.  This much data is written to each stripe before starting to write in the next stripe.  Default is 1048576.
 .TP
 --stripe_cnt <count> 
-A value of 0 for this means to stripe on all available OSTs. Default is 0.
+A value of 0 for this means to use the currently optimal number of stripes.  Default is 1 stripe per file.
 .TP
 --stripe_pattern <pattern> 
 Only Pattern 0 (RAID 0) is supported currently.
@@ -191,7 +201,7 @@ Optional argument to mkfs.
 Optional argument to mount fs. Mount options will be passed by this argument. For example, extents are to be enabled by adding ",extents" to the --mountfsoptions option. "errors=remount-ro" and "asyncdel" can also be added to it.
 .TP
 --journal_size <size> 
-Optional arguement to specify the journal size for the ext2/ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext2/ext3 filesystem will be configured with the default journal size.
+Optional arguement to specify the journal size for the ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext3 filesystem will be configured with a journal size dependent upon how large the filesystem is.
 .PP
 .B --add mtpt 
 Creates a mount-point on the specified node. Either an LOV or OSC name can be used.

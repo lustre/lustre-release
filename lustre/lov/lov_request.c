@@ -617,7 +617,7 @@ int lov_update_create_set(struct lov_request_set *set,
         loi = &lsm->lsm_oinfo[req->rq_stripe];
 
         if (rc && lov->tgts[req->rq_idx].active) {
-                CERROR("error creating objid "LPX64" sub-object"
+                CERROR("error creating fid "LPX64" sub-object"
                        " on OST idx %d/%d: rc = %d\n",
                        set->set_oa->o_id, req->rq_idx,
                        lsm->lsm_stripe_count, rc);

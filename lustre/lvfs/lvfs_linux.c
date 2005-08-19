@@ -65,13 +65,57 @@ int obd_memmax;
 # define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4))
-#define current_ngroups current->group_info->ngroups
-#define current_groups current->group_info->small_block
+static void push_group_info(struct lvfs_run_ctxt *save,
+                            struct upcall_cache_entry *uce)
+{
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
+        if (!ginfo) {
+                save->ngroups = current_ngroups;
+                current_ngroups = 0;
+        } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+                task_lock(current);
+                save->group_info = current->group_info;
+                current->group_info = ginfo;
+                task_unlock(current);
 #else
-#define current_ngroups current->ngroups
-#define current_groups current->groups
+                LASSERT(ginfo->ngroups <= NGROUPS);
+                LASSERT(current->ngroups <= NGROUPS_SMALL);
+                /* save old */
+                save->group_info.ngroups = current->ngroups;
+                if (current->ngroups)
+                        memcpy(save->group_info.small_block, current->groups,
+                               current->ngroups * sizeof(gid_t));
+                /* push new */
+                current->ngroups = ginfo->ngroups;
+                if (ginfo->ngroups)
+                        memcpy(current->groups, ginfo->small_block,
+                               current->ngroups * sizeof(gid_t));
 #endif
+        }
+}
+
+static void pop_group_info(struct lvfs_run_ctxt *save,
+                           struct upcall_cache_entry *uce)
+{
+        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
+
+        if (!ginfo) {
+                current_ngroups = save->ngroups;
+        } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
+                task_lock(current);
+                current->group_info = save->group_info;
+                task_unlock(current);
+#else
+                current->ngroups = save->group_info.ngroups;
+                if (current->ngroups)
+                        memcpy(current->groups, save->group_info.small_block,
+                               current->ngroups * sizeof(gid_t));
+#endif
+        }
+}
 
 /* push / pop to root of obd store */
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
@@ -97,7 +141,6 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
-        save->ngroups = current_ngroups;
         save->luc.luc_umask = current->fs->umask;
 
         LASSERT(save->pwd);
@@ -109,25 +152,11 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
-                save->luc.luc_suppgid1 = current_groups[0];
-                save->luc.luc_suppgid2 = current_groups[1];
 
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
-                current_ngroups = 0;
-
-                if (uc->luc_suppgid1 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid1;
-                if (uc->luc_suppgid2 != -1)
-                        current_groups[current_ngroups++] = uc->luc_suppgid2;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
-                if (uc->luc_suppgid1 != -1 && uc->luc_suppgid2 != -1 &&
-                    (uc->luc_suppgid1 > uc->luc_suppgid2)) {
-                        current_groups[0] = uc->luc_suppgid2;
-                        current_groups[1] = uc->luc_suppgid1;
-                }
-#endif
+                push_group_info(save, uc->luc_uce);
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
@@ -178,9 +207,7 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;
-                current_ngroups = saved->ngroups;
-                current_groups[0] = saved->luc.luc_suppgid1;
-                current_groups[1] = saved->luc.luc_suppgid2;
+                pop_group_info(saved, uc->luc_uce);
         }
 
         /*
@@ -352,12 +379,15 @@ static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-        
+
         dirent = buf->lrc_dirent;
         if (dirent)
-               dirent->lld_off = offset; 
+               dirent->lld_off = offset;
 
         OBD_ALLOC(dirent, sizeof(*dirent));
+
+        if (!dirent)
+                return -ENOMEM;
 
         list_add_tail(&dirent->lld_list, buf->lrc_list);
 

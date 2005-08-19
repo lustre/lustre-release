@@ -1,4 +1,102 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.5
+       * bug fixes
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7264
+Description: Mounting an ldiskfs file system with mballoc may crash OST node.
+Details    : ldiskfs mballoc code may reference an uninitialized buddy struct
+             at startup during orphan unlinking.  Instead, skip buddy update
+             before setup, as it will be regenerated after recovery is complete.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 7039
+Description: If an OST is inactive, its locks might reference stale inodes.
+Details    : lov_change_cbdata() must iterate over all namespaces, even if
+             they are inactive to clear inode references from the lock.
+
+Severity   : enhancement
+Frequency  : occasional, if non-standard max_dirty_mb used
+Bugzilla   : 7138
+Description: Client will block write RPCs if not enough grant
+Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
+             then the client will block writes while waiting for another RPC
+             to complete instead of consuming its dirty limit.  With change
+             we get improved performance when max_dirty_mb is small.
+
+Severity   : enhancement
+Bugzilla   : 3389, 6253
+Description: Add support for supplementary groups on the MDS.
+Details    : The MDS has an upcall /proc/fs/lustre/mds/{mds}/group_upcall
+             (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
+             lookups for user supplementary groups into a cache.
+
+Severity   : minor
+Bugzilla   : 7278
+Description: O_CREAT|O_EXCL open flags in liblustre always return -EEXIST
+Details    : Make libsysio to not enforce O_EXCL by clearing the flag,
+             for liblustre O_EXCL is enforced by MDS.
+
+Severity   : minor
+Bugzilla   : 6455
+Description: readdir never returns NULL in liblustre.
+Details    : Corrected llu_iop_getdirentries logic, to return offset of next
+             dentry in struct dirent.
+
+Severity   : minor
+Bugzilla   : 7138
+Frequency  : liblustre only, depends on application IO pattern
+Description: liblustre clients evicted if not contacting servers
+Details    : Don't put liblustre clients into the ping_evictor list, so
+             they will not be evicted by the pinger ever.
+
+Severity   : enhancement
+Bugzilla   : 6902
+Description: Add ability to evict clients by NID from MDS.
+Details    : By echoing "nid:$NID" string into
+             /proc/fs/lustre/mds/.../evict_client client with nid that equals to
+             $NID would be instantly evicted from this MDS and from all active
+             OSTs connected to it.
+
+Severity   : minor
+Bugzilla   : 7198
+Description: Do not query file size twice, somewhat slowing stat(2) calls.
+Details    : lookup_it_finish() used to query file size from OSTs that was not
+             needed.
+
+Severity   : minor
+Bugzilla   : 6237
+Description: service threads change working directory to that of init
+Details    : Starting lustre service threads may pin the working directory
+             of the parent thread, making that filesystem busy.  Threads
+             now change to the working directory of init to avoid this.
+
+Severity   : minor
+Bugzilla   : 6827
+Frequency  : during shutdown only
+Description: shutdown with a failed MDS or OST can cause unmount to hang
+Details    : Don't resend DISCONNECT messages in ptlrpc_disconnect_import()
+             if server is down.
+
+Severity   : minor
+Bugzilla   : 7331
+Frequency  : 2.6 only
+Description: chmod/chown may include an extra supplementary group
+Details    : ll{,u}_mdc_pack_op_data() does not properly initialize the
+             supplementary group and if none is specified this is used.
+
+Severity   : minor
+Bugzilla   : 5479 (6816)
+Frequency  : rare
+Description: Racing open + rm can assert client in mdc_set_open_replay_data()
+Details    : If lookup is in progress on a file that is unlinked we might try
+             to revalidate the inode and fail in revalidate after lookup is
+             complete and ll_file_open() enqueues the open again but
+             it_open_error() was not checking DISP_OPEN_OPEN errors correctly.
+
+2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
 
@@ -70,6 +168,24 @@ Description: Unusual file access patterns on the MDS may result in inode
 Details    : Bad interaction between the ea-in-inode patch and the "no-read"
              code in the 2.6 kernel caused the inode and/or EA data not to
              be read from disk, causing single-file corruption.
+
+Severity   : critical
+Bugzilla   : 6998
+Frequency  : rare, only 2.6 filesystems using extents
+Description: Heavy concurrent write and delete load may cause data corruption.
+Details    : It was possible under high-load situations to have an extent
+             metadata block in the block device cache from a just-unlinked
+             file overwrite a newly-allocated data block.  We now unmap any
+             metadata buffers that alias just-allocated data blocks.
+
+Severity   : minor
+Bugzilla   : 7241
+Frequency  : filesystems with default stripe_count larger than 77 
+Description: lconf+mke2fs fail when formatting filesystem with > 77 stripes
+Details    : lconf specifies an inode size of 4096 bytes when the default
+             stripe_count is larger than 77.  This conflicts with the default
+             inode density of 1 per 4096 bytes.  Allocate smaller inodes in
+             this case to avoid pinning too much memory for large EAs.
 
 ------------------------------------------------------------------------------
 
@@ -220,6 +336,11 @@ Details    : The interpretation of the default stripe count (0, to lfs
              OST, rather than all available.  For general usage we have
              found a stripe count of 1 or 2 works best.
 
+Severity   : enhancement
+Description: Add support for compiling against Cray portals.
+Details    : Conditional compiling for some areas that are different
+             on Cray Portals.
+
 Severity   : major
 Frequency  : occasional
 Bugzilla   : 6409, 6834
@@ -266,7 +387,7 @@ Severity   : minor
 Bugzilla   : 6147
 Description: Changes the "SCSI I/O Stats" kernel patch to default to "enabled"
 
-------------------------------------------------------------------------------
+-----------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2

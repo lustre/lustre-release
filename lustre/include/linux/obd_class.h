@@ -92,6 +92,9 @@ void ping_evictor_stop(void);
 /* buf should be len PTL_NALFMT_SIZE */
 char *obd_export_nid2str(struct obd_export *exp, char *buf);
 
+int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
+int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
+
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_attach(struct lustre_cfg *lcfg);

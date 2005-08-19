@@ -70,10 +70,8 @@ for NAME in $CONFIGS; do
 		sh llmountcleanup.sh
 		sh llrmount.sh
 	fi
+
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -e -+d -r $RSIZE -s $SIZE"
-	if [ "$O_DIRECT" -a  "$O_DIRECT" != "no" ]; then
-		IOZONE_OPTS="-I $IOZONE_OPTS"
-	fi
 	IOZFILE="-f $MOUNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
@@ -83,34 +81,33 @@ for NAME in $CONFIGS; do
 		sh llmountcleanup.sh
 		sh llrmount.sh
 
-		if [ "$IOZONE_DIR" != "no" ]; then
-			mount | grep $MOUNT || sh llmount.sh
-			SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-			IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
-			[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
-
+		if [ "$O_DIRECT" != "no" -a "$IOZONE_DIR" != "no" ]; then
 			$DEBUG_OFF
-			iozone $IOZONE_OPTS $IOZFILE.odir
-			IOZVER=`iozone -v|awk '/Revision:/ {print $3}'|tr -d .`
+			iozone -I $IOZONE_OPTS $IOZFILE.odir
 			$DEBUG_ON
 			sh llmountcleanup.sh
 			sh llrmount.sh
-			if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
-				$DEBUG_OFF
-				THREAD=1
-				IOZFILE="-F "
-				while [ $THREAD -le $IOZ_THREADS ]; do
-					IOZFILE="$IOZFILE $MOUNT/iozone.$THREAD"
-					THREAD=`expr $THREAD + 1`
-				done
-				iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
-				$DEBUG_ON
-				sh llmountcleanup.sh
-				sh llrmount.sh
-			elif [ $IOZVER -lt 3145 ]; then
-				VER=`iozone -v | awk '/Revision:/ { print $3 }'`
-				echo "iozone $VER too old for multi-thread test"
-			fi
+		fi
+
+		SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
+		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
+		IOZVER=`iozone -v|awk '/Revision:/ {print $3}'|tr -d .`
+		if [ "$IOZ_THREADS" -gt 1 -a "$IOZVER" -ge 3145 ]; then
+			$DEBUG_OFF
+			THREAD=1
+			IOZFILE="-F "
+			while [ $THREAD -le $IOZ_THREADS ]; do
+				IOZFILE="$IOZFILE $MOUNT/iozone.$THREAD"
+				THREAD=`expr $THREAD + 1`
+			done
+			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZFILE
+			$DEBUG_ON
+			sh llmountcleanup.sh
+			sh llrmount.sh
+		elif [ $IOZVER -lt 3145 ]; then
+			VER=`iozone -v | awk '/Revision:/ { print $3 }'`
+			echo "iozone $VER too old for multi-thread test"
 		fi
 	fi
 	if [ "$FSX" != "no" ]; then

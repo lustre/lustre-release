@@ -47,6 +47,30 @@
 
 #include "llite_lib.h"
 
+/* Pack the required supplementary groups into the supplied groups array.
+ * If we don't need to use the groups from the target inode(s) then we
+ * instead pack one or more groups from the user's supplementary group
+ * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
+void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
+{
+        LASSERT(i1 != NULL);
+        LASSERT(suppgids != NULL);
+
+        if (in_group_p(i1->i_stbuf.st_gid))
+                suppgids[0] = i1->i_stbuf.st_gid;
+        else
+                suppgids[0] = -1;
+
+        if (i2) {
+                if (in_group_p(i2->i_stbuf.st_gid))
+                        suppgids[1] = i2->i_stbuf.st_gid;
+                else
+                        suppgids[1] = -1;
+        } else {
+                suppgids[1] = -1;
+        }
+}
+
 void llu_prepare_mdc_op_data(struct mdc_op_data *data,
                              struct inode *i1,
                              struct inode *i2,
@@ -55,13 +79,14 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
                              int mode)
 {
         LASSERT(i1);
-        
-        ll_i2uctxt(&data->ctxt, i1, i2);
+
+        ll_i2gids(data->suppgids, i1, i2);
         ll_inode2fid(&data->fid1, i1);
 
-        if (i2) {
+        if (i2)
                 ll_inode2fid(&data->fid2, i2);
-        }
+        else
+                memset(&data->fid2, 0, sizeof(data->fid2));
 
         data->name = name;
         data->namelen = namelen;

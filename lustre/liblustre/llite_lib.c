@@ -62,7 +62,7 @@ static int lllib_init(void)
 {
         liblustre_set_nal_nid();
 
-        if (liblustre_init_current("dummy") ||
+        if (liblustre_init_current("liblustre") ||
             init_obdclass() ||
             init_lib_portals() ||
             ptlrpc_init() ||

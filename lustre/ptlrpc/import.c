@@ -262,9 +262,9 @@ static int import_select_connection(struct obd_import *imp)
         }
 
         if (imp->imp_conn_current && 
-            !(imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
+            imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
                 imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
-                                  struct obd_import_conn, oic_item);
+                                      struct obd_import_conn, oic_item);
         } else {
                 imp_conn = list_entry(imp->imp_conn_list.next,
                                       struct obd_import_conn, oic_item);
@@ -529,10 +529,21 @@ finish:
                         RETURN(0);
                 }
         } else {
-                list_del(&imp->imp_conn_current->oic_item);
-                list_add(&imp->imp_conn_current->oic_item,
-                         &imp->imp_conn_list);
-                imp->imp_conn_current = NULL;
+                spin_lock_irqsave(&imp->imp_lock, flags);
+                if (imp->imp_conn_current != NULL) {
+                        list_del(&imp->imp_conn_current->oic_item);
+                        list_add(&imp->imp_conn_current->oic_item,
+                                 &imp->imp_conn_list);
+                        imp->imp_conn_current = NULL;
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                } else {
+                        static int bug7269_dump = 0;
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        CERROR("this is bug 7269 - please attach log there\n");
+                        if (bug7269_dump == 0)
+                                portals_debug_dumplog();
+                        bug7269_dump = 1;
+                }
         }
 
  out:
@@ -543,7 +554,7 @@ finish:
                 }
 
                 ptlrpc_maybe_ping_import_soon(imp);
-                
+
                 CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
@@ -757,20 +768,19 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         }
 
         spin_lock_irqsave(&imp->imp_lock, flags);
-        if (imp->imp_state != LUSTRE_IMP_FULL) {
+        if (imp->imp_state != LUSTRE_IMP_FULL)
                 GOTO(out, 0);
-        }
+
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
         if (request) {
-                /* For non-replayable connections, don't attempt
-                   reconnect if this fails */
-                if (!imp->imp_replayable) {
-                        request->rq_no_resend = 1;
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
-                        request->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                }
+                /* We are disconnecting, do not retry a failed DISCONNECT rpc if
+                 * it fails.  We can get through the above with a down server
+                 * if the client doesn't know the server is gone yet. */
+                request->rq_no_resend = 1;
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
+                request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 request->rq_replen = lustre_msg_size(0, NULL);
                 rc = ptlrpc_queue_wait(request);
                 ptlrpc_req_finished(request);

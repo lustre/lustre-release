@@ -272,9 +272,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                      struct lookup_intent *it)
 {
         int rc;
-        struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -288,8 +287,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 RETURN(0);
 
         exp = ll_i2mdcexp(de->d_inode);
-        ll_inode2fid(&pfid, de->d_parent->d_inode);
-        ll_inode2fid(&cfid, de->d_inode);
         icbd.icbd_parent = de->d_parent->d_inode;
         icbd.icbd_childp = &de;
 
@@ -302,11 +299,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
 
-        ll_i2uctxt(&ctxt, de->d_parent->d_inode, de->d_inode);
+        ll_prepare_mdc_op_data(&op_data, de->d_parent->d_inode, de->d_inode,
+                               de->d_name.name, de->d_name.len, 0);
 
-        rc = mdc_intent_lock(exp, &ctxt, &pfid, de->d_name.name, de->d_name.len,
-                             NULL, 0,
-                             &cfid, it, lookup_flags, &req,ll_mdc_blocking_ast);
+        rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
+                             &req, ll_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)

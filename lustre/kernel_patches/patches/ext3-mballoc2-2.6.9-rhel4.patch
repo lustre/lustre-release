@@ -4,7 +4,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +++ linux-stage/fs/ext3/mballoc.c	2005-02-25 17:28:41.859307576 +0200
 @@ -0,0 +1,1861 @@
 +/*
-+ * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
++ * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
@@ -110,7 +110,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	struct super_block *ac_sb;
 +
 +	/* search goals */
-+struct ext3_free_extent ac_g_ex;
++	struct ext3_free_extent ac_g_ex;
 +	
 +	/* the best found extent */
 +	struct ext3_free_extent ac_b_ex;
@@ -471,7 +471,7 @@ Index: linux-stage/fs/ext3/mballoc.c
 +}
 +
 +static int mb_find_extent(struct ext3_buddy *e3b, int order, int block,
-+				int needed, struct ext3_free_extent *ex)
++			  int needed, struct ext3_free_extent *ex)
 +{
 +	int next, max, ord;
 +	void *buddy;
@@ -1849,17 +1849,17 @@ Index: linux-stage/fs/ext3/mballoc.c
 +	return ret;
 +}
 +
-+void ext3_free_blocks(handle_t *handle, struct inode * inode,
-+			unsigned long block, unsigned long count, int metadata)
++void ext3_free_blocks(handle_t *handle, struct inode *inode,
++		      unsigned long block, unsigned long count, int metadata)
 +{
-+	struct super_block *sb;
 +	int freed;
 +
-+	sb = inode->i_sb;
-+	if (!test_opt(sb, MBALLOC))
-+		ext3_free_blocks_sb(handle, sb, block, count, &freed);
++	if (!test_opt(inode->i_sb, MBALLOC) ||
++	    EXT3_SB(inode->i_sb)->s_buddy_blocks == NULL)
++		ext3_free_blocks_sb(handle, inode->i_sb, block, count, &freed);
 +	else
-+		ext3_mb_free_blocks(handle, inode, block, count, metadata, &freed);
++		ext3_mb_free_blocks(handle, inode, block,count,metadata,&freed);
++
 +	if (freed)
 +		DQUOT_FREE_BLOCK(inode, freed);
 +	return;

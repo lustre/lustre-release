@@ -53,6 +53,9 @@ Full name of gdb debug script. Default is /tmp/ogdb.
 --group <arg> 
 The group of devices to cleanup/configure.
 .TP
+--group_upcall <arg> 
+Pathname to the MDS upcall to resolve secondary group membership.  Defaults to NONE, meaning that the MDS will use whatever group the client supplies, but this is limited to a single supplementary group.
+.TP
 -h,--help 
 Print help.
 .TP

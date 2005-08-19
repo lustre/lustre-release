@@ -419,6 +419,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_FROM_GRANT      0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
 #define OBD_BRW_DROP            0x80 /* drop the page after IO */
+#define OBD_BRW_NOQUOTA        0x100
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -444,8 +445,6 @@ struct niobuf_remote {
 extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
 
 /* request structure for OST's */
-
-#define OST_REQ_HAS_OA1  0x1
 
 struct ost_body {
         struct  obdo oa;

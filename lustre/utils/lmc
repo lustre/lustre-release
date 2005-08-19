@@ -66,6 +66,7 @@ Object creation command summary:
   --timeout num
   --upcall path
   --lustre_upcall path
+  --groups_upcall path
   --portals_upcall path
   --ptldebug debug_level
   --subsystem subsystem_name
@@ -88,6 +89,7 @@ Object creation command summary:
   --fstype ldiskfs|ext3
   --size size
   --nspath
+  --group_upcall upcall
   --journal_size size
   --inode_size size
   --mdsuuid uuid
@@ -160,6 +162,7 @@ lmc_options = [
     ('timeout', "Set timeout to initiate recovery.", PARAM),
     ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
     ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
+    ('groups_upcall', "Set location of extended groups upcall script.", PARAM),
     ('portals_upcall', "Set location of portals upcall script.", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
@@ -189,6 +192,7 @@ lmc_options = [
     ('group', "", PARAM),
     ('dev', "Path of the device on local system.", PARAM,""),
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
+    ('group_upcall', "Set location of supplementary group upcall.", PARAM,""),
     ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
     ('inode_size', "Specify new inode size for underlying ext3 file system.", PARAM,"0"),
     ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
@@ -227,10 +231,13 @@ def panic(cmd, msg):
     print msg
     sys.exit(1)
 
-    
 def warning(*args):
     msg = string.join(map(str,args))
-    print "Warning: ", msg
+    sys.stderr.write("WARNING: %s\n" % (msg))
+
+def info(*args):
+    msg = string.join(map(str,args))
+    sys.stderr.write("INFO: %s\n" % (msg))
     
 #
 # manage names and uuids
@@ -439,7 +446,7 @@ class GenConfig:
 
     def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
-               nspath="", mkfsoptions="", mountfsoptions=""):
+               nspath="", mkfsoptions="", mountfsoptions="", group_upcall=""):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fstype)
         dev = self.addElement(mdd, "devpath", devname)
@@ -456,6 +463,8 @@ class GenConfig:
             self.addElement(mdd, "mkfsoptions", mkfsoptions)
         if mountfsoptions:
             self.addElement(mdd, "mountfsoptions", mountfsoptions)
+	if group_upcall:
+            self.addElement(mdd, "group_upcall", group_upcall)
 
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
@@ -604,6 +613,11 @@ def set_node_options(gen, node, options):
             gen.addElement(node, 'lustreUpcall', options.lustre_upcall)
         else: 
             gen.addElement(node, 'lustreUpcall', default_upcall)
+    if default_upcall or options.groups_upcall:
+        if options.groups_upcall:
+            gen.addElement(node, 'groupsUpcall', options.groups_upcall)
+        else:
+            gen.addElement(node, 'groupsUpcall', default_upcall)
     if default_upcall or options.portals_upcall:
         if options.portals_upcall:
             gen.addElement(node, 'portalsUpcall', options.portals_upcall)
@@ -733,6 +747,7 @@ def add_mds(gen, lustre, options):
     nspath = get_option(options, 'nspath')
     mkfsoptions = get_option(options, 'mkfsoptions')
     mountfsoptions = get_option(options, 'mountfsoptions')
+    group_upcall = get_option(options, 'group_upcall')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -745,7 +760,7 @@ def add_mds(gen, lustre, options):
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
                      size, journal_size, inode_size, nspath, mkfsoptions,
-                     mountfsoptions)
+                     mountfsoptions, group_upcall)
     lustre.appendChild(mdd)
                    
 
@@ -889,6 +904,9 @@ def add_lov(gen, lustre, options):
     mds_name = get_option(options, 'mds')
     stripe_sz = get_option_int(options, 'stripe_sz')
     stripe_cnt = get_option_int(options, 'stripe_cnt')
+    if stripe_cnt == 0:
+        info("default stripe count (0) - will use %d stripe(s) per file" \
+                % DEFAULT_STRIPE_CNT)
     pattern = get_option_int(options, 'stripe_pattern')
     uuid = new_uuid(name)
 

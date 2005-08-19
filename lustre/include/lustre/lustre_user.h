@@ -149,6 +149,17 @@ struct if_quotacheck {
         int                     stat;
 };
 
+#define MDS_GRP_DOWNCALL_MAGIC 0x6d6dd620
+
+struct mds_grp_downcall_data {
+        __u32           mgd_magic;
+        __u32           mgd_err;
+        __u32           mgd_uid;
+        __u32           mgd_gid;
+        __u32           mgd_ngroups;
+        __u32           mgd_groups[0];
+};
+
 #ifndef __KERNEL__
 #define NEED_QUOTA_DEFS
 #else

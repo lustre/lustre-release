@@ -397,7 +397,7 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
         spin_lock_irqsave(&svc->srv_lock, flags);
 
         svc->srv_n_active_reqs--;
-        list_add (&req->rq_list, &rqbd->rqbd_reqs);
+        list_add(&req->rq_list, &rqbd->rqbd_reqs);
 
         refcount = --(rqbd->rqbd_refcount);
         if (refcount == 0) {
@@ -533,8 +533,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                   request->rq_export->exp_conn_cnt);
                         goto put_conn;
                 }
-                if (request->rq_export->exp_obd
-                    && request->rq_export->exp_obd->obd_fail) {
+                if (request->rq_export->exp_obd &&
+                    request->rq_export->exp_obd->obd_fail) {
                         /* Failing over, don't handle any more reqs, send
                            error response instead. */
                         CDEBUG(D_HA, "Dropping req %p for failed obd %s\n",
@@ -554,8 +554,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         if (timediff / 1000000 > (long)obd_timeout) {
                 CERROR("Dropping timed-out opc %d request from %s"
                        ": %ld seconds old\n", request->rq_reqmsg->opc,
-                       request->rq_peerstr,
-                       timediff / 1000000);
+                       request->rq_peerstr, timediff / 1000000);
                 goto put_conn;
         }
 
@@ -596,11 +595,18 @@ put_conn:
 
         timediff = timeval_sub(&work_end, &work_start);
 
-        CDEBUG((timediff / 1000000 > (long)obd_timeout) ? D_ERROR : D_HA,
-               "request "LPU64" opc %u from %s processed in %ldus "
-               "(%ldus total)\n", request->rq_xid, request->rq_reqmsg->opc,
-               request->rq_peerstr,
-               timediff, timeval_sub(&work_end, &request->rq_arrival_time));
+        if (timediff / 1000000 > (long)obd_timeout)
+                CERROR("request "LPU64" opc %u from %s processed in %lds\n",
+                       request->rq_xid, request->rq_reqmsg->opc,
+                       request->rq_peerstr,
+                       timeval_sub(&work_end,
+                                   &request->rq_arrival_time) / 1000000);
+        else
+                CDEBUG(D_HA,"request "LPU64" opc %u from %s processed in %ldus "
+                       "(%ldus total)\n", request->rq_xid,
+                       request->rq_reqmsg->opc, request->rq_peerstr,
+                       timediff,
+                       timeval_sub(&work_end, &request->rq_arrival_time));
 
         if (svc->srv_stats != NULL) {
                 int opc = opcode_offset(request->rq_reqmsg->opc);
@@ -761,6 +767,7 @@ void ptlrpc_daemonize(void)
 {
         exit_mm(current);
         lustre_daemonize_helper();
+        set_fs_pwd(current->fs, init_task.fs->pwdmnt, init_task.fs->pwd);
         exit_files(current);
         reparent_to_init();
 }
