@@ -25,21 +25,107 @@
 
 #include "gmnal.h"
 
-ptl_handle_ni_t kgmnal_ni;
+int
+gmnal_cmd(struct portals_cfg *pcfg, void *private)
+{
+	gmnal_ni_t	*gmnalni = private;
+	char		*name;
+	int		 nid;
+	int		 gmid;
+	gm_status_t	 gm_status;
 
-extern int gmnal_cmd(struct portals_cfg *pcfg, void *private);
+	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n",
+	       pcfg->pcfg_command, private);
+	gmnalni = (gmnal_ni_t*)private;
 
-/*
- *	gmnal_api_shutdown
- *      nal_refct == 0 => called on last matching PtlNIFini()
- *	Close down this interface and free any resources associated with it
- *	nal_t	nal	our nal to shutdown
- */
+	switch(pcfg->pcfg_command) {
+	case GMNAL_IOC_GET_GNID:
+
+		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
+		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
+
+		spin_lock(&gmnalni->gmni_gm_lock);
+                gm_status = gm_host_name_to_node_id_ex(gmnalni->gmni_port, 0,
+                                                       name, &nid);
+		spin_unlock(&gmnalni->gmni_gm_lock);
+                if (gm_status != GM_SUCCESS) {
+                        CDEBUG(D_NET, "gm_host_name_to_node_id_ex(...host %s) "
+                               "failed[%d]\n", name, gm_status);
+                        return -ENOENT;
+                }
+
+                CDEBUG(D_NET, "Local node %s id is [%d]\n", name, nid);
+		spin_lock(&gmnalni->gmni_gm_lock);
+		gm_status = gm_node_id_to_global_id(gmnalni->gmni_port,
+						    nid, &gmid);
+		spin_unlock(&gmnalni->gmni_gm_lock);
+		if (gm_status != GM_SUCCESS) {
+			CDEBUG(D_NET, "gm_node_id_to_global_id failed[%d]\n",
+			       gm_status);
+			return -ENOENT;
+		}
+
+		CDEBUG(D_NET, "Global node is is [%u][%x]\n", gmid, gmid);
+		copy_to_user(PCFG_PBUF(pcfg, 2), &gmid, pcfg->pcfg_plen2);
+                return 0;
+
+	case NAL_CMD_REGISTER_MYNID:
+                /* Same NID OK */
+                if (pcfg->pcfg_nid == gmnalni->gmni_libnal->libnal_ni.ni_pid.nid)
+                        return 0;
+
+                CERROR("Can't change NID from "LPD64" to "LPD64"\n",
+                       gmnalni->gmni_libnal->libnal_ni.ni_pid.nid,
+                       pcfg->pcfg_nid);
+                return -EINVAL;
+
+	default:
+		CERROR ("gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
+		return -EINVAL;
+	}
+        /* not reached */
+}
+
+ptl_nid_t
+gmnal_get_local_nid (gmnal_ni_t *gmnalni)
+{
+	unsigned int	 local_gmid;
+        unsigned int     global_gmid;
+        ptl_nid_t        nid;
+        gm_status_t      gm_status;
+
+        /* Called before anything initialised: no need to lock */
+
+	spin_lock(&gmnalni->gmni_gm_lock);
+	gm_status = gm_get_node_id(gmnalni->gmni_port, &local_gmid);
+	spin_unlock(&gmnalni->gmni_gm_lock);
+	if (gm_status != GM_SUCCESS)
+		return PTL_NID_ANY;
+
+	CDEBUG(D_NET, "Local node id is [%u]\n", local_gmid);
+        
+	spin_lock(&gmnalni->gmni_gm_lock);
+	gm_status = gm_node_id_to_global_id(gmnalni->gmni_port, 
+                                            local_gmid, 
+					    &global_gmid);
+	spin_unlock(&gmnalni->gmni_gm_lock);
+	if (gm_status != GM_SUCCESS)
+		return PTL_NID_ANY;
+        
+	CDEBUG(D_NET, "Global node id is [%u]\n", global_gmid);
+
+        nid = (__u64)global_gmid;
+        LASSERT (nid != PTL_NID_ANY);
+        
+        return global_gmid;
+}
+
+
 void
 gmnal_api_shutdown(nal_t *nal)
 {
-	gmnal_ni_t	*gmnalni;
-	lib_nal_t	*libnal;
+	lib_nal_t	*libnal = nal->nal_data;
+	gmnal_ni_t	*gmnalni = libnal->libnal_data;
 
         if (nal->nal_refct != 0) {
                 /* This module got the first ref */
@@ -47,32 +133,28 @@ gmnal_api_shutdown(nal_t *nal)
                 return;
         }
 
-        libnal = (lib_nal_t *)nal->nal_data;
-        gmnalni = (gmnal_ni_t *)libnal->libnal_data;
 	CDEBUG(D_TRACE, "gmnal_api_shutdown: gmnalni [%p]\n", gmnalni);
 
         /* Stop portals calling our ioctl handler */
         libcfs_nal_cmd_unregister(GMNAL);
 
-        /* XXX for shutdown "under fire" we probably need to set a shutdown
-         * flag so when lib calls us we fail immediately and dont queue any
-         * more work but our threads can still call into lib OK.  THEN
-         * shutdown our threads, THEN lib_fini() */
-        lib_fini(libnal);
-
-	gmnal_stop_rxthread(gmnalni);
+        /* stop processing messages */
 	gmnal_stop_ctthread(gmnalni);
-	gmnal_free_txd(gmnalni);
-	gmnal_free_srxd(gmnalni);
+	gmnal_stop_rxthread(gmnalni);
+
 	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_close(gmnalni->gmni_port);
 	gm_finalize();
 	spin_unlock(&gmnalni->gmni_gm_lock);
-        /* Don't free 'nal'; it's a static struct */
-	PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));
-	PORTAL_FREE(libnal, sizeof(lib_nal_t));
-}
 
+        lib_fini(libnal);
+
+	gmnal_free_txs(gmnalni);
+	gmnal_free_rxs(gmnalni);
+
+	PORTAL_FREE(gmnalni, sizeof(*gmnalni));
+	PORTAL_FREE(libnal, sizeof(*libnal));
+}
 
 int
 gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
@@ -82,10 +164,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 
 	lib_nal_t	*libnal = NULL;
 	gmnal_ni_t	*gmnalni = NULL;
-	gmnal_srxd_t	*srxd = NULL;
-	gm_status_t	gm_status;
-	unsigned int	local_gmid = 0, global_gmid = 0;
+	gmnal_rx_t	*rx = NULL;
+	gm_status_t 	 gm_status;
         ptl_process_id_t process_id;
+        int              rc;
 
         if (nal->nal_refct != 0) {
                 if (actual_limits != NULL) {
@@ -93,49 +175,36 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
                         *actual_limits = libnal->libnal_ni.ni_actual_limits;
                 }
                 PORTAL_MODULE_USE;
-                return (PTL_OK);
+                return PTL_OK;
         }
 
         /* Called on first PtlNIInit() */
-
 	CDEBUG(D_TRACE, "startup\n");
 
-	PORTAL_ALLOC(gmnalni, sizeof(gmnal_ni_t));
-	if (!gmnalni) {
-		CERROR("can't get memory\n");
-		return(PTL_NO_SPACE);
+	PORTAL_ALLOC(gmnalni, sizeof(*gmnalni));
+	if (gmnalni == NULL) {
+		CERROR("can't allocate gmnalni\n");
+                return PTL_FAIL;
+        }
+        
+	PORTAL_ALLOC(libnal, sizeof(*libnal));
+	if (libnal == NULL) {
+		CERROR("can't allocate lib_nal\n");
+                goto failed_0;
 	}	
-	memset(gmnalni, 0, sizeof(gmnal_ni_t));
-	/*
- 	 *	set the small message buffer size 
-	 */
 
-	CDEBUG(D_NET, "Allocd and reset gmnalni[%p]\n", gmnalni);
-	CDEBUG(D_NET, "small_msg_size is [%d]\n", gmnalni->gmni_small_msg_size);
-
-	PORTAL_ALLOC(libnal, sizeof(lib_nal_t));
-	if (!libnal) {
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));
-		return(PTL_NO_SPACE);
-	}
-
-	memset(libnal, 0, sizeof(lib_nal_t));
-        libnal->libnal_send = gmnal_cb_send;
-        libnal->libnal_send_pages = gmnal_cb_send_pages;
-        libnal->libnal_recv = gmnal_cb_recv;
-        libnal->libnal_recv_pages = gmnal_cb_recv_pages;
-        libnal->libnal_map = NULL;
-        libnal->libnal_unmap = NULL;
-        libnal->libnal_dist = gmnal_cb_dist;
-        libnal->libnal_data = gmnalni;
-
-	CDEBUG(D_NET, "Allocd and reset libnal[%p]\n", libnal);
-
-	gmnalni->gmni_nal = nal;
+	memset(gmnalni, 0, sizeof(*gmnalni));
 	gmnalni->gmni_libnal = libnal;
-
 	spin_lock_init(&gmnalni->gmni_gm_lock);
 
+        *libnal = (lib_nal_t) {
+                .libnal_send       = gmnal_cb_send,
+                .libnal_send_pages = gmnal_cb_send_pages,
+                .libnal_recv       = gmnal_cb_recv,
+                .libnal_recv_pages = gmnal_cb_recv_pages,
+                .libnal_dist       = gmnal_cb_dist,
+                .libnal_data       = gmnalni,
+        };
 
 	/*
 	 *	initialise the interface,
@@ -143,11 +212,8 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	CDEBUG(D_NET, "Calling gm_init\n");
 	if (gm_init() != GM_SUCCESS) {
 		CERROR("call to gm_init failed\n");
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+                goto failed_1;
 	}
-
 
 	CDEBUG(D_NET, "Calling gm_open with port [%d], "
 	       "name [%s], version [%d]\n", gm_port_id,
@@ -158,202 +224,94 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 			    GM_API_VERSION);
 	spin_unlock(&gmnalni->gmni_gm_lock);
 
-	CDEBUG(D_NET, "gm_open returned [%d]\n", gm_status);
-	if (gm_status == GM_SUCCESS) {
-		CDEBUG(D_NET,"gm_open succeeded port[%p]\n",gmnalni->gmni_port);
-	} else {
-		switch(gm_status) {
-		case(GM_INVALID_PARAMETER):
-			CERROR("gm_open Failure. Invalid Parameter\n");
-			break;
-		case(GM_BUSY):
-			CERROR("gm_open Failure. GM Busy\n");
-			break;
-		case(GM_NO_SUCH_DEVICE):
-			CERROR("gm_open Failure. No such device\n");
-			break;
-		case(GM_INCOMPATIBLE_LIB_AND_DRIVER):
-			CERROR("gm_open Failure. Incompatile lib and driver\n");
-			break;
-		case(GM_OUT_OF_MEMORY):
-			CERROR("gm_open Failure. Out of Memory\n");
-			break;
-		default:
-			CERROR("gm_open Failure. Unknow error code [%d]\n",
-                               gm_status);
-			break;
-		}	
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+        if (gm_status != GM_SUCCESS) {
+                CERROR("Can't open GM port %d: %d (%s)\n",
+                       gm_port_id, gm_status, gmnal_gmstatus2str(gm_status));
+                goto failed_2;
 	}
 
-	gmnalni->gmni_small_msg_size = sizeof(gmnal_msghdr_t) + 
-                                        sizeof(ptl_hdr_t) +
-                                        PTL_MTU +
-                                        928;    /* !! */
-        CWARN("Msg size %08x\n", gmnalni->gmni_small_msg_size);
+        CDEBUG(D_NET,"gm_open succeeded port[%p]\n",gmnalni->gmni_port);
 
-	gmnalni->gmni_small_msg_gmsize =
-                gm_min_size_for_length(gmnalni->gmni_small_msg_size);
+	gmnalni->gmni_msg_size = offsetof(gmnal_msg_t,
+                                          gmm_u.immediate.gmim_payload[PTL_MTU]);
+        CWARN("Msg size %08x\n", gmnalni->gmni_msg_size);
 
-	if (gmnal_alloc_srxd(gmnalni) != 0) {
-		CERROR("Failed to allocate small rx descriptors\n");
-		gmnal_free_txd(gmnalni);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+	if (gmnal_alloc_rxs(gmnalni) != 0) {
+		CERROR("Failed to allocate rx descriptors\n");
+                goto failed_3;
 	}
 
-
-	/*
- 	 *	Hang out a bunch of small receive buffers
-	 *	In fact hang them all out
-	 */
-        for (srxd = gmnalni->gmni_srxd; srxd != NULL; srxd = srxd->rx_next) {
-		CDEBUG(D_NET, "giving [%p] to gm_provide_recvive_buffer\n", 
-		       srxd->rx_buffer);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_provide_receive_buffer_with_tag(gmnalni->gmni_port, 
-						   srxd->rx_buffer, 
-                                                   srxd->rx_gmsize, 
-						   GM_LOW_PRIORITY, 0);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-	}
-	
-	/*
-	 *	Allocate pools of small tx buffers and descriptors
-	 */
-	if (gmnal_alloc_txd(gmnalni) != 0) {
-		CERROR("Failed to allocate small tx descriptors\n");
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+	if (gmnal_alloc_txs(gmnalni) != 0) {
+		CERROR("Failed to allocate tx descriptors\n");
+                goto failed_3;
 	}
 
-	/*
-	 *	Initialise the portals library
-	 */
-	CDEBUG(D_NET, "Getting node id\n");
-	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_status = gm_get_node_id(gmnalni->gmni_port, &local_gmid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	if (gm_status != GM_SUCCESS) {
-		gmnal_stop_rxthread(gmnalni);
-		gmnal_stop_ctthread(gmnalni);
-		CERROR("can't determine node id\n");
-		gmnal_free_txd(gmnalni);
-		gmnal_free_srxd(gmnalni);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
-	}
-
-	gmnalni->gmni_local_gmid = local_gmid;
-	CDEBUG(D_NET, "Local node id is [%u]\n", local_gmid);
-
-	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_status = gm_node_id_to_global_id(gmnalni->gmni_port, 
-                                            local_gmid, 
-					    &global_gmid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	if (gm_status != GM_SUCCESS) {
-		CERROR("failed to obtain global id\n");
-		gmnal_stop_rxthread(gmnalni);
-		gmnal_stop_ctthread(gmnalni);
-		gmnal_free_txd(gmnalni);
-		gmnal_free_srxd(gmnalni);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
-	}
-	CDEBUG(D_NET, "Global node id is [%u]\n", global_gmid);
-	gmnalni->gmni_global_gmid = global_gmid;
-
-/*
-	pid = gm_getpid();
-*/
         process_id.pid = requested_pid;
-        process_id.nid = global_gmid;
+        process_id.nid = gmnal_get_local_nid(gmnalni);
+        if (process_id.nid == PTL_NID_ANY)
+                goto failed_3;
 
 	CDEBUG(D_NET, "portals_pid is [%u]\n", process_id.pid);
 	CDEBUG(D_NET, "portals_nid is ["LPU64"]\n", process_id.nid);
 
-	CDEBUG(D_PORTALS, "calling lib_init\n");
+	/* 	Hang out a bunch of small receive buffers
+	 *	In fact hang them all out */
+        for (rx = gmnalni->gmni_rx; rx != NULL; rx = rx->rx_next)
+                gmnal_post_rx(gmnalni, rx);
+
 	if (lib_init(libnal, nal, process_id,
                      requested_limits, actual_limits) != PTL_OK) {
 		CERROR("lib_init failed\n");
-		gmnal_stop_rxthread(gmnalni);
-		gmnal_stop_ctthread(gmnalni);
-		gmnal_free_txd(gmnalni);
-		gmnal_free_srxd(gmnalni);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+                goto failed_3;
 	}
 
-	/*
-	 * Now that we have initialised the portals library, start receive threads,
-	 * we do this to avoid processing messages before we can parse them
-	 */
-	gmnal_start_kernel_threads(gmnalni);
+	/* Now that we have initialised the portals library, start receive
+	 * threads, we do this to avoid processing messages before we can parse
+	 * them */
+	rc = gmnal_start_kernel_threads(gmnalni);
+        if (rc != 0) {
+                CERROR("Can't start threads: %d\n", rc);
+                goto failed_3;
+        }
 
-	while (gmnalni->gmni_rxthread_flag != GMNAL_RXTHREADS_STARTED) {
-		gmnal_yield(1);
-		CDEBUG(D_NET, "Waiting for receive thread signs of life\n");
-	}
-
-	CDEBUG(D_NET, "receive thread seems to have started\n");
-
-	if (libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, libnal->libnal_data) != 0) {
-		CDEBUG(D_NET, "libcfs_nal_cmd_register failed\n");
-
-                /* XXX these cleanup cases should be restructured to
-                 * minimise duplication... */
-                lib_fini(libnal);
-                
-		gmnal_stop_rxthread(gmnalni);
-		gmnal_stop_ctthread(gmnalni);
-		gmnal_free_txd(gmnalni);
-		gmnal_free_srxd(gmnalni);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_close(gmnalni->gmni_port);
-		gm_finalize();
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		PORTAL_FREE(gmnalni, sizeof(gmnal_ni_t));	
-		PORTAL_FREE(libnal, sizeof(lib_nal_t));
-		return(PTL_FAIL);
+        rc = libcfs_nal_cmd_register(GMNAL, &gmnal_cmd, libnal->libnal_data);
+	if (rc != 0) {
+		CDEBUG(D_NET, "libcfs_nal_cmd_register failed: %d\n", rc);
+                goto failed_4;
         }
 
 	CDEBUG(D_NET, "gmnal_init finished\n");
+	return PTL_OK;
 
-	return(PTL_OK);
+ failed_4:
+	gmnal_stop_rxthread(gmnalni);
+	gmnal_stop_ctthread(gmnalni);
+
+ failed_3:
+        spin_lock(&gmnalni->gmni_gm_lock);
+        gm_close(gmnalni->gmni_port);
+        spin_unlock(&gmnalni->gmni_gm_lock);
+
+ failed_2:
+        spin_lock(&gmnalni->gmni_gm_lock);
+        gm_finalize();
+        spin_unlock(&gmnalni->gmni_gm_lock);
+
+        /* safe to free buffers after network has been shut down */
+        gmnal_free_txs(gmnalni);
+        gmnal_free_rxs(gmnalni);
+
+ failed_1:
+        PORTAL_FREE(libnal, sizeof(*libnal));
+
+ failed_0:
+        PORTAL_FREE(gmnalni, sizeof(*gmnalni));
+
+        return PTL_FAIL;
 }
 
-nal_t the_gm_nal;
+ptl_handle_ni_t kgmnal_ni;
+nal_t           the_gm_nal;
 
 /* 
  *        Called when module loaded

@@ -28,63 +28,8 @@
  *      See start_kernel_threads
  */
 int num_rx_threads = -1;
-int num_stxds = 5;
+int num_txds = 5;
 int gm_port_id = 4;
-
-int
-gmnal_cmd(struct portals_cfg *pcfg, void *private)
-{
-	gmnal_ni_t	*gmnalni = NULL;
-	char		*name = NULL;
-	int		nid = -2;
-	int		gmid;
-	gm_status_t	gm_status;
-
-
-	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n",
-	       pcfg->pcfg_command, private);
-	gmnalni = (gmnal_ni_t*)private;
-	switch(pcfg->pcfg_command) {
-	/*
-	 * just reuse already defined GET_NID. Should define GMNAL version
-	 */
-	case(GMNAL_IOC_GET_GNID):
-
-		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
-		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
-
-		spin_lock(&gmnalni->gmni_gm_lock);
-		//nid = gm_host_name_to_node_id(gmnalni->gmni_port, name);
-                gm_status = gm_host_name_to_node_id_ex(gmnalni->gmni_port, 0,
-                                                       name, &nid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-                if (gm_status != GM_SUCCESS) {
-                        CDEBUG(D_NET, "gm_host_name_to_node_id_ex(...host %s) "
-                               "failed[%d]\n", name, gm_status);
-                        return (-1);
-                } else
-		        CDEBUG(D_NET, "Local node %s id is [%d]\n", name, nid);
-		spin_lock(&gmnalni->gmni_gm_lock);
-		gm_status = gm_node_id_to_global_id(gmnalni->gmni_port,
-						    nid, &gmid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
-		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_NET, "gm_node_id_to_global_id failed[%d]\n",
-			       gm_status);
-			return(-1);
-		}
-		CDEBUG(D_NET, "Global node is is [%u][%x]\n", gmid, gmid);
-		copy_to_user(PCFG_PBUF(pcfg, 2), &gmid, pcfg->pcfg_plen2);
-	break;
-	default:
-		CDEBUG(D_NET, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
-		pcfg->pcfg_nid2 = -1;
-	}
-
-
-	return(0);
-}
-
 
 static int __init
 gmnal_load(void)
@@ -117,11 +62,10 @@ gmnal_unload(void)
 
 
 module_init(gmnal_load);
-
 module_exit(gmnal_unload);
 
 MODULE_PARM(num_rx_threads, "i");
-MODULE_PARM(num_stxds, "i");
+MODULE_PARM(num_txds, "i");
 MODULE_PARM(gm_port_id, "i");
 
 MODULE_AUTHOR("Morgan Doyle");
