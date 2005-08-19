@@ -69,28 +69,28 @@ static int it_to_lock_mode(struct lookup_intent *it)
 int it_open_error(int phase, struct lookup_intent *it)
 {
         if (it_disposition(it, DISP_OPEN_OPEN)) {
-                if (phase == DISP_OPEN_OPEN)
+                if (phase >= DISP_OPEN_OPEN)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_OPEN_CREATE)) {
-                if (phase == DISP_OPEN_CREATE)
+                if (phase >= DISP_OPEN_CREATE)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_LOOKUP_EXECD)) {
-                if (phase == DISP_LOOKUP_EXECD)
+                if (phase >= DISP_LOOKUP_EXECD)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_IT_EXECD)) {
-                if (phase == DISP_IT_EXECD)
+                if (phase >= DISP_IT_EXECD)
                         return it->d.lustre.it_status;
                 else
                         return 0;
