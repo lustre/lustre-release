@@ -1,3 +1,5 @@
+lustre-version-revert-suse.patch
+lustre-version.patch
 dev_read_only-2.6-lnxi.patch
 sd_iostats-2.6-suse.patch
 blkdev_tunables-2.6-suse.patch
