@@ -237,7 +237,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
-        req->rq_status = obd_setattr(exp, &repbody->oa, NULL, oti);
+        req->rq_status = obd_setattr(exp, &repbody->oa, NULL, oti, NULL);
         RETURN(0);
 }
 
@@ -940,7 +940,7 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         } else if (keylen == 9 && strcmp(key, "audit_obj") == 0) {
                 lustre_swab_reqbuf(req, 1, sizeof(struct obdo),
                                    lustre_swab_obdo);
-        } else if (keylen == 8 && strcmp(key, "capa_key") == 0) {
+        } else if (keylen == 8 && memcmp(key, "capa_key", 8) == 0) {
                 lustre_swab_reqbuf(req, 1, sizeof(struct lustre_capa_key),
                                    lustre_swab_lustre_capa_key);
         }

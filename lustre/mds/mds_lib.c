@@ -267,7 +267,6 @@ int mds_pack_gskey(struct obd_device *obd, struct lustre_msg *repmsg,
                 if (size < 0) 
                         CERROR("Can not get gskey from MDS ino %lu rc %d\n",
                                 inode->i_ino, size);
-                (*offset) += 2; /* XXX: ignore crypto in case size == 0 */
                 GOTO(out, rc = size); 
         }
         if (le32_to_cpu(md_key->md_magic) != MD_KEY_MAGIC) {

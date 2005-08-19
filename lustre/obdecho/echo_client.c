@@ -1247,7 +1247,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         rc = obd_setattr(ec->ec_exp, &data->ioc_obdo1,
-                                         eco->eco_lsm, NULL);
+                                         eco->eco_lsm, NULL, NULL);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);

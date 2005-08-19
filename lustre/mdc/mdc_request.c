@@ -138,10 +138,16 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
         if (rc)
                 RETURN(rc);
 
+        DEBUG_CAPA(D_INFO, capa, "capa renewal");
+
+        spin_lock(&capa_lock);
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
         if (time_before(expiry, ll_capa_timer.expires) ||
-            !timer_pending(&ll_capa_timer))
+            !timer_pending(&ll_capa_timer)) {
                 mod_timer(&ll_capa_timer, expiry);
+                CDEBUG(D_INFO, "ll_capa_timer new timer: %lu\n", expiry);
+        }
+        spin_unlock(&capa_lock);
 
         RETURN(rc);
 }
@@ -151,7 +157,7 @@ int mdc_getattr_async(struct obd_export *exp, struct ptlrpc_request *req)
         int repsize[2] = {sizeof(struct mds_body), sizeof(struct lustre_capa)};
         ENTRY;
 
-        req->rq_replen = lustre_msg_size(1, repsize);
+        req->rq_replen = lustre_msg_size(2, repsize);
         req->rq_interpret_reply = mdc_interpret_getattr;
         ptlrpcd_add_req(req);
 

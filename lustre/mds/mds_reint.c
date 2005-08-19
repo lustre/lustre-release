@@ -691,8 +691,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 int offset = 1;
 
                 LASSERT(capa.lc_mdsid == mds->mds_num);
-                rc = mds_pack_capa(obd, NULL, &capa, req->rq_repmsg, &offset,
-                                   body);
+                rc = mds_pack_capa(obd, med, NULL, &capa, req,
+                                   &offset, body);
                 if (rc < 0) {
                         CERROR("mds_pack_capa: rc = %d\n", rc);
                         RETURN(rc);

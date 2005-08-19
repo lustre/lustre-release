@@ -109,7 +109,8 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 
 int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti);
+                   struct lov_stripe_md *md, struct obd_trans_info *oti,
+                   struct lustre_capa *capa);
 
 int filter_create_object(struct obd_device *obd, struct obdo *oa);
 
@@ -199,6 +200,7 @@ static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
 int filter_init_capa_keys(struct obd_device *obd);
 void filter_free_capa_keys(struct filter_obd *filter);
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa);
+int filter_verify_capa(int cmd, struct obd_export *exp, struct inode *inode, 
+                       struct lustre_capa *capa);
 
 #endif

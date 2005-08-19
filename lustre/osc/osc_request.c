@@ -253,7 +253,8 @@ static int osc_getattr(struct obd_export *exp, struct obdo *oa,
 }
 
 static int osc_setattr(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *md, struct obd_trans_info *oti)
+                       struct lov_stripe_md *md, struct obd_trans_info *oti,
+                       struct lustre_capa *capa)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;

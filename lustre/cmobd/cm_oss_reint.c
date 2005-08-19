@@ -91,7 +91,7 @@ static int cmobd_setattr_reint(struct obd_device *obd, void *rec)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_setattr(exp, oa, lsm, NULL);
+        rc = obd_setattr(exp, oa, lsm, NULL, NULL);
 
         cmobd_free_lsm(&lsm);
 out:

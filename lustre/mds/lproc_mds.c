@@ -153,7 +153,7 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        obd->u.mds.mds_capa_stat = val;
+        mds_update_capa_stat(obd, val);
         return count;
 }
 
@@ -177,7 +177,7 @@ static int lprocfs_wr_capa_timeout(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        obd->u.mds.mds_capa_timeout = val;
+        mds_update_capa_timeout(obd, val);
         return count;
 }
 
@@ -201,8 +201,8 @@ static int lprocfs_wr_capa_key_timeout(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        obd->u.mds.mds_capa_key_timeout = val;
-        return count;
+        rc = mds_update_capa_key_timeout(obd, val);
+        return rc ?: count;
 }
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {

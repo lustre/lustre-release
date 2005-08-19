@@ -1270,7 +1270,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                 }
 
                 offset = reply_off + 1;
-                rc = mds_pack_capa(obd, reqbody, req_capa, req->rq_repmsg,
+                rc = mds_pack_capa(obd, med, reqbody, req_capa, req,
                                    &offset, body);
         }
 
@@ -3331,8 +3331,6 @@ int mds_handle(struct ptlrpc_request *req)
 
         LASSERT(current->journal_info == NULL);
 
-        EXIT;
-
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && req->rq_reqmsg->opc != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
@@ -3357,7 +3355,7 @@ int mds_handle(struct ptlrpc_request *req)
 
 
         target_send_reply(req, rc, fail);
-        return 0;
+        RETURN(0);
 }
 
 /* Update the server data on disk.  This stores the new mount_count and also the

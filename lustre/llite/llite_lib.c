@@ -1326,6 +1326,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                         OBD_FREE(lli->lli_trunc_capa,
                                                  sizeof(*trunc_capa));
                                 lli->lli_trunc_capa = trunc_capa;
+                                DEBUG_CAPA(D_INFO, trunc_capa, "truncate");
                         }
                         spin_unlock(&lli->lli_lock);
                 }
@@ -1449,7 +1450,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-                rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL);
+                rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL, NULL);
                 obdo_free(oa);
                 if (rc)
                         CERROR("obd_setattr fails: rc = %d\n", rc);
@@ -2303,7 +2304,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP 
                               | OBD_MD_FLIFID;
 
-                rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL);
+                rc = obd_setattr(sbi->ll_dt_exp, oa, lsm, NULL, NULL);
                 obdo_free(oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)

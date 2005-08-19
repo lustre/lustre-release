@@ -553,7 +553,8 @@ static inline int obd_getattr_async(struct obd_export *exp,
 
 static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
                               struct lov_stripe_md *ea,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct lustre_capa *capa)
 {
         int rc;
         ENTRY;
@@ -561,7 +562,7 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_OP(exp, setattr);
         OBD_COUNTER_INCREMENT(exp->exp_obd, setattr);
 
-        rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti, capa);
         RETURN(rc);
 }
 static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,

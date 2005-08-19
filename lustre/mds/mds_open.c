@@ -441,7 +441,7 @@ mds_create_objects(struct obd_device *obd, struct ptlrpc_request *req,
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
                 
-                rc = obd_setattr(mds->mds_dt_exp, oa, lsm, &oti);
+                rc = obd_setattr(mds->mds_dt_exp, oa, lsm, &oti, NULL);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -704,6 +704,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
+        struct mds_export_data *med = &req->rq_export->u.eu_mds_data;
         struct mds_file_data *mfd = NULL;
         obd_id *ids = NULL;
         unsigned mode;
@@ -782,7 +783,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         .lc_mdsid = mds->mds_num,
                 };
 
-                rc = mds_pack_capa(obd, NULL, &capa, req->rq_repmsg,
+                rc = mds_pack_capa(obd, med, NULL, &capa, req,
                                    &reply_off, body);
                 if (rc < 0) {
                         CERROR("mds_pack_capa: rc = %d\n", rc);

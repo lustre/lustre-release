@@ -526,8 +526,10 @@ struct client_capa {
         struct inode             *inode;      /* this should be always valid
                                                * if c_refc > 0 */
         struct lustre_handle      handle;     /* handle of mds_file_data */
+#if 0   /* TODO: support multi mount point */
         struct list_head         *list;       /* the capa list belong to this client */
         struct timer_list        *timer;      /* timer belong to this client */
+#endif
 };
 
 struct filter_capa {
@@ -562,6 +564,29 @@ enum lustre_capa_type {
         FILTER_CAPA = 2,
 };
 
+#define DEBUG_CAPA(level, capa, fmt, args...)                                  \
+do {                                                                           \
+CDEBUG(level, fmt " capa@%p uid %u op %u ino "LPU64" mdsid %d keyid %d "       \
+       "expiry "LPU64" flags %u\n",                                            \
+       ##args, capa, (capa)->lc_uid, (capa)->lc_op, (capa)->lc_ino,            \
+       (capa)->lc_mdsid, (capa)->lc_keyid, (capa)->lc_expiry,                  \
+       (capa)->lc_flags);                                                      \
+} while (0)
+
+#define DEBUG_CAPA_KEY(level, key, fmt, args...)                               \
+do {                                                                           \
+CDEBUG(level, fmt " capa key@%p mdsid %d keyid %d expiry "LPU64"\n",           \
+       ##args, key, (key)->lk_mdsid, (key)->lk_keyid, (key)->lk_expiry);       \
+} while (0)
+
+#define DEBUG_MDS_CAPA_KEY(level, mkey, fmt, args...)                          \
+do {                                                                           \
+CDEBUG(level, fmt " capa key@%p mdsid %d keyid %d expiry "LPU64"\n",           \
+       ##args, mkey, le32_to_cpu((mkey)->k_key->lk_mdsid),                     \
+       le32_to_cpu((mkey)->k_key->lk_keyid),                                   \
+       le64_to_cpu((mkey)->k_key->lk_expiry));                                 \
+} while (0)
+
 extern spinlock_t capa_lock;
 extern struct hlist_head *capa_hash;
 extern struct list_head capa_list[];
@@ -592,6 +617,7 @@ int capa_is_to_expire(struct obd_capa *ocapa);
 
 /* struct lustre_capa.lc_flags */
 #define CAPA_FL_NOROUND   0x001 /* capa expiry not rounded */
+#define CAPA_FL_REMUID    0x002 /* remote uid */
 
 static inline unsigned long capa_pre_expiry(struct lustre_capa *capa)
 {
@@ -617,7 +643,7 @@ round_expiry(__u32 timeout)
 static inline int
 capa_key_cmp(struct lustre_capa_key *k1, struct lustre_capa_key *k2)
 {
-        return le32_to_cpu(k1->lk_keyid) - le32_to_cpu(k2->lk_keyid);
+        return k1->lk_keyid - k2->lk_keyid;
 }
 
 static inline unsigned long
@@ -625,9 +651,11 @@ expiry_to_jiffies(__u64 expiry)
 {
         /* sec -> jiffies */
         struct timeval tv;
+        unsigned long timeout;
 
         do_gettimeofday(&tv);
-        return jiffies + ((unsigned long)expiry - tv.tv_sec) * HZ;
+        timeout = jiffies + ((unsigned long)expiry - tv.tv_sec) * HZ;
+        return timeout;
 }
 
 struct mds_capa_key {

@@ -849,7 +849,8 @@ struct obd_ops {
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_setattr)(struct obd_export *exp, struct obdo *oa,
-                         struct lov_stripe_md *ea, struct obd_trans_info *oti);
+                         struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                         struct lustre_capa *capa);
         int (*o_getattr)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea);
         int (*o_getattr_async)(struct obd_export *exp, struct obdo *oa,

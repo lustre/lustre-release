@@ -264,7 +264,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               int niocount, struct niobuf_remote *nb,
                               struct niobuf_local *res,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
@@ -302,6 +303,10 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(cleanup, rc = PTR_ERR(dentry));
 
         inode = dentry->d_inode; 
+
+        rc = filter_verify_capa(cmd, exp, inode, capa);
+        if (rc)
+                return rc;
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
@@ -495,7 +500,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_remote *nb,
                                struct niobuf_local *res,
-                               struct obd_trans_info *oti)
+                               struct obd_trans_info *oti,
+                               struct lustre_capa *capa)
 {
         int rc = 0, i, tot_bytes = 0, cleanup_phase = 0;
         struct obd_device *obd = exp->exp_obd;
@@ -531,6 +537,10 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         dentry = filter_crow_object(obd, oa);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
+
+        rc = filter_verify_capa(cmd, exp, dentry->d_inode, capa);
+        if (rc)
+                return rc;
 
         cleanup_phase = 2;
 
@@ -639,19 +649,13 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   struct niobuf_remote *nb, struct niobuf_local *res,
                   struct obd_trans_info *oti, struct lustre_capa *capa)
 {
-        int rc;
-
-        rc = filter_verify_capa(cmd, exp, capa);
-        if (rc)
-                return rc;
-
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
-                                           niocount, nb, res, oti);
+                                           niocount, nb, res, oti, capa);
 
         if (cmd == OBD_BRW_READ)
                 return filter_preprw_read(cmd, exp, oa, objcount, obj,
-                                          niocount, nb, res, oti);
+                                          niocount, nb, res, oti, capa);
 
         LBUG();
         return -EPROTO;

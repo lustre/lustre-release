@@ -1014,13 +1014,11 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 GOTO(err_capa_keyid, rc = -ENOENT);
         }
 
-#if 0
         rc = mds_read_capa_key(obd, file);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", CAPA_KEYS, rc);
                 GOTO(err_capa_keyid, rc);
         }
-#endif
 
         /* reint fidext thumb by last fid after root and virt are initialized */
         mds->mds_fidext_thumb = mds->mds_last_fid;

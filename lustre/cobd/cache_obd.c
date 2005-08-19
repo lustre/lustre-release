@@ -712,7 +712,8 @@ static int cobd_dt_getattr_async(struct obd_export *exp,
 
 static int cobd_dt_setattr(struct obd_export *exp, struct obdo *obdo,
                            struct lov_stripe_md *ea,
-                           struct obd_trans_info *oti)
+                           struct obd_trans_info *oti,
+                           struct lustre_capa *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -725,7 +726,7 @@ static int cobd_dt_setattr(struct obd_export *exp, struct obdo *obdo,
                 RETURN(-EINVAL);
         }
         cobd_exp = cobd_get_exp(obd);
-        rc = obd_setattr(cobd_exp, obdo, ea, oti);
+        rc = obd_setattr(cobd_exp, obdo, ea, oti, capa);
         RETURN(rc);
 }
 

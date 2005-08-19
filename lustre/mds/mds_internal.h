@@ -362,8 +362,12 @@ void mds_capa_keys_cleanup(struct obd_device *obd);
 void mds_capa_key_timer_callback(unsigned long data);
 int mds_capa_key_start_thread(void);
 void mds_capa_key_stop_thread(void);
-int mds_pack_capa(struct obd_device *obd, struct mds_body *req_body,
-                  struct lustre_capa *req_capa, struct lustre_msg *repmsg,
-                  int *offset, struct mds_body *body);
+int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med, 
+                  struct mds_body *req_body, struct lustre_capa *req_capa,
+                  struct ptlrpc_request *req, int *offset, 
+                  struct mds_body *body);
+void mds_update_capa_stat(struct obd_device *obd, int stat);
+void mds_update_capa_timeout(struct obd_device *obd, unsigned long timeout);
+int mds_update_capa_key_timeout(struct obd_device *obd, unsigned long timeout);
 
 #endif /* _MDS_INTERNAL_H */

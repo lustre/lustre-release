@@ -89,26 +89,34 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
 {
         struct hlist_node *pos;
         struct obd_capa *ocapa;
-        ENTRY;
+        uid_t ouid;
 
         CDEBUG(D_CACHE, "find_capa uid %u op %u mdsid "LPU64" ino %lu "
                "type %d\n", uid, capa_op, mdsid, ino, type);
 
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
-                if (ocapa->c_capa.lc_uid != uid)
-                        continue;
-                if (ocapa->c_capa.lc_op != capa_op)
+                if (ocapa->c_capa.lc_ino != ino)
                         continue;
                 if (ocapa->c_capa.lc_mdsid != mdsid)
                         continue;
-                if (ocapa->c_capa.lc_ino != ino)
+                if (ocapa->c_capa.lc_op != capa_op)
                         continue;
                 if (ocapa->c_type != type)
                         continue;
-                RETURN(ocapa);
+
+                if (ocapa->c_type == CLIENT_CAPA &&
+                    ocapa->c_capa.lc_flags & CAPA_FL_REMUID)
+                        ouid = ocapa->c_capa.lc_ruid;
+                else
+                        ouid = ocapa->c_capa.lc_uid;
+
+                if (ouid != uid)
+                        continue;
+
+                return ocapa;
         }
 
-        RETURN(NULL);
+        return NULL;
 }
 
 inline void __capa_get(struct obd_capa *ocapa)
@@ -135,7 +143,6 @@ find_capa_locked(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
 static struct obd_capa *alloc_capa(void)
 {
         struct obd_capa *ocapa;
-        ENTRY;
 
         OBD_SLAB_ALLOC(ocapa, capa_cachep, SLAB_NOFS, sizeof(*ocapa));
         if (ocapa) {
@@ -143,7 +150,7 @@ static struct obd_capa *alloc_capa(void)
                 INIT_LIST_HEAD(&ocapa->c_list);
         }
 
-        RETURN(ocapa);
+        return ocapa;
 }
 
 static void destroy_capa(struct obd_capa *ocapa)
@@ -177,6 +184,7 @@ void capa_cache_cleanup(void)
         struct hlist_node *pos, *n;
 
         hlist_for_each_entry_safe(ocapa, pos, n, capa_hash, c_hash) {
+                LASSERT(ocapa->c_type != CLIENT_CAPA);
                 hlist_del(&ocapa->c_hash);
                 list_del(&ocapa->c_list);
                 OBD_FREE(ocapa, sizeof(*ocapa));
@@ -203,20 +211,19 @@ static inline void list_add_capa(struct obd_capa *ocapa, struct list_head *head)
         list_add_tail(&ocapa->c_list, head);
 }
 
-#define DEBUG_CAPA(level, ocapa, fmt, args...)                                 \
-do {                                                                           \
-CDEBUG(level, fmt " capa@%p uid %u op %u ino "LPU64" mdsid %d keyid %d "       \
-       "expiry "LPU64" flags %u type %d\n",                                    \
-       ##args, ocapa, ocapa->c_capa.lc_uid, ocapa->c_capa.lc_op,               \
-       ocapa->c_capa.lc_ino, ocapa->c_capa.lc_mdsid, ocapa->c_capa.lc_keyid,   \
-       ocapa->c_capa.lc_expiry, ocapa->c_capa.lc_flags, ocapa->c_type);        \
-} while (0)
+static inline void do_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
+{
+        memcpy(&ocapa->c_capa, capa, sizeof(*capa));
+}
 
 static struct obd_capa *
-get_new_capa_locked(struct hlist_head *head, uid_t uid, int capa_op,__u64 mdsid,
-                    unsigned long ino, int type, struct lustre_capa *capa,
+get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa,
                     struct inode *inode, struct lustre_handle *handle)
 {
+        uid_t uid = capa->lc_uid;
+        int capa_op = capa->lc_op;
+        __u64 mdsid = capa->lc_mdsid;
+        unsigned long ino = capa->lc_ino;
         struct obd_capa *ocapa, *old;
         ENTRY;
 
@@ -227,21 +234,25 @@ get_new_capa_locked(struct hlist_head *head, uid_t uid, int capa_op,__u64 mdsid,
         spin_lock(&capa_lock);
         old = find_capa(head, uid, capa_op, mdsid, ino, type);
         if (!old) {
-                memcpy(&ocapa->c_capa, capa, sizeof(*capa));
+                do_update_capa(ocapa, capa);
                 ocapa->c_type = type;
+
                 if (type == CLIENT_CAPA) {
                         LASSERT(inode);
+                        LASSERT(handle);
 #ifdef __KERNEL__
                         igrab(inode);
 #endif
                         ocapa->c_inode = inode;
                         memcpy(&ocapa->c_handle, handle, sizeof(*handle));
                 }
+
                 list_add_capa(ocapa, &capa_list[type]);
                 hlist_add_head(&ocapa->c_hash, capa_hash);
                 capa_count[type]++;
-                DEBUG_CAPA(D_CACHE, ocapa, "get_new_capa_locked");
+
                 __capa_get(ocapa);
+
                 if (type != CLIENT_CAPA && capa_count[type] > CAPA_CACHE_SIZE) {
                         struct list_head *node = capa_list[type].next;
                         struct obd_capa *tcapa;
@@ -254,7 +265,9 @@ get_new_capa_locked(struct hlist_head *head, uid_t uid, int capa_op,__u64 mdsid,
                                 if (atomic_read(&tcapa->c_refc) > 0)
                                         continue;
                                 list_del(&tcapa->c_list);
+                                hlist_del(&tcapa->c_hash);
                                 destroy_capa(tcapa);
+                                capa_count[type]--;
                                 count++;
                         }
                 }
@@ -265,9 +278,9 @@ get_new_capa_locked(struct hlist_head *head, uid_t uid, int capa_op,__u64 mdsid,
 
         __capa_get(old);
         spin_unlock(&capa_lock);
+
         destroy_capa(ocapa);
-        ocapa = old;
-        RETURN(ocapa);
+        RETURN(old);
 }
 
 static struct obd_capa *
@@ -285,8 +298,7 @@ capa_get_locked(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
                 RETURN(ocapa);
         
         if (capa)
-                ocapa = get_new_capa_locked(head, uid, capa_op, mdsid, ino,
-                                            type, capa, inode, handle);
+                ocapa = get_new_capa_locked(head, type, capa, inode, handle);
         RETURN(ocapa);
 }
 
@@ -326,11 +338,6 @@ void capa_put(struct obd_capa *ocapa, int type)
         EXIT;
 }
 
-static inline void __update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
-{
-        memcpy(&ocapa->c_capa, capa, sizeof(*capa));
-}
-
 static int update_capa_locked(struct lustre_capa *capa, int type)
 {
         uid_t uid = capa->lc_uid;
@@ -345,12 +352,13 @@ static int update_capa_locked(struct lustre_capa *capa, int type)
         spin_lock(&capa_lock);
         ocapa = find_capa(head, uid, capa_op, mdsid, ino, type);
         if (ocapa)
-                __update_capa(ocapa, capa);
+                do_update_capa(ocapa, capa);
         spin_unlock(&capa_lock);
 
-        if (ocapa == NULL && type == MDS_CAPA)
-                ocapa = get_new_capa_locked(head, uid, capa_op, mdsid, ino, type,
-                                            capa, NULL, NULL);
+        if (ocapa == NULL && type == MDS_CAPA) {
+                ocapa = get_new_capa_locked(head, type, capa, NULL, NULL);
+                capa_put(ocapa, type);
+        }
 
         RETURN(ocapa ? 0 : -ENOENT);
 }
@@ -368,11 +376,9 @@ void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
                 .offset = (unsigned long)(capa) % PAGE_SIZE,
                 .length = sizeof(struct lustre_capa_data),
         };
-        ENTRY;
 
         LASSERT(tfm);
         crypto_hmac(tfm, key, &keylen, &sl, 1, capa->lc_hmac);
-        EXIT;
 }
 
 void capa_dup(void *dst, struct obd_capa *ocapa)
@@ -403,7 +409,7 @@ int __capa_is_to_expire(struct obd_capa *ocapa)
         int pre_expiry = capa_pre_expiry(&ocapa->c_capa);
 
         do_gettimeofday(&tv);
-        return (ocapa->c_capa.lc_expiry - pre_expiry < tv.tv_sec)? 1 : 0;
+        return (ocapa->c_capa.lc_expiry - pre_expiry - 1 <= tv.tv_sec)? 1 : 0;
 }
 
 int capa_is_to_expire(struct obd_capa *ocapa)

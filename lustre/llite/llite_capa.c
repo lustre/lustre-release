@@ -43,6 +43,7 @@ static inline int have_expired_capa(void)
 {
         struct obd_capa *ocapa;
         int expired = 0;
+        unsigned long expiry;
         ENTRY;
 
         spin_lock(&capa_lock);
@@ -50,6 +51,13 @@ static inline int have_expired_capa(void)
                 ocapa = list_entry(ll_capa_list->next, struct obd_capa, c_list);
 
                 expired = __capa_is_to_expire(ocapa);
+                if (!expired && !timer_pending(&ll_capa_timer)) {
+                        /* the expired capa has been put, so set the timer to
+                         * the expired of the next capa */
+                        expiry = expiry_to_jiffies(ocapa->c_capa.lc_expiry);
+                        mod_timer(&ll_capa_timer, expiry);
+                        CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
+                }
         }
         spin_unlock(&capa_lock);
 
@@ -108,7 +116,7 @@ static int ll_capa_thread_main(void *arg)
         while (1) {
                 struct l_wait_info lwi = { 0 };
                 struct obd_capa *ocapa, *next = NULL;
-                int sleep = CAPA_PRE_EXPIRY;
+                unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
 
                 l_wait_event(ll_capa_thread.t_ctl_waitq,
                              (have_expired_capa() || ll_capa_check_stop()),
@@ -130,8 +138,9 @@ static int ll_capa_thread_main(void *arg)
                         }
                 }
                 if (next) {
-                        mod_timer(&ll_capa_timer,
-                                  expiry_to_jiffies(next->c_capa.lc_expiry));
+                        expiry = expiry_to_jiffies(next->c_capa.lc_expiry);
+                        mod_timer(&ll_capa_timer, expiry);
+                        CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
                         if (next->c_capa.lc_flags & CAPA_FL_NOROUND)
                                 sleep = CAPA_PRE_EXPIRY_NOROUND;
                 }
@@ -222,10 +231,18 @@ int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
         if (!och->och_capa)
                 rc = -ENOMEM;
 
+        DEBUG_CAPA(D_INFO, capa, "ll_set_och_capa");
+
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
+
+        spin_lock(&capa_lock);
         if (time_before(expiry, ll_capa_timer.expires) ||
-            !timer_pending(&ll_capa_timer))
+            !timer_pending(&ll_capa_timer)) {
                 mod_timer(&ll_capa_timer, expiry);
+                CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
+        }
+        spin_unlock(&capa_lock);
 
         RETURN(rc);
 }
+

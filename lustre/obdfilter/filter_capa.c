@@ -38,10 +38,12 @@ void filter_free_capa_keys(struct filter_obd *filter)
 {
         struct filter_capa_key *key, *n;
 
+        spin_lock(&filter->fo_capa_lock);
         list_for_each_entry_safe(key, n, &filter->fo_capa_keys, k_list) {
-                list_del(&key->k_list);
+                list_del_init(&key->k_list);
                 OBD_FREE(key, sizeof(*key));
         }
+        spin_unlock(&filter->fo_capa_lock);
 }
 
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
@@ -53,12 +55,13 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
 
         spin_lock(&filter->fo_capa_lock);
         list_for_each_entry(tmp, &filter->fo_capa_keys, k_list) {
-                if (tmp->k_key.lk_mdsid == le32_to_cpu(key->lk_mdsid)) {
-                        if (rkey == NULL)
-                                rkey = tmp;
-                        else
-                                bkey = tmp;
-                }
+                if (tmp->k_key.lk_mdsid != le32_to_cpu(key->lk_mdsid))
+                        continue;
+
+                if (rkey == NULL)
+                        rkey = tmp;
+                else
+                        bkey = tmp;
         }
         spin_unlock(&filter->fo_capa_lock);
 
@@ -68,33 +71,38 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
                 bkey = tmp;
         }
 
-        if (!bkey || !tmp) {
+        if (bkey) {
+                tmp = bkey;
+        } else {
                 OBD_ALLOC(tmp, sizeof(*tmp));
                 if (!tmp)
                         GOTO(out, rc = -ENOMEM);
-
-                spin_lock(&filter->fo_capa_lock);
-                list_add_tail(&tmp->k_list, &filter->fo_capa_keys);
-                spin_unlock(&filter->fo_capa_lock);
         }
 
         /* fields in lustre_capa_key are in cpu order */
+        spin_lock(&filter->fo_capa_lock);
         tmp->k_key.lk_mdsid = le32_to_cpu(key->lk_mdsid);
         tmp->k_key.lk_keyid = le32_to_cpu(key->lk_keyid);
         tmp->k_key.lk_expiry = le64_to_cpu(key->lk_expiry);
         memcpy(&tmp->k_key.lk_key, key->lk_key, sizeof(key->lk_key));
 
+        if (!bkey)
+                list_add_tail(&tmp->k_list, &filter->fo_capa_keys);
+        spin_unlock(&filter->fo_capa_lock);
+
+        DEBUG_CAPA_KEY(D_INFO, &tmp->k_key, "filter_update_capa_key");
 out:
         RETURN(rc);
 }
 
-int filter_verify_capa(int cmd, struct obd_export *exp,
+int filter_verify_capa(int cmd, struct obd_export *exp, struct inode *inode,
                        struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct obd_capa *ocapa;
         struct lustre_capa tcapa;
+        struct lustre_id fid;
         struct filter_capa_key *rkey = NULL, *bkey = NULL, *tmp;
         __u8 hmac_key[CAPA_KEY_LEN];
         int rc = 0;
@@ -107,7 +115,7 @@ int filter_verify_capa(int cmd, struct obd_export *exp,
         if (capa == NULL)
                 RETURN(-EACCES);
 
-        if (cmd == OBD_BRW_WRITE && !(capa->lc_op & MAY_WRITE))
+        if (cmd == OBD_BRW_WRITE && capa->lc_op != MAY_WRITE)
                 RETURN(-EACCES);
         if (cmd == OBD_BRW_READ && !(capa->lc_op & (MAY_WRITE | MAY_READ)))
                 RETURN(-EACCES);
@@ -115,7 +123,15 @@ int filter_verify_capa(int cmd, struct obd_export *exp,
         if (OBD_FAIL_CHECK(OBD_FAIL_FILTER_VERIFY_CAPA))
                 RETURN(-EACCES);
 
-        /* TODO: get fid from EA, and verify that against capa */
+        rc = fsfilt_get_md(obd, inode, &fid, sizeof(fid), EA_SID);
+        if (rc < 0) {
+                CERROR("get fid from object failed! rc:%d\n", rc);
+                RETURN(rc);
+        } else if (rc > 0) {
+                if (capa->lc_mdsid != id_group(&fid) ||
+                    capa->lc_ino != id_ino(&fid))
+                        RETURN(-EINVAL);
+        }
 
         if (capa_expired(capa))
                 RETURN(-ESTALE);

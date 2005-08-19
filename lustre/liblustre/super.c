@@ -783,7 +783,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 oa.o_valid = OBD_MD_FLID;
                 obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                             OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-                rc = obd_setattr(sbi->ll_dt_exp, &oa, lsm, NULL);
+                rc = obd_setattr(sbi->ll_dt_exp, &oa, lsm, NULL, NULL);
                 if (rc)
                         CERROR("obd_setattr fails: rc=%d\n", rc);
         }

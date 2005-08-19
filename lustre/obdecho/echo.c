@@ -189,7 +189,8 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
 }
 
 static int echo_setattr(struct obd_export *exp, struct obdo *oa,
-                        struct lov_stripe_md *md, struct obd_trans_info *oti)
+                        struct lov_stripe_md *md, struct obd_trans_info *oti,
+                        struct lustre_capa *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
 

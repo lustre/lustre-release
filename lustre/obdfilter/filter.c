@@ -1020,8 +1020,9 @@ static void filter_post(struct obd_device *obd)
 
         filter_cleanup_groups(obd);
         filter_free_server_data(filter);
-        filter_free_capa_keys(filter);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        filter_free_capa_keys(filter);
 }
 
 static void filter_set_last_id(struct filter_obd *filter, int group, obd_id id)
@@ -2164,7 +2165,8 @@ out_unlock:
 
 /* this is called from filter_truncate() until we have filter_punch() */
 int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti)
+                   struct lov_stripe_md *md, struct obd_trans_info *oti,
+                   struct lustre_capa *capa)
 {
         struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0 } };
         struct ldlm_valblock_ops *ns_lvbo;
@@ -2189,6 +2191,9 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(dentry))
                 GOTO(out_pop, rc = PTR_ERR(dentry));
 
+        rc = filter_verify_capa(OBD_BRW_WRITE, exp, dentry->d_inode, capa);
+        if (rc)
+                RETURN(rc);
         lock_kernel();
 
         /* setting objects attributes (including owner/group) */
@@ -2739,12 +2744,9 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPU64", "
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
-        error = filter_verify_capa(OBD_BRW_WRITE, exp, capa);
-        if (error)
-                RETURN(error);
 
         oa->o_size = start;
-        error = filter_setattr(exp, oa, NULL, oti);
+        error = filter_setattr(exp, oa, NULL, oti, capa);
         RETURN(error);
 }
 

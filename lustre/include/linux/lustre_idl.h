@@ -1043,11 +1043,12 @@ struct ptlbd_rsp {
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
-#define CAPA_KEY_LEN           16
-#define CAPA_DIGEST_SIZE       16
+#define CAPA_KEY_LEN           20 /* SHA1_DIGEST_LENGTH */
+#define CAPA_DIGEST_SIZE       20 /* SHA1_DIGEST_LENGTH */
 
 struct lustre_capa {
-        __u32   lc_uid;       /* uid */
+        __u32   lc_uid;       /* uid, mapped uid */
+        __u32   lc_ruid;      /* remote uid on client */
         __u32   lc_op;        /* operations allowed */
         __u64   lc_ino;       /* inode# */
         __u32   lc_mdsid;     /* mds# */

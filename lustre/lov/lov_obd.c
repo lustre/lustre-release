@@ -995,7 +995,8 @@ out:
 }
 
 static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
-                       struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+                       struct lov_stripe_md *lsm, struct obd_trans_info *oti,
+                       struct lustre_capa *capa)
 {
         struct lov_request_set *set;
         struct lov_obd *lov;
@@ -1028,7 +1029,7 @@ static int lov_setattr(struct obd_export *exp, struct obdo *src_oa,
                 req = list_entry(pos, struct lov_request, rq_link);
                 
                 rc = obd_setattr(lov->tgts[req->rq_idx].ltd_exp, req->rq_oa,
-                                 NULL, NULL);
+                                 NULL, NULL, NULL);
                 err = lov_update_common_set(set, req, rc);
                 if (err) {
                         CERROR("error: setattr objid "LPX64" subobj "
