@@ -141,8 +141,8 @@ id2pid(struct obd_device *obd, struct lustre_id *id, struct lustre_id *pid,
         }
         inode = dentry->d_inode;
 
-        if (S_ISDIR(id_type(id))) {
-                LASSERT(S_ISDIR(inode->i_mode));
+        if (S_ISDIR(inode->i_mode)) {
+                //LASSERT(S_ISDIR(id_type(id)));
                 rc = mds_md_get_attr(obd, inode, &mea, &mea_size);
                 if (rc)
                         GOTO(out, rc);
@@ -159,7 +159,7 @@ id2pid(struct obd_device *obd, struct lustre_id *id, struct lustre_id *pid,
                 }
                                 
         } else {
-                LASSERT(!S_ISDIR(inode->i_mode));
+                //LASSERT(!S_ISDIR(id_type(id)));
                 *type = PP_FILE;
 read_pid:
                 rc = mds_read_inode_pid(obd, inode, pid);
@@ -197,9 +197,10 @@ static int local_parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
         /* pp_id2 is present, which indicating we want to scan parent 
          * dir(pp_id2) to find the cross-ref entry(pp_id1) */
         if (id_fid(&pkg->pp_id2)) {
+                /* 
                 LASSERT(S_ISDIR(id_type(&pkg->pp_id1)));
                 LASSERT(S_ISDIR(id_type(&pkg->pp_id2)));
-
+                */
                 pkg->pp_type = PP_DIR;
                 goto scan;
         }
