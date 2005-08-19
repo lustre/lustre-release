@@ -113,11 +113,11 @@ static inline int llu_is_root_inode(struct inode *inode)
 do {                                                                           \
         struct lookup_intent *temp;                                            \
         LASSERT(llu_i2info(inode)->lli_it == NULL);                            \
-       	OBD_ALLOC(temp, sizeof(*temp));					       \
+        OBD_ALLOC(temp, sizeof(*temp));                                        \
         memcpy(temp, it, sizeof(*temp));                                       \
         llu_i2info(inode)->lli_it = temp;                                      \
         CDEBUG(D_DENTRY, "alloc intent %p to inode %p(ino %llu)\n",            \
-                        temp, inode, llu_i2stat(inode)->st_ino);               \
+                        temp, inode, (long long)llu_i2stat(inode)->st_ino);    \
 } while(0)
 
 
