@@ -479,7 +479,7 @@ out_noset:
         read_unlock(&rsc_cache.hash_lock);
         RETURN(tmp);
 }
-                                                                                                                        
+
 static int rsc_parse(struct cache_detail *cd,
                      char *mesg, int mlen)
 {
@@ -590,13 +590,31 @@ static int rsc_parse(struct cache_detail *cd,
                         kgss_mech_put(gm);
                         goto out;
                 }
-                expiry = (time_t) ctx_expiry;
+                expiry = (time_t) ((__u32) ctx_expiry);
 
                 kgss_mech_put(gm);
         }
         rsci->h.expiry_time = expiry;
         spin_lock_init(&rsci->seqdata.sd_lock);
         res = rsc_lookup(rsci, 1);
+        // XXX temp debugging
+        {
+                if (res == rsci) {
+                        CWARN("create ctxt %p(%u), expiry %ld (%lds later)\n",
+                              res, *((__u32 *) res->handle.data),
+                              res->h.expiry_time,
+                              res->h.expiry_time - get_seconds());
+                } else {
+                        CWARN("create ctxts [%p(%u), ex %ld (%lds later)], "
+                              "[%p(%u), ex %ld (%lds later)]\n",
+                              rsci, *((__u32 *) rsci->handle.data),
+                              rsci->h.expiry_time,
+                              rsci->h.expiry_time - get_seconds(),
+                              res, *((__u32 *) res->handle.data),
+                              res->h.expiry_time,
+                              res->h.expiry_time - get_seconds());
+                }
+        }
         rsc_put(&res->h, &rsc_cache);
         status = 0;
 out:
@@ -617,6 +635,9 @@ static void rsc_flush(uid_t uid)
         int n;
         ENTRY;
 
+        if (uid == -1)
+                CWARN("flush all gss contexts\n");
+
         write_lock(&rsc_cache.hash_lock);
         for (n = 0; n < RSC_HASHMAX; n++) {
                 for (ch = &rsc_cache.hash_table[n]; *ch;) {
@@ -628,8 +649,11 @@ static void rsc_flush(uid_t uid)
                                 cache_get(&rscp->h);
                                 set_bit(CACHE_NEGATIVE, &rscp->h.flags);
                                 clear_bit(CACHE_HASHED, &rscp->h.flags);
-                                CDEBUG(D_SEC, "flush rsc %p for uid %u\n",
-                                       rscp, rscp->cred.vc_uid);
+                                if (uid != -1)
+                                        CWARN("flush rsc %p(%u) for uid %u\n",
+                                              rscp,
+                                              *((__u32 *) rscp->handle.data),
+                                              rscp->cred.vc_uid);
                                 rsc_put(&rscp->h, &rsc_cache);
                                 rsc_cache.entries--;
                                 continue;
@@ -1191,6 +1215,14 @@ gss_svcsec_handle_destroy(struct ptlrpc_request *req,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));
 
+        //XXX temp for debugging
+        {
+                CWARN("destroy ctxt %p(%u/%u)@%s\n",
+                      rsci, *((__u32 *) rsci->handle.data),
+                      rsci->cred.vc_uid,
+                      portals_nid2str(req->rq_peer.peer_ni->pni_number,
+                                      req->rq_peer.peer_id.nid, nidstr));
+        }
         set_bit(CACHE_NEGATIVE, &rsci->h.flags);
         *res = PTLRPCS_OK;
         rc = SVC_LOGOUT;
@@ -1332,7 +1364,8 @@ gss_svcsec_authorize(struct ptlrpc_request *req)
 
         rscp = gss_svc_searchbyctx(&gc->gc_ctx);
         if (!rscp) {
-                CERROR("ctx disapeared under us?\n");
+                CERROR("ctx %u disapeared under us\n",
+                       *((__u32 *) gc->gc_ctx.data));
                 RETURN(-EINVAL);
         }
 

@@ -199,7 +199,7 @@ gss_inquire_context_kerberos(struct gss_ctx    *context_handle,
 {
         struct krb5_ctx *kctx = context_handle->internal_ctx_id;
 
-        *endtime = (__u64) kctx->endtime;
+        *endtime = (__u64) ((__u32) kctx->endtime);
         return GSS_S_COMPLETE;
 }
 
