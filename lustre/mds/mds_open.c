@@ -441,6 +441,10 @@ mds_create_objects(struct obd_device *obd, struct ptlrpc_request *req,
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
                 
+                /* pack lustre id to oss */
+                *(obdo_id(oa)) = body->id1;
+                oa->o_valid |= OBD_MD_FLIFID;
+
                 rc = obd_setattr(mds->mds_dt_exp, oa, lsm, &oti, NULL);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
