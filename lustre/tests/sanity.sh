@@ -15,7 +15,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT=60;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT 60 69";;
 *) error "unsupported kernel" ;;
 esac
 
