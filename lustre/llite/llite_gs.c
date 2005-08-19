@@ -522,7 +522,7 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         /*encrypt the data*/
         ptr = (char *)kmap(page);
         key_ptr = ptr;
-        ptr += offset; 
+        ptr += offset & (PAGE_SIZE - 1); 
         CDEBUG(D_INFO, "ptr is %s \n", ptr);
         for (i = 0; i < count; i++) 
                 *ptr++ ^= (__u8)data_key; 
