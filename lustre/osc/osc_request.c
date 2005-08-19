@@ -1894,6 +1894,10 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
                 do_gettimeofday(&start);
                 l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
                 do_gettimeofday(&stop);
+                
+                cli->cl_cache_wait_num++;
+                cli->cl_cache_wait_sum += timeval_sub(&stop, &start);
+                        
                 spin_lock(&cli->cl_loi_list_lock);
                 lprocfs_stime_record(&cli->cl_enter_stime, &stop, &start);
                 if (!list_empty(&ocw.ocw_entry)) {

@@ -364,6 +364,8 @@ struct client_obd {
         long                     cl_write_gaps;
         long                     cl_write_num;
         long                     cl_read_num;
+        long                     cl_cache_wait_num;
+        long                     cl_cache_wait_sum;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
