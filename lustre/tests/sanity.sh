@@ -13,6 +13,12 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 51b 51c 64b 71"
 
+case `uname -r` in
+2.4*) FSTYPE=${FSTYPE:-ext3} ;;
+2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT=60;;
+*) error "unsupported kernel" ;;
+esac
+
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
 	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
 
@@ -20,11 +26,6 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
 
 TMP=${TMP:-/tmp}
-case `uname -r` in
-2.4*) FSTYPE=${FSTYPE:-ext3} ;;
-2.6*) FSTYPE=${FSTYPE:-ldiskfs} ;;
-*) error "unsupported kernel" ;;
-esac
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -368,6 +369,15 @@ test_6g() {
 	$CHECKSTAT -g \#$RUNAS_ID $DIR/d6g/d/subdir || error
 }
 run_test 6g "Is new dir in sgid dir inheriting group?"
+
+test_6h() { # bug 7331
+	[ $RUNAS_ID -eq $UID ] && echo "skipping test 6f" && return
+	touch $DIR/f6h || error "touch failed"
+	chown $RUNAS_ID:$RUNAS_ID $DIR/f6h || error "initial chown failed"
+	$RUNAS -G$RUNAS_ID chown $RUNAS_ID:0 $DIR/f6h && error "chown worked"
+	$CHECKSTAT -t file -u \#$RUNAS_ID -g \#$RUNAS_ID $DIR/f6h || error
+}
+run_test 6h "$RUNAS chown RUNAS_ID.0 .../f6h (should return error)"
 
 test_7a() {
 	mkdir $DIR/d7

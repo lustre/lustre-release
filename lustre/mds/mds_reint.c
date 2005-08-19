@@ -203,9 +203,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
         int error;
         ENTRY;
 
-        /* only fix up attrs if the client VFS didn't already */
-        if (!(ia_valid & ATTR_RAW))
-                RETURN(0);
+        if (ia_valid & ATTR_RAW)
+                attr->ia_valid &= ~ATTR_RAW;
 
         if (!(ia_valid & ATTR_CTIME_SET))
                 LTIME_S(attr->ia_ctime) = now;
@@ -215,7 +214,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                 LTIME_S(attr->ia_mtime) = now;
 
         if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
-                RETURN(-EPERM);
+                RETURN((attr->ia_valid & ~ATTR_ATTR_FLAG) ? -EPERM : 0);
 
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
@@ -229,7 +228,7 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         RETURN(error);
         }
 
-        if (ia_valid & ATTR_UID) {
+        if (ia_valid & (ATTR_UID | ATTR_GID)) {
                 /* chown */
                 error = -EPERM;
                 if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
@@ -238,7 +237,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         attr->ia_uid = inode->i_uid;
                 if (attr->ia_gid == (gid_t) -1)
                         attr->ia_gid = inode->i_gid;
-                attr->ia_mode = inode->i_mode;
+                if (!(ia_valid & ATTR_MODE))
+                        attr->ia_mode = inode->i_mode;
                 /*
                  * If the user or group of a non-directory has been
                  * changed by a non-root user, remove the setuid bit.

@@ -161,6 +161,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
         rec->sa_fid = data->fid1;
+        rec->sa_suppgid = -1;
 
         if (iattr) {
                 rec->sa_valid = iattr->ia_valid;
@@ -174,11 +175,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
                 rec->sa_attr_flags = iattr->ia_attr_flags;
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
-                else if ((iattr->ia_valid & ATTR_MODE) &&
-                         in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = data->suppgids[0];
-                else if ((iattr->ia_valid & (ATTR_MTIME|ATTR_CTIME)) &&
-                         data->suppgids[0] != -1)
+                else
                         rec->sa_suppgid = data->suppgids[0];
         }
 

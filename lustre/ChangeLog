@@ -80,6 +80,13 @@ Description: shutdown with a failed MDS or OST can cause unmount to hang
 Details    : Don't resend DISCONNECT messages in ptlrpc_disconnect_import()
              if server is down.
 
+Severity   : minor
+Bugzilla   : 7331
+Frequency  : 2.6 only
+Description: chmod/chown may include an extra supplementary group
+Details    : ll{,u}_mdc_pack_op_data() does not properly initialize the
+             supplementary group and if none is specified this is used.
+
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4
        * bug fixes
