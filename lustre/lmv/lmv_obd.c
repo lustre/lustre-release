@@ -225,7 +225,6 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         lmv->connected = 0;
         lmv->cluuid = *cluuid;
         lmv->connect_flags = flags;
-        sema_init(&lmv->init_sem, 1);
         if (data)
                 memcpy(&lmv->conn_data, data, sizeof(*data));
 
@@ -240,7 +239,7 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
 #endif
 
         /* 
-         * all real clients shouls perform actual connection rightaway, because
+         * all real clients should perform actual connection rightaway, because
          * it is possible, that LMV will not have opportunity to connect
          * targets, as MDC stuff will bit called directly, for instance while
          * reading ../mdc/../kbytesfree procfs file, etc.
@@ -280,145 +279,270 @@ static void lmv_set_timeouts(struct obd_device *obd)
         }
 }
 
+static int lmv_init_ea_size(struct obd_export *exp, int easize,
+                            int cookiesize)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int i, rc = 0, change = 0;
+        ENTRY;
+
+        if (lmv->max_easize < easize) {
+                lmv->max_easize = easize;
+                change = 1;
+        }
+        if (lmv->max_cookiesize < cookiesize) {
+                lmv->max_cookiesize = cookiesize;
+                change = 1;
+        }
+        if (change == 0)
+                RETURN(0);
+        
+        if (lmv->connected == 0)
+                RETURN(0);
+
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                if (lmv->tgts[i].ltd_exp == NULL) {
+                        CWARN("%s: NULL export for %d\n", obd->obd_name, i);
+                        continue;
+                }
+
+                rc = obd_init_ea_size(lmv->tgts[i].ltd_exp, easize, cookiesize);
+                if (rc) {
+                        CERROR("obd_init_ea_size() failed on MDT target %d, "
+                               "error %d.\n", i, rc);
+                        break;
+                }
+        }
+        RETURN(rc);
+}
+
 #define MAX_STRING_SIZE 128
+
+int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
+{
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_uuid *cluuid = &lmv->cluuid;
+        struct obd_uuid lmv_mdc_uuid = { "LMV_MDC_UUID" };
+        struct lustre_handle conn = {0, };
+        struct obd_device *mdc_obd;
+        struct obd_export *mdc_exp;
+        int rc;
+#ifdef __KERNEL__
+        struct proc_dir_entry *lmv_proc_dir;
+#endif
+        ENTRY;
+
+        /* for MDS: don't connect to yourself */
+        if (obd_uuid_equals(&tgt->uuid, cluuid)) {
+                CDEBUG(D_CONFIG, "don't connect back to %s\n", cluuid->uuid);
+                /* XXX - the old code didn't increment active tgt count.
+                 *       should we ? */
+                RETURN(0);
+        }
+
+        mdc_obd = class_find_client_obd(&tgt->uuid, OBD_MDC_DEVICENAME,
+                                        &obd->obd_uuid);
+        if (!mdc_obd) {
+                CERROR("target %s not attached\n", tgt->uuid.uuid);
+                RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_CONFIG, "connect to %s(%s) - %s, %s FOR %s\n",
+                mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
+                tgt->uuid.uuid, obd->obd_uuid.uuid,
+                cluuid->uuid);
+
+        if (!mdc_obd->obd_set_up) {
+                CERROR("target %s not set up\n", tgt->uuid.uuid);
+                RETURN(-EINVAL);
+        }
+        
+        rc = obd_connect(&conn, mdc_obd, &lmv_mdc_uuid, &lmv->conn_data,
+                         lmv->connect_flags);
+        if (rc) {
+                CERROR("target %s connect error %d\n", tgt->uuid.uuid, rc);
+                RETURN(rc);
+        }
+
+        mdc_exp = class_conn2export(&conn);
+
+        rc = obd_register_observer(mdc_obd, obd);
+        if (rc) {
+                obd_disconnect(mdc_exp, 0);
+                CERROR("target %s register_observer error %d\n",
+                       tgt->uuid.uuid, rc);
+                RETURN(rc);
+        }
+
+        if (obd->obd_observer) {
+                /* tell the mds_lmv about the new target */
+                rc = obd_notify(obd->obd_observer, mdc_exp->exp_obd, 1,
+                                (void *)(tgt - lmv->tgts));
+                if (rc) {
+                        obd_disconnect(mdc_exp, 0);
+                        RETURN(rc);
+                }
+        }
+
+        tgt->ltd_exp = mdc_exp;
+        tgt->active = 1; 
+        lmv->desc.ld_active_tgt_count++;
+
+        obd_init_ea_size(tgt->ltd_exp, lmv->max_easize,
+                         lmv->max_cookiesize);
+        CDEBUG(D_CONFIG, "connected to %s(%s) successfully (%d)\n",
+                mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
+                atomic_read(&obd->obd_refcount));
+
+#ifdef __KERNEL__
+        lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
+        if (lmv_proc_dir) {
+                struct proc_dir_entry *mdc_symlink;
+                char name[MAX_STRING_SIZE + 1];
+
+                LASSERT(mdc_obd->obd_type != NULL);
+                LASSERT(mdc_obd->obd_type->typ_name != NULL);
+                name[MAX_STRING_SIZE] = '\0';
+                snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
+                         mdc_obd->obd_type->typ_name,
+                         mdc_obd->obd_name);
+                mdc_symlink = proc_symlink(mdc_obd->obd_name,
+                                           lmv_proc_dir, name);
+                if (mdc_symlink == NULL) {
+                        CERROR("could not register LMV target "
+                               "/proc/fs/lustre/%s/%s/target_obds/%s.",
+                               obd->obd_type->typ_name, obd->obd_name,
+                               mdc_obd->obd_name);
+                        lprocfs_remove(lmv_proc_dir);
+                        lmv_proc_dir = NULL;
+                }
+        }
+#endif
+        RETURN(0);
+}
+
+int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
+{
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lmv_tgt_desc *tgt;
+        int rc = 0;
+        ENTRY;
+
+        CDEBUG(D_CONFIG, "mdc_uuid: %s.\n", mdc_uuid->uuid);
+
+        lmv_init_lock(lmv);
+
+        if (lmv->desc.ld_active_tgt_count >= LMV_MAX_TGT_COUNT) {
+                lmv_init_unlock(lmv);
+                CERROR("can't add %s, LMV module compiled for %d MDCs. "
+                       "That many MDCs already configured.\n",
+                       mdc_uuid->uuid, LMV_MAX_TGT_COUNT);
+                RETURN(-EINVAL);
+        }
+
+        if (lmv->desc.ld_tgt_count == 0) {
+                struct obd_device *mdc_obd;
+
+                mdc_obd = class_find_client_obd(mdc_uuid, OBD_MDC_DEVICENAME,
+                                                &obd->obd_uuid);
+                if (!mdc_obd) {
+                        lmv_init_unlock(lmv);
+                        CERROR("Target %s not attached\n", mdc_uuid->uuid);
+                        RETURN(-EINVAL);
+                }
+
+                rc = obd_llog_init(obd, &obd->obd_llogs, mdc_obd, 0, NULL);
+                if (rc) {
+                        lmv_init_unlock(lmv);
+                        CERROR("lmv failed to setup llogging subsystems\n");
+                }
+        }
+
+        spin_lock(&lmv->lmv_lock);
+        tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
+        tgt->uuid = *mdc_uuid;
+        spin_unlock(&lmv->lmv_lock);
+
+        if (lmv->connected) {
+                rc = lmv_connect_mdc(obd, tgt);
+                if (rc) {
+                        spin_lock(&lmv->lmv_lock);
+                        lmv->desc.ld_tgt_count--;
+                        memset(tgt, 0, sizeof(*tgt));
+                        spin_unlock(&lmv->lmv_lock);
+                } else {
+                        int easize = sizeof(struct mea) +
+                                     lmv->desc.ld_tgt_count *
+                                     sizeof(struct lustre_id);
+                        lmv_init_ea_size(obd->obd_self_export, easize, 0);
+                }
+        }
+
+        lmv_init_unlock(lmv);
+        RETURN(rc);
+}
 
 /* performs a check if passed obd is connected. If no - connect it. */
 int lmv_check_connect(struct obd_device *obd)
 {
-#ifdef __KERNEL__
-        struct proc_dir_entry *lmv_proc_dir;
-#endif
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc *tgts;
-        struct obd_uuid *cluuid;
-        struct obd_export *exp;
-        int rc, rc2, i;
+        struct lmv_tgt_desc *tgt;
+        int i, rc, easize;
         ENTRY;
 
         if (lmv->connected)
                 RETURN(0);
         
-        down(&lmv->init_sem);
+        lmv_init_lock(lmv);
         if (lmv->connected) {
-                up(&lmv->init_sem);
+                lmv_init_unlock(lmv);
                 RETURN(0);
         }
 
-        cluuid = &lmv->cluuid;
-        exp = lmv->exp;
-        
-        CDEBUG(D_OTHER, "time to connect %s to %s\n",
-               cluuid->uuid, obd->obd_name);
+        if (lmv->desc.ld_tgt_count == 0) {
+                CERROR("%s: no targets configured.\n", obd->obd_name);
+                RETURN(-EINVAL);
+        }
 
-        for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgts++) {
-                struct obd_uuid lmv_mdc_uuid = { "LMV_MDC_UUID" };
-                struct lustre_handle conn = {0, };
-                struct obd_device *tgt_obd;
+        CDEBUG(D_CONFIG, "time to connect %s to %s\n",
+               lmv->cluuid.uuid, obd->obd_name);
 
-                LASSERT(tgts != NULL);
+        LASSERT(lmv->tgts != NULL);
 
-                tgt_obd = class_find_client_obd(&tgts->uuid, OBD_MDC_DEVICENAME, 
-                                                &obd->obd_uuid);
-                if (!tgt_obd) {
-                        CERROR("target %s not attached\n", tgts->uuid.uuid);
-                        GOTO(out_disc, rc = -EINVAL);
-                }
-
-                /* for MDS: don't connect to yourself */
-                if (obd_uuid_equals(&tgts->uuid, cluuid)) {
-                        CDEBUG(D_OTHER, "don't connect back to %s\n",
-                               cluuid->uuid);
-                        tgts->ltd_exp = NULL;
-                        continue;
-                }
-
-                CDEBUG(D_OTHER, "connect to %s(%s) - %s, %s FOR %s\n",
-                        tgt_obd->obd_name, tgt_obd->obd_uuid.uuid,
-                        tgts->uuid.uuid, obd->obd_uuid.uuid,
-                        cluuid->uuid);
-
-                if (!tgt_obd->obd_set_up) {
-                        CERROR("target %s not set up\n", tgts->uuid.uuid);
-                        GOTO(out_disc, rc = -EINVAL);
-                }
-                
-                rc = obd_connect(&conn, tgt_obd, &lmv_mdc_uuid, &lmv->conn_data,
-                                 lmv->connect_flags);
-                if (rc) {
-                        CERROR("target %s connect error %d\n",
-                                tgts->uuid.uuid, rc);
+        for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
+                rc = lmv_connect_mdc(obd, tgt);
+                if (rc)
                         GOTO(out_disc, rc);
-                }
-                tgts->ltd_exp = class_conn2export(&conn);
-
-                obd_init_ea_size(tgts->ltd_exp, lmv->max_easize,
-                                 lmv->max_cookiesize);
-
-                rc = obd_register_observer(tgt_obd, obd);
-                if (rc) {
-                        CERROR("target %s register_observer error %d\n",
-                               tgts->uuid.uuid, rc);
-                        obd_disconnect(tgts->ltd_exp, 0);
-                        GOTO(out_disc, rc);
-                }
-
-                lmv->desc.ld_active_tgt_count++;
-                tgts->active = 1;
-
-                CDEBUG(D_OTHER, "connected to %s(%s) successfully (%d)\n",
-                        tgt_obd->obd_name, tgt_obd->obd_uuid.uuid,
-                        atomic_read(&obd->obd_refcount));
-
-#ifdef __KERNEL__
-                lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
-                if (lmv_proc_dir) {
-                        struct obd_device *mdc_obd = class_conn2obd(&conn);
-                        struct proc_dir_entry *mdc_symlink;
-                        char name[MAX_STRING_SIZE + 1];
-
-                        LASSERT(mdc_obd != NULL);
-                        LASSERT(mdc_obd->obd_type != NULL);
-                        LASSERT(mdc_obd->obd_type->typ_name != NULL);
-                        name[MAX_STRING_SIZE] = '\0';
-                        snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
-                                 mdc_obd->obd_type->typ_name,
-                                 mdc_obd->obd_name);
-                        mdc_symlink = proc_symlink(mdc_obd->obd_name,
-                                                   lmv_proc_dir, name);
-                        if (mdc_symlink == NULL) {
-                                CERROR("could not register LMV target "
-                                       "/proc/fs/lustre/%s/%s/target_obds/%s.",
-                                       obd->obd_type->typ_name, obd->obd_name,
-                                       mdc_obd->obd_name);
-                                lprocfs_remove(lmv_proc_dir);
-                                lmv_proc_dir = NULL;
-                        }
-                }
-#endif
         }
 
         lmv_set_timeouts(obd);
-        class_export_put(exp);
+        class_export_put(lmv->exp);
         lmv->connected = 1;
-        up(&lmv->init_sem);
+        easize = lmv->desc.ld_tgt_count * sizeof(struct lustre_id) +
+                 sizeof(struct mea);
+        lmv_init_ea_size(obd->obd_self_export, easize, 0);
+        lmv_init_unlock(lmv);
         RETURN(0);
 
  out_disc:
         while (i-- > 0) {
-                struct obd_uuid uuid;
-                --tgts;
-                --lmv->desc.ld_active_tgt_count;
-                tgts->active = 0;
-                /* save for CERROR below; (we know it's terminated) */
-                uuid = tgts->uuid;
-                rc2 = obd_disconnect(tgts->ltd_exp, 0);
-                if (rc2)
-                        CERROR("error: LMV target %s disconnect on MDC idx %d: "
-                               "error %d\n", uuid.uuid, i, rc2);
+                int rc2;
+                --tgt;
+                tgt->active = 0;
+                if (tgt->ltd_exp) {
+                        --lmv->desc.ld_active_tgt_count;
+                        rc2 = obd_disconnect(tgt->ltd_exp, 0);
+                        if (rc2) {
+                                CERROR("error: LMV target %s disconnect on "
+                                       "MDC idx %d: error %d\n",
+                                       tgt->uuid.uuid, i, rc2);
+                        }
+                }
         }
-        class_disconnect(exp, 0);
-        up(&lmv->init_sem);
-        return rc;
+        class_disconnect(lmv->exp, 0);
+        lmv_init_unlock(lmv);
+        RETURN(rc);
 }
 
 static int lmv_disconnect(struct obd_export *exp, unsigned long flags)
@@ -544,22 +668,14 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 
 static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
 {
-        int i, rc = 0;
-        struct lmv_desc *desc;
-        struct obd_uuid *uuids;
-        struct lmv_tgt_desc *tgts;
-        struct obd_device *tgt_obd;
-        struct lustre_cfg *lcfg = buf;
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct lustre_cfg *lcfg = buf;
+        struct lmv_desc *desc;
+        int rc = 0;
         ENTRY;
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 1) < 1) {
                 CERROR("LMV setup requires a descriptor\n");
-                RETURN(-EINVAL);
-        }
-
-        if (LUSTRE_CFG_BUFLEN(lcfg, 2) < 1) {
-                CERROR("LMV setup requires an MDT UUID list\n");
                 RETURN(-EINVAL);
         }
 
@@ -570,49 +686,29 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        uuids = (struct obd_uuid *)lustre_cfg_buf(lcfg, 2);
-        if (sizeof(*uuids) * desc->ld_tgt_count != LUSTRE_CFG_BUFLEN(lcfg, 2)) {
-                CERROR("UUID array size wrong: %u * %u != %u\n",
-                       sizeof(*uuids), desc->ld_tgt_count, LUSTRE_CFG_BUFLEN(lcfg, 2));
-                RETURN(-EINVAL);
-        }
+        lmv->tgts_size = LMV_MAX_TGT_COUNT * sizeof(struct lmv_tgt_desc);
 
-        lmv->tgts_size = sizeof(struct lmv_tgt_desc) * desc->ld_tgt_count;
         OBD_ALLOC(lmv->tgts, lmv->tgts_size);
         if (lmv->tgts == NULL) {
                 CERROR("Out of memory\n");
                 RETURN(-ENOMEM);
         }
 
-        lmv->desc = *desc;
-        spin_lock_init(&lmv->lmv_lock);
-        
-        for (i = 0, tgts = lmv->tgts; i < desc->ld_tgt_count; i++, tgts++)
-                tgts->uuid = uuids[i];
-        
+        obd_str2uuid(&lmv->desc.ld_uuid, desc->ld_uuid.uuid);
+        lmv->desc.ld_tgt_count = 0;
+        lmv->desc.ld_active_tgt_count = 0;
         lmv->max_cookiesize = 0;
+        lmv->max_easize = 0;
 
-        lmv->max_easize = sizeof(struct lustre_id) *
-                desc->ld_tgt_count + sizeof(struct mea);
-        
+        spin_lock_init(&lmv->lmv_lock);
+        sema_init(&lmv->init_sem, 1);
+
         rc = lmv_setup_mgr(obd);
         if (rc) {
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
                 OBD_FREE(lmv->tgts, lmv->tgts_size);
                 RETURN(rc);
-        }
-
-        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, OBD_MDC_DEVICENAME,
-                                        &obd->obd_uuid);
-        if (!tgt_obd) {
-                CERROR("Target %s not attached\n", lmv->tgts->uuid.uuid);
-                RETURN(-EINVAL);
-        }
-
-        rc = obd_llog_init(obd, &obd->obd_llogs, tgt_obd, 0, NULL);
-        if (rc) {
-                CERROR("lmv_setup failed to setup llogging subsystems\n");
         }
 
         RETURN(rc);
@@ -627,6 +723,30 @@ static int lmv_cleanup(struct obd_device *obd, int flags)
         OBD_FREE(lmv->tgts, lmv->tgts_size);
         
         RETURN(0);
+}
+
+static int lmv_process_config(struct obd_device *obd, obd_count len, void *buf)
+{
+        struct lustre_cfg *lcfg = buf;
+        struct obd_uuid mdc_uuid;
+        int rc;
+        ENTRY;
+
+        switch(lcfg->lcfg_command) {
+        case LCFG_LMV_ADD_MDC:
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(mdc_uuid.uuid))
+                        GOTO(out, rc = -EINVAL);
+
+                obd_str2uuid(&mdc_uuid, lustre_cfg_string(lcfg, 1));
+		rc = lmv_add_mdc(obd, &mdc_uuid);
+                GOTO(out, rc);
+        default: {
+                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                GOTO(out, rc = -EINVAL);
+        }
+        }
+out:
+        RETURN(rc);
 }
 
 static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
@@ -644,7 +764,7 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         OBD_ALLOC(temp, sizeof(*temp));
         if (temp == NULL)
                 RETURN(-ENOMEM);
-                
+               
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
@@ -1653,44 +1773,6 @@ static struct obd_device *lmv_get_real_obd(struct obd_export *exp,
         return obd;
 }
 
-static int lmv_init_ea_size(struct obd_export *exp, int easize,
-                            int cookiesize)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct lmv_obd *lmv = &obd->u.lmv;
-        int i, rc = 0, change = 0;
-        ENTRY;
-
-        if (lmv->max_easize < easize) {
-                lmv->max_easize = easize;
-                change = 1;
-        }
-        if (lmv->max_cookiesize < cookiesize) {
-                lmv->max_cookiesize = cookiesize;
-                change = 1;
-        }
-        if (change == 0)
-                RETURN(0);
-        
-        if (lmv->connected == 0)
-                RETURN(0);
-
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                if (lmv->tgts[i].ltd_exp == NULL) {
-                        CWARN("%s: NULL export for %d\n", obd->obd_name, i);
-                        continue;
-                }
-
-                rc = obd_init_ea_size(lmv->tgts[i].ltd_exp, easize, cookiesize);
-                if (rc) {
-                        CERROR("obd_init_ea_size() failed on MDT target %d, "
-                               "error %d.\n", i, rc);
-                        break;
-                }
-        }
-        RETURN(rc);
-}
-
 static int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
                                  void *acl, int acl_size,
                                  struct lov_stripe_md **ea,
@@ -1879,7 +1961,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 __u32 *mdsize = val;
                 *vallen = sizeof(__u32);
                 *mdsize = sizeof(struct lustre_id) * lmv->desc.ld_tgt_count
-                        + sizeof(struct mea);
+                       + sizeof(struct mea);
                 RETURN(0);
         } else if (keylen == strlen("mdsnum") && !strcmp(key, "mdsnum")) {
                 struct obd_uuid *cluuid = &lmv->cluuid;
@@ -1887,7 +1969,8 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 __u32 *mdsnum = val;
                 int i;
 
-                for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgts++) {
+                tgts = lmv->tgts;
+                for (i = 0; i < lmv->desc.ld_tgt_count; i++, tgts++) {
                         if (obd_uuid_equals(&tgts->uuid, cluuid)) {
                                 *vallen = sizeof(__u32);
                                 *mdsnum = i;
@@ -2282,6 +2365,7 @@ struct obd_ops lmv_obd_ops = {
         .o_detach               = lmv_detach,
         .o_setup                = lmv_setup,
         .o_cleanup              = lmv_cleanup,
+        .o_process_config       = lmv_process_config,
         .o_connect              = lmv_connect,
         .o_disconnect           = lmv_disconnect,
         .o_statfs               = lmv_statfs,

@@ -466,11 +466,8 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                        desc->ld_default_stripe_size, count, ~0UL);
                 RETURN(-EINVAL);
         }
-        if (desc->ld_tgt_count > 0) {
-                lov->bufsize= sizeof(struct lov_tgt_desc) * desc->ld_tgt_count;
-        } else {
-                lov->bufsize = sizeof(struct lov_tgt_desc) * LOV_MAX_TGT_COUNT;  
-        }
+
+        lov->bufsize = sizeof(struct lov_tgt_desc) * LOV_MAX_TGT_COUNT;  
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (lov->tgts == NULL) {
                 lov->bufsize = 0;

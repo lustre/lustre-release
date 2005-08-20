@@ -385,6 +385,9 @@ command_t cmdlist[] = {
         {"lov_getconfig", jt_obd_lov_getconfig, 0,
          "read lov configuration from an mds device\n"
          "usage: lov_getconfig lov-uuid"},
+        {"lmv_modify_tgts", jt_lcfg_lmv_modify_tgts, 0,
+         "add an mdc to a LMV device\n"
+         "usage: lmv_modify_tgts add <lmv_name> <mdc_uuid>"},
         {"record", jt_cfg_record, 0, "record commands that follow in log\n"
          "usage: record cfg-uuid-name"},
         {"endrecord", jt_cfg_endrecord, 0, "stop recording\n"

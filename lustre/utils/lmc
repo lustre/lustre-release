@@ -666,6 +666,12 @@ class GenConfig:
         new = self.doc.createElement("info")
         return new
 
+    def lmv_add(self, lmv, mdt):
+	new = self.doc.createElement("lmv_add")
+        new.setAttribute("lmv_uuidref", lmv)
+        new.setAttribute("mdt_uuidref", mdt)
+        return new
+
     def lov_add(self, lov, ost, index, gen):
         new = self.doc.createElement("lov_add")
         new.setAttribute("lov_uuidref", lov)
@@ -852,9 +858,11 @@ def lov_del_osc(gen, lustre, lov, osc_uuid, options):
             tgt.setAttribute('active', '0')
             tgt.setAttribute('generation', gener)
 
-def lmv_add_obd(gen, lmv, mdc_uuid):
+def lmv_add_mdc(gen, lustre, lmv, mdc_uuid):
     lmv.appendChild(gen.lmv_tgt(mdc_uuid))
-
+    addrec = gen.lmv_add(getUUID(lmv), mdc_uuid)
+    addUpdate(gen, lustre, addrec)
+                            
 def ref_exists(profile, uuid):
     elist = profile.childNodes
     for e in elist:
@@ -1039,13 +1047,6 @@ def add_mds(gen, lustre, options):
     mdd_name = new_name("MDD_" + mds_name +"_" + node_name)
     mdd_uuid = new_uuid(mdd_name)
 
-    lmv_uuid = ""
-    if lmv_name:
-        lmv = findByName(lustre, lmv_name, "lmv")
-        if not lmv:
-            error('add_mds:', '"' + lmv_name + '"', "lmv element not found.")
-        lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
-
     mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
         mds_uuid = get_option(options, 'mdsuuid')
@@ -1056,11 +1057,19 @@ def add_mds(gen, lustre, options):
             mds_uuid = new_uuid(mds_name)
         mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
-        if lmv_name:
-            lmv_add_obd(gen, lmv, mds_uuid)
     else:
         mds = lookup(lustre, mds_uuid)
 
+    lmv_uuid = ""
+    if lmv_name:
+        lmv = findByName(lustre, lmv_name, "lmv")
+        if not lmv:
+            error('add_mds:', '"' + lmv_name + '"', "lmv element not found.")
+        lmv_add_mdc(gen, lustre, lmv, mds_uuid)
+        lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
+        if lmv_uuid:
+            mds.appendChild(gen.ref("lmv", lmv_uuid))
+    
     if options.failover:
         mds.setAttribute('failover', "1")
 
@@ -1088,9 +1097,6 @@ def add_mds(gen, lustre, options):
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
         error("NODE: ", node_name, "not found")
-
-    if lmv_name:
-        mds.appendChild(gen.ref("lmv", lmv_uuid))
 
     if fs_name != "":
 	fs_uuid = name2uuid(lustre, fs_name, 'filesystem', fatal=1)

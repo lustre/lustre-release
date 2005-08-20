@@ -22,6 +22,11 @@
 #ifndef _LMV_INTERNAL_H_
 #define _LMV_INTERNAL_H_
 
+#define LMV_MAX_TGT_COUNT 128
+
+#define lmv_init_lock(lmv)   down(&lmv->init_sem);
+#define lmv_init_unlock(lmv) up(&lmv->init_sem);
+
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
 

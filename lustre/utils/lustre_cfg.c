@@ -410,68 +410,6 @@ int jt_lcfg_lov_setup(int argc, char **argv)
         return rc;
 }
 
-int jt_lcfg_lmv_setup(int argc, char **argv)
-{
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-        struct lmv_desc desc;
-        struct obd_uuid *uuidarray, *ptr;
-        int rc, i;
-
-        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
-        if (argc <= 2)
-                return CMD_HELP;
-
-        if (strlen(argv[1]) > sizeof(desc.ld_uuid) - 1) {
-                fprintf(stderr,
-                        "error: %s: LMV uuid '%s' longer than "LPSZ" chars\n",
-                        jt_cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
-                return -EINVAL;
-        }
-
-        memset(&desc, 0, sizeof(desc));
-        obd_str2uuid(&desc.ld_uuid, argv[1]);
-        desc.ld_tgt_count = argc - 2;
-        printf("LMV: %d uuids:\n", desc.ld_tgt_count);
-
-        /* NOTE: it is possible to overwrite the default striping parameters,
-         *       but EXTREME care must be taken when saving the OST UUID list.
-         *       It must be EXACTLY the same, or have only additions at the
-         *       end of the list, or only overwrite individual OST entries
-         *       that are restored from backups of the previous OST.
-         */
-        uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
-        if (!uuidarray) {
-                fprintf(stderr, "error: %s: no memory for %d UUIDs\n",
-                        jt_cmdname(argv[0]), desc.ld_tgt_count);
-                rc = -ENOMEM;
-                goto out;
-        }
-        for (i = 2, ptr = uuidarray; i < argc; i++, ptr++) {
-                if (strlen(argv[i]) >= sizeof(*ptr)) {
-                        fprintf(stderr, "error: %s: arg %d (%s) too long\n",
-                                jt_cmdname(argv[0]), i, argv[i]);
-                        rc = -EINVAL;
-                        goto out;
-                }
-                printf("  %s\n", argv[i]);
-                strcpy((char *)ptr, argv[i]);
-        }
-
-        lustre_cfg_bufs_set(&bufs, 1, &desc, sizeof(desc));
-        lustre_cfg_bufs_set(&bufs, 2, (char*)uuidarray, 
-                            desc.ld_tgt_count * sizeof(*uuidarray));
-        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
-        lustre_cfg_free(lcfg);
-        
-        if (rc)
-                fprintf(stderr, "error: %s: ioctl error: %s\n",
-                        jt_cmdname(argv[0]), strerror(rc = errno));
-out:
-        free(uuidarray);
-        return rc;
-}
 int jt_lcfg_lov_modify_tgts(int argc, char **argv)
 {
         struct lustre_cfg_bufs bufs;
@@ -525,6 +463,82 @@ int jt_lcfg_lov_modify_tgts(int argc, char **argv)
         lustre_cfg_bufs_set(&bufs, 3, argv[5], strlen(argv[5]));
 
         lcfg = lustre_cfg_new(cmd, &bufs);
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        lustre_cfg_free(lcfg);
+        if (rc)
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+        return rc;
+}
+
+int jt_lcfg_lmv_setup(int argc, char **argv)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        struct lmv_desc desc;
+        int rc;
+
+        /* argv: lmv_setup <lmv_uuid> */
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        lustre_cfg_bufs_reset(&bufs, lcfg_devname);
+
+        if (strlen(argv[1]) > (sizeof(desc.ld_uuid) - 1)) {
+                fprintf(stderr,
+                        "error: %s: LMV uuid '%s' longer than "LPSZ" chars\n",
+                        jt_cmdname(argv[0]), argv[1], sizeof(desc.ld_uuid) - 1);
+                return -EINVAL;
+        }
+
+        memset(&desc, 0, sizeof(desc));
+        obd_str2uuid(&desc.ld_uuid, argv[1]);
+
+        lustre_cfg_bufs_set(&bufs, 1, &desc, sizeof(desc));
+        lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
+        rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
+        if (rc)
+                fprintf(stderr, "error: %s: ioctl error: %s\n",
+                        jt_cmdname(argv[0]), strerror(rc = errno));
+
+        lustre_cfg_free(lcfg);
+        return rc;
+}
+
+int jt_lcfg_lmv_modify_tgts(int argc, char **argv)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int mdc_uuid_len, rc;
+
+        /* NOTE: EXTREME care must be taken to always add MDCs in the same
+         *       order, or have only additions at the end of the list.
+         */
+
+        /* argv: lmv_modify_tgts add <LMV name> <MDC uuid> */
+        if (argc != 4)
+                return CMD_HELP;
+
+        if (strncmp(argv[1], "add", 4) != 0) {
+                fprintf(stderr, "error: %s: bad operation '%s'\n",
+                        jt_cmdname(argv[0]), argv[1]);
+                return CMD_HELP;
+        }
+
+        lustre_cfg_bufs_reset(&bufs, argv[2]);
+
+        if (((mdc_uuid_len = strlen(argv[3]) + 1)) > sizeof(struct obd_uuid)) {
+                fprintf(stderr,
+                        "error: %s: MDC uuid '%s' longer than "LPSZ" chars\n",
+                        jt_cmdname(argv[0]), argv[3],
+                        sizeof(struct obd_uuid) - 1);
+                return -EINVAL;
+        }
+
+        lustre_cfg_bufs_set(&bufs, 1, argv[3], mdc_uuid_len);
+        
+        lcfg = lustre_cfg_new(LCFG_LMV_ADD_MDC, &bufs);
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, lcfg);
         lustre_cfg_free(lcfg);
         if (rc)

@@ -101,7 +101,7 @@ subsystem_names = {
     "mds" :          (1 << 2),
     "osc" :          (1 << 3),
     "ost" :          (1 << 4),
-    "class" :        (1 << 5),
+    "obdclass" :     (1 << 5),
     "log" :          (1 << 6),
     "llite" :        (1 << 7),
     "rpc" :          (1 << 8),
@@ -664,14 +664,6 @@ class LCTLInterface:
   quit""" % (name, ost_uuid, index, gen)
         self.run(cmds)
 
-    # create an lmv
-    def lmv_setup(self, name, uuid, desc_uuid, devlist):
-        cmds = """
-  attach lmv %s %s
-  lmv_setup %s %s
-  quit""" % (name, uuid, desc_uuid, devlist)
-        self.run(cmds)
-
     # delete an OSC from a LOV
     def lov_del_osc(self, name, ost_uuid, index, gen):
         cmds = """
@@ -685,6 +677,21 @@ class LCTLInterface:
   device $%s
   deactivate
   quit""" % (name)
+        self.run(cmds)
+
+    # create an lmv
+    def lmv_setup(self, name, uuid, desc_uuid):
+        cmds = """
+  attach lmv %s %s
+  lmv_setup %s
+  quit""" % (name, uuid, desc_uuid)
+        self.run(cmds)
+
+    # add an MDC to an LMV
+    def lmv_add_mdc(self, lmv_name, mdt_uuid):
+        cmds = """
+  lmv_modify_tgts add %s %s
+  quit""" % (lmv_name, mdt_uuid)
         self.run(cmds)
 
     # dump the log file
@@ -1700,6 +1707,7 @@ class LMV(Module):
             return
 	    
 	self.info();
+        lctl.lmv_setup(self.name, self.uuid, self.desc_uuid)
         for mdc in self.mdclist:
             try:
                 # Only ignore connect failures with --force, which
@@ -1708,10 +1716,8 @@ class LMV(Module):
             except CommandError, e:
                 print "Error preparing LMV %s\n" % mdc.uuid
                 raise e
+            lctl.lmv_add_mdc(self.name, mdc.target_uuid)
 	
-        lctl.lmv_setup(self.name, self.uuid, self.desc_uuid,
-                       string.join(self.devlist))
-
     def cleanup(self):
         for mdc in self.mdclist:
             mdc.cleanup()
@@ -2026,6 +2032,12 @@ class CONFDEV(Module):
         if not self.client_uuids:
             return 0
 
+        if self.lmv:
+	    client_uuid = self.conf_name + "_lmv_UUID"
+            lmv = VMDC(self.lmv, client_uuid, self.conf_name, self.conf_name);
+        else:
+            lmv = None
+
         for uuid in self.client_uuids:
             log("recording client:", uuid)
             client_uuid = generate_client_uuid(self.name)
@@ -2037,7 +2049,7 @@ class CONFDEV(Module):
             client.prepare()
             lctl.mount_option(self.target.getName(), client.get_name(), "", "")
             lctl.end_record()
-            process_updates(self.db, self.name, self.target.getName(), client) 
+            process_updates(self.db, self.name, self.target.getName(), lmv, client)
             config.cleanup = 1
             lctl.clear_log(self.name, self.target.getName() + '-clean')
             lctl.record(self.name, self.target.getName() + '-clean')
@@ -2655,7 +2667,7 @@ class CMOBD(Module):
 	    self.master = get_osc(master_obd, client_uuid, self.master_uuid) 
         elif master_class == 'mds':
 	    client_uuid = "%s_mds_master_UUID" % (self.name)
-	    self.master = get_mdc(master_obd, client_uuid, self.master_uuid) 
+	    self.master = get_mdc(master_obd,  self.master_uuid, client_uuid) 
         elif master_class == 'lmv':
 	    client_uuid = "%s_lmv_master_UUID" % (self.name)
             self.master = LMV(master_obd, client_uuid, self.name, 
@@ -2667,8 +2679,8 @@ class CMOBD(Module):
 	    self.cache = get_osc(cache_obd, cache_obd.getUUID(), 
 			         self.cache_uuid)
         elif cache_class == 'mds':
-	    self.cache = get_mdc(cache_obd, cache_obd.getUUID(), 
-			         self.cache_uuid)
+	    self.cache = get_mdc(cache_obd, self.cache_uuid,
+				 cache_obd.getUUID())
 	else:
 	    panic("invalid cache obd class '%s'" %(cache_class))
 
@@ -2734,7 +2746,7 @@ class COBD(Module):
             self.master = LOV(master_obd, client_uuid, name,
 			      "master_%s" % (self.name));
         elif master_class == 'mds':
-            self.master = get_mdc(db, name, self.master_uuid) 
+            self.master = get_mdc(db, self.master_uuid, name) 
         elif master_class == 'lmv':
 	    client_uuid = "%s_lmv_master_UUID" % (self.name)
             self.master = LMV(master_obd, client_uuid, self.name, 
@@ -2747,7 +2759,7 @@ class COBD(Module):
             self.cache = LOV(cache_obd, client_uuid, name,
 			     "cache_%s" % (self.name));
         elif cache_class == 'mds':
-            self.cache = get_mdc(db, name, self.cache_uuid)
+            self.cache = get_mdc(db, self.cache_uuid, name)
         elif cache_class == 'lmv':
 	    client_uuid = "%s_lmv_cache_UUID" % (self.name)
             self.cache = LMV(cache_obd, client_uuid, self.name, 
@@ -3083,11 +3095,11 @@ def get_osc(db, ost_uuid, fs_name):
     osc = OSC(db, ost_uuid, fs_name)
     return osc
 
-def get_mdc(db, fs_name, mds_uuid):
-    mds_db = db.lookup(mds_uuid);
-    if not mds_db:
-        error("no mds:", mds_uuid)
-    mdc = MDC(mds_db, mds_uuid, fs_name)
+def get_mdc(db, mdt_uuid, fs_name):
+    mdt_db = db.lookup(mdt_uuid);
+    if not mdt_db:
+        error("no mdt:", mdt_uuid)
+    mdc = MDC(mdt_db, mdt_uuid, fs_name)
     return mdc
 
 def get_gkc(db, uuid, fs_name, gks_uuid):
@@ -3325,10 +3337,32 @@ def magic_get_osc(db, rec, lov):
         panic('osc not found:', obd_uuid)
     return lov_name, lov_uuid, osc
 
+def magic_get_mdc(db, rec, lmv):
+    if lmv:
+        lmv_uuid = lmv.mdc.uuid
+        fs_name = lmv.mdc.fs_name
+        lmv_name = lmv.mdc.name
+    else:
+        lmv_uuid = rec.getAttribute('lmv_uuidref')
+        fs_name = get_fs_name(db, rec, 'mds_ref', lmv_uuid)
+        lmv_name = "lmv_" + fs_name
+
+    mdt_uuid = rec.getAttribute('mdt_uuidref')
+
+    mds = db.lookup(mdt_uuid)
+    print mds
+    if not mds:
+        panic("MDS not found!")
+
+    mdc = MDC(mds, lmv_uuid, fs_name)
+    if not mdc:
+        panic('mdc not found:', mdt_uuid)
+    return lmv_name, lmv_uuid, mdc
+
 # write logs for update records.  sadly, logs of all types -- and updates in
 # particular -- are something of an afterthought.  lconf needs rewritten with
 # these as core concepts.  so this is a pretty big hack.
-def process_update_record(db, update, lov):
+def process_update_record(db, update, lmv, lov):
     for rec in update.childNodes:
         if rec.nodeType != rec.ELEMENT_NODE:
             continue
@@ -3338,6 +3372,26 @@ def process_update_record(db, update, lov):
 
         log("found " + rec.nodeName + " record in update version " +
             str(update.getAttribute('version')))
+
+        if rec.nodeName == 'lmv_add':
+            lmv_uuid = rec.getAttribute('lmv_uuidref')
+            mdt_uuid = rec.getAttribute('mdt_uuidref')
+            if not lmv_uuid or not mdt_uuid:
+                panic("malformed xml: '" + rec.nodeName + \
+        	      "' record requires lmv_uuid and mdt_uuid.")
+
+            lmv_name, lmv_uuid, mdc = magic_get_mdc(db, rec, lmv)
+
+            try:
+                # Only ignore connect failures with --force, which
+                # isn't implemented here yet.
+                mdc.prepare(ignore_connect_failure=0)
+            except CommandError, e:
+                print "Error preparing MDC %s\n" % osc.uuid
+                raise e
+
+            lctl.lmv_add_mdc(lmv_name, mdt_uuid)
+            continue
 
         if rec.nodeName != 'lov_add' and rec.nodeName != 'lov_delete' and \
            rec.nodeName != 'lov_deactivate':
@@ -3385,7 +3439,7 @@ def process_update_record(db, update, lov):
                 print "Error cleaning up OSC %s\n" % osc.uuid
                 raise e
 
-def process_updates(db, log_device, log_name, lov = None):
+def process_updates(db, log_device, log_name, lmv = None, lov = None):
     if not config.write_conf and not config.record:
         return
     if config.cleanup:
@@ -3403,7 +3457,7 @@ def process_updates(db, log_device, log_name, lov = None):
         lctl.clear_log(log_device, real_name)
         lctl.record(log_device, real_name)
 
-        process_update_record(db, u, lov)
+        process_update_record(db, u, lmv, lov)
 
         lctl.end_record()
 
@@ -3428,8 +3482,26 @@ def doSetup(services):
 	nl = n[1].correct_level(n[0])
 	nlist.append((nl, n[1]))
     nlist.sort()
+
+    if config.record:
+        lctl.clear_log(config.record_device, config.record_log)
+        lctl.record(config.record_device, config.record_log)
+
+    # ugly hack, only need to run lctl commands for --dump
+    if config.lctl_dump or config.record:
+        sys_set_timeout(timeout)
+        sys_set_lustre_upcall(lustre_upcall)
+
     for n in nlist:
         n[1].prepare()
+        if config.record and n[1].module_name == 'MTPT':
+	    lmv = n[1].vmdc
+	    lov = n[1].vosc
+
+    if config.record:
+        lctl.end_record()
+        process_updates(n[1].db, config.record_device, config.record_log,
+                        lmv, lov)
 
 def doLoadModules(services):
     if config.nomod:
@@ -3472,14 +3544,21 @@ def doCleanup(services):
     nlist.sort()
     nlist.reverse()
 
+    if config.record:
+        lctl.clear_log(config.record_device, config.record_log)
+        lctl.record(config.record_device, config.record_log)
+
     for n in nlist:
         if n[1].safe_to_clean():
             n[1].cleanup()
 
+    if config.record:
+        lctl.end_record()
+
 #
 # Load profile for 
 def doHost(lustreDB, hosts):
-    global is_router, local_node_name
+    global is_router, local_node_name, lustre_upcall, timeout
     node_db = None
     for h in hosts:
         node_db = lustreDB.lookup_name(h, 'node')
@@ -3539,8 +3618,6 @@ def doHost(lustreDB, hosts):
     else:
         # ugly hack, only need to run lctl commands for --dump
         if config.lctl_dump or config.record:
-            sys_set_timeout(timeout)
-            sys_set_lustre_upcall(lustre_upcall)
             for_each_profile(node_db, prof_list, doSetup)
             return
 
@@ -3959,17 +4036,11 @@ def main():
     if config.record:
         if not (config.record_device and config.record_log):
             panic("When recording, both --record_log and --record_device must be specified.")
-        lctl.clear_log(config.record_device, config.record_log)
-        lctl.record(config.record_device, config.record_log)
 
     # init module manager
     mod_manager = kmod_manager(config.lustre, config.portals)
 
     doHost(lustreDB, node_list)
-
-    if config.record:
-        lctl.end_record()
-        process_updates(lustreDB, config.record_device, config.record_log)
 
     return
 
