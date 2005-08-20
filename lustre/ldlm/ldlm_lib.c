@@ -256,12 +256,19 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         memset(&cli->cl_last_write_time, 0,
                sizeof(cli->cl_last_write_time));
+        
         cli->cl_write_gap_sum = 0;
         cli->cl_write_gaps = 0;
         cli->cl_write_num = 0;
         cli->cl_read_num = 0;
         cli->cl_cache_wait_num = 0;
         cli->cl_cache_wait_sum = 0;
+
+        cli->cl_dirty_num = 0;
+        cli->cl_dirty_sum = 0;
+        cli->cl_dirty_av = 0;
+        cli->cl_dirty_dmax = 0;
+        cli->cl_dirty_dmin = 0;
 
         if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
@@ -374,6 +381,31 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
                 symbol_put("mgmtcli_deregister_for_events");
         }
 
+        if (cli->cl_write_gaps) {
+                CWARN("%s: [writes num: %lu, reads num: %lu]: %lu write gaps: %lu "
+                      "av. (usec), %lu total (usec)\n", obddev->obd_name,
+                      cli->cl_write_num, cli->cl_read_num, cli->cl_write_gaps,
+                      cli->cl_write_gap_sum / cli->cl_write_gaps,
+                      cli->cl_write_gap_sum);
+        }
+        
+        if (cli->cl_cache_wait_num) {
+                CWARN("%s: [cache waits num: %lu]: cache wait av. %lu (usec)\n",
+                      obddev->obd_name, cli->cl_cache_wait_num,
+                      cli->cl_cache_wait_sum / cli->cl_cache_wait_num);
+        }
+
+        if (cli->cl_dirty_av) {
+                CWARN("%s: pipe loading av. %lu (b), max pipe space %lu (b), pipe "
+                      "loading ratio %lu%%\n", obddev->obd_name, cli->cl_dirty_av,
+                      cli->cl_dirty_max, (cli->cl_dirty_av * 100) / cli->cl_dirty_max);
+        }
+
+        if (cli->cl_dirty_dmax) {
+                CWARN("%s: pipe dirty max %lu (b), pipe dirty min %lu (b)\n",
+                      obddev->obd_name, cli->cl_dirty_dmax, cli->cl_dirty_dmin);
+        }
+
         /* Here we try to drop the security structure after destroy import,
          * to avoid issue of "sleep in spinlock".
          */
@@ -382,19 +414,6 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         ptlrpcs_import_drop_sec(cli->cl_import);
         class_import_put(cli->cl_import);
         cli->cl_import = NULL;
-
-        if (cli->cl_write_gaps) {
-                CWARN("%s: (write num: %lu, read num: %lu): %lu write gaps: %lu "
-                      "av. (usec), %lu total (usec)\n", obddev->obd_name,
-                      cli->cl_write_num, cli->cl_read_num, cli->cl_write_gaps,
-                      cli->cl_write_gap_sum / cli->cl_write_gaps,
-                      cli->cl_write_gap_sum);
-        }
-        if (cli->cl_cache_wait_num) {
-                CWARN("%s: cache wait num: %lu, cache wait av. %lu (usec)\n",
-                      obddev->obd_name, cli->cl_cache_wait_num,
-                      cli->cl_cache_wait_sum / cli->cl_cache_wait_num);
-        }
 
         ldlm_put_ref(flags & OBD_OPT_FORCE);
         RETURN(0);

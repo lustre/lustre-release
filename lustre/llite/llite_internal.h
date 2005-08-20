@@ -355,11 +355,12 @@ void ll_stime_record(struct ll_sb_info *sbi, struct timeval *start,
                      struct obd_service_time *stime);
 
 /* llite_capa.c */
+int ll_capa_thread_start(void);
+void ll_capa_thread_stop(void);
+
 void ll_capa_timer_callback(unsigned long unused);
-int ll_capa_start_thread(void);
-void ll_capa_stop_thread(void);
 int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
-                           struct obd_client_handle *och);
+                    struct obd_client_handle *och);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
@@ -375,8 +376,8 @@ int revalidate_it_finish(struct ptlrpc_request *request, int offset,
 
 
 /* llite/llite_gns.c */
-int ll_gns_start_thread(void);
-void ll_gns_stop_thread(void);
+int ll_gns_thread_start(void);
+void ll_gns_thread_stop(void);
 
 int ll_gns_mount_object(struct dentry *dentry,
                         struct vfsmount *mnt);

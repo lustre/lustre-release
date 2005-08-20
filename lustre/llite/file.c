@@ -200,7 +200,6 @@ int ll_md_real_close(struct obd_export *md_exp,
         och = *och_p;
         *och_p = NULL;
 
-
         up(&lli->lli_och_sem);
 
         /*

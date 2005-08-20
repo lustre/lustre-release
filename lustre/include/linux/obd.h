@@ -360,12 +360,19 @@ struct client_obd {
 
         /* debug stuff */
         struct timeval           cl_last_write_time;
-        long                     cl_write_gap_sum;
-        long                     cl_write_gaps;
-        long                     cl_write_num;
-        long                     cl_read_num;
-        long                     cl_cache_wait_num;
-        long                     cl_cache_wait_sum;
+        unsigned long            cl_write_gap_sum;
+        unsigned long            cl_write_gaps;
+        unsigned long            cl_write_num;
+        unsigned long            cl_read_num;
+        unsigned long            cl_cache_wait_num;
+        unsigned long            cl_cache_wait_sum;
+
+        unsigned long            cl_dirty_num;
+        unsigned long            cl_dirty_sum;
+        unsigned long            cl_dirty_av;
+        
+        unsigned long            cl_dirty_dmax;
+        unsigned long            cl_dirty_dmin;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we

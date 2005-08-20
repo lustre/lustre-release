@@ -129,7 +129,7 @@ static int __init init_lustre_lite(void)
                 goto out;
         cleanup = 2;
 
-        rc = ll_gns_start_thread();
+        rc = ll_gns_thread_start();
         if (rc)
                 goto out;
 
@@ -137,7 +137,7 @@ static int __init init_lustre_lite(void)
         ll_capa_timer.data = 0;
         init_timer(&ll_capa_timer);        
 
-        rc = ll_capa_start_thread();
+        rc = ll_capa_thread_start();
         if (rc)
                 goto out;
 
@@ -162,8 +162,8 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_fs_type);
 
         del_timer(&ll_capa_timer);
-        ll_capa_stop_thread();
-        ll_gns_stop_thread();
+        ll_capa_thread_stop();
+        ll_gns_thread_stop();
 
         LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
                  "couldn't destroy ll_file_data slab\n");

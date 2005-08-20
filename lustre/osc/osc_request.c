@@ -1314,6 +1314,7 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
 
         cli = aa->aa_cli;
+
         /* in failout recovery we ignore writeback failure and want
          * to just tell llite to unlock the page and continue */
         if (request->rq_reqmsg->opc == OST_WRITE &&
@@ -1332,8 +1333,6 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         else
                 lprocfs_stime_record(&cli->cl_read_stime, &now,
                                      &request->rq_rpcd_start);
-
-
 
         /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
@@ -1870,6 +1869,24 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         if (cli->cl_dirty_max < PAGE_SIZE)
                 return(-EDQUOT);
 
+        if (~0ul - cli->cl_dirty_sum <= cli->cl_dirty) {
+                cli->cl_dirty_av = (cli->cl_dirty_av +
+                                    (cli->cl_dirty_sum / cli->cl_dirty_num)) / 2;
+                cli->cl_dirty_num = 0;
+                cli->cl_dirty_sum = 0;
+        } else {
+                if (cli->cl_dirty_num)
+                        cli->cl_dirty_av = (cli->cl_dirty_sum / cli->cl_dirty_num);
+        }
+        
+        cli->cl_dirty_num++;
+        cli->cl_dirty_sum += cli->cl_dirty;
+
+        if (cli->cl_dirty > cli->cl_dirty_dmax)
+                cli->cl_dirty_dmax = cli->cl_dirty;
+        if (cli->cl_dirty < cli->cl_dirty_dmin)
+                cli->cl_dirty_dmin = cli->cl_dirty;
+
         /* Hopefully normal case - cache space and write credits available */
         if (cli->cl_dirty + PAGE_SIZE <= cli->cl_dirty_max &&
             cli->cl_avail_grant >= PAGE_SIZE) {
@@ -1923,6 +1940,24 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                 EXIT;
                 return;
         }
+
+        if (~0ul - cli->cl_dirty_sum <= cli->cl_dirty) {
+                cli->cl_dirty_av = (cli->cl_dirty_av +
+                                    (cli->cl_dirty_sum / cli->cl_dirty_num)) / 2;
+                cli->cl_dirty_num = 0;
+                cli->cl_dirty_sum = 0;
+        } else {
+                if (cli->cl_dirty_num)
+                        cli->cl_dirty_av = (cli->cl_dirty_sum / cli->cl_dirty_num);
+        }
+        
+        cli->cl_dirty_num++;
+        cli->cl_dirty_sum += cli->cl_dirty;
+
+        if (cli->cl_dirty > cli->cl_dirty_dmax)
+                cli->cl_dirty_dmax = cli->cl_dirty;
+        if (cli->cl_dirty < cli->cl_dirty_dmin)
+                cli->cl_dirty_dmin = cli->cl_dirty;
 
         oap->oap_brw_flags &= ~OBD_BRW_FROM_GRANT;
         cli->cl_dirty -= PAGE_SIZE;

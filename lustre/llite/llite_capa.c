@@ -32,8 +32,9 @@
 #include <linux/lustre_lite.h>
 #include "llite_internal.h"
 
-static struct ptlrpc_thread ll_capa_thread;
 static struct list_head *ll_capa_list = &capa_list[CLIENT_CAPA];
+static struct ptlrpc_thread capa_thread;
+
 static struct thread_ctl {
         struct completion ctl_starting;
         struct completion ctl_finishing;
@@ -66,7 +67,7 @@ static inline int have_expired_capa(void)
 
 static int inline ll_capa_check_stop(void)
 {
-        return (ll_capa_thread.t_flags & SVC_STOPPING) ? 1: 0;
+        return (capa_thread.t_flags & SVC_STOPPING) ? 1: 0;
 }
 
 static int ll_renew_capa(struct obd_capa *ocapa)
@@ -89,7 +90,7 @@ static int ll_renew_capa(struct obd_capa *ocapa)
         RETURN(rc);
 }
 
-static int ll_capa_thread_main(void *arg)
+static int ll_capa_thread(void *arg)
 {
         struct thread_ctl *ctl = arg;
         unsigned long flags;
@@ -110,7 +111,7 @@ static int ll_capa_thread_main(void *arg)
          * letting starting function know, that we are ready and control may be
          * returned.
          */
-        ll_capa_thread.t_flags = SVC_RUNNING;
+        capa_thread.t_flags = SVC_RUNNING;
         complete(&ctl->ctl_starting);
 
         while (1) {
@@ -118,7 +119,7 @@ static int ll_capa_thread_main(void *arg)
                 struct obd_capa *ocapa, *next = NULL;
                 unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
 
-                l_wait_event(ll_capa_thread.t_ctl_waitq,
+                l_wait_event(capa_thread.t_ctl_waitq,
                              (have_expired_capa() || ll_capa_check_stop()),
                              &lwi);
 
@@ -154,7 +155,7 @@ static int ll_capa_thread_main(void *arg)
                 schedule_timeout(sleep * HZ);
         }
 
-        ll_capa_thread.t_flags = SVC_STOPPED;
+        capa_thread.t_flags = SVC_STOPPED;
 
         /* this is SMP-safe way to finish thread. */
         complete_and_exit(&ctl->ctl_finishing, 0);
@@ -165,21 +166,21 @@ static int ll_capa_thread_main(void *arg)
 void ll_capa_timer_callback(unsigned long unused)
 {
         ENTRY;
-        wake_up(&ll_capa_thread.t_ctl_waitq);
+        wake_up(&capa_thread.t_ctl_waitq);
         EXIT;
 }
 
-int ll_capa_start_thread(void)
+int ll_capa_thread_start(void)
 {
         int rc;
         ENTRY;
 
-        LASSERT(ll_capa_thread.t_flags == 0);
+        LASSERT(capa_thread.t_flags == 0);
         init_completion(&ll_capa_ctl.ctl_starting);
         init_completion(&ll_capa_ctl.ctl_finishing);
-        init_waitqueue_head(&ll_capa_thread.t_ctl_waitq);
+        init_waitqueue_head(&capa_thread.t_ctl_waitq);
 
-        rc = kernel_thread(ll_capa_thread_main, &ll_capa_ctl,
+        rc = kernel_thread(ll_capa_thread, &ll_capa_ctl,
                            (CLONE_VM | CLONE_FILES));
         if (rc < 0) {
                 CERROR("cannot start expired capa thread, "
@@ -187,19 +188,19 @@ int ll_capa_start_thread(void)
                 RETURN(rc);
         }
         wait_for_completion(&ll_capa_ctl.ctl_starting);
-        LASSERT(ll_capa_thread.t_flags == SVC_RUNNING);
+        LASSERT(capa_thread.t_flags == SVC_RUNNING);
         RETURN(0);
 }
 
-void ll_capa_stop_thread(void)
+void ll_capa_thread_stop(void)
 {
         ENTRY;
 
-        ll_capa_thread.t_flags = SVC_STOPPING;
-        wake_up(&ll_capa_thread.t_ctl_waitq);
+        capa_thread.t_flags = SVC_STOPPING;
+        wake_up(&capa_thread.t_ctl_waitq);
         wait_for_completion(&ll_capa_ctl.ctl_finishing);
-        LASSERT(ll_capa_thread.t_flags == SVC_STOPPED);
-        ll_capa_thread.t_flags = 0;
+        LASSERT(capa_thread.t_flags == SVC_STOPPED);
+        capa_thread.t_flags = 0;
 
         EXIT;
 }

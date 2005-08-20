@@ -522,7 +522,7 @@ void ll_gns_del_timer(struct ll_sb_info *sbi)
  * starts GNS control thread and waits for a signal it is up and work may be
  * continued.
  */
-int ll_gns_start_thread(void)
+int ll_gns_thread_start(void)
 {
         int rc;
         ENTRY;
@@ -545,7 +545,7 @@ int ll_gns_start_thread(void)
 }
 
 /* stops GNS control thread and waits its actual stop. */
-void ll_gns_stop_thread(void)
+void ll_gns_thread_stop(void)
 {
         ENTRY;
         gns_thread.t_flags = SVC_STOPPING;
