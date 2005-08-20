@@ -1300,7 +1300,11 @@ gss_svcsec_accept(struct ptlrpc_request *req, enum ptlrpcs_error *res)
                 GOTO(err_free, rc = SVC_DROP);
         }
 
-        if (rawobj_extract(&gc->gc_ctx, &secdata, &seclen)) {
+        /* We _must_ alloc new storage for gc_ctx. In case of recovery
+         * request will be saved to delayed handling, at that time the
+         * incoming buffer might have already been released.
+         */
+        if (rawobj_extract_alloc(&gc->gc_ctx, &secdata, &seclen)) {
                 CERROR("fail to obtain gss context handle\n");
                 GOTO(err_free, rc = SVC_DROP);
         }
@@ -1468,9 +1472,9 @@ void gss_svcsec_cleanup_req(struct ptlrpc_svcsec *svcsec,
                 return;
         }
 
-        /* gsd->clclred.gc_ctx is NOT allocated, just set pointer
-         * to the incoming packet buffer, so don't need free it
-         */
+        /* gc_ctx is allocated, see gss_svcsec_accept() */
+        rawobj_free(&gsd->clcred.gc_ctx);
+
         OBD_FREE(gsd, sizeof(*gsd));
         req->rq_svcsec_data = NULL;
         return;

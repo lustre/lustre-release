@@ -168,6 +168,11 @@ int rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen)
         return __rawobj_extract(obj, buf, buflen, 0, 0);
 }
 
+int rawobj_extract_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen)
+{
+        return __rawobj_extract(obj, buf, buflen, 1, 0);
+}
+
 int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen)
 {
         return __rawobj_extract(obj, buf, buflen, 0, 1);

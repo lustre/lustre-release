@@ -103,6 +103,7 @@ int rawobj_equal(rawobj_t *a, rawobj_t *b);
 int rawobj_dup(rawobj_t *dest, rawobj_t *src);
 int rawobj_serialize(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract(rawobj_t *obj, __u32 **buf, __u32 *buflen);
+int rawobj_extract_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 
 /*
