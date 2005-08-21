@@ -440,7 +440,7 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
                        mdc_uuid->uuid, LMV_MAX_TGT_COUNT);
                 RETURN(-EINVAL);
         }
-
+#if 0
         if (lmv->desc.ld_tgt_count == 0) {
                 struct obd_device *mdc_obd;
 
@@ -458,7 +458,7 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
                         CERROR("lmv failed to setup llogging subsystems\n");
                 }
         }
-
+#endif
         spin_lock(&lmv->lmv_lock);
         tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
         tgt->uuid = *mdc_uuid;
