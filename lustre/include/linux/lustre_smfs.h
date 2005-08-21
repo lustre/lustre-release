@@ -381,6 +381,26 @@ static inline void duplicate_file(struct file *dst_file, struct file *src_file)
 	#endif
 	}
 }
+static inline void pre_smfs_file(struct file * file, loff_t *off,
+                                 loff_t **backfs_off)
+{
+               
+        if (off != &file->f_pos)
+                *backfs_off = off;
+        else
+                *backfs_off = &(F2CF(file)->f_pos);
+        
+        F2CF(file)->f_pos = file->f_pos;
+        pre_smfs_inode(file->f_dentry->d_inode, 
+                       I2CI(file->f_dentry->d_inode));
+}
+
+static inline void post_smfs_file(struct file *file)
+{
+        post_smfs_inode(file->f_dentry->d_inode,
+                        I2CI(file->f_dentry->d_inode));
+        duplicate_file(file, F2CF(file));
+}
 
 static inline void duplicate_sb(struct super_block *dst_sb,
                                 struct super_block *src_sb)

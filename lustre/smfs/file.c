@@ -62,33 +62,20 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
         LASSERT(cache_inode->i_fop->write);
 
         sfi = F2SMFI(filp);
-
-        if (sfi->magic != SMFS_FILE_MAGIC) 
-                LBUG();
+        LASSERT(sfi->magic == SMFS_FILE_MAGIC);
 
         if (filp->f_flags & O_APPEND)
                 msg.pos = filp->f_dentry->d_inode->i_size;
         
-        pre_smfs_inode(filp->f_dentry->d_inode, cache_inode);
-
+        pre_smfs_file(filp, &msg.pos, &cache_ppos);
         SMFS_PRE_HOOK(filp->f_dentry->d_inode, HOOK_WRITE, &msg);
-
-        if (ppos != &(filp->f_pos)) {
-                cache_ppos = &msg.pos;
-        } else {
-                cache_ppos = &sfi->c_file->f_pos;
-        }
-        
-        *cache_ppos = *ppos;
 
         rc = cache_inode->i_fop->write(sfi->c_file, buf, count,
                                        cache_ppos);
         
         SMFS_POST_HOOK(filp->f_dentry->d_inode, HOOK_WRITE, &msg, rc);
-        
-        post_smfs_inode(filp->f_dentry->d_inode, cache_inode);
+        post_smfs_file(filp);
         *ppos = *cache_ppos;
-        duplicate_file(filp, sfi->c_file);
         
         RETURN(rc);
 }
@@ -110,7 +97,7 @@ int smfs_ioctl(struct inode * inode, struct file * filp,
                 LBUG();
 
         pre_smfs_inode(inode, cache_inode);
-
+        
         rc = cache_inode->i_fop->ioctl(cache_inode, sfi->c_file, cmd, arg);
         
         post_smfs_inode(inode, cache_inode);
@@ -137,21 +124,10 @@ static ssize_t smfs_read(struct file *filp, char *buf,
         if (sfi->magic != SMFS_FILE_MAGIC) 
                 LBUG();
 
-        if (ppos != &(filp->f_pos)) {
-                cache_ppos = &tmp_ppos;
-        } else {
-                cache_ppos = &sfi->c_file->f_pos;
-        }
-        *cache_ppos = *ppos;
-
-        pre_smfs_inode(filp->f_dentry->d_inode, cache_inode);
-
+        pre_smfs_file(filp, ppos, &cache_ppos);
         rc = cache_inode->i_fop->read(sfi->c_file, buf, count, cache_ppos);
+        post_smfs_file(filp);
         
-        *ppos = *cache_ppos;
-        post_smfs_inode(filp->f_dentry->d_inode, cache_inode);
-        duplicate_file(filp, sfi->c_file);
-
         RETURN(rc);
 }
 

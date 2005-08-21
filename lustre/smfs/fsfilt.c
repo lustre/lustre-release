@@ -266,7 +266,6 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
         struct fsfilt_operations *cache_fsfilt;
         struct smfs_file_info *sfi;
         struct inode *cache_inode;
-        loff_t tmp_ppos;
         loff_t *cache_ppos;
         ssize_t rc = -EIO;
         struct hook_msg msg = {
@@ -287,13 +286,7 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
         if (sfi->magic != SMFS_FILE_MAGIC)
                 BUG();
 
-        if (off != &(file->f_pos))
-                cache_ppos = &tmp_ppos;
-        else
-                cache_ppos = &sfi->c_file->f_pos;
-        *cache_ppos = *off;
-
-        pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
+        pre_smfs_file(file, off, &cache_ppos);
         SMFS_PRE_HOOK(file->f_dentry->d_inode, HOOK_READDIR, &msg);
 
 #if CONFIG_SNAPFS
@@ -318,10 +311,8 @@ static ssize_t fsfilt_smfs_readpage(struct file *file, char *buf,
 
 #endif
         SMFS_POST_HOOK(file->f_dentry->d_inode, HOOK_READDIR, &msg, rc);
-        *off = *cache_ppos;
-        post_smfs_inode(file->f_dentry->d_inode, cache_inode);
-        duplicate_file(file, sfi->c_file);
-
+        post_smfs_file(file);
+        
         RETURN(rc);
 }
 
@@ -448,7 +439,6 @@ static int fsfilt_smfs_read_record(struct file * file, void *buf,
         struct  fsfilt_operations *cache_fsfilt;
         struct  inode *cache_inode;
         struct  smfs_file_info *sfi;
-        loff_t  tmp_ppos;
         loff_t  *cache_ppos;
         ssize_t rc;
 
@@ -458,29 +448,18 @@ static int fsfilt_smfs_read_record(struct file * file, void *buf,
                 RETURN(-EINVAL);
 
         cache_inode = I2CI(file->f_dentry->d_inode);
-
         if (!cache_inode)
                 RETURN(-EINVAL);
 
         sfi = F2SMFI(file);
-        if (sfi->magic != SMFS_FILE_MAGIC) BUG();
-
-        if (offs != &(file->f_pos))
-                cache_ppos = &tmp_ppos;
-        else
-                cache_ppos = &sfi->c_file->f_pos;
-        *cache_ppos = *offs;
-
-        pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
+        LASSERT(sfi->magic == SMFS_FILE_MAGIC);
 
         if (!cache_fsfilt->fs_read_record)
                 RETURN(-ENOSYS);
 
+        pre_smfs_file(file, offs, &cache_ppos);
         rc = cache_fsfilt->fs_read_record(sfi->c_file, buf, size, cache_ppos);
-
-        *offs = *cache_ppos;
-        post_smfs_inode(file->f_dentry->d_inode, cache_inode);
-        duplicate_file(file, sfi->c_file);
+        post_smfs_file(file);
 
         RETURN(rc);
 }
@@ -491,7 +470,6 @@ static int fsfilt_smfs_write_record(struct file *file, void *buf, int bufsize,
         struct  fsfilt_operations *cache_fsfilt;
         struct  inode *cache_inode;
         struct  smfs_file_info *sfi;
-        loff_t  tmp_ppos;
         loff_t  *cache_ppos;
         ssize_t rc = -EIO;
 
@@ -502,30 +480,20 @@ static int fsfilt_smfs_write_record(struct file *file, void *buf, int bufsize,
                 RETURN(-EINVAL);
 
         cache_inode = I2CI(file->f_dentry->d_inode);
-
         if (!cache_inode)
                 RETURN(-EINVAL);
 
         sfi = F2SMFI(file);
-        if (sfi->magic != SMFS_FILE_MAGIC)
-                BUG();
-
-        if (offs != &(file->f_pos))
-                cache_ppos = &tmp_ppos;
-        else
-                cache_ppos = &sfi->c_file->f_pos;
-        *cache_ppos = *offs;
-
-        pre_smfs_inode(file->f_dentry->d_inode, cache_inode);
+        LASSERT(sfi->magic == SMFS_FILE_MAGIC);
 
         if (!cache_fsfilt->fs_write_record)
                 RETURN(-ENOSYS);
-
+        
+        pre_smfs_file(file, offs, &cache_ppos);
         rc = cache_fsfilt->fs_write_record(sfi->c_file, buf,
                                            bufsize, cache_ppos, force_sync);
-        *offs = *cache_ppos;
-        post_smfs_inode(file->f_dentry->d_inode, cache_inode);
-        duplicate_file(file, sfi->c_file);
+
+        post_smfs_file(file);
 
         RETURN(rc);
 }
