@@ -1861,13 +1861,14 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         struct osc_cache_waiter ocw;
         struct l_wait_info lwi = { 0 };
         struct timeval start, stop;
+        ENTRY;
 
         CDEBUG(D_CACHE, "dirty: %ld dirty_max: %ld dropped: %lu grant: %lu\n",
                cli->cl_dirty, cli->cl_dirty_max, cli->cl_lost_grant,
                cli->cl_avail_grant);
 
         if (cli->cl_dirty_max < PAGE_SIZE)
-                return(-EDQUOT);
+                GOTO(out, -EDQUOT);
 
         if (~0ul - cli->cl_dirty_sum <= cli->cl_dirty) {
                 cli->cl_dirty_av = (cli->cl_dirty_av +
@@ -1892,7 +1893,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
             cli->cl_avail_grant >= PAGE_SIZE) {
                 /* account for ourselves */
                 osc_consume_write_grant(cli, oap);
-                return(0);
+                RETURN(0);
         }
 
         /* Make sure that there are write rpcs in flight to wait for.  This
@@ -1925,7 +1926,10 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
                 RETURN(ocw.ocw_rc);
         }
 
-        RETURN(-EDQUOT);
+        EXIT;
+out:
+        cli->cl_sync_rpcs++;
+        return -EDQUOT;
 }
 
 /* the companion to enter_cache, called when an oap is no longer part of the

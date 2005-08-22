@@ -238,6 +238,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;
+        
         /* FIXME: should limit this for the sum of all cl_dirty_max */
         cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
         if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
@@ -269,6 +270,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_dirty_av = 0;
         cli->cl_dirty_dmax = 0;
         cli->cl_dirty_dmin = 0;
+        cli->cl_sync_rpcs = 0;
 
         if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
@@ -373,6 +375,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
 
         if (!cli->cl_import)
                 RETURN(-EINVAL);
+
         if (cli->cl_mgmtcli_obd) {
                 mgmtcli_deregister_for_events_t dereg_f;
 
@@ -383,10 +386,10 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
 
         if (cli->cl_write_gaps) {
                 CWARN("%s: [writes num: %lu, reads num: %lu]: %lu write gaps: %lu "
-                      "av. (usec), %lu total (usec)\n", obddev->obd_name,
-                      cli->cl_write_num, cli->cl_read_num, cli->cl_write_gaps,
-                      cli->cl_write_gap_sum / cli->cl_write_gaps,
-                      cli->cl_write_gap_sum);
+                      "av. (usec), %lu total (usec), %lu rpcs falled back to sync\n",
+                      obddev->obd_name, cli->cl_write_num, cli->cl_read_num,
+                      cli->cl_write_gaps, cli->cl_write_gap_sum / cli->cl_write_gaps,
+                      cli->cl_write_gap_sum, cli->cl_sync_rpcs);
         }
         
         if (cli->cl_cache_wait_num) {
@@ -396,14 +399,13 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         }
 
         if (cli->cl_dirty_av) {
-                CWARN("%s: pipe loading av. %lu (b), max pipe space %lu (b), pipe "
-                      "loading ratio %lu%%\n", obddev->obd_name, cli->cl_dirty_av,
-                      cli->cl_dirty_max, (cli->cl_dirty_av * 100) / cli->cl_dirty_max);
-        }
-
-        if (cli->cl_dirty_dmax) {
-                CWARN("%s: pipe dirty max %lu (b), pipe dirty min %lu (b)\n",
-                      obddev->obd_name, cli->cl_dirty_dmax, cli->cl_dirty_dmin);
+                CWARN("%s: pipe loading av. %lu (b), max pipe room %lu (b), pipe "
+                      "loading av. ratio %lu%%, pipe dirty max %lu (b), pipe dirty "
+                      "min %lu (b), pipe loading max ratio %lu%%\n", obddev->obd_name,
+                      cli->cl_dirty_av, cli->cl_dirty_max,
+                      (cli->cl_dirty_av * 100) / cli->cl_dirty_max,
+                      cli->cl_dirty_dmax, cli->cl_dirty_dmin,
+                      (cli->cl_dirty_dmax * 100) / cli->cl_dirty_max);
         }
 
         /* Here we try to drop the security structure after destroy import,

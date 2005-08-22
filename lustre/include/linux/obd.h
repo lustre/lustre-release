@@ -302,7 +302,6 @@ struct mds_server_data;
 #define OSC_MAX_DIRTY_DEFAULT   (4*OSC_MAX_RIF_DEFAULT*PTLRPC_MAX_BRW_SIZE>>20)
 #define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
 
-
 struct mdc_rpc_lock;
 struct client_obd {
         struct obd_import       *cl_import;
@@ -373,6 +372,8 @@ struct client_obd {
         
         unsigned long            cl_dirty_dmax;
         unsigned long            cl_dirty_dmin;
+
+        unsigned long            cl_sync_rpcs;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
