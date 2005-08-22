@@ -2191,9 +2191,10 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(dentry))
                 GOTO(out_pop, rc = PTR_ERR(dentry));
 
-        rc = filter_verify_capa(OBD_BRW_WRITE, exp, dentry->d_inode, capa);
+        rc = filter_verify_fid(exp, dentry->d_inode, capa);
         if (rc)
-                RETURN(rc);
+                GOTO(out_pop, rc);
+
         lock_kernel();
 
         /* setting objects attributes (including owner/group) */
@@ -2736,11 +2737,16 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
                            struct lustre_capa *capa)
 {
         int error;
+        int rc;
         ENTRY;
 
         if (end != OBD_OBJECT_EOF)
                 CERROR("PUNCH not supported, only truncate: end = "LPX64"\n",
                        end);
+
+        rc = filter_verify_capa(OBD_BRW_WRITE, exp, capa);
+        if (rc)
+                RETURN(rc);
 
         CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPU64", "
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);

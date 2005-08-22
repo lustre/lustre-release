@@ -138,8 +138,6 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
         if (rc)
                 RETURN(rc);
 
-        DEBUG_CAPA(D_INFO, capa, "capa renewal");
-
         spin_lock(&capa_lock);
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
         if (time_before(expiry, ll_capa_timer.expires) ||

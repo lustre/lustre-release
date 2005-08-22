@@ -230,6 +230,7 @@ int ll_prepare_write(struct file *file, struct page *page,
 
         oa->o_fsuid = current->fsuid;
         oa->o_valid |= OBD_MD_FLFSUID;
+        *(obdo_id(oa)) = ll_i2info(inode)->lli_id;
 
         rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode),
                      oa, lsm, 1, &pga, NULL);

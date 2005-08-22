@@ -304,9 +304,11 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         inode = dentry->d_inode; 
 
-        rc = filter_verify_capa(cmd, exp, inode, capa);
-        if (rc)
-                return rc;
+        if (inode) {
+                rc = filter_verify_fid(exp, inode, capa);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 
         fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
 
@@ -538,9 +540,9 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
 
-        rc = filter_verify_capa(cmd, exp, dentry->d_inode, capa);
+        rc = filter_verify_fid(exp, dentry->d_inode, capa);
         if (rc)
-                return rc;
+                GOTO(cleanup, rc);
 
         cleanup_phase = 2;
 
@@ -649,6 +651,12 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   struct niobuf_remote *nb, struct niobuf_local *res,
                   struct obd_trans_info *oti, struct lustre_capa *capa)
 {
+        int rc;
+
+        rc = filter_verify_capa(cmd, exp, capa);
+        if (rc)
+                return rc;
+
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
                                            niocount, nb, res, oti, capa);

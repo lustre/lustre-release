@@ -232,8 +232,6 @@ int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
         if (!och->och_capa)
                 rc = -ENOMEM;
 
-        DEBUG_CAPA(D_INFO, capa, "ll_set_och_capa");
-
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
 
         spin_lock(&capa_lock);

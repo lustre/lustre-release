@@ -200,7 +200,8 @@ static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
 int filter_init_capa_keys(struct obd_device *obd);
 void filter_free_capa_keys(struct filter_obd *filter);
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_verify_capa(int cmd, struct obd_export *exp, struct inode *inode, 
-                       struct lustre_capa *capa);
+int filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa);
+int filter_verify_fid(struct obd_export *exp, struct inode *inode,
+                      struct lustre_capa *capa);
 
 #endif

@@ -73,10 +73,14 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
 
         if (bkey) {
                 tmp = bkey;
+
+                DEBUG_CAPA_KEY(D_INFO, &tmp->k_key, "filter update");
         } else {
                 OBD_ALLOC(tmp, sizeof(*tmp));
                 if (!tmp)
                         GOTO(out, rc = -ENOMEM);
+
+                DEBUG_CAPA_KEY(D_INFO, &tmp->k_key, "filter new");
         }
 
         /* fields in lustre_capa_key are in cpu order */
@@ -89,29 +93,49 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
         if (!bkey)
                 list_add_tail(&tmp->k_list, &filter->fo_capa_keys);
         spin_unlock(&filter->fo_capa_lock);
-
-        DEBUG_CAPA_KEY(D_INFO, &tmp->k_key, "filter_update_capa_key");
 out:
         RETURN(rc);
 }
 
-int filter_verify_capa(int cmd, struct obd_export *exp, struct inode *inode,
-                       struct lustre_capa *capa)
+int filter_verify_fid(struct obd_export *exp, struct inode *inode,
+                      struct lustre_capa *capa)
+{
+        struct lustre_id fid;
+        int rc;
+
+        if (!capa)
+                return 0;
+
+        ENTRY;
+        rc = fsfilt_get_md(exp->exp_obd, inode, &fid, sizeof(fid), EA_SID);
+        if (rc < 0) {
+                CERROR("get fid from object failed! rc:%d\n", rc);
+                RETURN(rc);
+        } else if (rc > 0) {
+                if (capa->lc_mdsid != id_group(&fid) ||
+                    capa->lc_ino != id_ino(&fid))
+                        RETURN(-EINVAL);
+        }
+
+        RETURN(0);
+}
+
+int
+filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct obd_capa *ocapa;
         struct lustre_capa tcapa;
-        struct lustre_id fid;
         struct filter_capa_key *rkey = NULL, *bkey = NULL, *tmp;
         __u8 hmac_key[CAPA_KEY_LEN];
         int rc = 0;
-        ENTRY;
 
         /* capability is disabled */
         if (filter->fo_capa_stat == 0)
                 RETURN(0);
 
+        ENTRY;
         if (capa == NULL)
                 RETURN(-EACCES);
 
@@ -122,16 +146,6 @@ int filter_verify_capa(int cmd, struct obd_export *exp, struct inode *inode,
 
         if (OBD_FAIL_CHECK(OBD_FAIL_FILTER_VERIFY_CAPA))
                 RETURN(-EACCES);
-
-        rc = fsfilt_get_md(obd, inode, &fid, sizeof(fid), EA_SID);
-        if (rc < 0) {
-                CERROR("get fid from object failed! rc:%d\n", rc);
-                RETURN(rc);
-        } else if (rc > 0) {
-                if (capa->lc_mdsid != id_group(&fid) ||
-                    capa->lc_ino != id_ino(&fid))
-                        RETURN(-EINVAL);
-        }
 
         if (capa_expired(capa))
                 RETURN(-ESTALE);
