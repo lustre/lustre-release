@@ -1410,7 +1410,7 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)(int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx));
 
         /* Checks for struct lustre_capa */
-        LASSERTF((int)sizeof(struct lustre_capa) == 56, " found %llu\n",
+        LASSERTF((int)sizeof(struct lustre_capa) == 60, " found %llu\n",
                  (unsigned long long)(int)sizeof(struct lustre_capa));
         LASSERTF((int)offsetof(struct lustre_capa, lc_uid) == 0, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct lustre_capa, lc_uid));
@@ -1442,11 +1442,11 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)(int)sizeof(((struct lustre_capa *)0)->lc_flags));
         LASSERTF((int)offsetof(struct lustre_capa, lc_hmac) == 40, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct lustre_capa, lc_hmac));
-        LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_hmac) == 16, " found %llu\n",
+        LASSERTF((int)sizeof(((struct lustre_capa *)0)->lc_hmac) == 20, " found %llu\n",
                  (unsigned long long)(int)sizeof(((struct lustre_capa *)0)->lc_hmac));
 
         /* Checks for struct lustre_capa_key */
-        LASSERTF((int)sizeof(struct lustre_capa_key) == 32, " found %llu\n",
+        LASSERTF((int)sizeof(struct lustre_capa_key) == 36, " found %llu\n",
                  (unsigned long long)(int)sizeof(struct lustre_capa_key));
         LASSERTF((int)offsetof(struct lustre_capa_key, lk_mdsid) == 0, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct lustre_capa_key, lk_mdsid));
@@ -1462,7 +1462,7 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_expiry));
         LASSERTF((int)offsetof(struct lustre_capa_key, lk_key) == 16, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct lustre_capa_key, lk_key));
-        LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_key) == 16, " found %llu\n",
+        LASSERTF((int)sizeof(((struct lustre_capa_key *)0)->lk_key) == 20, " found %llu\n",
                  (unsigned long long)(int)sizeof(((struct lustre_capa_key *)0)->lk_key));
 }
 
