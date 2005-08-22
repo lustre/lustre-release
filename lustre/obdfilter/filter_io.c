@@ -406,7 +406,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                 for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
                         int tmp, bytes;
 
-                        /* FIXME: this is calculated with PAGE_SIZE on client */
+                        /* should match code in osc_exit_cache() */
                         bytes = rnb[n].len;
                         bytes += rnb[n].offset & (blocksize - 1);
                         tmp = (rnb[n].offset + rnb[n].len) & (blocksize - 1);
@@ -485,6 +485,13 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         exp->exp_obd->u.filter.fo_tot_dirty -= used;
         fed->fed_dirty -= used;
 
+        if (fed->fed_dirty < 0 || fed->fed_grant < 0 || fed->fed_pending < 0) {
+                CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
+                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
+                       fed->fed_dirty, fed->fed_pending, fed->fed_grant);
+                spin_unlock(&exp->exp_obd->obd_osfs_lock);
+                LBUG();
+        }
         return rc;
 }
 
