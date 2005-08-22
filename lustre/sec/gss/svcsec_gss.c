@@ -597,24 +597,6 @@ static int rsc_parse(struct cache_detail *cd,
         rsci->h.expiry_time = expiry;
         spin_lock_init(&rsci->seqdata.sd_lock);
         res = rsc_lookup(rsci, 1);
-        // XXX temp debugging
-        {
-                if (res == rsci) {
-                        CWARN("create ctxt %p(%u), expiry %ld (%lds later)\n",
-                              res, *((__u32 *) res->handle.data),
-                              res->h.expiry_time,
-                              res->h.expiry_time - get_seconds());
-                } else {
-                        CWARN("create ctxts [%p(%u), ex %ld (%lds later)], "
-                              "[%p(%u), ex %ld (%lds later)]\n",
-                              rsci, *((__u32 *) rsci->handle.data),
-                              rsci->h.expiry_time,
-                              rsci->h.expiry_time - get_seconds(),
-                              res, *((__u32 *) res->handle.data),
-                              res->h.expiry_time,
-                              res->h.expiry_time - get_seconds());
-                }
-        }
         rsc_put(&res->h, &rsc_cache);
         status = 0;
 out:
@@ -642,23 +624,24 @@ static void rsc_flush(uid_t uid)
         for (n = 0; n < RSC_HASHMAX; n++) {
                 for (ch = &rsc_cache.hash_table[n]; *ch;) {
                         rscp = container_of(*ch, struct rsc, h);
-                        if (uid == -1 || rscp->cred.vc_uid == uid) {
-                                /* it seems simply set NEGATIVE doesn't work */
-                                *ch = (*ch)->next;
-                                rscp->h.next = NULL;
-                                cache_get(&rscp->h);
-                                set_bit(CACHE_NEGATIVE, &rscp->h.flags);
-                                clear_bit(CACHE_HASHED, &rscp->h.flags);
-                                if (uid != -1)
-                                        CWARN("flush rsc %p(%u) for uid %u\n",
-                                              rscp,
-                                              *((__u32 *) rscp->handle.data),
-                                              rscp->cred.vc_uid);
-                                rsc_put(&rscp->h, &rsc_cache);
-                                rsc_cache.entries--;
+
+                        if (uid != -1 && rscp->cred.vc_uid != uid) {
+                                ch = &((*ch)->next);
                                 continue;
                         }
-                        ch = &((*ch)->next);
+
+                        /* it seems simply set NEGATIVE doesn't work */
+                        *ch = (*ch)->next;
+                        rscp->h.next = NULL;
+                        cache_get(&rscp->h);
+                        set_bit(CACHE_NEGATIVE, &rscp->h.flags);
+                        clear_bit(CACHE_HASHED, &rscp->h.flags);
+                        if (uid != -1)
+                                CWARN("flush rsc %p(%u) for uid %u\n", rscp,
+                                      *((__u32 *) rscp->handle.data),
+                                      rscp->cred.vc_uid);
+                        rsc_put(&rscp->h, &rsc_cache);
+                        rsc_cache.entries--;
                 }
         }
         write_unlock(&rsc_cache.hash_lock);
@@ -1215,14 +1198,6 @@ gss_svcsec_handle_destroy(struct ptlrpc_request *req,
                portals_nid2str(req->rq_peer.peer_ni->pni_number,
                                req->rq_peer.peer_id.nid, nidstr));
 
-        //XXX temp for debugging
-        {
-                CWARN("destroy ctxt %p(%u/%u)@%s\n",
-                      rsci, *((__u32 *) rsci->handle.data),
-                      rsci->cred.vc_uid,
-                      portals_nid2str(req->rq_peer.peer_ni->pni_number,
-                                      req->rq_peer.peer_id.nid, nidstr));
-        }
         set_bit(CACHE_NEGATIVE, &rsci->h.flags);
         *res = PTLRPCS_OK;
         rc = SVC_LOGOUT;

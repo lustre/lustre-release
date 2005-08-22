@@ -1137,7 +1137,7 @@ proc_data_out:
                  */
                 if (major == GSS_S_NO_CONTEXT ||
                     major == GSS_S_BAD_SIG) {
-                        CWARN("req %p: server report cred %p %s, expired?\n",
+                        CWARN("req %p: server report cred %p %s\n",
                                req, cred, (major == GSS_S_NO_CONTEXT) ?
                                            "NO_CONTEXT" : "BAD_SIG");
 
