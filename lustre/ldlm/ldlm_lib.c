@@ -239,10 +239,12 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;
         
+        /* XXX: making ->cl_dirty_max twice bigger for debug purposes! */
         /* FIXME: should limit this for the sum of all cl_dirty_max */
         cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-        if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 8)
-                cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 3);
+        if (cli->cl_dirty_max >> PAGE_SHIFT > num_physpages / 4)
+                cli->cl_dirty_max = num_physpages << (PAGE_SHIFT - 2);
+
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
