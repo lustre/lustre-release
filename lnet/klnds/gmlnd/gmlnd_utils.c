@@ -31,11 +31,11 @@ int
 gmnal_is_rxthread(gmnal_ni_t *gmnalni)
 {
 	int i;
-	for (i=0; i<num_rx_threads; i++) {
+
+	for (i = 0; i < gmnalni->gmni_nrxthreads; i++)
 		if (gmnalni->gmni_rxthread_pid[i] == current->pid)
-			return(1);
-	}
-	return(0);
+			return 1;
+	return 0;
 }
 
 gmnal_tx_t *
@@ -344,44 +344,29 @@ gmnal_free_rxs(gmnal_ni_t *gmnalni)
 }
 
 void
-gmnal_stop_rxthread(gmnal_ni_t *gmnalni)
-{
-	int 	count = 2;
-        int     i;
-	
-	gmnalni->gmni_rxthread_stop_flag = GMNAL_THREAD_STOP;
-
-        for (i = 0; i < num_rx_threads; i++)
-                up(&gmnalni->gmni_rxq_wait);
-
-	while (gmnalni->gmni_rxthread_flag != GMNAL_THREAD_RESET) {
-		CDEBUG(D_NET, "gmnal_stop_rxthread sleeping\n");
-                gmnal_yield(1);
-
-                count++;
-                if ((count & (count - 1)) == 0)
-                        CWARN("Waiting for rxthreads to stop\n");
-	}
-}
-
-void
-gmnal_stop_ctthread(gmnal_ni_t *gmnalni)
+gmnal_stop_threads(gmnal_ni_t *gmnalni)
 {
         int count = 2;
+        int i;
 
-	gmnalni->gmni_ctthread_flag = GMNAL_THREAD_STOP;
+        gmnalni->gmni_thread_shutdown = 1;
 
+        /* wake ctthread with an alarm */
 	spin_lock(&gmnalni->gmni_gm_lock);
-	gm_set_alarm(gmnalni->gmni_port, &gmnalni->gmni_ctthread_alarm, 10, 
-		     NULL, NULL);
+	gm_set_alarm(gmnalni->gmni_port, &gmnalni->gmni_ctthread_alarm, 
+                     0, NULL, NULL);
 	spin_unlock(&gmnalni->gmni_gm_lock);
 
-	while (gmnalni->gmni_ctthread_flag == GMNAL_THREAD_STOP) {
-		CDEBUG(D_NET, "gmnal_stop_ctthread sleeping\n");
-                gmnal_yield(1);
+        /* wake each rxthread */
+        for (i = 0; i < num_online_cpus(); i++)
+                up(&gmnalni->gmni_rxq_wait);
+        
+	while (atomic_read(&gmnalni->gmni_nthreads) != 0) {
                 count++;
                 if ((count & (count - 1)) == 0)
-                        CWARN("Waiting for ctthread to stop\n");
+                        CWARN("Waiting for %d threads to stop\n",
+                              atomic_read(&gmnalni->gmni_nthreads));
+                gmnal_yield(1);
 	}
 }
 
@@ -393,12 +378,15 @@ gmnal_stop_ctthread(gmnal_ni_t *gmnalni)
  *	callback events or sleeps.
  */
 int
-gmnal_start_kernel_threads(gmnal_ni_t *gmnalni)
+gmnal_start_threads(gmnal_ni_t *gmnalni)
 {
+        int     i;
+        int     pid;
 
-	int	threads = 0;
-        int     flag;
-        
+        gmnalni->gmni_thread_shutdown = 0;
+        gmnalni->gmni_nrxthreads = 0;
+        atomic_set(&gmnalni->gmni_nthreads, 0);
+
         INIT_LIST_HEAD(&gmnalni->gmni_rxq);
 	spin_lock_init(&gmnalni->gmni_rxq_lock);
 	sema_init(&gmnalni->gmni_rxq_wait, 0);
@@ -410,64 +398,26 @@ gmnal_start_kernel_threads(gmnal_ni_t *gmnalni)
 	CDEBUG(D_NET, "Initializing caretaker thread alarm and flag\n");
 	gm_initialize_alarm(&gmnalni->gmni_ctthread_alarm);
 
-	CDEBUG(D_NET, "Starting caretaker thread\n");
-	gmnalni->gmni_ctthread_flag = GMNAL_THREAD_RESET;
-	gmnalni->gmni_ctthread_pid = 
-	         kernel_thread(gmnal_ct_thread, (void*)gmnalni, 0);
-	if (gmnalni->gmni_ctthread_pid <= 0) {
-		CERROR("Caretaker thread failed to start\n");
-		return -ENOMEM;
+        pid = kernel_thread(gmnal_ct_thread, (void*)gmnalni, 0);
+	if (pid < 0) {
+		CERROR("Caretaker thread failed to start: %d\n", pid);
+		return pid;
 	}
+        atomic_inc(&gmnalni->gmni_nthreads);
 
-	while (gmnalni->gmni_ctthread_flag != GMNAL_THREAD_RESET) {
-		gmnal_yield(1);
-		CDEBUG(D_NET, "Waiting for caretaker thread signs of life\n");
+	for (i = 0; i < num_online_cpus(); i++) {
+
+                pid = kernel_thread(gmnal_rx_thread, (void*)gmnalni, 0);
+                if (pid < 0) {
+                        CERROR("rx thread failed to start: %d\n", pid);
+                        gmnal_stop_threads(gmnalni);
+                        return pid;
+                }
+
+                atomic_inc(&gmnalni->gmni_nthreads);
+		gmnalni->gmni_rxthread_pid[i] = pid;
+                gmnalni->gmni_nrxthreads++;
 	}
-
-	CDEBUG(D_NET, "caretaker thread has started\n");
-
-	/*
- 	 *	Now start a number of receiver threads
-	 *	these treads get work to do from the caretaker (ct) thread
-	 */
-	gmnalni->gmni_rxthread_flag = GMNAL_THREAD_RESET;
-	gmnalni->gmni_rxthread_stop_flag = GMNAL_THREAD_RESET;
-
-	spin_lock_init(&gmnalni->gmni_rxthread_flag_lock);
-	for (threads=0; threads<NRXTHREADS; threads++)
-		gmnalni->gmni_rxthread_pid[threads] = -1;
-
-        /*
-         *      If the default number of receive threades isn't
-         *      modified at load time, then start one thread per cpu
-         */
-        if (num_rx_threads == -1)
-                num_rx_threads = smp_num_cpus;
-
-	CDEBUG(D_NET, "Starting [%d] receive threads\n", num_rx_threads);
-	for (threads=0; threads<num_rx_threads; threads++) {
-		gmnalni->gmni_rxthread_pid[threads] = 
-		       kernel_thread(gmnal_rx_thread, (void*)gmnalni, 0);
-		if (gmnalni->gmni_rxthread_pid[threads] <= 0) {
-			CERROR("Receive thread failed to start\n");
-			gmnal_stop_rxthread(gmnalni);
-			gmnal_stop_ctthread(gmnalni);
-			return -ENOMEM;
-		}
-	}
-
-	for (;;) {
-		spin_lock(&gmnalni->gmni_rxthread_flag_lock);
-                flag = gmnalni->gmni_rxthread_flag;
-		spin_unlock(&gmnalni->gmni_rxthread_flag_lock);
-                
-		if (flag == GMNAL_RXTHREADS_STARTED)
-                        break;
-
-		gmnal_yield(1);
-	}
-
-	CDEBUG(D_NET, "receive threads seem to have started\n");
 
 	return 0;
 }
@@ -760,7 +710,7 @@ gmnal_dequeue_rx(gmnal_ni_t *gmnalni)
 		while(down_interruptible(&gmnalni->gmni_rxq_wait) != 0)
                         /* do nothing */;
 
-		if (gmnalni->gmni_rxthread_stop_flag == GMNAL_THREAD_STOP)
+		if (gmnalni->gmni_thread_shutdown)
 			return NULL;
 
 		spin_lock(&gmnalni->gmni_rxq_lock);

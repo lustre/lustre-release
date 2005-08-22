@@ -162,28 +162,16 @@ typedef struct gmnal_ni {
         lib_nal_t       *gmni_libnal;
         struct gm_port  *gmni_port;
         spinlock_t       gmni_gm_lock;          /* serialise GM calls */
+        atomic_t         gmni_nthreads;
+        int              gmni_nrxthreads;
         long             gmni_rxthread_pid[NRXTHREADS];
-        int              gmni_rxthread_stop_flag;
-        spinlock_t       gmni_rxthread_flag_lock;
-        long             gmni_rxthread_flag;
-        long             gmni_ctthread_pid;
-        int              gmni_ctthread_flag;
         gm_alarm_t       gmni_ctthread_alarm;
+        int              gmni_thread_shutdown;
         int              gmni_msg_size;
         struct list_head gmni_rxq;
         spinlock_t       gmni_rxq_lock;
         struct semaphore gmni_rxq_wait;
 } gmnal_ni_t;
-
-/*
- *      Flags to start/stop and check status of threads
- *      each rxthread sets 1 bit (any bit) of the flag on startup
- *      and clears 1 bit when exiting
- */
-#define GMNAL_THREAD_RESET      0
-#define GMNAL_THREAD_STOP       666
-#define GMNAL_CTTHREAD_STARTED  333
-#define GMNAL_RXTHREADS_STARTED ( (1<<num_rx_threads)-1)
 
 
 /*
@@ -225,14 +213,13 @@ gmnal_tx_t *gmnal_get_tx(gmnal_ni_t *gmnalni, int block);
 void gmnal_return_tx(gmnal_ni_t *gmnalni, gmnal_tx_t *tx);
 int gmnal_alloc_rxs(gmnal_ni_t *gmnalni);
 void gmnal_free_rxs(gmnal_ni_t *gmnalni);
-void gmnal_stop_rxthread(gmnal_ni_t *gmnalni);
-void gmnal_stop_ctthread(gmnal_ni_t *gmnalni);
 char *gmnal_gmstatus2str(gm_status_t status);
 char *gmnal_rxevent2str(gm_recv_event_t *ev);
 void gmnal_yield(int delay);
 int gmnal_enqueue_rx(gmnal_ni_t *gmnalni, gm_recv_t *recv);
 gmnal_rx_t *gmnal_dequeue_rx(gmnal_ni_t *gmnalni);
-int gmnal_start_kernel_threads(gmnal_ni_t *gmnalni);
+void gmnal_stop_threads(gmnal_ni_t *gmnalni);
+int gmnal_start_threads(gmnal_ni_t *gmnalni);
 
 /* gmnal_comm.c */
 void gmnal_pack_msg(gmnal_ni_t *gmnalni, gmnal_tx_t *tx,
@@ -244,7 +231,6 @@ ptl_err_t gmnal_post_tx(gmnal_ni_t *gmnalni, gmnal_tx_t *tx,
                         lib_msg_t *libmsg, ptl_nid_t nid, int nob);
 
 /* Module Parameters */
-extern  int num_rx_threads;
 extern  int num_txds;
 extern  int gm_port_id;
 

@@ -130,8 +130,7 @@ gmnal_api_shutdown(nal_t *nal)
         libcfs_nal_cmd_unregister(GMNAL);
 
         /* stop processing messages */
-	gmnal_stop_ctthread(gmnalni);
-	gmnal_stop_rxthread(gmnalni);
+        gmnal_stop_threads(gmnalni);
 
 	gm_close(gmnalni->gmni_port);
 	gm_finalize();
@@ -255,7 +254,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	/* Now that we have initialised the portals library, start receive
 	 * threads, we do this to avoid processing messages before we can parse
 	 * them */
-	rc = gmnal_start_kernel_threads(gmnalni);
+	rc = gmnal_start_threads(gmnalni);
         if (rc != 0) {
                 CERROR("Can't start threads: %d\n", rc);
                 goto failed_3;
@@ -271,8 +270,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	return PTL_OK;
 
  failed_4:
-	gmnal_stop_rxthread(gmnalni);
-	gmnal_stop_ctthread(gmnalni);
+	gmnal_stop_threads(gmnalni);
 
  failed_3:
         gm_close(gmnalni->gmni_port);

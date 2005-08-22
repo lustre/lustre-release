@@ -22,12 +22,6 @@
 #include "gmnal.h"
 
 
-/*
- *      -1 indicates default value.
- *      This is 1 thread per cpu
- *      See start_kernel_threads
- */
-int num_rx_threads = -1;
 int num_txds = 5;
 int gm_port_id = 4;
 

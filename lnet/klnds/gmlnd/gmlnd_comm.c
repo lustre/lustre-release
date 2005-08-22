@@ -133,31 +133,25 @@ gmnal_ct_thread(void *arg)
 	sprintf(current->comm, "gmnal_ct");
 	kportal_daemonize("gmnalctd");
 
-	gmnalni->gmni_ctthread_flag = GMNAL_CTTHREAD_STARTED;
-
-	while(gmnalni->gmni_ctthread_flag == GMNAL_CTTHREAD_STARTED) {
+	while(!gmnalni->gmni_thread_shutdown) {
 
                 spin_lock(&gmnalni->gmni_gm_lock);
 		rxevent = gm_blocking_receive_no_spin(gmnalni->gmni_port);
                 spin_unlock(&gmnalni->gmni_gm_lock);
-
-		if (gmnalni->gmni_ctthread_flag == GMNAL_THREAD_STOP) {
-			CDEBUG(D_NET, "time to exit\n");
-			break;
-		}
 
 		CDEBUG(D_NET, "got [%s]\n", gmnal_rxevent2str(rxevent));
 
 		if (GM_RECV_EVENT_TYPE(rxevent) == GM_RECV_EVENT) {
                         recv = (gm_recv_t*)&rxevent->recv;
                         gmnal_enqueue_rx(gmnalni, recv);
-                } else {
-                        gm_unknown(gmnalni->gmni_port, rxevent);
-		}
+                        continue;
+                }
+
+                gm_unknown(gmnalni->gmni_port, rxevent);
 	}
 
-	gmnalni->gmni_ctthread_flag = GMNAL_THREAD_RESET;
-	CDEBUG(D_NET, "thread gmnalni [%p] is exiting\n", gmnalni);
+	CDEBUG(D_NET, "exiting\n");
+        atomic_dec(&gmnalni->gmni_nthreads);
 	return 0;
 }
 
@@ -173,33 +167,19 @@ gmnal_rx_thread(void *arg)
 	gmnal_rx_t    *rx;
 	int	       rank;
 
-	for (rank=0; rank<num_rx_threads; rank++)
+	for (rank = 0; rank < gmnalni->gmni_nrxthreads; rank++)
 		if (gmnalni->gmni_rxthread_pid[rank] == current->pid)
 			break;
 
 	snprintf(name, sizeof(name), "gmnal_rx_%d", rank);
 	kportal_daemonize(name);
 
-	/*
-	 * 	set 1 bit for each thread started
-	 *	doesn't matter which bit
-	 */
-	spin_lock(&gmnalni->gmni_rxthread_flag_lock);
-	if (gmnalni->gmni_rxthread_flag)
-		gmnalni->gmni_rxthread_flag = gmnalni->gmni_rxthread_flag*2 + 1;
-	else
-		gmnalni->gmni_rxthread_flag = 1;
-	spin_unlock(&gmnalni->gmni_rxthread_flag_lock);
-
-	while(gmnalni->gmni_rxthread_stop_flag != GMNAL_THREAD_STOP) {
-		CDEBUG(D_NET, "RXTHREAD:: Receive thread waiting\n");
+	while(!gmnalni->gmni_thread_shutdown) {
 
 		rx = gmnal_dequeue_rx(gmnalni);
-		if (rx == NULL) {
-			CDEBUG(D_NET, "Receive thread time to exit\n");
+		if (rx == NULL)
 			break;
-		}
-                
+
                 /* We're connectionless: simply ignore packets on error */
                 
                 if (gmnal_unpack_msg(gmnalni, rx) == 0) {
@@ -213,11 +193,8 @@ gmnal_rx_thread(void *arg)
                 gmnal_post_rx(gmnalni, rx);
 	}
 
-	spin_lock(&gmnalni->gmni_rxthread_flag_lock);
-	gmnalni->gmni_rxthread_flag /= 2;
-	spin_unlock(&gmnalni->gmni_rxthread_flag_lock);
-
-	CDEBUG(D_NET, "thread gmnalni [%p] is exiting\n", gmnalni);
+	CDEBUG(D_NET, "exiting\n");
+        atomic_dec(&gmnalni->gmni_nthreads);
 	return 0;
 }
 
