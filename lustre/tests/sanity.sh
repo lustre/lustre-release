@@ -1395,9 +1395,6 @@ test_32r() {
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
-#   chmod 444 /mnt/lustre/somefile
-#   open(/mnt/lustre/somefile, O_RDWR)
-#   Should return -1
 test_33() {
 	rm -f $DIR/test_33_file
 	touch $DIR/test_33_file
@@ -1408,7 +1405,7 @@ test_33() {
         log 33_2
 }
 run_test 33 "write file with mode 444 (should return error) ===="
-                                                                                                                                               
+
 test_33a() {
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
@@ -1635,16 +1632,12 @@ test_42b() {
         AFTERWRITES=`count_ost_writes`
         if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
                 error "$BEFOREWRITES < $AFTERWRITES on unlink"
-                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-unlk.bug5195.gz
-                error "please put $TMP/debug-unlk.bug5195.gz on bug 5195 once"
         fi
         BEFOREWRITES=`count_ost_writes`
         sync || error "sync: $?"
         AFTERWRITES=`count_ost_writes`
         if [ $BEFOREWRITES -lt $AFTERWRITES ]; then
                 error "$BEFOREWRITES < $AFTERWRITES on sync"
-                $LCTL dk | sort -k 4 -t: | gzip -9 > $TMP/debug-sync.bug5195.gz
-                error "please put $TMP/debug-sync.bug5195.gz on bug 5195 once"
         fi
         dmesg | grep 'error from obd_brw_async' && error 'error writing back'
 	start_writeback
