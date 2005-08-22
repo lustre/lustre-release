@@ -243,7 +243,6 @@ void gmnal_post_rx(gmnal_ni_t *gmnalni, gmnal_rx_t *rx);
 ptl_err_t gmnal_post_tx(gmnal_ni_t *gmnalni, gmnal_tx_t *tx, 
                         lib_msg_t *libmsg, ptl_nid_t nid, int nob);
 
-
 /* Module Parameters */
 extern  int num_rx_threads;
 extern  int num_txds;

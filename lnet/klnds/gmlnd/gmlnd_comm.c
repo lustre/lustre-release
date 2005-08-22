@@ -257,9 +257,11 @@ gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
         CERROR("status for tx [%p] is [%d][%s]\n", 
                tx, status, gmnal_gmstatus2str(status));
 
+        spin_lock(&gmnalni->gmni_gm_lock);
         gm_resume_sending(gmnalni->gmni_port, tx->tx_gm_priority,
                           tx->tx_gmlid, gm_port_id,
                           gmnal_resume_sending_callback, tx);
+        spin_unlock(&gmnalni->gmni_gm_lock);
 }
 
 void 
@@ -312,11 +314,8 @@ gmnal_post_tx (gmnal_ni_t *gmnalni, gmnal_tx_t *tx,
 
         LASSERT ((nid >> 32) == 0);
 
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_status = gm_global_id_to_node_id(gmnalni->gmni_port, (__u32)nid, 
                                             &tx->tx_gmlid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-
 	if (gm_status != GM_SUCCESS) {
 		CERROR("Failed to obtain local id\n");
                 gmnal_return_tx(gmnalni, tx);

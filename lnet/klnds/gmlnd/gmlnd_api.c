@@ -44,10 +44,8 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
 		copy_from_user(name, PCFG_PBUF(pcfg, 1), pcfg->pcfg_plen1);
 
-		spin_lock(&gmnalni->gmni_gm_lock);
                 gm_status = gm_host_name_to_node_id_ex(gmnalni->gmni_port, 0,
                                                        name, &nid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
                 if (gm_status != GM_SUCCESS) {
                         CDEBUG(D_NET, "gm_host_name_to_node_id_ex(...host %s) "
                                "failed[%d]\n", name, gm_status);
@@ -55,10 +53,8 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
                 }
 
                 CDEBUG(D_NET, "Local node %s id is [%d]\n", name, nid);
-		spin_lock(&gmnalni->gmni_gm_lock);
 		gm_status = gm_node_id_to_global_id(gmnalni->gmni_port,
 						    nid, &gmid);
-		spin_unlock(&gmnalni->gmni_gm_lock);
 		if (gm_status != GM_SUCCESS) {
 			CDEBUG(D_NET, "gm_node_id_to_global_id failed[%d]\n",
 			       gm_status);
@@ -95,20 +91,15 @@ gmnal_get_local_nid (gmnal_ni_t *gmnalni)
         gm_status_t      gm_status;
 
         /* Called before anything initialised: no need to lock */
-
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_status = gm_get_node_id(gmnalni->gmni_port, &local_gmid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
 	if (gm_status != GM_SUCCESS)
 		return PTL_NID_ANY;
 
 	CDEBUG(D_NET, "Local node id is [%u]\n", local_gmid);
         
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_status = gm_node_id_to_global_id(gmnalni->gmni_port, 
                                             local_gmid, 
 					    &global_gmid);
-	spin_unlock(&gmnalni->gmni_gm_lock);
 	if (gm_status != GM_SUCCESS)
 		return PTL_NID_ANY;
         
@@ -142,10 +133,8 @@ gmnal_api_shutdown(nal_t *nal)
 	gmnal_stop_ctthread(gmnalni);
 	gmnal_stop_rxthread(gmnalni);
 
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_close(gmnalni->gmni_port);
 	gm_finalize();
-	spin_unlock(&gmnalni->gmni_gm_lock);
 
         lib_fini(libnal);
 
@@ -219,10 +208,8 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	       "name [%s], version [%d]\n", gm_port_id,
 	       "gmnal", GM_API_VERSION);
 
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gm_status = gm_open(&gmnalni->gmni_port, 0, gm_port_id, "gmnal",
 			    GM_API_VERSION);
-	spin_unlock(&gmnalni->gmni_gm_lock);
 
         if (gm_status != GM_SUCCESS) {
                 CERROR("Can't open GM port %d: %d (%s)\n",
@@ -288,14 +275,10 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 	gmnal_stop_ctthread(gmnalni);
 
  failed_3:
-        spin_lock(&gmnalni->gmni_gm_lock);
         gm_close(gmnalni->gmni_port);
-        spin_unlock(&gmnalni->gmni_gm_lock);
 
  failed_2:
-        spin_lock(&gmnalni->gmni_gm_lock);
         gm_finalize();
-        spin_unlock(&gmnalni->gmni_gm_lock);
 
         /* safe to free buffers after network has been shut down */
         gmnal_free_txs(gmnalni);

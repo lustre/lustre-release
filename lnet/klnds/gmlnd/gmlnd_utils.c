@@ -50,10 +50,7 @@ gmnal_alloc_tx (gmnal_ni_t *gmnalni)
                 return NULL;
         }
         
-        spin_lock(&gmnalni->gmni_gm_lock);
-        buffer = gm_dma_malloc(gmnalni->gmni_port,
-                                 gmnalni->gmni_msg_size);
-        spin_unlock(&gmnalni->gmni_gm_lock);
+        buffer = gm_dma_malloc(gmnalni->gmni_port, gmnalni->gmni_msg_size);
         if (buffer == NULL) {
                 CERROR("Failed to gm_dma_malloc tx buffer size [%d]\n", 
                        gmnalni->gmni_msg_size);
@@ -82,9 +79,7 @@ gmnal_free_tx (gmnal_tx_t *tx)
                tx, tx->tx_msg, tx->tx_buffer_size);
 #if 0
         /* We free buffers after we've closed the GM port */
-        spin_lock(&gmnalni->gmni_gm_lock);
         gm_dma_free(gmnalni->gmni_port, tx->tx_msg);
-        spin_unlock(&gmnalni->gmni_gm_lock);
 #endif
         PORTAL_FREE(tx, sizeof(*tx));
 }
@@ -92,20 +87,13 @@ gmnal_free_tx (gmnal_tx_t *tx)
 int
 gmnal_alloc_txs(gmnal_ni_t *gmnalni)
 {
+	int           ntxcred = gm_num_send_tokens(gmnalni->gmni_port);
 	int           ntx;
-        int           ntxcred;
         int           nrxt_tx;
         int           i;
 	gmnal_tx_t   *tx;
 
-	CDEBUG(D_TRACE, "gmnal_alloc_small tx\n");
-
-	/* get total number of transmit tokens */
-	spin_lock(&gmnalni->gmni_gm_lock);
-	ntxcred = gm_num_send_tokens(gmnalni->gmni_port);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	CDEBUG(D_NET, "total number of send tokens available is [%d]\n", 
-               ntxcred);
+        CWARN("ntxcred: %d\n", ntxcred);
 
 	ntx = num_txds;
         nrxt_tx = num_txds + 1;
@@ -265,19 +253,13 @@ gmnal_return_tx(gmnal_ni_t *gmnalni, gmnal_tx_t *tx)
 int
 gmnal_alloc_rxs (gmnal_ni_t *gmnalni)
 {
-        int          nrxcred;
+        int          nrxcred = gm_num_receive_tokens(gmnalni->gmni_port);
         int          nrx;
         int          i;
 	gmnal_rx_t  *rxd;
 	void	    *rxbuffer;
 
-	CDEBUG(D_TRACE, "gmnal_alloc_small rx\n");
-
-	spin_lock(&gmnalni->gmni_gm_lock);
-	nrxcred = gm_num_receive_tokens(gmnalni->gmni_port);
-	spin_unlock(&gmnalni->gmni_gm_lock);
-	CDEBUG(D_NET, "total number of receive tokens available is [%d]\n",
-	       nrxcred);
+        CWARN("nrxcred: %d\n", nrxcred);
 
 	nrx = num_txds*2 + 2;
         if (nrx > nrxcred) {
@@ -288,10 +270,8 @@ gmnal_alloc_rxs (gmnal_ni_t *gmnalni)
 
 	CDEBUG(D_NET, "Allocated [%d] receive tokens to small messages\n", nrx);
 
-	spin_lock(&gmnalni->gmni_gm_lock);
 	gmnalni->gmni_rx_hash = gm_create_hash(gm_hash_compare_ptrs, 
-                                                  gm_hash_hash_ptr, 0, 0, nrx, 0);
-	spin_unlock(&gmnalni->gmni_gm_lock);
+                                               gm_hash_hash_ptr, 0, 0, nrx, 0);
 	if (gmnalni->gmni_rx_hash == NULL) {
                 CERROR("Failed to create hash table\n");
                 return -ENOMEM;
@@ -307,10 +287,8 @@ gmnal_alloc_rxs (gmnal_ni_t *gmnalni)
 			return -ENOMEM;
 		}
 
-		spin_lock(&gmnalni->gmni_gm_lock);
 		rxbuffer = gm_dma_malloc(gmnalni->gmni_port, 
 					 gmnalni->gmni_msg_size);
-		spin_unlock(&gmnalni->gmni_gm_lock);
 		if (rxbuffer == NULL) {
 			CERROR("Failed to gm_dma_malloc rxbuffer [%d], "
 			       "size [%d]\n",i ,gmnalni->gmni_msg_size);
@@ -353,20 +331,15 @@ gmnal_free_rxs(gmnal_ni_t *gmnalni)
 		       rx, rx->rx_msg, rx->rx_size);
 #if 0
                 /* We free buffers after we've shutdown the GM port */
-		spin_lock(&gmnalni->gmni_gm_lock);
 		gm_dma_free(gmnalni->gmni_port, _rxd->rx_msg);
-		spin_unlock(&gmnalni->gmni_gm_lock);
 #endif
 		PORTAL_FREE(rx, sizeof(*rx));
 	}
 
 #if 0
         /* see above */
-        if (gmnalni->gmni_rx_hash != NULL) {
-                spin_lock(&gmnalni->gmni_gm_lock);
+        if (gmnalni->gmni_rx_hash != NULL)
                 gm_destroy_hash(gmnalni->gmni_rx_hash);
-                spin_unlock(&gmnalni->gmni_gm_lock);
-        }
 #endif
 }
 
@@ -755,8 +728,10 @@ gmnal_yield(int delay)
 int
 gmnal_enqueue_rx(gmnal_ni_t *gmnalni, gm_recv_t *recv)
 {
-        void         *ptr = gm_ntohp(recv->buffer);
+        void       *ptr = gm_ntohp(recv->buffer);
         gmnal_rx_t *rx = gm_hash_find(gmnalni->gmni_rx_hash, ptr);
+
+        /* No locking; hash is read-only */
 
 	LASSERT (rx != NULL);
         LASSERT (rx->rx_msg == (gmnal_msg_t *)ptr);
