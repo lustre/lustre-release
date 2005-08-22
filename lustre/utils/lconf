@@ -1659,11 +1659,11 @@ class LOV(Module):
             lctl.lov_add_osc(self.name, target_uuid, index, gen)
 
     def cleanup(self):
+        if is_prepared(self.name):
+            Module.cleanup(self)
         for (osc, index, gen, active) in self.osclist:
             target_uuid = osc.target_uuid
             osc.cleanup()
-        if is_prepared(self.name):
-            Module.cleanup(self)
         if self.config_only:
             panic("Can't clean up config_only LOV ", self.name)
 
@@ -1719,10 +1719,10 @@ class LMV(Module):
             lctl.lmv_add_mdc(self.name, mdc.target_uuid)
 	
     def cleanup(self):
-        for mdc in self.mdclist:
-            mdc.cleanup()
         if is_prepared(self.name):
             Module.cleanup(self)
+        for mdc in self.mdclist:
+            mdc.cleanup()
 
     def add_module(self, manager):
         for mdc in self.mdclist:
@@ -2708,8 +2708,7 @@ class CMOBD(Module):
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
-	if self.master:
-    	    self.master.cleanup()
+    	self.master.cleanup()
 
     def add_module(self, manager):
 	manager.add_lustre_module('smfs', 'smfs')

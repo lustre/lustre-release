@@ -247,8 +247,10 @@ static int cmobd_cleanup(struct obd_device *obd, int flags)
         int rc;
         ENTRY;
 
-        if (cmobd->write_srv)
+        if (cmobd->write_srv) {
                 cmobd_cleanup_write_srv(obd);
+                cmobd->write_srv = NULL;
+        }
 
         rc = obd_disconnect(cmobd->master_exp, flags);
         if (rc) {

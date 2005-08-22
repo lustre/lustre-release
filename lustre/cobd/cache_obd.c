@@ -305,8 +305,8 @@ cobd_disconnect_client(struct obd_device *obd,
 }
 
 #define COBD_CONNECT (1 << 0)
-#define COBD_DISCON (1 << 1)
-#define COBD_BOTH (1 << 2)
+#define COBD_DISCON  (1 << 1)
+#define COBD_SWITCH  (1 << 2)
 
 /* magic function for switching cobd between two exports cache and master in
  * strong correspondence with passed @cache_on. It also may perform partial
@@ -314,8 +314,9 @@ cobd_disconnect_client(struct obd_device *obd,
  *
  * bias == COBD_CONNECT only connect new export (used in cobd_connect())
  * bias == COBD_DISCON only disconnect old export (used in cobd_disconnect())
- * bias == COBD_BOTH do both (disconnect old and connect new) (used in
- * cobd_iocontrol())
+ *
+ * bias == COBD_SWITCH do both (disconnect old and connect new). This will also
+ * set ->cache_on  to passed @cache_on value.
  */
 static int cobd_switch(struct obd_device *obd,
                        int cache_on, int bias)
@@ -337,7 +338,7 @@ static int cobd_switch(struct obd_device *obd,
         }
 
         /* disconnect old export */
-        if (bias == COBD_BOTH || bias == COBD_DISCON) {
+        if (bias == COBD_SWITCH || bias == COBD_DISCON) {
                 if (discon_exp) {
                         rc = cobd_disconnect_client(obd, discon_exp, 0);
                         if (rc) {
@@ -353,43 +354,54 @@ static int cobd_switch(struct obd_device *obd,
         }
 
         /* connect new export */
-        if (bias == COBD_BOTH || bias == COBD_CONNECT) {
-                rc = cobd_connect_client(obd, conn_exp, &conn,
-                                         NULL, OBD_OPT_REAL_CLIENT);
-                if (rc) {
-                        CERROR("can't connect export %p, err %d\n",
-                               conn_exp, rc);
-                        RETURN(rc);
-                }
+        if (bias == COBD_SWITCH || bias == COBD_CONNECT) {
+                int connected;
 
-                if (cache_on) {
-                        cobd->cache_real_exp = class_conn2export(&conn);
-                        cli_obd = class_exp2obd(cobd->cache_exp);
-                } else {
-                        cobd->master_real_exp = class_conn2export(&conn);
-                        cli_obd = class_exp2obd(cobd->master_exp);
-                }
-        }
+                connected = cache_on ? (cobd->cache_real_exp != NULL) :
+                        (cobd->master_real_exp != NULL);
 
-        cobd->cache_on = cache_on;
-        
-        if (bias == COBD_BOTH || bias == COBD_CONNECT) {
-                /* re-init EA size for new selected export. This should be done after
-                 * assigining new state to @cobd->cache_on to not call not connened
-                 * already old export. */
-                if (obd_md_type(cli_obd)) {
-                        rc = cobd_init_dt_desc(obd);
-                        if (rc == 0) {
-                                rc = cobd_init_ea_size(obd);
-                                if (rc) {
-                                        CERROR("can't initialize EA size, "
-                                               "err %d\n", rc);
-                                }
+                /* correct export already may be connected */
+                if (!connected) {
+                        rc = cobd_connect_client(obd, conn_exp, &conn,
+                                                 NULL, OBD_OPT_REAL_CLIENT);
+                        if (rc) {
+                                CERROR("can't connect export %p, err %d\n",
+                                       conn_exp, rc);
+                                RETURN(rc);
+                        }
+
+                        if (cache_on) {
+                                cobd->cache_real_exp = class_conn2export(&conn);
+                                cli_obd = class_exp2obd(cobd->cache_exp);
                         } else {
-                                /* ignore cases when we di dnot manage to init
-                                 * lovdesc. This is because some devices may not know
-                                 * "lovdesc" info command. */
-                                rc = 0;
+                                cobd->master_real_exp = class_conn2export(&conn);
+                                cli_obd = class_exp2obd(cobd->master_exp);
+                        }
+
+                        /* change flag only if connect is allowed to keep
+                         * ->cache_on coherent with real export connected. */
+                        cobd->cache_on = cache_on;
+                
+                        /* re-init EA size for new selected export. This should
+                         * be done after assigining new state to @cobd->cache_on
+                         * to not call disconnected old export. */
+                        if (obd_md_type(cli_obd)) {
+                                rc = cobd_init_dt_desc(obd);
+                                if (rc == 0) {
+                                        rc = cobd_init_ea_size(obd);
+                                        if (rc) {
+                                                CERROR("can't initialize EA size, "
+                                                       "err %d\n", rc);
+                                        }
+                                } else {
+                                        CERROR("can't initialize data lovdesc, "
+                                               "err %d\n", rc);
+                                        /* ignore cases when we did not manage
+                                         * to init lovdesc. This is because some
+                                         * devices may not know "lovdesc" info
+                                         * command. */
+                                        rc = 0;
+                                }
                         }
                 }
         }
@@ -442,7 +454,7 @@ cobd_disconnect(struct obd_export *exp, unsigned long flags)
          * cache should be switched after client umount this is not needed.
          * --umka. */
         cobd = &obd->u.cobd;
-        rc = cobd_switch(obd, cobd->cache_on, COBD_DISCON);
+        rc = cobd_switch(obd, !cobd->cache_on, COBD_DISCON);
         class_disconnect(exp, flags);
 
         RETURN(rc);
@@ -520,11 +532,11 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp,
         switch (cmd) {
         case OBD_IOC_COBD_CON:
                 if (!cobd->cache_on)
-                        rc = cobd_switch(obd, 1, COBD_BOTH);
+                        rc = cobd_switch(obd, 1, COBD_SWITCH);
                 break;
         case OBD_IOC_COBD_COFF: 
                 if (cobd->cache_on)
-                        rc = cobd_switch(obd, 0, COBD_BOTH);
+                        rc = cobd_switch(obd, 0, COBD_SWITCH);
                 break;
         default:
                 cobd_exp = cobd_get_exp(obd);
