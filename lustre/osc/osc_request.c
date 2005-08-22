@@ -1938,6 +1938,7 @@ out:
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                            int sent)
 {
+        int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
         ENTRY;
 
         if (!(oap->oap_brw_flags & OBD_BRW_FROM_GRANT)) {
@@ -1969,6 +1970,20 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
                 cli->cl_lost_grant += PAGE_SIZE;
                 CDEBUG(D_CACHE, "lost grant: %lu avail grant: %lu dirty: %lu\n",
                        cli->cl_lost_grant, cli->cl_avail_grant, cli->cl_dirty);
+        } else if (PAGE_SIZE != blocksize && oap->oap_count != PAGE_SIZE) {
+                /* For short writes we shouldn't count parts of pages that span
+                 * a whole block on the OST side, or our accounting goes wrong.
+                 * Should match the code in filter_grant_check. */
+                int offset = (oap->oap_obj_off + oap->oap_page_off) & ~PAGE_MASK;
+                int count = oap->oap_count + (offset & (blocksize - 1));
+                int end = (offset + oap->oap_count) & (blocksize - 1);
+                if (end)
+                        count += blocksize - end;
+
+                cli->cl_lost_grant += PAGE_SIZE - count;
+                CDEBUG(D_CACHE, "lost %lu grant: %lu avail: %lu dirty: %lu\n",
+                       PAGE_SIZE - count, cli->cl_lost_grant,
+                       cli->cl_avail_grant, cli->cl_dirty);
         }
 
         EXIT;

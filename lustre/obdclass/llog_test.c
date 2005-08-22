@@ -231,13 +231,14 @@ static int llog_test_4(struct obd_device *obd)
         char name[10];
         int rc, i, buflen;
         struct llog_mini_rec lmr;
-        struct llog_cookie cookie={0};
+        struct llog_cookie cookie;
         struct llog_ctxt *ctxt;
         int num_recs = 0;
         char *buf;
         struct llog_rec_hdr rec;
         ENTRY;
-        
+
+        memset(&cookie, 0, sizeof(cookie));
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_TEST_ORIG_CTXT);
         lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
         lmr.lmr_hdr.lrh_type = 0xf00f00;
