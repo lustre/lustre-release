@@ -1,6 +1,7 @@
 # This file is sourced by lustre/lustrecvs
 
 portalstag="HEAD"
+lnettag="HEAD"
 libsysiotag="HEAD"
 snmptag=""
 
@@ -29,6 +30,7 @@ case "$lustretag" in
 
     b1_4_newconfig)	
         portalstag="b_hd_newconfig"
+        lnettag="b_hd_newconfig"
 	;;
 
     b_cmd*)
@@ -82,5 +84,6 @@ esac
 
 cvs_cmd libsysio libsysio "$libsysiotag"
 cvs_cmd portals portals "$portalstag"
+cvs_cmd lnet lnet "$lnettag"
 cvs_cmd snmp lustre-snmp "$snmptag"
 cvs_cmd lustre lustre-core "$lustretag"
