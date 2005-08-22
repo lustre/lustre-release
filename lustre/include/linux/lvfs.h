@@ -48,6 +48,7 @@ struct lvfs_ucred {
 
 struct lvfs_callback_ops {
         struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr, void *data);
+        int (*l_open_llog) (__u64 id_ino, struct dentry *dentry, void *data);
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -72,10 +73,11 @@ struct lvfs_run_ctxt {
 
 /* lvfs_common.c */
 struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *, __u64, __u32, __u64 ,void *data);
+int lvfs_open_llog(struct lvfs_run_ctxt*, __u64, struct dentry*, void *data);
 
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                struct lvfs_ucred *cred);
-void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
+void pop_ctxt(struct lvfs_run_ctxt *saveu, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *cred);
 
 #ifdef __KERNEL__

@@ -182,6 +182,8 @@ struct llog_operations {
         int (*lop_connect)(struct llog_ctxt *ctxt, int count,
                            struct llog_logid *logid, struct llog_gen *gen,
                            struct obd_uuid *uuid);
+        int (*lop_update)(struct llog_ctxt *ctxt, struct llog_handle **,
+                           struct llog_logid *logid, void *data);
         /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
@@ -362,7 +364,7 @@ static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
 }
 
 static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                              struct llog_logid *logid, char *name)
+                              struct llog_logid *logid, char*fsname, char *name)
 {
         struct llog_operations *lop;
         int rc;
@@ -374,7 +376,7 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_create(ctxt, res, logid, NULL/*fsname*/, name);
+        rc = lop->lop_create(ctxt, res, logid, fsname, name);
         RETURN(rc);
 }
 

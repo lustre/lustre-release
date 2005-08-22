@@ -28,6 +28,7 @@
 #include <linux/lvfs.h>
 #include <linux/lustre_disk.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <lustre/lustre_user.h>
 #include <linux/version.h> 
@@ -420,8 +421,7 @@ out:
 /* Process all local logs.
 FIXME clients and servers should use the same fn. No need to have MDS 
 do client and confobd do servers. MGC should do both. */
-int lustre_process_logs(struct super_block *sb,
-                        struct config_llog_instance *cfg, int allow_recov)
+int lustre_process_logs(struct super_block *sb, int allow_recov)
 {
         struct obd_ioctl_data ioc_data = { 0 };
         struct list_head dentry_list;
@@ -459,7 +459,7 @@ int lustre_process_logs(struct super_block *sb,
                         continue;
                 }
                 logname[len] = 0;
-                                                                                       
+                                        
                 CERROR("starting log %s\n", logname);
                 ioc_data.ioc_inllen1 = len + 1;
                 ioc_data.ioc_inlbuf1 = logname;
@@ -518,38 +518,119 @@ static int do_lcfg(char *cfgname, ptl_nid_t nid, int cmd,
         return(err);
 }
 
+/* Set up a mgsobd to process startup logs */
+static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
+{
+        struct config_llog_instance cfg;
+        char*  mgsname;
+        int    mgsname_size, err = 0;
+
+        mgsname_size = 2 * sizeof(sb) + 5;
+        OBD_ALLOC(mgsname, mgsname_size);
+        if (!mgsname)
+                GOTO(out, err = -ENOMEM);
+        sprintf(mgsname, "MGS_%p", sb);
+
+        err = lustre_register_mount(mgsname, sb, mnt);
+        if (err)
+               GOTO(out_free, err);
+
+        cfg.cfg_instance = mgsname;
+        snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mgsname);
+ 
+        err = do_lcfg(mgsname, 0, LCFG_ATTACH, LUSTRE_MGS_NAME, cfg.cfg_uuid.uuid, 0, 0);
+        if (err)
+                GOTO(out_dereg, err);
+                                                                                       
+        err = do_lcfg(mgsname, 0, LCFG_SETUP, 0, 0, 0, 0);
+        if (err) {
+                CERROR("mgsobd setup error %d\n", err);
+                do_lcfg(mgsname, 0, LCFG_DETACH, 0, 0, 0, 0);
+                GOTO(out_dereg, err);
+        }
+
+out_free:
+        OBD_FREE(mgsname, mgsname_size);
+out:
+        return err;
+out_dereg:
+        lustre_deregister_mount(mgsname);
+        goto out_free;
+}
+
+static void lustre_stop_mgs(struct super_block *sb)
+{
+        struct obd_device *obd;
+        char mgsname[2 * sizeof(sb) + 5];
+
+        sprintf(mgsname, "MGS_%p", sb);
+ 
+        obd = class_name2obd(mgsname);
+        if (!obd) {
+                CERROR("Can not get mgs obd!\n");
+                goto out;
+        }
+        class_manual_cleanup(obd, NULL);
+out:
+        return;
+}
+
 /* Set up a mgcobd to process startup logs */
-static int lustre_start_mgc(char *mgcname, struct super_block *sb)
+static int lustre_start_mgc(struct super_block *sb, struct vfsmount *mnt)
 {
         struct config_llog_instance cfg;
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct obd_device *obd;
-        int err = 0;
+        char*  mgcname;
+        int    mgcname_size, err = 0;
+
+        mgcname_size = 2 * sizeof(sb) + 5;
+        OBD_ALLOC(mgcname, mgcname_size);
+        if (!mgcname)
+                GOTO(out, err = -ENOMEM);
+        sprintf(mgcname, "MGC_%p", sb);
+
+        /* register a mount for the mgc so it can call mgc_fs_setup() */
+        if (mnt != NULL) {
+                err = lustre_register_mount(mgcname, sb, mnt);
+                if (err) 
+                        GOTO(out_free, err);
+        }
 
         cfg.cfg_instance = mgcname;
         snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mgcname);
  
         err = do_lcfg(mgcname, 0, LCFG_ATTACH, LUSTRE_MGC_NAME, cfg.cfg_uuid.uuid, 0, 0);
         if (err)
-                goto out_free;
+                GOTO(out_dereg, err);
                                                                                        
         err = do_lcfg(mgcname, 0, LCFG_SETUP, 0, 0, 0, 0);
         if (err) {
                 CERROR("mgcobd setup error %d\n", err);
                 do_lcfg(mgcname, 0, LCFG_DETACH, 0, 0, 0, 0);
-                goto out_free;
+                GOTO(out_dereg, err);
+        }
+
+        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
+                // FIXME implement
+                CERROR("Need new server index from MGS!\n");
+                // rewrite last_rcvd, ldd (for new svname)
         }
 
         obd = class_name2obd(mgcname);
         if (!obd) {
                 CERROR("Can't find mgcobd %s\n", mgcname);
-                err = -ENOTCONN;
-                goto out_free;
+                GOTO(out_dereg, err = -ENOTCONN);
         }
         sbi->lsi_mgc = obd;
 
 out_free:
+        OBD_FREE(mgcname, mgcname_size);
+out:
         return err;
+out_dereg:
+        lustre_deregister_mount(mgcname);
+        goto out_free;
 }
 
 static void lustre_stop_mgc(struct super_block *sb)
@@ -626,7 +707,6 @@ static struct vfsmount *lustre_kern_mount(struct super_block *sb)
         mount_ctxt.pwdmnt = mnt;
         mount_ctxt.pwd = mnt->mnt_root;
         mount_ctxt.fs = get_ds();
-        //mount_ctxt.cb_ops = mds_lvfs_ops;
 
         err = parse_mount_data(&mount_ctxt, ldd); 
         unlock_mntput(mnt);
@@ -814,20 +894,10 @@ static int server_fill_super_common(struct super_block *sb)
      
 static int server_fill_super(struct super_block *sb)
 {
-        struct config_llog_instance cfg;
         struct lustre_sb_info *sbi = s2sbi(sb);
         struct vfsmount *mnt;
-        char *mgcname;
-        int mgcname_sz = sizeof(sb) * 2 + 5;
-        int err;
+        int mgs_service = 0, err;
         ENTRY;
-
-        /* Generate a string unique to this super, let's try
-           the address of the super itself.*/
-        OBD_ALLOC(mgcname, mgcname_sz);
-        if (!mgcname)
-                GOTO(out, err = -ENOMEM);
-        sprintf(mgcname, "MGC_%p", sb);
 
         /* mount to read server info */
         mnt = lustre_kern_mount(sb);
@@ -840,40 +910,31 @@ static int server_fill_super(struct super_block *sb)
         CERROR("Found service %s for fs %s on device %s\n",
                sbi->lsi_ldd->ldd_svname, sbi->lsi_ldd->ldd_fsname, 
                sbi->lsi_lmd->lmd_dev);
-        
-        /* register a mount for the mgc so it can call mgc_fs_setup() */
-        err = lustre_register_mount(mgcname, sb, mnt);
+
+        err = lustre_register_mount(sbi->lsi_ldd->ldd_svname, sb, mnt);
         if (err) 
                 GOTO(out, err);
 
-        err = lustre_start_mgc(mgcname, sb);
-        //part of mgc_startup err = mgc_fs_setup(sb, mnt);
+        if (sbi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MGMT) {
+                CERROR("Found MGS service for fs %s on device %s\n",
+                       sbi->lsi_ldd->ldd_fsname, sbi->lsi_lmd->lmd_dev);
+                mgs_service++;
+                err = lustre_start_mgs(sb, mnt);
+                if (err) 
+                       GOTO(out_dereg, err);
+        }
+
+        err = lustre_start_mgc(sb, mnt);
         if (err) 
                 GOTO(out_dereg, err);
         
-        /* we also need to register a mount for the real server */
-        err = lustre_register_mount(sbi->lsi_ldd->ldd_svname, sb, mnt);
-        if (err) 
-                GOTO(out_dereg, err);
-
-
-        if (sbi->lsi_ldd->ldd_flags & LDD_F_NEED_INDEX) {
-                // FIXME implement
-                CERROR("Need new server index from MGS!\n");
-                // rewrite last_rcvd, ldd (for new svname)
-        }
-        // FIXME register with MGS
- 
         /* Set up all obd devices for service */
-        cfg.cfg_instance = mgcname;
-        snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mgcname);
-        err = lustre_process_logs(sb, &cfg, 0);
+        err = lustre_process_logs(sb, 0);
         if (err < 0) {
                 CERROR("Unable to process log: %d\n", err);
                 GOTO(out_dereg, err);
         }
         
-        /* Finally, put something at the mount point. */
         CERROR("Mounting server\n");
         err = server_fill_super_common(sb);
         if (err) 
@@ -884,14 +945,13 @@ static int server_fill_super(struct super_block *sb)
            have to fix up the s_ops after! */
 out:
         //FIXME mntput
-        if (mgcname)
-                OBD_FREE(mgcname, mgcname_sz);
         if (sbi->lsi_ldd)
                 // FIXME ??
                 class_del_profile(sbi->lsi_ldd->ldd_svname);
         RETURN(err);
 out_dereg:
-        lustre_deregister_mount(mgcname);
+        if (mgs_service)
+                lustre_stop_mgs(sb);
         lustre_deregister_mount(sbi->lsi_ldd->ldd_svname);
         goto out;     
 }
@@ -932,7 +992,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         }
         memcpy(sbi->lsi_lmd, lmd, sizeof(*lmd));
         
-
         if (lmd_is_client(lmd)) {
                 if (!client_fill_super) {
                         CERROR("Nothing registered for client_fill_super!\n"
@@ -943,7 +1002,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         snprintf(mgcname, sizeof(mgcname), "mgc-client-%s", 
                                  lmd->lmd_dev);
                         CERROR("Mounting client\n");
-                        err = lustre_start_mgc(mgcname, sb);
+                        err = lustre_start_mgc(sb, NULL);
                         if (err) {
                                 lustre_free_sbi(sb);
                                 RETURN(err);

@@ -46,10 +46,8 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_disk.h>
-//#include <linux/lprocfs_status.h>
 
 #include "mgc_internal.h"
-
           
 static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb, 
                         struct vfsmount *mnt)

@@ -250,6 +250,9 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         RETURN(0);
 }
 
+static int
+lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen);
+
 static int lov_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -272,7 +275,7 @@ static int lov_disconnect(struct obd_export *exp)
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp) {
                         /* Disconnect and delete from list */
-                        lov_del_obd(obd, obd->obd_uuid, i, tgt->ltd_gen);
+                        lov_del_obd(obd, &obd->obd_uuid, i, tgt->ltd_gen);
                         /* Cleanup the osc now - can't do it from 
                            lov_cleanup because we lose our only reference to 
                            it right now. */ 

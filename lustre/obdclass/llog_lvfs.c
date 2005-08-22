@@ -432,10 +432,10 @@ static struct file *llog_filp_open(char* fsname, char *name,
         OBD_ALLOC(logname, PATH_MAX);
         if (logname == NULL)
                 return ERR_PTR(-ENOMEM); 
-//FIXME: Need to changing mkfs
-//        if (fsname)
-//              len = snprintf(logname, PATH_MAX, "%s/%s/%s", MOUNT_CONFIGS_DIR, fsname, name);
-//        else
+        if (fsname)
+              len = snprintf(logname, PATH_MAX, "%s/%s/%s",
+                             MOUNT_CONFIGS_DIR, fsname, name);
+        else
               len = snprintf(logname, PATH_MAX, "%s/%s", 
                              MOUNT_CONFIGS_DIR, name);
 
@@ -507,15 +507,22 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(fsname, name, open_flags, 0644);
+                handle->lgh_file = llog_filp_open(fsname, 
+                                                      name, open_flags, 0644);
+
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
-
+                rc = obd_lvfs_open_llog(ctxt->loc_exp, 
+                                   handle->lgh_file->f_dentry->d_inode->i_ino,
+                                   handle->lgh_file->f_dentry);
+                if (rc)
+                        GOTO(cleanup, rc);
                 handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =
                         handle->lgh_file->f_dentry->d_inode->i_ino;
                 handle->lgh_id.lgl_ogen =
                         handle->lgh_file->f_dentry->d_inode->i_generation;
+                
         } else {
                 oa = obdo_alloc();
                 if (oa == NULL)

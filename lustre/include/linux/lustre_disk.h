@@ -72,12 +72,12 @@ struct host_desc {
 
 struct lustre_disk_data {
         __u32     ldd_magic;
-        __u32     ldd_flags;           /* LDD_SV_TYPE */
-        struct host_desc ldd_mgmtnid;  /* mgmt nid; lmd can override */
-        char      ldd_fsname[64];      /* filesystem this server is part of */
-        char      ldd_svname[64];      /* this server's name (lustre-mdt0001) */
-        enum ldd_mount_type ldd_mount_type; /* target fs type LDD_MT_* */
-        char      ldd_mount_opts[128]; /* target fs mount opts */
+        __u32     ldd_flags;                 /* LDD_SV_TYPE */
+        char      ldd_fsname[64];            /* filesystem this server is part of */
+        char      ldd_svname[64];            /* this server's name (lustre-mdt0001) */
+        char      ldd_mount_opts[128];       /* target fs mount opts */
+        struct host_desc    ldd_mgmtnid;     /* mgmt nid; lmd can override */
+        enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)

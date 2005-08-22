@@ -31,6 +31,7 @@
 #include <asm/uaccess.h>
 #include <linux/types.h>
 #include <linux/fs.h>
+#include <linux/dcache.h>
 #include <linux/time.h>
 #include <linux/timer.h>
 #endif
@@ -578,6 +579,15 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 
         return lvfs_fid2dentry(&exp->exp_obd->obd_lvfs_ctxt, id_ino, gen, gr,
                                exp->exp_obd);
+}
+
+static inline int 
+obd_lvfs_open_llog(struct obd_export *exp, __u64 id_ino, struct dentry *dentry)
+{
+        LASSERT(exp->exp_obd);
+
+        return lvfs_open_llog(&exp->exp_obd->obd_lvfs_ctxt, id_ino, 
+                              dentry, exp->exp_obd);
 }
 
 #ifndef time_before

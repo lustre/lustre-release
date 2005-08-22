@@ -682,7 +682,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 int inst = 0;
 
                 lcfg = (struct lustre_cfg *)cfg_buf;
-                if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION))
+                if (lcfg->lcfg_magic == __swab32(LUSTRE_CFG_MAGIC))
                         lustre_swab_lustre_cfg(lcfg);
 
                 rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
@@ -758,7 +758,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         ENTRY;
 
         CDEBUG(D_INFO, "looking up llog %s\n", name);
-        rc = llog_create(ctxt, &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, NULL, name);
         if (rc)
                 RETURN(rc);
 
@@ -826,7 +826,7 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         int rc, rc2;
         ENTRY;
 
-        rc = llog_create(ctxt, &llh, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, NULL, name);
         if (rc)
                 RETURN(rc);
 

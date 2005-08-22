@@ -262,7 +262,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                                 &mds->mds_cfg_llh, NULL, NULL, name);
                 if (rc == 0)
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          &cfg_uuid);
@@ -292,7 +292,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mds->mds_cfg_llh, NULL, name);
+                                 &mds->mds_cfg_llh, NULL, NULL, name);
                 if (rc == 0) {
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
                                          NULL);

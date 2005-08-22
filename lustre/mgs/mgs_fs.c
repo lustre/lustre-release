@@ -50,7 +50,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
-        struct dentry *dentry;
+        struct dentry *logs_dentry;
         int rc;
         ENTRY;
 
@@ -72,17 +72,15 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
-        if (IS_ERR(dentry)) {
-                rc = PTR_ERR(dentry);
+        logs_dentry = simple_mkdir(current->fs->pwd, MOUNT_CONFIGS_DIR, 0777, 1);
+        if (IS_ERR(logs_dentry)) {
+                rc = PTR_ERR(logs_dentry);
                 CERROR("cannot create %s directory: rc = %d\n", 
                        MOUNT_CONFIGS_DIR, rc);
                 GOTO(err_pop, rc);
         }
 
-        mgs->mgs_configs_dir = dentry;
-     
-        INIT_LIST_HEAD(&mgs->mgs_open_llogs);
+        mgs->mgs_configs_dir = logs_dentry;
 
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

@@ -27,7 +27,8 @@
  * 1cf6
  * lcfG
  */
-#define LUSTRE_CFG_VERSION 0x1cf60001
+#define LUSTRE_CFG_MAGIC 0x1cf60001
+#define LUSTRE_CFG_START_VERSION 0x10000001
 #define LUSTRE_CFG_MAX_BUFCOUNT 8
 
 #define LCFG_HDR_SIZE(count) \
@@ -57,6 +58,7 @@ struct lustre_cfg_bufs {
 };
 
 struct lustre_cfg {
+        uint32_t lcfg_magic;
         uint32_t lcfg_version;
         uint32_t lcfg_command;
 
@@ -182,7 +184,8 @@ static inline struct lustre_cfg *lustre_cfg_new(int cmd,
         if (!lcfg)
                 RETURN(lcfg);
 
-        lcfg->lcfg_version = LUSTRE_CFG_VERSION;
+        lcfg->lcfg_magic = LUSTRE_CFG_MAGIC;
+        lcfg->lcfg_version = LUSTRE_CFG_START_VERSION;
         lcfg->lcfg_command = cmd;
         lcfg->lcfg_bufcount = bufs->lcfg_bufcount;
 
@@ -216,7 +219,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
         if (len < LCFG_HDR_SIZE(0))
                 RETURN(-EINVAL);
 
-        if (lcfg->lcfg_version != LUSTRE_CFG_VERSION)
+        if (lcfg->lcfg_magic != LUSTRE_CFG_MAGIC)
                 RETURN(-EINVAL);
         if (lcfg->lcfg_bufcount >= LUSTRE_CFG_MAX_BUFCOUNT)
                 RETURN(-EINVAL);
