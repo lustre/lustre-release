@@ -39,7 +39,6 @@ typedef enum {
         AUDIT_CREATE,
         AUDIT_LINK,
         AUDIT_UNLINK,
-        AUDIT_SYMLINK,
         AUDIT_RENAME,
         AUDIT_SETATTR,
         AUDIT_WRITE,

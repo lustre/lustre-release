@@ -99,7 +99,6 @@ const char *opstr[AUDIT_MAX] = {
         [AUDIT_CREATE]   "create",
         [AUDIT_LINK]     "link",
         [AUDIT_UNLINK]   "unlink",
-        [AUDIT_SYMLINK]  "symlink",
         [AUDIT_RENAME]   "rename",
         [AUDIT_SETATTR]  "setattr",
         [AUDIT_WRITE]    "write",

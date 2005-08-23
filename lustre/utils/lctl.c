@@ -84,6 +84,10 @@ static int parse_audit_ops(char * str, __u64 * mask)
                         SET_AUDIT_OP((*mask), AUDIT_STAT);
                 else if (!strcmp(op,"readdir"))
                         SET_AUDIT_OP((*mask), AUDIT_READDIR);
+                else if (!strcmp(op,"readlink"))
+                        SET_AUDIT_OP((*mask), AUDIT_READLINK);
+                else if (!strcmp(op,"setattr"))
+                        SET_AUDIT_OP((*mask), AUDIT_SETATTR);
                 else {
                         fprintf(stderr, "invalid audit operation '%s'\n", op);
                 }       
