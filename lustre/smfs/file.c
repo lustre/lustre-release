@@ -111,7 +111,6 @@ static ssize_t smfs_read(struct file *filp, char *buf,
 {
         struct  inode *cache_inode = I2CI(filp->f_dentry->d_inode);
         struct  smfs_file_info *sfi;
-        loff_t  tmp_ppos;
         loff_t  *cache_ppos = NULL;
         ssize_t rc = 0;
 
