@@ -1066,6 +1066,9 @@ int ll_readpage(struct file *filp, struct page *page)
         llap = llap_from_page(page, LLAP_ORIGIN_READPAGE);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
+
+        /* capability need this */
+        llap->llap_fsuid = current->fsuid;
         
         if (ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD)
                 ras_update(ll_i2sbi(inode), &fd->fd_ras, page->index,
