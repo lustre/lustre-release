@@ -197,6 +197,9 @@ static inline lproc_filter_attach_seqstat(struct obd_device *dev) {}
 #endif
 
 /* filter_capa.c */
+void blacklist_add(uid_t uid);
+void blacklist_del(uid_t uid);
+int blacklist_display(char *buf, int bufsize);
 int filter_init_capa_keys(struct obd_device *obd);
 void filter_free_capa_keys(struct filter_obd *filter);
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
