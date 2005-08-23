@@ -166,6 +166,7 @@ static int mds_set_obj_audit(struct obd_device * obd, struct inode * inode,
         };
         int len, rc = 0;
         void *lmm = NULL;
+        ENTRY;
         
         down(&inode->i_sem);
         len = fsfilt_get_md(obd, inode, NULL, 0, EA_LOV);

@@ -1462,14 +1462,17 @@ cleanup_no_trans:
                         if (au_inode == NULL) {
                                 au_inode = dparent->d_inode;
                                 au_id = *(rec->ur_id1);
+                                mds_audit_open(req, &au_id, au_inode, 
+                                               rec->ur_name, rec->ur_namelen,
+                                               rc);
                         } else {
                                 if (fid == 0)
                                         mds_read_inode_sid(obd, au_inode, &au_id);
                                 else
                                         mds_inode2id(obd, &au_id, au_inode, fid);
+                                mds_audit_open(req, &au_id, au_inode, 
+                                               NULL, 0, rc);
                         }
-                        mds_audit_open(req, &au_id, au_inode, 
-                                       rec->ur_name, rec->ur_namelen, rc);
                 }
 
                 l_dput(dchild);

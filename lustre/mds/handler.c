@@ -1695,12 +1695,15 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         if (resent_req == 0 && (dparent || dchild)) {
                 struct inode * au_inode = NULL;
                 
-                if (dchild && dchild->d_inode)
+                if (dchild && dchild->d_inode) {
                         au_inode = dchild->d_inode;
-                else
+                        mds_audit_stat(req, &body->id1, au_inode,
+                                       NULL, 0, rc);
+                } else {
                         au_inode = dparent->d_inode;
-                
-                mds_audit_stat(req, &body->id1, au_inode, name, namesize, rc);
+                        mds_audit_stat(req, &body->id1, au_inode,
+                                       name, namesize, rc);
+                }
         }
         switch (cleanup_phase) {
         case 2:
