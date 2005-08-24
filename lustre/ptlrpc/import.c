@@ -136,6 +136,9 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                ? "wait for recovery to complete"
                                : "fail");
 
+                if (obd_dump_on_timeout)
+                        portals_debug_dumplog();
+
                 CWARN("%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
                       imp->imp_target_uuid.uuid,
@@ -358,7 +361,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 #endif
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        size[0] = sizeof(struct obd_connect_data);
+        /* Allow a slightly larger reply for future growth compatibility */
+        size[0] = sizeof(struct obd_connect_data) + 16 * sizeof(__u64);
         request->rq_replen = lustre_msg_size(1, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
