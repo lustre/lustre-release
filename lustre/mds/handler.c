@@ -1459,6 +1459,10 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
 
         LASSERT(body != NULL);
 
+        /* XXX: quite a ugly hack, need to check old code
+         * drop FLSIZE/FLBLOCKS prior any checking to */
+        body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+        
         if (dentry->d_inode == NULL || !S_ISREG(inode->i_mode))
                 RETURN(0);
         
