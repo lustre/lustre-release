@@ -499,7 +499,7 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         unsigned char *ptr;
         char *key_ptr;
         int index = page->index;
-        __u64 data_key = 0; 
+        __u8 data_key = 0; 
         int i, rc = 0;
         ENTRY;
 
@@ -518,7 +518,12 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         spin_unlock(&lli->lli_lock);
         data_key += index;
 
-        CDEBUG(D_INFO, "data_key is "LPU64" \n", data_key);
+        CDEBUG(D_INFO, "data_key is %d \n", data_key);
+        if (data_key == 0) {
+                CDEBUG(D_INFO, "data_key is 0, inc 1 \n");
+                data_key ++; 
+        }
+        LASSERT((__u8)data_key != 0);
         /*encrypt the data*/
         ptr = (char *)kmap(page);
         key_ptr = ptr;

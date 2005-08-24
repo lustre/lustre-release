@@ -751,7 +751,6 @@ static obd_count cksum_pages(int nob, obd_count page_count,
         osc_crypt_page(page, off, count, ENCRYPT_DATA)
 #define osc_decrypt_page(page, off, count)  \
         osc_crypt_page(page, off, count, DECRYPT_DATA)
-
 /*Put a global call back var here is Ugly, but put it to client_obd
  *also seems not a good idea, WangDi*/
 crypt_cb_t  osc_crypt_cb = NULL;
@@ -767,6 +766,18 @@ static int osc_crypt_page(struct page *page, obd_off page_off, obd_off count,
         if (rc != 0)
                 CERROR("crypt page error %d \n", rc);
         RETURN(rc);
+}
+
+static int osc_decrypt_pages(struct brw_page *pga, int page_count)
+{
+        int i =0;
+        ENTRY;
+
+        for (i = 0; i < page_count; i++) {
+                struct brw_page *pg = &pga[i];
+                osc_decrypt_page(pg->pg, pg->page_offset, pg->count);
+        }
+        RETURN(0);
 }
 
 static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
@@ -944,8 +955,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         RETURN(-EPROTO);
                 }
                 LASSERT (req->rq_bulk->bd_nob == requested_nob);
-                osc_decrypt_page(pga->pg, pga->page_offset,
-                                 pga->count);
+                osc_decrypt_pages(pga, page_count);
                 RETURN(check_write_rcs(req, requested_nob, niocount,
                                        page_count, pga));
         }
@@ -996,7 +1006,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                                req->rq_import->imp_connection->c_peer.peer_id.nid);
         }
 #endif
-        osc_decrypt_page(pga->pg, pga->page_offset, pga->count);
+        osc_decrypt_pages(pga, page_count);
         RETURN(0);
 }
 
