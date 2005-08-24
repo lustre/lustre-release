@@ -440,7 +440,6 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
                        mdc_uuid->uuid, LMV_MAX_TGT_COUNT);
                 RETURN(-EINVAL);
         }
-#if 0
         if (lmv->desc.ld_tgt_count == 0) {
                 struct obd_device *mdc_obd;
 
@@ -458,7 +457,6 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
                         CERROR("lmv failed to setup llogging subsystems\n");
                 }
         }
-#endif
         spin_lock(&lmv->lmv_lock);
         tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
         tgt->uuid = *mdc_uuid;
@@ -724,7 +722,6 @@ static int lmv_cleanup(struct obd_device *obd, int flags)
         
         RETURN(0);
 }
-
 static int lmv_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
@@ -1941,6 +1938,17 @@ static int lmv_llog_finish(struct obd_device *obd,
         RETURN(rc);
 }
 
+static int lmv_precleanup(struct obd_device *obd, int flags)
+{
+        int rc = 0;
+        
+        rc = obd_llog_finish(obd, &obd->obd_llogs, 0);
+        if (rc != 0)
+                CERROR("failed to cleanup llogging subsystems\n");
+
+        RETURN(rc);
+}
+
 static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                         void *key, __u32 *vallen, void *val)
 {
@@ -2365,6 +2373,7 @@ struct obd_ops lmv_obd_ops = {
         .o_detach               = lmv_detach,
         .o_setup                = lmv_setup,
         .o_cleanup              = lmv_cleanup,
+        .o_precleanup           = lmv_precleanup,
         .o_process_config       = lmv_process_config,
         .o_connect              = lmv_connect,
         .o_disconnect           = lmv_disconnect,
