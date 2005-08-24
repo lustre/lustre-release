@@ -507,16 +507,17 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 handle->lgh_id = *logid;
 
         } else if (name) {
-                handle->lgh_file = llog_filp_open(fsname, 
-                                                      name, open_flags, 0644);
+                handle->lgh_file = llog_filp_open(fsname, name, open_flags, 0644);
 
                 if (IS_ERR(handle->lgh_file))
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
+
                 rc = obd_lvfs_open_llog(ctxt->loc_exp, 
                                    handle->lgh_file->f_dentry->d_inode->i_ino,
                                    handle->lgh_file->f_dentry);
                 if (rc)
                         GOTO(cleanup, rc);
+
                 handle->lgh_id.lgl_ogr = 1;
                 handle->lgh_id.lgl_oid =
                         handle->lgh_file->f_dentry->d_inode->i_ino;

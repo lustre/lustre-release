@@ -38,26 +38,202 @@
 #include <linux/lustre_fsfilt.h>
 #include "mgs_internal.h"
 
+static struct mgs_update_llh* mgs_get_update_handle(struct obd_device *obd,
+                                                    char *fsname, char *name)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgs_update_llh *mul, *l;
+        struct list_head *update_llh_list = &mgs->mgs_update_llhs;
+
+        list_for_each_entry_safe(mul, l, update_llh_list, mul_list) {
+                if (!strcmp(mul->mul_name, name) &&
+                    !strcmp(mul->mul_fsname, fsname))
+                        return mul;
+        }
+        return NULL;
+}
+
+static int mgs_new_update_handle(struct obd_device *obd,
+                                 struct mgs_update_llh *mul,
+                                 char  *fsname, char *name)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct list_head *update_llh_list = &mgs->mgs_update_llhs;
+        int rc = 0;
+
+        if(mgs_get_update_handle(obd, fsname, name))
+                GOTO(out, rc = -EBUSY);
+
+        OBD_ALLOC(mul, sizeof(*mul));
+        if (!mul) {
+                CERROR("Can not allocate memory for update_llh.\n");
+                GOTO(out, rc = -ENOMEM);
+        }
+        strncpy(mul->mul_name, name, sizeof mul->mul_name);
+        strncpy(mul->mul_fsname, fsname, sizeof mul->mul_fsname);
+
+        spin_lock(&mgs->mgs_llh_lock);
+        /*seach again, in case of race.*/
+        if (mgs_get_update_handle(obd, fsname, name))
+                 spin_unlock(&mgs->mgs_llh_lock);
+                 GOTO(out_free, rc = -EBUSY);
+        }
+        list_add(&mul->mul_list, &mgs->mgs_update_llhs);
+        spin_unlock(&mgs->mgs_llh_lock);
+
+out:
+        return rc;
+
+out_free:
+        OBD_FREE(mul, sizeof(*mul));
+        goto out;
+}
+
+static void mgs_free_update_handle(struct obd_device *obd,
+                                   struct mgs_update_llh *mul)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+        
+        spin_lock(&mgs->mgs_llh_lock);
+        list_del(&mul->mul_list);
+        spin_unlock(&mgs->mgs_llh_lock);
+      
+        return;
+}
+
 static int mgs_start_record(struct obd_device *obd, 
                             struct obd_ioctl_data *data)
 {
         static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
         struct mgs_obd *mgs = &obd->u.mgs;
-                struct lvfs_run_ctxt saved;
-                struct llog_handle **llog_handle;
-                char *name = data->ioc_inlbuf1;
-                char *fsname = data->ioc_inlbuf2;
-                int rc = 0;
+        struct lvfs_run_ctxt saved;
+        struct mgs_update_llh *mul;
+        struct llog_handle **llh_res;
+        char *name = data->ioc_inlbuf1;
+        char *fsname = data->ioc_inlbuf2;
+        int rc = 0;
 
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 llog_handle, NULL, fsname, name);
-                if (rc == 0)
-                        llog_init_handle(llog_handle, LLOG_F_IS_PLAIN, 
-                                         &cfg_uuid);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
+        rc = mgs_new_update_handle(obd, mul, fsname, name);
+        if (rc)
                 RETURN(rc);
+
+        llh_res = &mul->mul_llh;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                         llh_res, NULL, fsname, name);
+        if (rc == 0)
+                llog_init_handle(*llh_res, LLOG_F_IS_PLAIN, 
+                                 &cfg_uuid);
+
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        RETURN(rc);
+}
+
+static int mgs_end_record(struct obd_device *obd, 
+                          struct obd_ioctl_data *data)
+{
+        static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct lvfs_run_ctxt saved;
+        struct mgs_update_llh *mul;
+        char *name = data->ioc_inlbuf1;
+        char *fsname = data->ioc_inlbuf2;
+        int rc = 0;
+
+        mul = mgs_get_update_handle(obd, fsname, name);
+        if (!mul) {
+                CERROR("Can not get update handle for %s:%s \n",
+                       fsname, name);
+                return -EINVAL;
+        }
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_close(mul->mul_llh);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        RETURN(rc);
+}
+
+static int mgs_clear_record(struct obd_device *obd, 
+                            struct obd_ioctl_data *data)
+{
+        static struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct lvfs_run_ctxt saved;
+        struct mgs_update_llh *mul;
+        struct llog_handel **llh_res;
+        char *name = data->ioc_inlbuf1;
+        char *fsname = data->ioc_inlbuf2;
+        int rc = 0;
+
+        rc = mgs_new_update_handle(obd, mul, fsname, name);
+        if (rc)
+                RETURN(rc);
+
+        llh_res = &mul->mul_llh;
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
+                         llh_res, NULL, name);
+        if (rc == 0) {
+                llog_init_handle(mul->mul_llh, LLOG_F_IS_PLAIN, NULL);
+                rc = llog_destroy(mul->mul_llh);
+                llog_free_handle(mul->mul_llh);
+        }
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        mgs_free_update_handle(obd, mul);
+
+        RETURN(rc);
+}
+
+static int mgs_do_record(struct obd_device *obd,
+                         struct obd_ioctl_data *data,
+                         int from_user)
+{
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgs_update_llh *mul;
+        char *name = data->ioc_inlbuf1;
+        char *fsname = data->ioc_inlbuf2;
+        char *cfg_buf;
+        struct llog_rec_hdr rec;
+        int rc = 0;
+        
+        mul = mgs_get_update_handle(obd, fsname, name);
+        if (!mul) {
+                CERROR("Can not get update handle for %s:%s \n",
+                       fsname, name);
+                return -EINVAL;
+        }
+
+        rec.lrh_len = llog_data_len(data->ioc_plen1);
+
+        if (data->ioc_type == LUSTRE_CFG_TYPE) {
+                rec.lrh_type = OBD_CFG_REC;
+        } else {
+                CERROR("unknown cfg record type:%d \n", data->ioc_type);
+                RETURN(-EINVAL);
+        }
+
+        if (from_user) {
+                OBD_ALLOC(cfg_buf, data->ioc_plen1);
+                if (cfg_buf == NULL)
+                        RETURN(-ENOMEM);
+                rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
+                if (rc) {
+                        OBD_FREE(cfg_buf, data->ioc_plen1);
+                        RETURN(rc);
+                }
+        } else
+                cfg_buf = data->ioc_bulk;
+ 
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        rc = llog_write_rec(mul->mul_llh, &rec, NULL, 0, cfg_buf, -1);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        OBD_FREE(cfg_buf, data->ioc_plen1);
+        RETURN(rc);
 }
 
 int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -75,87 +251,22 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
         case OBD_IOC_RECORD: {
-                char *name = data->ioc_inlbuf1;
-                char *fsname = data->ioc_inlbuf2;
-                if (mgs->mgs_cfg_llh)
-                        RETURN(-EBUSY);
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mgs->mgs_cfg_llh, fsname, name);
-                if (rc == 0)
-                        llog_init_handle(mgs->mgs_cfg_llh, LLOG_F_IS_PLAIN,
-                                         &cfg_uuid);
-                else
-                        mgs->mgs_cfg_llh = NULL;
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
+                rc = mgs_start_record(obd, data);
                 RETURN(rc);
         }
 
         case OBD_IOC_ENDRECORD: {
-                if (!mgs->mgs_cfg_llh)
-                        RETURN(-EBADF);
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_close(mgs->mgs_cfg_llh);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                mgs->mgs_cfg_llh = NULL;
+                rc = mgs_end_record(obd, data);
                 RETURN(rc);
         }
 
         case OBD_IOC_CLEAR_LOG: {
-                char *name = data->ioc_inlbuf1;
-                if (mgs->mgs_cfg_llh)
-                        RETURN(-EBUSY);
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                 &mgs->mgs_cfg_llh, NULL, name);
-                if (rc == 0) {
-                        llog_init_handle(mgs->mgs_cfg_llh, LLOG_F_IS_PLAIN,
-                                         NULL);
-
-                        rc = llog_destroy(mgs->mgs_cfg_llh);
-                        llog_free_handle(mgs->mgs_cfg_llh);
-                }
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                mgs->mgs_cfg_llh = NULL;
+                rc = mgs_clear_record(obd, data);
                 RETURN(rc);
         }
 
         case OBD_IOC_DORECORD: {
-                char *cfg_buf;
-                struct llog_rec_hdr rec;
-                if (!mgs->mgs_cfg_llh)
-                        RETURN(-EBADF);
-
-                rec.lrh_len = llog_data_len(data->ioc_plen1);
-
-                if (data->ioc_type == LUSTRE_CFG_TYPE) {
-                        rec.lrh_type = OBD_CFG_REC;
-                } else {
-                        CERROR("unknown cfg record type:%d \n", data->ioc_type);
-                        RETURN(-EINVAL);
-                }
-
-                OBD_ALLOC(cfg_buf, data->ioc_plen1);
-                if (cfg_buf == NULL)
-                        RETURN(-EINVAL);
-                rc = copy_from_user(cfg_buf, data->ioc_pbuf1, data->ioc_plen1);
-                if (rc) {
-                        OBD_FREE(cfg_buf, data->ioc_plen1);
-                        RETURN(rc);
-                }
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                rc = llog_write_rec(mgs->mgs_cfg_llh, &rec, NULL, 0,
-                                    cfg_buf, -1);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                OBD_FREE(cfg_buf, data->ioc_plen1);
+                rc = mgs_do_record(obd, data, 1);
                 RETURN(rc);
         }
 

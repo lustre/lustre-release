@@ -321,7 +321,8 @@ struct mgs_obd {
         struct dentry                   *mgs_configs_dir;
         spinlock_t                       mgs_llogs_lock;
         struct list_head                 mgs_open_llogs;
-        struct llog_handle              *mgs_cfg_llh;
+        spinlock_t                       mgs_llhs_lock;
+        struct list_head                 mgs_update_llhs;
 };
 
 struct mds_obd {

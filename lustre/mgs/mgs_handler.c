@@ -200,6 +200,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         INIT_LIST_HEAD(&mgs->mgs_open_llogs);
+        INIT_LIST_HEAD(&mgs->mgs_update_llhs);
 
         rc = llog_start_commit_thread();
         if (rc < 0)
@@ -401,6 +402,9 @@ static int mgs_lvfs_open_llog(__u64 id, struct dentry *dentry , void *data)
          
         list_for_each_entry_safe(mollog, n, llog_list, mol_list) {
                 if (mollog->mol_id == id) {
+                        spin_lock(&mollog->mol_lock);
+                        mollog->mol_ref++;
+                        spin_unlock(&mollog->mol_lock);
                         dget(dentry);
                         return 0;
                 }
@@ -415,6 +419,8 @@ static int mgs_lvfs_open_llog(__u64 id, struct dentry *dentry , void *data)
         mollog->mol_id = id;
         mollog->mol_dentry = dentry;
         mollog->mol_update = 0;
+        mollog->mol_ref = 1;
+        spin_lock_init(&mollog->mol_lock);
 
         spin_lock(&mgs->mgs_llogs_lock);
         list_add(&mollog->mol_list, &mgs->mgs_open_llogs);
