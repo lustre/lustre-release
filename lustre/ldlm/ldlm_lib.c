@@ -1413,6 +1413,7 @@ static int target_recovery_thread(void *arg)
 
         /* next stage: replay requests */
         delta = jiffies;
+        obd->obd_req_replaying = 1;
         CDEBUG(D_ERROR, "1: request replay stage - %d clients from t"LPU64"\n",
               atomic_read(&obd->obd_req_replay_clients),
               obd->obd_next_recovery_transno);
@@ -1637,7 +1638,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * handled will pass through here and be processed immediately.
          */
         spin_lock_bh(&obd->obd_processing_task_lock);
-        if (transno < obd->obd_next_recovery_transno && check_for_clients(obd)) {
+        if (transno < obd->obd_next_recovery_transno && obd->obd_req_replaying) {
                 /* Processing the queue right now, don't re-add. */
                 LASSERT(list_empty(&req->rq_list));
                 spin_unlock_bh(&obd->obd_processing_task_lock);
