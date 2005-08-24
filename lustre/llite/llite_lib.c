@@ -583,6 +583,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_audit_mask = AUDIT_OFF;
         lli->lli_key_info = NULL;
         init_waitqueue_head(&lli->lli_dirty_wait);
+        lli->lli_io_epoch = 0;
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)

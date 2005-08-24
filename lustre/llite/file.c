@@ -74,7 +74,8 @@ finish:
 }
 
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
-                    struct obd_client_handle *och, int dirty)
+                    struct obd_client_handle *och, int dirty,
+                    __u64 epoch)
 {
         struct ptlrpc_request *req = NULL;
         struct mdc_op_data *op_data;
@@ -116,8 +117,9 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
 
         if (dirty) {
                 /* we modified data through this handle */
+                op_data->io_epoch = epoch;
                 op_data->flags |= MDS_BFLAG_DIRTY_EPOCH;
-                op_data->valid |= OBD_MD_FLFLAGS;
+                op_data->valid |= OBD_MD_FLFLAGS | OBD_MD_FLEPOCH;
                 if (ll_validate_size(inode, &op_data->size, &op_data->blocks))
                         op_data->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         }
@@ -154,7 +156,7 @@ int ll_md_real_close(struct obd_export *md_exp,
         int freeing = inode->i_state & I_FREEING;
         struct obd_client_handle **och_p;
         struct obd_client_handle *och;
-        __u64 *och_usecount;
+        __u64 *och_usecount, epoch;
         int rc = 0, dirty = 0;
         ENTRY;
 
@@ -199,6 +201,8 @@ int ll_md_real_close(struct obd_export *md_exp,
 
         och = *och_p;
         *och_p = NULL;
+        epoch = lli->lli_io_epoch;
+        lli->lli_io_epoch = 0;
 
         up(&lli->lli_och_sem);
 
@@ -209,7 +213,7 @@ int ll_md_real_close(struct obd_export *md_exp,
          * and this will be called from block_ast callack.
         */
         if (och && och->och_fh.cookie != DEAD_HANDLE_MAGIC)
-                rc = ll_md_och_close(md_exp, inode, och, dirty);
+                rc = ll_md_och_close(md_exp, inode, och, dirty, epoch);
         
         RETURN(rc);
 }
@@ -352,6 +356,9 @@ int ll_och_fill(struct inode *inode, struct lookup_intent *it,
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
+        if (lli->lli_io_epoch != 0 && lli->lli_io_epoch != body->io_epoch)
+                CDEBUG(D_ERROR, "are we opening new epoch?! "LPD64
+                       " != "LPD64"\n", lli->lli_io_epoch, body->io_epoch);
         lli->lli_io_epoch = body->io_epoch;
         mdc_set_open_replay_data(ll_i2mdexp(inode), och, 
 				 LUSTRE_IT(it)->it_data);
@@ -494,7 +501,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                         }
                         
                         /* ll_md_och_close() will free och */
-                        ll_md_och_close(ll_i2mdexp(inode), inode, och, 0);
+                        ll_md_och_close(ll_i2mdexp(inode), inode, och, 0, 0);
                 }
                 (*och_usecount)++;
                         
@@ -1348,7 +1355,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         rc = ll_file_release(f->f_dentry->d_inode, f);
         
         /* Now also destroy our supplemental och */
-        ll_md_och_close(ll_i2mdexp(inode), f->f_dentry->d_inode, och, 0);
+        ll_md_och_close(ll_i2mdexp(inode), f->f_dentry->d_inode, och, 0, 0);
         EXIT;
 out:
         ll_intent_release(&oit);

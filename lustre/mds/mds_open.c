@@ -1548,6 +1548,13 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                  * them until all write references are dropped.
                  * btw, we hold one reference */
                 LASSERT(mfd->mfd_mode & FMODE_WRITE);
+                LASSERT(request_body->valid & OBD_MD_FLEPOCH);
+                LASSERT(MDS_FILTERDATA(inode));
+                if (MDS_FILTERDATA(inode)->io_epoch != request_body->io_epoch)
+                        CDEBUG(D_ERROR, "try to update attr. for old epoch "
+                               LPD64" while current "LPD64"\n",
+                               MDS_FILTERDATA(inode)->io_epoch,
+                               request_body->io_epoch);
                 i_size_write(inode, request_body->size);
                 inode->i_blocks = request_body->blocks;
                 iattr.ia_size = inode->i_size;

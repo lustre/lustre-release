@@ -343,7 +343,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
                         }
                         ll_och_fill(inode, it, och);
                         /* ll_md_och_close() will free och */
-                        ll_md_och_close(ll_i2mdexp(inode), inode, och, 0);
+                        ll_md_och_close(ll_i2mdexp(inode), inode, och, 0, 0);
                 }       
                 (*och_usecount)++;        
 

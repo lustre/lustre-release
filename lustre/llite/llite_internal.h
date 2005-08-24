@@ -340,7 +340,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
-                    struct obd_client_handle *och, int dirty);
+                    struct obd_client_handle *och, int dirty, __u64 epoch);
 int ll_och_fill(struct inode *inode, struct lookup_intent *it,
                 struct obd_client_handle *och);
 int ll_set_audit(struct inode *, __u64);
@@ -624,11 +624,6 @@ ll_inode2mdc_data(struct mdc_op_data *op_data,
                 op_data->ctime = LTIME_S(inode->i_ctime);
                 newvalid |= OBD_MD_FLCTIME;
         }
-        if (valid & OBD_MD_FLEPOCH) {
-                op_data->io_epoch = ll_i2info(inode)->lli_io_epoch;
-                newvalid |= OBD_MD_FLEPOCH;
-        }
-
         if (valid & OBD_MD_FLTYPE) {
                 op_data->mode = (op_data->mode & S_IALLUGO) |
                         (inode->i_mode & S_IFMT);
