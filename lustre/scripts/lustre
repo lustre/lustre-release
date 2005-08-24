@@ -144,7 +144,7 @@ status() {
 
 	# check for either a server or a client filesystem
 	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
-	OST="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
+	OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status 2> /dev/null`"
 	LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
 	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running"
 
