@@ -1793,14 +1793,8 @@ static void osc_check_rpcs(struct client_obd *cli)
                 LOI_DEBUG(loi, "%lu in flight\n", rpcs_in_flight(cli));
                 LASSERT(loi->loi_ost_idx != LL_POISON);
 
-#if 0
-                /* XXX: disabling this check for debug purposes! Also it seem
-                 * does not make a big meaning because there will not be more
-                 * than ->cl_max_rpcs_in_flight RPCs in flight as ->cl_dirty_max
-                 * will limit it in osc_enter_cache(). */
                 if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)
                         break;
-#endif
 
                 /* attempt some read/write balancing by alternating between
                  * reads and writes in an object.  The makes_rpc checks here

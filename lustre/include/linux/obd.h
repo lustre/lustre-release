@@ -297,7 +297,7 @@ struct filter_obd {
 
 struct mds_server_data;
 
-#define OSC_MAX_RIF_DEFAULT      16
+#define OSC_MAX_RIF_DEFAULT      8
 #define OSC_MAX_RIF_MAX          64
 #define OSC_MAX_DIRTY_DEFAULT    (4*OSC_MAX_RIF_DEFAULT*PTLRPC_MAX_BRW_SIZE>>20)
 #define OSC_MAX_DIRTY_MB_MAX     512     /* totally arbitrary */

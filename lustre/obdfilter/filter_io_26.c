@@ -380,13 +380,10 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-#if 0
-                        filter_tally_write(&obd->u.filter, 
-                                           dreq->dr_pages,
-                                           dreq->dr_page_idx,
-                                           dreq->dr_blocks,
+                        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+                        filter_tally_write(&obd->u.filter,  dreq->dr_pages,
+                                           dreq->dr_npages, dreq->dr_blocks,
                                            blocks_per_page);
-#endif
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild, 
