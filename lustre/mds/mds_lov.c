@@ -828,7 +828,7 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
         struct config_llog_instance cfg;
         struct llog_ctxt *ctxt;
         char *profile = mds->mds_profile, *name;
-        int rc, version, namelen;
+        int rc, namelen;
         ENTRY;
 
         if (profile == NULL)
@@ -841,7 +841,7 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
         OBD_ALLOC(name, namelen);
         if (name == NULL)
                 RETURN(-ENOMEM);
-
+#if 0
         if (clean) {
                 version = mds->mds_config_version - 1;
                 sprintf(name, "%s-clean-%d", profile, version);
@@ -849,7 +849,14 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 version = mds->mds_config_version + 1;
                 sprintf(name, "%s-%d", profile, version);
         }
-
+#else
+        if (clean) {
+                sprintf(name, "%s-clean", profile);
+        } else {
+                sprintf(name, "%s", profile);
+        }
+#warning "should add config version finally"
+#endif
         CWARN("Applying configuration log %s\n", name);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
