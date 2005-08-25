@@ -863,8 +863,7 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
         rc = class_config_process_llog(ctxt, name, &cfg);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc == 0)
-                mds->mds_config_version = version;
+
         CWARN("Finished applying configuration log %s: %d\n", name, rc);
 
         OBD_FREE(name, namelen);
