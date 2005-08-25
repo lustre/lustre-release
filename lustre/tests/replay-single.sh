@@ -1314,5 +1314,5 @@ test_57() {
 run_test 57 "open orphan in reconstruct_open()"
 
 equals_msg test complete, cleaning up
-$CLEANUP
+#$CLEANUP
 

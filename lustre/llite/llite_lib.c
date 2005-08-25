@@ -584,6 +584,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_key_info = NULL;
         init_waitqueue_head(&lli->lli_dirty_wait);
         lli->lli_io_epoch = 0;
+        INIT_LIST_HEAD(&lli->lli_capas);
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -1145,6 +1146,7 @@ void ll_clear_inode(struct inode *inode)
         struct lustre_id id;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct obd_capa *ocapa, *tmp;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
@@ -1198,10 +1200,8 @@ void ll_clear_inode(struct inode *inode)
                 lli->lli_remote_acl = NULL;
         }
 
-        if (lli->lli_trunc_capa) {
-                OBD_FREE(lli->lli_trunc_capa, sizeof(struct lustre_capa));
-                lli->lli_trunc_capa = NULL;
-        }
+        list_for_each_entry_safe(ocapa, tmp, &lli->lli_capas, u.client.lli_list)
+                capa_put(ocapa);
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
         EXIT;
@@ -1227,7 +1227,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data *op_data;
-        struct lustre_capa *trunc_capa = NULL;
         int ia_valid = attr->ia_valid;
         int err, rc = 0;
         ENTRY;
@@ -1314,22 +1313,11 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 if (attr->ia_valid & ATTR_SIZE) {
-                        /* XXX: hack for truncate capa */
-                        rc = mdc_req2lustre_capa(request, 0, &trunc_capa);
+                        rc = ll_set_trunc_capa(request, 0, inode);
                         if (rc) {
                                 ptlrpc_req_finished(request);
                                 RETURN(rc);
                         }
-
-                        spin_lock(&lli->lli_lock);
-                        if (trunc_capa) {
-                                if (lli->lli_trunc_capa)
-                                        OBD_FREE(lli->lli_trunc_capa,
-                                                 sizeof(*trunc_capa));
-                                lli->lli_trunc_capa = trunc_capa;
-                                DEBUG_CAPA(D_INFO, trunc_capa, "truncate");
-                        }
-                        spin_unlock(&lli->lli_lock);
                 }
 
                 /* We call inode_setattr to adjust timestamps, but we first

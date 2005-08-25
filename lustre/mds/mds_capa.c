@@ -520,10 +520,10 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
                 expired = capa_is_to_expire(ocapa);
                 if (!expired) {
                         capa_dup(capa, ocapa);
-                        capa_put(ocapa, MDS_CAPA);
+                        capa_put(ocapa);
                         GOTO(out, rc);
                 }
-                capa_put(ocapa, MDS_CAPA);
+                capa_put(ocapa);
         }
 
         memcpy(capa, req_capa, sizeof(*capa));
@@ -539,7 +539,9 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
 
         capa_hmac(mds->mds_capa_hmac, key, capa);
 
-        rc = capa_renew(capa, MDS_CAPA);
+        ocapa = capa_renew(capa, MDS_CAPA);
+        if (!ocapa)
+                rc = -ENOMEM;
 out:
         if (rc == 0)
                 body->valid |= OBD_MD_CAPA;

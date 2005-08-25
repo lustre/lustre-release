@@ -117,6 +117,8 @@ void ll_truncate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_capa *ocapa;
+        struct lustre_capa *capa = NULL;
         struct obdo *oa = NULL;
         int rc;
         ENTRY;
@@ -165,9 +167,14 @@ void ll_truncate(struct inode *inode)
 
         lli->lli_size_pid = 0;
         up(&lli->lli_size_sem);
+
+        ocapa = capa_get(current->fsuid, CAPA_TRUNC, id_group(&lli->lli_id),
+                         id_ino(&lli->lli_id), CLIENT_CAPA, NULL, NULL, NULL);
+        if (ocapa)
+                capa = &ocapa->c_capa;
         
         rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
-                       OBD_OBJECT_EOF, NULL, lli->lli_trunc_capa);
+                       OBD_OBJECT_EOF, NULL, capa);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else

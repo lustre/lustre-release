@@ -230,9 +230,9 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
         if (blacklist_check(capa->lc_uid))
                 RETURN(-EACCES);
 
-        if (cmd == OBD_BRW_WRITE && capa->lc_op != MAY_WRITE)
+        if (cmd == OBD_BRW_WRITE && !(capa->lc_op & (CAPA_WRITE | CAPA_TRUNC)))
                 RETURN(-EACCES);
-        if (cmd == OBD_BRW_READ && !(capa->lc_op & (MAY_WRITE | MAY_READ)))
+        if (cmd == OBD_BRW_READ && !(capa->lc_op & (CAPA_WRITE | CAPA_READ)))
                 RETURN(-EACCES);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_FILTER_VERIFY_CAPA))
@@ -255,13 +255,13 @@ verify:
                                     sizeof(capa->lc_hmac));
                 } else {
                         /* ocapa is obsolete */
-                        capa_put(ocapa, FILTER_CAPA);
+                        capa_put(ocapa);
                         spin_unlock(&filter->fo_capa_lock);
                         goto new_capa;
                 }
                 spin_unlock(&filter->fo_capa_lock);
 
-                capa_put(ocapa, FILTER_CAPA);
+                capa_put(ocapa);
                 RETURN(rc ? -EACCES : 0);
         }
 

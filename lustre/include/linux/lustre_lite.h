@@ -120,7 +120,7 @@ struct ll_inode_info {
 
         struct lustre_key      *lli_key_info;
 
-        struct lustre_capa     *lli_trunc_capa; /* capabiliity for truncate */
+        struct list_head        lli_capas;
 
         wait_queue_head_t       lli_dirty_wait;
 };

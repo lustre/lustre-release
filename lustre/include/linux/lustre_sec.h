@@ -512,8 +512,14 @@ int svcsec_null_exit(void);
 #define CAPA_CACHE_SIZE 1000             /* for MDS & OST */
 #define CAPA_HMAC_ALG "sha1"
 
+/* capa ops */
+#define CAPA_READ       MAY_READ        /* 2 */
+#define CAPA_WRITE      MAY_WRITE       /* 4 */
+#define CAPA_TRUNC      8
+
 struct lustre_capa_data {
-        __u32   lc_uid;       /* uid */
+        __u32   lc_uid;       /* uid, mapped uid */
+        __u32   lc_ruid;      /* remote uid on client */
         __u32   lc_op;        /* operations allowed */
         __u64   lc_ino;       /* inode# */
         __u32   lc_mdsid;     /* mds# */
@@ -526,6 +532,7 @@ struct client_capa {
         struct inode             *inode;      /* this should be always valid
                                                * if c_refc > 0 */
         struct lustre_handle      handle;     /* handle of mds_file_data */
+        struct list_head          lli_list;   /* link to lli_capas */
 #if 0   /* TODO: support multi mount point */
         struct list_head         *list;       /* the capa list belong to this client */
         struct timer_list        *timer;      /* timer belong to this client */
@@ -599,8 +606,8 @@ struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
                           unsigned long ino, int type,
                           struct lustre_capa *capa, struct inode *inode,
                           struct lustre_handle *handle);
-void capa_put(struct obd_capa *ocapa, int type);
-int capa_renew(struct lustre_capa *capa, int type);
+void capa_put(struct obd_capa *ocapa);
+struct obd_capa *capa_renew(struct lustre_capa *capa, int type);
 void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);
 void capa_dup(void *dst, struct obd_capa *ocapa);
 void capa_dup2(void *dst, struct lustre_capa *capa);
@@ -609,7 +616,7 @@ int __capa_is_to_expire(struct obd_capa *ocapa);
 int capa_is_to_expire(struct obd_capa *ocapa);
 
 #define CAPA_EXPIRY_SHIFT 10 /* 1024 sec */
-#define CAPA_EXPIRY       (1UL << PAGE_SHIFT)
+#define CAPA_EXPIRY       (1UL << CAPA_EXPIRY_SHIFT)
 #define CAPA_EXPIRY_MASK  (~(CAPA_EXPIRY-1))
 
 #define CAPA_PRE_EXPIRY_NOROUND 3       /* sec */
@@ -618,6 +625,7 @@ int capa_is_to_expire(struct obd_capa *ocapa);
 /* struct lustre_capa.lc_flags */
 #define CAPA_FL_NOROUND   0x001 /* capa expiry not rounded */
 #define CAPA_FL_REMUID    0x002 /* remote uid */
+#define CAPA_FL_TRUNC     0x004 /* truncate capa, this kind of capa won't be renewed */
 
 static inline unsigned long capa_pre_expiry(struct lustre_capa *capa)
 {

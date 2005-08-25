@@ -808,6 +808,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 if (!can_merge_pages(&pga[i - 1], &pga[i]))
                         niocount++;
 
+        /* TODO: this could be optimized: thie capability can be
+         * found from ll_inode_info->lli_capas. */
         capa_op = (opc == OST_WRITE) ? MAY_WRITE : MAY_READ;
 get_capa:
         ocapa = capa_get(oa->o_fsuid, capa_op, raw_id->li_fid.lf_group,
@@ -844,22 +846,18 @@ get_capa:
 
         bufcnt = 0;
         body = lustre_msg_buf(req->rq_reqmsg, bufcnt++, sizeof(*body));
+        memcpy(&body->oa, oa, sizeof(*oa));
         ioobj = lustre_msg_buf(req->rq_reqmsg, bufcnt++, sizeof(*ioobj));
-        if (ocapa)
+        if (ocapa) {
                 capa = lustre_msg_buf(req->rq_reqmsg, bufcnt++, sizeof(*capa));
+                capa_dup(capa, ocapa);
+                body->oa.o_valid |= OBD_MD_CAPA;
+        }
         niobuf = lustre_msg_buf(req->rq_reqmsg, bufcnt++,
                                 niocount * sizeof(*niobuf));
 
-        memcpy(&body->oa, oa, sizeof(*oa));
-
         obdo_to_ioobj(oa, ioobj);
         ioobj->ioo_bufcnt = niocount;
-
-        if (ocapa) {
-                capa_dup(capa, ocapa);
-                body->oa.o_valid |= OBD_MD_CAPA;
-                capa_put(ocapa, CLIENT_CAPA);
-        }
 
         LASSERT (page_count > 0);
 

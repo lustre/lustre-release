@@ -142,8 +142,6 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
         EXIT;
 out:
         mdc_clear_open_replay_data(md_exp, och);
-        if (och->och_capa)
-                capa_put(och->och_capa, CLIENT_CAPA);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         OBD_FREE(och, sizeof *och);
         return rc;
@@ -364,7 +362,7 @@ int ll_och_fill(struct inode *inode, struct lookup_intent *it,
 				 LUSTRE_IT(it)->it_data);
 
         if (S_ISREG(inode->i_mode) && (body->valid & OBD_MD_CAPA))
-                rc = ll_set_och_capa(inode, it, och);
+                rc = ll_set_capa(inode, it);
         RETURN(rc);
 }
 

@@ -112,9 +112,11 @@ struct ll_sb_info {
         char                      ll_gns_oname[PATH_MAX];
         void                      *ll_crypto_info;
 
+#if 0
         /* TODO: to support multi mount for capability */
         struct list_head          ll_capa_list;
         struct timer_list         ll_capa_timer;
+#endif
 };
 
 struct ll_gns_ctl {
@@ -359,8 +361,9 @@ int ll_capa_thread_start(void);
 void ll_capa_thread_stop(void);
 
 void ll_capa_timer_callback(unsigned long unused);
-int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
-                    struct obd_client_handle *och);
+int ll_set_capa(struct inode *inode, struct lookup_intent *it);
+int ll_set_trunc_capa(struct ptlrpc_request *req, int offset,
+                      struct inode *inode);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);

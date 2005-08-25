@@ -106,6 +106,7 @@ int
 mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
 {
         struct mds_body *body = NULL;
+        struct obd_capa *ocapa;
         struct lustre_capa *capa = NULL;
         unsigned long expiry;
         ENTRY;
@@ -134,9 +135,9 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
                 RETURN(-EPROTO);
         }
 
-        rc = capa_renew(capa, CLIENT_CAPA);
-        if (rc)
-                RETURN(rc);
+        ocapa = capa_renew(capa, CLIENT_CAPA);
+        if (!ocapa)
+                RETURN(-ENOENT);
 
         spin_lock(&capa_lock);
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
@@ -409,34 +410,6 @@ int mdc_store_inode_generation(struct obd_export *exp,
         DEBUG_REQ(D_HA, req, "storing generation for ino "DLID4,
                   OLID4(&rec->cr_replayid));
         return 0;
-}
-
-int mdc_req2lustre_capa(struct ptlrpc_request *req, unsigned int offset,
-                        struct lustre_capa **capa)
-{
-        struct mds_body *body;
-        struct lustre_capa *lcapa;
-
-        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
-        if (!body)
-                RETURN(-ENOMEM);
-
-        if (!(body->valid & OBD_MD_CAPA)) {
-                *capa = NULL;
-                RETURN(0);
-        }
-
-        lcapa = (struct lustre_capa *)lustre_swab_repbuf(req, offset + 1,
-                                        sizeof(*capa), lustre_swab_lustre_capa);
-        if (!lcapa)
-                RETURN(-ENOMEM);
-                
-        OBD_ALLOC(*capa, sizeof(**capa));
-        if (!*capa)
-                RETURN(-ENOMEM);
-        memcpy(*capa, lcapa, sizeof(**capa));
-
-        RETURN(0);
 }
 
 static
@@ -1793,7 +1766,6 @@ MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");
 
 EXPORT_SYMBOL(mdc_req2lustre_md);
-EXPORT_SYMBOL(mdc_req2lustre_capa);
 EXPORT_SYMBOL(mdc_change_cbdata);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getattr);

@@ -324,8 +324,6 @@ int mdc_enqueue(struct obd_export *exp,
 int mdc_req2lustre_md(struct obd_export *exp_lmv, struct ptlrpc_request *req, 
                       unsigned int offset, struct obd_export *exp_lov, 
                       struct lustre_md *md);
-int mdc_req2lustre_capa(struct ptlrpc_request *req, unsigned int offset,
-                        struct lustre_capa **capa);
 int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 __u64 valid, const char *xattr_name,

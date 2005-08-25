@@ -684,7 +684,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (do_trunc) {
                 struct lustre_capa capa = {
                         .lc_uid   = rec->ur_uc.luc_uid,
-                        .lc_op    = MAY_WRITE,
+                        .lc_op    = CAPA_TRUNC,
                         .lc_ino   = inode->i_ino,
                         .lc_mdsid = mds->mds_num,
                 };

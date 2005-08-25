@@ -77,16 +77,12 @@ static int ll_renew_capa(struct obd_capa *ocapa)
         struct inode *inode = ocapa->c_inode;
         struct obd_export *md_exp = ll_i2mdexp(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        __u64 valid = 0;
+        __u64 valid = OBD_MD_CAPA;
         int rc;
         ENTRY;
 
-        valid |= OBD_MD_CAPA;
-
         rc = md_getattr(md_exp, &lli->lli_id, valid, NULL, NULL, 0,
                         0, ocapa, &req);
-        if (rc < 0)
-                CDEBUG(D_INFO, "md_getattr failed: rc = %d\n", rc);
         RETURN(rc);
 }
 
@@ -116,22 +112,28 @@ static int ll_capa_thread(void *arg)
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
-                struct obd_capa *ocapa, *next = NULL;
+                struct obd_capa *ocapa, *next = NULL, tcapa;
                 unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
 
                 l_wait_event(capa_thread.t_ctl_waitq,
                              (have_expired_capa() || ll_capa_check_stop()),
                              &lwi);
 
+                if (ll_capa_check_stop())
+                        break;
+
                 spin_lock(&capa_lock);
                 list_for_each_entry(ocapa, ll_capa_list, c_list) {
-                        if (__capa_is_to_expire(ocapa)) {
-                                /* get capa in case it's deleted */
-                                __capa_get(ocapa);
+                        if (ocapa->c_capa.lc_op == CAPA_TRUNC)
+                                continue;
 
+                        if (__capa_is_to_expire(ocapa)) {
+                                /* copy capa in case it's deleted */
+                                tcapa = *ocapa;
                                 spin_unlock(&capa_lock);
-                                ll_renew_capa(ocapa);
-                                capa_put(ocapa, CLIENT_CAPA);
+
+                                ll_renew_capa(&tcapa);
+
                                 spin_lock(&capa_lock);
                         } else {
                                 next = ocapa;
@@ -146,9 +148,6 @@ static int ll_capa_thread(void *arg)
                                 sleep = CAPA_PRE_EXPIRY_NOROUND;
                 }
                 spin_unlock(&capa_lock);
-
-                if (ll_capa_check_stop())
-                        break;
 
                 /* wait ll_renew_capa finish */
                 set_current_state(TASK_INTERRUPTIBLE);
@@ -205,18 +204,17 @@ void ll_capa_thread_stop(void)
         EXIT;
 }
 
-int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
-            	    struct obd_client_handle *och)
+int ll_set_capa(struct inode *inode, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
-        struct ll_inode_info *lli = ll_i2info(inode);
         struct mds_body *body;
         struct lustre_capa *capa;
+        struct obd_capa *ocapa;
+        struct ll_inode_info *lli = ll_i2info(inode);
         __u64 mdsid = lli->lli_id.li_fid.lf_group;
         unsigned long ino = lli->lli_id.li_stc.u.e3s.l3s_ino;
         int capa_op = (it->it_flags & MAY_WRITE) ? MAY_WRITE : MAY_READ;
         unsigned long expiry;
-        int rc = 0;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
@@ -227,10 +225,16 @@ int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
         LASSERT(capa != NULL);          /* reply already checked out */
         LASSERT_REPSWABBED(req, 7);     /* and swabbed down */
 
-        och->och_capa = capa_get(current->uid, capa_op, mdsid, ino,
-                                 CLIENT_CAPA, capa, inode, &body->handle);
-        if (!och->och_capa)
-                rc = -ENOMEM;
+        ocapa = capa_get(current->uid, capa_op, mdsid, ino, CLIENT_CAPA, capa,
+                         inode, &body->handle);
+        if (!ocapa)
+                RETURN(-ENOMEM);
+
+        spin_lock(&lli->lli_lock);
+        /* in case it was linked to lli_capas already */
+        if (list_empty(&ocapa->u.client.lli_list))
+                list_add(&ocapa->u.client.lli_list, &lli->lli_capas);
+        spin_unlock(&lli->lli_lock);
 
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
 
@@ -242,6 +246,38 @@ int ll_set_och_capa(struct inode *inode, struct lookup_intent *it,
         }
         spin_unlock(&capa_lock);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
+int ll_set_trunc_capa(struct ptlrpc_request *req, int offset, struct inode *inode)
+{
+        struct mds_body *body;
+        struct obd_capa *ocapa;
+        struct lustre_capa *capa;
+        struct ll_inode_info *lli = ll_i2info(inode);
+
+        body = lustre_msg_buf(req->rq_repmsg, offset, sizeof(*body));
+        if (!body)
+                return -ENOMEM;
+
+        if (!(body->valid & OBD_MD_CAPA))
+                return 0;
+
+        ENTRY;
+        capa = (struct lustre_capa *)lustre_swab_repbuf(req, offset + 1,
+                                        sizeof(*capa), lustre_swab_lustre_capa);
+        if (!capa)
+                RETURN(-ENOMEM);        
+
+        ocapa = capa_renew(capa, CLIENT_CAPA);
+        if (!ocapa)
+                RETURN(-ENOMEM);
+
+        spin_lock(&lli->lli_lock);
+        /* in case it was linked to lli_capas already */
+        if (list_empty(&ocapa->u.client.lli_list))
+                list_add(&ocapa->u.client.lli_list, &lli->lli_capas);
+        spin_unlock(&lli->lli_lock);
+
+        RETURN(0);
+}
