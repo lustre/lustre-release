@@ -32,6 +32,12 @@ struct snap_inode_info {
         int sn_index;           /*the inode snap_index*/
         ino_t sn_root_ino;        /*the root ino of this snap*/
 };
+
+struct audit_inode_info {
+        __u64 au_mask;
+        __u8  au_valid;
+};
+
 struct smfs_inode_info {
         /* this first part of struct should be the same as in mds_info_info */
         //struct lustre_id smi_id;
@@ -39,6 +45,7 @@ struct smfs_inode_info {
         /* smfs part. */
         struct inode *smi_inode;
         __u32  smi_flags;
+        struct audit_inode_info au_info;
 	struct snap_inode_info sm_sninfo;
 };
 #if 0

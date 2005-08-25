@@ -35,7 +35,7 @@
 //AUDIT OPCODES, also bit number in audit_setting mask
 
 typedef enum {
-        AUDIT_NONE = 0,
+        AUDIT_UNKNOWN = 0,
         AUDIT_CREATE,
         AUDIT_LINK,
         AUDIT_UNLINK,
@@ -51,9 +51,9 @@ typedef enum {
         AUDIT_MAX,
 } audit_op;
 
-#define AUDIT_FAIL AUDIT_MAX
-#define AUDIT_DIR  (AUDIT_MAX + 1)
-#define AUDIT_FS   (AUDIT_MAX + 2)
+#define AUDIT_FAIL  AUDIT_MAX
+#define AUDIT_DIR   (AUDIT_MAX + 1)
+#define AUDIT_FS    (AUDIT_MAX + 2)
 
 #define AUD_BIT(a) (1 << a)
 

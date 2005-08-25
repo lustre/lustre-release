@@ -43,7 +43,7 @@
 
 static audit_op hook2audit(hook_op hook)
 {
-        audit_op opcode = AUDIT_NONE;
+        audit_op opcode = AUDIT_UNKNOWN;
 
         switch (hook) 
         {
@@ -82,7 +82,7 @@ static audit_op hook2audit(hook_op hook)
                         return AUDIT_READDIR;
 
                 default:
-                        return AUDIT_NONE;
+                        break;
         }
         
         return opcode;
@@ -125,6 +125,25 @@ struct inode * get_inode_from_hook(hook_op hook, void * msg)
 
         return inode;
 }
+
+static inline int smfs_get_inode_audit(struct inode *inode, __u64 *mask)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_cache_fsfilt;
+        struct smfs_inode_info * smi = I2SMI(inode);
+        int rc = 0;
+        
+        if (smi->au_info.au_valid)
+                *mask = smi->au_info.au_mask;
+        else {
+                rc = fsfilt->fs_get_xattr(I2CI(inode), AUDIT_ATTR_EA, mask, sizeof(*mask));
+                if (rc <= 0)
+                        *mask = AUDIT_OFF;
+                smi->au_info.au_valid = 1;
+                smi->au_info.au_mask = *mask;
+        }
+        return 0;
+}
+
 /* is called also from fsfilt_smfs_get_info */
 int smfs_get_audit(struct super_block * sb, struct inode * parent,
                    struct inode * inode,  __u64 * mask)
@@ -158,11 +177,7 @@ int smfs_get_audit(struct super_block * sb, struct inode * parent,
                 RETURN(0);
         }
         /* get inode audit EA */
-        rc = fsfilt->fs_get_xattr(parent, AUDIT_ATTR_EA,
-                                  mask, sizeof(*mask));
-        if (rc <= 0)
-                RETURN(-ENODATA);
-        
+        smfs_get_inode_audit(parent, mask);
         /* check if parent has audit */
         if (IS_AUDIT(*mask))
                 RETURN(0);
@@ -170,11 +185,7 @@ int smfs_get_audit(struct super_block * sb, struct inode * parent,
         if (!inode)
                 RETURN(-ENOENT);
         
-        rc = fsfilt->fs_get_xattr(inode, AUDIT_ATTR_EA,
-                                  mask, sizeof(*mask));
-        if (rc <= 0)
-                RETURN(-ENODATA);
-        
+        smfs_get_inode_audit(inode, mask);
         if (IS_AUDIT(*mask))
                 RETURN(0);
 
@@ -261,6 +272,7 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
 {
         void * handle = NULL;
         struct fsfilt_operations * fsfilt = S2SMI(sb)->sm_fsfilt;
+        struct smfs_inode_info *smi = I2SMI(inode);
         int rc = 0;
         
         ENTRY;
@@ -277,7 +289,12 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
         if (fsfilt->fs_set_xattr)
                 rc = fsfilt->fs_set_xattr(inode, handle, AUDIT_ATTR_EA,
                                           mask, sizeof(*mask));
-
+        /* save audit EA in inode_info */
+        if (rc >= 0) {
+                smi->au_info.au_mask = *mask;
+                smi->au_info.au_valid = 1;
+        }
+        
         fsfilt->fs_commit(inode->i_sb, inode, handle, 1);
         RETURN(rc);
                                 

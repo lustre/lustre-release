@@ -95,7 +95,7 @@ int audit_notify(struct llog_handle *llh, void * arg)
 }
                                                                                                                                                
 const char *opstr[AUDIT_MAX] = {
-        [AUDIT_NONE]     "null",
+        [AUDIT_UNKNOWN]  "unknown",
         [AUDIT_CREATE]   "create",
         [AUDIT_LINK]     "link",
         [AUDIT_UNLINK]   "unlink",
