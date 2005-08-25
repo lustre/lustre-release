@@ -1463,7 +1463,7 @@ cleanup_no_trans:
                                 au_inode = dparent->d_inode;
                                 au_id = *(rec->ur_id1);
                                 mds_audit_open(req, &au_id, au_inode, 
-                                               rec->ur_name, rec->ur_namelen,
+                                               rec->ur_name, rec->ur_namelen - 1,
                                                rc);
                         } else {
                                 if (fid == 0)

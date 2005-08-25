@@ -1544,7 +1544,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         if (rc) {
                 if (child_lockh->cookie == 0)
                         mds_audit_auth(req, &uc, AUDIT_STAT, &body->id1, 
-                                       name, namesize);
+                                       name, namesize - 1);
                 GOTO(cleanup, rc);
         }
 
@@ -1706,7 +1706,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                 } else {
                         au_inode = dparent->d_inode;
                         mds_audit_stat(req, &body->id1, au_inode,
-                                       name, namesize, rc);
+                                       name, namesize - 1, rc);
                 }
         }
         switch (cleanup_phase) {

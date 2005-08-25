@@ -203,7 +203,7 @@ int mds_audit_reint(struct ptlrpc_request *req,
         }
         
         rc = mds_audit_auth(req, &rec->ur_uc, code, rec->ur_id1,  
-                            rec->ur_name, rec->ur_namelen);
+                            rec->ur_name, rec->ur_namelen - 1);
         return rc;
 }
 
