@@ -124,34 +124,86 @@ int mds_audit_auth(struct ptlrpc_request *req, struct lvfs_ucred * uc,
         struct obd_device *obd = req->rq_export->exp_obd;
         ptl_nid_t nid = req->rq_peer.peer_id.nid;
         int rc = 0;
-        struct dentry * dparent;
+        struct dentry * dparent, *dchild = NULL;
         struct inode * inode;
         struct audit_info info;
         
         ENTRY;
         
         dparent = mds_id2dentry(obd, id, NULL);
-        if (IS_ERR(dparent)) {
-                rc = PTR_ERR(dparent);
-                GOTO(out, rc);
+        if (IS_ERR(dparent) || !dparent->d_inode) {
+                CERROR("can't find inode "LPU64"\n", id_ino(id));
+                if (!IS_ERR(dparent))
+                        l_dput(dparent);
+                RETURN(-ENOENT);
         }
         inode = dparent->d_inode;
         
         info.m.nid = nid;
         info.m.uid = uc->luc_uid;
         info.m.gid = uc->luc_gid;
-        info.m.id = (*id);
         info.m.result = -EPERM;
         info.m.code = op;
         info.name = name;
         info.namelen = namelen;
+
+        if (name && namelen > 0) {
+                dchild = ll_lookup_one_len(name, dparent, namelen);
+                if (!IS_ERR(dchild)) {
+                        if (dchild->d_flags & DCACHE_CROSS_REF) {
+                                //TODO: we should know audit setting for this
+                                //so remote call is needed
+                        } else {
+                                inode = dchild->d_inode;
+                                info.name = NULL;
+                                info.namelen = 0;
+                        }
+                }
+        }
+        
+        mds_pack_inode2id(obd, &info.m.id, inode, 1);
         
         fsfilt_set_info(obd, inode->i_sb, inode,
                         10, "audit_info", sizeof(info), &info);
         l_dput(dparent);
 
         EXIT;
- out:
+
+        return rc;
+}
+
+int mds_audit_reint(struct ptlrpc_request *req,
+                    struct mds_update_record *rec)
+{
+        audit_op code = AUDIT_UNKNOWN;
+        int rc = 0;
+        
+        switch (rec->ur_opcode) {
+                case REINT_SETATTR:
+                        code = AUDIT_SETATTR;
+                        break;
+                case REINT_CREATE:
+                        code = AUDIT_CREATE;
+                        break;
+                case REINT_LINK:
+                        code = AUDIT_LINK;
+                        break;
+                case REINT_UNLINK:
+                        code = AUDIT_UNLINK;
+                        break;
+                case REINT_RENAME:                        
+                        code = AUDIT_RENAME;
+                        break;
+                case REINT_OPEN:
+                        code = AUDIT_OPEN;
+                        break;
+                default:
+                        CERROR("Wrong opcode in reint\n");
+                        LBUG();
+        }
+        
+        rc = mds_audit_auth(req, &rec->ur_uc, code, rec->ur_id1,  
+                            rec->ur_name, rec->ur_namelen);
         return rc;
 }
 

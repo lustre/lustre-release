@@ -2119,39 +2119,7 @@ int mds_reint(struct ptlrpc_request *req, int offset,
 
         rc = mds_init_ucred(&rec->ur_uc, req, rsd);
         if (rc) {
-                audit_op code = AUDIT_NONE;
-                char * au_name = NULL;
-                int au_len = 0;
-                switch (rec->ur_opcode) {
-                        case REINT_SETATTR:
-                                code = AUDIT_SETATTR;
-                                break;
-                        case REINT_CREATE:
-                                code = AUDIT_CREATE;
-                                au_name = rec->ur_name;
-                                au_len = rec->ur_namelen;
-                                break;
-                        case REINT_LINK:
-                                code = AUDIT_LINK;
-                                break;
-                        case REINT_UNLINK:
-                                code = AUDIT_UNLINK;
-                                break;
-                        case REINT_RENAME:
-                                code = AUDIT_RENAME;
-                                break;
-                        case REINT_OPEN:
-                                au_name = rec->ur_name;
-                                au_len = rec->ur_namelen;
-                                code = AUDIT_OPEN;
-                                break;
-                        default:
-                                CERROR("Wrong opcode in reint\n");
-                                LBUG();
-                }
-
-                mds_audit_auth(req, &rec->ur_uc, code, rec->ur_id1,  
-                               au_name, au_len);
+                mds_audit_reint(req, rec);
                 GOTO(out, rc);
         }
 

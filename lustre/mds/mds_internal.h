@@ -347,7 +347,7 @@ int mds_audit_stat(struct ptlrpc_request *, struct lustre_id *,
                    struct inode *, char*, int, int);
 int mds_audit_open(struct ptlrpc_request *, struct lustre_id *,
                    struct inode *, char*, int, int);
-
+int mds_audit_reint(struct ptlrpc_request *, struct mds_update_record *);
 /* mds_acl.c */
 struct upcall_cache *__mds_get_global_rmtacl_upcall_cache(void);
 int mds_init_rmtacl_upcall_cache(void);
