@@ -86,6 +86,34 @@ int mds_audit_stat(struct ptlrpc_request *req, struct lustre_id * id,
         RETURN(rc);
 }
 
+int mds_audit_perm(struct ptlrpc_request *req, struct inode *inode, audit_op op)
+{
+        struct obd_device *obd = req->rq_export->exp_obd;
+        ptl_nid_t nid = req->rq_peer.peer_id.nid;
+        struct audit_info info = {
+                .name = NULL,
+                .namelen = 0,
+        };
+        int rc = 0;
+        
+        ENTRY;
+        
+        LASSERT(inode);
+        info.m.nid = nid;
+        info.m.uid = current->uid;
+        info.m.gid = current->gid;
+        info.m.result = -EACCES;
+        info.m.code = op;
+        
+        /* failed access, log child id only */
+        mds_pack_inode2id(obd, &info.m.id, inode, 1);
+        
+        fsfilt_set_info(obd, inode->i_sb, inode,
+                        10, "audit_info", sizeof(info), (void*)&info);
+        
+        RETURN(rc);
+}
+
 int mds_audit_open(struct ptlrpc_request *req, struct lustre_id * id,
                    struct inode *inode, char *name, int namelen, int ret)
 {

@@ -1314,6 +1314,8 @@ cleanup:
         }
         switch (cleanup_phase) {
         case 2: /* child dentry */
+                if (rc == -EACCES)
+                        mds_audit_perm(req, dchild->d_inode, AUDIT_CREATE);
                 l_dput(dchild);
         case 1: /* locked parent dentry */
 #ifdef S_PDIROPS
@@ -2426,6 +2428,7 @@ cleanup:
         if (!rc)
                 (void)obd_set_info(mds->mds_dt_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
+        
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
                 up(&mds->mds_pending_dir->d_inode->i_sem);
@@ -2463,6 +2466,11 @@ cleanup:
                 if (dchild->d_inode && rc && (dchild->d_inode->i_nlink == 0 ||
                                 mds_inode_is_orphan(dchild->d_inode)))
                         CDEBUG(D_ERROR, "unlink, but return %d\n", rc);
+
+                /* catching failed permissions check for audit */
+                if (rc == -EACCES)
+                        mds_audit_perm(req, dchild->d_inode, AUDIT_UNLINK);
+
                 l_dput(dchild);
                 l_dput(dchild);
                 l_dput(dparent);
