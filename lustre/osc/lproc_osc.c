@@ -197,21 +197,27 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
 #define PRINTF_STIME(stime) (unsigned long)(stime)->st_num,     \
         lprocfs_stime_avg_ms(stime), lprocfs_stime_avg_us(stime)
 
-
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
+        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
         struct obd_device *dev = seq->private;
         struct client_obd *cli = &dev->u.cli;
+        unsigned long gap_av, wait_av;
         unsigned long flags;
-        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        struct timeval now;
         int i;
 
         do_gettimeofday(&now);
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
 
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+        wait_av = cli->cl_cache_wait_num ?
+                cli->cl_cache_wait_sum / cli->cl_cache_wait_num : 0;
+        
+        gap_av = cli->cl_write_gaps ?
+                cli->cl_write_gap_sum / cli->cl_write_gaps : 0;
+
+        seq_printf(seq, "snapshot_time:        %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
 
         seq_printf(seq, "read RPCs in flight:  %d\n",
@@ -223,10 +229,15 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         seq_printf(seq, "pending read pages:   %d\n",
                    cli->cl_pending_r_pages);
 
+        /* cache or grant waiting stats */
+        seq_printf(seq, "write waits num:      %lu\n",
+                   cli->cl_cache_wait_num);
+        seq_printf(seq, "av. wait time:        %lu (usec)\n",
+                   wait_av);
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        seq_printf(seq, "pages per RPC         RPCs   %% cum %% |");
+        seq_printf(seq, "       RPCs   %% cum %%\n");
 
         read_tot = lprocfs_oh_sum(&cli->cl_read_page_hist);
         write_tot = lprocfs_oh_sum(&cli->cl_write_page_hist);
@@ -247,9 +258,15 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
+        /* different RPC related stats like av gap time between two write RPCs,
+         * number of sync RPCs, etc. */
+        seq_printf(seq, "\nsync RPCs:            %lu\n", cli->cl_sync_rpcs);
+        seq_printf(seq, "write gaps:           %lu\n", cli->cl_write_gaps);
+        seq_printf(seq, "av. gap time:         %lu (usec)\n", gap_av);
+        
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-        seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
-        seq_printf(seq, "       rpcs   %% cum %%\n");
+        seq_printf(seq, "RPCs in flight        RPCs   %% cum %% |");
+        seq_printf(seq, "       RPCs   %% cum %%\n");
 
         read_tot = lprocfs_oh_sum(&cli->cl_read_rpc_hist);
         write_tot = lprocfs_oh_sum(&cli->cl_write_rpc_hist);
@@ -270,7 +287,7 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
-        seq_printf(seq, "\nrpc service time: (rpcs, average ms)\n");
+        seq_printf(seq, "\nRPC service time: (RPCs, average ms)\n");
         seq_printf(seq, "\tread\t%lu\t%lu.%04lu\n",
                         PRINTF_STIME(&cli->cl_read_stime));
         seq_printf(seq, "\twrite\t%lu\t%lu.%04lu\n\n",
@@ -284,7 +301,6 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 
         return 0;
 }
-#undef pct
 
 static void *osc_rpc_stats_seq_start(struct seq_file *p, loff_t *pos)
 {
@@ -300,6 +316,7 @@ static void *osc_rpc_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static void osc_rpc_stats_seq_stop(struct seq_file *p, void *v)
 {
 }
+
 struct seq_operations osc_rpc_stats_seq_sops = {
         .start = osc_rpc_stats_seq_start,
         .stop = osc_rpc_stats_seq_stop,
@@ -337,6 +354,13 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
         memset(&cli->cl_write_stime, 0, sizeof(cli->cl_write_stime));
         memset(&cli->cl_enter_stime, 0, sizeof(cli->cl_enter_stime));
 
+        cli->cl_cache_wait_num = 0;
+        cli->cl_cache_wait_sum = 0;
+        cli->cl_write_gap_sum = 0;
+        cli->cl_write_gaps = 0;
+        cli->cl_write_num = 0;
+        cli->cl_read_num = 0;
+
         return len;
 }
 
@@ -349,10 +373,115 @@ struct file_operations osc_rpc_stats_fops = {
         .release = seq_release,
 };
 
+/* cache stats */
+static int osc_cache_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct obd_device *dev = seq->private;
+        struct client_obd *cli = &dev->u.cli;
+        unsigned long flags;
+        struct timeval now;
+
+        do_gettimeofday(&now);
+
+        spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
+
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+                   now.tv_sec, now.tv_usec);
+
+        seq_printf(seq, "cache size:            %lu (b)\n", cli->cl_dirty_max);
+        seq_printf(seq, "max loading:           %lu (b)\n", cli->cl_dirty_dmax);
+        seq_printf(seq, "min loading:           %lu (b)\n", cli->cl_dirty_dmin);
+        seq_printf(seq, "av. cache loading:     %lu (b)\n", cli->cl_dirty_av);
+
+        seq_printf(seq, "\nav. loading ratio:     %lu%%\n",
+                   pct(cli->cl_dirty_av, cli->cl_dirty_max));
+        seq_printf(seq, "max loading ratio:     %lu%%\n",
+                   pct(cli->cl_dirty_dmax, cli->cl_dirty_max));
+
+        spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
+        
+        return 0;
+}
+#undef pct
+
+static void *osc_cache_stats_seq_start(struct seq_file *p, loff_t *pos)
+{
+        if (*pos == 0)
+                return (void *)1;
+        return NULL;
+}
+static void *osc_cache_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        ++*pos;
+        return NULL;
+}
+static void osc_cache_stats_seq_stop(struct seq_file *p, void *v)
+{
+}
+
+struct seq_operations osc_cache_stats_seq_sops = {
+        .start = osc_cache_stats_seq_start,
+        .stop = osc_cache_stats_seq_stop,
+        .next = osc_cache_stats_seq_next,
+        .show = osc_cache_stats_seq_show,
+};
+
+static int osc_cache_stats_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &osc_cache_stats_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t osc_cache_stats_seq_write(struct file *file, const char *buf,
+                                         size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct obd_device *dev = seq->private;
+        struct client_obd *cli = &dev->u.cli;
+
+        cli->cl_dirty_num = 0;
+        cli->cl_dirty_sum = 0;
+        cli->cl_dirty_av = 0;
+        cli->cl_dirty_dmax = 0;
+        cli->cl_dirty_dmin = 0;
+
+        return len;
+}
+
+struct file_operations osc_cache_stats_fops = {
+        .owner   = THIS_MODULE,
+        .open    = osc_cache_stats_seq_open,
+        .read    = seq_read,
+        .write   = osc_cache_stats_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        return lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
-                                      &osc_rpc_stats_fops, dev);
+        int rc;
+        
+        rc = lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
+                                    &osc_rpc_stats_fops, dev);
+        if (rc) {
+                CERROR("can't init \"rpc_stats\", err %d\n", rc);
+                return rc;
+        }
+
+        rc = lprocfs_obd_seq_create(dev, "cache_stats", 0444,
+                                    &osc_cache_stats_fops, dev);
+        if (rc)
+                CERROR("can't init \"cache_stats\", err %d\n", rc);
+
+        return rc;
 }
 
 #endif /* LPROCFS */

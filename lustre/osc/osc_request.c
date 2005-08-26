@@ -1893,7 +1893,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
 
         if (cli->cl_dirty > cli->cl_dirty_dmax)
                 cli->cl_dirty_dmax = cli->cl_dirty;
-        if (cli->cl_dirty < cli->cl_dirty_dmin)
+        if (cli->cl_dirty < cli->cl_dirty_dmin || !cli->cl_dirty_dmin)
                 cli->cl_dirty_dmin = cli->cl_dirty;
 
         /* Hopefully normal case - cache space and write credits available */
@@ -1968,7 +1968,7 @@ static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap,
 
         if (cli->cl_dirty > cli->cl_dirty_dmax)
                 cli->cl_dirty_dmax = cli->cl_dirty;
-        if (cli->cl_dirty < cli->cl_dirty_dmin)
+        if (cli->cl_dirty < cli->cl_dirty_dmin || !cli->cl_dirty_dmin)
                 cli->cl_dirty_dmin = cli->cl_dirty;
 
         oap->oap_brw_flags &= ~OBD_BRW_FROM_GRANT;
