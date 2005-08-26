@@ -124,16 +124,13 @@ static int set_dir_audit(char * dir, __u64 mask)
                 if (!strcmp(ent->d_name, ".") ||
                     !strcmp(ent->d_name, ".."))
                         continue;
-                //open file/dir
-                sprintf(buf, "%s/%s\0", dir, ent->d_name);
-                //printf("set audit on %s\n", buf);
-
+                
+                sprintf(buf, "%s/%s", dir, ent->d_name);
+                
                 fd = open(buf, O_RDONLY);
                 if (fd < 0) {
                         fprintf(stderr, "can't open: %s: %s\n", buf,
                                 strerror(rc = errno));
-                        closedir(sdr);
-                        free(buf);
                         continue;
                 }
                 rc = ioctl(fd, LL_IOC_AUDIT, mask);
