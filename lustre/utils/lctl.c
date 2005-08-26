@@ -125,7 +125,7 @@ static int set_dir_audit(char * dir, __u64 mask)
                     !strcmp(ent->d_name, ".."))
                         continue;
                 //open file/dir
-                sprintf(buf, "%s%s", dir, ent->d_name);
+                sprintf(buf, "%s/%s\0", dir, ent->d_name);
                 //printf("set audit on %s\n", buf);
 
                 fd = open(buf, O_RDONLY);
@@ -182,12 +182,12 @@ static int set_audit(int argc, char **argv, int fs)
         //audit for fs?
         if (fs)
                 SET_AUDIT_OP(mask, AUDIT_FS);
-        /*else {
+        else {
                 //if dir then set audit for childs also
                 if (S_ISDIR(st.st_mode)) {
                         rc = set_dir_audit(argv[3], mask);
                 }
-        }*/
+        }
         //set audit for file/dir itself
         rc = ioctl(fd, LL_IOC_AUDIT, mask);
         close(fd);
