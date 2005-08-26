@@ -272,7 +272,7 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
 {
         void * handle = NULL;
         struct fsfilt_operations * fsfilt = S2SMI(sb)->sm_fsfilt;
-        struct smfs_inode_info *smi = I2SMI(inode);
+        struct smfs_inode_info *smi = NULL;
         int rc = 0;
         
         ENTRY;
@@ -281,7 +281,7 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
                 return smfs_set_fs_audit(sb, mask);
 
         LASSERT(inode);
-        
+        smi = I2SMI(inode);
         handle = fsfilt->fs_start(inode, FSFILT_OP_SETATTR, NULL, 0);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
