@@ -23,10 +23,8 @@ CLEANUP=${CLEANUP:-"cleanup"}
 DIR1=${DIR1:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}
 CRYPT_TYPE=${CRYPT_TYPE:-"gks"}
+TMPFILE=${TMPFILE:-"/tmp/encrypt.tmp"}
 RUN_UID=${RUN_UID:-1000}
-if [ `using_krb5_sec $SECURITY` == 'n' ] ; then
-    ALWAYS_EXCEPT="0c $ALWAYS_EXCEPT"
-fi
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -130,10 +128,14 @@ enable_encrypt() {
 
 mkdir -p $DIR
 
+
+dd if=/dev/urandom of=$TMPFILE bs=1024 count=1024
+
 test_1a() {
+	rm -rf $DIR1/1a*
 	enable_encrypt $MOUNT
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/1a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/1a1
+	cp $TMPFILE  $DIR1/1a0
+	cp $TMPFILE  $DIR2/1a1
 	diff -u $DIR1/1a0 $DIR2/1a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/1a0 $DIR2/1a1 && error "write encryption failed"
@@ -143,11 +145,12 @@ test_1a() {
 run_test 1a "read/write encryption============="
 
 test_2a() {
+	rm -rf $DIR1/2a*
 	enable_encrypt $MOUNT
 	touch $DIR1/2a0
         setfacl -m u:bin:rw $DIR1/2a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/2a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/2a1
+	cp $TMPFILE  $DIR1/2a0
+	cp $TMPFILE  $DIR2/2a1
 	diff -u $DIR1/2a0 $DIR2/2a1 || error "files are different"
 	disable_encrypt $MOUNT
 	diff -u $DIR1/2a0 $DIR2/2a1 && error "write encryption failed"
@@ -159,8 +162,8 @@ run_test 2a "read/write encryption with acl============="
 test_3a() {
 	rm -rf $DIR1/3a*
 	enable_encrypt $MOUNT	
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/3a1
+	cp $TMPFILE  $DIR1/3a0
+	cp $TMPFILE  $DIR2/3a1
 	chown $RUN_UID $DIR1/3a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a0 || error "chown write error"
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/3a1 	
@@ -174,9 +177,9 @@ run_test 3a "write chown encryption============="
 
 test_4a() {
 	rm -rf $DIR1/4a*
-	enable_encrypt $MOUNT	
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/4a1
+	enable_encrypt $MOUNT
+	cp $TMPFILE  $DIR1/4a0
+	cp $TMPFILE  $DIR2/4a1
         setfacl -m u:bin:rw $DIR1/4a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a0 || error "chown write error"
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/4a1 	
@@ -191,8 +194,8 @@ run_test 4a "write chacl encryption============="
 test_5a() {
 	rm -rf $DIR1/5a*
 	enable_encrypt $MOUNT	
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/5a1
+	cp $TMPFILE  $DIR1/5a0
+	cp $TMPFILE  $DIR2/5a1
         setfacl -m u:bin:rw $DIR1/5a0
 	chown $RUN_UID $DIR1/5a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/5a0 || error "chown write error"
@@ -209,8 +212,8 @@ run_test 5a "write chacl encryption============="
 test_6a() {
 	rm -rf $DIR1/6a*
 	enable_encrypt $MOUNT	
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/6a0
-	echo aaaaaaaaaaaaaaaaaaaa >> $DIR2/6a1
+	cp $TMPFILE  $DIR1/6a0
+	cp $TMPFILE  $DIR2/6a1
 	chown 0600 $DIR1/6a0
         setfacl -m u:bin:rw $DIR1/6a0
 	echo aaaaaaaaaaaaaaaaaaaa >> $DIR1/6a0 || error "chown write error"
