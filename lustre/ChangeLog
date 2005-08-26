@@ -1,4 +1,15 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.6
+       * bug fixes
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7407
+Description: Running on many-way SMP OSTs can trigger oops in llcd_send()
+Details    : A race between allocating a new llcd and re-getting the llcd_lock
+             allowed another thread to grab newly-allocated llcd.
+
+08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.5
        * bug fixes
 
@@ -46,7 +57,7 @@ Details    : Corrected llu_iop_getdirentries logic, to return offset of next
              dentry in struct dirent.
 
 Severity   : minor
-Bugzilla   : 7138
+Bugzilla   : 7137
 Frequency  : liblustre only, depends on application IO pattern
 Description: liblustre clients evicted if not contacting servers
 Details    : Don't put liblustre clients into the ping_evictor list, so
