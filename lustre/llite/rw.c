@@ -168,8 +168,7 @@ void ll_truncate(struct inode *inode)
         lli->lli_size_pid = 0;
         up(&lli->lli_size_sem);
 
-        ocapa = capa_get(current->fsuid, CAPA_TRUNC, id_group(&lli->lli_id),
-                         id_ino(&lli->lli_id), CLIENT_CAPA, NULL, NULL, NULL);
+        ocapa = ll_get_capa(inode, current->fsuid, CAPA_TRUNC);
         if (ocapa)
                 capa = &ocapa->c_capa;
         

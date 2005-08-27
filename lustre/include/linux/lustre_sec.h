@@ -559,11 +559,12 @@ struct obd_capa {
         } u;
 };
 
-#define c_inode   u.client.inode
-#define c_handle  u.client.handle
-#define c_bvalid  u.filter.bvalid
-#define c_bkeyid  u.filter.bkeyid
-#define c_bhmac   u.filter.bhmac
+#define c_inode    u.client.inode
+#define c_handle   u.client.handle
+#define c_lli_list u.client.lli_list
+#define c_bvalid   u.filter.bvalid
+#define c_bkeyid   u.filter.bkeyid
+#define c_bhmac    u.filter.bhmac
 
 enum lustre_capa_type {
         CLIENT_CAPA = 0,
@@ -603,9 +604,7 @@ extern struct timer_list ll_capa_timer;
 int capa_op(int flags);
 void __capa_get(struct obd_capa *ocapa);
 struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
-                          unsigned long ino, int type,
-                          struct lustre_capa *capa, struct inode *inode,
-                          struct lustre_handle *handle);
+                          unsigned long ino, int type);
 void capa_put(struct obd_capa *ocapa);
 struct obd_capa *capa_renew(struct lustre_capa *capa, int type);
 void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);

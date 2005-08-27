@@ -75,9 +75,9 @@ capa_hashfn(unsigned int uid, int capa_op, __u64 mdsid, unsigned long ino)
 int capa_op(int flags)
 {
         if (flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
-                return MAY_WRITE;
+                return CAPA_WRITE;
         else if (flags & FMODE_READ)
-                return MAY_READ;
+                return CAPA_READ;
 
         LBUG(); /* should be either MAY_READ or MAY_WRITE */
         return 0;
@@ -101,8 +101,7 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                 if (ocapa->c_type != type)
                         continue;
 
-                if (ocapa->c_type == CLIENT_CAPA &&
-                    ocapa->c_capa.lc_flags & CAPA_FL_REMUID)
+                if (ocapa->c_type == CLIENT_CAPA)
                         ouid = ocapa->c_capa.lc_ruid;
                 else
                         ouid = ocapa->c_capa.lc_uid;
@@ -191,7 +190,6 @@ void capa_cache_cleanup(void)
 
         hlist_for_each_entry_safe(ocapa, pos, n, capa_hash, c_hash) {
                 LASSERT(ocapa->c_type != CLIENT_CAPA);
-//                        list_del_init(&ocapa->u.client.lli_list);
                 __capa_put(ocapa);
                 destroy_capa(ocapa);
         }
@@ -223,8 +221,7 @@ static inline void do_update_capa(struct obd_capa *ocapa, struct lustre_capa *ca
 }
 
 static struct obd_capa *
-get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa,
-                    struct inode *inode, struct lustre_handle *handle)
+get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
 {
         uid_t uid = capa->lc_uid;
         int capa_op = capa->lc_op;
@@ -241,19 +238,14 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa,
         if (!old) {
                 do_update_capa(ocapa, capa);
                 ocapa->c_type = type;
-
-                if (type == CLIENT_CAPA && inode) {
-                        LASSERT(handle);
-                        ocapa->c_inode = inode;
-                        memcpy(&ocapa->c_handle, handle, sizeof(*handle));
-                        INIT_LIST_HEAD(&ocapa->u.client.lli_list);
-                }
-
-                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "new");
-
                 list_add_capa(ocapa, &capa_list[type]);
                 hlist_add_head(&ocapa->c_hash, capa_hash);
+                if (type == CLIENT_CAPA)
+                        INIT_LIST_HEAD(&ocapa->c_lli_list);
+
                 capa_count[type]++;
+
+                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "new");
 
                 if (type != CLIENT_CAPA && capa_count[type] > CAPA_CACHE_SIZE) {
                         struct list_head *node = capa_list[type].next;
@@ -262,10 +254,13 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa,
 
                         /* free 12 unused capa from head */
                         while (node->next != &capa_list[type] && count < 12) {
-                                tcapa = list_entry(node, struct obd_capa, c_list);
+                                tcapa = list_entry(node, struct obd_capa,
+                                                   c_list);
                                 node = node->next;
                                 if (atomic_read(&tcapa->c_refc) > 0)
                                         continue;
+                                DEBUG_CAPA(D_CACHE, &ocapa->c_capa,
+                                           "free unused");
                                 __capa_put(tcapa);
                                 destroy_capa(tcapa);
                                 count++;
@@ -282,23 +277,14 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa,
 }
 
 struct obd_capa *
-capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
-         int type, struct lustre_capa *capa, struct inode *inode,
-         struct lustre_handle *handle)
+capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino, int type)
 {
         struct hlist_head *head = capa_hash +
                                   capa_hashfn(uid, capa_op, mdsid, ino);
         struct obd_capa *ocapa;
 
         ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, type);
-        if (ocapa)
-                return ocapa;
         
-        if (capa) {
-                ocapa = get_new_capa_locked(head, type, capa, inode, handle);
-                if (ocapa)
-                        __capa_get(ocapa);
-        }
         return ocapa;
 }
 
@@ -310,7 +296,7 @@ void capa_put(struct obd_capa *ocapa)
         DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "put");
         spin_lock(&capa_lock);
         if (ocapa->c_type == CLIENT_CAPA) {
-                list_del_init(&ocapa->u.client.lli_list);
+                list_del_init(&ocapa->c_lli_list);
                 __capa_put(ocapa);
                 destroy_capa(ocapa);
         } else {
@@ -335,12 +321,8 @@ static struct obd_capa *update_capa_locked(struct lustre_capa *capa, int type)
                 do_update_capa(ocapa, capa);
         spin_unlock(&capa_lock);
 
-        if (ocapa)
-                return ocapa;
-
-        if (type == MDS_CAPA ||
-            (type == CLIENT_CAPA && capa->lc_op == CAPA_TRUNC))
-                ocapa = get_new_capa_locked(head, type, capa, NULL, NULL);
+        if (!ocapa)
+                ocapa = get_new_capa_locked(head, type, capa);
 
         return ocapa;
 }

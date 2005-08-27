@@ -242,7 +242,7 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
                 RETURN(-ESTALE);
 
         ocapa = capa_get(capa->lc_uid, capa->lc_op, capa->lc_mdsid,
-                         capa->lc_ino, FILTER_CAPA, NULL, NULL, NULL);
+                         capa->lc_ino, FILTER_CAPA);
 verify:
         if (ocapa) {
                 /* fo_capa_lock protects capa too */
@@ -298,8 +298,7 @@ new_capa:
         capa_hmac(filter->fo_capa_hmac, hmac_key, &tcapa);
 
         /* store in capa cache */
-        ocapa = capa_get(capa->lc_uid, capa->lc_op, capa->lc_mdsid,
-                         capa->lc_ino, FILTER_CAPA, capa, NULL, NULL);
+        ocapa = capa_renew(capa, FILTER_CAPA);
         if (!ocapa)
                 GOTO(out, rc = -ENOMEM);
 

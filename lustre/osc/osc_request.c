@@ -810,11 +810,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
 
         /* TODO: this could be optimized: thie capability can be
          * found from ll_inode_info->lli_capas. */
-        capa_op = (opc == OST_WRITE) ? MAY_WRITE : MAY_READ;
+        capa_op = (opc == OST_WRITE) ? CAPA_WRITE : CAPA_READ;
 get_capa:
         ocapa = capa_get(oa->o_fsuid, capa_op, raw_id->li_fid.lf_group,
-                         raw_id->li_stc.u.e3s.l3s_ino, CLIENT_CAPA,
-                         NULL, NULL, NULL);
+                         raw_id->li_stc.u.e3s.l3s_ino, CLIENT_CAPA);
         if (!ocapa) {
                 if (opc == OST_READ && capa_op == MAY_READ) {
                         /* partial write might cause read, MAY_WRITE capability

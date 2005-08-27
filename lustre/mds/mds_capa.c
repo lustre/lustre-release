@@ -450,8 +450,11 @@ static void mds_capa_reverse_map(struct mds_export_data *med,
 {
         uid_t uid;
 
-        if (!med->med_remote)
+        if (!med->med_remote) {
+                /* when not remote uid, ruid == uid */
+                capa->lc_ruid = capa->lc_uid;
                 return;
+        }
 
         ENTRY;
         uid = mds_idmap_lookup_uid(med->med_idmap, 1, capa->lc_uid);
@@ -494,18 +497,15 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
 
                 mfd = mds_handle2mfd(&req_body->handle);
                 if (mfd == NULL) {
-                        CERROR("no handle for capa renewal ino "LPD64
-                               ": cookie "LPX64"\n",
-                               req_capa->lc_ino, req_body->handle.cookie);
+                        DEBUG_CAPA(D_ERROR, req_capa, "no handle "LPX64" for",
+                                   req_body->handle.cookie);
                         RETURN(-ESTALE);
                 }
 
                 mode = accmode(mfd->mfd_mode);
                 if (!(req_capa->lc_op & mode)) {
-                        CERROR("invalid capa to renew ino "LPD64
-                               ": op %d mismatch with mode %d\n",
-                               req_capa->lc_ino, req_capa->lc_op,
-                               mfd->mfd_mode);
+                        DEBUG_CAPA(D_ERROR, req_capa, "accmode %d mismatch",
+                                   mode);
                         RETURN(-EACCES);
                 }
         }
@@ -515,7 +515,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
         LASSERT(capa != NULL);
 
         ocapa = capa_get(req_capa->lc_uid, req_capa->lc_op, req_capa->lc_mdsid,
-                         req_capa->lc_ino, MDS_CAPA, NULL, NULL, NULL);
+                         req_capa->lc_ino, MDS_CAPA);
         if (ocapa) {
                 expired = capa_is_to_expire(ocapa);
                 if (!expired) {

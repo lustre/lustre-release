@@ -364,6 +364,7 @@ void ll_capa_timer_callback(unsigned long unused);
 int ll_set_capa(struct inode *inode, struct lookup_intent *it);
 int ll_set_trunc_capa(struct ptlrpc_request *req, int offset,
                       struct inode *inode);
+struct obd_capa *ll_get_capa(struct inode *inode, uid_t uid, int op);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
