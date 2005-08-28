@@ -1039,7 +1039,7 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
         struct lustre_mount_data *lmd = sbi->ll_lmd;
         char *profile = lmd->lmd_profile, *name = NULL;
         struct config_llog_instance cfg;
-        int rc, namelen =  0, version;
+        int rc, namelen =  0;
         struct llog_ctxt *ctxt;
         ENTRY;
 
@@ -1059,7 +1059,7 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
         OBD_ALLOC(name, namelen);
         if (name == NULL)
                 RETURN(-ENOMEM);
-
+#if 0
         if (clean) {
                 version = sbi->ll_config_version - 1;
                 sprintf(name, "%s-clean-%d", profile, version);
@@ -1067,14 +1067,19 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
                 version = sbi->ll_config_version + 1;
                 sprintf(name, "%s-%d", profile, version);
         }
-
+#else
+        if (clean) {
+                sprintf(name, "%s-clean", profile);
+        } else {
+                sprintf(name, "%s", profile);
+        }
+#endif
         CWARN("Applying configuration log %s\n", name);
 
         ctxt = llog_get_context(&sbi->ll_md_exp->exp_obd->obd_llogs,
                                 LLOG_CONFIG_REPL_CTXT);
         rc = class_config_process_llog(ctxt, name, &cfg);
-        if (rc == 0)
-                sbi->ll_config_version = version;
+        
         CWARN("Finished applying configuration log %s: %d\n", name, rc);
 
         if (rc == 0 && clean == 0) {
