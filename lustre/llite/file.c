@@ -154,7 +154,7 @@ int ll_md_real_close(struct obd_export *md_exp,
         int freeing = inode->i_state & I_FREEING;
         struct obd_client_handle **och_p;
         struct obd_client_handle *och;
-        __u64 *och_usecount, epoch;
+        __u64 *och_usecount, epoch = 0;
         int rc = 0, dirty = 0;
         ENTRY;
 
@@ -199,8 +199,10 @@ int ll_md_real_close(struct obd_export *md_exp,
 
         och = *och_p;
         *och_p = NULL;
-        epoch = lli->lli_io_epoch;
-        lli->lli_io_epoch = 0;
+        if (flags & FMODE_WRITE) {
+                epoch = lli->lli_io_epoch;
+                lli->lli_io_epoch = 0;
+        }
 
         up(&lli->lli_och_sem);
 
