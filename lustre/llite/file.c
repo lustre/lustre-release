@@ -354,10 +354,12 @@ int ll_och_fill(struct inode *inode, struct lookup_intent *it,
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
-        if (lli->lli_io_epoch != 0 && lli->lli_io_epoch != body->io_epoch)
-                CDEBUG(D_ERROR, "are we opening new epoch?! "LPD64
-                       " != "LPD64"\n", lli->lli_io_epoch, body->io_epoch);
-        lli->lli_io_epoch = body->io_epoch;
+        if (it->it_flags & FMODE_WRITE) {
+                if (lli->lli_io_epoch && lli->lli_io_epoch != body->io_epoch)
+                        CDEBUG(D_ERROR, "new epoch?! "LPD64" != "LPD64"\n",
+                               lli->lli_io_epoch, body->io_epoch);
+                lli->lli_io_epoch = body->io_epoch;
+        }
         mdc_set_open_replay_data(ll_i2mdexp(inode), och, 
 				 LUSTRE_IT(it)->it_data);
 
