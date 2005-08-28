@@ -1459,12 +1459,12 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
 
         LASSERT(body != NULL);
 
+        if (dentry->d_inode == NULL || !S_ISREG(inode->i_mode))
+                RETURN(0);
+        
         /* XXX: quite a ugly hack, need to check old code
          * drop FLSIZE/FLBLOCKS prior any checking to */
         body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-        
-        if (dentry->d_inode == NULL || !S_ISREG(inode->i_mode))
-                RETURN(0);
         
         if (obd->obd_recovering) {
                 CDEBUG(D_INODE, "size for "DLID4" is unknown yet (recovering)\n",
