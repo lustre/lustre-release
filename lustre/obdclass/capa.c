@@ -96,7 +96,7 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                         continue;
                 if (ocapa->c_capa.lc_mdsid != mdsid)
                         continue;
-                if (ocapa->c_capa.lc_op != capa_op)
+                if ((ocapa->c_capa.lc_op & capa_op) != ocapa->c_capa.lc_op)
                         continue;
                 if (ocapa->c_type != type)
                         continue;
