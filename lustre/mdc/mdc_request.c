@@ -672,6 +672,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         mod->mod_open_req = ptlrpc_request_addref(open_req);
 
         memcpy(&rec->cr_replayid, &body->id1, sizeof rec->cr_replayid);
+        memcpy(&rec->cr_ioepoch, &body->io_epoch, sizeof rec->cr_ioepoch);
         open_req->rq_replay_cb = mdc_replay_open;
         open_req->rq_commit_cb = mdc_commit_open;
         open_req->rq_cb_data = mod;

@@ -789,6 +789,7 @@ void lustre_swab_mds_rec_create(struct mds_rec_create *cr)
         lustre_swab_lustre_id(&cr->cr_replayid);
         __swab64s(&cr->cr_time);
         __swab64s(&cr->cr_rdev);
+        __swab64s(&cr->cr_ioepoch);
 }
 
 void lustre_swab_mds_rec_link(struct mds_rec_link *lk)

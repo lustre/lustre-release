@@ -70,6 +70,7 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         rec->cr_time = op_data->mod_time;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
+        rec->cr_ioepoch = 0;
 
         if (op_data->name) {
                 tmp = lustre_msg_buf(msg, offset + 1,

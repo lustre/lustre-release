@@ -818,6 +818,7 @@ struct mds_rec_create {
         __u64            cr_rdev;
         __u64            cr_enkey;
         __u64            cr_mac;
+        __u64            cr_ioepoch;
 };
 
 extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);

@@ -168,13 +168,16 @@ static int mds_get_write_access(struct mds_obd *mds, struct inode *inode,
                 rc = -ENOMEM;
                 goto out;
         }
-        if (epoch > mds->mds_io_epoch)
+        if (epoch > mds->mds_io_epoch) {
                 mds->mds_io_epoch = epoch;
-        else
+                CDEBUG(D_INODE, "repair MDS epoch "LPU64" for ino %lu/%u\n",
+                       mds->mds_io_epoch, inode->i_ino, inode->i_generation);
+        } else {
                 mds->mds_io_epoch++;
+                CDEBUG(D_INODE, "starting MDS epoch "LPU64" for ino %lu/%u\n",
+                       mds->mds_io_epoch, inode->i_ino, inode->i_generation);
+        }
         MDS_FILTERDATA(inode)->io_epoch = mds->mds_io_epoch;
-        CDEBUG(D_INODE, "starting MDS epoch "LPU64" for ino %lu/%u\n",
-               mds->mds_io_epoch, inode->i_ino, inode->i_generation);
  out:
         if (rc == 0)
                 atomic_inc(&inode->i_writecount);
@@ -234,7 +237,8 @@ int mds_query_write_access(struct inode *inode)
 /* This replaces the VFS dentry_open, it manages mfd and writecount */
 static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
                                              struct vfsmount *mnt, int flags,
-                                             struct ptlrpc_request *req)
+                                             struct ptlrpc_request *req,
+                                             struct mds_update_record *rec)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_obd *mds = mds_req2mds(req);
@@ -253,7 +257,7 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
 
         if (flags & FMODE_WRITE) {
                 /* FIXME: in recovery, need to pass old epoch here */
-                rc = mds_get_write_access(mds, dentry->d_inode, 0);
+                rc = mds_get_write_access(mds, dentry->d_inode, rec->ur_ioepoch);
                 if (rc)
                         GOTO(cleanup_mfd, rc);
                 body->io_epoch = MDS_FILTERDATA(dentry->d_inode)->io_epoch;
@@ -667,7 +671,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
                 mfd = mds_dentry_open(dchild, mds->mds_vfsmnt,
-                                      rec->ur_flags & ~MDS_OPEN_TRUNC, req);
+                                      rec->ur_flags & ~MDS_OPEN_TRUNC, req, rec);
                 if (!mfd) {
                         CERROR("mds: out of memory\n");
                         GOTO(out_dput, req->rq_status = -ENOMEM);
@@ -807,7 +811,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         up(&dchild->d_inode->i_sem);
 
         intent_set_disposition(rep, DISP_OPEN_OPEN);
-        mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req);
+        mfd = mds_dentry_open(dchild, mds->mds_vfsmnt, flags, req, rec);
         if (IS_ERR(mfd))
                 RETURN(PTR_ERR(mfd));
 

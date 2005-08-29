@@ -71,6 +71,7 @@ struct mds_update_record {
         __u32               ur_mode;
         __u64               ur_time;
         __u32               ur_flags;
+        __u64               ur_ioepoch;
 };
 
 #define ur_fsuid    ur_uc.luc_fsuid
