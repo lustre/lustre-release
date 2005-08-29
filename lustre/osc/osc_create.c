@@ -145,6 +145,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         if (rc == -ETIMEDOUT) {
                                 CDEBUG(D_ERROR,"%p: timeout waiting on recovery\n",
                                        oscc);
+                                portals_debug_dumplog();
                                 RETURN(rc);
                         }
                         CDEBUG(D_HA, "%p: oscc recovery over, waking up\n",
