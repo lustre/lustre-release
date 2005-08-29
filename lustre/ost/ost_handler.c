@@ -522,7 +522,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         do_gettimeofday(&now);
                         if (rc == -ETIMEDOUT) {
                                 DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT"
-                                          ", expt_conn_cnt = %u, real wait %us"
+                                          ", exp_conn_cnt = %u, real wait %us"
                                           ", arrived %u.%u, served %u.%u",
                                           req->rq_export->exp_conn_cnt,
                                           (unsigned) (now.tv_sec - tstart.tv_sec),
@@ -719,13 +719,19 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         rc = ptlrpc_start_bulk_transfer (desc);
         if (rc == 0) {
+                struct timeval tstart, now;
+                do_gettimeofday(&tstart);
                 lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
                                   ost_bulk_timeout, desc);
                 rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), 
                                   &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
+                do_gettimeofday(&now);
                 if (rc == -ETIMEDOUT) {
-                        DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
+                        DEBUG_REQ(D_ERROR, req, "timeout on bulk GET, "
+                                  "exp_conn_cnt = %u, real wait %us\n",
+                                  req->rq_export->exp_conn_cnt,
+                                  (unsigned) (now.tv_sec - tstart.tv_sec));
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
