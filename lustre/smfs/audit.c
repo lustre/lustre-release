@@ -149,9 +149,7 @@ int smfs_get_audit(struct super_block * sb, struct inode * parent,
                    struct inode * inode,  __u64 * mask)
 {
         struct smfs_super_info * smb = S2SMI(sb);
-        struct fsfilt_operations *fsfilt = smb->sm_fsfilt;
         struct obd_device * obd = smb->smsi_exp->exp_obd;
-        int rc;
         struct audit_priv * priv = NULL;
         
         ENTRY;
