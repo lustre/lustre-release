@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  2986 5494
-ALWAYS_EXCEPT="20b  24"
+#         bug  2986 5494 7288
+ALWAYS_EXCEPT="20b  24   27"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
