@@ -101,6 +101,8 @@ void ll_destroy_inodecache(void)
 static void ll_umount_lustre(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        LASSERT((sbi->ll_flags & LL_SBI_UMOUNT) == 0);
+        sbi->ll_flags |= LL_SBI_UMOUNT;
         ll_gns_check_mounts(sbi, LL_GNS_UMOUNT);
 }
 

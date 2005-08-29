@@ -505,6 +505,7 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 /* generic */
 #define LL_SBI_NOLCK           0x1
 #define LL_SBI_READAHEAD       0x2
+#define LL_SBI_UMOUNT          0x4
 #define LL_SUPER_MAGIC         0x0BD00BD0
 #define LL_MAX_BLKSIZE         (4UL * 1024 * 1024)
 
