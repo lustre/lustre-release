@@ -263,15 +263,23 @@ static int lustre_connect_ost(struct super_block *sb, char *lov,
                 RETURN(err);
         }
 
-        if (pag) {
+        /* FIXME Because of the async nature of file i/o, we never know
+         * who is actually dirty the pages; and any process have chance
+         * to trigger dirty-flushing within its own process context. So
+         * for simplicity we simply use root's credential, we suppose root
+         * always have credential.
+         */
+        if (pag)
                 sec_flags = PTLRPC_SEC_FL_PAG;
-                err = obd_set_info(obd->obd_self_export,
-                                   strlen("sec_flags"), "sec_flags",
-                                   sizeof(sec_flags), &sec_flags);
-                if (err) {
-                        OBD_FREE(data, sizeof(*data));
-                        RETURN(err);
-                }
+        else
+                sec_flags = PTLRPC_SEC_FL_OSS;
+
+        err = obd_set_info(obd->obd_self_export,
+                           strlen("sec_flags"), "sec_flags",
+                           sizeof(sec_flags), &sec_flags);
+        if (err) {
+                OBD_FREE(data, sizeof(*data));
+                RETURN(err);
         }
 
         err = obd_connect(&dt_conn, obd, &sbi->ll_sb_uuid, data, 0);

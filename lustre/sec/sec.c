@@ -419,7 +419,8 @@ static struct ptlrpc_cred *get_cred(struct ptlrpc_sec *sec)
 
         LASSERT(sec);
 
-        if (sec->ps_flags & (PTLRPC_SEC_FL_MDS | PTLRPC_SEC_FL_REVERSE)) {
+        if (sec->ps_flags &
+            (PTLRPC_SEC_FL_MDS | PTLRPC_SEC_FL_OSS | PTLRPC_SEC_FL_REVERSE)) {
                 vcred.vc_pag = 0;
                 vcred.vc_uid = 0;
         } else {

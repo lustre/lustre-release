@@ -281,6 +281,7 @@ struct ptlrpc_sec_type {
 #define PTLRPC_SEC_FL_MDS               0x0001 /* outgoing from MDS */
 #define PTLRPC_SEC_FL_REVERSE           0x0002 /* reverse sec */
 #define PTLRPC_SEC_FL_PAG               0x0004 /* enable PAG */
+#define PTLRPC_SEC_FL_OSS               0x0008 /* outgoing to OSS XXX */
 
 #define PTLRPC_CREDCACHE_NR     8
 #define PTLRPC_CREDCACHE_MASK   (PTLRPC_CREDCACHE_NR - 1)
