@@ -1,7 +1,9 @@
 AUTOMAKE_OPTIONS = foreign
 
-SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ portals lustre
-DIST_SUBDIRS := build @SNMP_DIST_SUBDIR@ libsysio portals lustre
+#SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet portals lustre
+#DIST_SUBDIRS := build @SNMP_DIST_SUBDIR@ libsysio lnet portals lustre
+SUBDIRS := . build @LIBSYSIO_SUBDIR@ @SNMP_SUBDIR@ lnet lustre
+DIST_SUBDIRS := build @SNMP_DIST_SUBDIR@ libsysio lnet lustre
 
 EXTRA_DIST := config.h.in
 
@@ -28,7 +30,8 @@ tags:
 
 if MODULES
 all-sources:
-	$(MAKE) sources -C portals
+	$(MAKE) sources -C lnet
+#	$(MAKE) sources -C portals
 	$(MAKE) sources -C lustre
 
 if LINUX

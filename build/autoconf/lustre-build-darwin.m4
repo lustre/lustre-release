@@ -93,7 +93,9 @@ AC_SUBST(kextdir)
 AC_SUBST(plistdir)
 AC_SUBST(macosdir)
 
-LP_PROG_DARWIN
+LN_PROG_DARWIN
+
+#LP_PROG_DARWIN
 
 LC_PROG_DARWIN
 ])
