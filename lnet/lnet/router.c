@@ -254,7 +254,8 @@ kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                         return target_nid;
                 }
         } else {                                /* ni already determined */
-                if (target_net == PTL_NIDNET(ni->ni_nid)) {
+                if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL ||
+                    target_net == PTL_NIDNET(ni->ni_nid)) {
                         ptl_ni_addref(ni);      /* extra ref so caller can drop blindly */
                         return target_nid;
                 }

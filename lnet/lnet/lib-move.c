@@ -603,7 +603,18 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                 return -EIO;
         }
 
-        if (ni->ni_nal->nal_type != LONAL) {
+        /* set the completion event's initiator.nid now we know it */
+        if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
+                msg->msg_ev.initiator.nid = ni->ni_nid;
+                
+        hdr->type           = cpu_to_le32(type);
+        hdr->dest_nid       = cpu_to_le64(target.nid);
+        hdr->dest_pid       = cpu_to_le32(target.pid);
+        hdr->src_nid        = cpu_to_le64(ni->ni_nid);
+        hdr->src_pid        = cpu_to_le64(ptl_apini.apini_pid);
+        hdr->payload_length = cpu_to_le32(len);
+
+        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL) {
                 if (gw_nid != ni->ni_nid) {         /* it's not for me */
                         routing = gw_nid != target.nid; /* will gateway have to forward? */
                 } else if (implicit_loopback) {    /* force lonal? */
@@ -616,22 +627,9 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                         
                         if (ni == NULL)         /* shutdown in progress */
                                 return -ENETDOWN;
-
-                        target.nid = ni->ni_nid;
                 }
         }
         
-        hdr->type           = cpu_to_le32(type);
-        hdr->dest_nid       = cpu_to_le64(target.nid);
-        hdr->dest_pid       = cpu_to_le32(target.pid);
-        hdr->src_nid        = cpu_to_le64(ni->ni_nid);
-        hdr->src_pid        = cpu_to_le64(ptl_apini.apini_pid);
-        hdr->payload_length = cpu_to_le32(len);
-
-        /* set the completion event's initiator.nid now we know it */
-        if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
-                msg->msg_ev.initiator.nid = ni->ni_nid;
-                
         target.nid = gw_nid;
         
         if (len == 0)
@@ -1028,7 +1026,8 @@ ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
          * If we don't think the packet is for us, return 1 */
 
         dest_nid = le64_to_cpu(hdr->dest_nid);
-        if (dest_nid != ni->ni_nid) {
+        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL &&
+            dest_nid != ni->ni_nid) {
 
                 if (!ptl_islocalnid(dest_nid))  /* tell NAL to use the router */
                         return 1;               /* to forward */
