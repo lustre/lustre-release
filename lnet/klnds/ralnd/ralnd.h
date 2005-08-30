@@ -332,7 +332,7 @@ typedef struct kra_peer
         struct list_head    rap_connd_list;     /* schedule on kra_connd_peers */
         struct list_head    rap_conns;          /* all active connections */
         struct list_head    rap_tx_queue;       /* msgs waiting for a conn */
-        ptl_nid_t           rap_nid;            /* who's on the other end(s) */
+        lnet_nid_t           rap_nid;            /* who's on the other end(s) */
         __u32               rap_ip;             /* IP address of peer */
         int                 rap_port;           /* port on which peer listens */
         atomic_t            rap_refcount;       /* # users */
@@ -379,7 +379,7 @@ kranal_peer_decref(kra_peer_t *peer)
 }
 
 static inline struct list_head *
-kranal_nid2peerlist (ptl_nid_t nid)
+kranal_nid2peerlist (lnet_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kranal_data.kra_peer_hash_size;
 
@@ -448,28 +448,28 @@ kranal_page2phys (struct page *p)
         return page_to_phys(p);
 }
 
-ptl_err_t kranal_startup (ptl_ni_t *ni);
+int kranal_startup (ptl_ni_t *ni);
 void kranal_shutdown (ptl_ni_t *ni);
 int kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-ptl_err_t kranal_send (ptl_ni_t *ni, void *private,
+int kranal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_process_id_t tgt, int routing,
+                       int type, lnet_process_id_t tgt, int routing,
                        unsigned int payload_niov, struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
-ptl_err_t kranal_send_pages (ptl_ni_t *ni, void *private,
+int kranal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_process_id_t tgt, int routing,
-                             unsigned int payload_niov, ptl_kiov_t *payload_kiov,
+                             int type, lnet_process_id_t tgt, int routing,
+                             unsigned int payload_niov, lnet_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);
-ptl_err_t kranal_recv(ptl_ni_t *ni, void *private,
+int kranal_recv(ptl_ni_t *ni, void *private,
                       ptl_msg_t *ptlmsg, unsigned int niov,
                       struct iovec *iov, size_t offset,
                       size_t mlen, size_t rlen);
-ptl_err_t kranal_recv_pages(ptl_ni_t *ni, void *private,
+int kranal_recv_pages(ptl_ni_t *ni, void *private,
                             ptl_msg_t *ptlmsg, unsigned int niov,
-                            ptl_kiov_t *kiov, size_t offset,
+                            lnet_kiov_t *kiov, size_t offset,
                             size_t mlen, size_t rlen);
-ptl_err_t kranal_accept(ptl_ni_t *ni, struct socket *sock);
+int kranal_accept(ptl_ni_t *ni, struct socket *sock);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table,
@@ -479,11 +479,11 @@ extern void kranal_update_reaper_timeout (long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
 extern void kranal_unlink_peer_locked (kra_peer_t *peer);
 extern void kranal_schedule_conn (kra_conn_t *conn);
-extern int kranal_create_peer (kra_peer_t **peerp, ptl_nid_t nid);
-extern int kranal_add_persistent_peer (ptl_nid_t nid, __u32 ip, int port);
-extern kra_peer_t *kranal_find_peer_locked (ptl_nid_t nid);
+extern int kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid);
+extern int kranal_add_persistent_peer (lnet_nid_t nid, __u32 ip, int port);
+extern kra_peer_t *kranal_find_peer_locked (lnet_nid_t nid);
 extern void kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx);
-extern int kranal_del_peer (ptl_nid_t nid);
+extern int kranal_del_peer (lnet_nid_t nid);
 extern void kranal_device_callback (RAP_INT32 devid, RAP_PVOID arg);
 extern int kranal_thread_start (int(*fn)(void *arg), void *arg);
 extern int kranal_connd (void *arg);

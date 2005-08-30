@@ -92,11 +92,11 @@ void *nal_thread(void *z)
      */
 
     pthread_mutex_lock(&p->mutex);
-    p->nal_flags |= (rc != PTL_OK) ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
+    p->nal_flags |= (rc != 0) ? NAL_FLAG_STOPPED : NAL_FLAG_RUNNING;
     pthread_cond_broadcast(&p->cond);
     pthread_mutex_unlock(&p->mutex);
 
-    if (rc == PTL_OK) {
+    if (rc == 0) {
         /* the thunk function is called each time the timer loop
            performs an operation and returns to blocking mode. we
            overload this function to inform the api side that

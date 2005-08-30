@@ -72,7 +72,7 @@ ksocknal_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 int
 ksocknal_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 { 
-        ptl_kiov_t    *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int     nob;
         int     rc;
 
@@ -240,7 +240,7 @@ ksocknal_recv_iov (ksock_conn_t *conn)
 int
 ksocknal_recv_kiov (ksock_conn_t *conn)
 {
-        ptl_kiov_t   *kiov = conn->ksnc_rx_kiov;
+        lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
         int     nob;
         int     rc;
         LASSERT (conn->ksnc_rx_nkiov > 0);
@@ -388,7 +388,7 @@ ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 
         ptl_finalize (peer->ksnp_ni, 
                       ltx->ltx_private, ltx->ltx_cookie,
-                      (tx->tx_resid == 0) ? PTL_OK : PTL_FAIL);
+                      (tx->tx_resid == 0) ? 0 : -EIO);
 
         ksocknal_free_ltx (ltx);
         EXIT;
@@ -682,7 +682,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
 }
 
 int
-ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_process_id_t id)
+ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 {
         unsigned long     flags;
         ksock_peer_t     *peer;
@@ -795,16 +795,16 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, ptl_process_id_t id)
         return (-EHOSTUNREACH);
 }
 
-ptl_err_t
+int
 ksocknal_sendmsg(ptl_ni_t        *ni, 
                  void            *private, 
                  ptl_msg_t       *cookie,
                  ptl_hdr_t       *hdr, 
                  int              type, 
-                 ptl_process_id_t target,
+                 lnet_process_id_t target,
                  unsigned int     payload_niov, 
                  struct iovec    *payload_iov, 
-                 ptl_kiov_t      *payload_kiov,
+                 lnet_kiov_t      *payload_kiov,
                  size_t           payload_offset,
                  size_t           payload_nob)
 {
@@ -844,7 +844,7 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
         if (ltx == NULL) {
                 CERROR("Can't allocate tx desc type %d size %d %s\n",
                        type, desc_size, in_interrupt() ? "(intr)" : "");
-                return (PTL_NO_SPACE);
+                return (-ENOMEM);
         }
 
         atomic_inc(&ksocknal_data.ksnd_nactive_ltxs);
@@ -885,15 +885,15 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
 
         rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target);
         if (rc == 0)
-                return (PTL_OK);
+                return (0);
         
         ksocknal_free_ltx(ltx);
-        return (PTL_FAIL);
+        return (-EIO);
 }
 
-ptl_err_t
+int
 ksocknal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-               ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
+               ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
                unsigned int payload_niov, struct iovec *payload_iov,
                size_t payload_offset, size_t payload_len)
 {
@@ -903,10 +903,10 @@ ksocknal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                                  payload_offset, payload_len));
 }
 
-ptl_err_t
+int
 ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                     ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
-                     unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
+                     ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
+                     unsigned int payload_niov, lnet_kiov_t *payload_kiov, 
                      size_t payload_offset, size_t payload_len)
 {
         return (ksocknal_sendmsg(ni, private, cookie,
@@ -918,7 +918,7 @@ ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 void
 ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
 {
-        ptl_process_id_t id = {.nid = fwd->kprfd_gateway_nid,
+        lnet_process_id_t id = {.nid = fwd->kprfd_gateway_nid,
                                .pid = LUSTRE_SRV_PTL_PID};
         /* CAVEAT EMPTOR:
          * LUSTRE_SRV_PTL_PID assumes my target is another socknal instance and
@@ -1069,9 +1069,9 @@ int
 ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
 {
         int       payload_nob = conn->ksnc_rx_nob_left;
-        ptl_nid_t src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
-        ptl_nid_t dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
-        ptl_nid_t sender_nid = conn->ksnc_peer->ksnp_id.nid;
+        lnet_nid_t src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
+        lnet_nid_t dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
+        lnet_nid_t sender_nid = conn->ksnc_peer->ksnp_id.nid;
         int       niov = 0;
         int       nob = payload_nob;
 
@@ -1122,23 +1122,23 @@ ksocknal_init_fmb (ksock_conn_t *conn, ksock_fmb_t *fmb)
         
         /* Set up conn->ksnc_rx_kiov to read the payload into fmb's kiov-ed
          * buffer */
-        LASSERT (niov <= sizeof(conn->ksnc_rx_iov_space)/sizeof(ptl_kiov_t));
+        LASSERT (niov <= sizeof(conn->ksnc_rx_iov_space)/sizeof(lnet_kiov_t));
 
         conn->ksnc_rx_niov = 0;
         conn->ksnc_rx_nkiov = niov;
         conn->ksnc_rx_kiov = conn->ksnc_rx_iov_space.kiov;
-        memcpy(conn->ksnc_rx_kiov, fmb->fmb_kiov, niov * sizeof(ptl_kiov_t));
+        memcpy(conn->ksnc_rx_kiov, fmb->fmb_kiov, niov * sizeof(lnet_kiov_t));
         
         CDEBUG (D_NET, "%p %s->%s %d reading body\n", conn,
                 libcfs_nid2str(src_nid), libcfs_nid2str(dest_nid), payload_nob);
         return (0);
 }
 
-ptl_err_t
+int
 ksocknal_fwd_parse (ksock_conn_t *conn)
 {
-        ptl_nid_t     dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
-        ptl_nid_t     src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
+        lnet_nid_t     dest_nid = le64_to_cpu(conn->ksnc_hdr.dest_nid);
+        lnet_nid_t     src_nid = le64_to_cpu(conn->ksnc_hdr.src_nid);
         int           body_len = le32_to_cpu(conn->ksnc_hdr.payload_length);
 
         CDEBUG (D_NET, "%p %s->%s %d parsing header\n", conn,
@@ -1155,7 +1155,7 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                        libcfs_nid2str(dest_nid),
                        body_len);
                 ksocknal_new_packet (conn, 0);  /* on to new packet */
-                return PTL_FAIL;
+                return -EIO;
         }
 
         if (body_len > PTL_MTU) {      /* too big to forward */
@@ -1166,14 +1166,14 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
                         body_len);
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
-                return PTL_FAIL;
+                return -EIO;
         }
 
         conn->ksnc_rx_state = SOCKNAL_RX_GET_FMB;       /* Getting FMB now */
         conn->ksnc_rx_nob_left = body_len;              /* stash packet size */
         conn->ksnc_rx_nob_wanted = body_len;            /* (no slop) */
 
-        return PTL_OK;
+        return 0;
 }
 
 int
@@ -1296,7 +1296,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
         case SOCKNAL_RX_HEADER:
                 if (conn->ksnc_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) { 
                         /* Userspace NAL */
-                        ptl_process_id_t *id = &conn->ksnc_peer->ksnp_id;
+                        lnet_process_id_t *id = &conn->ksnc_peer->ksnp_id;
                         
                         /* Substitute process ID assigned at connection time */
                         conn->ksnc_hdr.src_pid = cpu_to_le32(id->pid);
@@ -1305,13 +1305,13 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 rc = ptl_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
 
                 switch (rc) {
-                case PTL_OK:
+                case 0:
                         break;
                         
-                case PTL_IFACE_DUP:
+                case 1:
                         /* This packet isn't for me (still in net byte order) */
                         rc = ksocknal_fwd_parse (conn);
-                        if (rc == PTL_OK) {
+                        if (rc == 0) {
                                 switch (conn->ksnc_rx_state) {
                                 case SOCKNAL_RX_HEADER: /* skipped (zero payload) */
                                         return (0);     /* => come back later */
@@ -1339,7 +1339,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
         case SOCKNAL_RX_BODY:
                 /* payload all received */
-                ptl_finalize(conn->ksnc_peer->ksnp_ni, NULL, conn->ksnc_cookie, PTL_OK);
+                ptl_finalize(conn->ksnc_peer->ksnp_ni, NULL, conn->ksnc_cookie, 0);
                 /* Fall through */
 
         case SOCKNAL_RX_SLOP:
@@ -1375,7 +1375,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
         return (-EINVAL);                       /* keep gcc happy */
 }
 
-ptl_err_t
+int
 ksocknal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                unsigned int niov, struct iovec *iov, 
                size_t offset, size_t mlen, size_t rlen)
@@ -1400,12 +1400,12 @@ ksocknal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                  ptl_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
                  ptl_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));
 
-        return (PTL_OK);
+        return (0);
 }
 
-ptl_err_t
+int
 ksocknal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                     unsigned int niov, ptl_kiov_t *kiov, 
+                     unsigned int niov, lnet_kiov_t *kiov, 
                      size_t offset, size_t mlen, size_t rlen)
 {
         ksock_conn_t *conn = (ksock_conn_t *)private;
@@ -1428,7 +1428,7 @@ ksocknal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                  ptl_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
                  ptl_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));
 
-        return (PTL_OK);
+        return (0);
 }
 
 static inline int
@@ -1751,7 +1751,7 @@ ksocknal_invert_type(int type)
 
 int
 ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
-                     ptl_process_id_t *peerid, 
+                     lnet_process_id_t *peerid, 
                      __u64 *incarnation, __u32 *ipaddrs)
 {
         struct socket      *sock = conn->ksnc_sock;
@@ -1762,10 +1762,10 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         int                 i;
         int                 type;
         ptl_hdr_t           hdr;
-        ptl_process_id_t    recv_id;
+        lnet_process_id_t    recv_id;
         ptl_magicversion_t *hmv;
 
-        active = (peerid->nid != PTL_NID_ANY);
+        active = (peerid->nid != LNET_NID_ANY);
         timeout = active ? *ksocknal_tunables.ksnd_timeout :
                             ptl_acceptor_timeout();
 
@@ -1783,7 +1783,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
             hmv->magic != le32_to_cpu (PTL_PROTO_TCP_MAGIC)) {
                 /* Is this a generic acceptor connection request? */
                 rc = ptl_accept(ni, sock, hmv->magic);
-                if (rc != PTL_OK)
+                if (rc != 0)
                         return -EPROTO;
 
                 /* Yes it is! Start over again now I've skipping the generic
@@ -1848,8 +1848,8 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
                 return (-EPROTO);
         }
 
-        if (le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
-                CERROR("Expecting a HELLO hdr with a NID, but got PTL_NID_ANY"
+        if (le64_to_cpu(hdr.src_nid) == LNET_NID_ANY) {
+                CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY"
                        "from %u.%u.%u.%u\n", HIPQUAD(conn->ksnc_ipaddr));
                 return (-EPROTO);
         }
@@ -1972,7 +1972,7 @@ ksocknal_connect (ksock_route_t *route)
                 rc = ptl_connect(&sock, peer->ksnp_id.nid,
                                  route->ksnr_myipaddr, 
                                  route->ksnr_ipaddr, route->ksnr_port);
-                if (rc != PTL_OK)
+                if (rc != 0)
                         goto failed;
 
                 rc = ksocknal_create_conn(peer->ksnp_ni, route, sock, type);

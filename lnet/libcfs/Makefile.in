@@ -28,6 +28,6 @@ libcfs-all-objs := debug.o nidstrings.o lwt.o module.o tracefile.o watchdog.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 
-EXTRA_PRE_CFLAGS := -I@LUSTRE@/../portals/libcfs
+EXTRA_PRE_CFLAGS := -I@LUSTRE@/../lnet/libcfs
 
 @INCLUDE_RULES@

@@ -102,7 +102,7 @@ gmnal_load(void)
 
 	CDEBUG(D_INFO, "Calling gmnal_init\n");
         status = gmnal_init();
-	if (status == PTL_OK) {
+	if (status == 0) {
 		CDEBUG(D_INFO, "Portals GMNAL initialised ok\n");
 	} else {
 		CDEBUG(D_INFO, "Portals GMNAL Failed to initialise\n");

@@ -420,7 +420,7 @@ typedef struct kib_peer
 {
         struct list_head    ibp_list;           /* stash on global peer list */
         struct list_head    ibp_connd_list;     /* schedule on kib_connd_peers */
-        ptl_nid_t           ibp_nid;            /* who's on the other end(s) */
+        lnet_nid_t           ibp_nid;            /* who's on the other end(s) */
         atomic_t            ibp_refcount;       /* # users */
         int                 ibp_persistence;    /* "known" peer refs */
         struct list_head    ibp_conns;          /* all active connections */
@@ -736,7 +736,7 @@ static inline int wrq_signals_completion(IB_WORK_REQ *wrq)
 /******************************************************************************/
 
 static inline struct list_head *
-kibnal_nid2peerlist (ptl_nid_t nid)
+kibnal_nid2peerlist (lnet_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kibnal_data.kib_peer_hash_size;
 
@@ -782,7 +782,7 @@ kibnal_service_nid_field(IB_SERVICE_RECORD *srv)
 
 
 static inline void
-kibnal_set_service_keys(IB_SERVICE_RECORD *srv, ptl_nid_t nid)
+kibnal_set_service_keys(IB_SERVICE_RECORD *srv, lnet_nid_t nid)
 {
         LASSERT (strlen(IBNAL_SERVICE_NAME) < sizeof(srv->ServiceName));
         memset (srv->ServiceName, 0, sizeof(srv->ServiceName));
@@ -858,30 +858,30 @@ kibnal_whole_mem(void)
         return kibnal_data.kib_md.md_handle != NULL;
 }
 
-extern ptl_err_t kibnal_startup (ptl_ni_t *ni);
+extern int kibnal_startup (ptl_ni_t *ni);
 extern void kibnal_shutdown (ptl_ni_t *ni);
 extern int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-ptl_err_t kibnal_send (ptl_ni_t *ni, void *private,
+int kibnal_send (ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, ptl_process_id_t tgt, int routing,
+                       int type, lnet_process_id_t tgt, int routing,
                        unsigned int payload_niov, struct iovec *payload_iov,
                        size_t payload_offset, size_t payload_nob);
-ptl_err_t kibnal_send_pages (ptl_ni_t *ni, void *private,
+int kibnal_send_pages (ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, ptl_process_id_t tgt, int routing,
-                             unsigned int payload_niov, ptl_kiov_t *payload_kiov,
+                             int type, lnet_process_id_t tgt, int routing,
+                             unsigned int payload_niov, lnet_kiov_t *payload_kiov,
                              size_t payload_offset, size_t payload_nob);
-extern ptl_err_t kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
+extern int kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                               unsigned int niov, struct iovec *iov, 
                               size_t offset, size_t mlen, size_t rlen);
-extern ptl_err_t kibnal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                                    unsigned int niov, ptl_kiov_t *kiov, 
+extern int kibnal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
+                                    unsigned int niov, lnet_kiov_t *kiov, 
                                     size_t offset, size_t mlen, size_t rlen);
 
-extern kib_peer_t *kibnal_create_peer (ptl_nid_t nid);
+extern kib_peer_t *kibnal_create_peer (lnet_nid_t nid);
 extern void kibnal_destroy_peer (kib_peer_t *peer);
-extern int kibnal_del_peer (ptl_nid_t nid);
-extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
+extern int kibnal_del_peer (lnet_nid_t nid);
+extern kib_peer_t *kibnal_find_peer_locked (lnet_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
 extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
                                               __u64 incarnation);
@@ -904,7 +904,7 @@ extern void kibnal_close_conn (kib_conn_t *conn, int why);
 extern void kibnal_start_active_rdma (int type, int status,
                                       kib_rx_t *rx, ptl_msg_t *ptlmsg,
                                       unsigned int niov,
-                                      struct iovec *iov, ptl_kiov_t *kiov,
+                                      struct iovec *iov, lnet_kiov_t *kiov,
                                       size_t offset, size_t nob);
 
 void kibnal_ca_async_callback (void *ca_arg, IB_EVENT_RECORD *ev);

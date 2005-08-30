@@ -148,7 +148,7 @@ ptl_new_ni(__u32 net, struct list_head *nilist)
         return ni;
 }
 
-ptl_err_t
+int
 ptl_parse_networks(struct list_head *nilist, char *networks)
 {
 	int       tokensize = strlen(networks) + 1;
@@ -160,13 +160,13 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 	if (strlen(networks) > PTL_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
 		LCONSOLE_ERROR("Can't parse networks: string too long\n");
-		return PTL_FAIL;
+		return -EINVAL;
 	}
 
         PORTAL_ALLOC(tokens, tokensize);
         if (tokens == NULL) {
                 CERROR("Can't allocate net tokens\n");
-		return PTL_FAIL;
+		return -ENOMEM;
         }
 
         ptl_apini.apini_network_tokens = tokens;
@@ -197,7 +197,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 				*comma++ = 0;
 			net = libcfs_str2net(ptl_trimwhite(str));
 			
-			if (net == PTL_NIDNET(PTL_NID_ANY)) {
+			if (net == PTL_NIDNET(LNET_NID_ANY)) {
                                 ptl_syntax("networks", networks, 
                                            str - tokens, strlen(str));
                                 goto failed;
@@ -212,7 +212,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 
 		*bracket = 0;
 		net = libcfs_str2net(ptl_trimwhite(str));
-		if (net == PTL_NIDNET(PTL_NID_ANY)) {
+		if (net == PTL_NIDNET(LNET_NID_ANY)) {
                         ptl_syntax("networks", networks,
                                    str - tokens, strlen(str));
                         goto failed;
@@ -281,7 +281,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                 LCONSOLE_ERROR("No networks specified\n");
                 goto failed;
         }
-        return PTL_OK;
+        return 0;
 
  failed:
         while (!list_empty(nilist)) {
@@ -293,7 +293,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 	PORTAL_FREE(tokens, tokensize);
         ptl_apini.apini_network_tokens = NULL;
 
-        return PTL_FAIL;
+        return -EINVAL;
 }
 
 ptl_text_buf_t *
@@ -532,7 +532,7 @@ ptl_parse_route (char *str)
 	struct list_head *tmp1;
 	struct list_head *tmp2;
 	__u32             net;
-	ptl_nid_t         nid;
+	lnet_nid_t         nid;
 	ptl_text_buf_t   *ptb;
 	int               rc;
 	char             *sep;
@@ -597,11 +597,11 @@ ptl_parse_route (char *str)
 
 			if (ntokens == 1) {
 				net = libcfs_str2net(ptb->ptb_text);
-				if (net == PTL_NIDNET(PTL_NID_ANY))
+				if (net == PTL_NIDNET(LNET_NID_ANY))
 					goto token_error;
 			} else {
 				nid = libcfs_str2nid(ptb->ptb_text);
-				if (nid == PTL_NID_ANY)
+				if (nid == LNET_NID_ANY)
 					goto token_error;
 			}
 		}
@@ -613,12 +613,12 @@ ptl_parse_route (char *str)
 	list_for_each (tmp1, &nets) {
 		ptb = list_entry(tmp1, ptl_text_buf_t, ptb_list);
 		net = libcfs_str2net(ptb->ptb_text);
-		LASSERT (net != PTL_NIDNET(PTL_NID_ANY));
+		LASSERT (net != PTL_NIDNET(LNET_NID_ANY));
 
 		list_for_each (tmp2, &gateways) {
 			ptb = list_entry(tmp2, ptl_text_buf_t, ptb_list);
 			nid = libcfs_str2nid(ptb->ptb_text);
-			LASSERT (nid != PTL_NID_ANY);
+			LASSERT (nid != LNET_NID_ANY);
 
                         rc = kpr_add_route (net, nid);
                         if (rc != 0) {
@@ -642,7 +642,7 @@ ptl_parse_route (char *str)
 	return myrc;
 }
 
-ptl_err_t
+int
 ptl_parse_route_tbs(struct list_head *tbs)
 {
 	ptl_text_buf_t   *ptb;
@@ -652,27 +652,27 @@ ptl_parse_route_tbs(struct list_head *tbs)
 
 		if (ptl_parse_route(ptb->ptb_text) < 0) {
 			ptl_free_text_bufs(tbs);
-			return PTL_FAIL;
+			return -EINVAL;
 		}
 
 		list_del(&ptb->ptb_list);
 		ptl_free_text_buf(ptb);
 	}
 
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t
+int
 ptl_parse_routes (char *routes)
 {
 	struct list_head  tbs;
-	int               rc = PTL_OK;
+	int               rc = 0;
 
 	INIT_LIST_HEAD(&tbs);
 
 	if (ptl_str2tbs_sep(&tbs, routes) < 0) {
 		CERROR("Error parsing routes\n");
-		rc = PTL_FAIL;
+		rc = -EINVAL;
 	} else {
                 rc = ptl_parse_route_tbs(&tbs);
         }
@@ -682,7 +682,7 @@ ptl_parse_routes (char *routes)
 }
 
 #ifdef __KERNEL__
-ptl_err_t
+int
 ptl_set_ip_niaddr (ptl_ni_t *ni) 
 {
         __u32  net = PTL_NIDNET(ni->ni_nid);
@@ -704,7 +704,7 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
                 if (ni->ni_interfaces[1] != NULL) {
                         CERROR("Net %s doesn't support multiple interfaces\n",
                                libcfs_net2str(net));
-                        return PTL_FAIL;
+                        return -EPERM;
                 }
                 
                 rc = libcfs_ipif_query(ni->ni_interfaces[0],
@@ -712,17 +712,17 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
                 if (rc != 0) {
                         CERROR("Net %s can't query interface %s: %d\n",
                                libcfs_net2str(net), ni->ni_interfaces[0], rc);
-                        return PTL_FAIL;
+                        return -EPERM;
                 }
 
                 if (!up) {
                         CERROR("Net %s can't use interface %s: it's down\n",
                                libcfs_net2str(net), ni->ni_interfaces[0]);
-                        return PTL_FAIL;
+                        return -ENETDOWN;
                 }
                 
                 ni->ni_nid = PTL_MKNID(net, ip);
-                return PTL_OK;
+                return 0;
         }
 
         n = libcfs_ipif_enumerate(&names);
@@ -752,12 +752,12 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
 
                 libcfs_ipif_free_enumeration(names, n);
                 ni->ni_nid = PTL_MKNID(net, ip);
-                return PTL_OK;
+                return 0;
         }
 
         CERROR("Net %s can't find any interfaces\n", libcfs_net2str(net));
         libcfs_ipif_free_enumeration(names, n);
-        return PTL_FAIL;
+        return -ENOENT;
 }
 
 EXPORT_SYMBOL(ptl_set_ip_niaddr);

@@ -322,7 +322,7 @@ libcfs_net2str(__u32 net)
 }
 
 char *
-libcfs_nid2str(ptl_nid_t nid)
+libcfs_nid2str(lnet_nid_t nid)
 {
         __u32           addr = PTL_NIDADDR(nid);
         __u32           net = PTL_NIDNET(nid);
@@ -332,8 +332,8 @@ libcfs_nid2str(ptl_nid_t nid)
 	char           *str;
         int             nob;
 
-        if (nid == PTL_NID_ANY)
-                return "PTL_NID_ANY";
+        if (nid == LNET_NID_ANY)
+                return "LNET_NID_ANY";
 
         nf = libcfs_nal2nalstrfns(PTL_NETNAL(net));
 	str = libcfs_next_nidstring();
@@ -399,10 +399,10 @@ libcfs_str2net(char *str)
         if (libcfs_str2net_internal(str, &net) != NULL)
                 return net;
         
-        return PTL_NIDNET(PTL_NID_ANY);
+        return PTL_NIDNET(LNET_NID_ANY);
 }
 
-ptl_nid_t
+lnet_nid_t
 libcfs_str2nid(char *str)
 {
         char             *sep = strchr(str, '@');
@@ -413,7 +413,7 @@ libcfs_str2nid(char *str)
         if (sep != NULL) {
                 nf = libcfs_str2net_internal(sep + 1, &net);
                 if (nf == NULL)
-                        return PTL_NID_ANY;
+                        return LNET_NID_ANY;
         } else {
                 sep = str + strlen(str);
                 net = PTL_MKNET(SOCKNAL, 0);
@@ -422,7 +422,7 @@ libcfs_str2nid(char *str)
         }
 
         if (!nf->nf_str2addr(str, sep - str, &addr))
-                return PTL_NID_ANY;
+                return LNET_NID_ANY;
         
         return PTL_MKNID(net, addr);
 }
@@ -458,7 +458,7 @@ libcfs_net2str(__u32 net)
 }
 
 char *
-libcfs_nid2str(ptl_nid_t nid)
+libcfs_nid2str(lnet_nid_t nid)
 {
         char    *str = libcfs_next_nidstring();
         
@@ -471,7 +471,7 @@ libcfs_str2net(char *str)
         return 0;
 }
 
-ptl_nid_t
+lnet_nid_t
 libcfs_str2nid(char *str)
 {
         long long nid;
@@ -482,22 +482,22 @@ libcfs_str2nid(char *str)
             n == strlen(str))
                 goto out;
         
-        return PTL_NID_ANY;
+        return LNET_NID_ANY;
         
  out:
-        /* overflow check in case ptl_nid_t smaller than __u64 */
+        /* overflow check in case lnet_nid_t smaller than __u64 */
         mask = 0;
         mask = (~mask)<<(sizeof(nid)*8);
         
         if ((nid & mask) != 0)
-                return PTL_NID_ANY;
+                return LNET_NID_ANY;
 
         return nid;
 }
 #endif
 
 char *
-libcfs_id2str(ptl_process_id_t id)
+libcfs_id2str(lnet_process_id_t id)
 {
         char *str = libcfs_next_nidstring();
         
@@ -506,15 +506,15 @@ libcfs_id2str(ptl_process_id_t id)
 }
 
 int
-libcfs_str2anynid(ptl_nid_t *nidp, char *str)
+libcfs_str2anynid(lnet_nid_t *nidp, char *str)
 {
         if (!strcmp(str, "*")) {
-                *nidp = PTL_NID_ANY;
+                *nidp = LNET_NID_ANY;
                 return 1;
         }
 
         *nidp = libcfs_str2nid(str);
-        return *nidp != PTL_NID_ANY;
+        return *nidp != LNET_NID_ANY;
 }
 
 #ifdef __KERNEL__

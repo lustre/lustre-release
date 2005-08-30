@@ -197,7 +197,7 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
         kpr_seq_route_iterator_t *sri = iter;
         unsigned long             flags;
         __u32                     net;
-        ptl_nid_t                 nid;
+        lnet_nid_t                 nid;
         int                       alive;
 
         read_lock_irqsave(&kpr_state.kpr_rwlock, flags);

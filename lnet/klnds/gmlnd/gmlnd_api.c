@@ -107,18 +107,18 @@ gmnal_startup(ptl_ni_t *ni)
         if (global_nal_data != NULL) {
                 /* Already got 1 instance */
                 CERROR("Can't support > 1 instance of this NAL\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
 
         if (ni->ni_interfaces[0] != NULL) {
                 CERROR("Explicit interface config not supported\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
         
 	PORTAL_ALLOC(nal_data, sizeof(gmnal_data_t));
 	if (!nal_data) {
 		CDEBUG(D_ERROR, "can't get memory\n");
-		return(PTL_NO_SPACE);
+		return(-ENOMEM);
 	}	
 	memset(nal_data, 0, sizeof(gmnal_data_t));
 	/*
@@ -144,7 +144,7 @@ gmnal_startup(ptl_ni_t *ni)
 	if (gm_init() != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "call to gm_init failed\n");
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENETDOWN);
 	}
 
 
@@ -188,7 +188,7 @@ gmnal_startup(ptl_ni_t *ni)
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENETDOWN);
 	}
 
 	nal_data->small_msg_size = gmnal_small_msg_size;
@@ -203,7 +203,7 @@ gmnal_startup(ptl_ni_t *ni)
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENOMEM);
 	}
 
 
@@ -231,7 +231,7 @@ gmnal_startup(ptl_ni_t *ni)
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENOMEM);
 	}
 
 	gmnal_start_kernel_threads(nal_data);
@@ -259,7 +259,7 @@ gmnal_startup(ptl_ni_t *ni)
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENETDOWN);
 	}
 
 	nal_data->gm_local_nid = local_nid;
@@ -280,7 +280,7 @@ gmnal_startup(ptl_ni_t *ni)
 		gm_finalize();
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(nal_data, sizeof(gmnal_data_t));	
-		return(PTL_FAIL);
+		return(-ENETDOWN);
 	}
 	CDEBUG(D_INFO, "Global node id is [%u]\n", global_nid);
 	nal_data->gm_global_nid = global_nid;
@@ -304,7 +304,7 @@ gmnal_startup(ptl_ni_t *ni)
 	global_nal_data = nal_data;
 
         PORTAL_MODULE_USE;
-	return(PTL_OK);
+	return(0);
 }
 
 ptl_nal_t the_gm_nal = {

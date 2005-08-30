@@ -27,13 +27,13 @@
 
 #include "gmnal.h"
 
-ptl_err_t gmnal_cb_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
+int gmnal_cb_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 		   unsigned int niov, struct iovec *iov, size_t offset,
 		   size_t mlen, size_t rlen)
 {
         void            *buffer = NULL;
 	gmnal_srxd_t	*srxd = (gmnal_srxd_t*)private;
-	int		status = PTL_OK;
+	int		status = 0;
 
 	CDEBUG(D_TRACE, "gmnal_cb_recv ni [%p], private[%p], cookie[%p], "
 	       "niov[%d], iov [%p], offset["LPSZ"], mlen["LPSZ"], rlen["LPSZ"]\n",
@@ -81,13 +81,13 @@ ptl_err_t gmnal_cb_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 	return(status);
 }
 
-ptl_err_t gmnal_cb_recv_pages(ptl_ni_t *ni, void *private,
+int gmnal_cb_recv_pages(ptl_ni_t *ni, void *private,
                               ptl_msg_t *cookie, unsigned int kniov,
-                              ptl_kiov_t *kiov, size_t offset, size_t mlen,
+                              lnet_kiov_t *kiov, size_t offset, size_t mlen,
                               size_t rlen)
 {
 	gmnal_srxd_t	*srxd = (gmnal_srxd_t*)private;
-	int		status = PTL_OK;
+	int		status = 0;
 	char            *ptr = NULL;
 	void            *buffer = NULL;
 
@@ -151,8 +151,8 @@ ptl_err_t gmnal_cb_recv_pages(ptl_ni_t *ni, void *private,
 }
 
 
-ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                        ptl_hdr_t *hdr, int type, ptl_process_id_t target,
+int gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
+                        ptl_hdr_t *hdr, int type, lnet_process_id_t target,
                         int routing, unsigned int niov, struct iovec *iov, 
                         size_t offset, size_t len)
 {
@@ -170,7 +170,7 @@ ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 
         if (routing) {
                 CERROR ("Can't route\n");
-                return PTL_FAIL;
+                return -EIO;
         }
 
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
@@ -207,18 +207,18 @@ ptl_err_t gmnal_cb_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 			       stxd,  len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send is not supported\n");
-		ptl_finalize(ni, private, cookie, PTL_FAIL);
-		return(PTL_FAIL);
+		ptl_finalize(ni, private, cookie, -EIO);
+		return(-EIO);
 		gmnal_large_tx(ni, private, cookie, hdr, type, target.nid, target.pid,
 				niov, iov, offset, len);
 	}
-	return(PTL_OK);
+	return(0);
 }
 
-ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
+int gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
                               ptl_msg_t *cookie, ptl_hdr_t *hdr, int type,
-                              ptl_process_id_t target, int routing,
-                              unsigned int kniov, ptl_kiov_t *kiov, 
+                              lnet_process_id_t target, int routing,
+                              unsigned int kniov, lnet_kiov_t *kiov, 
                               size_t offset, size_t len)
 {
 
@@ -226,7 +226,7 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
 	char            *ptr;
 	void            *buffer = NULL;
 	gmnal_stxd_t    *stxd = NULL;
-	ptl_err_t       status = PTL_OK;
+	int       status = 0;
 
 	CDEBUG(D_TRACE, "gmnal_cb_send_pages target %s niov[%d] offset["
                LPSZ"] len["LPSZ"]\n", libcfs_id2str(target), kniov, offset, len);
@@ -236,7 +236,7 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
 
         if (routing) {
                 CERROR ("Can't route\n");
-                return PTL_FAIL;
+                return -EIO;
         }
 
 	/* HP SFS 1380: Need to do the gm_bcopy after the kmap so we can kunmap
@@ -291,13 +291,13 @@ ptl_err_t gmnal_cb_send_pages(ptl_ni_t *ni, void *private,
 	} else {
 		int	i = 0;
 		struct  iovec   *iovec = NULL, *iovec_dup = NULL;
-		ptl_kiov_t *kiov_dup = kiov;
+		lnet_kiov_t *kiov_dup = kiov;
 
 		PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
 		iovec_dup = iovec;
 		CDEBUG(D_ERROR, "Large message send it is not supported yet\n");
 		PORTAL_FREE(iovec, kniov*sizeof(struct iovec));
-		return(PTL_FAIL);
+		return(-EIO);
 		for (i=0; i<kniov; i++) {
 			CDEBUG(D_INFO, "processing kniov [%d] [%p]\n", i, kiov);
 			CDEBUG(D_INFO, "kniov page [%p] len [%d] offset[%d]\n",

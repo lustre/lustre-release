@@ -23,12 +23,12 @@ typedef struct manager {
 
 
 typedef struct connection {
-        ptl_nid_t      peer_nid;
+        lnet_nid_t      peer_nid;
         int            fd;
         manager        m;
 } *connection;
 
-connection force_tcp_connection(manager m, ptl_nid_t nid, procbridge pb);
+connection force_tcp_connection(manager m, lnet_nid_t nid, procbridge pb);
 manager init_connections(int (*f)(void *, void *), void *);
 void remove_connection(void *arg);
 void shutdown_connections(manager m);

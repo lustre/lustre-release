@@ -260,7 +260,7 @@ gmnal_pre_receive(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, int gmnal_type)
 	 */
 	rc = ptl_parse(nal_data->ni, portals_hdr, srxd);
 
-        if (rc != PTL_OK) {
+        if (rc != 0) {
                 /* I just received garbage; take appropriate action... */
                 LBUG();
         }
@@ -326,7 +326,7 @@ gmnal_rx_bad(gmnal_data_t *nal_data, gmnal_rxtwe_t *we, gmnal_srxd_t *srxd)
  *	Hang out the receive buffer again for another receive
  *	Call ptl_finalize
  */
-ptl_err_t
+int
 gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
 {
 	gmnal_srxd_t	*srxd = NULL;
@@ -335,8 +335,8 @@ gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
 
 	if (!private) {
 		CDEBUG(D_ERROR, "gmnal_small_rx no context\n");
-		ptl_finalize(ni, private, cookie, PTL_FAIL);
-		return(PTL_FAIL);
+		ptl_finalize(ni, private, cookie, -EIO);
+		return(-EIO);
 	}
 
 	srxd = (gmnal_srxd_t*)private;
@@ -345,7 +345,7 @@ gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
 	 *	let portals know receive is complete
 	 */
 	CDEBUG(D_PORTALS, "calling ptl_finalize\n");
-	ptl_finalize(ni, private, cookie, PTL_OK);
+	ptl_finalize(ni, private, cookie, 0);
 	/*
 	 *	return buffer so it can be used again
 	 */
@@ -355,7 +355,7 @@ gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
 					   srxd->gmsize, GM_LOW_PRIORITY, 0);
 	GMNAL_GM_UNLOCK(nal_data);
 
-	return(PTL_OK);
+	return(0);
 }
 
 
@@ -365,9 +365,9 @@ gmnal_small_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie)
  *	Copy headers to wired buffer and initiate gm_send from the wired buffer.
  *	The callback function informs when the send is complete.
  */
-ptl_err_t
+int
 gmnal_small_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-		ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid,
+		ptl_hdr_t *hdr, int type, lnet_nid_t global_nid, lnet_pid_t pid,
 		gmnal_stxd_t *stxd, int size)
 {
 	gmnal_data_t	*nal_data = (gmnal_data_t*)ni->ni_data;
@@ -394,7 +394,7 @@ gmnal_small_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 	GMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "Failed to obtain local id\n");
-		return(PTL_FAIL);
+		return(-ENETDOWN);
 	}
 	CDEBUG(D_INFO, "Local Node_id is [%u][%x]\n", local_nid, local_nid);
 
@@ -441,7 +441,7 @@ gmnal_small_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 	GMNAL_GM_UNLOCK(nal_data);
 	CDEBUG(D_INFO, "done\n");
 		
-	return(PTL_OK);
+	return(0);
 }
 
 
@@ -588,7 +588,7 @@ gmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		return;
 	}
 	gmnal_return_stxd(nal_data, stxd);
-	ptl_finalize(ni, stxd, cookie, PTL_OK);
+	ptl_finalize(ni, stxd, cookie, 0);
 	return;
 }
 
@@ -642,7 +642,7 @@ void gmnal_drop_sends_callback(struct gm_port *gm_port, void *context,
  */
 int
 gmnal_large_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-	        ptl_hdr_t *hdr, int type, ptl_nid_t global_nid, ptl_pid_t pid, 
+	        ptl_hdr_t *hdr, int type, lnet_nid_t global_nid, lnet_pid_t pid, 
 		unsigned int niov, struct iovec *iov, size_t offset, int size)
 {
 
@@ -759,7 +759,7 @@ gmnal_large_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 			}
 			GMNAL_GM_UNLOCK(nal_data);
 			gmnal_return_stxd(nal_data, stxd);
-			return(PTL_FAIL);
+			return(-EIO);
 		}
 
 		GMNAL_GM_UNLOCK(nal_data);
@@ -789,7 +789,7 @@ gmnal_large_tx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 	
 	CDEBUG(D_INFO, "done\n");
 		
-	return(PTL_OK);
+	return(0);
 }
 
 /*
@@ -829,8 +829,8 @@ gmnal_large_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 
 	if (!srxd) {
 		CDEBUG(D_ERROR, "gmnal_large_rx no context\n");
-		ptl_finalize(ni, private, cookie, PTL_FAIL);
-		return(PTL_FAIL);
+		ptl_finalize(ni, private, cookie, -EIO);
+		return(-EIO);
 	}
 
 	buffer = srxd->buffer;
@@ -899,7 +899,7 @@ gmnal_large_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 			 *	give back srxd and buffer. Send NACK to sender
 			 */
                         PORTAL_FREE(srxd->riov, nriov_dup*(sizeof(struct iovec)));
-			return(PTL_FAIL);
+			return(-EIO);
 		}
 		GMNAL_GM_UNLOCK(nal_data);
 		riov++;
@@ -916,7 +916,7 @@ gmnal_large_rx(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
 
 	CDEBUG(D_INFO, "lgmanl_large_rx done\n");
 
-	return(PTL_OK);
+	return(0);
 }
 
 
@@ -1140,7 +1140,7 @@ gmnal_remote_get_callback(gm_port_t *gm_port, void *context,
 	 *	Let our client application proceed
 	 */	
 	CDEBUG(D_ERROR, "final callback context[%p]\n", srxd);
-	ptl_finalize(ni, srxd, srxd->cookie, PTL_OK);
+	ptl_finalize(ni, srxd, srxd->cookie, 0);
 
 	/*
 	 *	send an ack to the sender to let him know we got the data
@@ -1305,7 +1305,7 @@ gmnal_large_tx_ack_received(gmnal_data_t *nal_data, gmnal_srxd_t *srxd)
 
 	CDEBUG(D_INFO, "gmnal_large_tx_ack_received stxd [%p]\n", stxd);
 
-	ptl_finalize(ni, stxd, stxd->cookie, PTL_OK);
+	ptl_finalize(ni, stxd, stxd->cookie, 0);
 
 	/*
 	 *	extract the iovec from the stxd, deregister the memory.

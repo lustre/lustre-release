@@ -233,7 +233,7 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
         int           niov = tx->tx_nkiov;
 #endif
         struct socket *sock = conn->ksnc_sock;
-        ptl_kiov_t    *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int            nob;
         int            rc;
         int            i;
@@ -428,7 +428,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov; 
         int           niov = conn->ksnc_rx_nkiov;
 #endif
-        ptl_kiov_t    *kiov = conn->ksnc_rx_kiov;
+        lnet_kiov_t    *kiov = conn->ksnc_rx_kiov;
         int           nob;
         int           rc;
         int           i;

@@ -37,10 +37,10 @@ ptl_md_unlink(ptl_libmd_t *md)
                 md->md_flags |= PTL_MD_FLAG_ZOMBIE;
 
                 /* Disassociate from ME (if any), and unlink it if it was created
-                 * with PTL_UNLINK */
+                 * with LNET_UNLINK */
                 if (me != NULL) {
                         me->me_md = NULL;
-                        if (me->me_unlink == PTL_UNLINK)
+                        if (me->me_unlink == LNET_UNLINK)
                                 ptl_me_unlink(me);
                 }
 
@@ -66,7 +66,7 @@ ptl_md_unlink(ptl_libmd_t *md)
 
 /* must be called with PTL_LOCK held */
 static int
-lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
+lib_md_build(ptl_libmd_t *lmd, lnet_md_t *umd, int unlink)
 {
         ptl_eq_t  *eq = NULL;
         int        i;
@@ -78,18 +78,20 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
          * otherwise caller may only ptl_md_free() it.
          */
 
-        if (!LNetHandleIsEqual (umd->eq_handle, PTL_EQ_NONE)) {
+        if (!LNetHandleIsEqual (umd->eq_handle, LNET_EQ_NONE)) {
                 eq = ptl_handle2eq(&umd->eq_handle);
                 if (eq == NULL)
-                        return PTL_EQ_INVALID;
+                        return -ENOENT;
         }
 
         /* This implementation doesn't know how to create START events or
          * disable END events.  Best to LASSERT our caller is compliant so
          * we find out quickly...  */
-        LASSERT (eq == NULL ||
-                 ((umd->options & PTL_MD_EVENT_START_DISABLE) != 0 &&
-                  (umd->options & PTL_MD_EVENT_END_DISABLE) == 0));
+        /*  TODO - reevaluate what should be here in light of 
+         * the removal of the start and end events
+         * maybe there we shouldn't even allow LNET_EQ_NONE!)
+        LASSERT (eq == NULL);
+         */
 
         lmd->md_me = NULL;
         lmd->md_start = umd->start;
@@ -100,12 +102,12 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
         lmd->md_eq = eq;
         lmd->md_threshold = umd->threshold;
         lmd->md_pending = 0;
-        lmd->md_flags = (unlink == PTL_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
+        lmd->md_flags = (unlink == LNET_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
 
-        if ((umd->options & PTL_MD_IOVEC) != 0) {
+        if ((umd->options & LNET_MD_IOVEC) != 0) {
 
-                if ((umd->options & PTL_MD_KIOV) != 0) /* Can't specify both */
-                        return PTL_MD_ILLEGAL;
+                if ((umd->options & LNET_MD_KIOV) != 0) /* Can't specify both */
+                        return -EINVAL;
 
                 lmd->md_niov = niov = umd->length;
                 memcpy(lmd->md_iov.iov, umd->start,
@@ -114,21 +116,21 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
                 for (i = 0; i < niov; i++) {
                         /* We take the base address on trust */
                         if (lmd->md_iov.iov[i].iov_len <= 0) /* invalid length */
-                                return PTL_MD_ILLEGAL;
+                                return -EINVAL;
 
                         total_length += lmd->md_iov.iov[i].iov_len;
                 }
 
                 lmd->md_length = total_length;
 
-                if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
+                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
                     (umd->max_size < 0 ||
                      umd->max_size > total_length)) // illegal max_size
-                        return PTL_MD_ILLEGAL;
+                        return -EINVAL;
 
-        } else if ((umd->options & PTL_MD_KIOV) != 0) {
+        } else if ((umd->options & LNET_MD_KIOV) != 0) {
 #ifndef __KERNEL__
-                return PTL_MD_ILLEGAL;
+                return -EINVAL;
 #else
                 lmd->md_niov = niov = umd->length;
                 memcpy(lmd->md_iov.kiov, umd->start,
@@ -138,17 +140,17 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
                         /* We take the page pointer on trust */
                         if (lmd->md_iov.kiov[i].kiov_offset +
                             lmd->md_iov.kiov[i].kiov_len > PAGE_SIZE )
-                                return PTL_VAL_FAILED; /* invalid length */
+                                return -EINVAL; /* invalid length */
 
                         total_length += lmd->md_iov.kiov[i].kiov_len;
                 }
 
                 lmd->md_length = total_length;
 
-                if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
+                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
                     (umd->max_size < 0 ||
                      umd->max_size > total_length)) // illegal max_size
-                        return PTL_MD_ILLEGAL;
+                        return -EINVAL;
 #endif
         } else {   /* contiguous */
                 lmd->md_length = umd->length;
@@ -156,10 +158,10 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
                 lmd->md_iov.iov[0].iov_base = umd->start;
                 lmd->md_iov.iov[0].iov_len = umd->length;
 
-                if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
+                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
                     (umd->max_size < 0 ||
                      umd->max_size > umd->length)) // illegal max_size
-                        return PTL_MD_ILLEGAL;
+                        return -EINVAL;
         }
 
         if (eq != NULL)
@@ -169,12 +171,12 @@ lib_md_build(ptl_libmd_t *lmd, ptl_md_t *umd, int unlink)
         ptl_initialise_handle (&lmd->md_lh, PTL_COOKIE_TYPE_MD);
         list_add (&lmd->md_list, &ptl_apini.apini_active_mds);
 
-        return PTL_OK;
+        return 0;
 }
 
 /* must be called with PTL_LOCK held */
 void
-ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd)
+ptl_md_deconstruct(ptl_libmd_t *lmd, lnet_md_t *umd)
 {
         /* NB this doesn't copy out all the iov entries so when a
          * discontiguous MD is copied out, the target gets to know the
@@ -182,7 +184,7 @@ ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd)
          * and that's all.
          */
         umd->start = lmd->md_start;
-        umd->length = ((lmd->md_options & (PTL_MD_IOVEC | PTL_MD_KIOV)) == 0) ?
+        umd->length = ((lmd->md_options & (LNET_MD_IOVEC | LNET_MD_KIOV)) == 0) ?
                       lmd->md_length : lmd->md_niov;
         umd->threshold = lmd->md_threshold;
         umd->max_size = lmd->md_max_size;
@@ -191,9 +193,9 @@ ptl_md_deconstruct(ptl_libmd_t *lmd, ptl_md_t *umd)
         ptl_eq2handle(&umd->eq_handle, lmd->md_eq);
 }
 
-ptl_err_t
-LNetMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
-            ptl_unlink_t unlink, ptl_handle_md_t *handle)
+int
+LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
+            lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
         ptl_me_t     *me;
         ptl_libmd_t  *md;
@@ -203,31 +205,31 @@ LNetMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
-        if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
+        if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
-                return PTL_IOV_INVALID;
+                return -EINVAL;
 
         md = ptl_md_alloc(&umd);
         if (md == NULL)
-                return PTL_NO_SPACE;
+                return -ENOMEM;
 
         PTL_LOCK(flags);
 
         me = ptl_handle2me(&meh);
         if (me == NULL) {
-                rc = PTL_ME_INVALID;
+                rc = -ENOENT;
         } else if (me->me_md != NULL) {
-                rc = PTL_ME_IN_USE;
+                rc = -EBUSY;
         } else {
                 rc = lib_md_build(md, &umd, unlink);
-                if (rc == PTL_OK) {
+                if (rc == 0) {
                         me->me_md = md;
                         md->md_me = me;
 
                         ptl_md2handle(handle, md);
 
                         PTL_UNLOCK(flags);
-                        return (PTL_OK);
+                        return (0);
                 }
         }
 
@@ -237,9 +239,9 @@ LNetMDAttach(ptl_handle_me_t meh, ptl_md_t umd,
         return (rc);
 }
 
-ptl_err_t
-LNetMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
-          ptl_unlink_t unlink, ptl_handle_md_t *handle)
+int
+LNetMDBind(lnet_handle_ni_t nih, lnet_md_t umd,
+          lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
         ptl_libmd_t  *md;
         unsigned long flags;
@@ -248,23 +250,23 @@ LNetMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
         LASSERT (ptl_apini.apini_init);
         LASSERT (ptl_apini.apini_refcount > 0);
         
-        if ((umd.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
+        if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
-                return PTL_IOV_INVALID;
+                return -EINVAL;
 
         md = ptl_md_alloc(&umd);
         if (md == NULL)
-                return PTL_NO_SPACE;
+                return -ENOMEM;
 
         PTL_LOCK(flags);
 
         rc = lib_md_build(md, &umd, unlink);
 
-        if (rc == PTL_OK) {
+        if (rc == 0) {
                 ptl_md2handle(handle, md);
 
                 PTL_UNLOCK(flags);
-                return (PTL_OK);
+                return (0);
         }
 
         ptl_md_free (md);
@@ -273,10 +275,10 @@ LNetMDBind(ptl_handle_ni_t nih, ptl_md_t umd,
         return (rc);
 }
 
-ptl_err_t
-LNetMDUnlink (ptl_handle_md_t mdh)
+int
+LNetMDUnlink (lnet_handle_md_t mdh)
 {
-        ptl_event_t      ev;
+        lnet_event_t      ev;
         ptl_libmd_t     *md;
         unsigned long    flags;
 
@@ -288,7 +290,7 @@ LNetMDUnlink (ptl_handle_md_t mdh)
         md = ptl_handle2md(&mdh);
         if (md == NULL) {
                 PTL_UNLOCK(flags);
-                return PTL_MD_INVALID;
+                return -ENOENT;
         }
 
         /* If the MD is busy, ptl_md_unlink just marks it for deletion, and
@@ -299,8 +301,8 @@ LNetMDUnlink (ptl_handle_md_t mdh)
             md->md_pending == 0) {
                 memset(&ev, 0, sizeof(ev));
 
-                ev.type = PTL_EVENT_UNLINK;
-                ev.ni_fail_type = PTL_OK;
+                ev.type = LNET_EVENT_UNLINK;
+                ev.ni_fail_type = 0;
                 ev.unlinked = 1;
                 ptl_md_deconstruct(md, &ev.md);
                 ptl_md2handle(&ev.md_handle, md);
@@ -311,6 +313,6 @@ LNetMDUnlink (ptl_handle_md_t mdh)
         ptl_md_unlink(md);
 
         PTL_UNLOCK(flags);
-        return PTL_OK;
+        return 0;
 }
 

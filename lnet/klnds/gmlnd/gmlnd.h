@@ -315,17 +315,17 @@ extern gmnal_data_t	*global_nal_data;
  *	CB NAL
  */
 
-ptl_err_t gmnal_cb_send(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-	int, ptl_nid_t, ptl_pid_t, unsigned int, struct iovec *, size_t, size_t);
+int gmnal_cb_send(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
+	int, lnet_nid_t, lnet_pid_t, unsigned int, struct iovec *, size_t, size_t);
 
-ptl_err_t gmnal_cb_send_pages(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-	int, ptl_nid_t, ptl_pid_t, unsigned int, ptl_kiov_t *, size_t, size_t);
+int gmnal_cb_send_pages(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
+	int, lnet_nid_t, lnet_pid_t, unsigned int, lnet_kiov_t *, size_t, size_t);
 
-ptl_err_t gmnal_cb_recv(ptl_ni_t *, void *, ptl_msg_t *, 
+int gmnal_cb_recv(ptl_ni_t *, void *, ptl_msg_t *, 
 	unsigned int, struct iovec *, size_t, size_t, size_t);
 
-ptl_err_t gmnal_cb_recv_pages(ptl_ni_t *, void *, ptl_msg_t *, 
-	unsigned int, ptl_kiov_t *, size_t, size_t, size_t);
+int gmnal_cb_recv_pages(ptl_ni_t *, void *, ptl_msg_t *, 
+	unsigned int, lnet_kiov_t *, size_t, size_t, size_t);
 
 int gmnal_init(void);
 
@@ -381,9 +381,9 @@ void		gmnal_remove_rxtwe(gmnal_data_t *);
 /*
  *	Small messages
  */
-ptl_err_t	gmnal_small_rx(ptl_ni_t *, void *, ptl_msg_t *);
-ptl_err_t	gmnal_small_tx(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-				int, ptl_nid_t, ptl_pid_t,
+int	gmnal_small_rx(ptl_ni_t *, void *, ptl_msg_t *);
+int	gmnal_small_tx(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
+				int, lnet_nid_t, lnet_pid_t,
 				gmnal_stxd_t*, int);
 void		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 
@@ -396,7 +396,7 @@ int 		gmnal_large_rx(ptl_ni_t *, void *, ptl_msg_t *, unsigned int,
 				struct iovec *, size_t, size_t, size_t);
 
 int 		gmnal_large_tx(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *, 
-				int, ptl_nid_t, ptl_pid_t, unsigned int, 
+				int, lnet_nid_t, lnet_pid_t, unsigned int, 
 				struct iovec*, size_t, int);
 
 void 		gmnal_large_tx_callback(gm_port_t *, void *, gm_status_t);

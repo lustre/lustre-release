@@ -26,14 +26,14 @@
 
 #include <portals/lib-p30.h>
 
-ptl_err_t
-LNetMEAttach(ptl_handle_ni_t interface, 
-            ptl_pt_index_t portal,
-            ptl_process_id_t match_id, 
-            ptl_match_bits_t match_bits,
-            ptl_match_bits_t ignore_bits,
-            ptl_unlink_t unlink, ptl_ins_pos_t pos, 
-            ptl_handle_me_t *handle)
+int
+LNetMEAttach(lnet_handle_ni_t interface, 
+            lnet_pt_index_t portal,
+            lnet_process_id_t match_id, 
+            lnet_match_bits_t match_bits,
+            lnet_match_bits_t ignore_bits,
+            lnet_unlink_t unlink, lnet_ins_pos_t pos, 
+            lnet_handle_me_t *handle)
 {
         ptl_me_t      *me;
         unsigned long  flags;
@@ -42,11 +42,11 @@ LNetMEAttach(ptl_handle_ni_t interface,
         LASSERT (ptl_apini.apini_refcount > 0);
         
         if (portal >= ptl_apini.apini_nportals)
-                return PTL_PT_INDEX_INVALID;
+                return -EINVAL;
 
         me = ptl_me_alloc();
         if (me == NULL)
-                return PTL_NO_SPACE;
+                return -ENOMEM;
 
         PTL_LOCK(flags);
 
@@ -58,7 +58,7 @@ LNetMEAttach(ptl_handle_ni_t interface,
 
         ptl_initialise_handle (&me->me_lh, PTL_COOKIE_TYPE_ME);
 
-        if (pos == PTL_INS_AFTER)
+        if (pos == LNET_INS_AFTER)
                 list_add_tail(&me->me_list, &(ptl_apini.apini_portals[portal]));
         else
                 list_add(&me->me_list, &(ptl_apini.apini_portals[portal]));
@@ -67,16 +67,16 @@ LNetMEAttach(ptl_handle_ni_t interface,
 
         PTL_UNLOCK(flags);
 
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t 
-LNetMEInsert(ptl_handle_me_t current_meh, 
-            ptl_process_id_t match_id, 
-            ptl_match_bits_t match_bits, 
-            ptl_match_bits_t ignore_bits,
-            ptl_unlink_t unlink, ptl_ins_pos_t pos,
-            ptl_handle_me_t *handle)
+int 
+LNetMEInsert(lnet_handle_me_t current_meh, 
+            lnet_process_id_t match_id, 
+            lnet_match_bits_t match_bits, 
+            lnet_match_bits_t ignore_bits,
+            lnet_unlink_t unlink, lnet_ins_pos_t pos,
+            lnet_handle_me_t *handle)
 {
         ptl_me_t     *current_me;
         ptl_me_t     *new_me;
@@ -87,7 +87,7 @@ LNetMEInsert(ptl_handle_me_t current_meh,
         
         new_me = ptl_me_alloc();
         if (new_me == NULL)
-                return PTL_NO_SPACE;
+                return -ENOMEM;
 
         PTL_LOCK(flags);
 
@@ -96,7 +96,7 @@ LNetMEInsert(ptl_handle_me_t current_meh,
                 ptl_me_free (new_me);
 
                 PTL_UNLOCK(flags);
-                return PTL_ME_INVALID;
+                return -ENOENT;
         }
 
         new_me->me_match_id = match_id;
@@ -107,7 +107,7 @@ LNetMEInsert(ptl_handle_me_t current_meh,
 
         ptl_initialise_handle (&new_me->me_lh, PTL_COOKIE_TYPE_ME);
 
-        if (pos == PTL_INS_AFTER)
+        if (pos == LNET_INS_AFTER)
                 list_add_tail(&new_me->me_list, &current_me->me_list);
         else
                 list_add(&new_me->me_list, &current_me->me_list);
@@ -116,11 +116,11 @@ LNetMEInsert(ptl_handle_me_t current_meh,
 
         PTL_UNLOCK(flags);
 
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t
-LNetMEUnlink(ptl_handle_me_t meh)
+int
+LNetMEUnlink(lnet_handle_me_t meh)
 {
         unsigned long flags;
         ptl_me_t     *me;
@@ -133,10 +133,10 @@ LNetMEUnlink(ptl_handle_me_t meh)
 
         me = ptl_handle2me(&meh);
         if (me == NULL) {
-                rc = PTL_ME_INVALID;
+                rc = -ENOENT;
         } else {
                 ptl_me_unlink(me);
-                rc = PTL_OK;
+                rc = 0;
         }
 
         PTL_UNLOCK(flags);

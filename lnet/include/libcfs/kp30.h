@@ -225,11 +225,11 @@ char      *libcfs_nal2modname(int type);
 char      *libcfs_nal2str(int type);
 int        libcfs_str2nal(char *str);
 char      *libcfs_net2str(__u32 net);
-char      *libcfs_nid2str(ptl_nid_t nid);
+char      *libcfs_nid2str(lnet_nid_t nid);
 __u32      libcfs_str2net(char *str);
-ptl_nid_t  libcfs_str2nid(char *str);
-int        libcfs_str2anynid(ptl_nid_t *nid, char *str);
-char      *libcfs_id2str(ptl_process_id_t id);
+lnet_nid_t  libcfs_str2nid(char *str);
+int        libcfs_str2anynid(lnet_nid_t *nid, char *str);
+char      *libcfs_id2str(lnet_process_id_t id);
 
 #if !CRAY_PORTALS
 /* how a lustre portals NID encodes net:address */

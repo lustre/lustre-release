@@ -306,7 +306,7 @@ int jt_ptl_network(int argc, char **argv)
         return -1;
 #else
         struct portal_ioctl_data data;
-        __u32                    net = PTL_NIDNET(PTL_NID_ANY);
+        __u32                    net = PTL_NIDNET(LNET_NID_ANY);
         int                      set = argc >= 2;
         int                      count;
         int                      rc;
@@ -332,7 +332,7 @@ int jt_ptl_network(int argc, char **argv)
         
         if (set) {
                 net = libcfs_str2net(argv[1]);
-                if (net == PTL_NIDNET(PTL_NID_ANY)) {
+                if (net == PTL_NIDNET(LNET_NID_ANY)) {
                         fprintf(stderr, "Can't parse net %s\n", argv[1]);
                         return -1;
                 }
@@ -512,7 +512,7 @@ int
 jt_ptl_print_peers (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_process_id_t         id;
+        lnet_process_id_t         id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -568,7 +568,7 @@ int
 jt_ptl_add_peer (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_nid_t                nid;
+        lnet_nid_t                nid;
         __u32                    ip = 0;
         int                      port = 0;
         int                      rc;
@@ -595,7 +595,7 @@ jt_ptl_add_peer (int argc, char **argv)
         }
 
         nid = libcfs_str2nid(argv[1]);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse NID: %s\n", argv[1]);
                 return -1;
         }
@@ -632,7 +632,7 @@ int
 jt_ptl_del_peer (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_nid_t                nid = PTL_NID_ANY;
+        lnet_nid_t                nid = LNET_NID_ANY;
         __u32                    ip = 0;
         int                      rc;
 
@@ -685,7 +685,7 @@ int
 jt_ptl_print_connections (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_process_id_t         id;
+        lnet_process_id_t         id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -743,7 +743,7 @@ jt_ptl_print_connections (int argc, char **argv)
 int jt_ptl_disconnect(int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_nid_t                nid = PTL_NID_ANY;
+        lnet_nid_t                nid = LNET_NID_ANY;
         __u32                    ipaddr = 0;
         int                      rc;
 
@@ -788,7 +788,7 @@ int jt_ptl_push_connection (int argc, char **argv)
 {
         struct portal_ioctl_data data;
         int                      rc;
-        ptl_nid_t                nid = PTL_NID_ANY;
+        lnet_nid_t                nid = LNET_NID_ANY;
 
         if (argc > 2) {
                 fprintf(stderr, "usage: %s [nid]\n", argv[0]);
@@ -864,7 +864,7 @@ jt_ptl_print_active_txs (int argc, char **argv)
 int jt_ptl_ping(int argc, char **argv)
 {
         int       rc;
-        ptl_nid_t nid;
+        lnet_nid_t nid;
         long      count   = 1;
         long      size    = 4;
         long      timeout = 1;
@@ -876,7 +876,7 @@ int jt_ptl_ping(int argc, char **argv)
         }
 
         nid = libcfs_str2nid(argv[1]);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse nid \"%s\"\n", argv[1]);
                 return (-1);
         }
@@ -920,7 +920,7 @@ int jt_ptl_mynid(int argc, char **argv)
         return -1;
 #else
         struct portal_ioctl_data data;
-        ptl_nid_t                nid;
+        lnet_nid_t                nid;
         int rc;
 
         if (argc != 2) {
@@ -929,7 +929,7 @@ int jt_ptl_mynid(int argc, char **argv)
         }
 
         nid = libcfs_str2nid(argv[1]);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 fprintf(stderr, "Can't parse NID '%s'\n", argv[1]);
                 return -1;
         }
@@ -953,7 +953,7 @@ int
 jt_ptl_fail_nid (int argc, char **argv)
 {
         int                      rc;
-        ptl_nid_t                nid;
+        lnet_nid_t                nid;
         unsigned int             threshold;
         struct portal_ioctl_data data;
 
@@ -970,7 +970,7 @@ jt_ptl_fail_nid (int argc, char **argv)
         }
 
         if (argc < 3) {
-                threshold = PTL_MD_THRESH_INF;
+                threshold = LNET_MD_THRESH_INF;
         } else if (sscanf (argv[2], "%i", &threshold) != 1) {
                 fprintf (stderr, "Can't parse count \"%s\"\n", argv[2]);
                 return (-1);
@@ -994,7 +994,7 @@ int
 jt_ptl_add_route (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_nid_t                gateway_nid;
+        lnet_nid_t                gateway_nid;
         int                      rc;
         
         if (argc != 2)
@@ -1007,7 +1007,7 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
 
         gateway_nid = libcfs_str2nid(argv[1]);
-        if (gateway_nid == PTL_NID_ANY) {
+        if (gateway_nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse gateway NID \"%s\"\n", argv[1]);
                 return (-1);
         }
@@ -1029,7 +1029,7 @@ int
 jt_ptl_del_route (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        ptl_nid_t                nid;
+        lnet_nid_t                nid;
         int                      rc;
         
         if (argc != 2) {
@@ -1062,7 +1062,7 @@ jt_ptl_notify_router (int argc, char **argv)
 {
         struct portal_ioctl_data data;
         int                      enable;
-        ptl_nid_t                nid;
+        lnet_nid_t                nid;
         int                      rc;
         struct timeval           now;
         time_t                   when;
@@ -1075,7 +1075,7 @@ jt_ptl_notify_router (int argc, char **argv)
         }
 
         nid = libcfs_str2nid(argv[1]);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse target NID \"%s\"\n", argv[1]);
                 return (-1);
         }
@@ -1123,7 +1123,7 @@ jt_ptl_print_routes (int argc, char **argv)
         int                       rc;
         int                       index;
         __u32			  net;
-        ptl_nid_t		  nid;
+        lnet_nid_t		  nid;
         int                       alive;
 
         for (index = 0;;index++)

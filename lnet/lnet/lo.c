@@ -21,13 +21,13 @@
 
 #include <portals/lib-p30.h>
 
-ptl_err_t
+int
 lonal_send (ptl_ni_t        *ni,
 	    void            *private,
 	    ptl_msg_t       *ptlmsg,
 	    ptl_hdr_t       *hdr,
 	    int              type,
-	    ptl_process_id_t target,
+	    lnet_process_id_t target,
 	    int              routing,
 	    unsigned int     payload_niov,
 	    struct iovec    *payload_iov,
@@ -40,18 +40,18 @@ lonal_send (ptl_ni_t        *ni,
                 .lod_offset  = payload_offset,
                 .lod_nob     = payload_nob,
                 .lod_iov     = { .iov = payload_iov } };
-        ptl_err_t rc;
+        int rc;
 
         LASSERT (!routing);
 
         rc = ptl_parse(ni, hdr, &lod);
-        if (rc == PTL_OK)
-                ptl_finalize(ni, private, ptlmsg, PTL_OK);
+        if (rc == 0)
+                ptl_finalize(ni, private, ptlmsg, 0);
         
         return rc;
 }
 
-ptl_err_t
+int
 lonal_recv(ptl_ni_t     *ni,
 	   void         *private,
 	   ptl_msg_t    *ptlmsg,
@@ -118,21 +118,21 @@ lonal_recv(ptl_ni_t     *ni,
         } while (mlen > 0);
         
  out:
-        ptl_finalize(ni, private, ptlmsg, PTL_OK);
-        return PTL_OK;
+        ptl_finalize(ni, private, ptlmsg, 0);
+        return 0;
 }
 
 #ifdef __KERNEL__
-ptl_err_t
+int
 lonal_send_pages (ptl_ni_t        *ni,
 		  void            *private,
 		  ptl_msg_t       *ptlmsg,
 		  ptl_hdr_t       *hdr,
 		  int              type,
-		  ptl_process_id_t target,
+		  lnet_process_id_t target,
 		  int              routing,
 		  unsigned int     payload_niov,
-		  ptl_kiov_t      *payload_kiov,
+		  lnet_kiov_t      *payload_kiov,
 		  size_t           payload_offset,
 		  size_t           payload_nob)
 {
@@ -142,23 +142,23 @@ lonal_send_pages (ptl_ni_t        *ni,
                 .lod_offset   = payload_offset,
                 .lod_nob      = payload_nob,
                 .lod_iov      = { .kiov = payload_kiov } };
-        ptl_err_t   rc;
+        int   rc;
 
         LASSERT (!routing);
 
         rc = ptl_parse(ni, hdr, &lod);
-        if (rc == PTL_OK)
-                ptl_finalize(ni, private, ptlmsg, PTL_OK);
+        if (rc == 0)
+                ptl_finalize(ni, private, ptlmsg, 0);
         
         return rc;
 }
 
-ptl_err_t
+int
 lonal_recv_pages(ptl_ni_t     *ni,
 		 void         *private,
 		 ptl_msg_t    *ptlmsg,
 		 unsigned int  niov,
-		 ptl_kiov_t   *kiov,
+		 lnet_kiov_t   *kiov,
 		 size_t        offset,
 		 size_t        mlen,
 		 size_t        rlen)
@@ -244,8 +244,8 @@ lonal_recv_pages(ptl_ni_t     *ni,
                 kunmap(lod->lod_iov.kiov->kiov_page);
 
  out:
-        ptl_finalize(ni, private, ptlmsg, PTL_OK);
-        return PTL_OK;
+        ptl_finalize(ni, private, ptlmsg, 0);
+        return 0;
 }
 #endif
 
@@ -260,14 +260,14 @@ lonal_shutdown(ptl_ni_t *ni)
         lonal_instanced = 0;
 }
 
-ptl_err_t
+int
 lonal_startup (ptl_ni_t *ni)
 {
 	LASSERT (ni->ni_nal == &ptl_lonal);
 	LASSERT (!lonal_instanced);
         lonal_instanced = 1;
 
-	return (PTL_OK);
+	return (0);
 }
 
 ptl_nal_t ptl_lonal = {

@@ -116,7 +116,7 @@ procbridge __global_procbridge = NULL;
  * initializes the tcp nal. we define unix_failure as an
  * error wrapper to cut down clutter.
  */
-ptl_err_t
+int
 procbridge_startup (ptl_ni_t *ni)
 {
     procbridge p;
@@ -147,13 +147,14 @@ procbridge_startup (ptl_ni_t *ni)
     /* initialize notifier */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, p->notifier)) {
         perror("socketpair failed");
-        return PTL_FAIL;
+        rc = -errno;
+        return rc;
     }
 
     if (!register_io_handler(p->notifier[1], READ_HANDLER,
                 procbridge_notifier_handler, p)) {
         perror("fail to register notifier handler");
-        return PTL_FAIL;
+        return -ENOMEM;
     }
 
 #ifdef ENABLE_SELECT_DISPATCH
@@ -164,7 +165,7 @@ procbridge_startup (ptl_ni_t *ni)
     rc = pthread_create(&p->t, NULL, nal_thread, b);
     if (rc != 0) {
         perror("nal_init: pthread_create");
-        return PTL_FAIL;
+        return -ESRCH;
     }
 
     do {
@@ -178,9 +179,9 @@ procbridge_startup (ptl_ni_t *ni)
     } while (1);
 
     if (p->nal_flags & NAL_FLAG_STOPPED)
-        return PTL_FAIL;
+        return -ENETDOWN;
 
     tcpnal_running = 1;
 
-    return PTL_OK;
+    return 0;
 }

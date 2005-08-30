@@ -291,7 +291,7 @@ int
 ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 {
         struct socket *sock = conn->ksnc_sock;
-        ptl_kiov_t    *kiov = tx->tx_kiov;
+        lnet_kiov_t    *kiov = tx->tx_kiov;
         int            rc;
         int            nob;
 
@@ -438,7 +438,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
         int           niov = conn->ksnc_rx_nkiov;
 #endif
-        ptl_kiov_t   *kiov = conn->ksnc_rx_kiov;
+        lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
         struct msghdr msg = {
                 .msg_name       = NULL,
                 .msg_namelen    = 0,

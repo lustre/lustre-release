@@ -301,7 +301,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	PORTAL_MODULE_UNUSE;
 }
 
-ptl_err_t
+int
 kqswnal_startup (ptl_ni_t *ni)
 {
 #if MULTIRAIL_EKC
@@ -320,12 +320,12 @@ kqswnal_startup (ptl_ni_t *ni)
 	/* Only 1 instance supported */
 	if (kqswnal_data.kqn_init != KQN_INIT_NOTHING) {
                 CERROR ("Only 1 instance supported\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
 
         if (ni->ni_interfaces[0] != NULL) {
                 CERROR("Explicit interface config not supported\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
         
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
@@ -366,13 +366,13 @@ kqswnal_startup (ptl_ni_t *ni)
 	if (kqswnal_data.kqn_ep == NULL) {
 		CERROR("Can't initialise EKC\n");
 		kqswnal_shutdown(ni);
-		return (PTL_IFACE_INVALID);
+		return (-ENODEV);
 	}
 
 	if (ep_waitfor_nodeid(kqswnal_data.kqn_ep) == ELAN_INVALID_NODE) {
 		CERROR("Can't get elan ID\n");
 		kqswnal_shutdown(ni);
-		return (PTL_IFACE_INVALID);
+		return (-ENODEV);
 	}
 #else
 	/**********************************************************************/
@@ -383,7 +383,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't get elan device 0\n");
 		kqswnal_shutdown(ni);
-		return (PTL_IFACE_INVALID);
+		return (-ENODEV);
 	}
 #endif
 
@@ -400,7 +400,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't allocate transmitter\n");
 		kqswnal_shutdown (ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 
 	/**********************************************************************/
@@ -414,7 +414,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't install small msg receiver\n");
 		kqswnal_shutdown (ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 
 	kqswnal_data.kqn_eprx_large = 
@@ -425,7 +425,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't install large msg receiver\n");
 		kqswnal_shutdown (ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 
 	/**********************************************************************/
@@ -441,7 +441,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve tx dma space\n");
 		kqswnal_shutdown(ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 #else
         dmareq.Waitfn   = DDI_DMA_SLEEP;
@@ -457,7 +457,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't reserve tx dma space\n");
 		kqswnal_shutdown (ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 #endif
 	/**********************************************************************/
@@ -473,7 +473,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve rx dma space\n");
 		kqswnal_shutdown(ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 #else
         dmareq.Waitfn   = DDI_DMA_SLEEP;
@@ -491,7 +491,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	{
 		CERROR ("Can't reserve rx dma space\n");
 		kqswnal_shutdown (ni);
-		return (PTL_NO_SPACE);
+		return (-ENOMEM);
 	}
 #endif
 	/**********************************************************************/
@@ -506,7 +506,7 @@ kqswnal_startup (ptl_ni_t *ni)
 		PORTAL_ALLOC (ktx, sizeof(*ktx));
 		if (ktx == NULL) {
 			kqswnal_shutdown (ni);
-			return (PTL_NO_SPACE);
+			return (-ENOMEM);
 		}
 
 		memset(ktx, 0, sizeof(*ktx));	/* NULL pointers; zero flags */
@@ -517,7 +517,7 @@ kqswnal_startup (ptl_ni_t *ni)
 		if (ktx->ktx_buffer == NULL)
 		{
 			kqswnal_shutdown (ni);
-			return (PTL_NO_SPACE);
+			return (-ENOMEM);
 		}
 
 		/* Map pre-allocated buffer NOW, to save latency on transmit */
@@ -565,7 +565,7 @@ kqswnal_startup (ptl_ni_t *ni)
 		PORTAL_ALLOC(krx, sizeof(*krx));
 		if (krx == NULL) {
 			kqswnal_shutdown(ni);
-			return (PTL_NO_SPACE);
+			return (-ENOMEM);
 		}
 
 		memset(krx, 0, sizeof(*krx)); /* clear flags, null pointers etc */
@@ -590,7 +590,7 @@ kqswnal_startup (ptl_ni_t *ni)
 			
 			if (page == NULL) {
 				kqswnal_shutdown (ni);
-				return (PTL_NO_SPACE);
+				return (-ENOMEM);
 			}
 
 			krx->krx_kiov[j].kiov_page = page;
@@ -649,7 +649,7 @@ kqswnal_startup (ptl_ni_t *ni)
 		{
 			CERROR ("failed ep_queue_receive %d\n", rc);
 			kqswnal_shutdown (ni);
-			return (PTL_FAIL);
+			return (-EIO);
 		}
 	}
 
@@ -661,12 +661,12 @@ kqswnal_startup (ptl_ni_t *ni)
 		{
 			CERROR ("failed to spawn scheduling thread: %d\n", rc);
 			kqswnal_shutdown (ni);
-			return (PTL_FAIL);
+			return (-ESRCH);
 		}
 	}
 
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
-	return (PTL_OK);
+	return (0);
 }
 
 void __exit

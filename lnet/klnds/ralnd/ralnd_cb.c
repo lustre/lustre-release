@@ -211,7 +211,7 @@ kranal_setup_virt_buffer (kra_tx_t *tx, int niov, struct iovec *iov,
 }
 
 int
-kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
+kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
                           int offset, int nob)
 {
         RAP_PHYS_REGION *phys = tx->tx_phys;
@@ -271,7 +271,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
 
 static inline int
 kranal_setup_rdma_buffer (kra_tx_t *tx, int niov,
-                          struct iovec *iov, ptl_kiov_t *kiov,
+                          struct iovec *iov, lnet_kiov_t *kiov,
                           int offset, int nob)
 {
         LASSERT ((iov == NULL) != (kiov == NULL));
@@ -390,7 +390,7 @@ kranal_unmap_buffer (kra_tx_t *tx)
 void
 kranal_tx_done (kra_tx_t *tx, int completion)
 {
-        ptl_err_t        ptlrc = (completion == 0) ? PTL_OK : PTL_FAIL;
+        int        ptlrc = (completion == 0) ? 0 : -EIO;
         unsigned long    flags;
         int              i;
 
@@ -452,7 +452,7 @@ kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx)
 }
 
 void
-kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
+kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
 {
         unsigned long    flags;
         kra_peer_t      *peer;
@@ -613,17 +613,17 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
         return 0;
 }
 
-ptl_err_t
+int
 kranal_do_send (ptl_ni_t        *ni,
                 void            *private,
                 ptl_msg_t       *ptlmsg,
                 ptl_hdr_t       *hdr,
                 int              type,
-                ptl_process_id_t target,
+                lnet_process_id_t target,
                 int              routing,
                 unsigned int     niov,
                 struct iovec    *iov,
-                ptl_kiov_t      *kiov,
+                lnet_kiov_t      *kiov,
                 int              offset,
                 int              nob)
 {
@@ -645,7 +645,7 @@ kranal_do_send (ptl_ni_t        *ni,
 
         if (routing) {
                 CERROR ("Can't route\n");
-                return PTL_FAIL;
+                return -EIO;
         }
 
         switch(type) {
@@ -661,7 +661,7 @@ kranal_do_send (ptl_ni_t        *ni,
                         if (nob > RANAL_FMA_MAX_DATA) {
                                 CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
                                        nob, target.nid);
-                                return PTL_FAIL;
+                                return -EIO;
                         }
                         break;                  /* RDMA not expected */
                 }
@@ -670,17 +670,17 @@ kranal_do_send (ptl_ni_t        *ni,
                 if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
                         CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
                                target.nid, conn->rac_rxmsg->ram_type);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx = kranal_get_idle_tx(0);
                 if (tx == NULL)
-                        return PTL_FAIL;
+                        return -EIO;
 
                 rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_conn = conn;
@@ -689,7 +689,7 @@ kranal_do_send (ptl_ni_t        *ni,
                 rc = kranal_map_buffer(tx);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 kranal_rdma(tx, RANAL_MSG_GET_DONE,
@@ -698,7 +698,7 @@ kranal_do_send (ptl_ni_t        *ni,
 
                 /* flag matched by consuming rx message */
                 kranal_consume_rxmsg(conn, NULL, 0);
-                return PTL_OK;
+                return 0;
         }
 
         case PTL_MSG_GET:
@@ -710,16 +710,16 @@ kranal_do_send (ptl_ni_t        *ni,
                  * IMMEDIATE GET if the sink buffer is mapped already and small
                  * enough for FMA */
 
-                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) == 0 &&
+                if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0 &&
                     ptlmsg->msg_md->md_length <= RANAL_FMA_MAX_DATA &&
                     ptlmsg->msg_md->md_length <= *kranal_tunables.kra_max_immediate)
                         break;
 
                 tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_GET_REQ);
                 if (tx == NULL)
-                        return PTL_NO_SPACE;
+                        return -ENOMEM;
 
-                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) == 0)
+                if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
                         rc = kranal_setup_virt_buffer(tx, ptlmsg->msg_md->md_niov,
                                                       ptlmsg->msg_md->md_iov.iov,
                                                       0, ptlmsg->msg_md->md_length);
@@ -729,21 +729,21 @@ kranal_do_send (ptl_ni_t        *ni,
                                                       0, ptlmsg->msg_md->md_length);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_ptlmsg[1] = ptl_create_reply_msg(ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR("Can't create reply for GET to "LPX64"\n", target.nid);
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.get.ragm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
                 kranal_launch_tx(tx, target.nid);
-                return PTL_OK;
+                return 0;
 
         case PTL_MSG_ACK:
                 LASSERT (nob == 0);
@@ -757,19 +757,19 @@ kranal_do_send (ptl_ni_t        *ni,
 
                 tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_PUT_REQ);
                 if (tx == NULL)
-                        return PTL_NO_SPACE;
+                        return -ENOMEM;
 
                 rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_ptlmsg[0] = ptlmsg;
                 tx->tx_msg.ram_u.putreq.raprm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
                 kranal_launch_tx(tx, target.nid);
-                return PTL_OK;
+                return 0;
         }
 
         LASSERT (kiov == NULL);
@@ -780,23 +780,23 @@ kranal_do_send (ptl_ni_t        *ni,
                                  in_interrupt()),
                                RANAL_MSG_IMMEDIATE);
         if (tx == NULL)
-                return PTL_NO_SPACE;
+                return -ENOMEM;
 
         rc = kranal_setup_immediate_buffer(tx, niov, iov, offset, nob);
         if (rc != 0) {
                 kranal_tx_done(tx, rc);
-                return PTL_FAIL;
+                return -EIO;
         }
 
         tx->tx_msg.ram_u.immediate.raim_hdr = *hdr;
         tx->tx_ptlmsg[0] = ptlmsg;
         kranal_launch_tx(tx, target.nid);
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t
+int
 kranal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
+             ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
              unsigned int niov, struct iovec *iov,
              size_t offset, size_t len)
 {
@@ -805,10 +805,10 @@ kranal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                               niov, iov, NULL, offset, len);
 }
 
-ptl_err_t
+int
 kranal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                   ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
-                   unsigned int niov, ptl_kiov_t *kiov,
+                   ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
+                   unsigned int niov, lnet_kiov_t *kiov,
                    size_t offset, size_t len)
 {
         return kranal_do_send(ni, private, cookie,
@@ -816,9 +816,9 @@ kranal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                               niov, NULL, kiov, offset, len);
 }
 
-ptl_err_t
+int
 kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-                unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
+                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                 int offset, int mlen, int rlen)
 {
         kra_conn_t  *conn = private;
@@ -837,21 +837,21 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         if (ptlmsg == NULL) {
                 /* GET or ACK or portals is discarding */
                 LASSERT (mlen == 0);
-                ptl_finalize(ni, NULL, ptlmsg, PTL_OK);
-                return PTL_OK;
+                ptl_finalize(ni, NULL, ptlmsg, 0);
+                return 0;
         }
 
         switch(rxmsg->ram_type) {
         default:
                 LBUG();
-                return PTL_FAIL;
+                return -EIO;
 
         case RANAL_MSG_IMMEDIATE:
                 if (mlen == 0) {
                         buffer = NULL;
                 } else if (kiov != NULL) {
                         CERROR("Can't recv immediate into paged buffer\n");
-                        return PTL_FAIL;
+                        return -EIO;
                 } else {
                         LASSERT (niov > 0);
                         while (offset >= iov->iov_len) {
@@ -862,30 +862,30 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                         }
                         if (mlen > iov->iov_len - offset) {
                                 CERROR("Can't handle immediate frags\n");
-                                return PTL_FAIL;
+                                return -EIO;
                         }
                         buffer = ((char *)iov->iov_base) + offset;
                 }
                 rc = kranal_consume_rxmsg(conn, buffer, mlen);
-                ptl_finalize(ni, NULL, ptlmsg, (rc == 0) ? PTL_OK : PTL_FAIL);
-                return PTL_OK;
+                ptl_finalize(ni, NULL, ptlmsg, (rc == 0) ? 0 : -EIO);
+                return 0;
 
         case RANAL_MSG_PUT_REQ:
                 tx = kranal_new_tx_msg(0, RANAL_MSG_PUT_ACK);
                 if (tx == NULL)
-                        return PTL_NO_SPACE;
+                        return -ENOMEM;
 
                 rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, mlen);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_conn = conn;
                 rc = kranal_map_buffer(tx);
                 if (rc != 0) {
                         kranal_tx_done(tx, rc);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_msg.ram_u.putack.rapam_src_cookie =
@@ -902,11 +902,11 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
                 /* flag matched by consuming rx message */
                 kranal_consume_rxmsg(conn, NULL, 0);
-                return PTL_OK;
+                return 0;
         }
 }
 
-ptl_err_t
+int
 kranal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
              unsigned int niov, struct iovec *iov,
              size_t offset, size_t mlen, size_t rlen)
@@ -915,9 +915,9 @@ kranal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                               offset, mlen, rlen);
 }
 
-ptl_err_t
+int
 kranal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                   unsigned int niov, ptl_kiov_t *kiov,
+                   unsigned int niov, lnet_kiov_t *kiov,
                    size_t offset, size_t mlen, size_t rlen)
 {
         return kranal_do_recv(ni, private, msg, niov, NULL, kiov,

@@ -1,9 +1,9 @@
 #
-# LP_CHECK_GCC_VERSION
+# LN_CHECK_GCC_VERSION
 #
 # Check compiler version
 #
-AC_DEFUN([LP_CHECK_GCC_VERSION],
+AC_DEFUN([LN_CHECK_GCC_VERSION],
 [AC_MSG_CHECKING([compiler version])
 PTL_CC_VERSION=`$CC --version | awk '/^gcc/{print $ 3}'`
 PTL_MIN_CC_VERSION="3.2.2"
@@ -20,11 +20,11 @@ fi
 ])
 
 #
-# LP_CONFIG_ZEROCOPY
+# LN_CONFIG_ZEROCOPY
 #
 # check if zerocopy is available/wanted
 #
-AC_DEFUN([LP_CONFIG_ZEROCOPY],
+AC_DEFUN([LN_CONFIG_ZEROCOPY],
 [AC_MSG_CHECKING([for zero-copy TCP support])
 AC_ARG_ENABLE([zerocopy],
 	AC_HELP_STRING([--disable-zerocopy],
@@ -44,11 +44,11 @@ fi
 ])
 
 #
-# LP_CONFIG_AFFINITY
+# LN_CONFIG_AFFINITY
 #
 # check if cpu affinity is available/wanted
 #
-AC_DEFUN([LP_CONFIG_AFFINITY],
+AC_DEFUN([LN_CONFIG_AFFINITY],
 [AC_ARG_ENABLE([affinity],
 	AC_HELP_STRING([--disable-affinity],
 		       [disable process/irq affinity]),
@@ -78,11 +78,11 @@ fi
 ])
 
 #
-# LP_CONFIG_QUADRICS
+# LN_CONFIG_QUADRICS
 #
 # check if quadrics support is in this kernel
 #
-AC_DEFUN([LP_CONFIG_QUADRICS],
+AC_DEFUN([LN_CONFIG_QUADRICS],
 [AC_MSG_CHECKING([for QsNet sources])
 AC_ARG_WITH([qsnet],
 	AC_HELP_STRING([--with-qsnet=path],
@@ -117,11 +117,11 @@ AC_SUBST(QSWNAL)
 ])
 
 #
-# LP_CONFIG_GM
+# LN_CONFIG_GM
 #
 # check if GM support is available
 #
-AC_DEFUN([LP_CONFIG_GM],
+AC_DEFUN([LN_CONFIG_GM],
 [LB_ARG_LIBS_INCLUDES([Myrinet],[gm])
 if test x$gm_includes != x ; then
 	GMCPPFLAGS="-I$gm_includes"
@@ -146,10 +146,10 @@ AC_SUBST(ENABLE_GM)
 ])
 
 #
-# LP_CONFIG_OPENIB
+# LN_CONFIG_OPENIB
 #
 # check for OpenIB in the kernel
-AC_DEFUN([LP_CONFIG_OPENIB],[
+AC_DEFUN([LN_CONFIG_OPENIB],[
 AC_MSG_CHECKING([whether to enable OpenIB support])
 # set default
 OPENIBPATH="$LINUX/drivers/infiniband"
@@ -224,16 +224,16 @@ AC_SUBST(OPENIBNAL)
 ])
 
 #
-# LP_CONFIG_IIB
+# LN_CONFIG_IIB
 #
 # check for infinicon infiniband support
 #
 #
-# LP_CONFIG_IIB
+# LN_CONFIG_IIB
 #
 # check for infinicon infiniband support
 #
-AC_DEFUN([LP_CONFIG_IIB],[
+AC_DEFUN([LN_CONFIG_IIB],[
 AC_MSG_CHECKING([whether to enable Infinicon support])
 # set default
 IIBPATH="/usr/include"
@@ -302,11 +302,11 @@ AC_SUBST(IIBNAL)
 ])
 
 #
-# LP_CONFIG_VIB
+# LN_CONFIG_VIB
 #
 # check for Voltaire infiniband support
 #
-AC_DEFUN([LP_CONFIG_VIB],
+AC_DEFUN([LN_CONFIG_VIB],
 [AC_MSG_CHECKING([whether to enable Voltaire IB support])
 VIBPATH=""
 AC_ARG_WITH([vib],
@@ -423,11 +423,11 @@ AC_SUBST(VIBNAL)
 ])
 
 #
-# LP_CONFIG_RANAL
+# LN_CONFIG_RANAL
 #
 # check whether to use the RapidArray nal
 #
-AC_DEFUN([LP_CONFIG_RANAL],
+AC_DEFUN([LN_CONFIG_RANAL],
 [#### Rapid Array
 AC_MSG_CHECKING([if RapidArray kernel headers are present])
 # placeholder
@@ -458,11 +458,11 @@ AC_SUBST(RANAL)
 ])
 
 #
-# LP_STRUCT_PAGE_LIST
+# LN_STRUCT_PAGE_LIST
 #
 # 2.6.4 no longer has page->list
 #
-AC_DEFUN([LP_STRUCT_PAGE_LIST],
+AC_DEFUN([LN_STRUCT_PAGE_LIST],
 [AC_MSG_CHECKING([if struct page has a list field])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/mm.h>
@@ -478,11 +478,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_STRUCT_SIGHAND
+# LN_STRUCT_SIGHAND
 #
 # red hat 2.4 adds sighand to struct task_struct
 #
-AC_DEFUN([LP_STRUCT_SIGHAND],
+AC_DEFUN([LN_STRUCT_SIGHAND],
 [AC_MSG_CHECKING([if task_struct has a sighand field])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -498,11 +498,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_FUNC_CPU_ONLINE
+# LN_FUNC_CPU_ONLINE
 #
 # cpu_online is different in rh 2.4, vanilla 2.4, and 2.6
 #
-AC_DEFUN([LP_FUNC_CPU_ONLINE],
+AC_DEFUN([LN_FUNC_CPU_ONLINE],
 [AC_MSG_CHECKING([if kernel defines cpu_online()])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -517,11 +517,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_TYPE_CPUMASK_T
+# LN_TYPE_CPUMASK_T
 #
 # same goes for cpumask_t
 #
-AC_DEFUN([LP_TYPE_CPUMASK_T],
+AC_DEFUN([LN_TYPE_CPUMASK_T],
 [AC_MSG_CHECKING([if kernel defines cpumask_t])
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
@@ -536,11 +536,11 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# LP_FUNC_SHOW_TASK
+# LN_FUNC_SHOW_TASK
 #
 # we export show_task(), but not all kernels have it (yet)
 #
-AC_DEFUN([LP_FUNC_SHOW_TASK],
+AC_DEFUN([LN_FUNC_SHOW_TASK],
 [AC_MSG_CHECKING([if kernel exports show_task])
 have_show_task=0
 for file in ksyms sched ; do
@@ -559,56 +559,56 @@ fi
 ])
 
 #
-# LP_PROG_LINUX
+# LN_PROG_LINUX
 #
 # Portals linux kernel checks
 #
-AC_DEFUN([LP_PROG_LINUX],
-[LP_CONFIG_ZEROCOPY
-LP_CONFIG_AFFINITY
-LP_CONFIG_QUADRICS
-LP_CONFIG_GM
-LP_CONFIG_OPENIB
-LP_CONFIG_VIB
-LP_CONFIG_IIB
-LP_CONFIG_RANAL
+AC_DEFUN([LN_PROG_LINUX],
+[LN_CONFIG_ZEROCOPY
+LN_CONFIG_AFFINITY
+LN_CONFIG_QUADRICS
+LN_CONFIG_GM
+LN_CONFIG_OPENIB
+LN_CONFIG_VIB
+LN_CONFIG_IIB
+LN_CONFIG_RANAL
 
-LP_STRUCT_PAGE_LIST
-LP_STRUCT_SIGHAND
-LP_FUNC_CPU_ONLINE
-LP_TYPE_CPUMASK_T
-LP_FUNC_SHOW_TASK
+LN_STRUCT_PAGE_LIST
+LN_STRUCT_SIGHAND
+LN_FUNC_CPU_ONLINE
+LN_TYPE_CPUMASK_T
+LN_FUNC_SHOW_TASK
 ])
 
 #
-# LP_PROG_DARWIN
+# LN_PROG_DARWIN
 #
 # Darwin checks
 #
-AC_DEFUN([LP_PROG_DARWIN],
+AC_DEFUN([LN_PROG_DARWIN],
 [LB_DARWIN_CHECK_FUNCS([get_preemption_level])
 ])
 
 #
-# LP_PATH_DEFAULTS
+# LN_PATH_DEFAULTS
 #
 # default paths for installed files
 #
-AC_DEFUN([LP_PATH_DEFAULTS],
+AC_DEFUN([LN_PATH_DEFAULTS],
 [
 ])
 
 #
-# LP_CONFIGURE
+# LN_CONFIGURE
 #
 # other configure checks
 #
-AC_DEFUN([LP_CONFIGURE],
-[# portals/utils/portals.c
+AC_DEFUN([LN_CONFIGURE],
+[# lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h sys/ioctl.h])
 AC_CHECK_FUNCS([gethostbyname socket connect])
 
-# portals/utils/debug.c
+# lnet/utils/debug.c
 AC_CHECK_HEADERS([linux/version.h])
 
 AC_CHECK_TYPE([spinlock_t],
@@ -616,7 +616,7 @@ AC_CHECK_TYPE([spinlock_t],
 	[],
 	[#include <linux/spinlock.h>])
 
-# portals/utils/wirecheck.c
+# lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])
 
 # --------  Check for required packages  --------------
@@ -707,11 +707,11 @@ fi
 ])
 
 #
-# LP_CONDITIONALS
+# LN_CONDITIONALS
 #
-# AM_CONDITOINAL defines for portals
+# AM_CONDITOINAL defines for lnet
 #
-AC_DEFUN([LP_CONDITIONALS],
+AC_DEFUN([LN_CONDITIONALS],
 [AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
@@ -721,54 +721,54 @@ AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
 ])
 
 #
-# LP_CONFIG_FILES
+# LN_CONFIG_FILES
 #
 # files that should be generated with AC_OUTPUT
 #
-AC_DEFUN([LP_CONFIG_FILES],
+AC_DEFUN([LN_CONFIG_FILES],
 [AC_CONFIG_FILES([
-portals/Kernelenv
-portals/Makefile
-portals/autoMakefile
-portals/autoconf/Makefile
-portals/doc/Makefile
-portals/include/Makefile
-portals/include/libcfs/Makefile
-portals/include/libcfs/linux/Makefile
-portals/include/portals/Makefile
-portals/include/portals/linux/Makefile
-portals/knals/Makefile
-portals/knals/autoMakefile
-portals/knals/gmnal/Makefile
-portals/knals/gmnal/autoMakefile
-portals/knals/openibnal/Makefile
-portals/knals/openibnal/autoMakefile
-portals/knals/iibnal/Makefile
-portals/knals/iibnal/autoMakefile
-portals/knals/vibnal/Makefile
-portals/knals/vibnal/autoMakefile
-portals/knals/qswnal/Makefile
-portals/knals/qswnal/autoMakefile
-portals/knals/ranal/Makefile
-portals/knals/ranal/autoMakefile
-portals/knals/socknal/Makefile
-portals/knals/socknal/autoMakefile
-portals/libcfs/Makefile
-portals/libcfs/autoMakefile
-portals/libcfs/linux/Makefile
-portals/portals/Makefile
-portals/portals/autoMakefile
-portals/tests/Makefile
-portals/tests/autoMakefile
-portals/unals/Makefile
-portals/utils/Makefile
+lnet/Kernelenv
+lnet/Makefile
+lnet/autoMakefile
+lnet/autoconf/Makefile
+lnet/doc/Makefile
+lnet/include/Makefile
+lnet/include/libcfs/Makefile
+lnet/include/libcfs/linux/Makefile
+lnet/include/portals/Makefile
+lnet/include/portals/linux/Makefile
+lnet/knals/Makefile
+lnet/knals/autoMakefile
+lnet/knals/gmnal/Makefile
+lnet/knals/gmnal/autoMakefile
+lnet/knals/openibnal/Makefile
+lnet/knals/openibnal/autoMakefile
+lnet/knals/iibnal/Makefile
+lnet/knals/iibnal/autoMakefile
+lnet/knals/vibnal/Makefile
+lnet/knals/vibnal/autoMakefile
+lnet/knals/qswnal/Makefile
+lnet/knals/qswnal/autoMakefile
+lnet/knals/ranal/Makefile
+lnet/knals/ranal/autoMakefile
+lnet/knals/socknal/Makefile
+lnet/knals/socknal/autoMakefile
+lnet/libcfs/Makefile
+lnet/libcfs/autoMakefile
+lnet/libcfs/linux/Makefile
+lnet/portals/Makefile
+lnet/portals/autoMakefile
+lnet/tests/Makefile
+lnet/tests/autoMakefile
+lnet/unals/Makefile
+lnet/utils/Makefile
 ])
 case $lb_target_os in
 	darwin)
 		AC_CONFIG_FILES([
-portals/include/libcfs/darwin/Makefile
-portals/include/portals/darwin/Makefile
-portals/libcfs/darwin/Makefile
+lnet/include/libcfs/darwin/Makefile
+lnet/include/portals/darwin/Makefile
+lnet/libcfs/darwin/Makefile
 ])
 		;;
 esac

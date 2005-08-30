@@ -25,9 +25,9 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
 
-ptl_err_t
-LNetEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
-           ptl_eq_handler_t callback, ptl_handle_eq_t *handle)
+int
+LNetEQAlloc(lnet_handle_ni_t interface, lnet_size_t count,
+           lnet_eq_handler_t callback, lnet_handle_eq_t *handle)
 {
         ptl_eq_t      *eq;
         unsigned long  flags;
@@ -48,13 +48,13 @@ LNetEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
         }
 
         if (count == 0)        /* catch bad parameter / overflow on roundup */
-                return (PTL_VAL_FAILED);
+                return (-EINVAL);
         
         eq = ptl_eq_alloc();
         if (eq == NULL)
-                return (PTL_NO_SPACE);
+                return (-ENOMEM);
 
-        PORTAL_ALLOC(eq->eq_events, count * sizeof(ptl_event_t));
+        PORTAL_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
         if (eq->eq_events == NULL) {
                 PTL_LOCK(flags);
                 ptl_eq_free (eq);
@@ -63,7 +63,7 @@ LNetEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
 
         /* NB this resets all event sequence numbers to 0, to be earlier
          * than eq_deq_seq */
-        memset(eq->eq_events, 0, count * sizeof(ptl_event_t));
+        memset(eq->eq_events, 0, count * sizeof(lnet_event_t));
 
         eq->eq_deq_seq = 1;
         eq->eq_enq_seq = 1;
@@ -79,15 +79,15 @@ LNetEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
         PTL_UNLOCK(flags);
 
         ptl_eq2handle(handle, eq);
-        return (PTL_OK);
+        return (0);
 }
 
-ptl_err_t
-LNetEQFree(ptl_handle_eq_t eqh)
+int
+LNetEQFree(lnet_handle_eq_t eqh)
 {
         ptl_eq_t      *eq;
         int            size;
-        ptl_event_t   *events;
+        lnet_event_t   *events;
         unsigned long  flags;
 
         LASSERT (ptl_apini.apini_init);
@@ -98,12 +98,12 @@ LNetEQFree(ptl_handle_eq_t eqh)
         eq = ptl_handle2eq(&eqh);
         if (eq == NULL) {
                 PTL_UNLOCK(flags);
-                return (PTL_EQ_INVALID);
+                return (-ENOENT);
         }
 
         if (eq->eq_refcount != 0) {
                 PTL_UNLOCK(flags);
-                return (PTL_EQ_IN_USE);
+                return (-EBUSY);
         }
 
         /* stash for free after lock dropped */
@@ -116,24 +116,24 @@ LNetEQFree(ptl_handle_eq_t eqh)
 
         PTL_UNLOCK(flags);
 
-        PORTAL_FREE(events, size * sizeof (ptl_event_t));
+        PORTAL_FREE(events, size * sizeof (lnet_event_t));
 
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t
-lib_get_event (ptl_eq_t *eq, ptl_event_t *ev)
+int
+lib_get_event (ptl_eq_t *eq, lnet_event_t *ev)
 {
         int          new_index = eq->eq_deq_seq & (eq->eq_size - 1);
-        ptl_event_t *new_event = &eq->eq_events[new_index];
+        lnet_event_t *new_event = &eq->eq_events[new_index];
         int          rc;
         ENTRY;
 
         CDEBUG(D_INFO, "event: %p, sequence: %lu, eq->size: %u\n",
                new_event, eq->eq_deq_seq, eq->eq_size);
 
-        if (PTL_SEQ_GT (eq->eq_deq_seq, new_event->sequence)) {
-                RETURN(PTL_EQ_EMPTY);
+        if (LNET_SEQ_GT (eq->eq_deq_seq, new_event->sequence)) {
+                RETURN(0);
         }
 
         /* We've got a new event... */
@@ -141,11 +141,11 @@ lib_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 
         /* ...but did it overwrite an event we've not seen yet? */
         if (eq->eq_deq_seq == new_event->sequence) {
-                rc = PTL_OK;
+                rc = 1;
         } else {
                 CERROR("Event Queue Overflow: eq seq %lu ev seq %lu\n",
                        eq->eq_deq_seq, new_event->sequence);
-                rc = PTL_EQ_DROPPED;
+                rc = -EOVERFLOW;
         }
 
         eq->eq_deq_seq = new_event->sequence + 1;
@@ -153,8 +153,8 @@ lib_get_event (ptl_eq_t *eq, ptl_event_t *ev)
 }
 
 
-ptl_err_t
-LNetEQGet (ptl_handle_eq_t eventq, ptl_event_t *event)
+int
+LNetEQGet (lnet_handle_eq_t eventq, lnet_event_t *event)
 {
         int which;
 
@@ -162,18 +162,18 @@ LNetEQGet (ptl_handle_eq_t eventq, ptl_event_t *event)
                          event, &which);
 }
 
-ptl_err_t
-LNetEQWait (ptl_handle_eq_t eventq, ptl_event_t *event)
+int
+LNetEQWait (lnet_handle_eq_t eventq, lnet_event_t *event)
 {
         int which;
 
-        return LNetEQPoll(&eventq, 1, PTL_TIME_FOREVER,
+        return LNetEQPoll(&eventq, 1, LNET_TIME_FOREVER,
                          event, &which);
 }
 
-ptl_err_t
-LNetEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
-           ptl_event_t *event, int *which)
+int
+LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
+           lnet_event_t *event, int *which)
 {
         unsigned long    flags;
         int              i;
@@ -192,7 +192,7 @@ LNetEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
         LASSERT (ptl_apini.apini_refcount > 0);
 
         if (neq < 1)
-                RETURN(PTL_EQ_INVALID);
+                RETURN(-ENOENT);
 
         PTL_LOCK(flags);
 
@@ -201,7 +201,7 @@ LNetEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
                         ptl_eq_t *eq = ptl_handle2eq(&eventqs[i]);
 
                         rc = lib_get_event (eq, event);
-                        if (rc != PTL_EQ_EMPTY) {
+                        if (rc != 0) {
                                 PTL_UNLOCK(flags);
                                 *which = i;
                                 RETURN(rc);
@@ -210,7 +210,7 @@ LNetEQPoll (ptl_handle_eq_t *eventqs, int neq, int timeout_ms,
                 
                 if (timeout_ms == 0) {
                         PTL_UNLOCK (flags);
-                        RETURN (PTL_EQ_EMPTY);
+                        RETURN (0);
                 }
 
                 /* Some architectures force us to do spin locking/unlocking

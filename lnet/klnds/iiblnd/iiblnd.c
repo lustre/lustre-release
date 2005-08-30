@@ -34,7 +34,7 @@ ptl_nal_t kibnal_nal = {
         .nal_recv_pages    = kibnal_recv_pages,
 };
 
-ptl_handle_ni_t         kibnal_ni;
+lnet_handle_ni_t         kibnal_ni;
 kib_tunables_t          kibnal_tunables;
 
 kib_data_t              kibnal_data = {
@@ -170,7 +170,7 @@ kibnal_advertise (void)
         FSTATUS                frc;
         FSTATUS                frc2;
 
-        LASSERT (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY);
+        LASSERT (kibnal_data.kib_ni->ni_nid != LNET_NID_ANY);
 
         PORTAL_ALLOC(fod, sizeof(*fod));
         if (fod == NULL)
@@ -213,7 +213,7 @@ kibnal_unadvertise (int expect_success)
         FSTATUS                frc;
         FSTATUS                frc2;
 
-        LASSERT (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY);
+        LASSERT (kibnal_data.kib_ni->ni_nid != LNET_NID_ANY);
 
         PORTAL_ALLOC(fod, sizeof(*fod));
         if (fod == NULL)
@@ -252,7 +252,7 @@ kibnal_unadvertise (int expect_success)
 }
 
 static int
-kibnal_set_mynid(ptl_nid_t nid)
+kibnal_set_mynid(lnet_nid_t nid)
 {
         struct timeval tv;
         int            rc;
@@ -274,7 +274,7 @@ kibnal_set_mynid(ptl_nid_t nid)
         CDEBUG(D_NET, "NID "LPX64"("LPX64")\n",
                kibnal_data.kib_ni->ni_nid, nid);
         
-        if (kibnal_data.kib_ni->ni_nid != PTL_NID_ANY) {
+        if (kibnal_data.kib_ni->ni_nid != LNET_NID_ANY) {
 
                 kibnal_unadvertise (1);
 
@@ -295,9 +295,9 @@ kibnal_set_mynid(ptl_nid_t nid)
         /* Delete all existing peers and their connections after new
          * NID/incarnation set to ensure no old connections in our brave
          * new world. */
-        kibnal_del_peer(PTL_NID_ANY);
+        kibnal_del_peer(LNET_NID_ANY);
 
-        if (kibnal_data.kib_ni->ni_nid == PTL_NID_ANY) {
+        if (kibnal_data.kib_ni->ni_nid == LNET_NID_ANY) {
                 /* No new NID to install */
                 up (&kibnal_data.kib_nid_mutex);
                 return (0);
@@ -339,20 +339,20 @@ kibnal_set_mynid(ptl_nid_t nid)
                 iibt_cm_destroy_cep (kibnal_data.kib_cep);
                 /* remove any peers that sprung up while I failed to
                  * advertise myself */
-                kibnal_del_peer(PTL_NID_ANY);
+                kibnal_del_peer(LNET_NID_ANY);
         }
 
-        kibnal_data.kib_ni->ni_nid = PTL_NID_ANY;
+        kibnal_data.kib_ni->ni_nid = LNET_NID_ANY;
         up (&kibnal_data.kib_nid_mutex);
         return (rc);
 }
 
 kib_peer_t *
-kibnal_create_peer (ptl_nid_t nid)
+kibnal_create_peer (lnet_nid_t nid)
 {
         kib_peer_t *peer;
 
-        LASSERT (nid != PTL_NID_ANY);
+        LASSERT (nid != LNET_NID_ANY);
 
         PORTAL_ALLOC (peer, sizeof (*peer));
         if (peer == NULL)
@@ -396,7 +396,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
 /* the caller is responsible for accounting for the additional reference
  * that this creates */
 kib_peer_t *
-kibnal_find_peer_locked (ptl_nid_t nid)
+kibnal_find_peer_locked (lnet_nid_t nid)
 {
         struct list_head *peer_list = kibnal_nid2peerlist (nid);
         struct list_head *tmp;
@@ -421,7 +421,7 @@ kibnal_find_peer_locked (ptl_nid_t nid)
 }
 
 kib_peer_t *
-kibnal_get_peer (ptl_nid_t nid)
+kibnal_get_peer (lnet_nid_t nid)
 {
         kib_peer_t     *peer;
         unsigned long   flags;
@@ -448,7 +448,7 @@ kibnal_unlink_peer_locked (kib_peer_t *peer)
 }
 
 static int
-kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
+kibnal_get_peer_info (int index, lnet_nid_t *nidp, int *persistencep)
 {
         kib_peer_t        *peer;
         struct list_head  *ptmp;
@@ -483,13 +483,13 @@ kibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
 }
 
 static int
-kibnal_add_persistent_peer (ptl_nid_t nid)
+kibnal_add_persistent_peer (lnet_nid_t nid)
 {
         unsigned long      flags;
         kib_peer_t        *peer;
         kib_peer_t        *peer2;
         
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return (-EINVAL);
 
         peer = kibnal_create_peer (nid);
@@ -539,7 +539,7 @@ kibnal_del_peer_locked (kib_peer_t *peer)
 }
 
 int
-kibnal_del_peer (ptl_nid_t nid)
+kibnal_del_peer (lnet_nid_t nid)
 {
         unsigned long      flags;
         struct list_head  *ptmp;
@@ -552,7 +552,7 @@ kibnal_del_peer (ptl_nid_t nid)
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kibnal_nid2peerlist(nid) - kibnal_data.kib_peers;
         else {
                 lo = 0;
@@ -566,7 +566,7 @@ kibnal_del_peer (ptl_nid_t nid)
                                  peer->ibp_connecting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        if (!(nid == PTL_NID_ANY || peer->ibp_nid == nid))
+                        if (!(nid == LNET_NID_ANY || peer->ibp_nid == nid))
                                 continue;
 
                         kibnal_del_peer_locked (peer);
@@ -872,7 +872,7 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
 }
 
 static int
-kibnal_close_matching_conns (ptl_nid_t nid)
+kibnal_close_matching_conns (lnet_nid_t nid)
 {
         unsigned long       flags;
         kib_peer_t         *peer;
@@ -885,7 +885,7 @@ kibnal_close_matching_conns (ptl_nid_t nid)
 
         write_lock_irqsave (&kibnal_data.kib_global_lock, flags);
 
-        if (nid != PTL_NID_ANY)
+        if (nid != LNET_NID_ANY)
                 lo = hi = kibnal_nid2peerlist(nid) - kibnal_data.kib_peers;
         else {
                 lo = 0;
@@ -900,7 +900,7 @@ kibnal_close_matching_conns (ptl_nid_t nid)
                                  peer->ibp_connecting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        if (!(nid == PTL_NID_ANY || nid == peer->ibp_nid))
+                        if (!(nid == LNET_NID_ANY || nid == peer->ibp_nid))
                                 continue;
 
                         count += kibnal_close_peer_conns_locked (peer, 0);
@@ -910,7 +910,7 @@ kibnal_close_matching_conns (ptl_nid_t nid)
         write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
 
         /* wildcards always succeed */
-        if (nid == PTL_NID_ANY)
+        if (nid == LNET_NID_ANY)
                 return (0);
         
         return (count == 0 ? -ENOENT : 0);
@@ -927,7 +927,7 @@ kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 
         switch(cmd) {
         case IOC_PORTAL_GET_PEER: {
-                ptl_nid_t   nid = 0;
+                lnet_nid_t   nid = 0;
                 int         share_count = 0;
 
                 rc = kibnal_get_peer_info(data->ioc_count,
@@ -961,7 +961,7 @@ kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
                 break;
         }
         case IOC_PORTAL_REGISTER_MYNID: {
-                if (data->ioc_nid == PTL_NID_ANY)
+                if (data->ioc_nid == LNET_NID_ANY)
                         rc = -EINVAL;
                 else
                         rc = kibnal_set_mynid (data->ioc_nid);
@@ -1160,7 +1160,7 @@ kibnal_shutdown (ptl_ni_t *ni)
         case IBNAL_INIT_ALL:
                 /* resetting my NID to unadvertises me, removes my
                  * listener and nukes all current peers */
-                kibnal_set_mynid (PTL_NID_ANY);
+                kibnal_set_mynid (LNET_NID_ANY);
 
                 /* Wait for all peer state to clean up (crazy) */
                 i = 2;
@@ -1295,7 +1295,7 @@ static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
 } 
 #undef roundup_power
 
-ptl_err_t
+int
 kibnal_startup (ptl_ni_t *ni)
 {
         IB_PORT_ATTRIBUTES *pattr;
@@ -1309,12 +1309,12 @@ kibnal_startup (ptl_ni_t *ni)
         /* Only 1 instance supported */
         if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
                 CERROR ("Only 1 instance supported\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
 
         if (ni->ni_interfaces[0] != NULL) {
                 CERROR("Explicit interface config not supported\n");
-                return PTL_FAIL;
+                return -EPERM;
         }
         
         ni->ni_data = &kibnal_data;
@@ -1332,7 +1332,7 @@ kibnal_startup (ptl_ni_t *ni)
 
         init_MUTEX (&kibnal_data.kib_nid_mutex);
         init_MUTEX_LOCKED (&kibnal_data.kib_nid_signal);
-        kibnal_data.kib_ni->ni_nid = PTL_NID_ANY;
+        kibnal_data.kib_ni->ni_nid = LNET_NID_ANY;
 
         rwlock_init(&kibnal_data.kib_global_lock);
 
@@ -1607,11 +1607,11 @@ kibnal_startup (ptl_ni_t *ni)
         kibnal_data.kib_init = IBNAL_INIT_ALL;
         /*****************************************************/
 
-        return (PTL_OK);
+        return (0);
 
  failed:
         kibnal_shutdown (ni);    
-        return (PTL_FAIL);
+        return (-ENETDOWN);
 }
 
 void __exit

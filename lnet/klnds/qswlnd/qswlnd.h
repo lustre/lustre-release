@@ -159,7 +159,7 @@ typedef struct kqswnal_rx
         int              krx_state;             /* what this RX is doing */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
-        ptl_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
+        lnet_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
 }  kqswnal_rx_t;
 
 #define KRX_POSTED       1                      /* receiving */
@@ -179,7 +179,7 @@ typedef struct kqswnal_tx
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */
-        ptl_nid_t         ktx_nid;              /* destination node */
+        lnet_nid_t         ktx_nid;              /* destination node */
         void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
         unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
@@ -281,14 +281,14 @@ extern int kqswnal_scheduler (void *);
 extern void kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
 extern void kqswnal_rx_done (kqswnal_rx_t *krx);
 
-static inline ptl_nid_t
+static inline lnet_nid_t
 kqswnal_elanid2nid (int elanid)
 {
         return PTL_MKNID(PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid), elanid);
 }
 
 static inline int
-kqswnal_nid2elanid (ptl_nid_t nid)
+kqswnal_nid2elanid (lnet_nid_t nid)
 {
         __u32 elanid = PTL_NIDADDR(nid);
 
@@ -296,7 +296,7 @@ kqswnal_nid2elanid (ptl_nid_t nid)
         return (elanid >= kqswnal_data.kqn_nnodes) ? -1 : elanid;
 }
 
-static inline ptl_nid_t
+static inline lnet_nid_t
 kqswnal_rx_nid(kqswnal_rx_t *krx)
 {
         return (kqswnal_elanid2nid(ep_rxd_node(krx->krx_rxd)));
@@ -371,28 +371,28 @@ ep_free_rcvr(EP_RCVR *r)
 }
 #endif
 
-ptl_err_t kqswnal_startup (ptl_ni_t *ni);
+int kqswnal_startup (ptl_ni_t *ni);
 void kqswnal_shutdown (ptl_ni_t *ni);
 int kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg);
-ptl_err_t kqswnal_send (ptl_ni_t *ni, void *private,
+int kqswnal_send (ptl_ni_t *ni, void *private,
                         ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                        int type, ptl_process_id_t tgt, int routing,
+                        int type, lnet_process_id_t tgt, int routing,
                         unsigned int payload_niov, 
                         struct iovec *payload_iov,
                         size_t payload_offset, size_t payload_nob);
-ptl_err_t kqswnal_send_pages (ptl_ni_t *ni, void *private,
+int kqswnal_send_pages (ptl_ni_t *ni, void *private,
                               ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                              int type, ptl_process_id_t tgt, int routing,
+                              int type, lnet_process_id_t tgt, int routing,
                               unsigned int payload_niov, 
-                              ptl_kiov_t *payload_kiov,
+                              lnet_kiov_t *payload_kiov,
                               size_t payload_offset, size_t payload_nob);
-ptl_err_t kqswnal_recv(ptl_ni_t *ni, void *private,
+int kqswnal_recv(ptl_ni_t *ni, void *private,
                        ptl_msg_t *ptlmsg, unsigned int niov,
                        struct iovec *iov, size_t offset,
                        size_t mlen, size_t rlen);
-ptl_err_t kqswnal_recv_pages(ptl_ni_t *ni, void *private,
+int kqswnal_recv_pages(ptl_ni_t *ni, void *private,
                              ptl_msg_t *ptlmsg, unsigned int niov,
-                             ptl_kiov_t *kiov, size_t offset,
+                             lnet_kiov_t *kiov, size_t offset,
                              size_t mlen, size_t rlen);
 
 int kqswnal_tunables_init(void);

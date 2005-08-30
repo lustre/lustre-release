@@ -53,12 +53,12 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-ptl_err_t tcpnal_send(ptl_ni_t *ni,
+int tcpnal_send(ptl_ni_t *ni,
                       void *private,
                       ptl_msg_t *cookie,
                       ptl_hdr_t *hdr,
                       int type,
-                      ptl_process_id_t target,
+                      lnet_process_id_t target,
                       int routing,
                       unsigned int niov,
                       struct iovec *iov,
@@ -69,7 +69,7 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
     bridge b=(bridge)ni->ni_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
-    ptl_err_t rc = PTL_OK;
+    int rc = 0;
     int   sysrc;
     int   total;
     int   ntiov;
@@ -77,12 +77,12 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
 
     if (routing) {
             CERROR("Can't route\n");
-            return PTL_FAIL;
+            return -EIO;
     }
     
     if (!(c=force_tcp_connection((manager)b->lower, target.nid,
                                  b->local)))
-        return(PTL_FAIL);
+        return(-EIO);
 
     /* TODO: these results should be checked. furthermore, provision
        must be made for the SIGPIPE which is delivered when
@@ -106,7 +106,7 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
     if (sysrc != total) {
             fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                      rc, total, errno);
-            rc = PTL_FAIL;
+            rc = -errno;
     }
 #else
     for (i = total = 0; i <= ntiov; i++) {
@@ -115,7 +115,7 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
             if (rc != tiov[i].iov_len) {
                     fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
                              rc, tiov[i].iov_len, errno);
-                    rc = PTL_FAIL;
+                    rc = -errno;
                     break;
             }
             total += rc;
@@ -132,10 +132,10 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
 #endif
     pthread_mutex_unlock(&send_lock);
 
-    if (rc == PTL_OK) {
-            /* NB the NAL only calls ptl_finalize() if it returns PTL_OK
+    if (rc == 0) {
+            /* NB the NAL only calls ptl_finalize() if it returns 0
              * from cb_send() */
-            ptl_finalize(ni, private, cookie, PTL_OK);
+            ptl_finalize(ni, private, cookie, 0);
     }
 
     return(rc);
@@ -155,7 +155,7 @@ ptl_err_t tcpnal_send(ptl_ni_t *ni,
  * blocking read of the requested data. must drain out the
  * difference of mainpulated and requested lengths from the network
  */
-ptl_err_t tcpnal_recv(ptl_ni_t *ni,
+int tcpnal_recv(ptl_ni_t *ni,
                       void *private,
                       ptl_msg_t *cookie,
                       unsigned int niov,
@@ -187,7 +187,7 @@ ptl_err_t tcpnal_recv(ptl_ni_t *ni,
 
 finalize:
     /* FIXME; we always assume success here... */
-    ptl_finalize(ni, private, cookie, PTL_OK);
+    ptl_finalize(ni, private, cookie, 0);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -197,7 +197,7 @@ finalize:
         free(trash);
     }
 
-    return(PTL_OK);
+    return(0);
 }
 
 
@@ -215,7 +215,7 @@ static int from_connection(void *a, void *d)
     connection c = d;
     bridge     b = a;
     ptl_hdr_t  hdr;
-    ptl_err_t  rc;
+    int  rc;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
             /* replace dest_nid,pid (socknal sets its own) */
@@ -223,7 +223,7 @@ static int from_connection(void *a, void *d)
             hdr.dest_pid = cpu_to_le32(ptl_getpid());
             
             rc = ptl_parse(b->b_ni, &hdr, c);
-            if (rc != PTL_OK) {
+            if (rc != 0) {
                     CERROR("Error %d from ptl_parse\n", rc);
                     return 0;
             }
@@ -252,8 +252,8 @@ int tcpnal_init(bridge b)
     if (!(m=init_connections(from_connection,b))){
         /* TODO: this needs to shut down the
            newly created junk */
-        return(PTL_NAL_FAILED);
+        return(-ENXIO);
     }
     b->lower=m;
-    return(PTL_OK);
+    return(0);
 }

@@ -53,24 +53,24 @@ typedef enum {
  * end. */
 typedef struct ptl_ack {
         ptl_handle_wire_t  dst_wmd;
-        ptl_match_bits_t   match_bits;
-        ptl_size_t         mlength;
+        lnet_match_bits_t   match_bits;
+        lnet_size_t         mlength;
 } WIRE_ATTR ptl_ack_t;
 
 typedef struct ptl_put {
         ptl_handle_wire_t  ack_wmd;
-        ptl_match_bits_t   match_bits;
-        ptl_hdr_data_t     hdr_data;
-        ptl_pt_index_t     ptl_index;
-        ptl_size_t         offset;
+        lnet_match_bits_t   match_bits;
+        lnet_hdr_data_t     hdr_data;
+        lnet_pt_index_t     ptl_index;
+        lnet_size_t         offset;
 } WIRE_ATTR ptl_put_t;
 
 typedef struct ptl_get {
         ptl_handle_wire_t  return_wmd;
-        ptl_match_bits_t   match_bits;
-        ptl_pt_index_t     ptl_index;
-        ptl_size_t         src_offset;
-        ptl_size_t         sink_length;
+        lnet_match_bits_t   match_bits;
+        lnet_pt_index_t     ptl_index;
+        lnet_size_t         src_offset;
+        lnet_size_t         sink_length;
 } WIRE_ATTR ptl_get_t;
 
 typedef struct ptl_reply {
@@ -83,10 +83,10 @@ typedef struct ptl_hello {
 } WIRE_ATTR ptl_hello_t;
 
 typedef struct {
-        ptl_nid_t           dest_nid;
-        ptl_nid_t           src_nid;
-        ptl_pid_t           dest_pid;
-        ptl_pid_t           src_pid;
+        lnet_nid_t           dest_nid;
+        lnet_nid_t           src_nid;
+        lnet_pid_t           dest_pid;
+        lnet_pid_t           src_pid;
         __u32               type;               /* ptl_msg_type_t */
         __u32               payload_length;     /* payload data to follow */
         /*<------__u64 aligned------->*/
@@ -144,7 +144,7 @@ typedef struct ptl_msg {
         struct list_head   msg_list;
         struct ptl_libmd  *msg_md;
         ptl_handle_wire_t  msg_ack_wmd;
-        ptl_event_t        msg_ev;
+        lnet_event_t        msg_ev;
 } ptl_msg_t;
 
 typedef struct ptl_libhandle {
@@ -158,21 +158,21 @@ typedef struct ptl_libhandle {
 typedef struct ptl_eq {
         struct list_head  eq_list;
         ptl_libhandle_t   eq_lh;
-        ptl_seq_t         eq_enq_seq;
-        ptl_seq_t         eq_deq_seq;
-        ptl_size_t        eq_size;
-        ptl_event_t      *eq_events;
+        lnet_seq_t         eq_enq_seq;
+        lnet_seq_t         eq_deq_seq;
+        lnet_size_t        eq_size;
+        lnet_event_t      *eq_events;
         int               eq_refcount;
-        ptl_eq_handler_t  eq_callback;
+        lnet_eq_handler_t  eq_callback;
 } ptl_eq_t;
 
 typedef struct ptl_me {
         struct list_head  me_list;
         ptl_libhandle_t   me_lh;
-        ptl_process_id_t  me_match_id;
-        ptl_match_bits_t  me_match_bits;
-        ptl_match_bits_t  me_ignore_bits;
-        ptl_unlink_t      me_unlink;
+        lnet_process_id_t  me_match_id;
+        lnet_match_bits_t  me_match_bits;
+        lnet_match_bits_t  me_ignore_bits;
+        lnet_unlink_t      me_unlink;
         struct ptl_libmd *me_md;
 } ptl_me_t;
 
@@ -181,9 +181,9 @@ typedef struct ptl_libmd {
         ptl_libhandle_t   md_lh;
         ptl_me_t         *md_me;
         char             *md_start;
-        ptl_size_t        md_offset;
-        ptl_size_t        md_length;
-        ptl_size_t        md_max_size;
+        lnet_size_t        md_offset;
+        lnet_size_t        md_length;
+        lnet_size_t        md_max_size;
         int               md_threshold;
         int               md_pending;
         unsigned int      md_options;
@@ -194,7 +194,7 @@ typedef struct ptl_libmd {
         unsigned int      md_niov;                /* # frags */
         union {
                 struct iovec  iov[PTL_MD_MAX_IOV];
-                ptl_kiov_t    kiov[PTL_MD_MAX_IOV];
+                lnet_kiov_t    kiov[PTL_MD_MAX_IOV];
         } md_iov;
 } ptl_libmd_t;
 
@@ -220,7 +220,7 @@ typedef struct
 typedef struct {
         /* info about peers we are trying to fail */
         struct list_head  tp_list;             /* apini_test_peers */
-        ptl_nid_t         tp_nid;              /* matching nid */
+        lnet_nid_t         tp_nid;              /* matching nid */
         unsigned int      tp_threshold;        /* # failures to simulate */
 } ptl_test_peer_t;
 
@@ -248,14 +248,14 @@ typedef union {
 /* Kernel Portals Routing Forwarded message Descriptor */
 typedef struct {
         struct list_head     kprfd_list;        /* stash in queues (routing target can use) */
-        ptl_nid_t            kprfd_target_nid;  /* final destination NID */
-        ptl_nid_t            kprfd_gateway_nid; /* next hop NID */
-        ptl_nid_t            kprfd_sender_nid;  /* previous hop NID */
-        ptl_nid_t            kprfd_source_nid;  /* original sender's NID */
+        lnet_nid_t            kprfd_target_nid;  /* final destination NID */
+        lnet_nid_t            kprfd_gateway_nid; /* next hop NID */
+        lnet_nid_t            kprfd_sender_nid;  /* previous hop NID */
+        lnet_nid_t            kprfd_source_nid;  /* original sender's NID */
         ptl_hdr_t           *kprfd_hdr;         /* header in wire byte order */
         int                  kprfd_nob;         /* # payload bytes */
         int                  kprfd_niov;        /* # payload frags */
-        ptl_kiov_t          *kprfd_kiov;        /* payload fragments */
+        lnet_kiov_t          *kprfd_kiov;        /* payload fragments */
         struct ptl_ni       *kprfd_src_ni;      /* originating NI */
         kpr_fwd_callback_t   kprfd_callback;    /* completion callback */
         void                *kprfd_callback_arg; /* completion callback arg */
@@ -273,7 +273,7 @@ typedef struct ptl_nal
         /* fields initialised by the NAL */
         unsigned int      nal_type;
         
-        ptl_err_t  (*nal_startup) (struct ptl_ni *ni);
+        int  (*nal_startup) (struct ptl_ni *ni);
         void       (*nal_shutdown) (struct ptl_ni *ni);
 
         int        (*nal_ctl)(struct ptl_ni *ni, unsigned int cmd, void *arg);
@@ -284,20 +284,20 @@ typedef struct ptl_nal
 	 * fragments described by iov, starting at 'offset' for 'mlen'
 	 * bytes.  
 	 * NB the NAL may NOT overwrite iov.  
-	 * PTL_OK on success => NAL has committed to send and will call
+	 * 0 on success => NAL has committed to send and will call
 	 * ptl_finalize on completion
 	 */
-	ptl_err_t (*nal_send) 
+	int (*nal_send) 
                 (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
-                 ptl_hdr_t *hdr, int type, ptl_process_id_t target,
+                 ptl_hdr_t *hdr, int type, lnet_process_id_t target,
                  int routing, unsigned int niov, struct iovec *iov, 
                  size_t offset, size_t mlen);
         
 	/* as send, but with a set of page fragments (NULL if not supported) */
-	ptl_err_t (*nal_send_pages)
+	int (*nal_send_pages)
                 (struct ptl_ni *ni, void *private, ptl_msg_t *cookie, 
-                 ptl_hdr_t *hdr, int type, ptl_process_id_t target, 
-                 int routing, unsigned int niov, ptl_kiov_t *iov, 
+                 ptl_hdr_t *hdr, int type, lnet_process_id_t target, 
+                 int routing, unsigned int niov, lnet_kiov_t *iov, 
                  size_t offset, size_t mlen);
 	/*
 	 * recv: Receives an incoming message from a remote process.  The
@@ -306,29 +306,29 @@ typedef struct ptl_nal
 	 * bytes.  Payload bytes after 'mlen' up to 'rlen' are to be
 	 * discarded.  
 	 * NB the NAL may NOT overwrite iov.
-	 * PTL_OK on success => NAL has committed to receive and will call
+	 * 0 on success => NAL has committed to receive and will call
 	 * ptl_finalize on completion
 	 */
-	ptl_err_t (*nal_recv) 
+	int (*nal_recv) 
                 (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
                  unsigned int niov, struct iovec *iov, 
                  size_t offset, size_t mlen, size_t rlen);
 
 	/* as recv, but with a set of page fragments (NULL if not supported) */
-	ptl_err_t (*nal_recv_pages) 
+	int (*nal_recv_pages) 
                 (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
-                 unsigned int niov, ptl_kiov_t *iov, 
+                 unsigned int niov, lnet_kiov_t *iov, 
                  size_t offset, size_t mlen, size_t rlen);
 
         /* forward a packet for the router */
         void (*nal_fwd)(struct ptl_ni *ni, kpr_fwd_desc_t *fwd);        
 
         /* notification of peer health */
-        void (*nal_notify)(struct ptl_ni *ni, ptl_nid_t peer, int alive);
+        void (*nal_notify)(struct ptl_ni *ni, lnet_nid_t peer, int alive);
 
 #ifdef __KERNEL__
         /* accept a new connection */
-        ptl_err_t (*nal_accept)(struct ptl_ni *ni, struct socket *sock);
+        int (*nal_accept)(struct ptl_ni *ni, struct socket *sock);
 #endif
 } ptl_nal_t;
 
@@ -336,7 +336,7 @@ typedef struct ptl_nal
 
 typedef struct ptl_ni {
         struct list_head  ni_list;              /* chain on apini_nis */
-        ptl_nid_t         ni_nid;               /* interface's NID */
+        lnet_nid_t         ni_nid;               /* interface's NID */
         void             *ni_data;              /* instance-specific data */
         ptl_nal_t        *ni_nal;               /* procedural interface */
         int               ni_shutdown;          /* shutting down? */
@@ -352,7 +352,7 @@ typedef struct                                  /* loopback descriptor */
         size_t           lod_nob;
         union {
                 struct iovec  *iov;
-                ptl_kiov_t    *kiov;
+                lnet_kiov_t    *kiov;
         }                lod_iov;
 } lo_desc_t;
 
@@ -386,8 +386,8 @@ typedef struct
         int               apini_nportals;       /* # portals */
         struct list_head *apini_portals;        /* the vector of portals */
 
-        ptl_pid_t         apini_pid;            /* requested pid */
-        ptl_ni_limits_t   apini_actual_limits;
+        lnet_pid_t         apini_pid;            /* requested pid */
+        lnet_ni_limits_t   apini_actual_limits;
 
         struct list_head  apini_nis;            /* NAL instances */
         struct list_head  apini_zombie_nis;     /* dying NAL instances */

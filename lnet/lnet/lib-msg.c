@@ -27,9 +27,9 @@
 #include <portals/lib-p30.h>
 
 void
-ptl_enq_event_locked (void *private, ptl_eq_t *eq, ptl_event_t *ev)
+ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
 {
-        ptl_event_t  *eq_slot;
+        lnet_event_t  *eq_slot;
 
         /* Allocate the next queue slot */
         ev->link = ev->sequence = eq->eq_enq_seq++;
@@ -66,7 +66,7 @@ ptl_enq_event_locked (void *private, ptl_eq_t *eq, ptl_event_t *ev)
 }
 
 void
-ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
+ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
 {
         ptl_libmd_t  *md;
         int           unlink;
@@ -78,10 +78,10 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
                 return;
 
         /* Only send an ACK if the PUT completed successfully */
-        if (status == PTL_OK &&
+        if (status == 0 &&
             !ptl_is_wire_handle_none(&msg->msg_ack_wmd)) {
 
-                LASSERT(msg->msg_ev.type == PTL_EVENT_PUT_END);
+                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
 
                 memset (&ack, 0, sizeof (ack));
                 ack.msg.ack.dst_wmd = msg->msg_ack_wmd;
@@ -90,7 +90,7 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
 
                 rc = ptl_send (ni, private, NULL, &ack, PTL_MSG_ACK,
                                msg->msg_ev.initiator, NULL, 0, 0);
-                if (rc != PTL_OK) {
+                if (rc != 0) {
                         /* send failed: there's nothing else to clean up. */
                         CERROR("Error %d sending ACK to "LPX64"\n",
                                rc, msg->msg_ev.initiator.nid);
@@ -131,7 +131,7 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_err_t status)
         PTL_UNLOCK(flags);
 }
 
-ptl_pid_t  ptl_getpid(void) 
+lnet_pid_t  ptl_getpid(void) 
 {
         return ptl_apini.apini_pid;
 }

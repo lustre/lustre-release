@@ -27,7 +27,7 @@
 void
 kibnal_tx_done (kib_tx_t *tx)
 {
-        ptl_err_t        ptlrc = (tx->tx_status == 0) ? PTL_OK : PTL_FAIL;
+        int        ptlrc = (tx->tx_status == 0) ? 0 : -EIO;
         int              i;
 
         LASSERT (!in_interrupt());
@@ -37,7 +37,7 @@ kibnal_tx_done (kib_tx_t *tx)
 
 #if IBNAL_USE_FMR
         if (tx->tx_md.md_fmrcount == 0 ||
-            (ptlrc != PTL_OK && tx->tx_md.md_active)) {
+            (ptlrc != 0 && tx->tx_md.md_active)) {
                 vv_return_t      vvrc;
 
                 /* mapping must be active (it dropped fmrcount to 0) */
@@ -277,7 +277,7 @@ kibnal_handle_completion(kib_conn_t *conn, int txtype, int status, __u64 cookie)
                         /* XXX layering violation: set REPLY data length */
                         LASSERT (tx->tx_ptlmsg[1] != NULL);
                         LASSERT (tx->tx_ptlmsg[1]->msg_ev.type == 
-                                 PTL_EVENT_REPLY_END);
+                                 LNET_EVENT_REPLY);
 
                         tx->tx_ptlmsg[1]->msg_ev.mlength = status;
                 }
@@ -645,7 +645,7 @@ kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd,
 int
 kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd, 
                       vv_access_con_bit_mask_t access,
-                      int nkiov, ptl_kiov_t *kiov, int offset, int nob)
+                      int nkiov, lnet_kiov_t *kiov, int offset, int nob)
 {
         /* active if I'm sending */
         int            active = ((access & vv_acc_r_mem_write) == 0);
@@ -788,7 +788,7 @@ kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd,
 int
 kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
                       vv_access_con_bit_mask_t access,
-                      int nkiov, ptl_kiov_t *kiov, int offset, int nob)
+                      int nkiov, lnet_kiov_t *kiov, int offset, int nob)
 {
         /* active if I'm sending */
         int            active = ((access & vv_acc_r_mem_write) == 0);
@@ -1278,7 +1278,7 @@ kibnal_schedule_peer_arp (kib_peer_t *peer)
 }
 
 void
-kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
+kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
 {
         kib_peer_t      *peer;
         kib_conn_t      *conn;
@@ -1372,17 +1372,17 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
         write_unlock_irqrestore(g_lock, flags);
 }
 
-ptl_err_t
+int
 kibnal_sendmsg(ptl_ni_t        *ni, 
                void            *private,
                ptl_msg_t       *ptlmsg,
                ptl_hdr_t       *hdr, 
                int              type, 
-               ptl_process_id_t target,
+               lnet_process_id_t target,
                int              routing,
                unsigned int     payload_niov, 
                struct iovec    *payload_iov, 
-               ptl_kiov_t      *payload_kiov,
+               lnet_kiov_t      *payload_kiov,
                int              payload_offset,
                int              payload_nob)
 {
@@ -1406,13 +1406,13 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 
         if (routing) {
                 CERROR ("Can't route\n");
-                return PTL_FAIL;
+                return -EIO;
         }
         
         switch (type) {
         default:
                 LBUG();
-                return (PTL_FAIL);
+                return (-EIO);
                 
         case PTL_MSG_REPLY: {
                 /* reply's 'private' is the incoming receive */
@@ -1429,7 +1429,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                                        target.nid, payload_nob, IBNAL_MSG_SIZE);
                                 CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
                                        nob, target.nid);
-                                return PTL_FAIL;
+                                return -EIO;
                         }
                         break;
                 }
@@ -1438,7 +1438,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 if (rx->rx_msg->ibm_type != IBNAL_MSG_GET_REQ) {
                         CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
                                target.nid, rx->rx_msg->ibm_type);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 /* NB rx_complete() will send GET_NAK when I return to it from
@@ -1447,7 +1447,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 tx = kibnal_get_idle_tx(0);
                 if (tx == NULL) {
                         CERROR("Can't get tx for REPLY to "LPX64"\n", target.nid);
-                        return PTL_FAIL;
+                        return -ENOMEM;
                 }
 
                 if (payload_nob == 0)
@@ -1463,7 +1463,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 if (rc != 0) {
                         CERROR("Can't setup GET src for "LPX64": %d\n", target.nid, rc);
                         kibnal_tx_done(tx);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
                 
                 rc = kibnal_init_rdma(tx, IBNAL_MSG_GET_DONE, payload_nob,
@@ -1474,7 +1474,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                                target.nid, rc);
                 } else if (rc == 0) {
                         /* No RDMA: local completion may happen now! */
-                        ptl_finalize (kibnal_data.kib_ni, NULL, ptlmsg, PTL_OK);
+                        ptl_finalize (kibnal_data.kib_ni, NULL, ptlmsg, 0);
                 } else {
                         /* RDMA: ptl_finalize(ptlmsg) when it completes */
                         tx->tx_ptlmsg[0] = ptlmsg;
@@ -1482,7 +1482,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 
                 kibnal_queue_tx(tx, rx->rx_conn);
                 rx->rx_responded = 1;
-                return (rc >= 0) ? PTL_OK : PTL_FAIL;
+                return (rc >= 0) ? 0 : -EIO;
         }
 
         case PTL_MSG_GET:
@@ -1498,7 +1498,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 ibmsg->ibm_u.get.ibgm_hdr = *hdr;
                 ibmsg->ibm_u.get.ibgm_cookie = tx->tx_cookie;
 
-                if ((ptlmsg->msg_md->md_options & PTL_MD_KIOV) == 0)
+                if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0)
                         rc = kibnal_setup_rd_iov(tx, &ibmsg->ibm_u.get.ibgm_rd,
                                                  vv_acc_r_mem_write,
                                                  ptlmsg->msg_md->md_niov,
@@ -1513,7 +1513,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 if (rc != 0) {
                         CERROR("Can't setup GET sink for "LPX64": %d\n", target.nid, rc);
                         kibnal_tx_done(tx);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
 #if IBNAL_USE_FMR
@@ -1531,13 +1531,13 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR("Can't create reply for GET -> "LPX64"\n", target.nid);
                         kibnal_tx_done(tx);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 tx->tx_ptlmsg[0] = ptlmsg;      /* finalise ptlmsg[0,1] on completion */
                 tx->tx_waiting = 1;             /* waiting for GET_DONE */
                 kibnal_launch_tx(tx, target.nid);
-                return PTL_OK;
+                return 0;
 
         case PTL_MSG_ACK:
                 LASSERT (payload_nob == 0);
@@ -1563,7 +1563,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 if (rc != 0) {
                         CERROR("Can't setup PUT src for "LPX64": %d\n", target.nid, rc);
                         kibnal_tx_done(tx);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 ibmsg = tx->tx_msg;
@@ -1574,7 +1574,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                 tx->tx_ptlmsg[0] = ptlmsg;      /* finalise ptlmsg on completion */
                 tx->tx_waiting = 1;             /* waiting for PUT_{ACK,NAK} */
                 kibnal_launch_tx(tx, target.nid);
-                return PTL_OK;
+                return 0;
         }
 
         LASSERT (offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob])
@@ -1584,7 +1584,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                                   type == PTL_MSG_REPLY));
         if (tx == NULL) {
                 CERROR ("Can't send %d to "LPX64": tx descs exhausted\n", type, target.nid);
-                return PTL_NO_SPACE;
+                return -ENOMEM;
         }
 
         ibmsg = tx->tx_msg;
@@ -1606,12 +1606,12 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 
         tx->tx_ptlmsg[0] = ptlmsg;              /* finalise ptlmsg on completion */
         kibnal_launch_tx(tx, target.nid);
-        return PTL_OK;
+        return 0;
 }
 
-ptl_err_t
+int
 kibnal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
+             ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
              unsigned int payload_niov, struct iovec *payload_iov,
              size_t payload_offset, size_t payload_len)
 {
@@ -1621,10 +1621,10 @@ kibnal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                                payload_offset, payload_len));
 }
 
-ptl_err_t
+int
 kibnal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                   ptl_hdr_t *hdr, int type, ptl_process_id_t tgt, int routing,
-                   unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
+                   ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
+                   unsigned int payload_niov, lnet_kiov_t *payload_kiov, 
                    size_t payload_offset, size_t payload_len)
 {
         return (kibnal_sendmsg(ni, private, cookie,
@@ -1633,9 +1633,9 @@ kibnal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                                payload_offset, payload_len));
 }
 
-ptl_err_t
+int
 kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-                unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
+                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                 size_t offset, int mlen, int rlen)
 {
         kib_rx_t    *rx = private;
@@ -1661,7 +1661,7 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 if (nob > IBNAL_MSG_SIZE) {
                         CERROR ("Immediate message from "LPX64" too big: %d\n",
                                 rxmsg->ibm_u.immediate.ibim_hdr.src_nid, rlen);
-                        return (PTL_FAIL);
+                        return (-EIO);
                 }
 
                 if (kiov != NULL)
@@ -1673,23 +1673,23 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                                          rxmsg->ibm_u.immediate.ibim_payload,
                                          mlen);
 
-                ptl_finalize (ni, NULL, ptlmsg, PTL_OK);
-                return (PTL_OK);
+                ptl_finalize (ni, NULL, ptlmsg, 0);
+                return (0);
 
         case IBNAL_MSG_PUT_REQ:
                 /* NB rx_complete() will send PUT_NAK when I return to it from
                  * here, unless I set rx_responded!  */
 
                 if (mlen == 0) { /* No payload to RDMA */
-                        ptl_finalize(ni, NULL, ptlmsg, PTL_OK);
-                        return PTL_OK;
+                        ptl_finalize(ni, NULL, ptlmsg, 0);
+                        return 0;
                 }
 
                 tx = kibnal_get_idle_tx(0);
                 if (tx == NULL) {
                         CERROR("Can't allocate tx for "LPX64"\n",
                                conn->ibc_peer->ibp_nid);
-                        return PTL_FAIL;
+                        return -ENOMEM;
                 }
 
                 txmsg = tx->tx_msg;
@@ -1707,7 +1707,7 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                         CERROR("Can't setup PUT sink for "LPX64": %d\n",
                                conn->ibc_peer->ibp_nid, rc);
                         kibnal_tx_done(tx);
-                        return PTL_FAIL;
+                        return -EIO;
                 }
 
                 txmsg->ibm_u.putack.ibpam_src_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
@@ -1729,18 +1729,18 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
                 LASSERT (!rx->rx_responded);
                 rx->rx_responded = 1;
-                return PTL_OK;
+                return 0;
 
         case IBNAL_MSG_GET_REQ:
                 /* We get called here just to discard any junk after the
                  * GET hdr. */
                 LASSERT (ptlmsg == NULL);
-                ptl_finalize (ni, NULL, ptlmsg, PTL_OK);
-                return (PTL_OK);
+                ptl_finalize (ni, NULL, ptlmsg, 0);
+                return (0);
         }
 }
 
-ptl_err_t
+int
 kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
              unsigned int niov, struct iovec *iov, 
              size_t offset, size_t mlen, size_t rlen)
@@ -1749,9 +1749,9 @@ kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                                 offset, mlen, rlen));
 }
 
-ptl_err_t
+int
 kibnal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                   unsigned int niov, ptl_kiov_t *kiov, 
+                   unsigned int niov, lnet_kiov_t *kiov, 
                    size_t offset, size_t mlen, size_t rlen)
 {
         return (kibnal_recvmsg (ni, private, msg, niov, NULL, kiov,

@@ -47,5 +47,5 @@ debugctl_SOURCES = debugctl.c
 debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
 
-nidstrings.c: @top_srcdir@/portals/libcfs/nidstrings.c
+nidstrings.c: @top_srcdir@/lnet/libcfs/nidstrings.c
 	ln -sf $< $@

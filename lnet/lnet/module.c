@@ -31,9 +31,9 @@ CFS_MODULE_PARM(config_on_load, "i", int, 0444,
 
 static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
-        ptl_err_t          initrc;
+        int          initrc;
         int                rc;
-        ptl_handle_ni_t    nih;
+        lnet_handle_ni_t    nih;
 
         if (cmd == IOC_PORTAL_UNCONFIGURE) {
                 /* ghastly hack to prevent repeated net config */
@@ -45,20 +45,20 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 
                 if (initrc) {
                         rc--;
-                        LNetNIFini((ptl_handle_ni_t){0});
+                        LNetNIFini((lnet_handle_ni_t){0});
                 }
                 
                 return rc == 0 ? 0 : -EBUSY;
         }
         
-        initrc = LNetNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
+        initrc = LNetNIInit(LNET_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
                            NULL, NULL, &nih);
-        if (!(initrc == PTL_OK || initrc == PTL_IFACE_DUP))
+        if (initrc < 0)
                 RETURN (-ENETDOWN);
 
         rc = LNetNICtl(nih, cmd, data);
 
-        if (initrc == PTL_OK) {
+        if (initrc == 0) {
                 PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
                 /* I instantiated the network */
                 ptl_apini.apini_niinit_self = 1;
@@ -78,21 +78,21 @@ static int init_kportals_module(void)
         ENTRY;
 
         rc = LNetInit(NULL);
-        if (rc != PTL_OK) {
+        if (rc != 0) {
                 CERROR("LNetInit: error %d\n", rc);
                 RETURN(rc);
         }
 
         if (config_on_load) {
-                ptl_handle_ni_t    nih;
+                lnet_handle_ni_t    nih;
 
                 PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
                 ptl_apini.apini_niinit_self = 1;
                 PTL_MUTEX_UP(&ptl_apini.apini_api_mutex);
 
-                rc = LNetNIInit(PTL_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
+                rc = LNetNIInit(LNET_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
                                NULL, NULL, &nih);
-                if (rc != PTL_OK) {
+                if (rc != 0) {
                         /* Can't LNetFini or fail now if I loaded NALs */
                         PTL_MUTEX_DOWN(&ptl_apini.apini_api_mutex);
                         ptl_apini.apini_niinit_self = 0;
@@ -119,7 +119,6 @@ static void exit_kportals_module(void)
 EXPORT_SYMBOL(ptl_register_nal);
 EXPORT_SYMBOL(ptl_unregister_nal);
 
-EXPORT_SYMBOL(ptl_err_str);
 EXPORT_SYMBOL(LNetMEAttach);
 EXPORT_SYMBOL(LNetMEInsert);
 EXPORT_SYMBOL(LNetMEUnlink);

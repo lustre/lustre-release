@@ -120,13 +120,13 @@ int pingsrv_thread(void *arg)
                 server->mdout.start     = server->in_buf;
                 server->mdout.length    = STDSIZE;
                 server->mdout.threshold = 1; 
-                server->mdout.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+                server->mdout.options   = LNET_MD_OP_PUT;
                 server->mdout.user_ptr  = NULL;
-                server->mdout.eq_handle = PTL_EQ_NONE;
+                server->mdout.eq_handle = LNET_EQ_NONE;
        
                 /* Bind the outgoing buffer */
                 if ((rc = LNetMDBind (server->ni, server->mdout, 
-                                     PTL_UNLINK, &server->mdout_h))) {
+                                     LNET_UNLINK, &server->mdout_h))) {
                          PDEBUG ("LNetMDBind", rc);
                          pingsrv_shutdown (1);
                          return 1;
@@ -136,17 +136,17 @@ int pingsrv_thread(void *arg)
                 server->mdin.start     = server->in_buf;
                 server->mdin.length    = STDSIZE;
                 server->mdin.threshold = 1; 
-                server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+                server->mdin.options   = LNET_MD_OP_PUT;
                 server->mdin.user_ptr  = NULL;
                 server->mdin.eq_handle = server->eq;
         
                 if ((rc = LNetMDAttach (server->me, server->mdin,
-                        PTL_UNLINK, &server->mdin_h))) {
+                        LNET_UNLINK, &server->mdin_h))) {
                         PDEBUG ("LNetMDAttach (bulk)", rc);
                         CDEBUG (D_OTHER, "ping server resources allocated\n");
                 }
                 
-                if ((rc = LNetPut (server->mdout_h, PTL_NOACK_REQ,
+                if ((rc = LNetPut (server->mdout_h, LNET_NOACK_REQ,
                          server->evnt.initiator, PTL_PING_CLIENT, 0, 0, 0, 0)))
                          PDEBUG ("LNetPut", rc);
                 
@@ -158,13 +158,13 @@ int pingsrv_thread(void *arg)
         return 0;    
 }
 
-static void pingsrv_packet(ptl_event_t *ev)
+static void pingsrv_packet(lnet_event_t *ev)
 {
         atomic_inc (&pkt);
         wake_up_process (server->tsk);
 } /* pingsrv_head() */
 
-static void pingsrv_callback(ptl_event_t *ev)
+static void pingsrv_callback(lnet_event_t *ev)
 {
         
         if (ev == NULL) {
@@ -189,10 +189,10 @@ static struct pingsrv_data *pingsrv_setup(void)
 {
         int rc;
 
-        server->ni = PTL_INVALID_HANDLE;
+        server->ni = LNET_INVALID_HANDLE;
 
-        rc = LNetNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
+        rc = LNetNIInit(LNET_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
+        if (rc != 0 && rc != 1) {
                 CDEBUG (D_OTHER, "LNetNIInit: error %d\n", rc);
                 return pingsrv_shutdown (4);
         }
@@ -203,13 +203,13 @@ static struct pingsrv_data *pingsrv_setup(void)
                 return pingsrv_shutdown (2);
         }
 
-        server->id_local.nid = PTL_NID_ANY;
-        server->id_local.pid = PTL_PID_ANY;
+        server->id_local.nid = LNET_NID_ANY;
+        server->id_local.pid = LNET_PID_ANY;
 
         /* Attach a match entries for header packets */
         if ((rc = LNetMEAttach (server->ni, PTL_PING_SERVER,
             server->id_local,0, ~0,
-            PTL_RETAIN, PTL_INS_AFTER, &server->me))) {
+            LNET_RETAIN, LNET_INS_AFTER, &server->me))) {
                 PDEBUG ("LNetMEAttach", rc);
                 return pingsrv_shutdown (2);
         }
@@ -231,13 +231,13 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->mdin.start     = server->in_buf;
         server->mdin.length    = STDSIZE;
         server->mdin.threshold = 1; 
-        server->mdin.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+        server->mdin.options   = LNET_MD_OP_PUT;
         server->mdin.user_ptr  = NULL;
         server->mdin.eq_handle = server->eq;
         memset (server->in_buf, 0, STDSIZE);
         
         if ((rc = LNetMDAttach (server->me, server->mdin,
-                PTL_UNLINK, &server->mdin_h))) {
+                LNET_UNLINK, &server->mdin_h))) {
                     PDEBUG ("LNetMDAttach (bulk)", rc);
                 CDEBUG (D_OTHER, "ping server resources allocated\n");
        }

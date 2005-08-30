@@ -117,7 +117,7 @@ struct ptldebug_header {
 /* initial pid  */
 # if CRAY_PORTALS
 /*
- * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this
+ * 1) lnet_pid_t in cray portals is only 16 bits, not 32 bits, therefore this
  *    is too big.
  *
  * 2) the implementation of ernal in cray portals further restricts the pid

@@ -85,7 +85,7 @@ tcpnal_set_global_params (void)
 
 /* Function:  compare_connection
  * Arguments: connection c:      a connection in the hash table
- *            ptl_process_id_t:  an id to verify  agains
+ *            lnet_process_id_t:  an id to verify  agains
  * Returns: 1 if the connection is the one requested, 0 otherwise
  *
  *    compare_connection() tests for collisions in the hash table
@@ -93,19 +93,19 @@ tcpnal_set_global_params (void)
 static int compare_connection(void *arg1, void *arg2)
 {
     connection c = arg1;
-    ptl_nid_t *nid = arg2;
+    lnet_nid_t *nid = arg2;
 
     return (c->peer_nid == *nid);
 }
 
 /* Function:  connection_key
- * Arguments: ptl_process_id_t id:  an id to hash
+ * Arguments: lnet_process_id_t id:  an id to hash
  * Returns: a not-particularily-well-distributed hash
  *          of the id
  */
 static unsigned int connection_key(void *arg)
 {
-        ptl_nid_t *nid = arg;
+        lnet_nid_t *nid = arg;
         
         return (unsigned int)(*nid);
 }
@@ -177,7 +177,7 @@ static int connection_input(void *d)
 
 static connection 
 allocate_connection(manager        m,
-                    ptl_nid_t      nid,
+                    lnet_nid_t      nid,
                     int            fd)
 {
     connection c=malloc(sizeof(struct connection));
@@ -192,7 +192,7 @@ allocate_connection(manager        m,
 }
 
 int
-tcpnal_write(ptl_nid_t nid, int sockfd, void *buffer, int nob)
+tcpnal_write(lnet_nid_t nid, int sockfd, void *buffer, int nob)
 {
         int rc = syscall(SYS_write, sockfd, buffer, nob);
         
@@ -212,7 +212,7 @@ tcpnal_write(ptl_nid_t nid, int sockfd, void *buffer, int nob)
 }
 
 int
-tcpnal_read(ptl_nid_t nid, int sockfd, void *buffer, int nob) 
+tcpnal_read(lnet_nid_t nid, int sockfd, void *buffer, int nob) 
 {
         int       rc;
 
@@ -237,7 +237,7 @@ tcpnal_read(ptl_nid_t nid, int sockfd, void *buffer, int nob)
 }
 
 int
-tcpnal_hello (int sockfd, ptl_nid_t nid)
+tcpnal_hello (int sockfd, lnet_nid_t nid)
 {
         struct timeval         tv;
         __u64                  incarnation;
@@ -321,8 +321,8 @@ tcpnal_hello (int sockfd, ptl_nid_t nid)
                 return -1;
         }
 
-        if (le64_to_cpu(hdr.src_nid) == PTL_NID_ANY) {
-                CERROR("Expecting a HELLO hdr with a NID, but got PTL_NID_ANY\n");
+        if (le64_to_cpu(hdr.src_nid) == LNET_NID_ANY) {
+                CERROR("Expecting a HELLO hdr with a NID, but got LNET_NID_ANY\n");
                 return -1;
         }
 
@@ -351,7 +351,7 @@ tcpnal_hello (int sockfd, ptl_nid_t nid)
  *          a pre-existing one, or a new connection
  */
 connection force_tcp_connection(manager m,
-                                ptl_nid_t nid,
+                                lnet_nid_t nid,
                                 procbridge pb)
 {
     unsigned int       ip = PTL_NIDADDR(nid);

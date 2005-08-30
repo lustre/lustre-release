@@ -65,7 +65,7 @@ ptl_acceptor_port(void)
 EXPORT_SYMBOL(ptl_acceptor_port);
 
 void
-ptl_connect_console_error (int rc, ptl_nid_t peer_nid, 
+ptl_connect_console_error (int rc, lnet_nid_t peer_nid, 
                            __u32 peer_ip, int peer_port)
 {
         switch (rc) {
@@ -123,8 +123,8 @@ ptl_connect_console_error (int rc, ptl_nid_t peer_nid,
 }
 EXPORT_SYMBOL(ptl_connect_console_error);
 
-ptl_err_t
-ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
+int
+ptl_connect(struct socket **sockp, lnet_nid_t peer_nid,
             __u32 local_ip, __u32 peer_ip, int peer_port)
 {
         ptl_acceptor_connreq_t  cr;
@@ -171,7 +171,7 @@ ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
                 }
                 
                 *sockp = sock;
-                return PTL_OK;
+                return 0;
         }
 
         rc = -EADDRINUSE;
@@ -181,7 +181,7 @@ ptl_connect(struct socket **sockp, ptl_nid_t peer_nid,
         libcfs_sock_release(sock);
  failed:
         ptl_connect_console_error(rc, peer_nid, peer_ip, peer_port);
-        return PTL_FAIL;
+        return rc;
 }
 EXPORT_SYMBOL(ptl_connect);
 
@@ -192,7 +192,7 @@ ptl_accept_magic(__u32 magic, __u32 constant)
                 magic == __swab32(constant));
 }
 
-ptl_err_t
+int
 ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
 {
         ptl_acceptor_connreq_t  cr;
@@ -226,7 +226,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u magic %08x: "
                                " %s acceptor protocol\n",
                                HIPQUAD(peer_ip), magic, str);
-                return PTL_FAIL;
+                return -EPROTO;
         }
 
         flip = magic != PTL_PROTO_ACCEPTOR_MAGIC;
@@ -241,7 +241,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         if (rc != 0) {
                 CERROR("Error %d reading connection request from "
                        "%u.%u.%u.%u\n", rc, HIPQUAD(peer_ip));
-                return PTL_FAIL;
+                return -EIO;
         }
 
         if (flip) {
@@ -253,7 +253,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u: "
                                " unrecognised protocol version %d\n",
                                HIPQUAD(peer_ip), cr.acr_version);
-                return PTL_FAIL;
+                return -EPROTO;
         }
 
         ni = ptl_net2ni(PTL_NIDNET(cr.acr_nid));
@@ -264,7 +264,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
                                " No matching NI\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
-                return PTL_FAIL;
+                return -EPERM;
         }
 
         if (ni->ni_nal->nal_accept == NULL) {
@@ -272,7 +272,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
                                " NI doesn not accept IP connections\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
-                return PTL_FAIL;
+                return -EPERM;
         }
                 
         CDEBUG(D_NET, "Accept %s from %u.%u.%u.%u%s\n",
@@ -281,7 +281,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
 
         if (blind_ni == NULL) {
                 rc = ni->ni_nal->nal_accept(ni, sock);
-                if (rc != PTL_OK)
+                if (rc != 0)
                         CERROR("NI %s refused connection from %u.%u.%u.%u\n",
                                libcfs_nid2str(ni->ni_nid), HIPQUAD(peer_ip));
         } else {
@@ -291,7 +291,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                  * uses the new acceptor protocol and I'm just being called to
                  * verify and skip it */
                 LASSERT (ni == blind_ni);
-                rc = PTL_OK;
+                rc = 0;
         }
 
         ptl_ni_decref(ni);
@@ -391,7 +391,7 @@ ptl_acceptor(void *arg)
 
                 if (blind_ni != NULL) {
                         rc = blind_ni->ni_nal->nal_accept(blind_ni, newsock);
-                        if (rc != PTL_OK) {
+                        if (rc != 0) {
                                 CERROR("NI %s refused 'blind' connection from "
                                        "%u.%u.%u.%u\n", 
                                        libcfs_nid2str(blind_ni->ni_nid), 
@@ -410,7 +410,7 @@ ptl_acceptor(void *arg)
 		}
 
                 rc = ptl_accept(NULL, newsock, magic);
-                if (rc != PTL_OK)
+                if (rc != 0)
                         goto failed;
                 
                 continue;
@@ -432,7 +432,7 @@ ptl_acceptor(void *arg)
 	return 0;
 }
 
-ptl_err_t
+int
 ptl_acceptor_start(void)
 {
 	long   pid;
@@ -446,20 +446,20 @@ ptl_acceptor_start(void)
         } else if (!strcmp(accept, "all")) {
                 secure = 0;
         } else if (!strcmp(accept, "none")) {
-                return PTL_OK;
+                return 0;
         } else {
                 LCONSOLE_ERROR ("Can't parse 'accept=\"%s\"'\n",
                                 accept);
-                return PTL_FAIL;
+                return -EINVAL;
         }
 	
 	if (ptl_count_acceptor_nis(NULL) == 0)  /* not required */
-		return PTL_OK;
+		return 0;
 	
 	pid = cfs_kernel_thread(ptl_acceptor, (void *)secure, 0);
 	if (pid < 0) {
 		CERROR("Can't start acceptor thread: %ld\n", pid);
-		return PTL_FAIL;
+		return -ESRCH;
 	}
 
 	mutex_down(&ptl_acceptor_state.pta_signal); /* wait for acceptor to startup */
@@ -467,11 +467,11 @@ ptl_acceptor_start(void)
 	if (ptl_acceptor_state.pta_shutdown == 0) {
                 /* started OK */
                 LASSERT (ptl_acceptor_state.pta_sock != NULL);
-		return PTL_OK;
+		return 0;
         }
 
         LASSERT (ptl_acceptor_state.pta_sock == NULL);
-	return PTL_FAIL;
+	return -ENETDOWN;
 }
 
 void
@@ -489,10 +489,10 @@ ptl_acceptor_stop(void)
 
 #else /* __KERNEL__ */
 
-ptl_err_t
+int
 ptl_acceptor_start(void)
 {
-	return PTL_OK;
+	return 0;
 }
 
 void

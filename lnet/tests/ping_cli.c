@@ -42,7 +42,7 @@ static struct pingcli_data *client = NULL;
 static int count = 0;
 
 static void
-pingcli_shutdown(ptl_handle_ni_t nih, int err)
+pingcli_shutdown(lnet_handle_ni_t nih, int err)
 {
         int rc;
 
@@ -86,7 +86,7 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
         CDEBUG (D_OTHER, "ping client released resources\n");
 } /* pingcli_shutdown() */
 
-static void pingcli_callback(ptl_event_t *ev)
+static void pingcli_callback(lnet_event_t *ev)
 {
         int i;
         unsigned magic;
@@ -107,7 +107,7 @@ static void pingcli_callback(ptl_event_t *ev)
 static void
 pingcli_start(struct portal_ioctl_data *args)
 {
-        ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
+        lnet_handle_ni_t nih = LNET_INVALID_HANDLE;
         unsigned ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
         int rc;
         struct timeval tv1, tv2;
@@ -142,8 +142,8 @@ pingcli_start(struct portal_ioctl_data *args)
                 return;
         }
 
-        rc = LNetNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL, &nih);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP)
+        rc = LNetNIInit(LNET_IFACE_DEFAULT, 0, NULL, NULL, &nih);
+        if (rc != 0 && rc != 1)
         {
                 CERROR ("LNetNIInit: error %d\n", rc);
                 pingcli_shutdown (nih, 4);
@@ -159,16 +159,16 @@ pingcli_start(struct portal_ioctl_data *args)
         }
 
         /* Setup the local match entries */
-        client->id_local.nid = PTL_NID_ANY;
-        client->id_local.pid = PTL_PID_ANY;
+        client->id_local.nid = LNET_NID_ANY;
+        client->id_local.pid = LNET_PID_ANY;
 
         /* Setup the remote match entries */
         client->id_remote.nid = client->nid;
         client->id_remote.pid = 0;
 
         if ((rc = LNetMEAttach (nih, PTL_PING_CLIENT,
-                   client->id_local, 0, ~0, PTL_RETAIN,
-                   PTL_INS_AFTER, &client->me)))
+                   client->id_local, 0, ~0, LNET_RETAIN,
+                   LNET_INS_AFTER, &client->me)))
         {
                 CERROR ("LNetMEAttach error %d\n", rc);
                 pingcli_shutdown (nih, 2);
@@ -187,15 +187,15 @@ pingcli_start(struct portal_ioctl_data *args)
 
         client->md_in_head.start     = client->inbuf;
         client->md_in_head.length    = (client->size + STDSIZE) * count;
-        client->md_in_head.threshold = PTL_MD_THRESH_INF;
-        client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+        client->md_in_head.threshold = LNET_MD_THRESH_INF;
+        client->md_in_head.options   = LNET_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
         client->md_in_head.eq_handle = client->eq;
         memset (client->inbuf, 0, (client->size + STDSIZE) * count);
 
         /* Attach the incoming buffer */
         if ((rc = LNetMDAttach (client->me, client->md_in_head,
-                              PTL_UNLINK, &client->md_in_head_h))) {
+                              LNET_UNLINK, &client->md_in_head_h))) {
                 CERROR ("LNetMDAttach error %d\n", rc);
                 pingcli_shutdown (nih, 1);
                 return;
@@ -204,9 +204,9 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.start     = client->outbuf;
         client->md_out_head.length    = STDSIZE + client->size;
         client->md_out_head.threshold = client->count;
-        client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
+        client->md_out_head.options   = LNET_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
-        client->md_out_head.eq_handle = PTL_EQ_NONE;
+        client->md_out_head.eq_handle = LNET_EQ_NONE;
 
         memcpy (client->outbuf, &ping_head_magic, sizeof(ping_head_magic));
 
@@ -214,7 +214,7 @@ pingcli_start(struct portal_ioctl_data *args)
 
         /* Bind the outgoing ping header */
         if ((rc=LNetMDBind (nih, client->md_out_head,
-                           PTL_UNLINK, &client->md_out_head_h))) {
+                           LNET_UNLINK, &client->md_out_head_h))) {
                 CERROR ("LNetMDBind error %d\n", rc);
                 pingcli_shutdown (nih, 1);
                 return;
@@ -231,7 +231,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 memcpy(client->outbuf+sizeof(unsigned)+sizeof(unsigned),&tv1,
                        sizeof(struct timeval));
 
-                if((rc = LNetPut (client->md_out_head_h, PTL_NOACK_REQ,
+                if((rc = LNetPut (client->md_out_head_h, LNET_NOACK_REQ,
                           client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
                          PDEBUG ("LNetPut (header)", rc);
                          pingcli_shutdown (nih, 1);
