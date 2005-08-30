@@ -1,0 +1,442 @@
+#LyX 1.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 221
+\textclass newbook
+\language english
+\inputencoding auto
+\fontscheme default
+\graphics default
+\paperfontsize default
+\spacing double 
+\papersize Default
+\paperpackage a4
+\use_geometry 0
+\use_amsmath 0
+\use_natbib 0
+\use_numerical_citations 0
+\paperorientation landscape
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\defskip medskip
+\quotes_language english
+\quotes_times 2
+\papercolumns 1
+\papersides 2
+\paperpagestyle fancy
+
+\layout Title
+
+MGC/MGS Detailed Design
+\layout Author
+
+Lin Song Tao 
+\layout Date
+
+2005.8
+\layout Section
+
+Functional Specification
+\layout Subsection
+
+Introduction
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+MGS (management server) and MGC (management client) are two type of OBD
+ device in Lustre Filesystem.
+ They are charged of the management and update of the llog.
+ 
+\layout Subsection
+
+Glossary
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+MGS: Management Server, manage the production and update of llog of client
+ and mds.
+\layout Standard
+
+MGC: Management Client, get the updated llog from the mgs and keep the local
+ llog updated if there are local llog.
+\layout Standard
+
+LLOG_VERSION: version of llog, 64bits, it has two parts, one for ost update,
+ one for client /mds update.
+\layout Standard
+
+NID: network identifier, in <address>@<network> format.
+\layout Standard
+
+Target\SpecialChar ~
+name: The name of a OST or MDT target.
+ This is always in the form 
+\emph on 
+<
+\emph default 
+filesystem>-(OST|MDT)<index>, where index is a 4-digit 4 hex number, e.g.
+ lustre-MDT000c.
+ If there are pools exists, the name will be <filesystem>-<poolname>-(OST|MDT)<i
+ndex>.
+\layout Subsection
+
+Function prototype
+\layout Subsubsection
+
+data struct for update
+\layout LyX-Code
+
+struct ost_info {
+\layout LyX-Code
+
+        char osi_ostname[40];
+\layout LyX-Code
+
+        char osi_nodename[40];
+\layout LyX-Code
+
+        ptl_nid_t osi_nid;
+\layout LyX-Code
+
+        __u32 osi_nal;
+\layout LyX-Code
+
+        __u32 osi_stripe_index;
+\layout LyX-Code
+
+}; 
+\layout LyX-Code
+
+struct mds_info {
+\layout LyX-Code
+
+       char msi_mdsname[40];
+\layout LyX-Code
+
+       char msi_nodename[40];
+\layout LyX-Code
+
+       ptl_nid_t msi_nid;
+\layout LyX-Code
+
+       __u32    osi_nal;
+\layout LyX-Code
+
+};
+\layout Subsubsection
+
+mgs corresponding data structs
+\layout LyX-Code
+
+struct mgs_obd {
+\layout LyX-Code
+
+        struct ptlrpc_service *mgs_service;
+\layout LyX-Code
+
+        struct vfsmount *mgs_vfsmnt;
+\layout LyX-Code
+
+        struct super_block *mgs_sb;
+\layout LyX-Code
+
+        struct dentry *mgs_configs_dir;    /* the CONFIG Dir dentry */
+\layout LyX-Code
+
+        spinlock_t mgs_llogs_lock;         /* lock to modify mgs_open_llogs*/
+\layout LyX-Code
+
+        struct list_head mgs_open_llogs;   /* The current active llogs */
+\layout LyX-Code
+
+        spinlock_t mgs_llhs_lock;          /* lock to modify the mgs_update_llhs
+ */
+\layout LyX-Code
+
+        struct list_head mgs_update_llhs;  /* the update llog handle lists*/
+\layout LyX-Code
+
+};
+\layout LyX-Code
+
+\layout LyX-Code
+
+struct mgs_open_llog {
+\layout LyX-Code
+
+        struct list_head    mol_list;     
+\layout LyX-Code
+
+        struct dentry       *mol_dentry;  /*Open direcorty dentry for the
+ client llogs */
+\layout LyX-Code
+
+        __u64               mol_id;  /* logid (node id ) of the client llog
+ */
+\layout LyX-Code
+
+        __u32               mol_ref;
+\layout LyX-Code
+
+        spinlock_t          mol_lock;
+\layout LyX-Code
+
+        /* for ost-add */
+\layout LyX-Code
+
+        __u8                mol_update;
+\layout LyX-Code
+
+        __u64               mol_version;
+\layout LyX-Code
+
+        __u64               mol_ost_number;
+\layout LyX-Code
+
+        __u64               mol_next_ost_index;
+\layout LyX-Code
+
+        struct list_head    mol_ost_infos;
+\layout LyX-Code
+
+        struct mds_info     *mol_mds_info;
+\layout LyX-Code
+
+};
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+Each fsname/pool will have 2 llogs in mgs , one for mds, one for client.
+ 
+\layout Standard
+
+OST register/change or MDS changes will modify the mds_open_llogs just for
+ client, and the mgs will according to the mgs_open_llogs to update new
+ llogs(both for mds and client).
+\layout Subsubsection
+
+MGC methods
+\layout LyX-Code
+
+int mgc_setup(struct obd_device *obd, obd_count len, void *buf);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgc_setup initialize the base data struct of mgc obd device.
+\layout LyX-Code
+
+int mgc_register_ost(struct obd_device *obd, struct ost_info *osi, nid_t
+ mgs_nid, struct mds_info *mdi);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgc_register_ost register the ost to the mgs, ang get the mds-info and index
+ from mgs, the index store int the ost_info buffer)
+\layout LyX-Code
+
+int mgc_register_mds(struct obd_device *obd, nid_t mgs_nid, struct mds_info
+ *mdi);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgc_register_mds register the mds to the mgs, in the case of MDS and MGS
+ in the different 
+\layout LyX-Code
+
+int mgc_update_ost_llogs(struct obd_device, struct ost_info *osi, struct
+ mds_info *mdi);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgc_register_ost_llogs according to the ost-info and mds-info, generate
+ the ost startup llog.
+\layout Subsubsection
+
+MGS methods
+\layout LyX-Code
+
+int mgs_setup(struct obd_device *obd, obd_count len, void *buf);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgs_setup initialize the base data struct of mgc obd device.
+\layout LyX-Code
+
+int mgs_update_llogs(struct obd_device);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgs_update_llogs according to the open mgs llog to update llogs.
+\layout LyX-Code
+
+int mgs_accept_ost(struct obd_device, struct ost_info* osi);
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+mgs will accept ost register in mgs_open_llog
+\layout LyX-Code
+
+int mgs_change_ost(struct obd_device, struct ost_info *osi);
+\layout LyX-Code
+
+int mgs_change_mgs(struct obd_device, struct mds_info *msi);
+\layout Section
+
+User Case
+\layout Subsection
+
+MGS startup:
+\layout Standard
+
+node1: mount -t lustre /dev/sda /mnt/lustre1mdt1
+\layout Section
+
+Logical Specifications
+\layout Subsection
+
+LLOG VERSION:
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+There are two conditions the llog version changes:
+\layout Standard
+
+1.
+ new ost register.
+\layout Standard
+
+2.
+ mds informations changes.
+\layout Standard
+
+When there are new ost(s) registers/unregister, the llog of mds/client have
+ to update, while the llog of ost can be left unchanged.
+ When mds informations changes(such as we move the mds disk to another node),
+ the llog of all nodes have to update.
+\layout Standard
+
+When the mds information changes, we will reset the version to the orginal
+ one to force ost update the llog.
+\layout Subsection
+
+Client:
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+When a client startups, it start the mgc.
+ The MGC connect to the mgs server (specified in mount command)to get the
+ updated client llog and start the client.
+\layout Subsection
+
+OST:
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+When a ost startups, It start the mgc also.
+ 
+\layout Standard
+
+If it is the first time it startup, mount command will trigger the MGC to
+ do such steps:
+\layout Standard
+
+1.1 Connect to the mgs server(must specified in the mount command)to register,
+ and get the ost-index and mds information from mgs server.
+\layout Standard
+
+1.2 According to the ost-index and mds information, MGC produce the local
+ ost startup llog.
+\layout Standard
+
+1.3 MGC perform the ost startup llog to start the OST.
+\layout Standard
+
+If is not the first time it startup, the mount command will trigger the
+ MGC do such steps:
+\layout Standard
+
+2.1 Connect to the mgs server(use the one specified in the mount command,
+ if not , get mgs nid from the local disk), to get the current version.
+ If mds version has been set to Original, get mds information from mgs,
+ Goto AcStep 1.2, otherwise jump to Step 1.3.
+\layout Subsection
+
+MDS:
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+When a mds startup.
+\layout Standard
+
+If it has not the same disk with mgs, mount command will trigger the MGC
+ to do such steps:
+\layout Standard
+
+1.1 Connect to the mgs server to get the updated mds start llog.
+\layout Standard
+
+1.2 MGC perform the mds startup llog to start the MDS.
+\layout Standard
+
+If it has the same disk with mgs, mount command will trigger the MGC to
+ do such steps:
+\layout Standard
+
+1.1 Get the mds startup llog from disk.
+\layout Standard
+
+1.2 MGC perform the mds startup llog to start the MDS.
+\layout Subsection
+
+MGS:
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+When a mgs startup.
+\layout Standard
+
+Accepting ost registering, keep the current version.
+\layout Subsection
+
+OST ADDITION(for simplify, not writing connect/disconect, even they will
+ happen)
+\layout Standard
+
+\SpecialChar ~
+\SpecialChar ~
+1.1 OST: mgc_register_ost
+\layout Standard
+
+1.1.1 OST: mgc_register_ost: send OST_ADD rpc to mgs
+\layout Standard
+
+1.2 MGS: mgs_accept_ost: get ost_info from mgs
+\layout Standard
+
+1.2.1 MGS: mgs_accept_ost: run llog_create in local node to build mgs_open_llog.
+\layout Standard
+
+1.2.2 MGS: mgs_accept_ost: add ost_infos in the mgs_open_llogs, ang calculate
+ the new index;
+\layout Standard
+
+1.2.3 MGS: mgs_accept_ost: return the index and the mds_info to the ost;
+\layout Standard
+
+1.3 OST: mgc_update_ost_llogs: according to the mds_info and the ost_info(with
+ the index) generate the new llog
+\the_end
