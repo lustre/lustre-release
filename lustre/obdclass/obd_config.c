@@ -478,6 +478,8 @@ void class_del_profile(char *prof)
                 OBD_FREE(lprof->lp_lov, strlen(lprof->lp_lov) + 1);
                 if (lprof->lp_lmv)
                         OBD_FREE(lprof->lp_lmv, strlen(lprof->lp_lmv) + 1);
+                if (lprof->lp_gkc)
+                        OBD_FREE(lprof->lp_gkc, strlen(lprof->lp_gkc) + 1);
                 OBD_FREE(lprof, sizeof *lprof);
         }
 }
