@@ -54,6 +54,8 @@ case "$lustretag" in
 	exit 0
 	;;
 
+    v*) buildtag=$lustretag ;;
+
     # this is the branch table
     # keep this list sorted alphabetically!
 
