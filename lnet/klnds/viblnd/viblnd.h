@@ -56,8 +56,8 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
-#include <portals/lib-p30.h>
+#include <lnet/p30.h>
+#include <lnet/lib-p30.h>
 
 /* CPU_{L,B}E #defines needed by Voltaire headers */
 #include <asm/byteorder.h>

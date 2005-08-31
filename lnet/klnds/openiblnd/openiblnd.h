@@ -54,8 +54,8 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
-#include <portals/lib-p30.h>
+#include <lnet/p30.h>
+#include <lnet/lib-p30.h>
 
 #include <ts_ib_core.h>
 #include <ts_ib_cm.h>

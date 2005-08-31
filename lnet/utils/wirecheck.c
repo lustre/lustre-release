@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 #include <string.h>
 

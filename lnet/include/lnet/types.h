@@ -4,7 +4,7 @@
 #include "build_check.h"
 
 #include <libcfs/libcfs.h>
-#include <portals/errno.h>
+#include <lnet/errno.h>
 
 /* This implementation uses the same type for API function return codes and
  * the completion status in an event  */

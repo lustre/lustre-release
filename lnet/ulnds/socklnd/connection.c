@@ -37,9 +37,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
-#include <portals/types.h>
-#include <portals/lib-types.h>
-#include <portals/socknal.h>
+#include <lnet/types.h>
+#include <lnet/lib-types.h>
+#include <lnet/socknal.h>
 #include <libcfs/kp30.h>
 #include <connection.h>
 #include <pthread.h>

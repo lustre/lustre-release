@@ -3,7 +3,7 @@
 
 #include "build_check.h"
 
-#include <portals/types.h>
+#include <lnet/types.h>
 
 int LNetInit(int *);
 

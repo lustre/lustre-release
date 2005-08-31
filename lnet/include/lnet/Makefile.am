@@ -1,4 +1,4 @@
-portalsdir=$(includedir)/portals
+lnetdir=$(includedir)/lnet
 
 SUBDIRS := linux
 if DARWIN

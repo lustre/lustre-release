@@ -15,7 +15,7 @@ endif
 if MODULES
 
 if LINUX
-modulenet_DATA = portals$(KMODEXT)
+modulenet_DATA = lnet$(KMODEXT)
 endif # LINUX
 
 if DARWIN
@@ -44,5 +44,5 @@ install-data-hook: $(install_data_hook)
 
 EXTRA_DIST := Info.plist router.h
 
-MOSTLYCLEANFILES = *.o *.ko *.mod.c portals
-DIST_SOURCES = $(portals-objs:%.o=%.c)
+MOSTLYCLEANFILES = *.o *.ko *.mod.c lnet
+DIST_SOURCES = $(lnet-objs:%.o=%.c)

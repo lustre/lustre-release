@@ -13,16 +13,16 @@
 #include "build_check.h"
 
 #if defined(__linux__)
-#include <portals/linux/lib-types.h>
+#include <lnet/linux/lib-types.h>
 #elif defined(__APPLE__)
-#include <portals/darwin/lib-types.h>
+#include <lnet/darwin/lib-types.h>
 #else
 #error Unsupported Operating System
 #endif
 
 #include <libcfs/libcfs.h>
 #include <libcfs/list.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 
 #define WIRE_ATTR	__attribute__((packed))
 

@@ -561,7 +561,7 @@ fi
 #
 # LN_PROG_LINUX
 #
-# Portals linux kernel checks
+# LNet linux kernel checks
 #
 AC_DEFUN([LN_PROG_LINUX],
 [LN_CONFIG_ZEROCOPY
@@ -735,8 +735,8 @@ lnet/doc/Makefile
 lnet/include/Makefile
 lnet/include/libcfs/Makefile
 lnet/include/libcfs/linux/Makefile
-lnet/include/portals/Makefile
-lnet/include/portals/linux/Makefile
+lnet/include/lnet/Makefile
+lnet/include/lnet/linux/Makefile
 lnet/knals/Makefile
 lnet/knals/autoMakefile
 lnet/knals/gmnal/Makefile
@@ -756,8 +756,8 @@ lnet/knals/socknal/autoMakefile
 lnet/libcfs/Makefile
 lnet/libcfs/autoMakefile
 lnet/libcfs/linux/Makefile
-lnet/portals/Makefile
-lnet/portals/autoMakefile
+lnet/lnet/Makefile
+lnet/lnet/autoMakefile
 lnet/tests/Makefile
 lnet/tests/autoMakefile
 lnet/unals/Makefile
@@ -767,7 +767,7 @@ case $lb_target_os in
 	darwin)
 		AC_CONFIG_FILES([
 lnet/include/libcfs/darwin/Makefile
-lnet/include/portals/darwin/Makefile
+lnet/include/lnet/darwin/Makefile
 lnet/libcfs/darwin/Makefile
 ])
 		;;

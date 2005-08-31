@@ -23,7 +23,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_PORTALS
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 int
 LNetEQAlloc(lnet_handle_ni_t interface, lnet_size_t count,

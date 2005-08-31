@@ -24,7 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 void
 ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)

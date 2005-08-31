@@ -1,9 +1,9 @@
-MODULES := portals
+MODULES := lnet
 
-portals-objs := api-errno.o api-ni.o config.o
-portals-objs += lib-me.o lib-msg.o lib-eq.o lib-md.o
-portals-objs += lib-move.o module.o lo.o
-portals-objs += router.o router_proc.o acceptor.o
+lnet-objs := api-errno.o api-ni.o config.o
+lnet-objs += lib-me.o lib-msg.o lib-eq.o lib-md.o
+lnet-objs += lib-move.o module.o lo.o
+lnet-objs += router.o router_proc.o acceptor.o
 
 default: all
 

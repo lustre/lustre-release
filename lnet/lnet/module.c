@@ -23,7 +23,7 @@
 # define EXPORT_SYMTAB
 #endif
 #define DEBUG_SUBSYSTEM S_PORTALS
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,

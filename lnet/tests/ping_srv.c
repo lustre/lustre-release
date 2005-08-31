@@ -26,7 +26,7 @@
 #define DEBUG_SUBSYSTEM S_PINGER
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
+#include <lnet/p30.h>
 #include "ping.h"
 
 #define STDSIZE (sizeof(int) + sizeof(int) + sizeof(struct timeval))

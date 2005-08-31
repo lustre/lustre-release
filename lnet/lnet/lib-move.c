@@ -24,7 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 #if 1
 /* Enforce the rule that the target NID must be that of the receiving NI */

@@ -49,8 +49,8 @@
 #include <sys/mman.h>
 #include <sys/utsname.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/ptlctl.h>
 #include <libcfs/portals_utils.h>
 #include "parser.h"
 

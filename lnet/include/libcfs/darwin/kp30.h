@@ -22,7 +22,7 @@
 
 #include <libcfs/darwin/darwin-lock.h>
 #include <libcfs/darwin/darwin-prim.h>
-#include <portals/p30.h>
+#include <lnet/p30.h>
 
 #define our_cond_resched()              schedule_timeout(1);
 

@@ -5,7 +5,7 @@
 #define __PORTALS_DARWIN_LIB_TYPES_H__
 
 #ifndef __PORTALS_LIB_TYPES_H__
-#error Do not #include this file directly. #include <portals/lib-types.h> instead
+#error Do not #include this file directly. #include <lnet/lib-types.h> instead
 #endif
 
 #include <sys/types.h>

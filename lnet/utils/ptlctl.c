@@ -22,8 +22,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/ptlctl.h>
 
 #include "parser.h"
 

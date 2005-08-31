@@ -9,8 +9,8 @@
 # include <time.h>
 #endif
 
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
+#include <lnet/p30.h>
 
 #endif

@@ -26,7 +26,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <portals/p30.h>
+#include <lnet/p30.h>
 #include <libcfs/kp30.h>
 #ifndef __KERNEL__
 #include <netdb.h>

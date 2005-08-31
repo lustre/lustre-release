@@ -9,7 +9,7 @@
 #ifndef TCPNAL_PROCBRIDGE_H
 #define TCPNAL_PROCBRIDGE_H
 
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 typedef struct bridge {
     int alive;

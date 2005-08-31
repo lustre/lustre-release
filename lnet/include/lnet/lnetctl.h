@@ -21,7 +21,7 @@
 #ifndef _PTLCTL_H_
 #define _PTLCTL_H_
 
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 

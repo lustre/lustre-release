@@ -39,9 +39,9 @@
 #endif
 
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
-#include <portals/lib-p30.h>
-#include <portals/socknal.h>
+#include <lnet/p30.h>
+#include <lnet/lib-p30.h>
+#include <lnet/socknal.h>
 
 /* default vals for tunables/modparams */
 #define SOCKNAL_TIMEOUT          50             /* default comms timeout (seconds) */

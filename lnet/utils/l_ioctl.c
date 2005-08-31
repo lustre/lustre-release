@@ -33,8 +33,8 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/ptlctl.h>
 #include <libcfs/portals_utils.h>
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */

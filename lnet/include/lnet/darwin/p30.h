@@ -5,7 +5,7 @@
 #define _PORTALS_DARWIN_P30_H_
 
 #ifndef __PORTALS_P30_H__
-#error Do not #include this file directly. #include <portals/p30.h> instead
+#error Do not #include this file directly. #include <lnet/p30.h> instead
 #endif
 
 /*

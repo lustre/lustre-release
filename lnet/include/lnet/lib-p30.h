@@ -12,17 +12,17 @@
 #include "build_check.h"
 
 #if defined(__linux__)
-#include <portals/linux/lib-p30.h>
+#include <lnet/linux/lib-p30.h>
 #elif defined(__APPLE__)
-#include <portals/darwin/lib-p30.h>
+#include <lnet/darwin/lib-p30.h>
 #else
 #error Unsupported Operating System
 #endif
 
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/kp30.h>
-#include <portals/p30.h>
-#include <portals/lib-types.h>
+#include <lnet/p30.h>
+#include <lnet/lib-types.h>
 
 extern ptl_apini_t   ptl_apini;                 /* THE network interface (at the API) */
 

@@ -5,7 +5,7 @@
 #define __PORTALS_LINUX_LIB_TYPES_H__
 
 #ifndef __PORTALS_LIB_TYPES_H__
-#error Do not #include this file directly. #include <portals/lib-types.h> instead
+#error Do not #include this file directly. #include <lnet/lib-types.h> instead
 #endif
 
 #ifdef __KERNEL__

@@ -29,7 +29,7 @@
 #include <sys/errno.h>
 #include <sys/types.h>
 #include <sys/fcntl.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 
 #ifndef isspace
 inline int

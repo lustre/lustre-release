@@ -20,7 +20,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_PORTALS
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 typedef struct {                                /* tmp struct for parsing routes */
 	struct list_head   ptb_list;		/* stash on lists */

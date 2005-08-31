@@ -49,13 +49,13 @@
 #ifdef REDSTORM
 #define __QK__
 #endif
-#include <portals/ipmap.h>
+#include <lnet/ipmap.h>
 #endif
 
 #include <libcfs/portals_utils.h>
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
-#include <portals/socknal.h>
+#include <lnet/api-support.h>
+#include <lnet/ptlctl.h>
+#include <lnet/socknal.h>
 #include "parser.h"
 
 unsigned int portal_debug;

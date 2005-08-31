@@ -24,7 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 /* must be called with PTL_LOCK held */
 void

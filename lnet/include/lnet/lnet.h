@@ -12,14 +12,14 @@
  * User application interface file
  */
 #if defined(__linux__)
-#include <portals/linux/p30.h>
+#include <lnet/linux/p30.h>
 #elif defined(__APPLE__)
-#include <portals/darwin/p30.h>
+#include <lnet/darwin/p30.h>
 #else
 #error Unsupported Operating System
 #endif
 
-#include <portals/types.h>
-#include <portals/api.h>
+#include <lnet/types.h>
+#include <lnet/api.h>
 
 #endif

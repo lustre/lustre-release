@@ -26,7 +26,7 @@
 
 #define DEBUG_SUBSYSTEM S_PTLROUTER
 
-#include <portals/lib-p30.h>
+#include <lnet/lib-p30.h>
 
 #ifdef __KERNEL__
 

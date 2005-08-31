@@ -32,8 +32,8 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include <portals/api-support.h>
-#include <portals/lib-types.h>
+#include <lnet/api-support.h>
+#include <lnet/lib-types.h>
 
 #include <gm.h>
 
