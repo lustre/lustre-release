@@ -231,7 +231,7 @@ lnet_nid_t
 kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 {
         ptl_ni_t            *ni = *nip;
-        lnet_nid_t            gwnid;
+        lnet_nid_t           gwnid;
 	struct list_head    *e;
         kpr_net_entry_t     *ne = NULL;
         kpr_route_entry_t   *re;
@@ -362,7 +362,7 @@ kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 void
 kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 {
-	lnet_nid_t            target_nid = fwd->kprfd_target_nid;
+	lnet_nid_t           target_nid = fwd->kprfd_target_nid;
         __u32                target_net = PTL_NIDNET(target_nid);
         __u32                receiver_net = PTL_NIDNET(src_ni->ni_nid);
         int                  nob = fwd->kprfd_nob;

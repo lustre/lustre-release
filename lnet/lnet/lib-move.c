@@ -53,8 +53,8 @@ ptl_match_md(int index, int op_mask, lnet_process_id_t src,
         struct list_head *tmp;
         ptl_me_t         *me;
         ptl_libmd_t      *md;
-        lnet_size_t        mlength;
-        lnet_size_t        offset;
+        lnet_size_t       mlength;
+        lnet_size_t       offset;
         ENTRY;
 
         CDEBUG (D_NET, "Request from %s of length %d into portal %d "
@@ -356,7 +356,7 @@ ptl_extract_iov (int dst_niov, struct iovec *dst,
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        lnet_size_t      frag_len;
+        lnet_size_t     frag_len;
         int             niov;
 
         if (len == 0)                           /* no data => */
@@ -519,7 +519,7 @@ ptl_extract_kiov (int dst_niov, lnet_kiov_t *dst,
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        lnet_size_t      frag_len;
+        lnet_size_t     frag_len;
         int             niov;
 
         if (len == 0)                           /* no data => */
@@ -586,9 +586,9 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
           ptl_libmd_t *md, lnet_size_t offset, lnet_size_t len)
 {
         unsigned long flags;
-        lnet_nid_t     gw_nid;
+        lnet_nid_t    gw_nid;
         int           routing = 0;
-        int     rc;
+        int           rc;
 
         /* CAVEAT EMPTOR! ni != NULL == interface pre-determined (ACK) */
 
@@ -708,7 +708,7 @@ ptl_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, ptl_msg_t *msg)
         lnet_size_t       offset = 0;
         lnet_process_id_t src = {.nid = hdr->src_nid,
                                 .pid = hdr->src_pid};
-        int        rc;
+        int              rc;
         ptl_libmd_t     *md;
         unsigned long    flags;
 
@@ -815,7 +815,7 @@ ptl_parse_reply(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, ptl_msg_t *msg)
         int              rlength;
         int              length;
         unsigned long    flags;
-        int        rc;
+        int              rc;
 
         PTL_LOCK(flags);
 
@@ -1015,9 +1015,9 @@ int
 ptl_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
 {
         unsigned long  flags;
-        int      rc;
+        int            rc;
         ptl_msg_t     *msg;
-        lnet_nid_t      dest_nid;
+        lnet_nid_t     dest_nid;
         __u32          type = le32_to_cpu(hdr->type);
 
         /* NB we return 0 if we manage to parse the header and believe
