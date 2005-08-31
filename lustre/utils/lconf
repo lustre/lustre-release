@@ -997,7 +997,9 @@ def init_loop(file, size, fstype, journal_size, inode_size, mkfsoptions, reforma
         if os.access(dev, os.R_OK):
             (stat, out) = run('losetup', dev)
             if stat:
-                run('losetup', dev, file)
+                (stat, out) = run('losetup', dev, file)
+                if stat:
+                    panic("losetup failed: (%s) %s" % (stat, out[0].strip()))
                 return dev
         else:
             print "out of loop devices"
