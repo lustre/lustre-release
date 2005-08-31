@@ -220,11 +220,18 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it)
         struct obd_capa *ocapa;
         struct ll_inode_info *lli = ll_i2info(inode);
         unsigned long expiry;
-        ENTRY;
+
+        if (!S_ISREG(inode->i_mode))
+                return 0;
 
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
         LASSERT(body != NULL);          /* reply already checked out */
         LASSERT_REPSWABBED(req, 1);     /* and swabbed down */
+
+        if (!(body->valid & OBD_MD_CAPA))
+                return 0;
+
+        ENTRY;
 
         capa = lustre_msg_buf(req->rq_repmsg, 7, sizeof (*capa));
         LASSERT(capa != NULL);          /* reply already checked out */

@@ -55,6 +55,8 @@ struct hlist_head *capa_hash;
 struct list_head capa_list[3];
 static int capa_count[3] = { 0 };
 
+static char *capa_type_name[] = { "client", "mds", "filter" };
+
 /* TODO: mdc and llite all need this, so define it here.
  * in the future it will be moved to ll_sb_info to support multi-
  * mount point */
@@ -109,7 +111,8 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                 if (ouid != uid)
                         continue;
 
-                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "found");
+                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "found %s",
+                           capa_type_name[ocapa->c_type]);
 
                 return ocapa;
         }
@@ -245,7 +248,8 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
 
                 capa_count[type]++;
 
-                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "new");
+                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "new %s",
+                           capa_type_name[type]);
 
                 if (type != CLIENT_CAPA && capa_count[type] > CAPA_CACHE_SIZE) {
                         struct list_head *node = capa_list[type].next;
@@ -259,8 +263,9 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
                                 node = node->next;
                                 if (atomic_read(&tcapa->c_refc) > 0)
                                         continue;
-                                DEBUG_CAPA(D_CACHE, &ocapa->c_capa,
-                                           "free unused");
+                                DEBUG_CAPA(D_CACHE, &tcapa->c_capa,
+                                           "free unused %s",
+                                           capa_type_name[type]);
                                 __capa_put(tcapa);
                                 destroy_capa(tcapa);
                                 count++;
@@ -293,7 +298,8 @@ void capa_put(struct obd_capa *ocapa)
         if (!ocapa)
                 return;
 
-        DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "put");
+        DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "put %s",
+                   capa_type_name[ocapa->c_type]);
         spin_lock(&capa_lock);
         if (ocapa->c_type == CLIENT_CAPA) {
                 list_del_init(&ocapa->c_lli_list);
@@ -305,7 +311,7 @@ void capa_put(struct obd_capa *ocapa)
         spin_unlock(&capa_lock);
 }
 
-static struct obd_capa *update_capa_locked(struct lustre_capa *capa, int type)
+struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
 {
         uid_t uid = capa->lc_uid;
         int capa_op = capa->lc_op;
@@ -317,21 +323,16 @@ static struct obd_capa *update_capa_locked(struct lustre_capa *capa, int type)
 
         spin_lock(&capa_lock);
         ocapa = find_capa(head, uid, capa_op, mdsid, ino, type);
-        if (ocapa)
+        if (ocapa) {
+                DEBUG_CAPA(D_INFO, capa, "renew %s", capa_type_name[type]);
                 do_update_capa(ocapa, capa);
+        }
         spin_unlock(&capa_lock);
 
         if (!ocapa)
                 ocapa = get_new_capa_locked(head, type, capa);
 
         return ocapa;
-}
-
-struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
-{
-        DEBUG_CAPA(D_INFO, capa, "renew");
-
-        return update_capa_locked(capa, type);
 }
 
 void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)

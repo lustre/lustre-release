@@ -365,8 +365,6 @@ int ll_och_fill(struct inode *inode, struct lookup_intent *it,
         mdc_set_open_replay_data(ll_i2mdexp(inode), och, 
 				 LUSTRE_IT(it)->it_data);
 
-        if (S_ISREG(inode->i_mode) && (body->valid & OBD_MD_CAPA))
-                rc = ll_set_capa(inode, it);
         RETURN(rc);
 }
 
@@ -374,11 +372,12 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
                   struct obd_client_handle *och)
 {
         struct ll_file_data *fd;
+        struct inode *inode = file->f_dentry->d_inode;
         int rc = 0;
         ENTRY;
 
         if (och) {
-                rc = ll_och_fill(file->f_dentry->d_inode, it, och);
+                rc = ll_och_fill(inode, it, och);
                 if (rc)
                         RETURN(rc);
         }
@@ -398,10 +397,11 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
         LASSERT(fd != NULL);
 
         file->private_data = fd;
-        ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
+        ll_readahead_init(inode, &fd->fd_ras);
         fd->fd_omode = it->it_flags;
 
-        RETURN(0);
+        rc = ll_set_capa(inode, it);
+        RETURN(rc);
 }
 
 /* Open a file, and (for the very first open) create objects on the OSTs at
