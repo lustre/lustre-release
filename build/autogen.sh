@@ -79,8 +79,7 @@ check_version() {
 
 echo "Checking for a complete tree..."
 # required directories
-#for dir in build lnet portals lustre ; do
-for dir in build lnet lustre ; do
+for dir in build portals lustre ; do
     if [ ! -d "$dir" ] ; then
 	cat >&2 <<EOF
 Your tree seems to be missing $dir.

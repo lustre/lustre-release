@@ -356,8 +356,7 @@ AC_SUBST(sysconfdir)
 docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 
-LN_PATH_DEFAULTS
-#LP_PATH_DEFAULTS
+LP_PATH_DEFAULTS
 LC_PATH_DEFAULTS
 ])
 
@@ -416,7 +415,7 @@ AC_TRY_COMPILE([],[],[
 	CC="$CC_save"
 ])
 
-CPPFLAGS="-I\$(top_builddir)/lnet/include -I\$(top_srcdir)/lnet/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
+CPPFLAGS="-I\$(top_builddir)/portals/include -I\$(top_srcdir)/portals/include -I\$(top_builddir)/lustre/include -I\$(top_srcdir)/lustre/include $CPPFLAGS"
 
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
 AC_SUBST(LLCPPFLAGS)
@@ -424,8 +423,8 @@ AC_SUBST(LLCPPFLAGS)
 LLCFLAGS="-g -Wall -fPIC"
 AC_SUBST(LLCFLAGS)
 
-# everyone builds against lnet and lustre
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/lnet/include -I$PWD/lustre/include"
+# everyone builds against portals and lustre
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/portals/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
@@ -458,8 +457,7 @@ AC_SUBST(SYSIO)
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
-LN_CONDITIONALS
-#LP_CONDITIONALS
+LP_CONDITIONALS
 LC_CONDITIONALS
 ])
 
@@ -490,8 +488,7 @@ LB_CONFIG_MODULES
 
 LC_CONFIG_LIBLUSTRE
 
-LN_CONFIGURE
-#LP_CONFIGURE
+LP_CONFIGURE
 LC_CONFIGURE
 if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIGURE
@@ -509,8 +506,7 @@ build/Rules
 build/lustre.spec
 ])
 
-LN_CONFIG_FILES
-#LP_CONFIG_FILES
+LP_CONFIG_FILES
 LC_CONFIG_FILES
 if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIG_FILES

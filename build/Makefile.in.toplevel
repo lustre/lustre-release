@@ -1,5 +1,4 @@
-subdir-m += lnet
-#subdir-m += portals
+subdir-m += portals
 subdir-m += lustre
 
 @INCLUDE_RULES@

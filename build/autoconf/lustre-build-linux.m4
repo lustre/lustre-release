@@ -329,11 +329,8 @@ fi
 
 #LB_LINUX_CONFIG_BIG_STACK
 
-# LNet tests
-LN_PROG_LINUX
-
 # Portals tests
-#LP_PROG_LINUX
+LP_PROG_LINUX
 
 # Lustre tests
 LC_PROG_LINUX
