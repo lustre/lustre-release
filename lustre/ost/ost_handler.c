@@ -917,7 +917,7 @@ out:
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        char *key, *val;
+        char *key, *val = NULL;
         int keylen, vallen, rc = 0;
         ENTRY;
 
@@ -932,11 +932,12 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        val = lustre_msg_buf(req->rq_reqmsg, 1, 1);
-        vallen = lustre_msg_buflen(req->rq_reqmsg,1);
+        vallen = lustre_msg_buflen(req->rq_reqmsg, 1);
+        if (vallen)
+                val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
 
         if (KEY_IS("evict_by_nid")) {
-                if (val)
+                if (val && vallen)
                         obd_export_evict_by_nid(exp->exp_obd, val);
 
                 GOTO(out, rc = 0);

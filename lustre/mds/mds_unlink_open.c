@@ -161,7 +161,10 @@ out_free_lmm:
         RETURN(rc);
 }
 
-int mds_cleanup_orphans(struct obd_device *obd)
+/* Delete inodes which were previously open-unlinked but were not reopened
+ * during MDS recovery for whatever reason (e.g. client also failed, recovery
+ * aborted, etc). */
+int mds_cleanup_pending(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;

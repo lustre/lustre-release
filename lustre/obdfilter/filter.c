@@ -302,7 +302,7 @@ static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
         filter->fo_fsd = NULL;
-        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
+        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
         filter->fo_last_rcvd_slots = NULL;
         return 0;
 }
@@ -373,7 +373,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 RETURN(-ENOMEM);
         filter->fo_fsd = fsd;
 
-        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
+        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
         if (filter->fo_last_rcvd_slots == NULL) {
                 OBD_FREE(fsd, sizeof(*fsd));
                 RETURN(-ENOMEM);

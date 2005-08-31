@@ -75,11 +75,6 @@ typedef enum {
 #define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
 #define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
 
-/* These are flags that are mapped into the flags and ASTs of blocking locks */
-#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
-/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
-#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
-
 /* XXX FIXME: This is being added to b_size as a low-risk fix to the fact that
  * the LVB filling happens _after_ the lock has been granted, so another thread
  * can match before the LVB has been updated.  As a dirty hack, we set
@@ -100,6 +95,11 @@ typedef enum {
 
 /* Don't drop lock covering mmapped file in LRU */
 #define LDLM_FL_NO_LRU         0x400000
+
+/* These are flags that are mapped into the flags and ASTs of blocking locks */
+#define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
+/* Flags sent in AST lock_flags to be mapped into the receiving lock. */
+#define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */

@@ -297,7 +297,7 @@ static struct ptlrpc_request *ptlrpc_prep_req_from_pool(struct ptlrpc_request_po
         request->rq_reqlen = pool->prp_rq_size;
         return request;
 }
-        
+
 struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
                                             int count, int *lengths,
                                             char **bufs,

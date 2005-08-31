@@ -48,7 +48,8 @@
 
 #include "mds_internal.h"
 
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
+/* This limit is arbitrary (32k clients on x86), but it is convenient to use
+ * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define LAST_RCVD "last_rcvd"

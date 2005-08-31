@@ -223,7 +223,7 @@ void request_in_callback(ptl_event_t *ev)
 #if CRAY_PORTALS
         req->rq_uid = ev->uid;
 #endif
-        
+
         spin_lock_irqsave (&service->srv_lock, flags);
 
         req->rq_history_seq = service->srv_request_seq++;
@@ -238,8 +238,8 @@ void request_in_callback(ptl_event_t *ev)
                          * start dropping incoming requests until more buffers
                          * get posted.  NB don't moan if it's because we're
                          * tearing down the service. */
-                        CWARN("All %s %s request buffers busy\n",
-                              service->srv_name, srv_ni->sni_ni->pni_name);
+                        CERROR("All %s %s request buffers busy\n",
+                               service->srv_name, srv_ni->sni_ni->pni_name);
                 }
                 /* req takes over the network's ref on rqbd */
         } else {
@@ -258,7 +258,7 @@ void request_in_callback(ptl_event_t *ev)
         EXIT;
 }
 
-/*  
+/*
  *  Server's outgoing reply callback
  */
 void reply_out_callback(ptl_event_t *ev)

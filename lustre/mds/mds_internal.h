@@ -130,7 +130,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *obd);
 
 /* mds/mds_unlink_open.c */
-int mds_cleanup_orphans(struct obd_device *obd);
+int mds_cleanup_pending(struct obd_device *obd);
 
 
 /* mds/mds_log.c */

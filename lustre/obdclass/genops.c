@@ -1291,8 +1291,8 @@ search_again:
         if (doomed_exp == NULL) {
                 goto out;
         } else {
-                CERROR("evicting %s at adminstrative request\n",
-                       doomed_exp->exp_client_uuid.uuid);
+                CERROR("evicting nid %s (%s) at adminstrative request\n",
+                       nid, doomed_exp->exp_client_uuid.uuid);
                 class_fail_export(doomed_exp);
                 class_export_put(doomed_exp);
                 exports_evicted++;

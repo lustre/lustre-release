@@ -2,6 +2,9 @@
 
 set -e
 
+#         bug 6088
+ALWAYS_EXCEPT="8"
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
@@ -243,7 +246,7 @@ test_12() {
     MULTIPID=$!
     sleep 5
 
-    # drop first enqueue
+#define OBD_FAIL_LDLM_ENQUEUE            0x302
     sysctl -w lustre.fail_loc=0x80000302
     facet_failover mds
     df $MOUNT || return 1

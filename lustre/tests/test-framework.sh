@@ -182,8 +182,8 @@ replay_barrier() {
     df $MOUNT
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 replay_barrier_nodf() {
@@ -191,8 +191,8 @@ replay_barrier_nodf() {
     do_facet $facet sync
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 mds_evict_client() {

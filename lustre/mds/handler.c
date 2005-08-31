@@ -1692,7 +1692,7 @@ int mds_postrecov(struct obd_device *obd)
         }
 
         /* clean PENDING dir */
-        rc = mds_cleanup_orphans(obd);
+        rc = mds_cleanup_pending(obd);
         if (rc < 0) {
                 GOTO(out, rc);
         } else {
@@ -2066,7 +2066,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 
         lprocfs_init_vars(mdt, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
-        
+
         sema_init(&mds->mds_health_sem, 1);
 
         mds->mds_service =

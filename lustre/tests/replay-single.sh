@@ -14,8 +14,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766
-ALWAYS_EXCEPT="0b"
+# bug number: 2766 4176
+ALWAYS_EXCEPT="0b  39"
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -756,7 +756,7 @@ test_38() {
 }
 run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
 
-test_39() {
+test_39() { # bug 4176
     createmany -o $DIR/$tfile-%d 800
     replay_barrier mds
     unlinkmany $DIR/$tfile-%d 0 400
