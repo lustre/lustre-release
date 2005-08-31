@@ -1664,6 +1664,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
         struct inode *inode = dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct address_space *mapping = inode->i_mapping;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct lustre_id id;
         struct ptlrpc_request *req;
@@ -1677,6 +1679,12 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         /* fsync's caller has already called _fdata{sync,write}, we want
          * that IO to finish before calling the osc and mdc sync methods */
         rc = filemap_fdatawait(inode->i_mapping);
+
+        /* 2.6 implements filemap_fdatawait() using PG_writeback which we
+         * don't support now. so, wait until all submited llaps are gone */
+        if (ll_is_inode_dirty(mapping->host))
+                CWARN("fsync() against "DLID4"\n", OLID4(&lli->lli_id));
+        wait_event(lli->lli_dirty_wait, !ll_is_inode_dirty(mapping->host));
 
         ll_inode2id(&id, inode);
         err = md_sync(ll_i2sbi(inode)->ll_md_exp, &id, &req);
