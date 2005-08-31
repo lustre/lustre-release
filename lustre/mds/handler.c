@@ -1500,7 +1500,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         free_page(page);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-                CERROR("do_kern_mount failed: rc = %d\n", rc);
+                LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
+                               lustre_cfg_string(lcfg, 1), rc);
                 GOTO(err_ops, rc);
         }
 

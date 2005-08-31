@@ -1325,9 +1325,12 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),MS_NOATIME|MS_NODIRATIME,
                             lustre_cfg_string(lcfg, 1), option);
-        rc = PTR_ERR(mnt);
-        if (IS_ERR(mnt))
+        if (IS_ERR(mnt)) {
+                rc = PTR_ERR(mnt);
+                LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
+                               lustre_cfg_string(lcfg, 1), rc);
                 GOTO(err_ops, rc);
+        }
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
