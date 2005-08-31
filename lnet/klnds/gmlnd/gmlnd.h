@@ -21,9 +21,9 @@
 
 
 /*
- *	Portals GM kernel NAL header file
- *	This file makes all declaration and prototypes 
- *	for the API side and CB side of the NAL
+ *      Portals GM kernel NAL header file
+ *      This file makes all declaration and prototypes 
+ *      for the API side and CB side of the NAL
  */
 #ifndef __INCLUDE_GMNAL_H__
 #define __INCLUDE_GMNAL_H__
@@ -47,7 +47,13 @@
 #include "linux/string.h"
 #include "linux/stat.h"
 #include "linux/errno.h"
+#include "linux/version.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+#include "linux/buffer_head.h"
+#include "linux/fs.h"
+#else
 #include "linux/locks.h"
+#endif
 #include "linux/unistd.h"
 #include "linux/init.h"
 #include "linux/sem.h"
@@ -56,14 +62,16 @@
 
 #define DEBUG_SUBSYSTEM S_NAL
 
-#include "portals/nal.h"
-#include "portals/api.h"
-#include "portals/errno.h"
 #include "libcfs/kp30.h"
-#include "portals/p30.h"
+#include "lnet/p30.h"
+#include "lnet/lib-p30.h"
 
-#include "portals/nal.h"
-#include "portals/lib-p30.h"
+/* undefine these before including the GM headers which clash */
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
 
 #define GM_STRONG_TYPES 1
 #ifdef VERSION
@@ -72,345 +80,207 @@
 #include "gm.h"
 #include "gm_internal.h"
 
+/* Default Tunable Values */
+#define GMNAL_PORT                 4            /* which port to use */
+#define GMNAL_NTX                  32           /* # tx descs */
+#define GMNAL_NTX_NBLK             256          /* # reserved tx descs */
+#define GMNAL_NRX_SMALL            128          /* # small receives to post */
+#define GMNAL_NRX_LARGE            64           /* # large receives to post */
+#define GMNAL_NLARGE_TX_BUFS       32           /* # large tx buffers */
+
+/* Fixed tunables */
+#define GMNAL_RESCHED              100          /* # busy loops to force scheduler to yield */
+#define GMNAL_NETADDR_BASE         0x10000000   /* where we start in network VM */
+#define GMNAL_LARGE_PRIORITY       GM_LOW_PRIORITY /* large message GM priority */
+#define GMNAL_SMALL_PRIORITY       GM_LOW_PRIORITY /* small message GM priority */
+
+/* Wire protocol */
+typedef struct {
+        ptl_hdr_t       gmim_hdr;               /* portals header */
+        char            gmim_payload[0];        /* payload */
+} gmnal_immediate_msg_t;
+
+typedef struct {
+        /* First 2 fields fixed FOR ALL TIME */
+        __u32           gmm_magic;              /* I'm a GM message */
+        __u16           gmm_version;            /* this is my version number */
+
+        __u16           gmm_type;               /* msg type */
+        __u64           gmm_srcnid;             /* sender's NID */
+        __u64           gmm_dstnid;             /* destination's NID */
+        union {
+                gmnal_immediate_msg_t   immediate;
+        }               gmm_u;
+} WIRE_ATTR gmnal_msg_t;
+
+#define GMNAL_MSG_MAGIC                 0x6d797269 /* 'myri'! */
+#define GMNAL_MSG_VERSION               1
+#define GMNAL_MSG_IMMEDIATE             1
+
+typedef struct netbuf {
+        __u64                    nb_netaddr;    /* network VM address */
+        struct page             *nb_pages[1];   /* the pages (at least 1) */
+} gmnal_netbuf_t;
+
+#define GMNAL_NETBUF_MSG(nb)            ((gmnal_msg_t *)page_address((nb)->nb_pages[0]))
+#define GMNAL_NETBUF_LOCAL_NETADDR(nb)  ((void *)((unsigned long)(nb)->nb_netaddr))
+
+typedef struct gmnal_txbuf {
+        struct list_head         txb_list;      /* queue on gmni_idle_ltxbs */
+        struct gmnal_txbuf      *txb_next;      /* stash on gmni_ltxs */
+        gmnal_netbuf_t           txb_buf;       /* space */
+} gmnal_txbuf_t;
+
+typedef struct gmnal_tx {
+        struct list_head         tx_list;       /* queue */
+        int                      tx_isnblk:1;   /* reserved for non-blocking? */
+        int                      tx_credit:1;   /* consumed a credit? */
+        int                      tx_large_iskiov:1; /* large is in kiovs? */
+        struct gmnal_ni         *tx_gmni;       /* owning NI */
+        lnet_nid_t               tx_nid;        /* destination NID */
+        int                      tx_gmlid;      /* destination GM local ID */
+        ptl_msg_t               *tx_ptlmsg;     /* ptlmsg to finalize on completion */
+
+        gmnal_netbuf_t           tx_buf;        /* small tx buffer */
+        gmnal_txbuf_t           *tx_ltxb;       /* large buffer (to free on completion) */
+        int                      tx_msgnob;     /* message size (so far) */
+
+        int                      tx_large_nob;  /* # bytes large buffer payload */
+        int                      tx_large_offset; /* offset within frags */
+        int                      tx_large_niov; /* # VM frags */
+        union {
+                struct iovec    *iov;           /* mapped frags */
+                lnet_kiov_t     *kiov;          /* page frags */
+        }                        tx_large_frags;
+        struct gmnal_tx         *tx_next;       /* stash on gmni_txs */
+} gmnal_tx_t;
+
+typedef struct gmnal_rx {
+        struct list_head         rx_list;	/* enqueue on gmni_rxq for handling */
+        int                      rx_islarge:1;  /* large receive buffer? */
+        unsigned int             rx_recv_nob;	/* bytes received */
+        __u16                    rx_recv_gmid;	/* sender */
+        __u8                     rx_recv_port;	/* sender's port */
+        __u8                     rx_recv_type;	/* ?? */
+        struct gmnal_rx         *rx_next;	/* stash on gmni_rxs */
+        gmnal_netbuf_t           rx_buf;        /* the buffer */
+} gmnal_rx_t;
+
+typedef struct gmnal_ni {
+        ptl_ni_t         *gmni_ni;              /* generic NI */
+        struct gm_port   *gmni_port;            /* GM port */
+        spinlock_t        gmni_gm_lock;         /* serialise GM calls */
+        int               gmni_large_pages;     /* # pages in a large message buffer */
+        int               gmni_large_msgsize;   /* nob in large message buffers */
+        int               gmni_large_gmsize;    /* large message GM bucket */
+        int               gmni_small_msgsize;   /* nob in small message buffers */
+        int               gmni_small_gmsize;    /* small message GM bucket */
+        __u64             gmni_netaddr_base;    /* base of mapped network VM */
+        int               gmni_netaddr_size;    /* # bytes of mapped network VM */
+
+        gmnal_tx_t       *gmni_txs;             /* all txs */
+        gmnal_rx_t       *gmni_rxs;		/* all rx descs */
+        gmnal_txbuf_t    *gmni_ltxbs;           /* all large tx bufs */
+        
+        atomic_t          gmni_nthreads;        /* total # threads */
+        gm_alarm_t        gmni_alarm;           /* alarm to wake caretaker */
+        int               gmni_shutdown;	/* tell all threads to exit */
+
+        struct list_head  gmni_idle_txs;        /* idle tx's */
+        struct list_head  gmni_nblk_idle_txs;   /* reserved for non-blocking callers */
+        wait_queue_head_t gmni_idle_tx_wait;    /* block here for idle tx */
+        int               gmni_tx_credits;      /* # transmits still possible */
+        struct list_head  gmni_idle_ltxbs;      /* idle large tx buffers */
+        struct list_head  gmni_buf_txq;         /* tx's waiting for buffers */
+        struct list_head  gmni_cred_txq;        /* tx's waiting for credits */
+        spinlock_t        gmni_tx_lock;         /* serialise */
+
+        struct gm_hash   *gmni_rx_hash;		/* buffer->rx lookup */
+        struct semaphore  gmni_rx_mutex;        /* serialise blocking on GM */
+} gmnal_ni_t;
+
+typedef struct {
+        int              *gm_port;
+        int              *gm_ntx;
+        int              *gm_ntx_nblk;
+        int              *gm_nlarge_tx_bufs;
+        int              *gm_nrx_small;
+        int              *gm_nrx_large;
+
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        struct ctl_table_header *gm_sysctl;    /* sysctl interface */
+#endif
+} gmnal_tunables_t;
 
 
-/*
- *	Defines for the API NAL
- */
-
-/*
- *	Small message size is configurable
- *	insmod can set small_msg_size
- *	which is used to populate nal_data.small_msg_size
- */
-#define GMNAL_SMALL_MESSAGE		1078
-#define GMNAL_LARGE_MESSAGE_INIT	1079
-#define GMNAL_LARGE_MESSAGE_ACK	1080
-#define GMNAL_LARGE_MESSAGE_FINI	1081
-
-extern  int gmnal_small_msg_size;
-extern  int num_rx_threads;
-extern  int num_stxds;
-extern  int gm_port_id;
-#define GMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
-#define GMNAL_IS_SMALL_MESSAGE(n,a,b,c)	gmnal_is_small_msg(n, a, b, c)
-#define GMNAL_MAGIC				0x1234abcd
-/*
- *	The gm_port to use for gmnal
- */
-#define GMNAL_GM_PORT_ID	gm_port_id
-
-
-/*
- *	Small Transmit Descriptor
- *	A structre to keep track of a small transmit operation
- *	This structure has a one-to-one relationship with a small
- *	transmit buffer (both create by gmnal_stxd_alloc). 
- *	There are two free list of stxd. One for use by clients of the NAL
- *	and the other by the NAL rxthreads when doing sends. 
- *	This helps prevent deadlock caused by stxd starvation.
- */
-typedef struct _gmnal_stxd_t {
-	void 			*buffer;
-	int			buffer_size;
-	gm_size_t		gm_size;
-	int			msg_size;
-	int			gm_target_node;
-	int			gm_priority;
-	int			type;
-	struct _gmnal_data_t 	*nal_data;
-	ptl_msg_t		*cookie;
-	int			niov;
-	struct iovec		iov[PTL_MD_MAX_IOV];
-	struct _gmnal_stxd_t	*next;
-        int                     rxt; 
-        int                     kniov;
-        struct iovec            *iovec_dup;
-} gmnal_stxd_t;
-
-/*
- *	keeps a transmit token for large transmit (gm_get)
- *	and a pointer to rxd that is used as context for large receive
- */
-typedef struct _gmnal_ltxd_t {
-	struct _gmnal_ltxd_t	*next;
-	struct	_gmnal_srxd_t  *srxd;
-} gmnal_ltxd_t;
-
-
-/*
- *	as for gmnal_stxd_t 
- *	a hash table in nal_data find srxds from
- *	the rx buffer address. hash table populated at init time
- */
-typedef struct _gmnal_srxd_t {
-	void 			*buffer;
-	int			size;
-	gm_size_t		gmsize;
-	unsigned int		gm_source_node;
-	gmnal_stxd_t		*source_stxd;
-	int			type;
-	int			nsiov;
-	int			nriov;
-	struct iovec 		*riov;
-	int			ncallbacks;
-	spinlock_t		callback_lock;
-	int			callback_status;
-	ptl_msg_t		*cookie;
-	struct _gmnal_srxd_t	*next;
-	struct _gmnal_data_t	*nal_data;
-} gmnal_srxd_t;
-
-/*
- *	Header which lmgnal puts at the start of each message
- *	watch alignment for ia32/64 interaction
- */
-typedef struct	_gmnal_msghdr {
-	int		magic;
-	int 		type;
-	unsigned int	sender_node_id;
-	int		niov;
-	gm_remote_ptr_t	stxd_remote_ptr; /* 64 bits */
-	} gmnal_msghdr_t;
-#define GMNAL_MSGHDR_SIZE	sizeof(gmnal_msghdr_t)
-
-/*
- *	the caretaker thread (ct_thread) gets receive events
- *	(and other events) from the myrinet device via the GM2 API.
- *	caretaker thread populates one work entry for each receive event,
- *	puts it on a Q in nal_data and wakes a receive thread to  
- *	process the receive.  
- *	Processing a portals receive can involve a transmit operation. 
- *	Because of this the caretaker thread cannot process receives 
- *	as it may get deadlocked when supply of transmit descriptors 
- *	is exhausted (as caretaker thread is responsible for replacing 
- *	transmit descriptors on the free list)
- */
-typedef struct _gmnal_rxtwe {
-	void			*buffer;
-	unsigned		snode;
-	unsigned		sport;
-	unsigned		type;
-	unsigned		length;
-	struct _gmnal_rxtwe	*next;
-} gmnal_rxtwe_t;
-
-/*
- *	1 receive thread started on each CPU
- */
-#define NRXTHREADS 10 /* max number of receiver threads */
-
-typedef struct _gmnal_data_t {
-	int		refcnt;
-	spinlock_t	cb_lock;
-	spinlock_t	stxd_lock;
-	struct semaphore stxd_token;
-	gmnal_stxd_t	*stxd;
-	spinlock_t 	rxt_stxd_lock;
-	struct semaphore rxt_stxd_token;
-	gmnal_stxd_t	*rxt_stxd;
-	spinlock_t 	ltxd_lock;
-	struct semaphore ltxd_token;
-	gmnal_ltxd_t	*ltxd;
-	spinlock_t 	srxd_lock;
-	struct semaphore srxd_token;
-	gmnal_srxd_t	*srxd;
-	struct gm_hash	*srxd_hash;
-        ptl_ni_t        *ni;
-	struct gm_port	*gm_port;
-	unsigned int	gm_local_nid;
-	unsigned int	gm_global_nid;
-	spinlock_t 	gm_lock;
-	long		rxthread_pid[NRXTHREADS];
-	int		rxthread_stop_flag;
-	spinlock_t	rxthread_flag_lock;
-	long		rxthread_flag;
-	long		ctthread_pid;
-	int		ctthread_flag;
-	gm_alarm_t	ctthread_alarm;
-	int		small_msg_size;
-	int		small_msg_gmsize;
-	gmnal_rxtwe_t	*rxtwe_head;
-	gmnal_rxtwe_t	*rxtwe_tail;
-	spinlock_t	rxtwe_lock;
-	struct	semaphore rxtwe_wait;
-        struct ctl_table_header *sysctl;
-} gmnal_data_t;
-
-/*
- *	Flags to start/stop and check status of threads
- *	each rxthread sets 1 bit (any bit) of the flag on startup
- *	and clears 1 bit when exiting
- */
-#define GMNAL_THREAD_RESET	0
-#define GMNAL_THREAD_STOP	666
-#define GMNAL_CTTHREAD_STARTED	333
-#define GMNAL_RXTHREADS_STARTED ( (1<<num_rx_threads)-1)
-
-
-extern gmnal_data_t	*global_nal_data;
-
-/*
- *	Return codes
- */
-#define GMNAL_STATUS_OK	0
-#define GMNAL_STATUS_FAIL	1
-#define GMNAL_STATUS_NOMEM	2
-
-
-/*
- *	FUNCTION PROTOTYPES
- */
-
-/*
- *	Locking macros
- */
-
-/*
- *	For the Small tx and rx descriptor lists
- */
-#define GMNAL_TXD_LOCK_INIT(a)		spin_lock_init(&a->stxd_lock);
-#define GMNAL_TXD_LOCK(a)		spin_lock(&a->stxd_lock);
-#define GMNAL_TXD_UNLOCK(a)		spin_unlock(&a->stxd_lock);
-#define GMNAL_TXD_TOKEN_INIT(a, n)	sema_init(&a->stxd_token, n);
-#define GMNAL_TXD_GETTOKEN(a)		down(&a->stxd_token);
-#define GMNAL_TXD_TRYGETTOKEN(a)	down_trylock(&a->stxd_token)
-#define GMNAL_TXD_RETURNTOKEN(a)	up(&a->stxd_token);
-
-#define GMNAL_RXT_TXD_LOCK_INIT(a)	spin_lock_init(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_LOCK(a)		spin_lock(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_UNLOCK(a)	        spin_unlock(&a->rxt_stxd_lock);
-#define GMNAL_RXT_TXD_TOKEN_INIT(a, n)	sema_init(&a->rxt_stxd_token, n);
-#define GMNAL_RXT_TXD_GETTOKEN(a)	down(&a->rxt_stxd_token);
-#define GMNAL_RXT_TXD_TRYGETTOKEN(a)	down_trylock(&a->rxt_stxd_token)
-#define GMNAL_RXT_TXD_RETURNTOKEN(a)	up(&a->rxt_stxd_token);
-
-#define GMNAL_LTXD_LOCK_INIT(a)		spin_lock_init(&a->ltxd_lock);
-#define GMNAL_LTXD_LOCK(a)		spin_lock(&a->ltxd_lock);
-#define GMNAL_LTXD_UNLOCK(a)		spin_unlock(&a->ltxd_lock);
-#define GMNAL_LTXD_TOKEN_INIT(a, n)	sema_init(&a->ltxd_token, n);
-#define GMNAL_LTXD_GETTOKEN(a)		down(&a->ltxd_token);
-#define GMNAL_LTXD_TRYGETTOKEN(a)	down_trylock(&a->ltxd_token)
-#define GMNAL_LTXD_RETURNTOKEN(a)	up(&a->ltxd_token);
-
-#define GMNAL_RXD_LOCK_INIT(a)		spin_lock_init(&a->srxd_lock);
-#define GMNAL_RXD_LOCK(a)		spin_lock(&a->srxd_lock);
-#define GMNAL_RXD_UNLOCK(a)		spin_unlock(&a->srxd_lock);
-#define GMNAL_RXD_TOKEN_INIT(a, n)	sema_init(&a->srxd_token, n);
-#define GMNAL_RXD_GETTOKEN(a)		down(&a->srxd_token);
-#define GMNAL_RXD_TRYGETTOKEN(a)	down_trylock(&a->srxd_token)
-#define GMNAL_RXD_RETURNTOKEN(a)	up(&a->srxd_token);
-
-#define GMNAL_GM_LOCK_INIT(a)		spin_lock_init(&a->gm_lock);
-#define GMNAL_GM_LOCK(a)		spin_lock(&a->gm_lock);
-#define GMNAL_GM_UNLOCK(a)		spin_unlock(&a->gm_lock);
-#define GMNAL_CB_LOCK_INIT(a)		spin_lock_init(&a->cb_lock);
-
-
-/*
- *	Memory Allocator
- */
-
-/*
- *	CB NAL
- */
-
-int gmnal_cb_send(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-	int, lnet_nid_t, lnet_pid_t, unsigned int, struct iovec *, size_t, size_t);
-
-int gmnal_cb_send_pages(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-	int, lnet_nid_t, lnet_pid_t, unsigned int, lnet_kiov_t *, size_t, size_t);
-
-int gmnal_cb_recv(ptl_ni_t *, void *, ptl_msg_t *, 
-	unsigned int, struct iovec *, size_t, size_t, size_t);
-
-int gmnal_cb_recv_pages(ptl_ni_t *, void *, ptl_msg_t *, 
-	unsigned int, lnet_kiov_t *, size_t, size_t, size_t);
-
+/* gmnal_api.c */
 int gmnal_init(void);
+void gmnal_fini(void);
+int gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
+int gmnal_startup(ptl_ni_t *ni);
+void gmnal_shutdown(ptl_ni_t *ni);
 
-void  gmnal_fini(void);
+/* gmnal_cb.c */
+int gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
+               unsigned int niov, struct iovec *iov, 
+               size_t offset, size_t mlen, size_t rlen);
+int gmnal_recv_pages(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
+                     unsigned int nkiov, lnet_kiov_t *kiov, 
+                     size_t offset, size_t mlen, size_t rlen);
+int gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
+               ptl_hdr_t *hdr, int type, 
+               lnet_process_id_t tgt, int routing,
+               unsigned int niov, struct iovec *iov, 
+               size_t offset, size_t len);
+int gmnal_send_pages(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
+                     ptl_hdr_t *hdr, int type,
+                     lnet_process_id_t tgt, int routing,
+                     unsigned int nkiov, lnet_kiov_t *kiov, 
+                     size_t offset, size_t len);
 
-/*
- *	Small and Large Transmit and Receive Descriptor Functions
- */
-int  		gmnal_alloc_txd(gmnal_data_t *);
-void 		gmnal_free_txd(gmnal_data_t *);
-gmnal_stxd_t* 	gmnal_get_stxd(gmnal_data_t *, int);
-void 		gmnal_return_stxd(gmnal_data_t *, gmnal_stxd_t *);
-gmnal_ltxd_t* 	gmnal_get_ltxd(gmnal_data_t *);
-void 		gmnal_return_ltxd(gmnal_data_t *, gmnal_ltxd_t *);
+/* gmnal_util.c */
+void gmnal_free_ltxbufs(gmnal_ni_t *gmni);
+int gmnal_alloc_ltxbufs(gmnal_ni_t *gmni);
+void gmnal_free_txs(gmnal_ni_t *gmni);
+int gmnal_alloc_txs(gmnal_ni_t *gmni);
+void gmnal_free_rxs(gmnal_ni_t *gmni);
+int gmnal_alloc_rxs(gmnal_ni_t *gmni);
+char *gmnal_gmstatus2str(gm_status_t status);
+char *gmnal_rxevent2str(gm_recv_event_t *ev);
+void gmnal_yield(int delay);
 
-int  		gmnal_alloc_srxd(gmnal_data_t *);
-void 		gmnal_free_srxd(gmnal_data_t *);
-gmnal_srxd_t* 	gmnal_get_srxd(gmnal_data_t *, int);
-void 		gmnal_return_srxd(gmnal_data_t *, gmnal_srxd_t *);
+void gmnal_copy_tofrom_netbuf(int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
+                              int nb_pages, gmnal_netbuf_t *nb, int nb_offset,
+                              int nob, int from_nb);
 
-/*
- *	general utility functions
- */
-gmnal_srxd_t	*gmnal_rxbuffer_to_srxd(gmnal_data_t *, void*);
-void		gmnal_stop_rxthread(gmnal_data_t *);
-void		gmnal_stop_ctthread(gmnal_data_t *);
-void		gmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
-void		gmnal_resume_sending_callback(gm_port_t *, void *, gm_status_t);
-char		*gmnal_gm_error(gm_status_t);
-char		*gmnal_rxevent(gm_recv_event_t*);
-int		gmnal_is_small_msg(gmnal_data_t*, int, struct iovec*, int);
-void 		gmnal_yield(int);
-int		gmnal_start_kernel_threads(gmnal_data_t *);
+static inline void
+gmnal_copy_from_netbuf(int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
+                       int nb_pages, gmnal_netbuf_t *nb, int nb_offset, int nob)
+{
+        gmnal_copy_tofrom_netbuf(niov, iov, kiov, offset,
+                                 nb_pages, nb, nb_offset, nob, 1);
+}
 
+static inline void
+gmnal_copy_to_netbuf(int nb_pages, gmnal_netbuf_t *nb, int nb_offset,
+                     int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
+                     int nob)
+{
+        gmnal_copy_tofrom_netbuf(niov, iov, kiov, offset,
+                                 nb_pages, nb, nb_offset, nob, 0);
+}
 
-/*
- *	Communication functions
- */
+/* gmnal_comm.c */
+void gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx);
+gmnal_tx_t *gmnal_get_tx(gmnal_ni_t *gmni, int may_block);
+void gmnal_tx_done(gmnal_tx_t *tx, int rc);
+void gmnal_pack_msg(gmnal_ni_t *gmni, gmnal_msg_t *msg,
+                    lnet_nid_t dstnid, int type);
+void gmnal_stop_threads(gmnal_ni_t *gmni);
+int gmnal_start_threads(gmnal_ni_t *gmni);
+void gmnal_check_txqueues_locked (gmnal_ni_t *gmni);
 
-/*
- *	Receive threads
- */
-int 		gmnal_ct_thread(void *); /* caretaker thread */
-int 		gmnal_rx_thread(void *); /* receive thread */
-int 		gmnal_pre_receive(gmnal_data_t*, gmnal_rxtwe_t*, int);
-int		gmnal_rx_bad(gmnal_data_t *, gmnal_rxtwe_t *, gmnal_srxd_t*);
-int		gmnal_rx_requeue_buffer(gmnal_data_t *, gmnal_srxd_t *);
-int		gmnal_add_rxtwe(gmnal_data_t *, gm_recv_t *);
-gmnal_rxtwe_t * gmnal_get_rxtwe(gmnal_data_t *);
-void		gmnal_remove_rxtwe(gmnal_data_t *);
-
-
-/*
- *	Small messages
- */
-int	gmnal_small_rx(ptl_ni_t *, void *, ptl_msg_t *);
-int	gmnal_small_tx(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *,
-				int, lnet_nid_t, lnet_pid_t,
-				gmnal_stxd_t*, int);
-void		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
-
-
-
-/*
- *	Large messages
- */
-int 		gmnal_large_rx(ptl_ni_t *, void *, ptl_msg_t *, unsigned int, 
-				struct iovec *, size_t, size_t, size_t);
-
-int 		gmnal_large_tx(ptl_ni_t *, void *, ptl_msg_t *, ptl_hdr_t *, 
-				int, lnet_nid_t, lnet_pid_t, unsigned int, 
-				struct iovec*, size_t, int);
-
-void 		gmnal_large_tx_callback(gm_port_t *, void *, gm_status_t);
-
-int 		gmnal_remote_get(gmnal_srxd_t *, int, struct iovec*, int, 
-				  struct iovec*);
-
-void		gmnal_remote_get_callback(gm_port_t *, void *, gm_status_t);
-
-int 		gmnal_copyiov(int, gmnal_srxd_t *, int, struct iovec*, int, 
-			       struct iovec*);
-
-void 		gmnal_large_tx_ack(gmnal_data_t *, gmnal_srxd_t *);
-void 		gmnal_large_tx_ack_callback(gm_port_t *, void *, gm_status_t);
-void 		gmnal_large_tx_ack_received(gmnal_data_t *, gmnal_srxd_t *);
+/* Module Parameters */
+extern gmnal_tunables_t gmnal_tunables;
 
 #endif /*__INCLUDE_GMNAL_H__*/

@@ -107,6 +107,16 @@ if test -d $QSNET/drivers/net/qsnet ; then
 			QSWCPPFLAGS="-I$QSNET/include/linux"
 		fi
 	fi
+
+	if test x$QSNET = x$LINUX ; then
+		LB_LINUX_CONFIG([QSNET],[],[
+			LB_LINUX_CONFIG([QSNET_MODULE],[],[
+				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswnal.])
+				QSWNAL=""
+				QSWCPPFLAGS=""
+			])
+		])
+	fi
 else
 	AC_MSG_RESULT([no])
 	QSWNAL=""
@@ -121,28 +131,99 @@ AC_SUBST(QSWNAL)
 #
 # check if GM support is available
 #
-AC_DEFUN([LN_CONFIG_GM],
-[LB_ARG_LIBS_INCLUDES([Myrinet],[gm])
-if test x$gm_includes != x ; then
-	GMCPPFLAGS="-I$gm_includes"
-	if test -d "$gm/drivers" ; then
-		GMCPPFLAGS="$GMCPPFLAGS -I$gm/drivers -I$gm/drivers/linux/gm"
-	fi
+AC_DEFUN([LN_CONFIG_GM],[
+AC_MSG_CHECKING([whether to enable GM support])
+AC_ARG_WITH([gm],
+        AC_HELP_STRING([--with-gm=path-to-gm-source-tree],
+	               [build gmnal against path]),
+	[
+	        case $with_gm in
+                no)    ENABLE_GM=0
+	               ;;
+                *)     ENABLE_GM=1
+                       GM_SRC="$with_gm"
+		       ;;
+                esac
+        ],[
+                ENABLE_GM=0
+        ])
+AC_ARG_WITH([gm-install],
+        AC_HELP_STRING([--with-gm-install=path-to-gm-install-tree],
+	               [say where GM has been installed]),
+	[
+	        GM_INSTALL=$with_gm_install
+        ],[
+                GM_INSTALL="/opt/gm"
+        ])
+if test $ENABLE_GM -eq 0; then
+        AC_MSG_RESULT([no])
+else
+        AC_MSG_RESULT([yes])
+
+	GMNAL="gmnal"
+        GMCPPFLAGS="-I$GM_SRC/include -I$GM_SRC/drivers -I$GM_SRC/drivers/linux/gm"
+
+	if test -f $GM_INSTALL/lib/libgm.a -o \
+                -f $GM_INSTALL/lib64/libgm.a; then
+	        GMLIBS="-L$GM_INSTALL/lib -L$GM_INSTALL/lib64"
+        else
+	        AC_MSG_ERROR([Cant find GM libraries under $GM_INSTALL])
+        fi
+
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$GMCPPFLAGS -DGM_KERNEL $EXTRA_KCFLAGS"
+
+        AC_MSG_CHECKING([that code using GM compiles with given path])
+	LB_LINUX_TRY_COMPILE([
+		#define GM_STRONG_TYPES 1
+		#ifdef VERSION
+		#undef VERSION
+		#endif
+	        #include "gm.h"
+		#include "gm_internal.h"
+        ],[
+	        struct gm_port *port = NULL;
+		gm_recv_event_t *rxevent = gm_blocking_receive_no_spin(port);
+                return 0;
+        ],[
+		AC_MSG_RESULT([yes])
+        ],[
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([Bad --with-gm path])
+        ])
+
+	AC_MSG_CHECKING([that GM has gm_register_memory_ex_phys()])
+	LB_LINUX_TRY_COMPILE([
+		#define GM_STRONG_TYPES 1
+		#ifdef VERSION
+		#undef VERSION
+		#endif
+	        #include "gm.h"
+		#include "gm_internal.h"
+	],[
+		gm_status_t     gmrc;
+		struct gm_port *port = NULL;
+		gm_u64_t        phys = 0;
+		gm_up_t         pvma = 0;
+
+		gmrc = gm_register_memory_ex_phys(port, phys, 100, pvma);
+		return 0;
+	],[
+		AC_MSG_RESULT([yes])
+	],[
+		AC_MSG_RESULT([no.
+Please patch the GM sources as follows... 
+    cd $GM_SRC
+    patch -p0 < $PWD/lnet/knals/gmnal/gm-reg-phys.patch
+...then rebuild and re-install them])
+                AC_MSG_ERROR([Can't build GM without gm_register_memory_ex_phys()])
+        ])
+
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(GMCPPFLAGS)
-
-if test x$gm_libs != x ; then
-	GMLIBS="-L$gm_libs"
-fi
 AC_SUBST(GMLIBS)
-
-ENABLE_GM=0
-if test x$gm != x ; then
-	GMNAL="gmnal"
-	ENABLE_GM=1
-fi
 AC_SUBST(GMNAL)
-AC_SUBST(ENABLE_GM)
 ])
 
 #
@@ -223,11 +304,6 @@ AC_SUBST(OPENIBCPPFLAGS)
 AC_SUBST(OPENIBNAL)
 ])
 
-#
-# LN_CONFIG_IIB
-#
-# check for infinicon infiniband support
-#
 #
 # LN_CONFIG_IIB
 #

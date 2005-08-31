@@ -22,76 +22,61 @@
 #include "gmnal.h"
 
 
-int gmnal_small_msg_size = sizeof(gmnal_msghdr_t) + sizeof(ptl_hdr_t) + PTL_MTU;
-/*
- *      -1 indicates default value.
- *      This is 1 thread per cpu
- *      See start_kernel_threads
- */
-int num_rx_threads = -1;
-int num_stxds = 5;
-int gm_port_id = 4;
+static int port = GMNAL_PORT;
+CFS_MODULE_PARM(port, "i", int, 0444,
+                "GM port to use for communications");
 
-int
-gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
-{
-        struct portal_ioctl_data *data = arg;
-	gmnal_data_t	*nal_data = NULL;
-	char		*name = NULL;
-	int		nid = -2;
-	int		gnid;
-	gm_status_t	gm_status;
+static int ntx = GMNAL_NTX;
+CFS_MODULE_PARM(ntx, "i", int, 0444,
+                "# 'normal' tx descriptors");
 
+static int ntx_nblk = GMNAL_NTX_NBLK;
+CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
+                "# 'reserved' tx descriptors");
 
-	CDEBUG(D_TRACE, "gmnal_cmd [%d] ni_data [%p]\n", cmd, ni->ni_data);
-	nal_data = (gmnal_data_t*)ni->ni_data;
-	switch(cmd) {
-	case IOC_PORTAL_GET_GMID:
+static int nlarge_tx_bufs = GMNAL_NLARGE_TX_BUFS;
+CFS_MODULE_PARM(nlarge_tx_bufs, "i", int, 0444,
+                "# large tx message buffers");
 
-		PORTAL_ALLOC(name, data->ioc_plen1);
-                if (name == NULL)
-                        return -ENOMEM;
-                
-		if (copy_from_user(name, data->ioc_pbuf1, data->ioc_plen1)) {
-                        PORTAL_FREE(name, data->ioc_plen1);
-                        return -EFAULT;
-                }
-                
-		GMNAL_GM_LOCK(nal_data);
-		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
-                gm_status = gm_host_name_to_node_id_ex (nal_data->gm_port, 0, name, &nid);
-		GMNAL_GM_UNLOCK(nal_data);
-                if (gm_status != GM_SUCCESS) {
-                        CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) failed[%d]\n",
-                                name, gm_status);
-                        PORTAL_FREE(name, data->ioc_plen1);
-                        return -ENOENT;
-                }
+static int nrx_small = GMNAL_NRX_SMALL;
+CFS_MODULE_PARM(nrx_small, "i", int, 0444,
+                "# small rx message buffers");
 
-                CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
-                PORTAL_FREE(name, data->ioc_plen1);
-                
-		GMNAL_GM_LOCK(nal_data);
-		gm_status = gm_node_id_to_global_id(nal_data->gm_port, 
-						    nid, &gnid);
-		GMNAL_GM_UNLOCK(nal_data);
-		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_INFO, "gm_node_id_to_global_id failed[%d]\n", 
-			       gm_status);
-                        return -ENOENT;
-		}
-		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
+static int nrx_large = GMNAL_NRX_LARGE;
+CFS_MODULE_PARM(nrx_large, "i", int, 0444,
+                "# large rx message buffers");
 
-                /* gnid returned to userspace in ioc_nid!!! */
-                data->ioc_nid = gnid;
-                return 0;
-        
-	default:
-		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", cmd);
-                return -EINVAL;
-	}
-}
+gmnal_tunables_t gmnal_tunables = {
+        .gm_port            = &port,
+        .gm_ntx             = &ntx,
+        .gm_ntx_nblk        = &ntx_nblk,
+        .gm_nlarge_tx_bufs  = &nlarge_tx_bufs,
+        .gm_nrx_small       = &nrx_small,
+        .gm_nrx_large       = &nrx_large,
+};
 
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+static ctl_table gmnal_ctl_table[] = {
+	{1, "port", &port,
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{2, "ntx", &ntx, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{3, "ntx_nblk", &ntx_nblk, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{4, "nlarge_tx_bufs", &nlarge_tx_bufs, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{5, "nrx_small", &nrx_small, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{6, "nrx_large", &nrx_large, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{0}
+};
+
+static ctl_table gmnal_top_ctl_table[] = {
+	{207, "gmnal", NULL, 0, 0555, gmnal_ctl_table},
+	{0}
+};
+#endif
 
 static int __init
 gmnal_load(void)
@@ -99,43 +84,40 @@ gmnal_load(void)
 	int	status;
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
-
-	CDEBUG(D_INFO, "Calling gmnal_init\n");
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        gmnal_tunables.gm_sysctl =
+                register_sysctl_table(gmnal_top_ctl_table, 0);
+        
+        if (gmnal_tunables.gm_sysctl == NULL)
+                CWARN("Can't setup /proc tunables\n");
+#endif
+	CDEBUG(D_NET, "Calling gmnal_init\n");
         status = gmnal_init();
 	if (status == 0) {
-		CDEBUG(D_INFO, "Portals GMNAL initialised ok\n");
+		CDEBUG(D_NET, "Portals GMNAL initialised ok\n");
 	} else {
-		CDEBUG(D_INFO, "Portals GMNAL Failed to initialise\n");
+		CDEBUG(D_NET, "Portals GMNAL Failed to initialise\n");
 		return(-ENODEV);
-		
 	}
 
-	CDEBUG(D_INFO, "This is the end of the gmnal init routine");
-
+	CDEBUG(D_NET, "This is the end of the gmnal init routine");
 
 	return(0);
 }
-
 
 static void __exit
 gmnal_unload(void)
 {
 	gmnal_fini();
-	return;
+#if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
+        if (gmnal_tunables.gm_sysctl != NULL)
+                unregister_sysctl_table(gmnal_tunables.gm_sysctl);
+#endif
 }
 
-
 module_init(gmnal_load);
-
 module_exit(gmnal_unload);
 
-MODULE_PARM(gmnal_small_msg_size, "i");
-MODULE_PARM(num_rx_threads, "i");
-MODULE_PARM(num_stxds, "i");
-MODULE_PARM(gm_port_id, "i");
-
-MODULE_AUTHOR("Morgan Doyle");
-
-MODULE_DESCRIPTION("A Portals kernel NAL for Myrinet GM.");
-
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
+MODULE_DESCRIPTION("Kernel GM NAL v1.01");
 MODULE_LICENSE("GPL");

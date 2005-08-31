@@ -245,7 +245,7 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         int                    nob;
         ptl_acceptor_connreq_t cr;
         ptl_hdr_t              hdr;
-        ptl_magicversion_t    *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
+        ptl_magicversion_t     hmv;
 
         gettimeofday(&tv, NULL);
         incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
@@ -255,13 +255,18 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
         cr.acr_nid     = nid;
 
-        CLASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
+        /* hmv initialised and copied separately into hdr; compiler "optimize"
+         * likely due to confusion about pointer alias of hmv and hdr when this
+         * was done in-place. */
+        hmv.magic         = cpu_to_le32(PTL_PROTO_TCP_MAGIC);
+        hmv.version_major = cpu_to_le32(PTL_PROTO_TCP_VERSION_MAJOR);
+        hmv.version_minor = cpu_to_le32(PTL_PROTO_TCP_VERSION_MINOR);
 
         memset (&hdr, 0, sizeof (hdr));
-        hmv->magic         = cpu_to_le32(PTL_PROTO_TCP_MAGIC);
-        hmv->version_major = cpu_to_le32(PTL_PROTO_TCP_VERSION_MAJOR);
-        hmv->version_minor = cpu_to_le32(PTL_PROTO_TCP_VERSION_MINOR);
-        
+
+        CLASSERT (sizeof (hmv) == sizeof (hdr.dest_nid));
+        memcpy(&hdr.dest_nid, &hmv, sizeof(hmv));
+
         /* hdr.src_nid/src_pid are ignored at dest */
 
         hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
@@ -279,23 +284,23 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         if (rc != 0)
                 return -1;
 
-        rc = tcpnal_read(nid, sockfd, hmv, sizeof(*hmv));
+        rc = tcpnal_read(nid, sockfd, &hmv, sizeof(hmv));
         if (rc != 0)
                 return -1;
         
-        if (hmv->magic != le32_to_cpu(PTL_PROTO_TCP_MAGIC)) {
+        if (hmv.magic != le32_to_cpu(PTL_PROTO_TCP_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from %s\n",
-                        cpu_to_le32(hmv->magic), PTL_PROTO_TCP_MAGIC, 
+                        cpu_to_le32(hmv.magic), PTL_PROTO_TCP_MAGIC, 
                         libcfs_nid2str(nid));
                 return -1;
         }
 
-        if (hmv->version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
-            hmv->version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
+        if (hmv.version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
+            hmv.version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
                         " from %s\n",
-                        le16_to_cpu (hmv->version_major),
-                        le16_to_cpu (hmv->version_minor),
+                        le16_to_cpu (hmv.version_major),
+                        le16_to_cpu (hmv.version_minor),
                         PTL_PROTO_TCP_VERSION_MAJOR,
                         PTL_PROTO_TCP_VERSION_MINOR,
                         libcfs_nid2str(nid));
@@ -308,7 +313,8 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         /* version 1 sends magic/version as the dest_nid of a 'hello' header,
          * so read the rest of it in now... */
 
-        rc = tcpnal_read(nid, sockfd, hmv + 1, sizeof(hdr) - sizeof(*hmv));
+        rc = tcpnal_read(nid, sockfd, ((char *)&hdr) + sizeof (hmv),
+                         sizeof(hdr) - sizeof(hmv));
         if (rc != 0)
                 return -1;
 

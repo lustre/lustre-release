@@ -310,7 +310,7 @@ ptl_acceptor(void *arg)
 	__u32          peer_ip;
 	int            peer_port;
         ptl_ni_t      *blind_ni;
-        int            secure = (int)arg;
+        int            secure = (int)((unsigned long)arg);
 
 	LASSERT (ptl_acceptor_state.pta_sock == NULL);
 
