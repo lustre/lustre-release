@@ -1315,7 +1315,8 @@ cleanup:
         switch (cleanup_phase) {
         case 2: /* child dentry */
                 if (rc == -EACCES)
-                        mds_audit_perm(req, dchild->d_inode, AUDIT_CREATE);
+                        mds_audit(req, dchild, rec->ur_name,
+                                  rec->ur_namelen - 1, AUDIT_CREATE, rc);
                 l_dput(dchild);
         case 1: /* locked parent dentry */
 #ifdef S_PDIROPS
@@ -2469,7 +2470,7 @@ cleanup:
 
                 /* catching failed permissions check for audit */
                 if (rc == -EACCES)
-                        mds_audit_perm(req, dchild->d_inode, AUDIT_UNLINK);
+                        mds_audit(req, dchild, NULL, 0, AUDIT_UNLINK, rc);
 
                 l_dput(dchild);
                 l_dput(dchild);

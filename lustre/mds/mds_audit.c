@@ -54,43 +54,15 @@
 #include <linux/lustre_acl.h>
 #include "mds_internal.h"
 
-int mds_audit_stat(struct ptlrpc_request *req, struct lustre_id * id,
-                   struct inode *inode, char *name, int namelen, int ret)
+int mds_audit(struct ptlrpc_request *req, struct dentry *dentry,
+              char *name, int namelen, audit_op op, int ret)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         ptl_nid_t nid = req->rq_peer.peer_id.nid;
+        struct inode *inode = dentry->d_inode;
+        struct inode *parent = dentry->d_parent->d_inode;
         struct audit_info info = {
-                .name = NULL,
-                .namelen = 0,
-        };
-        int rc = 0, len = sizeof(info);
-        
-        ENTRY;
-        
-        LASSERT(inode);
-        LASSERT(id);
-        info.m.id = *id;
-        info.m.nid = nid;
-        info.m.uid = current->uid;
-        info.m.gid = current->gid;
-        info.m.result = ret;
-        info.m.code = AUDIT_STAT;
-        if (ret) {
-                info.name = name;
-                info.namelen = namelen;
-        }
-        // send info to local fs
-        fsfilt_set_info(obd, inode->i_sb, inode,
-                        10, "audit_info", len, (void*)&info);
-
-        RETURN(rc);
-}
-
-int mds_audit_perm(struct ptlrpc_request *req, struct inode *inode, audit_op op)
-{
-        struct obd_device *obd = req->rq_export->exp_obd;
-        ptl_nid_t nid = req->rq_peer.peer_id.nid;
-        struct audit_info info = {
+                .child = inode,
                 .name = NULL,
                 .namelen = 0,
         };
@@ -98,49 +70,21 @@ int mds_audit_perm(struct ptlrpc_request *req, struct inode *inode, audit_op op)
         
         ENTRY;
         
-        LASSERT(inode);
-        info.m.nid = nid;
-        info.m.uid = current->uid;
-        info.m.gid = current->gid;
-        info.m.result = -EACCES;
-        info.m.code = op;
-        
-        /* failed access, log child id only */
-        mds_pack_inode2id(obd, &info.m.id, inode, 1);
-        
-        fsfilt_set_info(obd, inode->i_sb, inode,
-                        10, "audit_info", sizeof(info), (void*)&info);
-        
-        RETURN(rc);
-}
-
-int mds_audit_open(struct ptlrpc_request *req, struct lustre_id * id,
-                   struct inode *inode, char *name, int namelen, int ret)
-{
-        struct obd_device *obd = req->rq_export->exp_obd;
-        ptl_nid_t nid = req->rq_peer.peer_id.nid;
-        struct audit_info info = {
-                .name = NULL,
-                .namelen = 0,
-        };
-        int rc = 0, len = sizeof(info);
-        
-        ENTRY;
-
-        LASSERT(inode);        
-        info.m.id = (*id);
         info.m.nid = nid;
         info.m.uid = current->uid;
         info.m.gid = current->gid;
         info.m.result = ret;
-        info.m.code = AUDIT_OPEN;
-        if (ret) {
+        info.m.code = op;
+        
+        if (!inode) {
+                inode = parent;
                 info.name = name;
                 info.namelen = namelen;
         }
-        
-        fsfilt_set_info(obd, inode->i_sb, inode,
-                        10, "audit_info", len, (void*)&info);
+        mds_pack_inode2id(obd, &info.m.id, inode, 1);
+                
+        fsfilt_set_info(obd, parent->i_sb, parent,
+                        10, "audit_info", sizeof(info), (void*)&info);
         
         RETURN(rc);
 }
@@ -178,10 +122,7 @@ int mds_audit_auth(struct ptlrpc_request *req, struct lvfs_ucred * uc,
         if (name && namelen > 0) {
                 dchild = ll_lookup_one_len(name, dparent, namelen);
                 if (!IS_ERR(dchild)) {
-                        if (dchild->d_flags & DCACHE_CROSS_REF) {
-                                //TODO: we should know audit setting for this
-                                //so remote call is needed
-                        } else {
+                        if (!dchild->d_flags & DCACHE_CROSS_REF) {
                                 inode = dchild->d_inode;
                                 info.name = NULL;
                                 info.namelen = 0;

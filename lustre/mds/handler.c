@@ -1695,23 +1695,11 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         GOTO(cleanup, rc);
 
  cleanup:
-        /* audit stuff for getattr */
-        if (resent_req == 0 && (dparent || dchild)) {
-                struct inode * au_inode = NULL;
-                
-                if (dchild && dchild->d_inode) {
-                        au_inode = dchild->d_inode;
-                        mds_audit_stat(req, &body->id1, au_inode,
-                                       NULL, 0, rc);
-                } else {
-                        au_inode = dparent->d_inode;
-                        mds_audit_stat(req, &body->id1, au_inode,
-                                       name, namesize - 1, rc);
-                }
-        }
         switch (cleanup_phase) {
         case 2:
                 if (resent_req == 0) {
+                        mds_audit(req, dchild, name, namesize - 1,
+                                  AUDIT_STAT, rc);
                         if (rc && DENTRY_VALID(dchild))
                                 ldlm_lock_decref(child_lockh, LCK_PR);
                         if (name)

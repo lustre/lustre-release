@@ -91,6 +91,7 @@ struct audit_name_record {
 
 struct audit_info {
         struct audit_msg m;
+        struct inode * child;
         char * name;
         __u32 namelen;
 };

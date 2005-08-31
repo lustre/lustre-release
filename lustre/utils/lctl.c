@@ -182,7 +182,7 @@ static int set_audit(int argc, char **argv, int fs)
         else {
                 //if dir then set audit for childs also
                 if (S_ISDIR(st.st_mode)) {
-                        rc = set_dir_audit(argv[3], mask);
+                        //rc = set_dir_audit(argv[3], mask | AUD_BIT(AUDIT_DIR));
                 }
         }
         //set audit for file/dir itself
