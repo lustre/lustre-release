@@ -3,4 +3,4 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = socklnd qswlnd gmlnd openiblnd iiblnd viblnd ralnd
+SUBDIRS = socklnd qswlnd gmlnd openiblnd iiblnd viblnd ralnd ptllnd

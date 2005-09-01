@@ -78,6 +78,34 @@ fi
 ])
 
 #
+# LN_CONFIG_PORTALS
+#
+# configure support for Portals
+#
+AC_DEFUN([LN_CONFIG_PORTALS],
+[AC_MSG_CHECKING([for Portals API headers])
+AC_ARG_WITH([portals],
+	AC_HELP_STRING([--with-portals=path],
+		       [set path to portals includes]),
+	[PORTALS=$with_portals],
+        [PORTALS=$with_portals])
+AC_MSG_RESULT([$PORTALS])
+
+AC_MSG_CHECKING([if Portals headers are present])
+if test -e $PORTALS/portals/api.h ; then
+	AC_MSG_RESULT([yes])
+	PTLLND="ptllnd"
+        PTLLNDCPPFLAGS="-I$PORTALS"
+else
+	AC_MSG_RESULT([no])
+	PTLLND=""
+	PTLLNDCPPFLAGS=""
+fi
+AC_SUBST(PTLLNDCPPFLAGS)
+AC_SUBST(PTLLND)
+])
+
+#
 # LN_CONFIG_QUADRICS
 #
 # check if quadrics support is in this kernel
@@ -648,6 +676,7 @@ LN_CONFIG_OPENIB
 LN_CONFIG_VIB
 LN_CONFIG_IIB
 LN_CONFIG_RALND
+LN_CONFIG_PORTALS
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
@@ -794,6 +823,7 @@ AM_CONDITIONAL(BUILD_OPENIBLND, test x$OPENIBLND = "xopeniblnd")
 AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
 AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
+AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
 ])
 
 #
@@ -829,6 +859,8 @@ lnet/klnds/ralnd/Makefile
 lnet/klnds/ralnd/autoMakefile
 lnet/klnds/socklnd/Makefile
 lnet/klnds/socklnd/autoMakefile
+lnet/klnds/ptllnd/Makefile
+lnet/klnds/ptllnd/autoMakefile
 lnet/libcfs/Makefile
 lnet/libcfs/autoMakefile
 lnet/libcfs/linux/Makefile

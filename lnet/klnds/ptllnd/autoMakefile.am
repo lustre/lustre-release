@@ -1,0 +1,13 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if MODULES
+#if BUILD_PTLLND
+modulenet_DATA = kptllnd$(KMODEXT)
+#endif
+endif
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(kptllnd-objs:%.o=%.c) ptllnd.h 

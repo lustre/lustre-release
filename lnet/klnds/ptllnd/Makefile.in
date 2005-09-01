@@ -1,0 +1,7 @@
+MODULES := kptllnd
+
+kptllnd-objs := ptllnd.o
+
+EXTRA_POST_CFLAGS := @PTLLNDCPPFLAGS@
+
+@INCLUDE_RULES@
