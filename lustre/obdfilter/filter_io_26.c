@@ -369,7 +369,7 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         
         if (rw == OBD_BRW_WRITE) {
                 create = 1;
-                //sem = &obd->u.filter.fo_alloc_lock;
+                sem = &obd->u.filter.fo_alloc_lock;
         }
 
         rc = fsfilt_map_inode_pages(obd, inode,
