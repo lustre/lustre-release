@@ -9,6 +9,16 @@ Description: Running on many-way SMP OSTs can trigger oops in llcd_send()
 Details    : A race between allocating a new llcd and re-getting the llcd_lock
              allowed another thread to grab newly-allocated llcd.
 
+Severity   : enhancement
+Bugzilla   : 7116
+Description: 2.6 OST async journal commit and locking fix to improve performance
+Details    : The filter_direct_io()+filter_commitrw_write() journal commits for
+             2.6 kernels are now async as they already were in 2.4 kernels so
+             that they can commit concurrently with the network bulk transfer.
+             For block-allocated files the filter allocation semaphore is held
+             to avoid filesystem fragmentation during allocation.  BKL lock
+	     removed for 2.6 xattr operations where it is no longer needed.
+
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.5
        * bug fixes

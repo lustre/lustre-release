@@ -359,7 +359,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
 
         LASSERT(current->journal_info == handle);
 
-        lock_kernel();
+        lock_24kernel();
         transaction = handle->h_transaction;
         journal = transaction->t_journal;
         tid = transaction->t_tid;
@@ -368,7 +368,7 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
         rc = journal_stop(handle);
         if (rc) {
                 CERROR("error while stopping transaction: %d\n", rc);
-                unlock_kernel();
+                unlock_24kernel();
                 return rc;
         }
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
@@ -377,9 +377,9 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
                 CERROR("strange race: %lu != %lu\n",
                        (unsigned long) tid, (unsigned long) rtid);
 #else
-        log_start_commit(journal, transaction->t_tid);
+        log_start_commit(journal, tid);
 #endif
-        unlock_kernel();
+        unlock_24kernel();
 
         *wait_handle = (void *) tid;
         CDEBUG(D_INODE, "commit async: %lu\n", (unsigned long) tid);
@@ -473,11 +473,11 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                 CWARN("setting EA on %lu/%u again... interesting\n",
                        inode->i_ino, inode->i_generation);
 
-        lock_kernel();
+        lock_24kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
                                    XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
 
-        unlock_kernel();
+        unlock_24kernel();
 
         if (rc)
                 CERROR("error adding MD data to inode %lu: rc = %d\n",
@@ -491,11 +491,11 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
         int rc;
 
         LASSERT(down_trylock(&inode->i_sem) != 0);
-        lock_kernel();
+        lock_24kernel();
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
                             XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
-        unlock_kernel();
+        unlock_24kernel();
 
         /* This gives us the MD size */
         if (lmm == NULL)
@@ -764,7 +764,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         EXT_ASSERT(i == path->p_depth);
         EXT_ASSERT(path[i].p_hdr);
 
-       	if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
+        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
                 goto map;
         }
