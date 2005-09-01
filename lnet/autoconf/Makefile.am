@@ -1,1 +1,1 @@
-EXTRA_DIST := lustre-portals.m4
+EXTRA_DIST := lustre-lnet.m4
