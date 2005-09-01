@@ -1,5 +1,5 @@
-#ifndef P30_API_H
-#define P30_API_H
+#ifndef __LNET_API_H__
+#define __LNET_API_H__
 
 #include "build_check.h"
 

@@ -2,7 +2,7 @@
 #define _KPING_INCLUDED
 
 #include <libcfs/portals_utils.h>
-#include <lnet/p30.h>
+#include <lnet/lnet.h>
 
 
 #define PTL_PING_IN_SIZE		256	// n packets per buffer

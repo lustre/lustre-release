@@ -39,8 +39,8 @@
 #endif
 
 #include <libcfs/kp30.h>
-#include <lnet/p30.h>
-#include <lnet/lib-p30.h>
+#include <lnet/lnet.h>
+#include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
 
 /* default vals for tunables/modparams */

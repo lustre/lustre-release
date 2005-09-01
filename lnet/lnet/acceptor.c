@@ -21,7 +21,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_PORTALS
-#include <lnet/lib-p30.h>
+#include <lnet/lib-lnet.h>
 
 #ifdef __KERNEL__
 static char *accept = "secure";

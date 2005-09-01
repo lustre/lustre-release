@@ -20,7 +20,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_PORTALS
-#include <lnet/lib-p30.h>
+#include <lnet/lib-lnet.h>
 
 #define DEFAULT_NETWORKS  "tcp"
 static char *networks = DEFAULT_NETWORKS;

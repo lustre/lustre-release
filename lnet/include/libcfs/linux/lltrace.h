@@ -20,7 +20,7 @@
 #include <sys/time.h>
 #include <lnet/types.h>
 #include <libcfs/kp30.h>
-#include <lnet/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include <linux/limits.h>
 #include <asm/page.h>
 #include <linux/version.h>

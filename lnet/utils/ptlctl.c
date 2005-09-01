@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <lnet/api-support.h>
-#include <lnet/ptlctl.h>
+#include <lnet/lnetctl.h>
 
 #include "parser.h"
 

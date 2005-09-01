@@ -50,7 +50,7 @@
 #include <sys/utsname.h>
 
 #include <lnet/api-support.h>
-#include <lnet/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
 #include "parser.h"
 

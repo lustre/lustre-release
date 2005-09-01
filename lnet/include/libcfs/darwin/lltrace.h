@@ -21,6 +21,6 @@
 #include <lnet/types.h>
 #include <libcfs/kp30.h>
 #include <mach/vm_param.h>
-#include <lnet/ptlctl.h>
+#include <lnet/lnetctl.h>
 
 #endif

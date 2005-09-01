@@ -30,7 +30,7 @@
 # include <linux/highmem.h>
 # include <linux/module.h>
 # include <linux/version.h>
-# include <lnet/p30.h>
+# include <lnet/lnet.h>
 # include <linux/smp_lock.h>
 # include <asm/atomic.h>
 # include <asm/uaccess.h>

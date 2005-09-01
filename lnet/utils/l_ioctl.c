@@ -34,7 +34,7 @@
 #include <unistd.h>
 
 #include <lnet/api-support.h>
-#include <lnet/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include <libcfs/portals_utils.h>
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */

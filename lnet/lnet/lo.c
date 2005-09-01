@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <lnet/lib-p30.h>
+#include <lnet/lib-lnet.h>
 
 int
 lonal_send (ptl_ni_t        *ni,

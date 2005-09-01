@@ -51,8 +51,8 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <libcfs/kp30.h>
-#include <lnet/p30.h>
-#include <lnet/lib-p30.h>
+#include <lnet/lnet.h>
+#include <lnet/lib-lnet.h>
 
 #include <linux/iba/ibt.h>
 

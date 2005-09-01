@@ -1,10 +1,9 @@
-#ifndef _P30_TYPES_H_
-#define _P30_TYPES_H_
+#ifndef __LNET_TYPES_H__
+#define __LNET_TYPES_H__
 
 #include "build_check.h"
 
 #include <libcfs/libcfs.h>
-#include <lnet/errno.h>
 
 /* This implementation uses the same type for API function return codes and
  * the completion status in an event  */

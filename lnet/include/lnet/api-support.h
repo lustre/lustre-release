@@ -1,5 +1,5 @@
-#ifndef __API_SUPPORT_H__
-#define __API_SUPPORT_H__
+#ifndef __LNET_API_SUPPORT_H__
+#define __LNET_API_SUPPORT_H__
 #include "build_check.h"
 
 #ifndef __KERNEL__
@@ -11,6 +11,6 @@
 
 #include <lnet/types.h>
 #include <libcfs/kp30.h>
-#include <lnet/p30.h>
+#include <lnet/lnet.h>
 
 #endif

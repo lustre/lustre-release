@@ -1,27 +1,27 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * lib-p30.h
+ * lib-lnet.h
  *
  * Top level include for library side routines
  */
 
-#ifndef __PORTALS_LIB_P30_H__
-#define __PORTALS_LIB_P30_H__
+#ifndef __LNET_LIB_LNET_H__
+#define __LNET_LIB_LNET_H__
 
 #include "build_check.h"
 
 #if defined(__linux__)
-#include <lnet/linux/lib-p30.h>
+#include <lnet/linux/lib-lnet.h>
 #elif defined(__APPLE__)
-#include <lnet/darwin/lib-p30.h>
+#include <lnet/darwin/lib-lnet.h>
 #else
 #error Unsupported Operating System
 #endif
 
 #include <lnet/types.h>
 #include <libcfs/kp30.h>
-#include <lnet/p30.h>
+#include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 
 extern ptl_apini_t   ptl_apini;                 /* THE network interface (at the API) */

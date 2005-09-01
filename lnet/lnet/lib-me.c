@@ -24,7 +24,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <lnet/lib-p30.h>
+#include <lnet/lib-lnet.h>
 
 int
 LNetMEAttach(lnet_handle_ni_t interface, 
