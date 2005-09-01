@@ -60,14 +60,6 @@ static int ll_get_acl_key(struct inode *inode, struct posix_acl **acl,
         int rc = 0;
         ENTRY;
 
-        if (lli->lli_posix_acl && lli->lli_key_info) {
-                /*If they are in the local cache, just fetch them*/
-                spin_lock(&lli->lli_lock);
-                *acl = posix_acl_dup(lli->lli_posix_acl);
-                *lkey =  lustre_key_get(lli->lli_key_info);
-                spin_unlock(&lli->lli_lock);
-                RETURN(rc);
-        }
         sbi = ll_i2sbi(inode);
         ll_inode2id(&id, inode);
 
