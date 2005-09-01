@@ -1,4 +1,4 @@
-#include "socknal.h"
+#include "socklnd.h"
 
 # if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
 static ctl_table ksocknal_ctl_table[18];

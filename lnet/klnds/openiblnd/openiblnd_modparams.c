@@ -21,7 +21,7 @@
  *
  */
 
-#include "openibnal.h"
+#include "openiblnd.h"
 
 static int n_connd = IBNAL_N_CONND;
 CFS_MODULE_PARM(n_connd, "i", int, 0444,

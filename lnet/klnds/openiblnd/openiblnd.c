@@ -21,7 +21,7 @@
  *
  */
 
-#include "openibnal.h"
+#include "openiblnd.h"
 
 ptl_nal_t               kibnal_nal = {
         .nal_type       = OPENIBNAL,

@@ -21,7 +21,7 @@
  *
  */
 
-#include "iibnal.h"
+#include "iiblnd.h"
 
 ptl_nal_t kibnal_nal = {
         .nal_type          = IIBNAL,

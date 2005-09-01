@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 void
 gmnal_free_netbuf_pages (gmnal_netbuf_t *nb, int npages) 

@@ -19,7 +19,7 @@
  *
  */
 
-#include "qswnal.h"
+#include "qswlnd.h"
 
 static int tx_maxcontig = KQSW_TX_MAXCONTIG;
 CFS_MODULE_PARM(tx_maxcontig, "i", int, 0444,

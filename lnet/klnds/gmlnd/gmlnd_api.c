@@ -23,7 +23,7 @@
  *	Implements the API NAL functions
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 ptl_nal_t gmnal_nal =
 {

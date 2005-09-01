@@ -21,7 +21,7 @@
  *
  */
 
-#include "qswnal.h"
+#include "qswlnd.h"
 
 void
 kqswnal_notify_peer_down(kqswnal_tx_t *ktx)

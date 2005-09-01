@@ -5,11 +5,11 @@
 
 if MODULES
 if !CRAY_PORTALS
-if BUILD_IIBNAL
-modulenet_DATA = kiibnal$(KMODEXT)
+if BUILD_IIBLND
+modulenet_DATA = kiiblnd$(KMODEXT)
 endif
 endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kiibnal-objs:%.o=%.c) iibnal.h
+DIST_SOURCES = $(kiiblnd-objs:%.o=%.c) iiblnd.h

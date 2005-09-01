@@ -31,9 +31,9 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #if defined(__linux__)
-#include "socknal_lib-linux.h"
+#include "socklnd_lib-linux.h"
 #elif defined(__APPLE__)
-#include "socknal_lib-darwin.h"
+#include "socklnd_lib-darwin.h"
 #else
 #error Unsupported Operating System
 #endif
@@ -41,7 +41,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/p30.h>
 #include <lnet/lib-p30.h>
-#include <lnet/socknal.h>
+#include <lnet/socklnd.h>
 
 /* default vals for tunables/modparams */
 #define SOCKNAL_TIMEOUT          50             /* default comms timeout (seconds) */

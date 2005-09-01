@@ -1,5 +1,5 @@
-MODULES := ksocknal
+MODULES := ksocklnd
 
-ksocknal-objs := socknal.o socknal_cb.o socknal_modparams.o socknal_lib-linux.o
+ksocklnd-objs := socklnd.o socklnd_cb.o socklnd_modparams.o socklnd_lib-linux.o
 
 @INCLUDE_RULES@

@@ -18,7 +18,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "socknal.h"
+#include "socklnd.h"
 
 static int timeout = SOCKNAL_TIMEOUT;
 CFS_MODULE_PARM(timeout, "i", int, 0644,

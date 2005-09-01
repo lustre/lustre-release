@@ -5,11 +5,11 @@
 
 if MODULES
 if !CRAY_PORTALS
-if BUILD_VIBNAL
-modulenet_DATA = kvibnal$(KMODEXT)
+if BUILD_VIBLND
+modulenet_DATA = kviblnd$(KMODEXT)
 endif
 endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kvibnal-objs:%.o=%.c) vibnal.h vibnal_wire.h
+DIST_SOURCES = $(kviblnd-objs:%.o=%.c) viblnd.h viblnd_wire.h

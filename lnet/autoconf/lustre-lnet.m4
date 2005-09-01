@@ -28,7 +28,7 @@ AC_DEFUN([LN_CONFIG_ZEROCOPY],
 [AC_MSG_CHECKING([for zero-copy TCP support])
 AC_ARG_ENABLE([zerocopy],
 	AC_HELP_STRING([--disable-zerocopy],
-		       [disable socknal zerocopy]),
+		       [disable socklnd zerocopy]),
 	[],[enable_zerocopy='yes'])
 if test x$enable_zerocopy = xno ; then
 	AC_MSG_RESULT([no (by request)])
@@ -94,7 +94,7 @@ AC_MSG_RESULT([$QSNET])
 AC_MSG_CHECKING([if quadrics kernel headers are present])
 if test -d $QSNET/drivers/net/qsnet ; then
 	AC_MSG_RESULT([yes])
-	QSWNAL="qswnal"
+	QSWLND="qswlnd"
 	AC_MSG_CHECKING([for multirail EKC])
 	if test -f $QSNET/include/elan/epcomms.h; then
 		AC_MSG_RESULT([supported])
@@ -111,19 +111,19 @@ if test -d $QSNET/drivers/net/qsnet ; then
 	if test x$QSNET = x$LINUX ; then
 		LB_LINUX_CONFIG([QSNET],[],[
 			LB_LINUX_CONFIG([QSNET_MODULE],[],[
-				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswnal.])
-				QSWNAL=""
+				AC_MSG_WARN([QSNET is not enabled in this kernel; not building qswlnd.])
+				QSWLND=""
 				QSWCPPFLAGS=""
 			])
 		])
 	fi
 else
 	AC_MSG_RESULT([no])
-	QSWNAL=""
+	QSWLND=""
 	QSWCPPFLAGS=""
 fi
 AC_SUBST(QSWCPPFLAGS)
-AC_SUBST(QSWNAL)
+AC_SUBST(QSWLND)
 ])
 
 #
@@ -135,7 +135,7 @@ AC_DEFUN([LN_CONFIG_GM],[
 AC_MSG_CHECKING([whether to enable GM support])
 AC_ARG_WITH([gm],
         AC_HELP_STRING([--with-gm=path-to-gm-source-tree],
-	               [build gmnal against path]),
+	               [build gmlnd against path]),
 	[
 	        case $with_gm in
                 no)    ENABLE_GM=0
@@ -160,7 +160,7 @@ if test $ENABLE_GM -eq 0; then
 else
         AC_MSG_RESULT([yes])
 
-	GMNAL="gmnal"
+	GMLND="gmlnd"
         GMCPPFLAGS="-I$GM_SRC/include -I$GM_SRC/drivers -I$GM_SRC/drivers/linux/gm"
 
 	if test -f $GM_INSTALL/lib/libgm.a -o \
@@ -214,7 +214,7 @@ else
 		AC_MSG_RESULT([no.
 Please patch the GM sources as follows... 
     cd $GM_SRC
-    patch -p0 < $PWD/lnet/klnds/gmnal/gm-reg-phys.patch
+    patch -p0 < $PWD/lnet/klnds/gmlnd/gm-reg-phys.patch
 ...then rebuild and re-install them])
                 AC_MSG_ERROR([Can't build GM without gm_register_memory_ex_phys()])
         ])
@@ -223,7 +223,7 @@ Please patch the GM sources as follows...
 fi
 AC_SUBST(GMCPPFLAGS)
 AC_SUBST(GMLIBS)
-AC_SUBST(GMNAL)
+AC_SUBST(GMLND)
 ])
 
 #
@@ -236,7 +236,7 @@ AC_MSG_CHECKING([whether to enable OpenIB support])
 OPENIBPATH="$LINUX/drivers/infiniband"
 AC_ARG_WITH([openib],
 	AC_HELP_STRING([--with-openib=path],
-	               [build openibnal against path]),
+	               [build openiblnd against path]),
 	[
 		case $with_openib in
 		yes)    ENABLEOPENIB=2
@@ -286,7 +286,7 @@ else
 		return 0;
 	],[
 		AC_MSG_RESULT([yes])
-		OPENIBNAL="openibnal"
+		OPENIBLND="openiblnd"
 	],[
 		AC_MSG_RESULT([no])
 		case $ENABLEOPENIB in
@@ -295,13 +295,13 @@ else
 		3) AC_MSG_ERROR([can't compile with OpenIB headers under $OPENIBPATH]);;
 		*) AC_MSG_ERROR([internal error]);;
 		esac
-		OPENIBNAL=""
+		OPENIBLND=""
 		OPENIBCPPFLAGS=""
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(OPENIBCPPFLAGS)
-AC_SUBST(OPENIBNAL)
+AC_SUBST(OPENIBLND)
 ])
 
 #
@@ -315,7 +315,7 @@ AC_MSG_CHECKING([whether to enable Infinicon support])
 IIBPATH="/usr/include"
 AC_ARG_WITH([iib],
 	AC_HELP_STRING([--with-iib=path],
-	               [build iibnal against path]),
+	               [build iiblnd against path]),
 	[
 		case $with_iib in
 		yes)    ENABLEIIB=2
@@ -359,7 +359,7 @@ else
 		return rc == FSUCCESS ? 0 : 1;
 	],[
 		AC_MSG_RESULT([yes])
-		IIBNAL="iibnal"
+		IIBLND="iiblnd"
 	],[
 		AC_MSG_RESULT([no])
 		case $ENABLEIIB in
@@ -368,13 +368,13 @@ else
 		3) AC_MSG_ERROR([can't compile with Infinicon headers under $IIBPATH]);;
 		*) AC_MSG_ERROR([internal error]);;
 		esac
-		IIBNAL=""
+		IIBLND=""
 		IIBCPPFLAGS=""
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(IIBCPPFLAGS)
-AC_SUBST(IIBNAL)
+AC_SUBST(IIBLND)
 ])
 
 #
@@ -387,7 +387,7 @@ AC_DEFUN([LN_CONFIG_VIB],
 VIBPATH=""
 AC_ARG_WITH([vib],
 	AC_HELP_STRING([--with-vib=path],
-		       [build vibnal against path]),
+		       [build viblnd against path]),
 	[
 		case $with_vib in
 		no)     AC_MSG_RESULT([no]);;
@@ -403,7 +403,7 @@ AC_ARG_WITH([vib],
 		AC_MSG_RESULT([no])
 	])
 if test -z "$VIBPATH"; then
-	VIBNAL=""
+	VIBLND=""
 else
 	VIBCPPFLAGS="-I${VIBPATH}/include -I${VIBPATH}/cm"
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
@@ -437,13 +437,13 @@ else
                                           NULL, 0);
 		return 0;
 	],[
-		VIBNAL="vibnal"
+		VIBLND="viblnd"
 	],[
-	        AC_MSG_ERROR([can't compile vibnal with given path])
+	        AC_MSG_ERROR([can't compile viblnd with given path])
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
-if test -n "$VIBNAL"; then
+if test -n "$VIBLND"; then
 	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
 	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
@@ -495,15 +495,15 @@ if test -n "$VIBNAL"; then
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
 AC_SUBST(VIBCPPFLAGS)
-AC_SUBST(VIBNAL)
+AC_SUBST(VIBLND)
 ])
 
 #
-# LN_CONFIG_RANAL
+# LN_CONFIG_RALND
 #
-# check whether to use the RapidArray nal
+# check whether to use the RapidArray lnd
 #
-AC_DEFUN([LN_CONFIG_RANAL],
+AC_DEFUN([LN_CONFIG_RALND],
 [#### Rapid Array
 AC_MSG_CHECKING([if RapidArray kernel headers are present])
 # placeholder
@@ -522,15 +522,15 @@ LB_LINUX_TRY_COMPILE([
 	return rc == RAP_SUCCESS ? 0 : 1;
 ],[
 	AC_MSG_RESULT([yes])
-	RANAL="ranal"
+	RALND="ralnd"
 ],[
 	AC_MSG_RESULT([no])
-	RANAL=""
+	RALND=""
 	RACPPFLAGS=""
 ])
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 AC_SUBST(RACPPFLAGS)
-AC_SUBST(RANAL)
+AC_SUBST(RALND)
 ])
 
 #
@@ -647,7 +647,7 @@ LN_CONFIG_GM
 LN_CONFIG_OPENIB
 LN_CONFIG_VIB
 LN_CONFIG_IIB
-LN_CONFIG_RANAL
+LN_CONFIG_RALND
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
@@ -788,12 +788,12 @@ fi
 # AM_CONDITOINAL defines for lnet
 #
 AC_DEFUN([LN_CONDITIONALS],
-[AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
-AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
-AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
-AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
-AM_CONDITIONAL(BUILD_VIBNAL, test x$VIBNAL = "xvibnal")
-AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
+[AM_CONDITIONAL(BUILD_QSWLND, test x$QSWLND = "xqswlnd")
+AM_CONDITIONAL(BUILD_GMLND, test x$GMLND = "xgmlnd")
+AM_CONDITIONAL(BUILD_OPENIBLND, test x$OPENIBLND = "xopeniblnd")
+AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
+AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
+AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
 ])
 
 #
@@ -815,20 +815,20 @@ lnet/include/lnet/Makefile
 lnet/include/lnet/linux/Makefile
 lnet/klnds/Makefile
 lnet/klnds/autoMakefile
-lnet/klnds/gmnal/Makefile
-lnet/klnds/gmnal/autoMakefile
-lnet/klnds/openibnal/Makefile
-lnet/klnds/openibnal/autoMakefile
-lnet/klnds/iibnal/Makefile
-lnet/klnds/iibnal/autoMakefile
-lnet/klnds/vibnal/Makefile
-lnet/klnds/vibnal/autoMakefile
-lnet/klnds/qswnal/Makefile
-lnet/klnds/qswnal/autoMakefile
-lnet/klnds/ranal/Makefile
-lnet/klnds/ranal/autoMakefile
-lnet/klnds/socknal/Makefile
-lnet/klnds/socknal/autoMakefile
+lnet/klnds/gmlnd/Makefile
+lnet/klnds/gmlnd/autoMakefile
+lnet/klnds/openiblnd/Makefile
+lnet/klnds/openiblnd/autoMakefile
+lnet/klnds/iiblnd/Makefile
+lnet/klnds/iiblnd/autoMakefile
+lnet/klnds/viblnd/Makefile
+lnet/klnds/viblnd/autoMakefile
+lnet/klnds/qswlnd/Makefile
+lnet/klnds/qswlnd/autoMakefile
+lnet/klnds/ralnd/Makefile
+lnet/klnds/ralnd/autoMakefile
+lnet/klnds/socklnd/Makefile
+lnet/klnds/socklnd/autoMakefile
 lnet/libcfs/Makefile
 lnet/libcfs/autoMakefile
 lnet/libcfs/linux/Makefile

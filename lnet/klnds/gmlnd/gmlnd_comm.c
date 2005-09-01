@@ -23,7 +23,7 @@
  *	This file contains all gmnal send and receive functions
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 void
 gmnal_pack_msg(gmnal_ni_t *gmni, gmnal_msg_t *msg,

@@ -21,7 +21,7 @@
  *
  */
 
-#include "ranal.h"
+#include "ralnd.h"
 
 void
 kranal_device_callback(RAP_INT32 devid, RAP_PVOID arg)

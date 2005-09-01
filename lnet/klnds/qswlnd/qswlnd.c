@@ -19,7 +19,7 @@
  *
  */
 
-#include "qswnal.h"
+#include "qswlnd.h"
 
 
 ptl_nal_t kqswnal_nal =

@@ -5,11 +5,11 @@
 
 if MODULES
 if !CRAY_PORTALS
-if BUILD_RANAL
-modulenet_DATA = kranal$(KMODEXT)
+if BUILD_RALND
+modulenet_DATA = kralnd$(KMODEXT)
 endif
 endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kranal-objs:%.o=%.c) ranal.h
+DIST_SOURCES = $(kralnd-objs:%.o=%.c) ralnd.h

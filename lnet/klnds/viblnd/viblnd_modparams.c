@@ -21,7 +21,7 @@
  *
  */
 
-#include "vibnal.h"
+#include "viblnd.h"
 
 static int service_number = IBNAL_SERVICE_NUMBER;
 CFS_MODULE_PARM(service_number, "i", int, 0444,

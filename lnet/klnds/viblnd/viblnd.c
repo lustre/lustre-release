@@ -22,7 +22,7 @@
  *
  */
 
-#include "vibnal.h"
+#include "viblnd.h"
 
 ptl_nal_t               kibnal_nal = {
         .nal_type       = VIBNAL,

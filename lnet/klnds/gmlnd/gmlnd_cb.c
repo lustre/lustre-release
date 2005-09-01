@@ -25,7 +25,7 @@
  */
 
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 int
 gmnal_recvmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,

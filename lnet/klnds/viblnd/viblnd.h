@@ -273,7 +273,7 @@ typedef struct
 #define IBNAL_INIT_CQ              7
 #define IBNAL_INIT_ALL             8
 
-#include "vibnal_wire.h"
+#include "viblnd_wire.h"
 
 /***********************************************************************/
 

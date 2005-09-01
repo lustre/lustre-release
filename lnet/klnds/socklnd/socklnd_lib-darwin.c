@@ -28,7 +28,7 @@
 #include <netinet/tcp.h>
 #include <sys/file.h>
 
-#include "socknal.h"
+#include "socklnd.h"
 
 #if 0
 #undef SOCKNAL_SINGLE_FRAG_TX

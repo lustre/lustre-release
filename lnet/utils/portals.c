@@ -55,7 +55,7 @@
 #include <libcfs/portals_utils.h>
 #include <lnet/api-support.h>
 #include <lnet/ptlctl.h>
-#include <lnet/socknal.h>
+#include <lnet/socklnd.h>
 #include "parser.h"
 
 unsigned int portal_debug;

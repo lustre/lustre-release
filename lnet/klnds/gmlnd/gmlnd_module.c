@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "gmnal.h"
+#include "gmlnd.h"
 
 
 static int port = GMNAL_PORT;

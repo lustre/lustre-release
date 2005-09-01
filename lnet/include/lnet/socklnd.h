@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * <lnet/socknal.h>
+ * <lnet/socklnd.h>
  *
  * #defines shared between socknal implementation and utilities
  */

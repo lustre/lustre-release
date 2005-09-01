@@ -23,7 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "socknal.h"
+#include "socklnd.h"
 
 void
 ksocknal_free_ltx (ksock_ltx_t *ltx)

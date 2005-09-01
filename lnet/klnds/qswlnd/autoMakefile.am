@@ -5,11 +5,11 @@
 
 if MODULES
 if !CRAY_PORTALS
-if BUILD_QSWNAL
-modulenet_DATA = kqswnal$(KMODEXT)
+if BUILD_QSWLND
+modulenet_DATA = kqswlnd$(KMODEXT)
 endif
 endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kqswnal-objs:%.o=%.c) qswnal.h
+DIST_SOURCES = $(kqswlnd-objs:%.o=%.c) qswlnd.h

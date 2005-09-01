@@ -21,7 +21,7 @@
  *
  */
 
-#include "openibnal.h"
+#include "openiblnd.h"
 
 /*
  *  LIB functions follow

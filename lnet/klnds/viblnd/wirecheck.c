@@ -17,7 +17,7 @@ typedef struct {
 #include <lnet/lib-types.h>
 
 #define IBNAL_USE_FMR 1
-#include "vibnal_wire.h"
+#include "viblnd_wire.h"
 
 #ifndef HAVE_STRNLEN
 #define strnlen(s, i) strlen(s)

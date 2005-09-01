@@ -21,7 +21,7 @@
  *
  */
 
-#include "ranal.h"
+#include "ralnd.h"
 
 static int n_connd = RANAL_N_CONND;
 CFS_MODULE_PARM(n_connd, "i", int, 0444,

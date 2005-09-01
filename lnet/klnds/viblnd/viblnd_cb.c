@@ -22,7 +22,7 @@
  *
  */
 
-#include "vibnal.h"
+#include "viblnd.h"
 
 void
 kibnal_tx_done (kib_tx_t *tx)
