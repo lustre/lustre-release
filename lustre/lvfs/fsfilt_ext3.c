@@ -1040,18 +1040,17 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 int *created, int create,
                                 struct semaphore *optional_sem)
 {
-        int rc;
-#ifdef EXT3_MULTIBLOCK_ALLOCATOR
-        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
-                rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
-                                                     blocks, created, create);
-                return rc;
-        }
-#endif
+        int rc = 0;
         if (optional_sem != NULL)
                 down(optional_sem);
-        rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
-                                            created, create);
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
+                rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
+                                                     blocks, created, create);
+        else
+#endif
+                rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
+                                                    created, create);
         if (optional_sem != NULL)
                 up(optional_sem);
 
