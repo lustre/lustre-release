@@ -54,6 +54,10 @@ case "$lustretag" in
 	exit 0
 	;;
 
+    b1_4_newconfig*)
+        buildtag="b_lnet"
+        ;;
+
     v*) buildtag=$lustretag ;;
 
     # this is the branch table
