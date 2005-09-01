@@ -214,7 +214,7 @@ else
 		AC_MSG_RESULT([no.
 Please patch the GM sources as follows... 
     cd $GM_SRC
-    patch -p0 < $PWD/lnet/knals/gmnal/gm-reg-phys.patch
+    patch -p0 < $PWD/lnet/klnds/gmnal/gm-reg-phys.patch
 ...then rebuild and re-install them])
                 AC_MSG_ERROR([Can't build GM without gm_register_memory_ex_phys()])
         ])
@@ -813,22 +813,22 @@ lnet/include/libcfs/Makefile
 lnet/include/libcfs/linux/Makefile
 lnet/include/lnet/Makefile
 lnet/include/lnet/linux/Makefile
-lnet/knals/Makefile
-lnet/knals/autoMakefile
-lnet/knals/gmnal/Makefile
-lnet/knals/gmnal/autoMakefile
-lnet/knals/openibnal/Makefile
-lnet/knals/openibnal/autoMakefile
-lnet/knals/iibnal/Makefile
-lnet/knals/iibnal/autoMakefile
-lnet/knals/vibnal/Makefile
-lnet/knals/vibnal/autoMakefile
-lnet/knals/qswnal/Makefile
-lnet/knals/qswnal/autoMakefile
-lnet/knals/ranal/Makefile
-lnet/knals/ranal/autoMakefile
-lnet/knals/socknal/Makefile
-lnet/knals/socknal/autoMakefile
+lnet/klnds/Makefile
+lnet/klnds/autoMakefile
+lnet/klnds/gmnal/Makefile
+lnet/klnds/gmnal/autoMakefile
+lnet/klnds/openibnal/Makefile
+lnet/klnds/openibnal/autoMakefile
+lnet/klnds/iibnal/Makefile
+lnet/klnds/iibnal/autoMakefile
+lnet/klnds/vibnal/Makefile
+lnet/klnds/vibnal/autoMakefile
+lnet/klnds/qswnal/Makefile
+lnet/klnds/qswnal/autoMakefile
+lnet/klnds/ranal/Makefile
+lnet/klnds/ranal/autoMakefile
+lnet/klnds/socknal/Makefile
+lnet/klnds/socknal/autoMakefile
 lnet/libcfs/Makefile
 lnet/libcfs/autoMakefile
 lnet/libcfs/linux/Makefile
@@ -836,7 +836,7 @@ lnet/lnet/Makefile
 lnet/lnet/autoMakefile
 lnet/tests/Makefile
 lnet/tests/autoMakefile
-lnet/unals/Makefile
+lnet/ulnds/Makefile
 lnet/utils/Makefile
 ])
 case $lb_target_os in
