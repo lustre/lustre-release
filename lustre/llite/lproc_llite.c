@@ -227,7 +227,8 @@ static int ll_wr_config_update(struct file *file, const char *buffer,
         ENTRY;
 
         CWARN("Starting a LOV/OST update !\n");
-        RETURN(ll_process_config_update(sbi, 0));
+        ll_process_config_update(sbi, 0);
+        RETURN(count);
 }
 
 static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off,
