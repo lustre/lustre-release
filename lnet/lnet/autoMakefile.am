@@ -6,10 +6,10 @@ my_sources =    api-errno.c api-ni.c config.c \
 if !CRAY_PORTALS
 
 if LIBLUSTRE
-noinst_LIBRARIES= libportals.a
-libportals_a_SOURCES= $(my_sources)
-libportals_a_CPPFLAGS = $(LLCPPFLAGS)
-libportals_a_CFLAGS = $(LLCFLAGS)
+noinst_LIBRARIES= liblnet.a
+liblnet_a_SOURCES= $(my_sources)
+liblnet_a_CPPFLAGS = $(LLCPPFLAGS)
+liblnet_a_CFLAGS = $(LLCFLAGS)
 endif
 
 if MODULES
