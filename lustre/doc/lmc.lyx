@@ -170,6 +170,11 @@ The arguments required are:
  scripts used by the client for recovery
 \layout Description
 
+--group_upcall\SpecialChar ~
+<path> Specify the location of the group upcall scripts used by the MDS
+ for determiningsupplementary group membership
+\layout Description
+
 --ptldebug\SpecialChar ~
 <debug_level> Set the portals debug level.
 \layout Description

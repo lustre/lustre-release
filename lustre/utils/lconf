@@ -871,7 +871,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         # devsize is in 1k, and fs block count is in 4k
         block_cnt = devsize/4
 
-    if fstype in ('ext3', 'extN', 'ldiskfs'):
+    if fstype in ('ext3', 'ldiskfs'):
         # ext3 journal size is in megabytes
         if jsize == 0:
             if devsize == 0:
@@ -944,7 +944,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
     if ret:
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
-    if fstype in ('ext3', 'extN', 'ldiskfs'):
+    if fstype in ('ext3', 'ldiskfs'):
         htree = 'tune2fs -O dir_index'
         (ret, out) = run (htree, dev)
         if ret:
