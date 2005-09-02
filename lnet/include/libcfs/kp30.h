@@ -462,6 +462,7 @@ enum {
         IIBNAL    = 6,
         VIBNAL    = 7,
         RANAL     = 8,
+        PTLLND    = 9,
 };
 
 enum {
