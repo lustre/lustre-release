@@ -84,7 +84,7 @@ static int ll_writepages(struct address_space *mapping,
         struct timeval tstart, now;
         do_gettimeofday(&tstart);
         rc =  generic_writepages(mapping, wbc);
-        /* this syncronization (even being implemented via Writeback)
+        /* this synchronization (even being implemented via Writeback)
          * makes recovery much more sad, because iget() can get stuck
          * on I_LOCK the kernel helds over ->writepages() -bzzz */
         if (rc == 0 && wbc->sync_mode == WB_SYNC_ALL

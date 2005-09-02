@@ -355,10 +355,6 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        if (LUSTRE_CFG_BUFLEN(lcfg, 2) != sizeof(int)) {
-                CERROR("invalid priority\n");
-                RETURN(-EINVAL);
-        }
         if (strcmp(obd->obd_type->typ_name, OBD_MDC_DEVICENAME) &&
             strcmp(obd->obd_type->typ_name, OBD_OSC_DEVICENAME)) {
                 CERROR("can't add connection on non-client dev\n");

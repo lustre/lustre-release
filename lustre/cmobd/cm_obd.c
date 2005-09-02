@@ -278,7 +278,7 @@ static int cmobd_iocontrol(unsigned int cmd, struct obd_export *exp,
         case OBD_IOC_CMOBD_SYNC:
                 /* here would be nice to make sure somehow that all data is in
                  * cache and there are no outstanding requests, as otherwise
-                 * cahce is not coherent. But how to check that from CMOBD? I do
+                 * cache is not coherent. But how to check that from CMOBD? I do
                  * not know. --umka */
                 rc = cmobd_reintegrate(obd);
                 break;
