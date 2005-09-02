@@ -534,11 +534,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
-#if 0   /* disabled to evaluate impact -bzzz */
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (rc == 0)
                 rc = err;
-#endif
 
         fsfilt_check_slow(now, obd_timeout, "commitrw commit");
 

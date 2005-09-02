@@ -128,7 +128,7 @@
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
 
-#define OST_MAX_THREADS 48UL
+#define OST_MAX_THREADS 36UL
 #define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   OST_MAX_THREADS), 2UL)
 #define OST_NBUFS       (64 * smp_num_cpus)
