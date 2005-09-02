@@ -162,7 +162,7 @@ lmc_options = [
     ('timeout', "Set timeout to initiate recovery.", PARAM),
     ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
     ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
-    ('group_upcall', "Set location of extended groups upcall script.", PARAM),
+    ('group_upcall', "Set location of extended group upcall script.", PARAM),
     ('portals_upcall', "Set location of portals upcall script.", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
@@ -613,11 +613,8 @@ def set_node_options(gen, node, options):
             gen.addElement(node, 'lustreUpcall', options.lustre_upcall)
         else: 
             gen.addElement(node, 'lustreUpcall', default_upcall)
-    if default_upcall or options.groups_upcall:
-        if options.groups_upcall:
-            gen.addElement(node, 'groupsUpcall', options.groups_upcall)
-        else:
-            gen.addElement(node, 'groupsUpcall', default_upcall)
+    if options.group_upcall:
+        gen.addElement(node, 'groupUpcall', options.group_upcall)
     if default_upcall or options.portals_upcall:
         if options.portals_upcall:
             gen.addElement(node, 'portalsUpcall', options.portals_upcall)
