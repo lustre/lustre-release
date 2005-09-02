@@ -514,8 +514,8 @@ int svcsec_null_exit(void);
 #define CAPA_HMAC_ALG "sha1"
 
 /* capa ops */
-#define CAPA_READ       MAY_READ        /* 2 */
-#define CAPA_WRITE      MAY_WRITE       /* 4 */
+#define CAPA_WRITE      MAY_WRITE       /* 2 */
+#define CAPA_READ       MAY_READ        /* 4 */
 #define CAPA_TRUNC      8
 
 struct lustre_capa_data {
@@ -619,31 +619,36 @@ int capa_is_to_expire(struct obd_capa *ocapa);
 #define CAPA_EXPIRY       (1UL << CAPA_EXPIRY_SHIFT)
 #define CAPA_EXPIRY_MASK  (~(CAPA_EXPIRY-1))
 
-#define CAPA_PRE_EXPIRY_NOROUND 3       /* sec */
+#define CAPA_PRE_EXPIRY_SHORT   3       /* sec */
 #define CAPA_PRE_EXPIRY         300     /* sec */
 
 /* struct lustre_capa.lc_flags */
-#define CAPA_FL_NOROUND   0x001 /* capa expiry not rounded */
+#define CAPA_FL_SHORT     0x001 /* short capa expiry */
 #define CAPA_FL_REMUID    0x002 /* remote uid */
-#define CAPA_FL_TRUNC     0x004 /* truncate capa, this kind of capa won't be renewed */
 
 static inline unsigned long capa_pre_expiry(struct lustre_capa *capa)
 {
-        return (capa->lc_flags & CAPA_FL_NOROUND) ? 
-                        CAPA_PRE_EXPIRY_NOROUND : CAPA_PRE_EXPIRY;
+        return (capa->lc_flags & CAPA_FL_SHORT) ? 
+                        CAPA_PRE_EXPIRY_SHORT : CAPA_PRE_EXPIRY;
 }
 
 static inline __u64
 round_expiry(__u32 timeout)
 {
         struct timeval tv;
+        int capa_expiry = CAPA_EXPIRY;
+        int mask = CAPA_EXPIRY_MASK;
         __u64 expiry;
 
         do_gettimeofday(&tv);
         expiry = tv.tv_sec + timeout;
 
-        if (timeout > CAPA_EXPIRY)
-                expiry = (expiry + CAPA_EXPIRY - 1) & CAPA_EXPIRY_MASK;
+        if (timeout < CAPA_EXPIRY) {
+                capa_expiry = 64;
+                mask = ~63;
+        }
+
+        expiry = (expiry + capa_expiry - 1) & mask;
 
         return expiry;
 }

@@ -254,9 +254,14 @@ verify:
                         rc = memcmp(capa->lc_hmac, ocapa->c_bhmac,
                                     sizeof(capa->lc_hmac));
                 } else {
-                        /* ocapa is obsolete */
-                        capa_put(ocapa);
-                        spin_unlock(&filter->fo_capa_lock);
+                        /* ocapa is obsolete too */
+                        ocapa->c_bvalid = 0;
+                        goto new_capa;
+                }
+
+                if (rc && __capa_is_to_expire(ocapa)) {
+                        /* client should use new expiry now */
+                        ocapa->c_bvalid = 0;
                         goto new_capa;
                 }
                 spin_unlock(&filter->fo_capa_lock);
@@ -265,8 +270,8 @@ verify:
                 RETURN(rc ? -EACCES : 0);
         }
 
-new_capa:
         spin_lock(&filter->fo_capa_lock);
+new_capa:
         list_for_each_entry(tmp, &filter->fo_capa_keys, k_list) {
                 if (tmp->k_key.lk_mdsid == capa->lc_mdsid) {
                         if (rkey == NULL)
@@ -313,6 +318,7 @@ new_capa:
 
                 spin_lock(&filter->fo_capa_lock);
                 memcpy(ocapa->c_bhmac, tcapa.lc_hmac, sizeof(ocapa->c_bhmac));
+                ocapa->c_bvalid = 1;
                 spin_unlock(&filter->fo_capa_lock);
         }
         goto verify;

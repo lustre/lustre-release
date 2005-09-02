@@ -497,7 +497,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
 
                 mfd = mds_handle2mfd(&req_body->handle);
                 if (mfd == NULL) {
-                        DEBUG_CAPA(D_WARNING, req_capa, "no handle "LPX64" for",
+                        DEBUG_CAPA(D_INFO, req_capa, "no handle "LPX64" for",
                                    req_body->handle.cookie);
                         RETURN(-ESTALE);
                 }
@@ -508,6 +508,8 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
                                    mode);
                         RETURN(-EACCES);
                 }
+
+                mds_mfd_put(mfd);
         }
 
         LASSERT(repmsg->buflens[*offset] == sizeof(*capa));
@@ -533,7 +535,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
         capa->lc_keyid = le32_to_cpu(CUR_CAPA_KEY_ID(mds));
         capa->lc_expiry = round_expiry(mds->mds_capa_timeout);
         if (mds->mds_capa_timeout < CAPA_EXPIRY)
-                capa->lc_flags |= CAPA_FL_NOROUND;
+                capa->lc_flags |= CAPA_FL_SHORT;
         memcpy(key, CUR_CAPA_KEY(mds)->lk_key, sizeof(key));
         spin_unlock(&mds_capa_lock);
 

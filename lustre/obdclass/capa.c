@@ -215,7 +215,7 @@ static inline void list_add_capa(struct obd_capa *ocapa, struct list_head *head)
                 }
         }
 
-        list_add_tail(&ocapa->c_list, head);
+        list_add(&ocapa->c_list, head);
 }
 
 static inline void do_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
@@ -367,7 +367,7 @@ int capa_expired(struct lustre_capa *capa)
         struct timeval tv;
 
         do_gettimeofday(&tv);
-        return (capa->lc_expiry < tv.tv_sec) ? 1 : 0;
+        return ((unsigned long )capa->lc_expiry <= tv.tv_sec) ? 1 : 0;
 }
 
 int __capa_is_to_expire(struct obd_capa *ocapa)
@@ -376,7 +376,10 @@ int __capa_is_to_expire(struct obd_capa *ocapa)
         int pre_expiry = capa_pre_expiry(&ocapa->c_capa);
 
         do_gettimeofday(&tv);
-        return (ocapa->c_capa.lc_expiry - pre_expiry - 1 <= tv.tv_sec)? 1 : 0;
+        /* XXX: in case the lock is inaccurate, minus one more
+         * pre_expiry to make sure the expiry won't miss */
+        return ((unsigned long)ocapa->c_capa.lc_expiry -
+                2 * pre_expiry <= tv.tv_sec)? 1 : 0;
 }
 
 int capa_is_to_expire(struct obd_capa *ocapa)

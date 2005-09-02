@@ -112,7 +112,7 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
         ENTRY;
 
         if (rc) {
-                DEBUG_REQ(D_WARNING, req,
+                DEBUG_REQ(D_INFO, req,
                           "async getattr failed: rc = %d", rc);
                 RETURN(rc);
         }
@@ -141,10 +141,12 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
 
         spin_lock(&capa_lock);
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
+        CDEBUG(D_INFO, "expiry %lu vs timer %lu, base %p\n",
+               expiry, ll_capa_timer.expires, ll_capa_timer.base);
         if (time_before(expiry, ll_capa_timer.expires) ||
             !timer_pending(&ll_capa_timer)) {
                 mod_timer(&ll_capa_timer, expiry);
-                CDEBUG(D_INFO, "ll_capa_timer new timer: %lu\n", expiry);
+                CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
         }
         spin_unlock(&capa_lock);
 

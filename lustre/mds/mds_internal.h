@@ -200,6 +200,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
 struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle);
+void mds_mfd_put(struct mds_file_data *mfd);
 int mds_validate_size(struct obd_device *obd, struct inode *inode,
                       struct mds_body *body, struct iattr *iattr);
 int accmode(int flags);

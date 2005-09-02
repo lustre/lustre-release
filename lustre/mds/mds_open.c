@@ -94,7 +94,7 @@ struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle)
         RETURN(class_handle2object(handle->cookie));
 }
 
-static void mds_mfd_put(struct mds_file_data *mfd)
+void mds_mfd_put(struct mds_file_data *mfd)
 {
         CDEBUG(D_INFO, "PUTting mfd %p : new refcount %d\n", mfd,
                atomic_read(&mfd->mfd_refcount) - 1);

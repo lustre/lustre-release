@@ -43,6 +43,7 @@ static struct thread_ctl {
 static inline int have_expired_capa(void)
 {
         struct obd_capa *ocapa;
+        struct lustre_capa *capa;
         int expired = 0;
         unsigned long expiry;
         ENTRY;
@@ -50,14 +51,18 @@ static inline int have_expired_capa(void)
         spin_lock(&capa_lock);
         if (!list_empty(ll_capa_list)) {
                 ocapa = list_entry(ll_capa_list->next, struct obd_capa, c_list);
-
                 expired = __capa_is_to_expire(ocapa);
-                if (!expired && !timer_pending(&ll_capa_timer)) {
-                        /* the expired capa has been put, so set the timer to
-                         * the expired of the next capa */
-                        expiry = expiry_to_jiffies(ocapa->c_capa.lc_expiry);
-                        mod_timer(&ll_capa_timer, expiry);
-                        CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
+
+                if (!expired) {
+                        capa = &ocapa->c_capa;
+                        expiry = expiry_to_jiffies(capa->lc_expiry -
+                                                   capa_pre_expiry(capa));
+                        if (time_before(expiry, ll_capa_timer.expires) ||
+                            !timer_pending(&ll_capa_timer)) {
+                                mod_timer(&ll_capa_timer, expiry);
+                                CDEBUG(D_INFO,"ll_capa_timer new expiry: %lu\n",
+                                       expiry);
+                        }
                 }
         }
         spin_unlock(&capa_lock);
@@ -81,13 +86,8 @@ static int ll_renew_capa(struct obd_capa *ocapa)
         int rc;
         ENTRY;
 
-        if (capa_expired(&ocapa->c_capa)) {
-                /* this is the second time try to renew since the last
-                 * renewal failed, it means on one is openning it and
-                 * should be put now. */
-                capa_put(ocapa);
-                RETURN(0);
-        }
+        if (capa_expired(&ocapa->c_capa))
+                RETURN(-ESTALE);
 
         rc = md_getattr(md_exp, &lli->lli_id, valid, NULL, NULL, 0,
                         0, ocapa, &req);
@@ -98,6 +98,7 @@ static int ll_capa_thread(void *arg)
 {
         struct thread_ctl *ctl = arg;
         unsigned long flags;
+        int rc;
         ENTRY;
 
         {
@@ -120,7 +121,7 @@ static int ll_capa_thread(void *arg)
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
-                struct obd_capa *ocapa, *next = NULL, tcapa;
+                struct obd_capa *ocapa, *tmp, *next = NULL, tcapa;
                 unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
 
                 l_wait_event(capa_thread.t_ctl_waitq,
@@ -131,7 +132,10 @@ static int ll_capa_thread(void *arg)
                         break;
 
                 spin_lock(&capa_lock);
-                list_for_each_entry(ocapa, ll_capa_list, c_list) {
+                list_for_each_entry_safe(ocapa, tmp, ll_capa_list, c_list) {
+                        if (ocapa->c_capa.lc_flags & CAPA_FL_SHORT)
+                                sleep = CAPA_PRE_EXPIRY_SHORT;
+
                         if (ocapa->c_capa.lc_op == CAPA_TRUNC)
                                 continue;
 
@@ -140,7 +144,9 @@ static int ll_capa_thread(void *arg)
                                 tcapa = *ocapa;
                                 spin_unlock(&capa_lock);
 
-                                ll_renew_capa(&tcapa);
+                                rc = ll_renew_capa(&tcapa);
+                                if (rc)
+                                        capa_put(ocapa);
 
                                 spin_lock(&capa_lock);
                         } else {
@@ -148,12 +154,18 @@ static int ll_capa_thread(void *arg)
                                 break;
                         }
                 }
+
                 if (next) {
-                        expiry = expiry_to_jiffies(next->c_capa.lc_expiry);
-                        mod_timer(&ll_capa_timer, expiry);
-                        CDEBUG(D_INFO, "ll_capa_timer new expiry: %lu\n", expiry);
-                        if (next->c_capa.lc_flags & CAPA_FL_NOROUND)
-                                sleep = CAPA_PRE_EXPIRY_NOROUND;
+                        struct lustre_capa *capa = &next->c_capa;
+
+                        expiry = expiry_to_jiffies(capa->lc_expiry -
+                                                   capa_pre_expiry(capa));
+                        if (time_before(expiry, ll_capa_timer.expires) ||
+                            !timer_pending(&ll_capa_timer)) {
+                                mod_timer(&ll_capa_timer, expiry);
+                                CDEBUG(D_INFO,"ll_capa_timer new expiry: %lu\n",
+                                       expiry);
+                        }
                 }
                 spin_unlock(&capa_lock);
 
