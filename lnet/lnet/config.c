@@ -522,6 +522,18 @@ ptl_str2tbs_expand (struct list_head *tbs, char *str)
 }
 
 int
+lnet_parse_hops (char *str, unsigned int *hops)
+{
+        int     len = strlen(str);
+        int     nob = len;
+        
+        return (sscanf(str, "%u%n", hops, &nob) >= 1 &&
+                nob == len &&
+                *hops > 0 && *hops < 256);
+}
+
+
+int
 lnet_parse_route (char *str)
 {
 	/* static scratch buffer OK (single threaded) */
@@ -532,13 +544,15 @@ lnet_parse_route (char *str)
 	struct list_head *tmp1;
 	struct list_head *tmp2;
 	__u32             net;
-	lnet_nid_t         nid;
+	lnet_nid_t        nid;
 	ptl_text_buf_t   *ptb;
 	int               rc;
 	char             *sep;
 	char             *token = str;
 	int               ntokens = 0;
         int               myrc = -1;
+        unsigned int      hops;
+        int               got_hops = 0;
 
 	INIT_LIST_HEAD(&gateways);
 	INIT_LIST_HEAD(&nets);
@@ -553,7 +567,7 @@ lnet_parse_route (char *str)
 		while (ptl_iswhite(*sep))
 			sep++;
 		if (*sep == 0) {
-			if (ntokens < 2)
+			if (ntokens < (got_hops ? 3 : 2))
                                 goto token_error;
 			break;
 		}
@@ -567,11 +581,16 @@ lnet_parse_route (char *str)
 		if (*sep != 0)
 			*sep++ = 0;
 		
-		if (ntokens == 1)
+		if (ntokens == 1) {
 			tmp2 = &nets;		/* expanding nets */
-		else
+                } else if (ntokens == 2 &&
+                           lnet_parse_hops(token, &hops)) {
+                        got_hops = 1;           /* got a hop count */
+                        continue;
+                } else {
 			tmp2 = &gateways;	/* expanding gateways */
-			
+                }
+                
 		ptb = ptl_new_text_buf(strlen(token));
 		if (ptb == NULL)
 			goto out;
@@ -607,6 +626,9 @@ lnet_parse_route (char *str)
 		}
 	}
 
+        if (!got_hops)
+                hops = 1;
+
 	LASSERT (!list_empty(&nets));
 	LASSERT (!list_empty(&gateways));
 
@@ -620,7 +642,7 @@ lnet_parse_route (char *str)
 			nid = libcfs_str2nid(ptb->ptb_text);
 			LASSERT (nid != LNET_NID_ANY);
 
-                        rc = kpr_add_route (net, nid);
+                        rc = kpr_add_route (net, hops, nid);
                         if (rc != 0) {
                                 CERROR("Can't create route "
                                        "to %s via %s\n",

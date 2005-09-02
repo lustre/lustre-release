@@ -994,12 +994,14 @@ int
 jt_ptl_add_route (int argc, char **argv)
 {
         struct portal_ioctl_data data;
-        lnet_nid_t                gateway_nid;
+        lnet_nid_t               gateway_nid;
+        unsigned int             hops = 1;
+        char                    *end;
         int                      rc;
         
-        if (argc != 2)
+        if (argc < 2 || argc > 3)
         {
-                fprintf (stderr, "usage: %s gateway\n", argv[0]);
+                fprintf (stderr, "usage: %s gateway [hopcount]\n", argv[0]);
                 return (0);
         }
 
@@ -1012,8 +1014,17 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
         }
 
+        if (argc == 3) {
+                hops = strtoul(argv[2], &end, 0);
+                if (hops >= 256 || *end != 0) {
+                        fprintf (stderr, "Can't parse hopcount \"%s\"\n", argv[2]);
+                        return -1;
+                }
+        }
+        
         PORTAL_IOC_INIT(data);
         data.ioc_net = g_net;
+        data.ioc_count = hops;
         data.ioc_nid = gateway_nid;
 
         rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
@@ -1124,7 +1135,9 @@ jt_ptl_print_routes (int argc, char **argv)
         int                       index;
         __u32			  net;
         lnet_nid_t		  nid;
+        unsigned int              hops;
         int                       alive;
+        int                       ignored;
 
         for (index = 0;;index++)
         {
@@ -1135,12 +1148,16 @@ jt_ptl_print_routes (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                net   = data.ioc_net;
-                nid   = data.ioc_nid;
-                alive = data.ioc_flags;
+                net     = data.ioc_net;
+                hops    = data.ioc_count;
+                nid     = data.ioc_nid;
+                alive   = data.ioc_flags & 1;
+                ignored = data.ioc_flags & 2;
 
-                printf ("net %18s gw %32s %s\n", 
-                        libcfs_net2str(net), libcfs_nid2str(nid),
+                printf ("net %18s hops %u gw %32s %s\n", 
+                        libcfs_net2str(net), hops,
+                        libcfs_nid2str(nid),
+                        ignored ? "<ignored>" :
                         alive ? "up" : "down");
         }
 

@@ -197,8 +197,10 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
         kpr_seq_route_iterator_t *sri = iter;
         unsigned long             flags;
         __u32                     net;
-        lnet_nid_t                 nid;
+        unsigned int              hops;
+        lnet_nid_t                nid;
         int                       alive;
+        int                       ignored;
 
         read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
@@ -211,13 +213,17 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
         }
 
         net = sri->sri_net->kpne_net;
+        hops = sri->sri_net->kpne_hops;
         nid = sri->sri_route->kpre_gateway->kpge_nid;
         alive = sri->sri_route->kpre_gateway->kpge_alive;
+        ignored = !ptl_islocalnet(sri->sri_net->kpne_net) &&
+                  ptl_islocalnet(sri->sri_route->kpre_gateway->kpge_nid);
 
         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
-        seq_printf(s, "%-8s %4s %s\n",
-                   libcfs_net2str(net),
+        seq_printf(s, "%-8s %2u %7s %s\n",
+                   libcfs_net2str(net), hops,
+                   ignored ? "ignored" :
                    alive ? "up" : "down",
                    libcfs_nid2str(nid));
         return 0;

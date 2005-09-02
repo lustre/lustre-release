@@ -613,6 +613,29 @@ ptl_islocalnid (lnet_nid_t nid)
         return islocal;
 }
 
+int
+ptl_islocalnet (__u32 net)
+{
+        struct list_head *tmp;
+        ptl_ni_t         *ni;
+        unsigned long     flags;
+        int               islocal = 0;
+
+        PTL_LOCK(flags);
+
+        list_for_each (tmp, &lnet_apini.apini_nis) {
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
+
+                if (PTL_NIDNET(ni->ni_nid) == net) {
+                        islocal = 1;
+                        break;
+                }
+        }
+        
+        PTL_UNLOCK(flags);
+        return islocal;
+}
+
 void
 ptl_shutdown_nalnis (void)
 {

@@ -238,7 +238,6 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
         int                  found;
         unsigned long        flags;
         ptl_ni_t            *gwni = NULL;
-        ptl_ni_t            *tmpni = NULL;
         kpr_gateway_entry_t *ge = NULL;
         __u32                target_net = PTL_NIDNET(target_nid);
 
@@ -272,7 +271,7 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 		return LNET_NID_ANY;
         }
 
-	/* Search routes for one that has a gateway to target_nid on the callers network */
+	/* Search for the target net */
         found = 0;
         list_for_each (e, &kpr_state.kpr_nets) {
 		ne = list_entry (e, kpr_net_entry_t, kpne_list);
@@ -304,29 +303,21 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                             kpr_ge_isbetter (ge, re->kpre_gateway))
                                 continue;
 
-                } else if (gwni != NULL &&
-                           PTL_NIDNET(gwni->ni_nid) ==
-                           PTL_NIDNET(ge->kpge_nid)) {
-                        /* another gateway on the same net */
+                } else if (ge != NULL) {        /* another gateway */
+                        LASSERT (gwni != NULL);
+                        /* we don't allow gateways on different nets to get
+                         * into the route table */
+                        LASSERT (PTL_NIDNET(gwni->ni_nid) ==
+                                 PTL_NIDNET(re->kpre_gateway->kpge_nid));
 
                         if (kpr_ge_isbetter(ge, re->kpre_gateway))
                                 continue;
                 } else {
-                        /* another gateway on a new/different net */
+                        LASSERT (gwni == NULL);
 
-                        tmpni = lnet_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
-                        if (tmpni == NULL)      /* gateway not on a local net */
+                        gwni = lnet_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
+                        if (gwni == NULL)       /* gateway not on a local net */
                                 continue;
-                
-                        if (ge != NULL &&
-                            kpr_ge_isbetter(ge, re->kpre_gateway)) {
-                                ptl_ni_decref(tmpni);
-                                continue;
-                        }
-                        
-                        if (gwni != NULL)
-                                ptl_ni_decref(gwni);
-                        gwni = tmpni;
                 }
 
                 ge = re->kpre_gateway;
@@ -357,6 +348,33 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                 *nip = gwni;                    /* already got a ref */
 
 	return gwnid;
+}
+
+int
+kpr_distance (lnet_nid_t nid)
+{
+        unsigned long     flags;
+	struct list_head *e;
+        kpr_net_entry_t  *ne;
+        __u32             net = PTL_NIDNET(nid);
+        int               dist = -ENETUNREACH;
+        
+        if (ptl_islocalnet(net))
+                return 0;
+
+	read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
+
+        list_for_each (e, &kpr_state.kpr_nets) {
+		ne = list_entry (e, kpr_net_entry_t, kpne_list);
+                
+                if (ne->kpne_net == net) {
+                        dist = ne->kpne_hops;
+                        break;
+                }
+        }
+
+	read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+        return dist;
 }
 
 void
@@ -579,7 +597,7 @@ lnet_fwd_done (ptl_ni_t *dst_ni, kpr_fwd_desc_t *fwd, int error)
 }
 
 int
-kpr_add_route (__u32 net, lnet_nid_t gateway_nid)
+kpr_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway_nid)
 {
 	unsigned long	     flags;
 	struct list_head    *e;
@@ -588,10 +606,11 @@ kpr_add_route (__u32 net, lnet_nid_t gateway_nid)
         kpr_gateway_entry_t *ge = NULL;
         int                  dup = 0;
 
-        CDEBUG(D_NET, "Add route: net %s : gw %s\n",
-               libcfs_net2str(net), libcfs_nid2str(gateway_nid));
+        CDEBUG(D_NET, "Add route: net %s hops %u gw %s\n",
+               libcfs_net2str(net), hops, libcfs_nid2str(gateway_nid));
 
-        if (gateway_nid == LNET_NID_ANY)
+        if (gateway_nid == LNET_NID_ANY ||
+            hops < 1 || hops > 255)
                 return (-EINVAL);
 
         /* Assume net, route, gateway all new */
@@ -616,6 +635,7 @@ kpr_add_route (__u32 net, lnet_nid_t gateway_nid)
         atomic_set (&ge->kpge_weight, 0);
 
         ne->kpne_net = net;
+        ne->kpne_hops = hops;
         INIT_LIST_HEAD(&ne->kpne_routes);
         
         LASSERT(!in_interrupt());
@@ -636,22 +656,45 @@ kpr_add_route (__u32 net, lnet_nid_t gateway_nid)
         if (!dup) { /* Adding a new network? */
                 list_add_tail(&ne->kpne_list, &kpr_state.kpr_nets);
         } else {
+                if (ne->kpne_hops != hops) {
+                        unsigned int hops2 = ne->kpne_hops;
+
+                        write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
+
+                        CERROR("Inconsistent hop count %d(%d) for network %s\n",
+                               hops, hops2, libcfs_net2str(net));
+                        PORTAL_FREE(re, sizeof(*re));
+                        PORTAL_FREE(ge, sizeof(*ge));
+                        return -EINVAL;
+                }
+
                 dup = 0;
                 list_for_each (e, &ne->kpne_routes) {
                         kpr_route_entry_t *re2 = 
                                 list_entry(e, kpr_route_entry_t, kpre_list);
-                        
-                        dup = (re2->kpre_gateway->kpge_nid == gateway_nid);
-                        if (dup)
+
+                        if (PTL_NIDNET(re2->kpre_gateway->kpge_nid) !=
+                            PTL_NIDNET(gateway_nid)) {
+                                /* different gateway nets is an error */
+                                dup = -1;
                                 break;
+                        }
+                        
+                        if (re2->kpre_gateway->kpge_nid == gateway_nid) {
+                                /* same gateway is a noop */
+                                dup = 1;
+                                break;
+                        }
                 }
                 
-                if (dup) { /* Ignore duplicate route entry */
+                if (dup != 0) { 
+                        /* Don't add duplicate/bad route entry */
                         write_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 
                         PORTAL_FREE(re, sizeof(*re));
                         PORTAL_FREE(ge, sizeof(*ge));
-                        return 0;
+
+                        return (dup < 0) ? -EINVAL : 0;
                 }
         }
 
@@ -754,7 +797,8 @@ kpr_del_route (__u32 net, lnet_nid_t gw_nid)
 }
 
 int
-kpr_get_route (int idx, __u32 *net, lnet_nid_t *gateway_nid, __u32 *alive)
+kpr_get_route (int idx, __u32 *net, __u32 *hops, 
+               lnet_nid_t *gateway_nid, __u32 *alive, __u32 *ignored)
 {
 	struct list_head    *e1;
 	struct list_head    *e2;
@@ -775,8 +819,11 @@ kpr_get_route (int idx, __u32 *net, lnet_nid_t *gateway_nid, __u32 *alive)
                 
                         if (idx-- == 0) {
                                 *net = ne->kpne_net;
+                                *hops = ne->kpne_hops;
                                 *gateway_nid = ge->kpge_nid;
                                 *alive = ge->kpge_alive;
+                                *ignored = !ptl_islocalnet(ne->kpne_net) &&
+                                           ptl_islocalnet(ge->kpge_nid);
 
                                 read_unlock_irqrestore(&kpr_state.kpr_rwlock, 
                                                        flags);
@@ -799,15 +846,25 @@ kpr_ctl(unsigned int cmd, void *arg)
                 return -EINVAL;
                 
         case IOC_PORTAL_ADD_ROUTE:
-                return kpr_add_route(data->ioc_net, data->ioc_nid);
+                return kpr_add_route(data->ioc_net, data->ioc_count, 
+                                     data->ioc_nid);
 
         case IOC_PORTAL_DEL_ROUTE:
                 return kpr_del_route (data->ioc_net, data->ioc_nid);
 
-        case IOC_PORTAL_GET_ROUTE:
-                return kpr_get_route(data->ioc_count, &data->ioc_net,
-                                     &data->ioc_nid, &data->ioc_flags);
-
+        case IOC_PORTAL_GET_ROUTE: {
+                int alive;
+                int ignored;
+                int rc;
+                        
+                rc = kpr_get_route(data->ioc_count, 
+                                   &data->ioc_net, &data->ioc_count, 
+                                   &data->ioc_nid, &alive, &ignored);
+                data->ioc_flags = (  alive ? 1 : 0) | 
+                                  (ignored ? 2 : 0);
+                return rc;
+        }
+                
         case IOC_PORTAL_NOTIFY_ROUTER:
                 return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, 
                                   (time_t)data->ioc_u64[0]);
@@ -911,7 +968,7 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 }
 
 int
-kpr_add_route (__u32 net, lnet_nid_t gateway_nid)
+kpr_add_route (__u32 net, int hops, lnet_nid_t gateway_nid)
 {
         return -EOPNOTSUPP;
 }
@@ -920,6 +977,12 @@ int
 kpr_ctl(unsigned int cmd, void *arg)
 {
         return -EINVAL;
+}
+
+int
+kpr_distance(lnet_nid_t nid)
+{
+        return 0;
 }
 
 void

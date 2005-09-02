@@ -1370,3 +1370,12 @@ LNetGet(lnet_handle_md_t mdh, lnet_process_id_t target,
         /* completion will be signalled by an event */
         return 0;
 }
+
+int
+LNetDist (lnet_handle_ni_t interface, lnet_nid_t nid)
+{
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
+        
+        return kpr_distance(nid);
+}

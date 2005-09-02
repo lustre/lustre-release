@@ -37,7 +37,7 @@ typedef struct
         time_t                  kpge_timestamp;
         int                     kpge_alive;
         int                     kpge_refcount;
-        lnet_nid_t               kpge_nid;
+        lnet_nid_t              kpge_nid;
 } kpr_gateway_entry_t;
 
 typedef struct
@@ -51,12 +51,13 @@ typedef struct
         struct list_head        kpne_list;
         struct list_head        kpne_routes;
         __u32                   kpne_net;
+        unsigned int            kpne_hops;
 } kpr_net_entry_t;
 
 typedef struct
 {
         work_struct_t           kpru_tq;
-        lnet_nid_t               kpru_nid;
+        lnet_nid_t              kpru_nid;
         int                     kpru_alive;
         time_t                  kpru_when;
 } kpr_upcall_t;

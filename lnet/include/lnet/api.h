@@ -143,5 +143,6 @@ int LNetGet(lnet_handle_md_t  md_in,
 		 lnet_match_bits_t match_bits_in, 
 		 lnet_size_t       offset_in);
 
+int LNetDist (lnet_handle_ni_t interface, lnet_nid_t nid);
 
 #endif
