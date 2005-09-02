@@ -744,7 +744,7 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)(int)sizeof(((struct mds_rec_setattr *)0)->sa_ctime));
 
         /* Checks for struct mds_rec_create */
-        LASSERTF((int)sizeof(struct mds_rec_create) == 112, " found %llu\n",
+        LASSERTF((int)sizeof(struct mds_rec_create) == 120, " found %llu\n",
                  (unsigned long long)(int)sizeof(struct mds_rec_create));
         LASSERTF((int)offsetof(struct mds_rec_create, cr_opcode) == 0, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct mds_rec_create, cr_opcode));
