@@ -32,7 +32,7 @@
 #define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 
-#define LBUG_WITH_LOC(file, func, line)    do {portals_catastrophe = 1;} while(0)
+#define LBUG_WITH_LOC(file, func, line)    do {libcfs_catastrophe = 1;} while(0)
 
 /* --------------------------------------------------------------------- */
 

@@ -175,7 +175,7 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         unsigned long flags;
 
 #ifdef CRAY_PORTALS
-        if (mask == D_PORTALS && !(portal_debug & D_PORTALS))
+        if (mask == D_PORTALS && !(libcfs_debug & D_PORTALS))
                 return;
 #endif
         if (strchr(file, '/'))
@@ -234,7 +234,7 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
                        "tage->used == %u in libcfs_debug_msg\n", tage->used);
 
  out:
-        if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || portal_printk)
+        if ((mask & (D_EMERG | D_ERROR | D_WARNING | D_CONSOLE)) || libcfs_printk)
                 print_to_console(&header, mask, debug_buf, needed, file, fn);
 
         trace_put_tcd(tcd, flags);
@@ -523,7 +523,7 @@ static int tracefiled(void *arg)
 
         /* we're started late enough that we pick up init's fs context */
         /* this is so broken in uml?  what on earth is going on? */
-        kportal_daemonize("ktracefiled");
+        libcfs_daemonize("ktracefiled");
         reparent_to_init();
 
         spin_lock_init(&pc.pc_lock);

@@ -92,7 +92,7 @@ kibnal_tx_done (kib_tx_t *tx)
                 if (tx->tx_ptlmsg[i] == NULL)
                         continue;
 
-                ptl_finalize (kibnal_data.kib_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
+                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
                 tx->tx_ptlmsg[i] = NULL;
         }
         
@@ -541,7 +541,7 @@ kibnal_rx (kib_rx_t *rx)
 
         switch (msg->ibm_type) {
         case IBNAL_MSG_GET_RDMA:
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
                 /* If the incoming get was matched, I'll have initiated the
                  * RDMA and the completion message... */
                 if (rx->rx_rdma)
@@ -556,10 +556,10 @@ kibnal_rx (kib_rx_t *rx)
                 break;
                 
         case IBNAL_MSG_PUT_RDMA:
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
                 if (rx->rx_rdma)
                         break;
-                /* This is most unusual, since even if ptl_parse() didn't
+                /* This is most unusual, since even if lnet_parse() didn't
                  * match anything, it should have asked us to read (and
                  * discard) the payload.  The portals header must be
                  * inconsistent with this message type, so it's the
@@ -570,7 +570,7 @@ kibnal_rx (kib_rx_t *rx)
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
                 LASSERT (!rx->rx_rdma);
                 break;
                 
@@ -1282,7 +1282,7 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid,
         
         if (type == IBNAL_MSG_GET_RDMA) {
                 /* reply gets finalized when tx completes */
-                tx->tx_ptlmsg[1] = ptl_create_reply_msg(kibnal_data.kib_ni, 
+                tx->tx_ptlmsg[1] = lnet_create_reply_msg(kibnal_data.kib_ni, 
                                                         nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR ("Can't create reply for GET -> "LPX64"\n",
@@ -1376,7 +1376,7 @@ kibnal_start_active_rdma (int type, int status,
                 CERROR ("tx descs exhausted on RDMA from "LPX64
                         " completing locally with failure\n",
                         rx->rx_conn->ibc_peer->ibp_nid);
-                ptl_finalize (kibnal_data.kib_ni, NULL, ptlmsg, -ENOMEM);
+                lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg, -ENOMEM);
                 return;
         }
         LASSERT (tx->tx_nsp == 0);
@@ -1474,7 +1474,7 @@ init_tx:
                 LASSERT (tx->tx_nsp == 1);
                 /* No RDMA: local completion happens now! */
                 CDEBUG(D_WARNING,"No data: immediate completion\n");
-                ptl_finalize (kibnal_data.kib_ni, NULL, ptlmsg,
+                lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg,
                               status == 0 ? 0 : -EIO);
         }
 
@@ -1595,11 +1595,11 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 
         if (payload_nob > 0) {
                 if (payload_kiov != NULL)
-                        ptl_copy_kiov2buf(ibmsg->ibm_u.immediate.ibim_payload,
+                        lnet_copy_kiov2buf(ibmsg->ibm_u.immediate.ibim_payload,
                                           payload_niov, payload_kiov,
                                           payload_offset, payload_nob);
                 else
-                        ptl_copy_iov2buf(ibmsg->ibm_u.immediate.ibim_payload,
+                        lnet_copy_iov2buf(ibmsg->ibm_u.immediate.ibim_payload,
                                          payload_niov, payload_iov,
                                          payload_offset, payload_nob);
         }
@@ -1667,22 +1667,22 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 }
 
                 if (kiov != NULL)
-                        ptl_copy_buf2kiov(niov, kiov, offset,
+                        lnet_copy_buf2kiov(niov, kiov, offset,
                                           rxmsg->ibm_u.immediate.ibim_payload,
                                           mlen);
                 else
-                        ptl_copy_buf2iov(niov, iov, offset,
+                        lnet_copy_buf2iov(niov, iov, offset,
                                          rxmsg->ibm_u.immediate.ibim_payload,
                                          mlen);
 
-                ptl_finalize (ni, NULL, ptlmsg, 0);
+                lnet_finalize (ni, NULL, ptlmsg, 0);
                 return (0);
 
         case IBNAL_MSG_GET_RDMA:
                 /* We get called here just to discard any junk after the
                  * GET hdr. */
                 LASSERT (ptlmsg == NULL);
-                ptl_finalize (ni, NULL, ptlmsg, 0);
+                lnet_finalize (ni, NULL, ptlmsg, 0);
                 return (0);
 
         case IBNAL_MSG_PUT_RDMA:
@@ -2843,8 +2843,8 @@ kibnal_connd (void *arg)
         int                peer_index = 0;
         unsigned long      deadline = jiffies;
         
-        kportal_daemonize ("kibnal_connd");
-        kportal_blockallsigs ();
+        libcfs_daemonize ("kibnal_connd");
+        libcfs_blockallsigs ();
 
         init_waitqueue_entry (&wait, current);
 
@@ -2947,8 +2947,8 @@ kibnal_scheduler(void *arg)
         int             did_something;
 
         snprintf(name, sizeof(name), "kibnal_sd_%02ld", id);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
+        libcfs_daemonize(name);
+        libcfs_blockallsigs();
 
         spin_lock_irqsave(&kibnal_data.kib_sched_lock, flags);
 

@@ -25,8 +25,8 @@
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
 
-#define PORTALS_DEV_ID 0
-#define PORTALS_DEV_PATH "/dev/portals"
+#define LNET_DEV_ID 0
+#define LNET_DEV_PATH "/dev/lnet"
 #define OBD_DEV_ID 1
 #define OBD_DEV_PATH "/dev/obd"
 #define SMFS_DEV_ID  2

@@ -3,11 +3,11 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
 
-#define PORTAL_MINOR 240
+#define LNET_MINOR 240
 
 
 void
-kportal_daemonize (char *str)
+libcfs_daemonize (char *str)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,63)) 
 	daemonize(str);
@@ -18,7 +18,7 @@ kportal_daemonize (char *str)
 }
 
 void
-kportal_blockallsigs ()
+libcfs_blockallsigs ()
 { 
 	unsigned long  flags; 
 	
@@ -159,12 +159,12 @@ static struct file_operations libcfs_fops = {
 };
 
 cfs_psdev_t libcfs_dev = { 
-	PORTAL_MINOR, 
-	"portals", 
+	LNET_MINOR, 
+	"lnet", 
 	&libcfs_fops
 };
 
-EXPORT_SYMBOL(kportal_blockallsigs);
-EXPORT_SYMBOL(kportal_daemonize);
+EXPORT_SYMBOL(libcfs_blockallsigs);
+EXPORT_SYMBOL(libcfs_daemonize);
 
 

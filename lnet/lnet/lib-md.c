@@ -169,7 +169,7 @@ lib_md_build(ptl_libmd_t *lmd, lnet_md_t *umd, int unlink)
 
         /* It's good; let handle2md succeed and add to active mds */
         ptl_initialise_handle (&lmd->md_lh, PTL_COOKIE_TYPE_MD);
-        list_add (&lmd->md_list, &ptl_apini.apini_active_mds);
+        list_add (&lmd->md_list, &lnet_apini.apini_active_mds);
 
         return 0;
 }
@@ -202,8 +202,8 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         unsigned long flags;
         int           rc;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
@@ -247,8 +247,8 @@ LNetMDBind(lnet_handle_ni_t nih, lnet_md_t umd,
         unsigned long flags;
         int           rc;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
@@ -282,8 +282,8 @@ LNetMDUnlink (lnet_handle_md_t mdh)
         ptl_libmd_t     *md;
         unsigned long    flags;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
 

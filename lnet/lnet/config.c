@@ -149,7 +149,7 @@ ptl_new_ni(__u32 net, struct list_head *nilist)
 }
 
 int
-ptl_parse_networks(struct list_head *nilist, char *networks)
+lnet_parse_networks(struct list_head *nilist, char *networks)
 {
 	int       tokensize = strlen(networks) + 1;
         char     *tokens;
@@ -169,8 +169,8 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
 		return -ENOMEM;
         }
 
-        ptl_apini.apini_network_tokens = tokens;
-        ptl_apini.apini_network_tokens_nob = tokensize;
+        lnet_apini.apini_network_tokens = tokens;
+        lnet_apini.apini_network_tokens_nob = tokensize;
         memcpy (tokens, networks, tokensize);
 	str = tokens;
         
@@ -291,7 +291,7 @@ ptl_parse_networks(struct list_head *nilist, char *networks)
                 PORTAL_FREE(ni, sizeof(*ni));
         }
 	PORTAL_FREE(tokens, tokensize);
-        ptl_apini.apini_network_tokens = NULL;
+        lnet_apini.apini_network_tokens = NULL;
 
         return -EINVAL;
 }
@@ -522,7 +522,7 @@ ptl_str2tbs_expand (struct list_head *tbs, char *str)
 }
 
 int
-ptl_parse_route (char *str)
+lnet_parse_route (char *str)
 {
 	/* static scratch buffer OK (single threaded) */
 	static char       cmd[PTL_SINGLE_TEXTBUF_NOB];
@@ -643,14 +643,14 @@ ptl_parse_route (char *str)
 }
 
 int
-ptl_parse_route_tbs(struct list_head *tbs)
+lnet_parse_route_tbs(struct list_head *tbs)
 {
 	ptl_text_buf_t   *ptb;
 
 	while (!list_empty(tbs)) {
 		ptb = list_entry(tbs->next, ptl_text_buf_t, ptb_list);
 
-		if (ptl_parse_route(ptb->ptb_text) < 0) {
+		if (lnet_parse_route(ptb->ptb_text) < 0) {
 			ptl_free_text_bufs(tbs);
 			return -EINVAL;
 		}
@@ -663,7 +663,7 @@ ptl_parse_route_tbs(struct list_head *tbs)
 }
 
 int
-ptl_parse_routes (char *routes)
+lnet_parse_routes (char *routes)
 {
 	struct list_head  tbs;
 	int               rc = 0;
@@ -674,7 +674,7 @@ ptl_parse_routes (char *routes)
 		CERROR("Error parsing routes\n");
 		rc = -EINVAL;
 	} else {
-                rc = ptl_parse_route_tbs(&tbs);
+                rc = lnet_parse_route_tbs(&tbs);
         }
 
 	LASSERT (ptl_tbnob == 0);
@@ -683,7 +683,7 @@ ptl_parse_routes (char *routes)
 
 #ifdef __KERNEL__
 int
-ptl_set_ip_niaddr (ptl_ni_t *ni) 
+lnet_set_ip_niaddr (ptl_ni_t *ni) 
 {
         __u32  net = PTL_NIDNET(ni->ni_nid);
         char **names;
@@ -760,6 +760,6 @@ ptl_set_ip_niaddr (ptl_ni_t *ni)
         return -ENOENT;
 }
 
-EXPORT_SYMBOL(ptl_set_ip_niaddr);
+EXPORT_SYMBOL(lnet_set_ip_niaddr);
 
 #endif

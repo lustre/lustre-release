@@ -63,7 +63,7 @@ int
 kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
 {
         int         timeout = active ? *kranal_tunables.kra_timeout :
-                                        ptl_acceptor_timeout();
+                                        lnet_acceptor_timeout();
         int         rc;
 
         rc = libcfs_sock_read(sock, &connreq->racr_magic, 
@@ -77,7 +77,7 @@ kranal_recv_connreq(struct socket *sock, kra_connreq_t *connreq, int active)
             connreq->racr_magic != RANAL_MSG_MAGIC &&
             connreq->racr_magic != __swab32(RANAL_MSG_MAGIC)) {
                 /* Is this a generic acceptor connection request? */
-                rc = ptl_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
+                rc = lnet_accept(kranal_data.kra_ni, sock, connreq->racr_magic);
                 if (rc != 0)               /* nope */
                         return -EPROTO;
 
@@ -505,7 +505,7 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         kranal_pack_connreq(&connreq, conn, peer->rap_nid);
 
-        rc = ptl_connect(&sock, peer->rap_nid,
+        rc = lnet_connect(&sock, peer->rap_nid,
                          0, peer->rap_ip, peer->rap_port);
         if (rc != 0)
                 goto failed_0;
@@ -559,7 +559,7 @@ kranal_active_conn_handshake(kra_peer_t *peer,
  failed_2:
         libcfs_sock_release(sock);
  failed_1:
-        ptl_connect_console_error(rc, peer->rap_nid,
+        lnet_connect_console_error(rc, peer->rap_nid,
                                   peer->rap_ip, peer->rap_port);
  failed_0:
         kranal_conn_decref(conn);
@@ -1351,7 +1351,7 @@ kranal_shutdown (ptl_ni_t *ni)
         unsigned long flags;
 
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
         LASSERT (ni == kranal_data.kra_ni);
         LASSERT (ni->ni_data == &kranal_data);
@@ -1464,7 +1464,7 @@ kranal_shutdown (ptl_ni_t *ni)
         kranal_free_txdescs(&kranal_data.kra_idle_nblk_txs);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
         kranal_data.kra_init = RANAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1474,7 +1474,7 @@ int
 kranal_startup (ptl_ni_t *ni)
 {
         struct timeval    tv;
-        int               pkmem = atomic_read(&portal_kmemory);
+        int               pkmem = atomic_read(&libcfs_kmemory);
         int               rc;
         int               i;
         kra_device_t     *dev;
@@ -1487,7 +1487,7 @@ kranal_startup (ptl_ni_t *ni)
                 return -EPERM;
         }
 
-        if (ptl_set_ip_niaddr(ni) != 0) {
+        if (lnet_set_ip_niaddr(ni) != 0) {
                 CERROR ("Can't determine my NID\n");
                 return -EPERM;
         }
@@ -1621,7 +1621,7 @@ kranal_startup (ptl_ni_t *ni)
 void __exit
 kranal_module_fini (void)
 {
-        ptl_unregister_nal(&kranal_nal);
+        lnet_unregister_nal(&kranal_nal);
         kranal_tunables_fini();
 }
 
@@ -1634,7 +1634,7 @@ kranal_module_init (void)
         if (rc != 0)
                 return rc;
 
-        ptl_register_nal(&kranal_nal);
+        lnet_register_nal(&kranal_nal);
 
         return 0;
 }

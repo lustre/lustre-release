@@ -1436,7 +1436,7 @@ kibnal_shutdown (ptl_ni_t *ni)
         LASSERT (ni->ni_data == &kibnal_data);
         
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         switch (kibnal_data.kib_init) {
 
@@ -1536,7 +1536,7 @@ kibnal_shutdown (ptl_ni_t *ni)
                              kibnal_data.kib_peer_hash_size);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1862,7 +1862,7 @@ kibnal_startup (ptl_ni_t *ni)
 void __exit
 kibnal_module_fini (void)
 {
-        ptl_unregister_nal(&kibnal_nal);
+        lnet_unregister_nal(&kibnal_nal);
         kibnal_tunables_fini();
 }
 
@@ -1888,7 +1888,7 @@ kibnal_module_init (void)
         if (rc != 0)
                 return rc;
 
-        ptl_register_nal(&kibnal_nal);
+        lnet_register_nal(&kibnal_nal);
 
         return 0;
 }

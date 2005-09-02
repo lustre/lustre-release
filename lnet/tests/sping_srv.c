@@ -107,7 +107,7 @@ int pingsrv_thread(void *arg)
 {
         int rc;
         
-        kportal_daemonize ("pingsrv");
+        libcfs_daemonize ("pingsrv");
         server->tsk = current;
         
         while (running) {

@@ -403,7 +403,7 @@ kranal_tx_done (kra_tx_t *tx, int completion)
                 if (tx->tx_ptlmsg[i] == NULL)
                         continue;
 
-                ptl_finalize(kranal_data.kra_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
+                lnet_finalize(kranal_data.kra_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
                 tx->tx_ptlmsg[i] = NULL;
         }
 
@@ -498,7 +498,7 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
                 }
 
                 rc = kranal_add_persistent_peer(nid, PTL_NIDADDR(nid),
-                                                ptl_acceptor_port());
+                                                lnet_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
                                libcfs_nid2str(nid), rc);
@@ -732,7 +732,7 @@ kranal_do_send (ptl_ni_t        *ni,
                         return -EIO;
                 }
 
-                tx->tx_ptlmsg[1] = ptl_create_reply_msg(ni, target.nid, ptlmsg);
+                tx->tx_ptlmsg[1] = lnet_create_reply_msg(ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR("Can't create reply for GET to "LPX64"\n", target.nid);
                         kranal_tx_done(tx, rc);
@@ -837,7 +837,7 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         if (ptlmsg == NULL) {
                 /* GET or ACK or portals is discarding */
                 LASSERT (mlen == 0);
-                ptl_finalize(ni, NULL, ptlmsg, 0);
+                lnet_finalize(ni, NULL, ptlmsg, 0);
                 return 0;
         }
 
@@ -867,7 +867,7 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                         buffer = ((char *)iov->iov_base) + offset;
                 }
                 rc = kranal_consume_rxmsg(conn, buffer, mlen);
-                ptl_finalize(ni, NULL, ptlmsg, (rc == 0) ? 0 : -EIO);
+                lnet_finalize(ni, NULL, ptlmsg, (rc == 0) ? 0 : -EIO);
                 return 0;
 
         case RANAL_MSG_PUT_REQ:
@@ -1089,8 +1089,8 @@ kranal_connd (void *arg)
         int                did_something;
 
         snprintf(name, sizeof(name), "kranal_connd_%02ld", id);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
+        libcfs_daemonize(name);
+        libcfs_blockallsigs();
 
         init_waitqueue_entry(&wait, current);
 
@@ -1182,8 +1182,8 @@ kranal_reaper (void *arg)
         long               next_min_timeout = MAX_SCHEDULE_TIMEOUT;
         long               current_min_timeout = 1;
 
-        kportal_daemonize("kranal_reaper");
-        kportal_blockallsigs();
+        libcfs_daemonize("kranal_reaper");
+        libcfs_blockallsigs();
 
         init_waitqueue_entry(&wait, current);
 
@@ -1775,14 +1775,14 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
         case RANAL_MSG_IMMEDIATE:
                 CDEBUG(D_NET, "RX IMMEDIATE on %p\n", conn);
-                ptl_parse(kranal_data.kra_ni, &msg->ram_u.immediate.raim_hdr, conn);
+                lnet_parse(kranal_data.kra_ni, &msg->ram_u.immediate.raim_hdr, conn);
                 break;
 
         case RANAL_MSG_PUT_REQ:
                 CDEBUG(D_NET, "RX PUT_REQ on %p\n", conn);
-                ptl_parse(kranal_data.kra_ni, &msg->ram_u.putreq.raprm_hdr, conn);
+                lnet_parse(kranal_data.kra_ni, &msg->ram_u.putreq.raprm_hdr, conn);
 
-                if (conn->rac_rxmsg == NULL)    /* ptl_parse matched something */
+                if (conn->rac_rxmsg == NULL)    /* lnet_parse matched something */
                         break;
 
                 tx = kranal_new_tx_msg(0, RANAL_MSG_PUT_NAK);
@@ -1833,9 +1833,9 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
         case RANAL_MSG_GET_REQ:
                 CDEBUG(D_NET, "RX GET_REQ on %p\n", conn);
-                ptl_parse(kranal_data.kra_ni, &msg->ram_u.get.ragm_hdr, conn);
+                lnet_parse(kranal_data.kra_ni, &msg->ram_u.get.ragm_hdr, conn);
 
-                if (conn->rac_rxmsg == NULL)    /* ptl_parse matched something */
+                if (conn->rac_rxmsg == NULL)    /* lnet_parse matched something */
                         break;
 
                 tx = kranal_new_tx_msg(0, RANAL_MSG_GET_NAK);
@@ -1949,8 +1949,8 @@ kranal_scheduler (void *arg)
         int               busy_loops = 0;
 
         snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
+        libcfs_daemonize(name);
+        libcfs_blockallsigs();
 
         dev->rad_scheduler = current;
         init_waitqueue_entry(&wait, current);

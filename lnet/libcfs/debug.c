@@ -31,25 +31,25 @@
 
 #include "tracefile.h"
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
-EXPORT_SYMBOL(portal_subsystem_debug);
+unsigned int libcfs_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+EXPORT_SYMBOL(libcfs_subsystem_debug);
 
-unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
+unsigned int libcfs_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
                              D_RPCTRACE | D_VFSTRACE);
-EXPORT_SYMBOL(portal_debug);
+EXPORT_SYMBOL(libcfs_debug);
 
-unsigned int portal_printk;
-EXPORT_SYMBOL(portal_printk);
+unsigned int libcfs_printk;
+EXPORT_SYMBOL(libcfs_printk);
 
-unsigned int portal_stack;
-EXPORT_SYMBOL(portal_stack);
+unsigned int libcfs_stack;
+EXPORT_SYMBOL(libcfs_stack);
 
-unsigned int portals_catastrophe;
-EXPORT_SYMBOL(portals_catastrophe);
+unsigned int libcfs_catastrophe;
+EXPORT_SYMBOL(libcfs_catastrophe);
 
 #ifdef __KERNEL__
-atomic_t portal_kmemory = ATOMIC_INIT(0);
-EXPORT_SYMBOL(portal_kmemory);
+atomic_t libcfs_kmemory = ATOMIC_INIT(0);
+EXPORT_SYMBOL(libcfs_kmemory);
 #endif
 
 static cfs_waitq_t debug_ctlwq;
@@ -57,7 +57,7 @@ static cfs_waitq_t debug_ctlwq;
 char debug_file_path[1024] = "/tmp/lustre-log";
 static char debug_file_name[1024];
 
-void portals_debug_dumplog_internal(void *arg)
+void libcfs_debug_dumplog_internal(void *arg)
 {
         CFS_DECL_JOURNAL_DATA;
 
@@ -71,16 +71,16 @@ void portals_debug_dumplog_internal(void *arg)
         CFS_POP_JOURNAL;
 }
 
-int portals_debug_dumplog_thread(void *arg)
+int libcfs_debug_dumplog_thread(void *arg)
 {
-        kportal_daemonize("");
+        libcfs_daemonize("");
         reparent_to_init();
-        portals_debug_dumplog_internal(arg);
+        libcfs_debug_dumplog_internal(arg);
         cfs_waitq_signal(&debug_ctlwq);
         return 0;
 }
 
-void portals_debug_dumplog(void)
+void libcfs_debug_dumplog(void)
 {
         int            rc;
         cfs_waitlink_t wait;
@@ -93,7 +93,7 @@ void portals_debug_dumplog(void)
         set_current_state(TASK_INTERRUPTIBLE);
         cfs_waitq_add(&debug_ctlwq, &wait);
 
-        rc = cfs_kernel_thread(portals_debug_dumplog_thread,
+        rc = cfs_kernel_thread(libcfs_debug_dumplog_thread,
                                (void *)(long)cfs_curproc_pid(),
                                CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0)
@@ -125,7 +125,7 @@ static int panic_dumplog(struct notifier_block *self, unsigned long unused1,
 
         while (current->lock_depth >= 0)
                 unlock_kernel();
-        portals_debug_dumplog();
+        libcfs_debug_dumplog();
         return 0;
 }
 
@@ -191,8 +191,8 @@ void portals_debug_set_level(unsigned int debug_level)
 {
         printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
                debug_level);
-        portal_debug = debug_level;
+        libcfs_debug = debug_level;
 }
 
-EXPORT_SYMBOL(portals_debug_dumplog);
+EXPORT_SYMBOL(libcfs_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_set_level);

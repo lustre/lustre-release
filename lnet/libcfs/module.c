@@ -399,7 +399,7 @@ static void exit_libcfs_module(void)
         remove_proc();
 
         CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
         rc = cfs_psdev_deregister(&libcfs_dev);
         if (rc)
@@ -409,9 +409,9 @@ static void exit_libcfs_module(void)
         lwt_fini();
 #endif
 
-        if (atomic_read(&portal_kmemory) != 0)
+        if (atomic_read(&libcfs_kmemory) != 0)
                 CERROR("Portals memory leaked: %d bytes\n",
-                       atomic_read(&portal_kmemory));
+                       atomic_read(&libcfs_kmemory));
 
         rc = portals_debug_cleanup();
         if (rc)

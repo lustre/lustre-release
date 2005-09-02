@@ -1150,7 +1150,7 @@ kibnal_shutdown (ptl_ni_t *ni)
         LASSERT (ni == kibnal_data.kib_ni);
        
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         switch (kibnal_data.kib_init) {
         default:
@@ -1270,7 +1270,7 @@ kibnal_shutdown (ptl_ni_t *ni)
                              kibnal_data.kib_peer_hash_size);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1621,7 +1621,7 @@ kibnal_module_fini (void)
         if (kibnal_tunables.kib_sysctl != NULL)
                 unregister_sysctl_table (kibnal_tunables.kib_sysctl);
 #endif
-        ptl_unregister_nal(&kibnal_nal);
+        lnet_unregister_nal(&kibnal_nal);
 }
 
 int __init
@@ -1643,7 +1643,7 @@ kibnal_module_init (void)
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        ptl_register_nal(&kibnal_nal);
+        lnet_register_nal(&kibnal_nal);
         
 #ifdef CONFIG_SYSCTL
         /* Press on regardless even if registering sysctl doesn't work */

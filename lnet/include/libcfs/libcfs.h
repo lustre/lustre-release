@@ -33,13 +33,13 @@
 /*
  *  Debugging
  */
-extern unsigned int portal_subsystem_debug;
-extern unsigned int portal_stack;
-extern unsigned int portal_debug;
-extern unsigned int portal_printk;
+extern unsigned int libcfs_subsystem_debug;
+extern unsigned int libcfs_stack;
+extern unsigned int libcfs_debug;
+extern unsigned int libcfs_printk;
 
 /* Has there been an LBUG? */
-extern unsigned int portals_catastrophe;
+extern unsigned int libcfs_catastrophe;
 
 /*
  * struct ptldebug_header is defined in libcfs/<os>/libcfs.h
@@ -125,8 +125,8 @@ extern unsigned int portals_catastrophe;
 do {                                                                          \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)) ||         \
-            (portal_debug & (mask) &&                                         \
-             portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
+            (libcfs_debug & (mask) &&                                         \
+             libcfs_subsystem_debug & DEBUG_SUBSYSTEM))                       \
                 libcfs_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, format, ## a);                \
@@ -163,7 +163,7 @@ do {                                                                          \
                 cdebug_next = cfs_time_current() + cdebug_delay;              \
         } else {                                                              \
                 libcfs_debug_msg(DEBUG_SUBSYSTEM,                            \
-                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  libcfs_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
                                   __FILE__, __FUNCTION__, __LINE__,           \
                                   CDEBUG_STACK, cdebug_format, ## a);         \
                 cdebug_count++;                                               \

@@ -250,7 +250,7 @@ gmnal_startup(ptl_ni_t *ni)
  */
 int gmnal_init(void)
 {
-        ptl_register_nal(&gmnal_nal);
+        lnet_register_nal(&gmnal_nal);
         return 0;
 }
 
@@ -259,5 +259,5 @@ int gmnal_init(void)
  */
 void gmnal_fini()
 {
-        ptl_unregister_nal(&gmnal_nal);
+        lnet_unregister_nal(&gmnal_nal);
 }

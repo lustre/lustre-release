@@ -95,7 +95,7 @@ int tcpnal_send(ptl_ni_t *ni,
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
-    ntiov = 1 + ptl_extract_iov(256, &tiov[1], niov, iov, offset, len);
+    ntiov = 1 + lnet_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
     pthread_mutex_lock(&send_lock);
 #if 1
@@ -133,9 +133,9 @@ int tcpnal_send(ptl_ni_t *ni,
     pthread_mutex_unlock(&send_lock);
 
     if (rc == 0) {
-            /* NB the NAL only calls ptl_finalize() if it returns 0
+            /* NB the NAL only calls lnet_finalize() if it returns 0
              * from cb_send() */
-            ptl_finalize(ni, private, cookie, 0);
+            lnet_finalize(ni, private, cookie, 0);
     }
 
     return(rc);
@@ -145,7 +145,7 @@ int tcpnal_send(ptl_ni_t *ni,
 /* Function:  tcpnal_recv
  * Arguments: ptl_ni_t *:        pointer to NAL instance
  *            void *private:     connection pointer passed through
- *                               ptl_parse()
+ *                               lnet_parse()
  *            ptl_msg_t *cookie: passed back to portals library
  *            user_ptr data:     pointer to the destination buffer
  *            size_t mlen:       length of the body
@@ -175,7 +175,7 @@ int tcpnal_recv(ptl_ni_t *ni,
     LASSERT(rlen);
     LASSERT(rlen >= mlen);
 
-    ntiov = ptl_extract_iov(256, tiov, niov, iov, offset, mlen);
+    ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
     
     /* FIXME
      * 1. Is this effecient enough? change to use readv() directly?
@@ -187,7 +187,7 @@ int tcpnal_recv(ptl_ni_t *ni,
 
 finalize:
     /* FIXME; we always assume success here... */
-    ptl_finalize(ni, private, cookie, 0);
+    lnet_finalize(ni, private, cookie, 0);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -220,11 +220,11 @@ static int from_connection(void *a, void *d)
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
             /* replace dest_nid,pid (socknal sets its own) */
             hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
-            hdr.dest_pid = cpu_to_le32(ptl_getpid());
+            hdr.dest_pid = cpu_to_le32(lnet_getpid());
             
-            rc = ptl_parse(b->b_ni, &hdr, c);
+            rc = lnet_parse(b->b_ni, &hdr, c);
             if (rc != 0) {
-                    CERROR("Error %d from ptl_parse\n", rc);
+                    CERROR("Error %d from lnet_parse\n", rc);
                     return 0;
             }
 

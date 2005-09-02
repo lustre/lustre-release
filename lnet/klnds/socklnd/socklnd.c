@@ -1329,7 +1329,7 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
         ksocknal_connsock_decref(conn);
 
         if (notify)
-                kpr_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0, then);
+                lnet_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0, then);
 }
 
 void
@@ -1368,7 +1368,7 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                        ", ip %d.%d.%d.%d:%d, with error\n",
                        libcfs_id2str(conn->ksnc_peer->ksnp_id),
                        HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
-                ptl_finalize (conn->ksnc_peer->ksnp_ni, NULL, 
+                lnet_finalize (conn->ksnc_peer->ksnp_ni, NULL, 
                               conn->ksnc_cookie, -EIO);
                 break;
         case SOCKNAL_RX_BODY_FWD:
@@ -1925,7 +1925,7 @@ ksocknal_base_shutdown (void)
         unsigned long  flags;
 
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
         LASSERT (ksocknal_data.ksnd_nnets == 0);
 
         switch (ksocknal_data.ksnd_init) {
@@ -2004,7 +2004,7 @@ ksocknal_base_shutdown (void)
         }
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         PORTAL_MODULE_UNUSE;
 }
@@ -2118,7 +2118,7 @@ ksocknal_base_startup (void)
                 goto failed;
         }
 
-        if (kpr_forwarding()) {
+        if (lnet_forwarding()) {
                 /* Only allocate forwarding buffers if we're a gateway */
 
                 for (i = 0; i < (SOCKNAL_SMALL_FWD_NMSGS +
@@ -2341,7 +2341,7 @@ ksocknal_startup (ptl_ni_t *ni)
 void __exit
 ksocknal_module_fini (void)
 {
-        ptl_unregister_nal(&ksocknal_nal);
+        lnet_unregister_nal(&ksocknal_nal);
         ksocknal_lib_tunables_fini();
 }
 
@@ -2361,7 +2361,7 @@ ksocknal_module_init (void)
         if (rc != 0)
                 return rc;
 
-        ptl_register_nal(&ksocknal_nal);
+        lnet_register_nal(&ksocknal_nal);
 
         return 0;
 }

@@ -36,7 +36,7 @@ CFS_MODULE_PARM(routes, "s", charp, 0444,
                 "routes to non-local networks");
 
 int
-kpr_forwarding ()
+lnet_forwarding ()
 {
         return forwarding;
 }
@@ -58,7 +58,7 @@ kpr_do_upcall (void *arg)
         snprintf (nidstr, sizeof(nidstr), "%s", libcfs_nid2str(u->kpru_nid));
         snprintf (whenstr, sizeof(whenstr), "%ld", u->kpru_when);
 
-        portals_run_upcall (argv);
+        libcfs_run_upcall (argv);
 
         PORTAL_FREE(u, sizeof(*u));
 }
@@ -85,7 +85,7 @@ kpr_upcall (lnet_nid_t gw_nid, int alive, time_t when)
 }
 
 int
-kpr_notify (ptl_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
+lnet_notify (ptl_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
 {
 	unsigned long	     flags;
         int                  found;
@@ -174,7 +174,7 @@ kpr_notify (ptl_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
 
         if (ni == NULL) {
                 /* userland notified me: notify NAL? */
-                ni = ptl_net2ni(PTL_NIDNET(gateway_nid));
+                ni = lnet_net2ni(PTL_NIDNET(gateway_nid));
                 if (ni != NULL) {
                         ni->ni_nal->nal_notify(ni, gateway_nid, alive);
                         ptl_ni_decref(ni);
@@ -228,7 +228,7 @@ kpr_update_weight (kpr_gateway_entry_t *ge, int nob)
 }
 
 lnet_nid_t
-kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
+lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 {
         ptl_ni_t            *ni = *nip;
         lnet_nid_t           gwnid;
@@ -248,7 +248,7 @@ kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                 (ni == NULL) ? "<>" : libcfs_nid2str(ni->ni_nid));
 
         if (ni == NULL) {                       /* ni not determined yet */
-                gwni = ptl_net2ni(target_net);  /* is it a local network? */
+                gwni = lnet_net2ni(target_net);  /* is it a local network? */
                 if (gwni != NULL) {
                         *nip = gwni;
                         return target_nid;
@@ -314,7 +314,7 @@ kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                 } else {
                         /* another gateway on a new/different net */
 
-                        tmpni = ptl_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
+                        tmpni = lnet_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
                         if (tmpni == NULL)      /* gateway not on a local net */
                                 continue;
                 
@@ -360,7 +360,7 @@ kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 }
 
 void
-kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
+lnet_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 {
 	lnet_nid_t           target_nid = fwd->kprfd_target_nid;
         __u32                target_net = PTL_NIDNET(target_nid);
@@ -382,7 +382,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 libcfs_nid2str(src_ni->ni_nid),
                 libcfs_nid2str(target_nid));
 
-        LASSERT (nob == ptl_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
+        LASSERT (nob == lnet_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
 
         /* it's not for any local NID (i.e. it's going to get sent) */
         LASSERT (!ptl_islocalnid(target_nid));
@@ -422,7 +422,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         }
         
         rc = -ENETUNREACH;
-        if (!kpr_forwarding()) {                /* I'm not a router */
+        if (!lnet_forwarding()) {                /* I'm not a router */
                 read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
                 LCONSOLE_ERROR("Refusing to forward message from %s for %s "
                                "received from %s on %s: forwarding disabled!\n",
@@ -434,7 +434,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
         }
         
         /* Is the target_nid on a local network? */
-        dst_ni = ptl_net2ni(target_net);
+        dst_ni = lnet_net2ni(target_net);
         if (dst_ni != NULL) {
                 if (dst_ni->ni_nal->nal_fwd == NULL) {
                         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
@@ -498,7 +498,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
                 if (!re->kpre_gateway->kpge_alive)
                         continue;               /* gateway is dead */
 
-                tmp_ni = ptl_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
+                tmp_ni = lnet_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
                 if (tmp_ni == NULL)
                         continue;
 
@@ -565,7 +565,7 @@ kpr_fwd_start (ptl_ni_t *src_ni, kpr_fwd_desc_t *fwd)
 }
 
 void
-kpr_fwd_done (ptl_ni_t *dst_ni, kpr_fwd_desc_t *fwd, int error)
+lnet_fwd_done (ptl_ni_t *dst_ni, kpr_fwd_desc_t *fwd, int error)
 {
 	ptl_ni_t *src_ni = fwd->kprfd_src_ni;
 
@@ -809,7 +809,7 @@ kpr_ctl(unsigned int cmd, void *arg)
                                      &data->ioc_nid, &data->ioc_flags);
 
         case IOC_PORTAL_NOTIFY_ROUTER:
-                return kpr_notify(NULL, data->ioc_nid, data->ioc_flags, 
+                return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, 
                                   (time_t)data->ioc_u64[0]);
         }
 }
@@ -847,7 +847,7 @@ kpr_finalise (void)
         }
 
         CDEBUG(D_MALLOC, "kpr_finalise: kmem back to %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 }
 
 int
@@ -856,7 +856,7 @@ kpr_initialise (void)
         int     rc;
         
         CDEBUG(D_MALLOC, "kpr_initialise: kmem %d\n",
-               atomic_read(&portal_kmemory));
+               atomic_read(&libcfs_kmemory));
 
         memset(&kpr_state, 0, sizeof(kpr_state));
 
@@ -865,7 +865,7 @@ kpr_initialise (void)
         rwlock_init(&kpr_state.kpr_rwlock);
         spin_lock_init(&kpr_state.kpr_stats_lock);
 
-        rc = ptl_parse_routes(routes);
+        rc = lnet_parse_routes(routes);
         if (rc != 0)
                 kpr_finalise();
 
@@ -875,23 +875,23 @@ kpr_initialise (void)
         return (rc == 0) ? 0 : -EINVAL;
 }
 
-EXPORT_SYMBOL(kpr_forwarding);
-EXPORT_SYMBOL(kpr_lookup);
-EXPORT_SYMBOL(kpr_fwd_start);
-EXPORT_SYMBOL(kpr_fwd_done);
-EXPORT_SYMBOL(kpr_notify);
+EXPORT_SYMBOL(lnet_forwarding);
+EXPORT_SYMBOL(lnet_lookup);
+EXPORT_SYMBOL(lnet_fwd_start);
+EXPORT_SYMBOL(lnet_fwd_done);
+EXPORT_SYMBOL(lnet_notify);
 
 #else
 
 lnet_nid_t
-kpr_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
+lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 {
         ptl_ni_t            *ni = *nip;
         ptl_ni_t            *gwni;
         __u32                target_net = PTL_NIDNET(target_nid);
 
         if (ni == NULL) {                       /* ni not determined yet */
-                gwni = ptl_net2ni(target_net);  /* is it a local network? */
+                gwni = lnet_net2ni(target_net);  /* is it a local network? */
                 if (gwni != NULL) {
                         *nip = gwni;
                         return target_nid;

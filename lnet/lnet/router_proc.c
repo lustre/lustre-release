@@ -24,8 +24,8 @@
 #include "router.h"
 #include <linux/seq_file.h>
 
-#define KPR_PROC_STATS  "sys/portals/router_stats"
-#define KPR_PROC_ROUTES "sys/portals/routes"
+#define KPR_PROC_STATS  "sys/lnet/router_stats"
+#define KPR_PROC_ROUTES "sys/lnet/routes"
 
 static int 
 kpr_proc_stats_read (char *page, char **start, off_t off,

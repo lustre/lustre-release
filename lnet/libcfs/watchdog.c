@@ -123,7 +123,7 @@ static void lcw_cb(unsigned long data)
 
         tsk = lcw_lookup_task(lcw);
         if (tsk != NULL)
-                portals_debug_dumpstack(tsk);
+                libcfs_debug_dumpstack(tsk);
 
         spin_lock_irqsave(&lcw_pending_timers_lock, flags);
         if (list_empty(&lcw->lcw_list)) {
@@ -158,7 +158,7 @@ static int lcw_dispatch_main(void *data)
 
         ENTRY;
 
-        kportal_daemonize("lc_watchdogd");
+        libcfs_daemonize("lc_watchdogd");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -390,13 +390,13 @@ EXPORT_SYMBOL(lc_watchdog_delete);
  * Provided watchdog handlers
  */
 
-extern void portals_debug_dumplog_internal(void *arg);
+extern void libcfs_debug_dumplog_internal(void *arg);
 
 void lc_watchdog_dumplog(struct lc_watchdog *lcw,
                          struct task_struct *tsk,
                          void               *data)
 {
         tsk = tsk ? tsk : current;
-        portals_debug_dumplog_internal((void *)(long)tsk->pid);
+        libcfs_debug_dumplog_internal((void *)(long)tsk->pid);
 }
 EXPORT_SYMBOL(lc_watchdog_dumplog);

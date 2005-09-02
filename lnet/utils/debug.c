@@ -65,7 +65,7 @@ static int debug_mask = ~0;
 
 #define MAX_MARK_SIZE 100
 
-static const char *portal_debug_subsystems[] =
+static const char *libcfs_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", 
          "ost", "class", "log", "llite",
          "rpc", "mgmt", "portals", "nal", 
@@ -73,7 +73,7 @@ static const char *portal_debug_subsystems[] =
          "ldlm", "lov", "router", "cobd", 
          "sm", "asobd", "confobd", "lmv", 
          "cmobd", "sec", NULL};
-static const char *portal_debug_masks[] =
+static const char *libcfs_debug_masks[] =
         {"trace", "inode", "super", "ext2", 
          "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", 
@@ -87,7 +87,7 @@ struct debug_daemon_cmd {
         unsigned int cmdv;
 };
 
-static const struct debug_daemon_cmd portal_debug_daemon_cmd[] = {
+static const struct debug_daemon_cmd libcfs_debug_daemon_cmd[] = {
         {"start", DEBUG_DAEMON_START},
         {"stop", DEBUG_DAEMON_STOP},
         {0, 0}
@@ -97,12 +97,12 @@ static int do_debug_mask(char *name, int enable)
 {
         int found = 0, i;
 
-        for (i = 0; portal_debug_subsystems[i] != NULL; i++) {
-                if (strcasecmp(name, portal_debug_subsystems[i]) == 0 ||
+        for (i = 0; libcfs_debug_subsystems[i] != NULL; i++) {
+                if (strcasecmp(name, libcfs_debug_subsystems[i]) == 0 ||
                     strcasecmp(name, "all_subs") == 0) {
                         printf("%s output from subsystem \"%s\"\n",
                                 enable ? "Enabling" : "Disabling",
-                                portal_debug_subsystems[i]);
+                                libcfs_debug_subsystems[i]);
                         if (enable)
                                 subsystem_mask |= (1 << i);
                         else
@@ -110,12 +110,12 @@ static int do_debug_mask(char *name, int enable)
                         found = 1;
                 }
         }
-        for (i = 0; portal_debug_masks[i] != NULL; i++) {
-                if (strcasecmp(name, portal_debug_masks[i]) == 0 ||
+        for (i = 0; libcfs_debug_masks[i] != NULL; i++) {
+                if (strcasecmp(name, libcfs_debug_masks[i]) == 0 ||
                     strcasecmp(name, "all_types") == 0) {
                         printf("%s output of type \"%s\"\n",
                                 enable ? "Enabling" : "Disabling",
-                                portal_debug_masks[i]);
+                                libcfs_debug_masks[i]);
                         if (enable)
                                 debug_mask |= (1 << i);
                         else
@@ -192,8 +192,8 @@ static int applymask(char* procpath, int value)
 static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 {
         if (!dump_filename) {
-                applymask("/proc/sys/portals/subsystem_debug", subs_mask);
-                applymask("/proc/sys/portals/debug", debug_mask);
+                applymask("/proc/sys/lnet/subsystem_debug", subs_mask);
+                applymask("/proc/sys/lnet/debug", debug_mask);
         } else {
                 struct portals_debug_ioctl_data data;
 
@@ -204,7 +204,7 @@ static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
 
                 dump(OBD_DEV_ID, PTL_IOC_DEBUG_MASK, &data);
         }
-        printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/portals\n",
+        printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/lnet\n",
                subs_mask, debug_mask);
 }
 
@@ -219,13 +219,13 @@ int jt_dbg_list(int argc, char **argv)
 
         if (strcasecmp(argv[1], "subs") == 0) {
                 printf("Subsystems: all_subs");
-                for (i = 0; portal_debug_subsystems[i] != NULL; i++)
-                        printf(", %s", portal_debug_subsystems[i]);
+                for (i = 0; libcfs_debug_subsystems[i] != NULL; i++)
+                        printf(", %s", libcfs_debug_subsystems[i]);
                 printf("\n");
         } else if (strcasecmp(argv[1], "types") == 0) {
                 printf("Types: all_types");
-                for (i = 0; portal_debug_masks[i] != NULL; i++)
-                        printf(", %s", portal_debug_masks[i]);
+                for (i = 0; libcfs_debug_masks[i] != NULL; i++)
+                        printf(", %s", libcfs_debug_masks[i]);
                 printf("\n");
         } else if (strcasecmp(argv[1], "applymasks") == 0) {
                 applymask_all(subsystem_mask, debug_mask);
@@ -394,7 +394,7 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);
 
-        fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
+        fd = open("/proc/sys/lnet/dump_kernel", O_WRONLY);
         if (fd < 0) {
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
@@ -514,7 +514,7 @@ dbg_write_cmd(int fd, char *str)
 }
 
 const char debug_daemon_usage[] = "usage: %s {start file [MB]|stop}\n";
-#define DAEMON_FILE "/proc/sys/portals/daemon_file"
+#define DAEMON_FILE "/proc/sys/lnet/daemon_file"
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
         int  rc;
@@ -609,7 +609,7 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_CLEAR_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_CLEAR_DEBUG, buf);
         if (rc) {
                 fprintf(stderr, "IOC_PORTAL_CLEAR_DEBUG failed: %s\n",
                         strerror(errno));
@@ -652,7 +652,7 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MARK_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_MARK_DEBUG, buf);
         if (rc) {
                 fprintf(stderr, "IOC_PORTAL_MARK_DEBUG failed: %s\n",
                         strerror(errno));
@@ -664,10 +664,10 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"libcfs", "portals/libcfs"},
-        {"portals", "portals/portals"},
-        {"ksocknal", "portals/knals/socknal"},
-        {"kptlrouter", "portals/router"},
+        {"libcfs", "lnet/libcfs"},
+        {"portals", "lnet/portals"},
+        {"ksocknal", "lnet/knals/socknal"},
+        {"kptlrouter", "lnet/router"},
         {"lvfs", "lustre/lvfs"},
         {"obdclass", "lustre/obdclass"},
         {"llog_test", "lustre/obdclass"},
@@ -825,7 +825,7 @@ int jt_dbg_panic(int argc, char **argv)
                 return -1;
         }
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_PANIC, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PANIC, buf);
         if (rc) {
                 fprintf(stderr, "IOC_PORTAL_PANIC failed: %s\n",
                         strerror(errno));

@@ -32,7 +32,7 @@ kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
         do_gettimeofday (&now);
         then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
 
-        kpr_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
+        lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
 
 void
@@ -424,14 +424,14 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
 {
         switch (ktx->ktx_state) {
         case KTX_FORWARDING:       /* router asked me to forward this packet */
-                kpr_fwd_done (kqswnal_data.kqn_ni,
+                lnet_fwd_done (kqswnal_data.kqn_ni,
                               (kpr_fwd_desc_t *)ktx->ktx_args[0], error);
                 break;
 
         case KTX_RDMAING:          /* optimized GET/PUT handled */
         case KTX_PUTTING:          /* optimized PUT sent */
         case KTX_SENDING:          /* normal send */
-                ptl_finalize (kqswnal_data.kqn_ni, NULL,
+                lnet_finalize (kqswnal_data.kqn_ni, NULL,
                               (ptl_msg_t *)ktx->ktx_args[1],
                               (error == 0) ? 0 : -EIO);
                 break;
@@ -440,9 +440,9 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
                 /* Complete the GET with success since we can't avoid
                  * delivering a REPLY event; we committed to it when we
                  * launched the GET */
-                ptl_finalize (kqswnal_data.kqn_ni, NULL, 
+                lnet_finalize (kqswnal_data.kqn_ni, NULL, 
                               (ptl_msg_t *)ktx->ktx_args[1], 0);
-                ptl_finalize (kqswnal_data.kqn_ni, NULL,
+                lnet_finalize (kqswnal_data.kqn_ni, NULL,
                               (ptl_msg_t *)ktx->ktx_args[2],
                               (error == 0) ? 0 : -EIO);
                 break;
@@ -735,7 +735,7 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
         kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(buffer + KQSW_HDR_SIZE);
         lnet_nid_t           nid = kqswnal_rx_nid(krx);
 
-        /* Note (1) ptl_parse has already flipped hdr.
+        /* Note (1) lnet_parse has already flipped hdr.
          *      (2) RDMA addresses are sent in native endian-ness.  When
          *      EKC copes with different endian nodes, I'll fix this (and
          *      eat my hat :) */
@@ -869,7 +869,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
 
         if (len == 0) {
                 /* data got truncated to nothing. */
-                ptl_finalize(kqswnal_data.kqn_ni, krx, ptlmsg, 0);
+                lnet_finalize(kqswnal_data.kqn_ni, krx, ptlmsg, 0);
                 /* Let kqswnal_rx_done() complete the RPC with success */
                 krx->krx_rpc_reply_status = 0;
                 return (0);
@@ -1171,7 +1171,7 @@ kqswnal_sendmsg (ptl_ni_t        *ni,
 #endif
                 if (type == PTL_MSG_GET) {
                         /* Allocate reply message now while I'm in thread context */
-                        ktx->ktx_args[2] = ptl_create_reply_msg (
+                        ktx->ktx_args[2] = lnet_create_reply_msg (
                                 kqswnal_data.kqn_ni, target.nid, ptlmsg);
                         if (ktx->ktx_args[2] == NULL)
                                 goto out;
@@ -1193,11 +1193,11 @@ kqswnal_sendmsg (ptl_ni_t        *ni,
 #endif
                 if (payload_nob > 0) {
                         if (payload_kiov != NULL)
-                                ptl_copy_kiov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
+                                lnet_copy_kiov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
                                                    payload_niov, payload_kiov, 
                                                    payload_offset, payload_nob);
                         else
-                                ptl_copy_iov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
+                                lnet_copy_iov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
                                                   payload_niov, payload_iov, 
                                                   payload_offset, payload_nob);
                 }
@@ -1242,8 +1242,8 @@ kqswnal_sendmsg (ptl_ni_t        *ni,
                          * pretend the GET succeeded but the REPLY
                          * failed. */
                         rc = 0;
-                        ptl_finalize (kqswnal_data.kqn_ni, private, ptlmsg, 0);
-                        ptl_finalize (kqswnal_data.kqn_ni, private,
+                        lnet_finalize (kqswnal_data.kqn_ni, private, ptlmsg, 0);
+                        lnet_finalize (kqswnal_data.kqn_ni, private,
                                       (ptl_msg_t *)ktx->ktx_args[2], -EIO);
                 }
                 
@@ -1340,7 +1340,7 @@ kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
                 ktx->ktx_frags[0].Len = KQSW_HDR_SIZE + nob;
 #endif
                 if (nob > 0)
-                        ptl_copy_kiov2buf(ktx->ktx_buffer + KQSW_HDR_SIZE,
+                        lnet_copy_kiov2buf(ktx->ktx_buffer + KQSW_HDR_SIZE,
                                           niov, kiov, 0, nob);
         }
         else
@@ -1499,7 +1499,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        rc = ptl_parse (kqswnal_data.kqn_ni, hdr, krx);
+        rc = lnet_parse (kqswnal_data.kqn_ni, hdr, krx);
         
         if (rc != 1) {
                 /* It's for me or there's been some error.
@@ -1539,7 +1539,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
                       hdr, payload_nob, niov, krx->krx_kiov,
                       kqswnal_fwd_callback, krx);
 
-        kpr_fwd_start (kqswnal_data.kqn_ni, &krx->krx_fwd);
+        lnet_fwd_start (kqswnal_data.kqn_ni, &krx->krx_fwd);
 }
 
 /* Receive Interrupt Handler: posts to schedulers */
@@ -1687,7 +1687,7 @@ kqswnal_recvmsg (ptl_ni_t     *ni,
         if (senders_csum != hdr_csum)
                 kqswnal_csum_error (krx, 1);
 #endif
-        /* NB ptl_parse() has already flipped *hdr */
+        /* NB lnet_parse() has already flipped *hdr */
 
         CDEBUG(D_NET,"kqswnal_recv, mlen="LPSZ", rlen="LPSZ"\n", mlen, rlen);
 
@@ -1813,7 +1813,7 @@ kqswnal_recvmsg (ptl_ni_t     *ni,
                        "csum_nob %d\n",
                         hdr_csum, payload_csum, csum_frags, csum_nob);
 #endif
-        ptl_finalize(ni, private, ptlmsg, 0);
+        lnet_finalize(ni, private, ptlmsg, 0);
 
         return (0);
 }
@@ -1877,8 +1877,8 @@ kqswnal_scheduler (void *arg)
         int              counter = 0;
         int              did_something;
 
-        kportal_daemonize ("kqswnal_sched");
-        kportal_blockallsigs ();
+        libcfs_daemonize ("kqswnal_sched");
+        libcfs_blockallsigs ();
         
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 

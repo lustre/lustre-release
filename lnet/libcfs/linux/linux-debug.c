@@ -59,9 +59,9 @@
 #include <linux/kallsyms.h>
 #endif
 
-char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
+char lnet_upcall[1024] = "/usr/lib/lustre/lnet_upcall";
 
-void portals_run_upcall(char **argv)
+void libcfs_run_upcall(char **argv)
 {
         int   rc;
         int   argc;
@@ -71,7 +71,7 @@ void portals_run_upcall(char **argv)
                 NULL};
         ENTRY;
 
-        argv[0] = portals_upcall;
+        argv[0] = lnet_upcall;
         argc = 1;
         while (argv[argc] != NULL)
                 argc++;
@@ -81,7 +81,7 @@ void portals_run_upcall(char **argv)
         rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
-                       "check /proc/sys/portals/upcall\n",
+                       "check /proc/sys/lnet/upcall\n",
                        rc, argv[0], argv[1],
                        argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
                        argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
@@ -97,7 +97,7 @@ void portals_run_upcall(char **argv)
         }
 }
 
-void portals_run_lbug_upcall(char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char buf[32];
@@ -111,12 +111,12 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
         argv[4] = buf;
         argv[5] = NULL;
 
-        portals_run_upcall (argv);
+        libcfs_run_upcall (argv);
 }
 
 #ifdef __KERNEL__
 
-void portals_debug_dumpstack(struct task_struct *tsk)
+void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__) 
         if (tsk != NULL) 
@@ -136,15 +136,15 @@ void portals_debug_dumpstack(struct task_struct *tsk)
 #endif
 }
 
-cfs_task_t *portals_current(void)
+cfs_task_t *libcfs_current(void)
 { 
         CWARN("current task struct is %p\n", current);
         return current;
 }
-EXPORT_SYMBOL(portals_debug_dumpstack);
-EXPORT_SYMBOL(portals_current);
+EXPORT_SYMBOL(libcfs_debug_dumpstack);
+EXPORT_SYMBOL(libcfs_current);
 
 #endif /* __KERNEL__ */
 
-EXPORT_SYMBOL(portals_run_upcall);
-EXPORT_SYMBOL(portals_run_lbug_upcall);
+EXPORT_SYMBOL(libcfs_run_upcall);
+EXPORT_SYMBOL(libcfs_run_lbug_upcall);

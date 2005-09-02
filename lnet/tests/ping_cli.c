@@ -28,7 +28,7 @@
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
 #include "ping.h"
-/* int portal_debug = D_PING_CLI;  */
+/* int libcfs_debug = D_PING_CLI;  */
 
 
 #define STDSIZE (sizeof(int) + sizeof(int) + sizeof(struct timeval))

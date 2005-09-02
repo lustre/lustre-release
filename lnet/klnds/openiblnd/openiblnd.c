@@ -229,7 +229,7 @@ kibnal_make_svcqry (kib_conn_t *conn)
         kibnal_init_msg(msg, IBNAL_MSG_SVCQRY, 0);
         kibnal_pack_msg(msg, 0, peer->ibp_nid, 0);
 
-        rc = ptl_connect(&sock, peer->ibp_nid,
+        rc = lnet_connect(&sock, peer->ibp_nid,
                          0, peer->ibp_ip, peer->ibp_port);
         if (rc != 0)
                 return -ECONNABORTED;
@@ -317,7 +317,7 @@ kibnal_handle_svcqry (struct socket *sock)
         }
         
         rc = libcfs_sock_read(sock, &msg->ibm_magic, sizeof(msg->ibm_magic),
-                              ptl_acceptor_timeout());
+                              lnet_acceptor_timeout());
         if (rc != 0) {
                 CERROR("Error %d receiving svcqry from %u.%u.%u.%u/%d\n",
                        rc, HIPQUAD(peer_ip), peer_port);
@@ -330,16 +330,16 @@ kibnal_handle_svcqry (struct socket *sock)
                 rc = libcfs_sock_read(sock, &msg->ibm_version, 
                                       offsetof(kib_msg_t, ibm_u) -
                                       offsetof(kib_msg_t, ibm_version),
-                                      ptl_acceptor_timeout());
+                                      lnet_acceptor_timeout());
         } else {
                 /* This might be a generic acceptor connection request... */
-                rc = ptl_accept(kibnal_data.kib_ni, sock, msg->ibm_magic);
+                rc = lnet_accept(kibnal_data.kib_ni, sock, msg->ibm_magic);
                 if (rc != 0)
                         goto out;
 
                 /* ...followed by my service query */
                 rc = libcfs_sock_read(sock, msg, offsetof(kib_msg_t, ibm_u),
-                                      ptl_acceptor_timeout());
+                                      lnet_acceptor_timeout());
         }
         
         if (rc != 0) {
@@ -1302,7 +1302,7 @@ kibnal_shutdown (ptl_ni_t *ni)
         unsigned long flags;
 
         CDEBUG(D_MALLOC, "before NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         LASSERT(ni == kibnal_data.kib_ni);
         LASSERT(ni->ni_data == &kibnal_data);
@@ -1416,7 +1416,7 @@ kibnal_shutdown (ptl_ni_t *ni)
                              kibnal_data.kib_peer_hash_size);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
-               atomic_read (&portal_kmemory));
+               atomic_read (&libcfs_kmemory));
 
         kibnal_data.kib_init = IBNAL_INIT_NOTHING;
         PORTAL_MODULE_UNUSE;
@@ -1437,7 +1437,7 @@ kibnal_startup (ptl_ni_t *ni)
                 return -EPERM;
         }
 
-        if (ptl_set_ip_niaddr(ni) != 0) {
+        if (lnet_set_ip_niaddr(ni) != 0) {
                 CERROR("Can't determine my NID\n");
                 return -EPERM;
         }
@@ -1644,7 +1644,7 @@ kibnal_startup (ptl_ni_t *ni)
 void __exit
 kibnal_module_fini (void)
 {
-        ptl_unregister_nal(&kibnal_nal);
+        lnet_unregister_nal(&kibnal_nal);
         kibnal_tunables_fini();
 }
 
@@ -1657,7 +1657,7 @@ kibnal_module_init (void)
         if (rc != 0)
                 return rc;
         
-        ptl_register_nal(&kibnal_nal);
+        lnet_register_nal(&kibnal_nal);
 
         return (0);
 }

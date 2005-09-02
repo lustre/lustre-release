@@ -46,7 +46,7 @@ void portals_debug_print(void)
 }
 
 
-void portals_debug_dumplog(void)
+void libcfs_debug_dumplog(void)
 {
         printf("Look in %s\n", debug_file_name);
         return;

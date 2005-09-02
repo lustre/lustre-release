@@ -304,7 +304,7 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
                         tx->tx_msgnob += tx->tx_large_nob;
 
                         /* We've copied everything... */
-                        ptl_finalize(gmni->gmni_ni, NULL, tx->tx_ptlmsg, 0);
+                        lnet_finalize(gmni->gmni_ni, NULL, tx->tx_ptlmsg, 0);
                         tx->tx_ptlmsg = NULL;
 
                         spin_lock(&gmni->gmni_tx_lock);
@@ -384,7 +384,7 @@ gmnal_rx_thread(void *arg)
 	gm_recv_t	*recv = NULL;
         gmnal_rx_t      *rx;
 
-	kportal_daemonize("gmnal_rxd");
+	libcfs_daemonize("gmnal_rxd");
 
         down(&gmni->gmni_rx_mutex);
 
@@ -442,7 +442,7 @@ gmnal_rx_thread(void *arg)
                  * errors */
                 if (gmnal_unpack_msg(gmni, rx) == 0) {
                         LASSERT (GMNAL_NETBUF_MSG(&rx->rx_buf)->gmm_type == GMNAL_MSG_IMMEDIATE);
-                        (void)ptl_parse(gmni->gmni_ni, 
+                        (void)lnet_parse(gmni->gmni_ni, 
                                         &(GMNAL_NETBUF_MSG(&rx->rx_buf)->gmm_u.immediate.gmim_hdr),
                                         rx);
                 }

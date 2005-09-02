@@ -57,11 +57,11 @@
 #include <asm/div64.h>
 #include "tracefile.h"
 
-static struct ctl_table_header *portals_table_header = NULL;
+static struct ctl_table_header *lnet_table_header = NULL;
 extern char debug_file_path[1024];
-extern char portals_upcall[1024];
+extern char lnet_upcall[1024];
 
-#define PSDEV_PORTALS  (0x100)
+#define PSDEV_LNET  (0x100)
 enum {
         PSDEV_DEBUG = 1,          /* control debugging */
         PSDEV_SUBSYSTEM_DEBUG,    /* control debugging */
@@ -74,27 +74,27 @@ enum {
         PSDEV_PORTALS_CATASTROPHE,/* if we have LBUGged or panic'd */
 };
 
-static struct ctl_table portals_table[] = {
-        {PSDEV_DEBUG, "debug", &portal_debug, sizeof(int), 0644, NULL,
+static struct ctl_table lnet_table[] = {
+        {PSDEV_DEBUG, "debug", &libcfs_debug, sizeof(int), 0644, NULL,
          &proc_dointvec},
-        {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &portal_subsystem_debug,
+        {PSDEV_SUBSYSTEM_DEBUG, "subsystem_debug", &libcfs_subsystem_debug,
          sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_PRINTK, "printk", &portal_printk, sizeof(int), 0644, NULL,
+        {PSDEV_PRINTK, "printk", &libcfs_printk, sizeof(int), 0644, NULL,
          &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
-        {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
-         sizeof(portals_upcall), 0644, NULL, &proc_dostring,
+        {PSDEV_PORTALS_UPCALL, "upcall", lnet_upcall,
+         sizeof(lnet_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
-        {PSDEV_PORTALS_MEMUSED, "memused", (int *)&portal_kmemory.counter,
+        {PSDEV_PORTALS_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
          sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_PORTALS_CATASTROPHE, "catastrophe", &portals_catastrophe,
+        {PSDEV_PORTALS_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
          sizeof(int), 0444, NULL, &proc_dointvec},
         {0}
 };
 
 static struct ctl_table top_table[2] = {
-        {PSDEV_PORTALS, "portals", NULL, 0, 0555, portals_table},
+        {PSDEV_LNET, "lnet", NULL, 0, 0555, lnet_table},
         {0}
 };
 
@@ -222,7 +222,7 @@ static int prof_read_proc(char *buffer, char **start, off_t ppos, int wanted,
 /*
  * all kids love /proc :/
  */
-static unsigned char basedir[]="net/portals";
+static unsigned char basedir[]="net/lnet";
 #endif /* PORTALS_PROFILING */
 
 int insert_proc(void)
@@ -255,18 +255,18 @@ int insert_proc(void)
 #endif /* PORTALS_PROFILING */
 
 #ifdef CONFIG_SYSCTL
-        if (!portals_table_header)
-                portals_table_header = register_sysctl_table(top_table, 0);
+        if (!lnet_table_header)
+                lnet_table_header = register_sysctl_table(top_table, 0);
 #endif
 
-        ent = create_proc_entry("sys/portals/dump_kernel", 0, NULL);
+        ent = create_proc_entry("sys/lnet/dump_kernel", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register dump_kernel\n");
                 return -1;
         }
         ent->write_proc = trace_dk;
 
-        ent = create_proc_entry("sys/portals/daemon_file", 0, NULL);
+        ent = create_proc_entry("sys/lnet/daemon_file", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register daemon_file\n");
                 return -1;
@@ -274,7 +274,7 @@ int insert_proc(void)
         ent->write_proc = trace_write_daemon_file;
         ent->read_proc = trace_read_daemon_file;
 
-        ent = create_proc_entry("sys/portals/debug_mb", 0, NULL);
+        ent = create_proc_entry("sys/lnet/debug_mb", 0, NULL);
         if (ent == NULL) {
                 CERROR("couldn't register debug_mb\n");
                 return -1;
@@ -303,13 +303,13 @@ void remove_proc(void)
         remove_proc_entry(dir, 0);
 #endif /* PORTALS_PROFILING */
 
-        remove_proc_entry("sys/portals/dump_kernel", NULL);
-        remove_proc_entry("sys/portals/daemon_file", NULL);
-        remove_proc_entry("sys/portals/debug_mb", NULL);
+        remove_proc_entry("sys/lnet/dump_kernel", NULL);
+        remove_proc_entry("sys/lnet/daemon_file", NULL);
+        remove_proc_entry("sys/lnet/debug_mb", NULL);
 
 #ifdef CONFIG_SYSCTL
-        if (portals_table_header)
-                unregister_sysctl_table(portals_table_header);
-        portals_table_header = NULL;
+        if (lnet_table_header)
+                unregister_sysctl_table(lnet_table_header);
+        lnet_table_header = NULL;
 #endif
 }

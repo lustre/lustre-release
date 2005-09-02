@@ -243,7 +243,7 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         __u64                  incarnation;
         int                    rc;
         int                    nob;
-        ptl_acceptor_connreq_t cr;
+        lnet_acceptor_connreq_t cr;
         ptl_hdr_t              hdr;
         ptl_magicversion_t     hmv;
 

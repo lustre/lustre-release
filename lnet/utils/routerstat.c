@@ -103,7 +103,7 @@ int main (int argc, char **argv)
    if (argc > 1)
       interval = atoi (argv[1]);
 
-   fd = open ("/proc/sys/portals/router_stats", O_RDONLY);
+   fd = open ("/proc/sys/lnet/router_stats", O_RDONLY);
    if (fd < 0)
    {
       fprintf (stderr, "Can't open stat: %s\n", strerror (errno));

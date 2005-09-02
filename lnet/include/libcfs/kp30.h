@@ -46,15 +46,15 @@
  * Memory
  */
 #ifdef PORTAL_DEBUG
-extern atomic_t portal_kmemory;
+extern atomic_t libcfs_kmemory;
 
 # define portal_kmem_inc(ptr, size)                                           \
 do {                                                                          \
-        atomic_add(size, &portal_kmemory);                                    \
+        atomic_add(size, &libcfs_kmemory);                                    \
 } while (0)
 
 # define portal_kmem_dec(ptr, size) do {                                      \
-        atomic_sub(size, &portal_kmemory);                                    \
+        atomic_sub(size, &libcfs_kmemory);                                    \
 } while (0)
 
 #else
@@ -76,14 +76,14 @@ do {                                                                      \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
                 CERROR("PORTALS: %d total bytes allocated by portals\n",  \
-                       atomic_read(&portal_kmemory));                     \
+                       atomic_read(&libcfs_kmemory));                     \
         } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 if (!((mask) & CFS_ALLOC_ZERO))                           \
                        memset((ptr), 0, (size));                          \
         }                                                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
-               (int)(size), (ptr), atomic_read (&portal_kmemory));        \
+               (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
 } while (0)
 
 #define PORTAL_ALLOC(ptr, size) \
@@ -106,7 +106,7 @@ do {                                                                    \
                 cfs_free(ptr);                                          \
         portal_kmem_dec((ptr), s);                                      \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
-               s, (ptr), atomic_read(&portal_kmemory));                 \
+               s, (ptr), atomic_read(&libcfs_kmemory));                 \
 } while (0)
 
 /******************************************************************************/
@@ -164,10 +164,10 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 /* debug.c */
 extern spinlock_t stack_backtrace_lock;
 
-void portals_debug_dumpstack(cfs_task_t *tsk);
-void portals_run_upcall(char **argv);
-void portals_run_lbug_upcall(char * file, const char *fn, const int line);
-void portals_debug_dumplog(void);
+void libcfs_debug_dumpstack(cfs_task_t *tsk);
+void libcfs_run_upcall(char **argv);
+void libcfs_run_lbug_upcall(char * file, const char *fn, const int line);
+void libcfs_debug_dumplog(void);
 int portals_debug_init(unsigned long bufsize);
 int portals_debug_cleanup(void);
 int portals_debug_clear_buffer(void);
@@ -178,8 +178,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 
 void portals_debug_set_level(unsigned int debug_level);
 
-extern void kportal_daemonize (char *name);
-extern void kportal_blockallsigs (void);
+extern void libcfs_daemonize (char *name);
+extern void libcfs_blockallsigs (void);
 
 #else  /* !__KERNEL__ */
 # ifdef PORTAL_DEBUG
@@ -200,7 +200,7 @@ do {                                                                           \
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
-void portals_debug_dumplog(void);
+void libcfs_debug_dumplog(void);
 #endif
 
 /*

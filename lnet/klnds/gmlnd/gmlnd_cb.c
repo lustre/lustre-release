@@ -53,7 +53,7 @@ gmnal_recvmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                                npages, &rx->rx_buf, payload_offset, 
                                mlen);
 
-        ptl_finalize(ni, private, ptlmsg, 0);
+        lnet_finalize(ni, private, ptlmsg, 0);
 	return 0;
 }
 
@@ -120,16 +120,16 @@ gmnal_sendmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 char *buffer = &(GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_u.immediate.gmim_payload[0]);
         
                 if (iov != NULL)
-                        ptl_copy_iov2buf(buffer, niov, iov, offset, len);
+                        lnet_copy_iov2buf(buffer, niov, iov, offset, len);
                 else
-                        ptl_copy_kiov2buf(buffer, niov, kiov, offset, len);
+                        lnet_copy_kiov2buf(buffer, niov, kiov, offset, len);
                 
                 tx->tx_msgnob += len;
                 tx->tx_large_nob = 0;
 
                 /* We've copied everything... */
                 LASSERT(tx->tx_ptlmsg == NULL);
-                ptl_finalize(ni, NULL, ptlmsg, 0);
+                lnet_finalize(ni, NULL, ptlmsg, 0);
         } else {
                 /* stash payload pts to copy later */
                 tx->tx_large_nob = len;

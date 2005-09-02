@@ -149,7 +149,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	/* NB ep_free_rcvr() returns only after we've freed off all receive
 	 * buffers (see shutdown handling in kqswnal_requeue_rx()).  This
 	 * means we must have completed any messages we passed to
-	 * ptl_parse() or kpr_fwd_start(). */
+	 * lnet_parse() or lnet_fwd_start(). */
 
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_xmtr (kqswnal_data.kqn_eptx);
@@ -206,7 +206,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 		kpr_fwd_desc_t *fwd = list_entry (kqswnal_data.kqn_idletxd_fwdq.next,
 						  kpr_fwd_desc_t, kprfd_list);
 		list_del (&fwd->kprfd_list);
-		kpr_fwd_done (ni, fwd, -ESHUTDOWN);
+		lnet_fwd_done (ni, fwd, -ESHUTDOWN);
 	}
 
 	/**********************************************************************/
@@ -296,7 +296,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	/* resets flags, pointers to NULL etc */
 	memset(&kqswnal_data, 0, sizeof (kqswnal_data));
 
-	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&portal_kmemory));
+	CDEBUG (D_MALLOC, "done kmem %d\n", atomic_read(&libcfs_kmemory));
 
 	PORTAL_MODULE_UNUSE;
 }
@@ -328,7 +328,7 @@ kqswnal_startup (ptl_ni_t *ni)
                 return -EPERM;
         }
         
-	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&portal_kmemory));
+	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&libcfs_kmemory));
 	
 	/* ensure all pointers NULL etc */
 	memset (&kqswnal_data, 0, sizeof (kqswnal_data));
@@ -672,7 +672,7 @@ kqswnal_startup (ptl_ni_t *ni)
 void __exit
 kqswnal_finalise (void)
 {
-	ptl_unregister_nal(&kqswnal_nal);
+	lnet_unregister_nal(&kqswnal_nal);
 	kqswnal_tunables_fini();
 }
 
@@ -684,7 +684,7 @@ kqswnal_initialise (void)
 	if (rc != 0)
 		return rc;
 
-	ptl_register_nal(&kqswnal_nal);
+	lnet_register_nal(&kqswnal_nal);
 	return (0);
 }
 

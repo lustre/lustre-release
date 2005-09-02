@@ -38,7 +38,7 @@
 #include <linux/init.h>
 #include <linux/poll.h>
 #include "ping.h"
-/* int portal_debug = D_PING_CLI;  */
+/* int libcfs_debug = D_PING_CLI;  */
 
 
 #define STDSIZE (sizeof(int) + sizeof(int) + 4) /* The data is 4 bytes

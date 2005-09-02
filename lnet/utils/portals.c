@@ -58,15 +58,15 @@
 #include <lnet/socklnd.h>
 #include "parser.h"
 
-unsigned int portal_debug;
-unsigned int portal_printk;
+unsigned int libcfs_debug;
+unsigned int libcfs_printk;
 
 static int   g_net_set;
 static __u32 g_net;
 
 /* Convert a string boolean to an int; "enable" -> 1 */
 int 
-ptl_parse_bool (int *b, char *str) 
+lnet_parse_bool (int *b, char *str) 
 {
         if (!strcasecmp (str, "no") ||
             !strcasecmp (str, "n") ||
@@ -92,7 +92,7 @@ ptl_parse_bool (int *b, char *str)
 }
 
 int
-ptl_parse_port (int *port, char *str)
+lnet_parse_port (int *port, char *str)
 {
         char      *end;
         
@@ -129,7 +129,7 @@ ptl_gethostbyname(char * hname) {
 #endif
 
 int
-ptl_parse_ipquad (__u32 *ipaddrp, char *str)
+lnet_parse_ipquad (__u32 *ipaddrp, char *str)
 {
         int             a;
         int             b;
@@ -148,7 +148,7 @@ ptl_parse_ipquad (__u32 *ipaddrp, char *str)
 }
 
 int
-ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
+lnet_parse_ipaddr (__u32 *ipaddrp, char *str)
 {
 #ifdef HAVE_GETHOSTBYNAME
         struct hostent *he;
@@ -159,7 +159,7 @@ ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
                 return (0);
         }
 
-        if (ptl_parse_ipquad(ipaddrp, str) == 0)
+        if (lnet_parse_ipquad(ipaddrp, str) == 0)
                 return (0);
 
 #ifdef HAVE_GETHOSTBYNAME
@@ -200,7 +200,7 @@ ptl_ipaddr_2_str (__u32 ipaddr, char *str, int lookup)
 }
 
 int
-ptl_parse_time (time_t *t, char *str) 
+lnet_parse_time (time_t *t, char *str) 
 {
         char          *end;
         int            n;
@@ -294,7 +294,7 @@ int g_net_is_compatible (char *cmd, ...)
 
 int ptl_initialize(int argc, char **argv) 
 {
-        register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
+        register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
         return 0;
 }
 
@@ -315,7 +315,7 @@ int jt_ptl_network(int argc, char **argv)
             (!strcmp(argv[1], "unconfigure") ||
              !strcmp(argv[1], "down"))) {
                 PORTAL_IOC_INIT(data);
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
                 
                 if (rc == 0) {
                         printf ("portals ready to unload\n");
@@ -341,7 +341,7 @@ int jt_ptl_network(int argc, char **argv)
         for (count = 0;; count++) {
                 PORTAL_IOC_INIT (data);
                 data.ioc_count = count;
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NI, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_NI, &data);
 
                 if (rc >= 0) {
                         if (!set) {
@@ -398,7 +398,7 @@ jt_ptl_print_interfaces (int argc, char **argv)
                 data.ioc_net   = g_net;
                 data.ioc_count = index;
                 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_INTERFACE, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_INTERFACE, &data);
                 if (rc != 0)
                         break;
 
@@ -441,7 +441,7 @@ jt_ptl_add_interface (int argc, char **argv)
         if (!g_net_is_compatible(argv[0], SOCKNAL, 0))
                 return -1;
 
-        if (ptl_parse_ipaddr(&ipaddr, argv[1]) != 0) {
+        if (lnet_parse_ipaddr(&ipaddr, argv[1]) != 0) {
                 fprintf (stderr, "Can't parse ip: %s\n", argv[1]);
                 return -1;
         }
@@ -452,7 +452,7 @@ jt_ptl_add_interface (int argc, char **argv)
                         netmask = 0;
                         for (i = count; i > 0; i--)
                                 netmask = netmask|(1<<(32-i));
-                } else if (ptl_parse_ipquad(&netmask, argv[2]) != 0) {
+                } else if (lnet_parse_ipquad(&netmask, argv[2]) != 0) {
                         fprintf (stderr, "Can't parse netmask: %s\n", argv[2]);
                         return -1;
                 }
@@ -463,7 +463,7 @@ jt_ptl_add_interface (int argc, char **argv)
         data.ioc_u32[0] = ipaddr;
         data.ioc_u32[1] = netmask;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_ADD_INTERFACE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_ADD_INTERFACE, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to add interface: %s\n",
                          strerror (errno));
@@ -489,7 +489,7 @@ jt_ptl_del_interface (int argc, char **argv)
                 return -1;
 
         if (argc == 2 &&
-            ptl_parse_ipaddr(&ipaddr, argv[1]) != 0) {
+            lnet_parse_ipaddr(&ipaddr, argv[1]) != 0) {
                 fprintf (stderr, "Can't parse ip: %s\n", argv[1]);
                 return -1;
         }
@@ -498,7 +498,7 @@ jt_ptl_del_interface (int argc, char **argv)
         data.ioc_net    = g_net;
         data.ioc_u32[0] = ipaddr;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_INTERFACE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_INTERFACE, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to delete interface: %s\n",
                          strerror (errno));
@@ -526,7 +526,7 @@ jt_ptl_print_peers (int argc, char **argv)
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
                 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_PEER, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_PEER, &data);
                 if (rc != 0)
                         break;
 
@@ -601,13 +601,13 @@ jt_ptl_add_peer (int argc, char **argv)
         }
 
         if (g_net_is_compatible (NULL, SOCKNAL, OPENIBNAL, VIBNAL, RANAL, 0) &&
-            ptl_parse_ipaddr (&ip, argv[2]) != 0) {
+            lnet_parse_ipaddr (&ip, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
                 return -1;
         }
 
         if (g_net_is_compatible (NULL, SOCKNAL, OPENIBNAL, RANAL, 0) &&
-            ptl_parse_port (&port, argv[3]) != 0) {
+            lnet_parse_port (&port, argv[3]) != 0) {
                 fprintf (stderr, "Can't parse port: %s\n", argv[3]);
                 return -1;
         }
@@ -618,7 +618,7 @@ jt_ptl_add_peer (int argc, char **argv)
         data.ioc_u32[0] = ip;
         data.ioc_u32[1] = port;
 
-        rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_ADD_PEER, &data);
+        rc = l_ioctl (LNET_DEV_ID, IOC_PORTAL_ADD_PEER, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to add peer: %s\n",
                          strerror (errno));
@@ -659,7 +659,7 @@ jt_ptl_del_peer (int argc, char **argv)
 
         if (g_net_is_compatible(NULL, SOCKNAL, 0)) {
                 if (argc > 2 &&
-                    ptl_parse_ipaddr (&ip, argv[2]) != 0) {
+                    lnet_parse_ipaddr (&ip, argv[2]) != 0) {
                         fprintf (stderr, "Can't parse ip addr: %s\n",
                                  argv[2]);
                         return -1;
@@ -671,7 +671,7 @@ jt_ptl_del_peer (int argc, char **argv)
         data.ioc_nid    = nid;
         data.ioc_u32[0] = ip;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_PEER, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_PEER, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to remove peer: %s\n",
                          strerror (errno));
@@ -699,7 +699,7 @@ jt_ptl_print_connections (int argc, char **argv)
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_CONN, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_CONN, &data);
                 if (rc != 0)
                         break;
 
@@ -764,7 +764,7 @@ int jt_ptl_disconnect(int argc, char **argv)
 
         if (g_net_is_compatible (NULL, SOCKNAL, 0) &&
             argc >= 3 &&
-            ptl_parse_ipaddr (&ipaddr, argv[2]) != 0) {
+            lnet_parse_ipaddr (&ipaddr, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr %s\n", argv[2]);
                 return -1;
         }
@@ -774,7 +774,7 @@ int jt_ptl_disconnect(int argc, char **argv)
         data.ioc_nid     = nid;
         data.ioc_u32[0]  = ipaddr;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_CLOSE_CONNECTION, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_CLOSE_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to remove connection: %s\n",
                         strerror(errno));
@@ -808,7 +808,7 @@ int jt_ptl_push_connection (int argc, char **argv)
         data.ioc_net     = g_net;
         data.ioc_nid     = nid;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_PUSH_CONNECTION, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PUSH_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to push connection: %s\n",
                         strerror(errno));
@@ -833,7 +833,7 @@ jt_ptl_print_active_txs (int argc, char **argv)
                 data.ioc_net   = g_net;
                 data.ioc_count = index;
 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_TXDESC, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_TXDESC, &data);
                 if (rc != 0)
                         break;
 
@@ -904,7 +904,7 @@ int jt_ptl_ping(int argc, char **argv)
         data.ioc_u32[0]  = size;
         data.ioc_u32[1]  = timeout;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_PING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PING, &data);
         if (rc) {
                 fprintf(stderr, "failed to start pinger: %s\n",
                         strerror(errno));
@@ -938,7 +938,7 @@ int jt_ptl_mynid(int argc, char **argv)
         data.ioc_net = PTL_NIDNET(nid);
         data.ioc_nid = nid;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_REGISTER_MYNID, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_REGISTER_MYNID, &data);
         if (rc < 0)
                 fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));
@@ -980,7 +980,7 @@ jt_ptl_fail_nid (int argc, char **argv)
         data.ioc_nid = nid;
         data.ioc_count = threshold;
         
-        rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_FAIL_NID, &data);
+        rc = l_ioctl (LNET_DEV_ID, IOC_PORTAL_FAIL_NID, &data);
         if (rc < 0)
                 fprintf (stderr, "IOC_PORTAL_FAIL_NID failed: %s\n",
                          strerror (errno));
@@ -1016,7 +1016,7 @@ jt_ptl_add_route (int argc, char **argv)
         data.ioc_net = g_net;
         data.ioc_nid = gateway_nid;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
         if (rc != 0) {
                 fprintf (stderr, "IOC_PORTAL_ADD_ROUTE failed: %s\n", strerror (errno));
                 return (-1);
@@ -1047,7 +1047,7 @@ jt_ptl_del_route (int argc, char **argv)
         data.ioc_net = g_net;
         data.ioc_nid = nid;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
         if (rc != 0) {
                 fprintf (stderr, "IOC_PORTAL_DEL_ROUTE (%s) failed: %s\n", 
                          libcfs_nid2str(nid), strerror (errno));
@@ -1080,7 +1080,7 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        if (ptl_parse_bool (&enable, argv[2]) != 0) {
+        if (lnet_parse_bool (&enable, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse boolean %s\n", argv[2]);
                 return (-1);
         }
@@ -1089,7 +1089,7 @@ jt_ptl_notify_router (int argc, char **argv)
         
         if (argc < 4) {
                 when = now.tv_sec;
-        } else if (ptl_parse_time (&when, argv[3]) != 0) {
+        } else if (lnet_parse_time (&when, argv[3]) != 0) {
                 fprintf(stderr, "Can't parse time %s\n"
                         "Please specify either 'YYYY-MM-DD-HH:MM:SS'\n"
                         "or an absolute unix time in seconds\n", argv[3]);
@@ -1106,7 +1106,7 @@ jt_ptl_notify_router (int argc, char **argv)
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
         data.ioc_u64[0] = (__u64)when;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
         if (rc != 0) {
                 fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER (%s) failed: %s\n",
                          libcfs_nid2str(nid), strerror (errno));
@@ -1131,7 +1131,7 @@ jt_ptl_print_routes (int argc, char **argv)
                 PORTAL_IOC_INIT(data);
                 data.ioc_count = index;
                 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_ROUTE, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_ROUTE, &data);
                 if (rc != 0)
                         break;
 
@@ -1160,7 +1160,7 @@ lwt_control(int enable, int clear)
         PORTAL_IOC_INIT(data);
         data.ioc_flags = (enable ? 1 : 0) | (clear ? 2 : 0);
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_CONTROL, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_CONTROL, &data);
         if (rc == 0)
                 return (0);
 
@@ -1180,7 +1180,7 @@ lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize,
         data.ioc_pbuf1 = (char *)events;
         data.ioc_plen1 = size;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_SNAPSHOT, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_SNAPSHOT, &data);
         if (rc != 0) {
                 fprintf(stderr, "IOC_PORTAL_LWT_SNAPSHOT failed: %s\n",
                         strerror(errno));
@@ -1228,7 +1228,7 @@ lwt_get_string(char *kstr)
         data.ioc_pbuf2 = NULL;
         data.ioc_plen2 = 0;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
         if (rc != 0) {
                 fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
                         strerror(errno));
@@ -1249,7 +1249,7 @@ lwt_get_string(char *kstr)
         data.ioc_pbuf2 = ustr;
         data.ioc_plen2 = size;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
         if (rc != 0) {
                 fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
                         strerror(errno));
@@ -1546,7 +1546,7 @@ int jt_ptl_memhog(int argc, char **argv)
         PORTAL_IOC_INIT(data);
         data.ioc_count = count;
         data.ioc_flags = gfp;
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_MEMHOG, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_MEMHOG, &data);
 
         if (rc != 0) {
                 fprintf(stderr, "memhog %d failed: %s\n", count, strerror(errno));

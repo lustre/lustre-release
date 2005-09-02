@@ -56,7 +56,7 @@ kibnal_tx_done (kib_tx_t *tx)
                 if (tx->tx_ptlmsg[i] == NULL)
                         continue;
 
-                ptl_finalize (kibnal_data.kib_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
+                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
                 tx->tx_ptlmsg[i] = NULL;
         }
         
@@ -346,12 +346,12 @@ kibnal_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
                 break;
                 
         case IBNAL_MSG_PUT_REQ:
                 rx->rx_responded = 0;
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.putreq.ibprm_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.putreq.ibprm_hdr, rx);
                 if (rx->rx_responded)
                         break;
 
@@ -414,7 +414,7 @@ kibnal_handle_rx (kib_rx_t *rx)
 
         case IBNAL_MSG_GET_REQ:
                 rx->rx_responded = 0;
-                ptl_parse(kibnal_data.kib_ni, &msg->ibm_u.get.ibgm_hdr, rx);
+                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.get.ibgm_hdr, rx);
                 if (rx->rx_responded)           /* I responded to the GET_REQ */
                         break;
                 /* NB GET didn't match (I'd have responded even with no payload
@@ -1474,9 +1474,9 @@ kibnal_sendmsg(ptl_ni_t        *ni,
                                target.nid, rc);
                 } else if (rc == 0) {
                         /* No RDMA: local completion may happen now! */
-                        ptl_finalize (kibnal_data.kib_ni, NULL, ptlmsg, 0);
+                        lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg, 0);
                 } else {
-                        /* RDMA: ptl_finalize(ptlmsg) when it completes */
+                        /* RDMA: lnet_finalize(ptlmsg) when it completes */
                         tx->tx_ptlmsg[0] = ptlmsg;
                 }
 
@@ -1527,7 +1527,7 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 #endif
                 kibnal_init_tx_msg(tx, IBNAL_MSG_GET_REQ, nob);
 
-                tx->tx_ptlmsg[1] = ptl_create_reply_msg(kibnal_data.kib_ni, target.nid, ptlmsg);
+                tx->tx_ptlmsg[1] = lnet_create_reply_msg(kibnal_data.kib_ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
                         CERROR("Can't create reply for GET -> "LPX64"\n", target.nid);
                         kibnal_tx_done(tx);
@@ -1592,11 +1592,11 @@ kibnal_sendmsg(ptl_ni_t        *ni,
 
         if (payload_nob > 0) {
                 if (payload_kiov != NULL)
-                        ptl_copy_kiov2buf(ibmsg->ibm_u.immediate.ibim_payload,
+                        lnet_copy_kiov2buf(ibmsg->ibm_u.immediate.ibim_payload,
                                           payload_niov, payload_kiov,
                                           payload_offset, payload_nob);
                 else
-                        ptl_copy_iov2buf(ibmsg->ibm_u.immediate.ibim_payload,
+                        lnet_copy_iov2buf(ibmsg->ibm_u.immediate.ibim_payload,
                                          payload_niov, payload_iov,
                                          payload_offset, payload_nob);
         }
@@ -1665,15 +1665,15 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 }
 
                 if (kiov != NULL)
-                        ptl_copy_buf2kiov(niov, kiov, offset,
+                        lnet_copy_buf2kiov(niov, kiov, offset,
                                           rxmsg->ibm_u.immediate.ibim_payload,
                                           mlen);
                 else
-                        ptl_copy_buf2iov(niov, iov, offset,
+                        lnet_copy_buf2iov(niov, iov, offset,
                                          rxmsg->ibm_u.immediate.ibim_payload,
                                          mlen);
 
-                ptl_finalize (ni, NULL, ptlmsg, 0);
+                lnet_finalize (ni, NULL, ptlmsg, 0);
                 return (0);
 
         case IBNAL_MSG_PUT_REQ:
@@ -1681,7 +1681,7 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                  * here, unless I set rx_responded!  */
 
                 if (mlen == 0) { /* No payload to RDMA */
-                        ptl_finalize(ni, NULL, ptlmsg, 0);
+                        lnet_finalize(ni, NULL, ptlmsg, 0);
                         return 0;
                 }
 
@@ -1735,7 +1735,7 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 /* We get called here just to discard any junk after the
                  * GET hdr. */
                 LASSERT (ptlmsg == NULL);
-                ptl_finalize (ni, NULL, ptlmsg, 0);
+                lnet_finalize (ni, NULL, ptlmsg, 0);
                 return (0);
         }
 }
@@ -3074,8 +3074,8 @@ kibnal_connd (void *arg)
         int                peer_index = 0;
         unsigned long      deadline = jiffies;
         
-        kportal_daemonize ("kibnal_connd");
-        kportal_blockallsigs ();
+        libcfs_daemonize ("kibnal_connd");
+        libcfs_blockallsigs ();
 
         init_waitqueue_entry (&wait, current);
         kibnal_data.kib_connd = current;
@@ -3251,8 +3251,8 @@ kibnal_scheduler(void *arg)
         int             busy_loops = 0;
 
         snprintf(name, sizeof(name), "kibnal_sd_%02ld", id);
-        kportal_daemonize(name);
-        kportal_blockallsigs();
+        libcfs_daemonize(name);
+        libcfs_blockallsigs();
 
         init_waitqueue_entry(&wait, current);
 

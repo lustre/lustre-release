@@ -83,8 +83,8 @@ static inline int ltrace_start()
 {
         int rc = 0;
         dbg_initialize(0, NULL);
-#ifdef PORTALS_DEV_ID
-        rc = register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
+#ifdef LNET_DEV_ID
+        rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
 #endif
         ltrace_filter("class");
         ltrace_filter("nal");
@@ -105,8 +105,8 @@ static inline int ltrace_start()
 
 static inline void ltrace_stop()
 {
-#ifdef PORTALS_DEV_ID
-        unregister_ioc_dev(PORTALS_DEV_ID);
+#ifdef LNET_DEV_ID
+        unregister_ioc_dev(LNET_DEV_ID);
 #endif
 }
 

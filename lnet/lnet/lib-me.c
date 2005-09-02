@@ -38,10 +38,10 @@ LNetMEAttach(lnet_handle_ni_t interface,
         ptl_me_t      *me;
         unsigned long  flags;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
-        if (portal >= ptl_apini.apini_nportals)
+        if (portal >= lnet_apini.apini_nportals)
                 return -EINVAL;
 
         me = ptl_me_alloc();
@@ -59,9 +59,9 @@ LNetMEAttach(lnet_handle_ni_t interface,
         ptl_initialise_handle (&me->me_lh, PTL_COOKIE_TYPE_ME);
 
         if (pos == LNET_INS_AFTER)
-                list_add_tail(&me->me_list, &(ptl_apini.apini_portals[portal]));
+                list_add_tail(&me->me_list, &(lnet_apini.apini_portals[portal]));
         else
-                list_add(&me->me_list, &(ptl_apini.apini_portals[portal]));
+                list_add(&me->me_list, &(lnet_apini.apini_portals[portal]));
 
         ptl_me2handle(handle, me);
 
@@ -82,8 +82,8 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         ptl_me_t     *new_me;
         unsigned long flags;
 
-        LASSERT (ptl_apini.apini_init);        
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);        
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         new_me = ptl_me_alloc();
         if (new_me == NULL)
@@ -126,8 +126,8 @@ LNetMEUnlink(lnet_handle_me_t meh)
         ptl_me_t     *me;
         int           rc;
 
-        LASSERT (ptl_apini.apini_init);        
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);        
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
 

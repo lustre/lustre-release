@@ -44,9 +44,9 @@ lonal_send (ptl_ni_t        *ni,
 
         LASSERT (!routing);
 
-        rc = ptl_parse(ni, hdr, &lod);
+        rc = lnet_parse(ni, hdr, &lod);
         if (rc == 0)
-                ptl_finalize(ni, private, ptlmsg, 0);
+                lnet_finalize(ni, private, ptlmsg, 0);
         
         return rc;
 }
@@ -118,7 +118,7 @@ lonal_recv(ptl_ni_t     *ni,
         } while (mlen > 0);
         
  out:
-        ptl_finalize(ni, private, ptlmsg, 0);
+        lnet_finalize(ni, private, ptlmsg, 0);
         return 0;
 }
 
@@ -146,9 +146,9 @@ lonal_send_pages (ptl_ni_t        *ni,
 
         LASSERT (!routing);
 
-        rc = ptl_parse(ni, hdr, &lod);
+        rc = lnet_parse(ni, hdr, &lod);
         if (rc == 0)
-                ptl_finalize(ni, private, ptlmsg, 0);
+                lnet_finalize(ni, private, ptlmsg, 0);
         
         return rc;
 }
@@ -244,7 +244,7 @@ lonal_recv_pages(ptl_ni_t     *ni,
                 kunmap(lod->lod_iov.kiov->kiov_page);
 
  out:
-        ptl_finalize(ni, private, ptlmsg, 0);
+        lnet_finalize(ni, private, ptlmsg, 0);
         return 0;
 }
 #endif

@@ -48,24 +48,24 @@ struct {
 	int               pta_shutdown;
 	struct socket    *pta_sock;
 	struct semaphore  pta_signal;
-} ptl_acceptor_state;
+} lnet_acceptor_state;
 
 int
-ptl_acceptor_timeout(void)
+lnet_acceptor_timeout(void)
 {
         return accept_timeout;
 }
-EXPORT_SYMBOL(ptl_acceptor_timeout);
+EXPORT_SYMBOL(lnet_acceptor_timeout);
 
 int
-ptl_acceptor_port(void)
+lnet_acceptor_port(void)
 {
         return accept_port;
 }
-EXPORT_SYMBOL(ptl_acceptor_port);
+EXPORT_SYMBOL(lnet_acceptor_port);
 
 void
-ptl_connect_console_error (int rc, lnet_nid_t peer_nid, 
+lnet_connect_console_error (int rc, lnet_nid_t peer_nid, 
                            __u32 peer_ip, int peer_port)
 {
         switch (rc) {
@@ -121,13 +121,13 @@ ptl_connect_console_error (int rc, lnet_nid_t peer_nid,
                 break;
         }
 }
-EXPORT_SYMBOL(ptl_connect_console_error);
+EXPORT_SYMBOL(lnet_connect_console_error);
 
 int
-ptl_connect(struct socket **sockp, lnet_nid_t peer_nid,
+lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
             __u32 local_ip, __u32 peer_ip, int peer_port)
 {
-        ptl_acceptor_connreq_t  cr;
+        lnet_acceptor_connreq_t  cr;
         struct socket          *sock;
         int                     rc;
         int                     port;
@@ -180,22 +180,22 @@ ptl_connect(struct socket **sockp, lnet_nid_t peer_nid,
  failed_sock:
         libcfs_sock_release(sock);
  failed:
-        ptl_connect_console_error(rc, peer_nid, peer_ip, peer_port);
+        lnet_connect_console_error(rc, peer_nid, peer_ip, peer_port);
         return rc;
 }
-EXPORT_SYMBOL(ptl_connect);
+EXPORT_SYMBOL(lnet_connect);
 
 static inline int
-ptl_accept_magic(__u32 magic, __u32 constant)
+lnet_accept_magic(__u32 magic, __u32 constant)
 {
         return (magic == constant ||
                 magic == __swab32(constant));
 }
 
 int
-ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
+lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
 {
-        ptl_acceptor_connreq_t  cr;
+        lnet_acceptor_connreq_t  cr;
         __u32                   peer_ip;
         int                     peer_port;
         int                     rc;
@@ -212,13 +212,13 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         LASSERT (rc == 0);                      /* we succeeded before */
 
-        if (!ptl_accept_magic(magic, PTL_PROTO_ACCEPTOR_MAGIC)) {
+        if (!lnet_accept_magic(magic, PTL_PROTO_ACCEPTOR_MAGIC)) {
 
                 if (magic == le32_to_cpu(PTL_PROTO_TCP_MAGIC))
                         str = "'old' socknal/tcpnal";
-                else if (ptl_accept_magic(magic, PTL_PROTO_RA_MAGIC))
+                else if (lnet_accept_magic(magic, PTL_PROTO_RA_MAGIC))
                         str = "'old' ranal";
-                else if (ptl_accept_magic(magic, PTL_PROTO_OPENIB_MAGIC))
+                else if (lnet_accept_magic(magic, PTL_PROTO_OPENIB_MAGIC))
                         str = "'old' openibnal";
                 else
                         str = "unrecognised";
@@ -236,7 +236,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
          * more to read... */
         rc = libcfs_sock_read(sock, &cr.acr_version, 
                               sizeof(cr) - 
-                              offsetof(ptl_acceptor_connreq_t, acr_version),
+                              offsetof(lnet_acceptor_connreq_t, acr_version),
                               accept_timeout);
         if (rc != 0) {
                 CERROR("Error %d reading connection request from "
@@ -256,7 +256,7 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 return -EPROTO;
         }
 
-        ni = ptl_net2ni(PTL_NIDNET(cr.acr_nid));
+        ni = lnet_net2ni(PTL_NIDNET(cr.acr_nid));
         if (ni == NULL ||             /* no matching net */
             ni->ni_nid != cr.acr_nid) /* right NET, but wrong NID! */ {
                 if (ni != NULL)
@@ -297,10 +297,10 @@ ptl_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         ptl_ni_decref(ni);
         return rc;
 }
-EXPORT_SYMBOL(ptl_accept);
+EXPORT_SYMBOL(lnet_accept);
         
 int
-ptl_acceptor(void *arg)
+lnet_acceptor(void *arg)
 {
 	char           name[16];
 	struct socket *newsock;
@@ -312,7 +312,7 @@ ptl_acceptor(void *arg)
         ptl_ni_t      *blind_ni;
         int            secure = (int)((unsigned long)arg);
 
-	LASSERT (ptl_acceptor_state.pta_sock == NULL);
+	LASSERT (lnet_acceptor_state.pta_sock == NULL);
 
         /* If there is only a single NI that needs me, I'll pass her
          * connections "blind".  Otherwise I'll have to read the bytestream to
@@ -326,10 +326,10 @@ ptl_acceptor(void *arg)
         }
 
 	snprintf(name, sizeof(name), "acceptor_%03d", accept_port);
-	kportal_daemonize(name);
-	kportal_blockallsigs();
+	libcfs_daemonize(name);
+	libcfs_blockallsigs();
 
-	rc = libcfs_sock_listen(&ptl_acceptor_state.pta_sock,
+	rc = libcfs_sock_listen(&lnet_acceptor_state.pta_sock,
 				0, accept_port, accept_backlog);
 	if (rc != 0) {
                 if (rc == -EADDRINUSE)
@@ -341,7 +341,7 @@ ptl_acceptor(void *arg)
                                        "unexpected error %d\n",
                                        accept_port, rc);
 
-		ptl_acceptor_state.pta_sock = NULL;
+		lnet_acceptor_state.pta_sock = NULL;
         } else {
                 LCONSOLE(0, "Accept %s, port %d%s\n", 
                          accept, accept_port,
@@ -349,15 +349,15 @@ ptl_acceptor(void *arg)
         }
         
 	/* set init status and unblock parent */
-	ptl_acceptor_state.pta_shutdown = rc;
-	mutex_up(&ptl_acceptor_state.pta_signal);
+	lnet_acceptor_state.pta_shutdown = rc;
+	mutex_up(&lnet_acceptor_state.pta_signal);
 	
 	if (rc != 0)
 		return rc;
 
-	while (ptl_acceptor_state.pta_shutdown == 0) {
+	while (lnet_acceptor_state.pta_shutdown == 0) {
 		
-		rc = libcfs_sock_accept(&newsock, ptl_acceptor_state.pta_sock);
+		rc = libcfs_sock_accept(&newsock, lnet_acceptor_state.pta_sock);
 		if (rc != 0) {
 			if (rc != -EAGAIN) {
 				CWARN("Accept error %d: pausing...\n", rc);
@@ -409,7 +409,7 @@ ptl_acceptor(void *arg)
 			goto failed;
 		}
 
-                rc = ptl_accept(NULL, newsock, magic);
+                rc = lnet_accept(NULL, newsock, magic);
                 if (rc != 0)
                         goto failed;
                 
@@ -419,27 +419,27 @@ ptl_acceptor(void *arg)
 		libcfs_sock_release(newsock);
 	}
 	
-	libcfs_sock_release(ptl_acceptor_state.pta_sock);
-        ptl_acceptor_state.pta_sock = NULL;
+	libcfs_sock_release(lnet_acceptor_state.pta_sock);
+        lnet_acceptor_state.pta_sock = NULL;
 
         if (blind_ni != NULL)
                 ptl_ni_decref(blind_ni);
 
         LCONSOLE(0,"Acceptor stopping\n");
 	
-	/* unblock ptl_acceptor_stop() */
-	mutex_up(&ptl_acceptor_state.pta_signal);
+	/* unblock lnet_acceptor_stop() */
+	mutex_up(&lnet_acceptor_state.pta_signal);
 	return 0;
 }
 
 int
-ptl_acceptor_start(void)
+lnet_acceptor_start(void)
 {
 	long   pid;
         long   secure;
 
-	LASSERT (ptl_acceptor_state.pta_sock == NULL);
-	init_mutex_locked(&ptl_acceptor_state.pta_signal);
+	LASSERT (lnet_acceptor_state.pta_sock == NULL);
+	init_mutex_locked(&lnet_acceptor_state.pta_signal);
 
         if (!strcmp(accept, "secure")) {
                 secure = 1;
@@ -456,47 +456,47 @@ ptl_acceptor_start(void)
 	if (ptl_count_acceptor_nis(NULL) == 0)  /* not required */
 		return 0;
 	
-	pid = cfs_kernel_thread(ptl_acceptor, (void *)secure, 0);
+	pid = cfs_kernel_thread(lnet_acceptor, (void *)secure, 0);
 	if (pid < 0) {
 		CERROR("Can't start acceptor thread: %ld\n", pid);
 		return -ESRCH;
 	}
 
-	mutex_down(&ptl_acceptor_state.pta_signal); /* wait for acceptor to startup */
+	mutex_down(&lnet_acceptor_state.pta_signal); /* wait for acceptor to startup */
 
-	if (ptl_acceptor_state.pta_shutdown == 0) {
+	if (lnet_acceptor_state.pta_shutdown == 0) {
                 /* started OK */
-                LASSERT (ptl_acceptor_state.pta_sock != NULL);
+                LASSERT (lnet_acceptor_state.pta_sock != NULL);
 		return 0;
         }
 
-        LASSERT (ptl_acceptor_state.pta_sock == NULL);
+        LASSERT (lnet_acceptor_state.pta_sock == NULL);
 	return -ENETDOWN;
 }
 
 void
-ptl_acceptor_stop(void)
+lnet_acceptor_stop(void)
 {
-	if (ptl_acceptor_state.pta_sock == NULL) /* not running */
+	if (lnet_acceptor_state.pta_sock == NULL) /* not running */
 		return;
 	
-	ptl_acceptor_state.pta_shutdown = 1;
-	libcfs_sock_abort_accept(ptl_acceptor_state.pta_sock);
+	lnet_acceptor_state.pta_shutdown = 1;
+	libcfs_sock_abort_accept(lnet_acceptor_state.pta_sock);
 
 	/* block until acceptor signals exit */
-	mutex_down(&ptl_acceptor_state.pta_signal);
+	mutex_down(&lnet_acceptor_state.pta_signal);
 }
 
 #else /* __KERNEL__ */
 
 int
-ptl_acceptor_start(void)
+lnet_acceptor_start(void)
 {
 	return 0;
 }
 
 void
-ptl_acceptor_stop(void)
+lnet_acceptor_stop(void)
 {
 }
 

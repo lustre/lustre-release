@@ -93,19 +93,19 @@ static inline void our_cond_resched(void)
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
 #else
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
-        portals_catastrophe = 1;                                        \
-        portals_debug_dumpstack(NULL);                                  \
-        portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(file, func, line);                      \
+        libcfs_catastrophe = 1;                                        \
+        libcfs_debug_dumpstack(NULL);                                  \
+        libcfs_debug_dumplog();                                        \
+        libcfs_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)

@@ -146,14 +146,14 @@ cfs_psdev_t libcfs_dev = {
 };
 
 void
-kportal_daemonize (char *str)
+libcfs_daemonize (char *str)
 {
 	printf("Daemonize request: %s.\n", str);
 	return;
 }
 
 void 
-kportal_blockallsigs(void)
+libcfs_blockallsigs(void)
 {
 	return;
 }

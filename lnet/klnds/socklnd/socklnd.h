@@ -247,8 +247,8 @@ typedef struct                                  /* forwarded packet */
 typedef struct                                  /* locally transmitted packet */
 {
         ksock_tx_t              ltx_tx;         /* send info */
-        void                   *ltx_private;    /* ptl_finalize() callback arg */
-        void                   *ltx_cookie;     /* ptl_finalize() callback arg */
+        void                   *ltx_private;    /* lnet_finalize() callback arg */
+        void                   *ltx_cookie;     /* lnet_finalize() callback arg */
         ptl_hdr_t               ltx_hdr;        /* buffer for packet header */
         int                     ltx_desc_size;  /* bytes allocated for this desc */
         struct iovec            ltx_iov[1];     /* iov for hdr + payload */
@@ -320,7 +320,7 @@ typedef struct ksock_conn
         int                 ksnc_rx_nkiov;      /* # page frags */
         lnet_kiov_t         *ksnc_rx_kiov;       /* the page frags */
         ksock_rxiovspace_t  ksnc_rx_iov_space;  /* space for frag descriptors */
-        void               *ksnc_cookie;        /* rx ptl_finalize passthru arg */
+        void               *ksnc_cookie;        /* rx lnet_finalize passthru arg */
         ptl_hdr_t           ksnc_hdr;           /* where I read headers into */
 
         /* WRITER */

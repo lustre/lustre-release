@@ -32,8 +32,8 @@ LNetEQAlloc(lnet_handle_ni_t interface, lnet_size_t count,
         ptl_eq_t      *eq;
         unsigned long  flags;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
          * overflow, they don't skip entries, so the queue has the same
@@ -74,7 +74,7 @@ LNetEQAlloc(lnet_handle_ni_t interface, lnet_size_t count,
         PTL_LOCK(flags);
 
         ptl_initialise_handle (&eq->eq_lh, PTL_COOKIE_TYPE_EQ);
-        list_add (&eq->eq_list, &ptl_apini.apini_active_eqs);
+        list_add (&eq->eq_list, &lnet_apini.apini_active_eqs);
 
         PTL_UNLOCK(flags);
 
@@ -90,8 +90,8 @@ LNetEQFree(lnet_handle_eq_t eqh)
         lnet_event_t   *events;
         unsigned long  flags;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
         
         PTL_LOCK(flags);
 
@@ -188,8 +188,8 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 #endif
         ENTRY;
 
-        LASSERT (ptl_apini.apini_init);
-        LASSERT (ptl_apini.apini_refcount > 0);
+        LASSERT (lnet_apini.apini_init);
+        LASSERT (lnet_apini.apini_refcount > 0);
 
         if (neq < 1)
                 RETURN(-ENOENT);
@@ -219,7 +219,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 #ifdef __KERNEL__
                 cfs_waitlink_init(&wl);
                 set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_add(&ptl_apini.apini_waitq, &wl);
+                cfs_waitq_add(&lnet_apini.apini_waitq, &wl);
 
                 PTL_UNLOCK(flags);
 
@@ -237,11 +237,11 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                 }
                 
                 PTL_LOCK(flags);
-                cfs_waitq_del(&ptl_apini.apini_waitq, &wl);
+                cfs_waitq_del(&lnet_apini.apini_waitq, &wl);
 #else
                 if (timeout_ms < 0) {
-                        pthread_cond_wait(&ptl_apini.apini_cond, 
-                                          &ptl_apini.apini_mutex);
+                        pthread_cond_wait(&lnet_apini.apini_cond, 
+                                          &lnet_apini.apini_mutex);
                 } else {
                         gettimeofday(&then, NULL);
                         
@@ -253,8 +253,8 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 ts.tv_nsec -= 1000000000;
                         }
                         
-                        pthread_cond_timedwait(&ptl_apini.apini_cond,
-                                               &ptl_apini.apini_mutex, &ts);
+                        pthread_cond_timedwait(&lnet_apini.apini_cond,
+                                               &lnet_apini.apini_mutex, &ts);
                         
                         gettimeofday(&now, NULL);
                         timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +

@@ -131,7 +131,7 @@ typedef struct {
         __u32       acr_magic;                  /* PTL_ACCEPTOR_PROTO_MAGIC */
         __u32       acr_version;                /* protocol version */
         __u64       acr_nid;                    /* target NID */
-} WIRE_ATTR ptl_acceptor_connreq_t;
+} WIRE_ATTR lnet_acceptor_connreq_t;
 
 #define PTL_PROTO_ACCEPTOR_MAGIC         0xacce7100
 #define PTL_PROTO_ACCEPTOR_VERSION       1
@@ -285,7 +285,7 @@ typedef struct ptl_nal
 	 * bytes.  
 	 * NB the NAL may NOT overwrite iov.  
 	 * 0 on success => NAL has committed to send and will call
-	 * ptl_finalize on completion
+	 * lnet_finalize on completion
 	 */
 	int (*nal_send) 
                 (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
@@ -307,7 +307,7 @@ typedef struct ptl_nal
 	 * discarded.  
 	 * NB the NAL may NOT overwrite iov.
 	 * 0 on success => NAL has committed to receive and will call
-	 * ptl_finalize on completion
+	 * lnet_finalize on completion
 	 */
 	int (*nal_recv) 
                 (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
@@ -424,6 +424,6 @@ typedef struct
                 long       msgs_max;
         }                 apini_counters;
         
-} ptl_apini_t;
+} lnet_apini_t;
 
 #endif

@@ -88,7 +88,7 @@ int pingsrv_thread(void *arg)
         unsigned long magic;
         unsigned long ping_bulk_magic = __cpu_to_le32(0xcafebabe);
         
-        kportal_daemonize ("pingsrv");
+        libcfs_daemonize ("pingsrv");
         server->tsk =  cfs_current();
         
         while (running) {

@@ -58,15 +58,15 @@ ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
 
         /* Wake anyone sleeping for an event (see lib-eq.c) */
 #ifdef __KERNEL__
-        if (cfs_waitq_active(&ptl_apini.apini_waitq))
-                cfs_waitq_broadcast(&ptl_apini.apini_waitq);
+        if (cfs_waitq_active(&lnet_apini.apini_waitq))
+                cfs_waitq_broadcast(&lnet_apini.apini_waitq);
 #else
-        pthread_cond_broadcast(&ptl_apini.apini_cond);
+        pthread_cond_broadcast(&lnet_apini.apini_cond);
 #endif
 }
 
 void
-ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
+lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
 {
         ptl_libmd_t  *md;
         int           unlink;
@@ -125,13 +125,13 @@ ptl_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
                 ptl_md_unlink(md);
 
         list_del (&msg->msg_list);
-        ptl_apini.apini_counters.msgs_alloc--;
+        lnet_apini.apini_counters.msgs_alloc--;
         ptl_msg_free(msg);
 
         PTL_UNLOCK(flags);
 }
 
-lnet_pid_t  ptl_getpid(void) 
+lnet_pid_t  lnet_getpid(void) 
 {
-        return ptl_apini.apini_pid;
+        return lnet_apini.apini_pid;
 }
