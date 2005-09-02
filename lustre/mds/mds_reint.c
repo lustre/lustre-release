@@ -2148,11 +2148,18 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = fsfilt_del_dir_entry(req->rq_export->exp_obd, dchild);
+                if (rc)
+                        CERROR("can't remove direntry: %d\n", rc);
                 rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
                                         rc, 0);
+                if (rc)
+                        CERROR("can't finish transno: %d\n", rc);
         }
         EXIT;
 cleanup:
+        if (rc)
+                CERROR("can't unlink inode "DLID4": %d\n",
+                       OLID4(&op_data->id1), rc);
         req->rq_status = rc;
 
 #ifdef S_PDIROPS
