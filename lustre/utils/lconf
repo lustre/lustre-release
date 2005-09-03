@@ -1059,8 +1059,8 @@ def def_mount_options(fstype, target):
         mountfsoptions = "errors=remount-ro"
         if target == 'ost' and sys_get_branch() == '2.4':
             mountfsoptions = "%s,asyncdel" % (mountfsoptions)
-        if target == 'ost' and sys_get_branch() == '2.6':
-            mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
+        #if target == 'ost' and sys_get_branch() == '2.6':
+        #    mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
         return mountfsoptions
     return ""
         
