@@ -83,11 +83,11 @@ out:
 int
 ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
 {
-        char *path, *pathpage, *datapage, *argv[4];
+        char *path, *pathpage, *datapage = NULL, *argv[4];
         struct file *mntinfo_fd = NULL;
         int cleanup_phase = 0, rc = 0;
         struct ll_sb_info *sbi;
-        struct dentry *dchild;
+        struct dentry *dchild = NULL;
         ENTRY;
 
         LASSERT(dentry->d_inode != NULL);
