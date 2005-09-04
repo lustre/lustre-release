@@ -3808,15 +3808,21 @@ int mds_postrecov_common(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         struct llog_ctxt *ctxt;
         int rc, item = 0, valsize;
+        struct timeval tstart, now;
          __u32 group;
         ENTRY;
 
+        CDEBUG(D_ERROR, "%s: post-recovery\n", obd->obd_name);
         LASSERT(!obd->obd_recovering);
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
         LASSERT(ctxt != NULL);
 
         /* clean PENDING dir */
+        do_gettimeofday(&tstart);
         rc = mds_cleanup_orphans(obd);
+        do_gettimeofday(&now);
+        CDEBUG(D_ERROR, "%s: cleaned %d MDS orphans in %us\n",
+               obd->obd_name, rc, (unsigned) (now.tv_sec - tstart.tv_sec));
         if (rc < 0)
                 GOTO(out, rc);
         item = rc;
@@ -3825,8 +3831,11 @@ int mds_postrecov_common(struct obd_device *obd)
         valsize = sizeof(group);
         rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"),
                           "mds_conn", valsize, &group);
-        if (rc)
+        if (rc) {
+                CERROR("%s: failed to obd_set_info(): %d\n", 
+                       obd->obd_name, rc);
                 GOTO(out, rc);
+        }
 
         rc = llog_connect(ctxt, obd->u.mds.mds_dt_desc.ld_tgt_count,
                           NULL, NULL, NULL);
@@ -3837,9 +3846,16 @@ int mds_postrecov_common(struct obd_device *obd)
         }
 
         /* remove the orphaned precreated objects */
+        do_gettimeofday(&tstart);
         rc = mds_dt_clear_orphans(mds, NULL /* all OSTs */);
-        if (rc)
+        do_gettimeofday(&now);
+        CDEBUG(D_ERROR, "%s: cleaned OSS orphans in %us: %d\n",
+               obd->obd_name, (unsigned) (now.tv_sec - tstart.tv_sec), rc);
+        if (rc) {
+                CERROR("%s: can't clear OSS orphans: %d\n", 
+                       obd->obd_name, rc);
                 GOTO(err_llog, rc);
+        }
 
 out:
         RETURN(rc < 0 ? rc : item);
