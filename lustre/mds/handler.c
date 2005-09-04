@@ -3875,7 +3875,7 @@ int mds_postrecov(struct obd_device *obd)
         int rc;
         ENTRY;
         rc = mds_postrecov_common(obd);
-        if (rc => 0)
+        if (rc >= 0)
                 rc = mds_md_reconnect(obd);
         RETURN(rc);
 }
