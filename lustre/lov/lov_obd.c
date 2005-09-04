@@ -1503,8 +1503,7 @@ static int lov_queue_async_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
-            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) 
                  RETURN(-EIO);
 
         rc = obd_queue_async_io(tgt->ltd_exp, lsm, loi, lap->lap_sub_cookie,
@@ -1533,8 +1532,7 @@ static int lov_set_async_flags(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
-            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) 
                  RETURN(-EIO);
         
         rc = obd_set_async_flags(tgt->ltd_exp, lsm, loi, lap->lap_sub_cookie,
@@ -1565,8 +1563,7 @@ static int lov_queue_group_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen) && 
-            !lov_tgt_pending(lov, tgt, loi->loi_ost_gen))
+        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) 
                  RETURN(-EIO);
 
         rc = obd_queue_group_io(tgt->ltd_exp, lsm, loi, oig,
