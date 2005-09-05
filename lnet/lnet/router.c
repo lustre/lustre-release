@@ -240,6 +240,7 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
         ptl_ni_t            *gwni = NULL;
         kpr_gateway_entry_t *ge = NULL;
         __u32                target_net = PTL_NIDNET(target_nid);
+        __u32                gateway_net;
 
         /* Return the NID I must send to, to reach 'target_nid' */
         
@@ -292,31 +293,32 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 
                 if (!re->kpre_gateway->kpge_alive) /* gateway down */
                         continue;
-                
+
+                gateway_net = PTL_NIDNET(re->kpre_gateway->kpge_nid);
+
                 if (ni != NULL) {
                         /* local ni determined */
-                        if (PTL_NIDNET(ni->ni_nid) != /* gateway not on ni's net */
-                            PTL_NIDNET(re->kpre_gateway->kpge_nid))
+                        if (gateway_net !=      /* gateway not on ni's net */
+                            PTL_NIDNET(ni->ni_nid))
                                 continue;
 
                         if (ge != NULL &&
                             kpr_ge_isbetter (ge, re->kpre_gateway))
                                 continue;
 
-                } else if (ge != NULL) {        /* another gateway */
+                } else if (!ptl_islocalnet(gateway_net, NULL)) {
+                        continue;               /* not on a local net */
+                } else if (ge != NULL) {        
+                        /* already got 1 candidate gateway */
                         LASSERT (gwni != NULL);
-                        /* we don't allow gateways on different nets to get
-                         * into the route table */
-                        LASSERT (PTL_NIDNET(gwni->ni_nid) ==
-                                 PTL_NIDNET(re->kpre_gateway->kpge_nid));
 
                         if (kpr_ge_isbetter(ge, re->kpre_gateway))
                                 continue;
                 } else {
                         LASSERT (gwni == NULL);
+                        gwni = lnet_net2ni(gateway_net);
 
-                        gwni = lnet_net2ni(PTL_NIDNET(re->kpre_gateway->kpge_nid));
-                        if (gwni == NULL)       /* gateway not on a local net */
+                        if (gwni == NULL)       /* local nets changed */
                                 continue;
                 }
 
@@ -351,26 +353,30 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 }
 
 int
-kpr_distance (lnet_nid_t nid)
+kpr_distance (lnet_nid_t nid, int *orderp)
 {
         unsigned long     flags;
 	struct list_head *e;
         kpr_net_entry_t  *ne;
         __u32             net = PTL_NIDNET(nid);
         int               dist = -ENETUNREACH;
-        
-        if (ptl_islocalnet(net))
+        int               order = 0;
+
+        if (ptl_islocalnet(net, orderp))
                 return 0;
 
 	read_lock_irqsave(&kpr_state.kpr_rwlock, flags);
 
         list_for_each (e, &kpr_state.kpr_nets) {
 		ne = list_entry (e, kpr_net_entry_t, kpne_list);
-                
+
                 if (ne->kpne_net == net) {
                         dist = ne->kpne_hops;
+                        if (orderp != NULL)
+                                *orderp = order;
                         break;
                 }
+                order++;
         }
 
 	read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
@@ -822,8 +828,8 @@ kpr_get_route (int idx, __u32 *net, __u32 *hops,
                                 *hops = ne->kpne_hops;
                                 *gateway_nid = ge->kpge_nid;
                                 *alive = ge->kpge_alive;
-                                *ignored = !ptl_islocalnet(ne->kpne_net) &&
-                                           ptl_islocalnet(ge->kpge_nid);
+                                *ignored = ptl_islocalnet(ne->kpne_net, NULL) ||
+                                           !ptl_islocalnet(PTL_NIDNET(ge->kpge_nid), NULL);
 
                                 read_unlock_irqrestore(&kpr_state.kpr_rwlock, 
                                                        flags);
@@ -980,8 +986,11 @@ kpr_ctl(unsigned int cmd, void *arg)
 }
 
 int
-kpr_distance(lnet_nid_t nid)
+kpr_distance(lnet_nid_t nid, int *orderp)
 {
+        if (!lnet_net2ni(PTL_NIDNET(nid), orderp))
+                return -ENETUNREACH;
+        
         return 0;
 }
 

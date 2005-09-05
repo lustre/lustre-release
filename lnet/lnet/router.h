@@ -36,6 +36,7 @@ typedef struct
         atomic_t                kpge_weight;
         time_t                  kpge_timestamp;
         int                     kpge_alive;
+        int                     kpge_checked;
         int                     kpge_refcount;
         lnet_nid_t              kpge_nid;
 } kpr_gateway_entry_t;

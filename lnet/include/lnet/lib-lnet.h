@@ -371,7 +371,7 @@ void      lnet_fwd_done(ptl_ni_t *ni, kpr_fwd_desc_t *fwd, int error);
 int       lnet_notify(ptl_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
 
 /* internal APIs */
-int       kpr_distance(lnet_nid_t nid);
+int       kpr_distance(lnet_nid_t nid, int *order);
 int       kpr_ctl(unsigned int cmd, void *arg);
 int       kpr_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
 int       kpr_initialise(void);
@@ -440,7 +440,7 @@ extern int ptl_get_apinih (lnet_handle_ni_t *nih);
 
 extern ptl_ni_t *lnet_net2ni (__u32 net);
 extern int ptl_islocalnid (lnet_nid_t nid);
-extern int ptl_islocalnet (__u32 net);
+extern int ptl_islocalnet (__u32 net, int *orderp);
 extern void ptl_enq_event_locked (void *private,
                                   ptl_eq_t *eq, lnet_event_t *ev);
 extern void lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, 

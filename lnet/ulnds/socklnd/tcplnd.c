@@ -40,30 +40,18 @@
 #include <syscall.h>
 #endif
 
-/* Function:  tcpnal_send
- * Arguments: ni:      pointer to NAL instance
- *            private: unused
- *            cookie:  passed back to the portals library
- *            hdr:     pointer to the portals header
- *            nid:     destination node
- *            pid:     destination process
- *            data:    body of the message
- *            len:     length of the body
- * Returns: zero on success
- *
- * sends a packet to the peer, after insuring that a connection exists
- */
-int tcpnal_send(ptl_ni_t *ni,
-                      void *private,
-                      ptl_msg_t *cookie,
-                      ptl_hdr_t *hdr,
-                      int type,
-                      lnet_process_id_t target,
-                      int routing,
-                      unsigned int niov,
-                      struct iovec *iov,
-                      size_t offset,
-                      size_t len)
+int tcpnal_send(ptl_ni_t         *ni,
+                void             *private,
+                ptl_msg_t        *cookie,
+                ptl_hdr_t        *hdr,
+                int               type,
+                lnet_process_id_t target,
+                int               routing,
+                unsigned int      niov,
+                struct iovec     *iov,
+                ptl_kiov_t        kiov,
+                unsigned int      offset,
+                unsigned int      len)
 {
     connection c;
     bridge b=(bridge)ni->ni_data;
@@ -92,6 +80,7 @@ int tcpnal_send(ptl_ni_t *ni,
        nonstandard */
 
     LASSERT (niov <= 256);
+    LASSERT (len == 0 || iov != NULL);          /* I don't understand kiovs */
 
     tiov[0].iov_base = hdr;
     tiov[0].iov_len = sizeof(ptl_hdr_t);
@@ -142,38 +131,27 @@ int tcpnal_send(ptl_ni_t *ni,
 }
 
 
-/* Function:  tcpnal_recv
- * Arguments: ptl_ni_t *:        pointer to NAL instance
- *            void *private:     connection pointer passed through
- *                               lnet_parse()
- *            ptl_msg_t *cookie: passed back to portals library
- *            user_ptr data:     pointer to the destination buffer
- *            size_t mlen:       length of the body
- *            size_t rlen:       length of data in the network
- * Returns: zero on success
- *
- * blocking read of the requested data. must drain out the
- * difference of mainpulated and requested lengths from the network
- */
-int tcpnal_recv(ptl_ni_t *ni,
-                      void *private,
-                      ptl_msg_t *cookie,
-                      unsigned int niov,
-                      struct iovec *iov,
-                      size_t offset,
-                      size_t mlen,
-                      size_t rlen)
+int tcpnal_recv(ptl_ni_t     *ni,
+                void         *private,
+                ptl_msg_t    *cookie,
+                unsigned int  niov,
+                struct iovec *iov,
+                plt_kiov_t   *kiov,
+                unsigned int  offset,
+                unsigned int  mlen,
+                unsigned int  rlen)
 {
     struct iovec tiov[256];
     int ntiov;
     int i;
 
-    if (!niov)
+    if (mlen == 0)
             goto finalize;
 
     LASSERT(mlen);
     LASSERT(rlen);
     LASSERT(rlen >= mlen);
+    LASSERT(iov != NULL);                       /* I don't understand kiovs */
 
     ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
     

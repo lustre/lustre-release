@@ -614,18 +614,18 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
 }
 
 int
-kranal_do_send (ptl_ni_t        *ni,
-                void            *private,
-                ptl_msg_t       *ptlmsg,
-                ptl_hdr_t       *hdr,
-                int              type,
-                lnet_process_id_t target,
-                int              routing,
-                unsigned int     niov,
-                struct iovec    *iov,
-                lnet_kiov_t      *kiov,
-                int              offset,
-                int              nob)
+kranal_send (ptl_ni_t         *ni,
+             void             *private,
+             ptl_msg_t        *ptlmsg,
+             ptl_hdr_t        *hdr,
+             int               type,
+             lnet_process_id_t target,
+             int               routing,
+             unsigned int      niov,
+             struct iovec     *iov,
+             lnet_kiov_t      *kiov,
+             unsigned int      offset,
+             unsigned int      nob)
 {
         kra_conn_t *conn;
         kra_tx_t   *tx;
@@ -795,31 +795,9 @@ kranal_do_send (ptl_ni_t        *ni,
 }
 
 int
-kranal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-             unsigned int niov, struct iovec *iov,
-             size_t offset, size_t len)
-{
-        return kranal_do_send(ni, private, cookie,
-                              hdr, type, tgt, routing,
-                              niov, iov, NULL, offset, len);
-}
-
-int
-kranal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                   ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-                   unsigned int niov, lnet_kiov_t *kiov,
-                   size_t offset, size_t len)
-{
-        return kranal_do_send(ni, private, cookie,
-                              hdr, type, tgt, routing,
-                              niov, NULL, kiov, offset, len);
-}
-
-int
-kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                int offset, int mlen, int rlen)
+kranal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
+             unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+             unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         kra_conn_t  *conn = private;
         kra_msg_t   *rxmsg = conn->rac_rxmsg;
@@ -904,24 +882,6 @@ kranal_do_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                 kranal_consume_rxmsg(conn, NULL, 0);
                 return 0;
         }
-}
-
-int
-kranal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-             unsigned int niov, struct iovec *iov,
-             size_t offset, size_t mlen, size_t rlen)
-{
-        return kranal_do_recv(ni, private, msg, niov, iov, NULL,
-                              offset, mlen, rlen);
-}
-
-int
-kranal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                   unsigned int niov, lnet_kiov_t *kiov,
-                   size_t offset, size_t mlen, size_t rlen)
-{
-        return kranal_do_recv(ni, private, msg, niov, NULL, kiov,
-                              offset, mlen, rlen);
 }
 
 int

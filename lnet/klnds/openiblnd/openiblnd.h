@@ -507,23 +507,13 @@ int kibnal_startup (ptl_ni_t *ni);
 void kibnal_shutdown (ptl_ni_t *ni);
 int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 int kibnal_send (ptl_ni_t *ni, void *private,
-                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, lnet_process_id_t tgt, int routing,
-                       unsigned int payload_niov, struct iovec *payload_iov,
-                       size_t payload_offset, size_t payload_nob);
-int kibnal_send_pages (ptl_ni_t *ni, void *private,
-                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, lnet_process_id_t tgt, int routing,
-                             unsigned int payload_niov, lnet_kiov_t *payload_kiov,
-                             size_t payload_offset, size_t payload_nob);
-int kibnal_recv(ptl_ni_t *ni, void *private,
-                      ptl_msg_t *ptlmsg, unsigned int niov,
-                      struct iovec *iov, size_t offset,
-                      size_t mlen, size_t rlen);
-int kibnal_recv_pages(ptl_ni_t *ni, void *private,
-                            ptl_msg_t *ptlmsg, unsigned int niov,
-                            lnet_kiov_t *kiov, size_t offset,
-                            size_t mlen, size_t rlen);
+                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                 int type, lnet_process_id_t tgt, int routing,
+                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                 unsigned int offset, unsigned int nob);
+int kibnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
+                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                unsigned int offset, unsigned int mlen, unsigned int rlen);
 int kibnal_accept(ptl_ni_t *ni, struct socket *sock);
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
@@ -535,7 +525,7 @@ extern int kibnal_make_svcqry (kib_conn_t *conn);
 extern void kibnal_free_acceptsock (kib_acceptsock_t *as);
 extern int kibnal_listener_procint(ctl_table *table, int write, 
                                    struct file *filp, void *buffer, 
-                                   size_t *lenp);
+                                   unisgned int *lenp);
 extern int kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid);
 extern void kibnal_put_peer (kib_peer_t *peer);
 extern int kibnal_add_persistent_peer(lnet_nid_t nid, __u32 ip, int port);

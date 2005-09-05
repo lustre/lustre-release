@@ -796,17 +796,18 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 }
 
 int
-ksocknal_sendmsg(ptl_ni_t        *ni, 
-                 void            *private, 
-                 ptl_msg_t       *cookie,
-                 ptl_hdr_t       *hdr, 
-                 int              type, 
-                 lnet_process_id_t target,
-                 unsigned int     payload_niov, 
-                 struct iovec    *payload_iov, 
-                 lnet_kiov_t      *payload_kiov,
-                 size_t           payload_offset,
-                 size_t           payload_nob)
+ksocknal_send(ptl_ni_t         *ni, 
+              void             *private, 
+              ptl_msg_t        *cookie,
+              ptl_hdr_t        *hdr, 
+              int               type, 
+              lnet_process_id_t target,
+              int               routing,
+              unsigned int      payload_niov, 
+              struct iovec     *payload_iov, 
+              lnet_kiov_t      *payload_kiov,
+              unsigned int      payload_offset,
+              unsigned int      payload_nob)
 {
         ksock_ltx_t  *ltx;
         int           desc_size;
@@ -889,30 +890,6 @@ ksocknal_sendmsg(ptl_ni_t        *ni,
         
         ksocknal_free_ltx(ltx);
         return (-EIO);
-}
-
-int
-ksocknal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-               ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-               unsigned int payload_niov, struct iovec *payload_iov,
-               size_t payload_offset, size_t payload_len)
-{
-        return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, tgt,
-                                 payload_niov, payload_iov, NULL,
-                                 payload_offset, payload_len));
-}
-
-int
-ksocknal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                     ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-                     unsigned int payload_niov, lnet_kiov_t *payload_kiov, 
-                     size_t payload_offset, size_t payload_len)
-{
-        return (ksocknal_sendmsg(ni, private, cookie,
-                                 hdr, type, tgt,
-                                 payload_niov, NULL, payload_kiov,
-                                 payload_offset, payload_len));
 }
 
 void
@@ -1377,8 +1354,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
 int
 ksocknal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-               unsigned int niov, struct iovec *iov, 
-               size_t offset, size_t mlen, size_t rlen)
+               unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+               unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         ksock_conn_t *conn = (ksock_conn_t *)private;
 
@@ -1389,41 +1366,22 @@ ksocknal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         conn->ksnc_rx_nob_wanted = mlen;
         conn->ksnc_rx_nob_left   = rlen;
 
-        conn->ksnc_rx_nkiov = 0;
-        conn->ksnc_rx_kiov = NULL;
-        conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
-        conn->ksnc_rx_niov =
-                lnet_extract_iov(PTL_MD_MAX_IOV, conn->ksnc_rx_iov,
-                                niov, iov, offset, mlen);
-
-        LASSERT (mlen == 
-                 lnet_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
-                 lnet_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));
-
-        return (0);
-}
-
-int
-ksocknal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                     unsigned int niov, lnet_kiov_t *kiov, 
-                     size_t offset, size_t mlen, size_t rlen)
-{
-        ksock_conn_t *conn = (ksock_conn_t *)private;
-
-        LASSERT (mlen <= rlen);
-        LASSERT (niov <= PTL_MD_MAX_IOV);
+        if (mlen == 0 || iov != NULL) {
+                conn->ksnc_rx_nkiov = 0;
+                conn->ksnc_rx_kiov = NULL;
+                conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
+                conn->ksnc_rx_niov =
+                        lnet_extract_iov(PTL_MD_MAX_IOV, conn->ksnc_rx_iov,
+                                         niov, iov, offset, mlen);
+        } else {
+                conn->ksnc_rx_niov = 0;
+                conn->ksnc_rx_iov  = NULL;
+                conn->ksnc_rx_kiov = conn->ksnc_rx_iov_space.kiov;
+                conn->ksnc_rx_nkiov = 
+                        lnet_extract_kiov(PTL_MD_MAX_IOV, conn->ksnc_rx_kiov,
+                                          niov, kiov, offset, mlen);
+        }
         
-        conn->ksnc_cookie = msg;
-        conn->ksnc_rx_nob_wanted = mlen;
-        conn->ksnc_rx_nob_left   = rlen;
-
-        conn->ksnc_rx_niov = 0;
-        conn->ksnc_rx_iov  = NULL;
-        conn->ksnc_rx_kiov = conn->ksnc_rx_iov_space.kiov;
-        conn->ksnc_rx_nkiov = 
-                lnet_extract_kiov(PTL_MD_MAX_IOV, conn->ksnc_rx_kiov,
-                                 niov, kiov, offset, mlen);
-
         LASSERT (mlen == 
                  lnet_iov_nob (conn->ksnc_rx_niov, conn->ksnc_rx_iov) +
                  lnet_kiov_nob (conn->ksnc_rx_nkiov, conn->ksnc_rx_kiov));

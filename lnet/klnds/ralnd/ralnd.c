@@ -31,9 +31,7 @@ ptl_nal_t kranal_nal = {
         .nal_shutdown   = kranal_shutdown,
         .nal_ctl        = kranal_ctl,
         .nal_send       = kranal_send,
-        .nal_send_pages = kranal_send_pages,
         .nal_recv       = kranal_recv,
-        .nal_recv_pages = kranal_recv_pages,
         .nal_accept     = kranal_accept,
 };
 

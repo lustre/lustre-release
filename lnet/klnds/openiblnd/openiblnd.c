@@ -29,9 +29,7 @@ ptl_nal_t               kibnal_nal = {
         .nal_shutdown   = kibnal_shutdown,
         .nal_ctl        = kibnal_ctl,
         .nal_send       = kibnal_send,
-        .nal_send_pages = kibnal_send_pages,
         .nal_recv       = kibnal_recv,
-        .nal_recv_pages = kibnal_recv_pages,
         .nal_accept     = kibnal_accept,
 };
 

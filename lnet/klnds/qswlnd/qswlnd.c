@@ -29,9 +29,7 @@ ptl_nal_t kqswnal_nal =
 	.nal_shutdown   = kqswnal_shutdown,
 	.nal_ctl        = kqswnal_ctl,
 	.nal_send       = kqswnal_send,
-        .nal_send_pages = kqswnal_send_pages,
         .nal_recv       = kqswnal_recv,
-        .nal_recv_pages = kqswnal_recv_pages,
 	.nal_fwd        = kqswnal_fwd_packet,
 };
 

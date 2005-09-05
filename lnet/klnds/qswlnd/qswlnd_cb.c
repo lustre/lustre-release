@@ -845,7 +845,7 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
 int
 kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
               int niov, struct iovec *iov, lnet_kiov_t *kiov,
-              size_t offset, size_t len)
+              unsigned int offset, unsigned int len)
 {
         kqswnal_remotemd_t *rmd;
         kqswnal_tx_t       *ktx;
@@ -1000,19 +1000,19 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         return (rc);
 }
 
-static int
-kqswnal_sendmsg (ptl_ni_t        *ni,
-                 void            *private,
-                 ptl_msg_t       *ptlmsg,
-                 ptl_hdr_t       *hdr,
-                 int              type,
-                 lnet_process_id_t target,
-                 int              routing,
-                 unsigned int     payload_niov,
-                 struct iovec    *payload_iov,
-                 lnet_kiov_t      *payload_kiov,
-                 size_t           payload_offset,
-                 size_t           payload_nob)
+int
+kqswnal_send (ptl_ni_t         *ni,
+              void             *private,
+              ptl_msg_t        *ptlmsg,
+              ptl_hdr_t        *hdr,
+              int               type,
+              lnet_process_id_t target,
+              int               routing,
+              unsigned int      payload_niov,
+              struct iovec     *payload_iov,
+              lnet_kiov_t      *payload_kiov,
+              unsigned int      payload_offset,
+              unsigned int      payload_nob)
 {
         kqswnal_tx_t      *ktx;
         int                rc;
@@ -1252,42 +1252,6 @@ kqswnal_sendmsg (ptl_ni_t        *ni,
         
         atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc == 0 ? 0 : -EIO);
-}
-
-int
-kqswnal_send (ptl_ni_t        *ni,
-              void            *private,
-              ptl_msg_t       *ptlmsg,
-              ptl_hdr_t       *hdr,
-              int              type,
-              lnet_process_id_t tgt,
-              int              routing,
-              unsigned int     payload_niov,
-              struct iovec    *payload_iov,
-              size_t           payload_offset,
-              size_t           payload_nob)
-{
-        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, tgt, routing,
-                                 payload_niov, payload_iov, NULL, 
-                                 payload_offset, payload_nob));
-}
-
-int
-kqswnal_send_pages (ptl_ni_t        *ni,
-                    void            *private,
-                    ptl_msg_t       *ptlmsg,
-                    ptl_hdr_t       *hdr,
-                    int              type,
-                    lnet_process_id_t tgt,
-                    int              routing,
-                    unsigned int     payload_niov,
-                    lnet_kiov_t      *payload_kiov,
-                    size_t           payload_offset,
-                    size_t           payload_nob)
-{
-        return (kqswnal_sendmsg (ni, private, ptlmsg, hdr, type, tgt, routing,
-                                 payload_niov, NULL, payload_kiov, 
-                                 payload_offset, payload_nob));
 }
 
 void
@@ -1650,16 +1614,16 @@ kqswnal_csum_error (kqswnal_rx_t *krx, int ishdr)
 }
 #endif
 
-static int
-kqswnal_recvmsg (ptl_ni_t     *ni,
-                 void         *private,
-                 ptl_msg_t    *ptlmsg,
-                 unsigned int  niov,
-                 struct iovec *iov,
-                 lnet_kiov_t   *kiov,
-                 size_t        offset,
-                 size_t        mlen,
-                 size_t        rlen)
+int
+kqswnal_recv (ptl_ni_t      *ni,
+              void          *private,
+              ptl_msg_t     *ptlmsg,
+              unsigned int   niov,
+              struct iovec  *iov,
+              lnet_kiov_t   *kiov,
+              unsigned int   offset,
+              unsigned int   mlen,
+              unsigned int   rlen)
 {
         kqswnal_rx_t *krx = (kqswnal_rx_t *)private;
         char         *buffer = page_address(krx->krx_kiov[0].kiov_page);
@@ -1675,7 +1639,7 @@ kqswnal_recvmsg (ptl_ni_t     *ni,
         kqsw_csum_t   senders_csum;
         kqsw_csum_t   payload_csum = 0;
         kqsw_csum_t   hdr_csum = kqsw_csum(0, hdr, sizeof(*hdr));
-        size_t        csum_len = mlen;
+        unsigned int  csum_len = mlen;
         int           csum_frags = 0;
         int           csum_nob = 0;
         static atomic_t csum_counter;
@@ -1816,36 +1780,6 @@ kqswnal_recvmsg (ptl_ni_t     *ni,
         lnet_finalize(ni, private, ptlmsg, 0);
 
         return (0);
-}
-
-int
-kqswnal_recv(ptl_ni_t     *ni,
-             void         *private,
-             ptl_msg_t    *ptlmsg,
-             unsigned int  niov,
-             struct iovec *iov,
-             size_t        offset,
-             size_t        mlen,
-             size_t        rlen)
-{
-        return (kqswnal_recvmsg(ni, private, ptlmsg, 
-                                niov, iov, NULL, 
-                                offset, mlen, rlen));
-}
-
-int
-kqswnal_recv_pages (ptl_ni_t     *ni,
-                    void         *private,
-                    ptl_msg_t    *ptlmsg,
-                    unsigned int  niov,
-                    lnet_kiov_t   *kiov,
-                    size_t        offset,
-                    size_t        mlen,
-                    size_t        rlen)
-{
-        return (kqswnal_recvmsg(ni, private, ptlmsg, 
-                                niov, NULL, kiov, 
-                                offset, mlen, rlen));
 }
 
 int

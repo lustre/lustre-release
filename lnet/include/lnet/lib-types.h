@@ -274,51 +274,39 @@ typedef struct ptl_nal
         unsigned int      nal_type;
         
         int  (*nal_startup) (struct ptl_ni *ni);
-        void       (*nal_shutdown) (struct ptl_ni *ni);
+        void (*nal_shutdown) (struct ptl_ni *ni);
+        int  (*nal_ctl)(struct ptl_ni *ni, unsigned int cmd, void *arg);
 
-        int        (*nal_ctl)(struct ptl_ni *ni, unsigned int cmd, void *arg);
-        
-	/*
-	 * send: Sends a preformatted header and payload data to a
-	 * specified remote process. The payload is scattered over 'niov'
-	 * fragments described by iov, starting at 'offset' for 'mlen'
-	 * bytes.  
-	 * NB the NAL may NOT overwrite iov.  
-	 * 0 on success => NAL has committed to send and will call
-	 * lnet_finalize on completion
-	 */
-	int (*nal_send) 
-                (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
-                 ptl_hdr_t *hdr, int type, lnet_process_id_t target,
-                 int routing, unsigned int niov, struct iovec *iov, 
-                 size_t offset, size_t mlen);
-        
-	/* as send, but with a set of page fragments (NULL if not supported) */
-	int (*nal_send_pages)
-                (struct ptl_ni *ni, void *private, ptl_msg_t *cookie, 
-                 ptl_hdr_t *hdr, int type, lnet_process_id_t target, 
-                 int routing, unsigned int niov, lnet_kiov_t *iov, 
-                 size_t offset, size_t mlen);
-	/*
-	 * recv: Receives an incoming message from a remote process.  The
-	 * payload is to be received into the scattered buffer of 'niov'
-	 * fragments described by iov, starting at 'offset' for 'mlen'
-	 * bytes.  Payload bytes after 'mlen' up to 'rlen' are to be
-	 * discarded.  
-	 * NB the NAL may NOT overwrite iov.
-	 * 0 on success => NAL has committed to receive and will call
-	 * lnet_finalize on completion
-	 */
-	int (*nal_recv) 
-                (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
-                 unsigned int niov, struct iovec *iov, 
-                 size_t offset, size_t mlen, size_t rlen);
+        /* In data movement APIs below, payload buffers are described as a set
+         * of 'niov' fragments which are...
+         * EITHER 
+         *    in virtual memory (struct iovec *iov != NULL)
+         * OR
+         *    in pages (kernel only: plt_kiov_t *kiov != NULL).
+         * The NAL may NOT overwrite these fragment descriptors.
+         * An 'offset' and may specify a byte offset within the set of
+         * fragments to start from 
+         */
 
-	/* as recv, but with a set of page fragments (NULL if not supported) */
-	int (*nal_recv_pages) 
-                (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
-                 unsigned int niov, lnet_kiov_t *iov, 
-                 size_t offset, size_t mlen, size_t rlen);
+        /* Start sending a preformatted header and 'mlen' bytes of payload data
+	 * of to a specified remote process.  'private' is NULL for PUT and GET
+	 * messages; otherwise this is a response to an incoming message and
+	 * 'private' is the 'private' passed to lnet_parse().  Return non-zero
+	 * for immediate failure, otherwise complete later with
+	 * lnet_finalize() */
+	int (*nal_send) (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
+                         ptl_hdr_t *hdr, int type, lnet_process_id_t target,
+                         int routing, unsigned int niov, 
+                         struct iovec *iov, lnet_kiov_t *kiov,
+                         unsigned int offset, unsigned int mlen);
+
+        /* Start receiving 'mlen' bytes of payload data, skipping the following
+         * 'rlen' - 'mlen' bytes. 'private' is the 'private' passed to
+         * lnet_parse().  Return non-zero for immedaite failuyre, otherwise
+         * complete later with lnet_finalize() */
+	int (*nal_recv) (struct ptl_ni *ni, void *private, ptl_msg_t * cookie,
+                         unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                         unsigned int offset, unsigned int mlen, unsigned int rlen);
 
         /* forward a packet for the router */
         void (*nal_fwd)(struct ptl_ni *ni, kpr_fwd_desc_t *fwd);        
@@ -336,7 +324,7 @@ typedef struct ptl_nal
 
 typedef struct ptl_ni {
         struct list_head  ni_list;              /* chain on apini_nis */
-        lnet_nid_t         ni_nid;               /* interface's NID */
+        lnet_nid_t        ni_nid;               /* interface's NID */
         void             *ni_data;              /* instance-specific data */
         ptl_nal_t        *ni_nal;               /* procedural interface */
         int               ni_shutdown;          /* shutting down? */
@@ -348,8 +336,8 @@ typedef struct                                  /* loopback descriptor */
 {
         unsigned int     lod_type;
         unsigned int     lod_niov;
-        size_t           lod_offset;
-        size_t           lod_nob;
+        unsigned int     lod_offset;
+        unsigned int     lod_nob;
         union {
                 struct iovec  *iov;
                 lnet_kiov_t    *kiov;

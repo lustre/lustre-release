@@ -862,21 +862,13 @@ extern int kibnal_startup (ptl_ni_t *ni);
 extern void kibnal_shutdown (ptl_ni_t *ni);
 extern int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 int kibnal_send (ptl_ni_t *ni, void *private,
-                       ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                       int type, lnet_process_id_t tgt, int routing,
-                       unsigned int payload_niov, struct iovec *payload_iov,
-                       size_t payload_offset, size_t payload_nob);
-int kibnal_send_pages (ptl_ni_t *ni, void *private,
-                             ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                             int type, lnet_process_id_t tgt, int routing,
-                             unsigned int payload_niov, lnet_kiov_t *payload_kiov,
-                             size_t payload_offset, size_t payload_nob);
+                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
+                 int type, lnet_process_id_t tgt, int routing,
+                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                 unsigned int offset, unsigned int nob);
 extern int kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                              unsigned int niov, struct iovec *iov, 
-                              size_t offset, size_t mlen, size_t rlen);
-extern int kibnal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                                    unsigned int niov, lnet_kiov_t *kiov, 
-                                    size_t offset, size_t mlen, size_t rlen);
+                        unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+                        unsigned int offset, unsigned int mlen, unsigned int rlen);
 
 extern kib_peer_t *kibnal_create_peer (lnet_nid_t nid);
 extern void kibnal_destroy_peer (kib_peer_t *peer);
@@ -905,7 +897,7 @@ extern void kibnal_start_active_rdma (int type, int status,
                                       kib_rx_t *rx, ptl_msg_t *ptlmsg,
                                       unsigned int niov,
                                       struct iovec *iov, lnet_kiov_t *kiov,
-                                      size_t offset, size_t nob);
+                                      unsigned int offset, unsigned int nob);
 
 void kibnal_ca_async_callback (void *ca_arg, IB_EVENT_RECORD *ev);
 void kibnal_ca_callback (void *ca_arg, void *cq_arg);

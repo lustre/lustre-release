@@ -22,28 +22,38 @@
 #include <lnet/lib-lnet.h>
 
 int
-lonal_send (ptl_ni_t        *ni,
-	    void            *private,
-	    ptl_msg_t       *ptlmsg,
-	    ptl_hdr_t       *hdr,
-	    int              type,
+lonal_send (ptl_ni_t         *ni,
+	    void             *private,
+	    ptl_msg_t        *ptlmsg,
+	    ptl_hdr_t        *hdr,
+	    int               type,
 	    lnet_process_id_t target,
-	    int              routing,
-	    unsigned int     payload_niov,
-	    struct iovec    *payload_iov,
-	    size_t           payload_offset,
-	    size_t           payload_nob)
+	    int               routing,
+	    unsigned int      payload_niov,
+	    struct iovec     *payload_iov,
+            lnet_kiov_t      *payload_kiov,
+	    unsigned int      payload_offset,
+	    unsigned int      payload_nob)
 {
-        lo_desc_t lod = {
-                .lod_type    = LOD_IOV,
-                .lod_niov    = payload_niov,
-                .lod_offset  = payload_offset,
-                .lod_nob     = payload_nob,
-                .lod_iov     = { .iov = payload_iov } };
+        lo_desc_t lod = { .lod_niov    = payload_niov,
+                          .lod_offset  = payload_offset,
+                          .lod_nob     = payload_nob};
         int rc;
 
         LASSERT (!routing);
 
+        if (payload_nob == 0 || payload_iov != NULL) {
+                lod.lod_type     = LOD_IOV;
+                lod.lod_iov.iov  = payload_iov;
+        } else {
+#ifndef __KERNEL__
+                LBUG();
+#else
+                lod.lod_type     = LOD_KIOV;
+                lod.lod_iov.kiov = payload_kiov;
+#endif
+        }
+        
         rc = lnet_parse(ni, hdr, &lod);
         if (rc == 0)
                 lnet_finalize(ni, private, ptlmsg, 0);
@@ -51,23 +61,16 @@ lonal_send (ptl_ni_t        *ni,
         return rc;
 }
 
-int
-lonal_recv(ptl_ni_t     *ni,
-	   void         *private,
-	   ptl_msg_t    *ptlmsg,
-	   unsigned int  niov,
-	   struct iovec *iov,
-	   size_t        offset,
-	   size_t        mlen,
-	   size_t        rlen)
+void
+lonal_copy_iov(lo_desc_t    *lod,
+               unsigned int  niov,
+               struct iovec *iov,
+               unsigned int  offset,
+               unsigned int  mlen)
 {
-        lo_desc_t *lod = (lo_desc_t *)private;
-
-        /* I only handle mapped->mapped matches */
-        LASSERT(mlen == 0 || lod->lod_type == LOD_IOV);
-
-        if (mlen == 0)
-                goto out;
+        /* I only copy iovec->iovec */
+        LASSERT(lod->lod_type == LOD_IOV);
+        LASSERT(mlen > 0);
 
         while (offset >= iov->iov_len) {
                 offset -= iov->iov_len;
@@ -116,65 +119,27 @@ lonal_recv(ptl_ni_t     *ni,
 
                 mlen -= fraglen;
         } while (mlen > 0);
-        
- out:
-        lnet_finalize(ni, private, ptlmsg, 0);
-        return 0;
 }
 
-#ifdef __KERNEL__
-int
-lonal_send_pages (ptl_ni_t        *ni,
-		  void            *private,
-		  ptl_msg_t       *ptlmsg,
-		  ptl_hdr_t       *hdr,
-		  int              type,
-		  lnet_process_id_t target,
-		  int              routing,
-		  unsigned int     payload_niov,
-		  lnet_kiov_t      *payload_kiov,
-		  size_t           payload_offset,
-		  size_t           payload_nob)
+void
+lonal_copy_kiov(lo_desc_t    *lod,
+                unsigned int  niov,
+                lnet_kiov_t  *kiov,
+                unsigned int  offset,
+                unsigned int  mlen)
 {
-        lo_desc_t lod = {
-                .lod_type     = LOD_KIOV,
-                .lod_niov     = payload_niov,
-                .lod_offset   = payload_offset,
-                .lod_nob      = payload_nob,
-                .lod_iov      = { .kiov = payload_kiov } };
-        int   rc;
-
-        LASSERT (!routing);
-
-        rc = lnet_parse(ni, hdr, &lod);
-        if (rc == 0)
-                lnet_finalize(ni, private, ptlmsg, 0);
-        
-        return rc;
-}
-
-int
-lonal_recv_pages(ptl_ni_t     *ni,
-		 void         *private,
-		 ptl_msg_t    *ptlmsg,
-		 unsigned int  niov,
-		 lnet_kiov_t   *kiov,
-		 size_t        offset,
-		 size_t        mlen,
-		 size_t        rlen)
-{
+#ifndef __KERNEL__
+        LBUG();
+#else
         void          *srcaddr = NULL;
         void          *dstaddr = NULL;
         unsigned long  srcfrag = 0;
         unsigned long  dstfrag = 0;
         unsigned long  fraglen;
-        lo_desc_t    *lod = (lo_desc_t *)private;
 
-        /* I only handle unmapped->unmapped matches */
-        LASSERT(mlen == 0 || lod->lod_type == LOD_KIOV);
-
-        if (mlen == 0)
-                goto out;
+        /* I only copy kiov->kiov */
+        LASSERT(lod->lod_type == LOD_KIOV);
+        LASSERT(mlen > 0);
 
         while (offset >= kiov->kiov_len) {
                 offset -= kiov->kiov_len;
@@ -242,12 +207,33 @@ lonal_recv_pages(ptl_ni_t     *ni,
 
         if (srcaddr != NULL)
                 kunmap(lod->lod_iov.kiov->kiov_page);
+#endif
+}
 
- out:
+int
+lonal_recv(ptl_ni_t     *ni,
+           void         *private,
+           ptl_msg_t    *ptlmsg,
+           unsigned int  niov,
+           struct iovec *iov,
+           lnet_kiov_t  *kiov,
+           unsigned int  offset,
+           unsigned int  mlen,
+           unsigned int  rlen)
+{
+        lo_desc_t    *lod = (lo_desc_t *)private;
+
+        if (mlen != 0) {
+                if (iov != NULL)
+                        lonal_copy_iov(lod, niov, iov, offset, mlen);
+                else
+                        lonal_copy_kiov(lod, niov, kiov, offset, mlen);
+        }
+
         lnet_finalize(ni, private, ptlmsg, 0);
         return 0;
 }
-#endif
+
 
 static int lonal_instanced;
 
@@ -276,10 +262,6 @@ ptl_nal_t ptl_lonal = {
         .nal_shutdown   = lonal_shutdown,
         .nal_send       = lonal_send,
         .nal_recv       = lonal_recv,
-#ifdef __KERNEL__
-        .nal_send_pages = lonal_send_pages,
-        .nal_recv_pages = lonal_recv_pages,
-#endif
 };
 
 ptl_ni_t *ptl_loni;

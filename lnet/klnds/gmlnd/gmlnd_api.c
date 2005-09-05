@@ -32,9 +32,7 @@ ptl_nal_t gmnal_nal =
         .nal_shutdown        = gmnal_shutdown,
         .nal_ctl             = gmnal_ctl,
         .nal_send            = gmnal_send,
-        .nal_send_pages      = gmnal_send_pages,
         .nal_recv            = gmnal_recv,
-        .nal_recv_pages      = gmnal_recv_pages,
 };
 
 gmnal_ni_t *the_gmni = NULL;

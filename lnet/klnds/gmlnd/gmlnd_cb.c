@@ -28,9 +28,9 @@
 #include "gmlnd.h"
 
 int
-gmnal_recvmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-              unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-              size_t offset, size_t mlen)
+gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
+           unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+           unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         gmnal_ni_t      *gmni = ni->ni_data;
 	gmnal_rx_t	*rx = (gmnal_rx_t*)private;
@@ -58,29 +58,10 @@ gmnal_recvmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 }
 
 int
-gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-           unsigned int niov, struct iovec *iov, 
-           size_t offset, size_t mlen, size_t rlen)
-{
-        return gmnal_recvmsg(ni, private, ptlmsg,
-                             niov, iov, NULL, offset, mlen);
-}
-
-int
-gmnal_recv_pages(ptl_ni_t *ni, void *private, 
-                 ptl_msg_t *ptlmsg, 
-                 unsigned int nkiov, lnet_kiov_t *kiov, 
-                 size_t offset, size_t mlen, size_t rlen)
-{
-        return gmnal_recvmsg(ni, private, ptlmsg,
-                             nkiov, NULL, kiov, offset, mlen);
-}
-
-int
-gmnal_sendmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-              ptl_hdr_t *hdr, int type, lnet_process_id_t pid,
-              unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-              size_t offset, size_t len)
+gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
+           ptl_hdr_t *hdr, int type, lnet_process_id_t pid, int routing,
+           unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+           unsigned int offset, unsigned int len)
 {
 	gmnal_ni_t	*gmni = ni->ni_data;
         gm_status_t      gmrc;
@@ -152,28 +133,4 @@ gmnal_sendmsg(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         spin_unlock(&gmni->gmni_tx_lock);
 
         return 0;
-}
-
-int
-gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-           ptl_hdr_t *hdr, int type, 
-           lnet_process_id_t pid, int routing,
-           unsigned int niov, struct iovec *iov, 
-           size_t offset, size_t len)
-{
-        return gmnal_sendmsg(ni, private, ptlmsg, 
-                             hdr, type, pid,
-                             niov, iov, NULL, offset, len);
-}
-
-int
-gmnal_send_pages(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-                 ptl_hdr_t *hdr, int type,
-                 lnet_process_id_t pid, int routing,
-                 unsigned int nkiov, lnet_kiov_t *kiov, 
-                 size_t offset, size_t len)
-{
-        return gmnal_sendmsg(ni, private, ptlmsg, 
-                             hdr, type, pid,
-                             nkiov, NULL, kiov, offset, len);
 }

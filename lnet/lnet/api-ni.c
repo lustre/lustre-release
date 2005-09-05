@@ -614,11 +614,12 @@ ptl_islocalnid (lnet_nid_t nid)
 }
 
 int
-ptl_islocalnet (__u32 net)
+ptl_islocalnet (__u32 net, int *orderp)
 {
         struct list_head *tmp;
         ptl_ni_t         *ni;
         unsigned long     flags;
+        int               order = 0;
         int               islocal = 0;
 
         PTL_LOCK(flags);
@@ -628,8 +629,11 @@ ptl_islocalnet (__u32 net)
 
                 if (PTL_NIDNET(ni->ni_nid) == net) {
                         islocal = 1;
+                        if (orderp != NULL)
+                                *orderp = order;
                         break;
                 }
+                order++;
         }
         
         PTL_UNLOCK(flags);

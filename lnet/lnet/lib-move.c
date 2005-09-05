@@ -565,19 +565,20 @@ int
 ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
           lnet_size_t offset, lnet_size_t mlen, lnet_size_t rlen)
 {
-        if (mlen == 0)
-                return ((ni->ni_nal->nal_recv)(ni, private, msg,
-                                               0, NULL,
-                                               offset, mlen, rlen));
+        int           niov = 0;
+        struct iovec *iov = NULL;
+        lnet_kiov_t  *kiov = NULL;
 
-        if ((md->md_options & LNET_MD_KIOV) == 0)
-                return ((ni->ni_nal->nal_recv)(ni, private, msg,
-                                               md->md_niov, md->md_iov.iov,
-                                               offset, mlen, rlen));
-
-        return ((ni->ni_nal->nal_recv_pages)(ni, private, msg,
-                                             md->md_niov, md->md_iov.kiov,
-                                             offset, mlen, rlen));
+        if (mlen != 0) {
+                niov = md->md_niov;
+                if (((md->md_options) & LNET_MD_KIOV) != 0)
+                        kiov = md->md_iov.kiov;
+                else
+                        iov = md->md_iov.iov;
+        }
+        
+        return (ni->ni_nal->nal_recv)(ni, private, msg, 
+                                      niov, iov, kiov, offset, mlen, rlen);
 }
 
 int
@@ -587,6 +588,9 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
 {
         unsigned long flags;
         lnet_nid_t    gw_nid;
+        int           niov = 0;
+        struct iovec *iov = NULL;
+        lnet_kiov_t  *kiov = NULL;
         int           routing = 0;
         int           rc;
 
@@ -631,21 +635,17 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         }
         
         target.nid = gw_nid;
+
+        if (len != 0) {
+                niov = md->md_niov;
+                if (((md->md_options) & LNET_MD_KIOV) != 0)
+                        kiov = md->md_iov.kiov;
+                else
+                        iov = md->md_iov.iov;
+        }
         
-        if (len == 0)
-                rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, 
-                                            type, target, routing,
-                                            0, NULL, offset, len);
-        else if ((md->md_options & LNET_MD_KIOV) == 0)
-                rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, 
-                                            type, target, routing,
-                                            md->md_niov, md->md_iov.iov,
-                                            offset, len);
-        else
-                rc = (ni->ni_nal->nal_send_pages)(ni, private, msg, hdr, 
-                                                  type, target, routing,
-                                                  md->md_niov, md->md_iov.kiov,
-                                                  offset, len);
+        rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, type, target, routing,
+                                    niov, iov, kiov, offset, len);
 
         ptl_ni_decref(ni);                      /* lose ref from lnet_lookup */
         return rc;
@@ -1372,10 +1372,10 @@ LNetGet(lnet_handle_md_t mdh, lnet_process_id_t target,
 }
 
 int
-LNetDist (lnet_handle_ni_t interface, lnet_nid_t nid)
+LNetDist (lnet_handle_ni_t interface, lnet_nid_t nid, int *order)
 {
         LASSERT (lnet_apini.apini_init);
         LASSERT (lnet_apini.apini_refcount > 0);
         
-        return kpr_distance(nid);
+        return kpr_distance(nid, order);
 }

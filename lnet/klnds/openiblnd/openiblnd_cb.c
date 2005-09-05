@@ -1225,18 +1225,18 @@ kibnal_start_active_rdma (int type, int status,
 }
 
 int
-kibnal_sendmsg(ptl_ni_t        *ni, 
-               void            *private,
-               ptl_msg_t       *ptlmsg,
-               ptl_hdr_t       *hdr, 
-               int              type, 
-               lnet_process_id_t target,
-               int              routing,
-               unsigned int     payload_niov, 
-               struct iovec    *payload_iov, 
-               lnet_kiov_t      *payload_kiov,
-               int              payload_offset,
-               int              payload_nob)
+kibnal_send(ptl_ni_t         *ni, 
+            void             *private,
+            ptl_msg_t        *ptlmsg,
+            ptl_hdr_t        *hdr, 
+            int               type, 
+            lnet_process_id_t target,
+            int               routing,
+            unsigned int      payload_niov, 
+            struct iovec     *payload_iov, 
+            lnet_kiov_t      *payload_kiov,
+            unsigned int      payload_offset,
+            unsigned int      payload_nob)
 {
         kib_msg_t  *ibmsg;
         kib_tx_t   *tx;
@@ -1350,35 +1350,10 @@ kibnal_sendmsg(ptl_ni_t        *ni,
         kibnal_launch_tx(tx, target.nid);
         return (0);
 }
-
 int
-kibnal_send (ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-             ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-             unsigned int payload_niov, struct iovec *payload_iov,
-             size_t payload_offset, size_t payload_len)
-{
-        return (kibnal_sendmsg(ni, private, cookie,
-                               hdr, type, tgt, routing,
-                               payload_niov, payload_iov, NULL,
-                               payload_offset, payload_len));
-}
-
-int
-kibnal_send_pages (ptl_ni_t *ni, void *private, ptl_msg_t *cookie, 
-                   ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, int routing,
-                   unsigned int payload_niov, lnet_kiov_t *payload_kiov, 
-                   size_t payload_offset, size_t payload_len)
-{
-        return (kibnal_sendmsg(ni, private, cookie,
-                               hdr, type, tgt, routing,
-                               payload_niov, NULL, payload_kiov,
-                               payload_offset, payload_len));
-}
-
-int
-kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                int offset, int mlen, int rlen)
+kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
+             unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+             unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         kib_rx_t    *rx = private;
         kib_msg_t   *rxmsg = rx->rx_msg;
@@ -1427,24 +1402,6 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                                           niov, iov, kiov, offset, mlen);
                 return (0);
         }
-}
-
-int
-kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-             unsigned int niov, struct iovec *iov, 
-             size_t offset, size_t mlen, size_t rlen)
-{
-        return (kibnal_recvmsg (ni, private, msg, niov, iov, NULL,
-                                offset, mlen, rlen));
-}
-
-int
-kibnal_recv_pages (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                   unsigned int niov, lnet_kiov_t *kiov, 
-                   size_t offset, size_t mlen, size_t rlen)
-{
-        return (kibnal_recvmsg (ni, private, msg, niov, NULL, kiov,
-                                offset, mlen, rlen));
 }
 
 int
