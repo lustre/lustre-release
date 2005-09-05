@@ -174,7 +174,7 @@ int mds_md_disconnect(struct obd_device *obd, int flags)
         down(&mds->mds_md_sem);
         if (!IS_ERR(mds->mds_md_obd) && mds->mds_md_exp != NULL) {
                 LASSERT(mds->mds_md_connected);
-                
+
                 obd_register_observer(mds->mds_md_obd, NULL);
 
                 if (flags & OBD_OPT_FORCE) {

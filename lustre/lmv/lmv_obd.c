@@ -422,14 +422,14 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         RETURN(0);
 }
 
-int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
+int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *tgt_uuid)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_tgt_desc *tgt;
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_CONFIG, "mdc_uuid: %s.\n", mdc_uuid->uuid);
+        CDEBUG(D_CONFIG, "tgt_uuid: %s.\n", tgt_uuid->uuid);
 
         lmv_init_lock(lmv);
 
@@ -437,17 +437,17 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
                 lmv_init_unlock(lmv);
                 CERROR("can't add %s, LMV module compiled for %d MDCs. "
                        "That many MDCs already configured.\n",
-                       mdc_uuid->uuid, LMV_MAX_TGT_COUNT);
+                       tgt_uuid->uuid, LMV_MAX_TGT_COUNT);
                 RETURN(-EINVAL);
         }
         if (lmv->desc.ld_tgt_count == 0) {
                 struct obd_device *mdc_obd;
 
-                mdc_obd = class_find_client_obd(mdc_uuid, OBD_MDC_DEVICENAME,
+                mdc_obd = class_find_client_obd(tgt_uuid, OBD_MDC_DEVICENAME,
                                                 &obd->obd_uuid);
                 if (!mdc_obd) {
                         lmv_init_unlock(lmv);
-                        CERROR("Target %s not attached\n", mdc_uuid->uuid);
+                        CERROR("Target %s not attached\n", tgt_uuid->uuid);
                         RETURN(-EINVAL);
                 }
 
@@ -459,7 +459,7 @@ int lmv_add_mdc(struct obd_device *obd, struct obd_uuid *mdc_uuid)
         }
         spin_lock(&lmv->lmv_lock);
         tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
-        tgt->uuid = *mdc_uuid;
+        tgt->uuid = *tgt_uuid;
         spin_unlock(&lmv->lmv_lock);
 
         if (lmv->connected) {
@@ -725,17 +725,17 @@ static int lmv_cleanup(struct obd_device *obd, int flags)
 static int lmv_process_config(struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = buf;
-        struct obd_uuid mdc_uuid;
+        struct obd_uuid tgt_uuid;
         int rc;
         ENTRY;
 
         switch(lcfg->lcfg_command) {
         case LCFG_LMV_ADD_MDC:
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(mdc_uuid.uuid))
+                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof(tgt_uuid.uuid))
                         GOTO(out, rc = -EINVAL);
 
-                obd_str2uuid(&mdc_uuid, lustre_cfg_string(lcfg, 1));
-		rc = lmv_add_mdc(obd, &mdc_uuid);
+                obd_str2uuid(&tgt_uuid, lustre_cfg_string(lcfg, 1));
+		rc = lmv_add_mdc(obd, &tgt_uuid);
                 GOTO(out, rc);
         default: {
                 CERROR("Unknown command: %d\n", lcfg->lcfg_command);
