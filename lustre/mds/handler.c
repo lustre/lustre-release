@@ -1708,9 +1708,10 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         if (parent_lockh[1].cookie != 0)
                                 ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
-                        if (dparent)
-                                l_dput(dparent);
                 }
+                if (dparent)
+                        l_dput(dparent);
+
                 l_dput(dchild);
         case 1:
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
