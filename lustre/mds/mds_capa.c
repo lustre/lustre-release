@@ -184,8 +184,10 @@ int mds_read_capa_key(struct obd_device *obd, struct file *file)
         expiry = CUR_CAPA_KEY_JIFFIES(mds);
         spin_lock(&mds_capa_lock);
         if (time_before(expiry, mds_eck_timer.expires) ||
-            !timer_pending(&mds_eck_timer))
+            !timer_pending(&mds_eck_timer)) {
                 mod_timer(&mds_eck_timer, expiry);
+                CDEBUG(D_INFO, "mds_eck_timer %lu", expiry);
+        }
         list_add_capa_key(&CUR_MDS_CAPA_KEY(mds), &mds_capa_key_list);
         spin_unlock(&mds_capa_lock);
 out:
@@ -265,8 +267,10 @@ mds_update_capa_key(struct obd_device *obd, struct mds_capa_key *mkey,
         list_add_capa_key(&CUR_MDS_CAPA_KEY(mds), &mds_capa_key_list);
 
         if (time_before(expiry, mds_eck_timer.expires) ||
-            !timer_pending(&mds_eck_timer))
+            !timer_pending(&mds_eck_timer)) {
                 mod_timer(&mds_eck_timer, expiry);
+                CDEBUG(D_INFO, "mds_eck_timer %lu", expiry);
+        }
         spin_unlock(&mds_capa_lock);
 
         DEBUG_MDS_CAPA_KEY(D_INFO, &CUR_MDS_CAPA_KEY(mds),
@@ -278,6 +282,7 @@ out:
 static inline int have_expired_capa_key(void)
 {
         struct mds_capa_key *key;
+        unsigned long expiry;
         int expired = 0;
         ENTRY;
 
@@ -286,8 +291,17 @@ static inline int have_expired_capa_key(void)
                 key = list_entry(mds_capa_key_list.next, struct mds_capa_key,
                                  k_list);
                 /* expiry is in sec, so in case it misses, the result will
-                 * minus HZ and then compare with jiffies. */
-                expired = time_before(CAPA_KEY_JIFFIES(key) - HZ, jiffies);
+                 * minus 5 sec and then compare with jiffies. (in case the
+                 * clock is innacurate) */
+                expiry = CAPA_KEY_JIFFIES(key);
+                expired = time_before(expiry - 5 * HZ, jiffies);
+                if (!expired) {
+                        if (time_before(expiry, mds_eck_timer.expires) ||
+                            !timer_pending(&mds_eck_timer)) {
+                                mod_timer(&mds_eck_timer, expiry);
+                                CDEBUG(D_INFO, "mds_eck_timer %lu", expiry);
+                        }
+                }
         }
         spin_unlock(&mds_capa_lock);
 
@@ -325,6 +339,7 @@ static int mds_capa_key_thread_main(void *arg)
 
         while (!mds_capa_key_check_stop()) {
                 struct l_wait_info lwi = { 0 };
+                unsigned long expiry;
                 struct mds_capa_key *key, *tmp, *next = NULL;
 
                 l_wait_event(mds_eck_thread.t_ctl_waitq,
@@ -350,8 +365,11 @@ static int mds_capa_key_thread_main(void *arg)
                         spin_lock(&mds_capa_lock);
                 }
 
-                if (next)
-                        mod_timer(&mds_eck_timer, CAPA_KEY_JIFFIES(next));
+                if (next) {
+                        expiry = CAPA_KEY_JIFFIES(next);
+                        mod_timer(&mds_eck_timer, expiry);
+                        CDEBUG(D_INFO, "mds_eck_timer %lu", expiry);
+                }
                 spin_unlock(&mds_capa_lock);
         }
 

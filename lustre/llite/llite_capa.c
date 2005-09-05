@@ -52,7 +52,6 @@ static inline int have_expired_capa(void)
         if (!list_empty(ll_capa_list)) {
                 ocapa = list_entry(ll_capa_list->next, struct obd_capa, c_list);
                 expired = __capa_is_to_expire(ocapa);
-
                 if (!expired) {
                         capa = &ocapa->c_capa;
                         expiry = expiry_to_jiffies(capa->lc_expiry -
