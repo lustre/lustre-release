@@ -1247,6 +1247,17 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
                 sbi->s_mdsnum = es->s_mdsnum;
         }
 #endif
+        if (!strncmp(obd->obd_type->typ_name, "obdfilter", 9)) {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                request_queue_t *q = bdev_get_queue(sb->s_bdev);
+                if (q->max_phys_segments * PAGE_SIZE < (1 << 20))
+#else
+                if (MAX_SEGMENTS * PAGE_SIZE < (1 << 20))
+#endif
+                        CDEBUG(D_WARNING, "Lustre loves 1MB requests, "
+                               "but current max_phys_segments=%d\n",
+                               q->max_phys_segments);
+        }
         return 0;
 }
 
