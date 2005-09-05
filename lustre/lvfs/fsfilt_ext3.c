@@ -862,6 +862,8 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         if (!pblock)
                 goto out;
         EXT_ASSERT(count <= cex->ec_len);
+        if (count < cex->ec_len)
+                CDEBUG(D_ERROR, "%d < %lu\n", count, cex->ec_len);
 
         /* insert new extent */
         nex.ee_block = cex->ec_block;

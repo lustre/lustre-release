@@ -233,7 +233,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                                 request_queue_t *q = bdev_get_queue(bio->bi_bdev);
 
                                 /* Dang! I have to fragment this I/O */
-                                CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
+                                CDEBUG(D_INODE|D_ERROR, "bio++ sz %d vcnt %d(%d) "
                                        "sectors %d(%d) psg %d(%d) hsg %d(%d)\n",
                                        bio->bi_size, 
                                        bio->bi_vcnt, bio->bi_max_vecs,
