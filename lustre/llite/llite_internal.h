@@ -361,7 +361,8 @@ int ll_capa_thread_start(void);
 void ll_capa_thread_stop(void);
 
 void ll_capa_timer_callback(unsigned long unused);
-int ll_set_capa(struct inode *inode, struct lookup_intent *it);
+int ll_set_capa(struct inode *inode, struct lookup_intent *it,
+                struct obd_client_handle *och);
 int ll_set_trunc_capa(struct ptlrpc_request *req, int offset,
                       struct inode *inode);
 struct obd_capa *ll_get_capa(struct inode *inode, uid_t uid, int op);

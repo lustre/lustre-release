@@ -238,8 +238,10 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
         if (OBD_FAIL_CHECK(OBD_FAIL_FILTER_VERIFY_CAPA))
                 RETURN(-EACCES);
 
-        if (capa_expired(capa))
+        if (capa_expired(capa)) {
+                DEBUG_CAPA(D_INFO, capa, "expired");
                 RETURN(-ESTALE);
+        }
 
         ocapa = capa_get(capa->lc_uid, capa->lc_op, capa->lc_mdsid,
                          capa->lc_ino, FILTER_CAPA);

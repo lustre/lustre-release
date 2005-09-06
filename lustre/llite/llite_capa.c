@@ -223,7 +223,8 @@ void ll_capa_thread_stop(void)
         EXIT;
 }
 
-int ll_set_capa(struct inode *inode, struct lookup_intent *it)
+int ll_set_capa(struct inode *inode, struct lookup_intent *it,
+                struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = LUSTRE_IT(it)->it_data;
         struct mds_body *body;
@@ -254,7 +255,7 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it)
 
         spin_lock(&capa_lock);
         ocapa->c_inode = inode;
-        ocapa->c_handle = body->handle;
+        ocapa->c_handle = och->och_fh;
         spin_unlock(&capa_lock);
 
         spin_lock(&lli->lli_lock);

@@ -400,7 +400,6 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
         ll_readahead_init(inode, &fd->fd_ras);
         fd->fd_omode = it->it_flags;
 
-        rc = ll_set_capa(inode, it);
         RETURN(rc);
 }
 
@@ -510,6 +509,12 @@ int ll_file_open(struct inode *inode, struct file *file)
                 rc = ll_local_open(file, it, NULL);
                 if (rc)
                         LBUG();
+
+                rc = ll_set_capa(inode, it, *och_p);
+                if (rc) {
+                        up(&lli->lli_och_sem);
+                        RETURN(rc);
+                }
         } else {
                 LASSERT(*och_usecount == 0);
                 OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
@@ -545,6 +550,12 @@ int ll_file_open(struct inode *inode, struct file *file)
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
                 rc = ll_local_open(file, it, *och_p);
                 LASSERTF(rc == 0, "rc = %d\n", rc);
+
+                rc = ll_set_capa(inode, it, *och_p);
+                if (rc) {
+                        up(&lli->lli_och_sem);
+                        RETURN(rc);
+                }
         }
         up(&lli->lli_och_sem);
         
