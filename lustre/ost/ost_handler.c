@@ -511,7 +511,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         break;
                 }
 
-                LASSERT(page_rc <= pp_rnb[i].len);
+                LASSERTF(page_rc <= pp_rnb[i].len, "page_rc (%d) > "
+                         "pp_rnb[%d].len (%d)\n", page_rc, i, pp_rnb[i].len);
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
