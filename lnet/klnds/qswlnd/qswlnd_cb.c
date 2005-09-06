@@ -856,7 +856,9 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         int                 ndatav;
 #endif
 
-        LASSERT (type == PTL_MSG_GET || type == PTL_MSG_PUT);
+        LASSERT (type == PTL_MSG_GET || 
+                 type == PTL_MSG_PUT ||
+                 type == PTL_MSG_REPLY);
         /* Not both mapped and paged payload */
         LASSERT (iov == NULL || kiov == NULL);
         /* RPC completes with failure by default */
@@ -927,6 +929,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
                 break;
 
         case PTL_MSG_PUT:
+        case PTL_MSG_REPLY:
                 ndatav = kqswnal_eiovs2datav(EP_MAXFRAG, datav,
                                              rmd->kqrmd_nfrag, rmd->kqrmd_frag,
                                              ktx->ktx_nfrag, ktx->ktx_frags);
@@ -971,6 +974,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
                 break;
                 
         case PTL_MSG_PUT:
+        case PTL_MSG_REPLY:
 #if MULTIRAIL_EKC
                 eprc = ep_rpc_get (krx->krx_rxd, 
                                    kqswnal_rdma_fetch_complete, ktx,
@@ -1118,14 +1122,15 @@ kqswnal_send (ptl_ni_t         *ni,
          * portals header. */
         ktx->ktx_nfrag = ktx->ktx_firsttmpfrag = 1;
 
-        if (!routing &&                         /* target.nid is final dest */
-            ((type == PTL_MSG_GET &&            /* optimize GET? */
-              kqswnal_tunables.kqn_optimized_gets != 0 &&
-              le32_to_cpu(hdr->msg.get.sink_length) >= 
-              *kqswnal_tunables.kqn_optimized_gets) ||
-             (type == PTL_MSG_PUT &&            /* optimize PUT? */
-              kqswnal_tunables.kqn_optimized_puts != 0 &&
-              payload_nob >= *kqswnal_tunables.kqn_optimized_puts))) {
+        if ((!routing &&                        /* target.nid is final dest */
+             type == PTL_MSG_GET &&             /* optimize GET? */
+             *kqswnal_tunables.kqn_optimized_gets != 0 &&
+             ptlmsg->msg_md->md_length >= 
+             *kqswnal_tunables.kqn_optimized_gets) ||
+            ((type == PTL_MSG_PUT ||            /* optimize PUT? */
+              type == PTL_MSG_REPLY) &&         /* optimize REPLY? */
+             *kqswnal_tunables.kqn_optimized_puts != 0 &&
+             payload_nob >= *kqswnal_tunables.kqn_optimized_puts)) {
                 ptl_libmd_t        *md = ptlmsg->msg_md;
                 kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(ktx->ktx_buffer + KQSW_HDR_SIZE);
                 
@@ -1139,7 +1144,7 @@ kqswnal_send (ptl_ni_t         *ni,
                  * immediately after the header, and send that as my
                  * message. */
 
-                ktx->ktx_state = (type == PTL_MSG_PUT) ? KTX_PUTTING : KTX_GETTING;
+                ktx->ktx_state = (type == PTL_MSG_GET) ? KTX_GETTING : KTX_PUTTING;
 
                 if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) != 0) 
                         rc = kqswnal_map_tx_kiov (ktx, 0, md->md_length,
@@ -1661,9 +1666,10 @@ kqswnal_recv (ptl_ni_t      *ni,
         }
         
         if (krx->krx_rpc_reply_needed &&
-            hdr->type == PTL_MSG_PUT) {
-                /* This must be an optimized PUT */
-                rc = kqswnal_rdma (krx, ptlmsg, PTL_MSG_PUT,
+            (hdr->type == PTL_MSG_PUT ||
+             hdr->type == PTL_MSG_REPLY)) {
+                /* This must be an optimized PUT/REPLY */
+                rc = kqswnal_rdma (krx, ptlmsg, hdr->type,
                                    niov, iov, kiov, offset, mlen);
                 return (rc == 0 ? 0 : -EIO);
         }
