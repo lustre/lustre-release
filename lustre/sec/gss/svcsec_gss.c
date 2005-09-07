@@ -268,8 +268,9 @@ gssd_upcall(struct rsi *item, struct cache_req *chandle)
                         }
                 }
                 read_unlock(&rsi_cache.hash_lock);
-        } while ((get_seconds() - starttime) <= 15);
-        CERROR("15s timeout while waiting cache refill\n");
+        } while ((get_seconds() - starttime) <= SVCSEC_UPCALL_TIMEOUT);
+        CERROR("%ds timeout while waiting cache refill\n",
+               SVCSEC_UPCALL_TIMEOUT);
         return NULL;
 }
 

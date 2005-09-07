@@ -107,6 +107,30 @@ int rawobj_extract_alloc(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 int rawobj_extract_local(rawobj_t *obj, __u32 **buf, __u32 *buflen);
 
 /*
+ * definition of several timeout values
+ */
+#define GSS_TIMEOUT_DELTA       (5)
+#define CRED_REFRESH_UPCALL_TIMEOUT                             \
+        ({                                                      \
+                int timeout = obd_timeout - GSS_TIMEOUT_DELTA;  \
+                                                                \
+                if (timeout < GSS_TIMEOUT_DELTA * 2)            \
+                        timeout = GSS_TIMEOUT_DELTA * 2;        \
+                timeout;                                        \
+        })
+#define SECINIT_RPC_TIMEOUT                                     \
+        ({                                                      \
+                int timeout = CRED_REFRESH_UPCALL_TIMEOUT -     \
+                              GSS_TIMEOUT_DELTA;                \
+                if (timeout < GSS_TIMEOUT_DELTA)                \
+                        timeout = GSS_TIMEOUT_DELTA;            \
+                timeout;                                        \
+        })
+#define SECFINI_RPC_TIMEOUT     (GSS_TIMEOUT_DELTA)
+
+#define SVCSEC_UPCALL_TIMEOUT   (SECINIT_RPC_TIMEOUT)
+
+/*
  * mark of the interface between kernel and lgssd/lsvcgssd
  */
 #define GSSD_INTERFACE_VERSION  (1)
