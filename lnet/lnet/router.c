@@ -974,7 +974,7 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 }
 
 int
-kpr_add_route (__u32 net, int hops, lnet_nid_t gateway_nid)
+kpr_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway_nid)
 {
         return -EOPNOTSUPP;
 }
@@ -988,7 +988,7 @@ kpr_ctl(unsigned int cmd, void *arg)
 int
 kpr_distance(lnet_nid_t nid, int *orderp)
 {
-        if (!lnet_net2ni(PTL_NIDNET(nid), orderp))
+        if (!lnet_net2ni(PTL_NIDNET(nid)))
                 return -ENETUNREACH;
         
         return 0;
