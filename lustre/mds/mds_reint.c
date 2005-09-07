@@ -2133,7 +2133,6 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
                 op_data->create_mode |= MDS_MODE_REPLAY;
         
         rc = md_unlink(mds->mds_md_exp, op_data, &request);
-        OBD_FREE(op_data, sizeof(*op_data));
         cleanup_phase = 2;
 
         if (request) {
@@ -2174,6 +2173,7 @@ cleanup:
         l_dput(dchild);
         l_dput(dparent);
 
+        OBD_FREE(op_data, sizeof(*op_data));
         return 0;
 }
 
