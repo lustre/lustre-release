@@ -126,6 +126,21 @@ lov_tgt_ready(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
         return rc;
 }
 
+static inline int
+lov_tgt_valid(struct lov_obd *lov, struct lov_tgt_desc *tgt, int gen)
+{
+        int rc = 0;
+        lov_tgts_lock(lov);
+
+        if (((gen == 0) || (gen == tgt->ltd_gen)) && (tgt->ltd_exp != NULL)) {
+                tgt->ltd_refcount++;
+                rc = 1;
+        }
+
+        lov_tgts_unlock(lov);
+        return rc;
+}
+
 static inline void
 lov_tgt_decref(struct lov_obd *lov, struct lov_tgt_desc *tgt)
 {

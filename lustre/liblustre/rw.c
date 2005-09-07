@@ -147,6 +147,10 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = llu_lock_to_stripe_offset(inode, lock);
+                if (stripe < 0) {
+                        CERROR("lock on inode without such object\n");
+                        break;
+                }
 #warning "fix l_lock() using here!"
 //                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 kms = ldlm_extent_shift_kms(lock,

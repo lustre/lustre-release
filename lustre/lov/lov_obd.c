@@ -1469,6 +1469,7 @@ static int lov_prep_async_page(struct obd_export *exp,
                                          lap->lap_sub_offset,
                                          &lov_async_page_ops, lap,
                                          &lap->lap_sub_cookie);
+                lov_tgt_decref(lov, tgt);
         } else {
                 rc = -EIO;
         }
@@ -1503,9 +1504,9 @@ static int lov_queue_async_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) 
-                 RETURN(-EIO);
-
+        if (!lov_tgt_valid(lov, tgt, loi->loi_ost_gen))
+                RETURN(-EIO);
+        
         rc = obd_queue_async_io(tgt->ltd_exp, lsm, loi, lap->lap_sub_cookie,
                                 cmd, off, count, brw_flags, async_flags);
 
@@ -1563,8 +1564,8 @@ static int lov_queue_group_io(struct obd_export *exp,
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
 
-        if (!lov_tgt_ready(lov, tgt, loi->loi_ost_gen)) 
-                 RETURN(-EIO);
+        if (!lov_tgt_valid(lov, tgt, loi->loi_ost_gen))
+                RETURN(-EIO);
 
         rc = obd_queue_group_io(tgt->ltd_exp, lsm, loi, oig,
                                 lap->lap_sub_cookie, cmd, off, count,
@@ -1628,6 +1629,13 @@ static int lov_teardown_async_page(struct obd_export *exp,
 
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
         tgt = lov->tgts + loi->loi_ost_idx;
+
+        /* FIXME: this leaks the page, but it should never really happen.
+         *        Should we make this an LBUG() ? */
+        if (!lov_tgt_valid(lov, tgt, loi->loi_ost_gen)) {
+                CERROR("page found with invalid OSC !");
+                RETURN(-EIO);
+        }
 
         rc = obd_teardown_async_page(tgt->ltd_exp, lsm, loi,
                                      lap->lap_sub_cookie);
@@ -1763,6 +1771,11 @@ static int lov_change_cbdata(struct obd_export *exp,
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
+
+                if (!lov_tgt_valid(lov, tgt, loi->loi_ost_gen)) {
+                        CDEBUG(D_HA, "lov idx %d invalid.\n", loi->loi_ost_idx);
+                        continue;
+                }
                 rc = obd_change_cbdata(tgt->ltd_exp, &submd, it, data);
                 lov_tgt_decref(lov, tgt);
         }
@@ -2131,9 +2144,13 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         }
                 }
                 lov_tgts_unlock(lov);
+                
+                /* This can happen if a deleted OST has been replaced
+                 * in the lsm by the MDS.  */
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 portals_debug_dumpstack(NULL);
+
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {

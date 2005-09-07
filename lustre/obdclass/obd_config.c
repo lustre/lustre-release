@@ -640,10 +640,6 @@ static int class_config_parse_handler(struct llog_handle * handle,
                                         cfg->cfg_instance);
                                 lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
                         }
-                        if (lcfg->lcfg_command == LCFG_ATTACH) {
-                                lustre_cfg_bufs_set_string(&bufs, 2,
-                                                    (char *)cfg->cfg_uuid.uuid);
-                        }
                         if (lcfg->lcfg_command == LCFG_SETUP) {
                                 /*add cfg_instance to the end of lcfg buffers*/
                                 lustre_cfg_bufs_set_string(&bufs,
@@ -651,7 +647,10 @@ static int class_config_parse_handler(struct llog_handle * handle,
                                                            cfg->cfg_instance); 
                         }
                 }
-
+                if (cfg && (lcfg->lcfg_command == LCFG_ATTACH)) {
+                        lustre_cfg_bufs_set_string(&bufs, 2,
+                                                   (char *)cfg->cfg_uuid.uuid);
+                }
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
 
                 lcfg_new->lcfg_num   = lcfg->lcfg_num;
