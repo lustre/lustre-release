@@ -19,6 +19,17 @@ Details    : The filter_direct_io()+filter_commitrw_write() journal commits for
              to avoid filesystem fragmentation during allocation.  BKL lock
 	     removed for 2.6 xattr operations where it is no longer needed.
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 8320
+Description: lconf incorrectly determined whether two IP networks could talk
+Details    : In some more complicated routing and multiple-network
+	     configurations, lconf will avoid trying to make a network
+	     connection to a disjoint part of the IP space.  It was doing the
+	     math incorrectly for one set of cases.
+
+------------------------------------------------------------------------------
+
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.5
        * bug fixes
@@ -116,6 +127,8 @@ Details    : If lookup is in progress on a file that is unlinked we might try
              to revalidate the inode and fail in revalidate after lookup is
              complete and ll_file_open() enqueues the open again but
              it_open_error() was not checking DISP_OPEN_OPEN errors correctly.
+
+------------------------------------------------------------------------------
 
 2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.4

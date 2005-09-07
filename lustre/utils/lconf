@@ -1468,7 +1468,11 @@ class Network(Module):
         except:
             return 0
 
-        if addr1 & mask1 == addr2 & mask2:
+        # If the masks are not identical we need to know if the 2 interfaces
+        #  can talk to each other, so the most restrictive will tell us that
+        mask = max(mask1, mask2)
+        if addr1 & mask == addr2 & mask:
+            debug("Net1: %s Net2: %s Match: %s to %s" % (net1, net2, addr1 & mask, addr2 & mask))
             return 1
         return 0
 
