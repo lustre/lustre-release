@@ -997,7 +997,7 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
                                req->rq_peer.peer_id.nid, nidstr));
 
         svcdata->is_init = 1;
-        svcdata->reserve_len = 6 * 4 +
+        svcdata->reserve_len = 7 * 4 +
                 size_round4(rsip->out_handle.len) +
                 size_round4(rsip->out_token.len);
 
@@ -1018,14 +1018,15 @@ gss_svcsec_handle_init(struct ptlrpc_request *req,
         resp += req->rq_replen / 4;
         reslen = svcdata->reserve_len;
 
-        /* gss reply:
-         * status, major, minor, seq, out_handle, out_token
+        /* gss reply: (conform to err notify format)
+         * x, x, seq, major, minor, handle, token
          */
-        *resp++ = cpu_to_le32(PTLRPCS_OK);
+        *resp++ = 0;
+        *resp++ = 0;
+        *resp++ = cpu_to_le32(GSS_SEQ_WIN);
         *resp++ = cpu_to_le32(rsip->major_status);
         *resp++ = cpu_to_le32(rsip->minor_status);
-        *resp++ = cpu_to_le32(GSS_SEQ_WIN);
-        reslen -= (4 * 4);
+        reslen -= (5 * 4);
         if (rawobj_serialize(&rsip->out_handle,
                              &resp, &reslen)) {
                 dump_rsi(rsip);

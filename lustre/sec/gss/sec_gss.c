@@ -212,10 +212,12 @@ static int secinit_parse_reply(char *repbuf, int replen,
         p = (__u32 *) buf_to_sec_data(repbuf);
         effective = 0;
 
-        status = le32_to_cpu(*p++);
+        p += 2; /* skip the leading unused bytes */
+        seq = le32_to_cpu(*p++);
         major = le32_to_cpu(*p++);
         minor = le32_to_cpu(*p++);
-        seq = le32_to_cpu(*p++);
+        status = 0;
+
         effective += 4 * 4;
 
         if (copy_to_user(outbuf, &status, 4))
