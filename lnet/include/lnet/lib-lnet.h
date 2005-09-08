@@ -55,6 +55,8 @@ static inline int ptl_md_exhausted (ptl_libmd_t *md)
 #define PTL_MUTEX_UP(m)   pthread_mutex_unlock(m)
 #endif
 
+#define MAX_PORTALS     64
+
 #ifdef PTL_USE_LIB_FREELIST
 
 #define MAX_MES         2048
@@ -436,46 +438,43 @@ ptl_ni_decref(ptl_ni_t *ni)
 extern ptl_nal_t ptl_lonal;
 extern ptl_ni_t *ptl_loni;
 
-extern int ptl_get_apinih (lnet_handle_ni_t *nih);
-
 extern ptl_ni_t *lnet_net2ni (__u32 net);
 extern int ptl_islocalnid (lnet_nid_t nid);
 extern int ptl_islocalnet (__u32 net, int *orderp);
 extern void ptl_enq_event_locked (void *private,
                                   ptl_eq_t *eq, lnet_event_t *ev);
-extern void lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, 
-                          lnet_ni_fail_t ni_fail_type);
+extern void lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int rc);
 extern int lnet_parse (ptl_ni_t *ni, ptl_hdr_t *hdr, void *private);
 extern ptl_msg_t *lnet_create_reply_msg (ptl_ni_t *ni, lnet_nid_t peer_nid, 
                                         ptl_msg_t *get_msg);
 extern void ptl_print_hdr (ptl_hdr_t * hdr);
 extern int ptl_fail_nid(lnet_nid_t nid, unsigned int threshold);
 
-extern lnet_size_t lnet_iov_nob (int niov, struct iovec *iov);
+extern unsigned int lnet_iov_nob (int niov, struct iovec *iov);
 extern void lnet_copy_iov2buf (char *dest, int niov, struct iovec *iov, 
-                              lnet_size_t offset, lnet_size_t len);
-extern void lnet_copy_buf2iov (int niov, struct iovec *iov, lnet_size_t offset, 
-                              char *src, lnet_size_t len);
+                              unsigned int offset, unsigned int len);
+extern void lnet_copy_buf2iov (int niov, struct iovec *iov, unsigned int offset, 
+                              char *src, unsigned int len);
 extern int lnet_extract_iov (int dst_niov, struct iovec *dst,
                             int src_niov, struct iovec *src,
-                            lnet_size_t offset, lnet_size_t len);
+                            unsigned int offset, unsigned int len);
 
-extern lnet_size_t lnet_kiov_nob (int niov, lnet_kiov_t *iov);
+extern unsigned int lnet_kiov_nob (int niov, lnet_kiov_t *iov);
 extern void lnet_copy_kiov2buf (char *dest, int niov, lnet_kiov_t *kiov, 
-                               lnet_size_t offset, lnet_size_t len);
-extern void lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, lnet_size_t offset,
-                               char *src, lnet_size_t len);
+                               unsigned int offset, unsigned int len);
+extern void lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, unsigned int offset,
+                               char *src, unsigned int len);
 extern int lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst, 
                              int src_niov, lnet_kiov_t *src,
-                             lnet_size_t offset, lnet_size_t len);
+                             unsigned int offset, unsigned int len);
 
 extern lnet_pid_t lnet_getpid(void);
 
 extern int ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
-                           lnet_size_t offset, lnet_size_t mlen, lnet_size_t rlen);
+                           unsigned int offset, unsigned int mlen, unsigned int rlen);
 extern int ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                            ptl_hdr_t *hdr, int type, lnet_process_id_t target,
-                           ptl_libmd_t *md, lnet_size_t offset, lnet_size_t len);
+                           ptl_libmd_t *md, unsigned int offset, unsigned int len);
 
 extern void ptl_me_unlink(ptl_me_t *me);
 

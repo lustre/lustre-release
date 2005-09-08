@@ -26,8 +26,8 @@
 #include <lnet/lib-lnet.h>
 
 int
-LNetEQAlloc(lnet_handle_ni_t interface, lnet_size_t count,
-           lnet_eq_handler_t callback, lnet_handle_eq_t *handle)
+LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback, 
+            lnet_handle_eq_t *handle)
 {
         ptl_eq_t      *eq;
         unsigned long  flags;

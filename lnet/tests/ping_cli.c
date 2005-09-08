@@ -42,7 +42,7 @@ static struct pingcli_data *client = NULL;
 static int count = 0;
 
 static void
-pingcli_shutdown(lnet_handle_ni_t nih, int err)
+pingcli_shutdown(int err)
 {
         int rc;
 
@@ -66,7 +66,7 @@ pingcli_shutdown(lnet_handle_ni_t nih, int err)
                         if ((rc = LNetMEUnlink (client->me)))
                                 PDEBUG ("LNetMEUnlink", rc);
                 case 3:
-                        LNetNIFini(nih);
+                        LNetNIFini();
 
                 case 4:
                         /* Free our buffers */
@@ -107,7 +107,6 @@ static void pingcli_callback(lnet_event_t *ev)
 static void
 pingcli_start(struct portal_ioctl_data *args)
 {
-        lnet_handle_ni_t nih = LNET_INVALID_HANDLE;
         unsigned ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
         int rc;
         struct timeval tv1, tv2;
@@ -129,7 +128,7 @@ pingcli_start(struct portal_ioctl_data *args)
         if (client->outbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return;
         }
 
@@ -138,23 +137,23 @@ pingcli_start(struct portal_ioctl_data *args)
         if (client->inbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return;
         }
 
-        rc = LNetNIInit(LNET_IFACE_DEFAULT, 0, NULL, NULL, &nih);
+        rc = LNetNIInit(0);
         if (rc != 0 && rc != 1)
         {
                 CERROR ("LNetNIInit: error %d\n", rc);
-                pingcli_shutdown (nih, 4);
+                pingcli_shutdown (4);
                 return;
         }
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = LNetGetId (nih, &client->myid)))
+        if ((rc = LNetGetId (1, &client->myid)))
         {
                 CERROR ("LNetGetId error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return;
         }
 
@@ -166,20 +165,20 @@ pingcli_start(struct portal_ioctl_data *args)
         client->id_remote.nid = client->nid;
         client->id_remote.pid = 0;
 
-        if ((rc = LNetMEAttach (nih, PTL_PING_CLIENT,
+        if ((rc = LNetMEAttach (PTL_PING_CLIENT,
                    client->id_local, 0, ~0, LNET_RETAIN,
                    LNET_INS_AFTER, &client->me)))
         {
                 CERROR ("LNetMEAttach error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return;
         }
 
         /* Allocate the event queue for this network interface */
-        if ((rc = LNetEQAlloc (nih, 64, pingcli_callback, &client->eq)))
+        if ((rc = LNetEQAlloc (64, pingcli_callback, &client->eq)))
         {
                 CERROR ("LNetEQAlloc error %d\n", rc);
-                pingcli_shutdown (nih, 2);
+                pingcli_shutdown (2);
                 return;
         }
 
@@ -197,7 +196,7 @@ pingcli_start(struct portal_ioctl_data *args)
         if ((rc = LNetMDAttach (client->me, client->md_in_head,
                               LNET_UNLINK, &client->md_in_head_h))) {
                 CERROR ("LNetMDAttach error %d\n", rc);
-                pingcli_shutdown (nih, 1);
+                pingcli_shutdown (1);
                 return;
         }
         /* Setup the outgoing ping header */
@@ -213,10 +212,10 @@ pingcli_start(struct portal_ioctl_data *args)
         count = 0;
 
         /* Bind the outgoing ping header */
-        if ((rc=LNetMDBind (nih, client->md_out_head,
+        if ((rc=LNetMDBind (client->md_out_head,
                            LNET_UNLINK, &client->md_out_head_h))) {
                 CERROR ("LNetMDBind error %d\n", rc);
-                pingcli_shutdown (nih, 1);
+                pingcli_shutdown (1);
                 return;
         }
         while ((client->count - count)) {
@@ -232,9 +231,10 @@ pingcli_start(struct portal_ioctl_data *args)
                        sizeof(struct timeval));
 
                 if((rc = LNetPut (client->md_out_head_h, LNET_NOACK_REQ,
-                          client->id_remote, PTL_PING_SERVER, 0, 0, 0, 0))) {
+                                  client->id_remote, PTL_PING_SERVER, 
+                                  0, 0, 0))) {
                          PDEBUG ("LNetPut (header)", rc);
-                         pingcli_shutdown (nih, 1);
+                         pingcli_shutdown (1);
                          return;
                 }
                 CWARN ("Lustre: sent msg no %d.\n", count);
@@ -252,7 +252,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 count++;
         }
 
-        pingcli_shutdown (nih, 2);
+        pingcli_shutdown (2);
 
 } /* pingcli_setup() */
 

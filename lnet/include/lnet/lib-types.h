@@ -52,25 +52,25 @@ typedef enum {
  * wire structs MUST be fixed size and the smaller types are placed at the
  * end. */
 typedef struct ptl_ack {
-        ptl_handle_wire_t  dst_wmd;
-        lnet_match_bits_t   match_bits;
-        lnet_size_t         mlength;
+        ptl_handle_wire_t   dst_wmd;
+        __u64               match_bits;
+        __u32               mlength;
 } WIRE_ATTR ptl_ack_t;
 
 typedef struct ptl_put {
-        ptl_handle_wire_t  ack_wmd;
-        lnet_match_bits_t   match_bits;
-        lnet_hdr_data_t     hdr_data;
-        lnet_pt_index_t     ptl_index;
-        lnet_size_t         offset;
+        ptl_handle_wire_t   ack_wmd;
+        __u64               match_bits;
+        __u64               hdr_data;
+        __u32               ptl_index;
+        __u32               offset;
 } WIRE_ATTR ptl_put_t;
 
 typedef struct ptl_get {
-        ptl_handle_wire_t  return_wmd;
-        lnet_match_bits_t   match_bits;
-        lnet_pt_index_t     ptl_index;
-        lnet_size_t         src_offset;
-        lnet_size_t         sink_length;
+        ptl_handle_wire_t   return_wmd;
+        __u64               match_bits;
+        __u32               ptl_index;
+        __u32               src_offset;
+        __u32               sink_length;
 } WIRE_ATTR ptl_get_t;
 
 typedef struct ptl_reply {
@@ -83,10 +83,10 @@ typedef struct ptl_hello {
 } WIRE_ATTR ptl_hello_t;
 
 typedef struct {
-        lnet_nid_t           dest_nid;
-        lnet_nid_t           src_nid;
-        lnet_pid_t           dest_pid;
-        lnet_pid_t           src_pid;
+        lnet_nid_t          dest_nid;
+        lnet_nid_t          src_nid;
+        lnet_pid_t          dest_pid;
+        lnet_pid_t          src_pid;
         __u32               type;               /* ptl_msg_type_t */
         __u32               payload_length;     /* payload data to follow */
         /*<------__u64 aligned------->*/
@@ -144,7 +144,7 @@ typedef struct ptl_msg {
         struct list_head   msg_list;
         struct ptl_libmd  *msg_md;
         ptl_handle_wire_t  msg_ack_wmd;
-        lnet_event_t        msg_ev;
+        lnet_event_t       msg_ev;
 } ptl_msg_t;
 
 typedef struct ptl_libhandle {
@@ -158,21 +158,21 @@ typedef struct ptl_libhandle {
 typedef struct ptl_eq {
         struct list_head  eq_list;
         ptl_libhandle_t   eq_lh;
-        lnet_seq_t         eq_enq_seq;
-        lnet_seq_t         eq_deq_seq;
-        lnet_size_t        eq_size;
-        lnet_event_t      *eq_events;
+        lnet_seq_t        eq_enq_seq;
+        lnet_seq_t        eq_deq_seq;
+        unsigned int      eq_size;
+        lnet_event_t     *eq_events;
         int               eq_refcount;
-        lnet_eq_handler_t  eq_callback;
+        lnet_eq_handler_t eq_callback;
 } ptl_eq_t;
 
 typedef struct ptl_me {
         struct list_head  me_list;
         ptl_libhandle_t   me_lh;
-        lnet_process_id_t  me_match_id;
-        lnet_match_bits_t  me_match_bits;
-        lnet_match_bits_t  me_ignore_bits;
-        lnet_unlink_t      me_unlink;
+        lnet_process_id_t me_match_id;
+        __u64             me_match_bits;
+        __u64             me_ignore_bits;
+        lnet_unlink_t     me_unlink;
         struct ptl_libmd *me_md;
 } ptl_me_t;
 
@@ -181,9 +181,9 @@ typedef struct ptl_libmd {
         ptl_libhandle_t   md_lh;
         ptl_me_t         *md_me;
         char             *md_start;
-        lnet_size_t        md_offset;
-        lnet_size_t        md_length;
-        lnet_size_t        md_max_size;
+        unsigned int      md_offset;
+        unsigned int      md_length;
+        unsigned int      md_max_size;
         int               md_threshold;
         int               md_pending;
         unsigned int      md_options;
@@ -374,8 +374,7 @@ typedef struct
         int               apini_nportals;       /* # portals */
         struct list_head *apini_portals;        /* the vector of portals */
 
-        lnet_pid_t         apini_pid;            /* requested pid */
-        lnet_ni_limits_t   apini_actual_limits;
+        lnet_pid_t        apini_pid;            /* requested pid */
 
         struct list_head  apini_nis;            /* NAL instances */
         struct list_head  apini_zombie_nis;     /* dying NAL instances */

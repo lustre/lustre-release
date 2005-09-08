@@ -37,10 +37,6 @@ ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
          * UNLINK event unless an explicit unlink succeeds, so the link
          * sequence is pretty useless */
 
-        /* We don't support different uid/jids yet */
-        ev->uid = 0;
-        ev->jid = 0;
-
         /* size must be a power of 2 to handle sequence # overflow */
         LASSERT (eq->eq_size != 0 &&
                  eq->eq_size == LOWEST_BIT_SET (eq->eq_size));
@@ -115,7 +111,7 @@ lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
         else
                 unlink = ptl_md_exhausted(md);
 
-        msg->msg_ev.ni_fail_type = status;
+        msg->msg_ev.status = status;
         msg->msg_ev.unlinked = unlink;
 
         if (md->md_eq != NULL)

@@ -85,7 +85,7 @@ static void *pingsrv_shutdown(int err)
                                         PDEBUG ("LNetMEUnlink", rc);
 
                 case 3:
-                        LNetNIFini(server->ni);
+                        LNetNIFini();
 
                 case 4:
                         
@@ -125,8 +125,8 @@ int pingsrv_thread(void *arg)
                 server->mdout.eq_handle = LNET_EQ_NONE;
        
                 /* Bind the outgoing buffer */
-                if ((rc = LNetMDBind (server->ni, server->mdout, 
-                                     LNET_UNLINK, &server->mdout_h))) {
+                if ((rc = LNetMDBind (server->mdout, 
+                                      LNET_UNLINK, &server->mdout_h))) {
                          PDEBUG ("LNetMDBind", rc);
                          pingsrv_shutdown (1);
                          return 1;
@@ -147,7 +147,8 @@ int pingsrv_thread(void *arg)
                 }
                 
                 if ((rc = LNetPut (server->mdout_h, LNET_NOACK_REQ,
-                         server->evnt.initiator, PTL_PING_CLIENT, 0, 0, 0, 0)))
+                                   server->evnt.initiator, PTL_PING_CLIENT, 
+                                   0, 0, 0)))
                          PDEBUG ("LNetPut", rc);
                 
                 atomic_dec (&pkt);
@@ -189,16 +190,14 @@ static struct pingsrv_data *pingsrv_setup(void)
 {
         int rc;
 
-        server->ni = LNET_INVALID_HANDLE;
-
-        rc = LNetNIInit(LNET_IFACE_DEFAULT, 0, NULL, NULL, &server->ni);
+        rc = LNetNIInit(0);
         if (rc != 0 && rc != 1) {
                 CDEBUG (D_OTHER, "LNetNIInit: error %d\n", rc);
                 return pingsrv_shutdown (4);
         }
 
         /* Based on the initialization aquire our unique portal ID. */
-        if ((rc = LNetGetId (server->ni, &server->my_id))) {
+        if ((rc = LNetGetId (1, &server->my_id))) {
                 PDEBUG ("LNetGetId", rc);
                 return pingsrv_shutdown (2);
         }
@@ -207,7 +206,7 @@ static struct pingsrv_data *pingsrv_setup(void)
         server->id_local.pid = LNET_PID_ANY;
 
         /* Attach a match entries for header packets */
-        if ((rc = LNetMEAttach (server->ni, PTL_PING_SERVER,
+        if ((rc = LNetMEAttach (PTL_PING_SERVER,
             server->id_local,0, ~0,
             LNET_RETAIN, LNET_INS_AFTER, &server->me))) {
                 PDEBUG ("LNetMEAttach", rc);
@@ -215,8 +214,7 @@ static struct pingsrv_data *pingsrv_setup(void)
         }
 
 
-        if ((rc = LNetEQAlloc (server->ni, 64, pingsrv_callback,
-                                        &server->eq))) {
+        if ((rc = LNetEQAlloc (64, pingsrv_callback, &server->eq))) {
                 PDEBUG ("LNetEQAlloc (callback)", rc);
                 return pingsrv_shutdown (2);
         }

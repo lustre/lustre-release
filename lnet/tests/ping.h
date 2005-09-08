@@ -36,11 +36,9 @@
 #if __KERNEL__
 
 struct pingsrv_data {
-        
-        lnet_handle_ni_t         ni;
-        lnet_handle_me_t         me;
+	lnet_handle_me_t         me;
         lnet_handle_eq_t         eq;
-        void                   *in_buf;
+        void                    *in_buf;
         lnet_process_id_t        my_id;
         lnet_process_id_t        id_local;
         lnet_md_t                mdin;
@@ -55,10 +53,10 @@ struct pingcli_data {
         
 	int                     count;
 	int                     size;
-	lnet_nid_t               nid;
+	lnet_nid_t              nid;
 	int                     timeout;
         lnet_handle_me_t 	me;
-        lnet_handle_eq_t		eq;
+        lnet_handle_eq_t	eq;
         char           	       *inbuf;    
         char                   *outbuf;   
         lnet_process_id_t  	myid; 

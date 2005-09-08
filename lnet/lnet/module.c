@@ -31,9 +31,8 @@ CFS_MODULE_PARM(config_on_load, "i", int, 0444,
 
 static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
-        int          initrc;
+        int                initrc;
         int                rc;
-        lnet_handle_ni_t    nih;
 
         if (cmd == IOC_PORTAL_UNCONFIGURE) {
                 /* ghastly hack to prevent repeated net config */
@@ -45,18 +44,17 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 
                 if (initrc) {
                         rc--;
-                        LNetNIFini((lnet_handle_ni_t){0});
+                        LNetNIFini();
                 }
                 
                 return rc == 0 ? 0 : -EBUSY;
         }
         
-        initrc = LNetNIInit(LNET_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID, 
-                           NULL, NULL, &nih);
+        initrc = LNetNIInit(LUSTRE_SRV_PTL_PID);
         if (initrc < 0)
                 RETURN (-ENETDOWN);
 
-        rc = LNetNICtl(nih, cmd, data);
+        rc = LNetCtl(cmd, data);
 
         if (initrc == 0) {
                 PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
@@ -64,7 +62,7 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
                 lnet_apini.apini_niinit_self = 1;
                 PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
         } else {
-                LNetNIFini(nih);
+                LNetNIFini();
         }
         
         return rc;
@@ -77,21 +75,18 @@ static int init_kportals_module(void)
         int rc;
         ENTRY;
 
-        rc = LNetInit(NULL);
+        rc = LNetInit();
         if (rc != 0) {
                 CERROR("LNetInit: error %d\n", rc);
                 RETURN(rc);
         }
 
         if (config_on_load) {
-                lnet_handle_ni_t    nih;
-
                 PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
                 lnet_apini.apini_niinit_self = 1;
                 PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
 
-                rc = LNetNIInit(LNET_IFACE_DEFAULT, LUSTRE_SRV_PTL_PID,
-                               NULL, NULL, &nih);
+                rc = LNetNIInit(LUSTRE_SRV_PTL_PID);
                 if (rc != 0) {
                         /* Can't LNetFini or fail now if I loaded NALs */
                         PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);

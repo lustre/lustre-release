@@ -27,13 +27,11 @@
 #include <lnet/lib-lnet.h>
 
 int
-LNetMEAttach(lnet_handle_ni_t interface, 
-            lnet_pt_index_t portal,
-            lnet_process_id_t match_id, 
-            lnet_match_bits_t match_bits,
-            lnet_match_bits_t ignore_bits,
-            lnet_unlink_t unlink, lnet_ins_pos_t pos, 
-            lnet_handle_me_t *handle)
+LNetMEAttach(unsigned int portal,
+             lnet_process_id_t match_id, 
+             __u64 match_bits, __u64 ignore_bits,
+             lnet_unlink_t unlink, lnet_ins_pos_t pos, 
+             lnet_handle_me_t *handle)
 {
         ptl_me_t      *me;
         unsigned long  flags;
@@ -73,8 +71,7 @@ LNetMEAttach(lnet_handle_ni_t interface,
 int 
 LNetMEInsert(lnet_handle_me_t current_meh, 
             lnet_process_id_t match_id, 
-            lnet_match_bits_t match_bits, 
-            lnet_match_bits_t ignore_bits,
+            __u64 match_bits, __u64 ignore_bits,
             lnet_unlink_t unlink, lnet_ins_pos_t pos,
             lnet_handle_me_t *handle)
 {

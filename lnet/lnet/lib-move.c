@@ -45,16 +45,16 @@ static void ptl_commit_md (ptl_libmd_t *md, ptl_msg_t *msg);
 
 static ptl_libmd_t *
 ptl_match_md(int index, int op_mask, lnet_process_id_t src,
-             lnet_size_t rlength, lnet_size_t roffset,
-             lnet_match_bits_t match_bits, ptl_msg_t *msg,
-             lnet_size_t *mlength_out, lnet_size_t *offset_out)
+             unsigned int rlength, unsigned int roffset,
+             __u64 match_bits, ptl_msg_t *msg,
+             unsigned int *mlength_out, unsigned int *offset_out)
 {
         struct list_head *match_list = &lnet_apini.apini_portals[index];
         struct list_head *tmp;
         ptl_me_t         *me;
         ptl_libmd_t      *md;
-        lnet_size_t       mlength;
-        lnet_size_t       offset;
+        unsigned int      mlength;
+        unsigned int      offset;
         ENTRY;
 
         CDEBUG (D_NET, "Request from %s of length %d into portal %d "
@@ -275,10 +275,10 @@ fail_peer (lnet_nid_t nid, int outgoing)
         return (fail);
 }
 
-lnet_size_t
+unsigned int
 lnet_iov_nob (int niov, struct iovec *iov)
 {
-        lnet_size_t nob = 0;
+        unsigned int nob = 0;
 
         while (niov-- > 0)
                 nob += (iov++)->iov_len;
@@ -288,9 +288,9 @@ lnet_iov_nob (int niov, struct iovec *iov)
 
 void
 lnet_copy_iov2buf (char *dest, int niov, struct iovec *iov,
-                  lnet_size_t offset, lnet_size_t len)
+                   unsigned int offset, unsigned int len)
 {
-        lnet_size_t nob;
+        unsigned int nob;
 
         if (len == 0)
                 return;
@@ -318,10 +318,10 @@ lnet_copy_iov2buf (char *dest, int niov, struct iovec *iov,
 }
 
 void
-lnet_copy_buf2iov (int niov, struct iovec *iov, lnet_size_t offset,
-                  char *src, lnet_size_t len)
+lnet_copy_buf2iov (int niov, struct iovec *iov, unsigned int offset,
+                   char *src, unsigned int len)
 {
-        lnet_size_t nob;
+        unsigned int nob;
 
         if (len == 0)
                 return;
@@ -350,13 +350,13 @@ lnet_copy_buf2iov (int niov, struct iovec *iov, lnet_size_t offset,
 
 int
 lnet_extract_iov (int dst_niov, struct iovec *dst,
-                 int src_niov, struct iovec *src,
-                 lnet_size_t offset, lnet_size_t len)
+                  int src_niov, struct iovec *src,
+                  unsigned int offset, unsigned int len)
 {
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        lnet_size_t     frag_len;
+        unsigned int    frag_len;
         int             niov;
 
         if (len == 0)                           /* no data => */
@@ -395,7 +395,7 @@ lnet_extract_iov (int dst_niov, struct iovec *dst,
 }
 
 #ifndef __KERNEL__
-lnet_size_t
+unsigned int
 lnet_kiov_nob (int niov, lnet_kiov_t *kiov)
 {
         LASSERT (0);
@@ -404,32 +404,32 @@ lnet_kiov_nob (int niov, lnet_kiov_t *kiov)
 
 void
 lnet_copy_kiov2buf (char *dest, int niov, lnet_kiov_t *kiov,
-                   lnet_size_t offset, lnet_size_t len)
+                    unsigned int offset, unsigned int len)
 {
         LASSERT (0);
 }
 
 void
-lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, lnet_size_t offset,
-                   char *src, lnet_size_t len)
+lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, unsigned int offset,
+                    char *src, unsigned int len)
 {
         LASSERT (0);
 }
 
 int
 lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
-                  int src_niov, lnet_kiov_t *src,
-                  lnet_size_t offset, lnet_size_t len)
+                   int src_niov, lnet_kiov_t *src,
+                   unsigned int offset, unsigned int len)
 {
         LASSERT (0);
 }
 
 #else /* __KERNEL__ */
 
-lnet_size_t
+unsigned int
 lnet_kiov_nob (int niov, lnet_kiov_t *kiov)
 {
-        lnet_size_t  nob = 0;
+        unsigned int  nob = 0;
 
         while (niov-- > 0)
                 nob += (kiov++)->kiov_len;
@@ -439,10 +439,10 @@ lnet_kiov_nob (int niov, lnet_kiov_t *kiov)
 
 void
 lnet_copy_kiov2buf (char *dest, int niov, lnet_kiov_t *kiov,
-                   lnet_size_t offset, lnet_size_t len)
+                    unsigned int offset, unsigned int len)
 {
-        lnet_size_t  nob;
-        char       *addr;
+        unsigned int  nob;
+        char         *addr;
 
         if (len == 0)
                 return;
@@ -475,11 +475,11 @@ lnet_copy_kiov2buf (char *dest, int niov, lnet_kiov_t *kiov,
 }
 
 void
-lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, lnet_size_t offset,
-                   char *src, lnet_size_t len)
+lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, unsigned int offset,
+                    char *src, unsigned int len)
 {
-        lnet_size_t  nob;
-        char       *addr;
+        unsigned int  nob;
+        char         *addr;
 
         if (len == 0)
                 return;
@@ -513,13 +513,13 @@ lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, lnet_size_t offset,
 
 int
 lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
-                  int src_niov, lnet_kiov_t *src,
-                  lnet_size_t offset, lnet_size_t len)
+                   int src_niov, lnet_kiov_t *src,
+                   unsigned int offset, unsigned int len)
 {
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        lnet_size_t     frag_len;
+        unsigned int    frag_len;
         int             niov;
 
         if (len == 0)                           /* no data => */
@@ -563,7 +563,7 @@ lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
 
 int
 ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
-          lnet_size_t offset, lnet_size_t mlen, lnet_size_t rlen)
+          unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         int           niov = 0;
         struct iovec *iov = NULL;
@@ -584,7 +584,7 @@ ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
 int
 ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
           ptl_hdr_t *hdr, int type, lnet_process_id_t target,
-          ptl_libmd_t *md, lnet_size_t offset, lnet_size_t len)
+          ptl_libmd_t *md, unsigned int offset, unsigned int len)
 {
         unsigned long flags;
         lnet_nid_t    gw_nid;
@@ -704,13 +704,13 @@ ptl_drop_message (ptl_ni_t *ni, void *private, ptl_hdr_t *hdr)
 static int
 lnet_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, ptl_msg_t *msg)
 {
-        lnet_size_t       mlength = 0;
-        lnet_size_t       offset = 0;
+        unsigned int      mlength = 0;
+        unsigned int      offset = 0;
         lnet_process_id_t src = {.nid = hdr->src_nid,
-                                .pid = hdr->src_pid};
-        int              rc;
-        ptl_libmd_t     *md;
-        unsigned long    flags;
+                                 .pid = hdr->src_pid};
+        int               rc;
+        ptl_libmd_t      *md;
+        unsigned long     flags;
 
         /* Convert put fields to host byte order */
         hdr->msg.put.match_bits = le64_to_cpu(hdr->msg.put.match_bits);
@@ -754,14 +754,14 @@ lnet_parse_put(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, ptl_msg_t *msg)
 static int
 lnet_parse_get(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private, ptl_msg_t *msg)
 {
-        lnet_size_t       mlength = 0;
-        lnet_size_t       offset = 0;
+        unsigned int      mlength = 0;
+        unsigned int      offset = 0;
         lnet_process_id_t src = {.nid = hdr->src_nid,
-                                .pid = hdr->src_pid};
-        ptl_libmd_t     *md;
-        ptl_hdr_t        reply;
-        unsigned long    flags;
-        int              rc;
+                                 .pid = hdr->src_pid};
+        ptl_libmd_t      *md;
+        ptl_hdr_t         reply;
+        unsigned long     flags;
+        int               rc;
 
         /* Convert get fields to host byte order */
         hdr->msg.get.match_bits = le64_to_cpu(hdr->msg.get.match_bits);
@@ -1130,9 +1130,9 @@ lnet_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
 
 int
 LNetPut(lnet_handle_md_t mdh, lnet_ack_req_t ack,
-       lnet_process_id_t target, lnet_pt_index_t portal,
-       lnet_ac_index_t ac, lnet_match_bits_t match_bits,
-       lnet_size_t offset, lnet_hdr_data_t hdr_data)
+        lnet_process_id_t target, unsigned int portal,
+        __u64 match_bits, unsigned int offset, 
+        __u64 hdr_data)
 {
         ptl_msg_t        *msg;
         ptl_hdr_t         hdr;
@@ -1286,9 +1286,9 @@ lnet_create_reply_msg (ptl_ni_t *ni, lnet_nid_t peer_nid, ptl_msg_t *getmsg)
 }
 
 int
-LNetGet(lnet_handle_md_t mdh, lnet_process_id_t target,
-       lnet_pt_index_t portal, lnet_ac_index_t ac,
-       lnet_match_bits_t match_bits, lnet_size_t offset)
+LNetGet(lnet_handle_md_t mdh, 
+        lnet_process_id_t target, unsigned int portal, 
+        __u64 match_bits, unsigned int offset)
 {
         ptl_msg_t        *msg;
         ptl_hdr_t         hdr;
@@ -1372,7 +1372,7 @@ LNetGet(lnet_handle_md_t mdh, lnet_process_id_t target,
 }
 
 int
-LNetDist (lnet_handle_ni_t interface, lnet_nid_t nid, int *order)
+LNetDist (lnet_nid_t nid, int *order)
 {
         LASSERT (lnet_apini.apini_init);
         LASSERT (lnet_apini.apini_refcount > 0);

@@ -152,7 +152,7 @@ lnet_register_nal (ptl_nal_t *nal)
         nal->nal_refcount = 0;
 
         if (nal->nal_type != LONAL)
-                LCONSOLE(0, "%s NAL registered\n",
+                LCONSOLE(0, "%s LND registered\n",
                          libcfs_nal2str(nal->nal_type));
 
         PTL_MUTEX_UP(&lnet_apini.apini_nal_mutex);
@@ -169,22 +169,17 @@ lnet_unregister_nal (ptl_nal_t *nal)
         
         list_del (&nal->nal_list);
         if (nal->nal_type != LONAL)
-                LCONSOLE(0, "%s NAL unregistered\n",
+                LCONSOLE(0, "%s LND unregistered\n",
                          libcfs_nal2str(nal->nal_type));
 
         PTL_MUTEX_UP(&lnet_apini.apini_nal_mutex);
 }
 
 #ifndef PTL_USE_LIB_FREELIST
-int
-ptl_descriptor_setup (lnet_ni_limits_t *requested_limits,
-                      lnet_ni_limits_t *actual_limits)
-{
-        /* Ignore requested limits! */
-        actual_limits->max_mes = INT_MAX;
-        actual_limits->max_mds = INT_MAX;
-        actual_limits->max_eqs = INT_MAX;
 
+int
+ptl_descriptor_setup (void)
+{
         return 0;
 }
 
@@ -243,8 +238,7 @@ ptl_freelist_fini (ptl_freelist_t *fl)
 }
 
 int
-ptl_descriptor_setup (lnet_ni_limits_t *requested_limits,
-                      lnet_ni_limits_t *actual_limits)
+ptl_descriptor_setup (void)
 {
         /* NB on failure caller must still call ptl_descriptor_cleanup */
         /*               ******                                        */
@@ -254,13 +248,6 @@ ptl_descriptor_setup (lnet_ni_limits_t *requested_limits,
         memset (&lnet_apini.apini_free_msgs, 0, sizeof (lnet_apini.apini_free_msgs));
         memset (&lnet_apini.apini_free_mds,  0, sizeof (lnet_apini.apini_free_mds));
         memset (&lnet_apini.apini_free_eqs,  0, sizeof (lnet_apini.apini_free_eqs));
-
-        /* Ignore requested limits! */
-        actual_limits->max_mes = MAX_MES;
-        actual_limits->max_mds = MAX_MDS;
-        actual_limits->max_eqs = MAX_EQS;
-        /* Hahahah what a load of bollocks.  There's nowhere to
-         * specify the max # messages in-flight */
 
         rc = ptl_freelist_init (&lnet_apini.apini_free_mes,
                                 MAX_MES, sizeof (ptl_me_t));
@@ -395,12 +382,9 @@ ptl_invalidate_handle (ptl_libhandle_t *lh)
 }
 
 int
-lnet_apini_init(lnet_pid_t requested_pid,
-               lnet_ni_limits_t *requested_limits,
-               lnet_ni_limits_t *actual_limits)
+lnet_apini_init(lnet_pid_t requested_pid)
 {
         int               rc = 0;
-        int               ptl_size;
         int               i;
         ENTRY;
 
@@ -408,8 +392,7 @@ lnet_apini_init(lnet_pid_t requested_pid,
 
         lnet_apini.apini_pid = requested_pid;
 
-        rc = ptl_descriptor_setup (requested_limits, 
-                                   &lnet_apini.apini_actual_limits);
+        rc = ptl_descriptor_setup ();
         if (rc != 0)
                 goto out;
 
@@ -429,36 +412,18 @@ lnet_apini_init(lnet_pid_t requested_pid,
         if (rc != 0)
                 goto out;
         
-        if (requested_limits != NULL)
-                ptl_size = requested_limits->max_pt_index + 1;
-        else
-                ptl_size = 64;
-
-        lnet_apini.apini_nportals = ptl_size;
+        lnet_apini.apini_nportals = MAX_PORTALS;
         PORTAL_ALLOC(lnet_apini.apini_portals, 
-                     ptl_size * sizeof(*lnet_apini.apini_portals));
+                     lnet_apini.apini_nportals * 
+                     sizeof(*lnet_apini.apini_portals));
         if (lnet_apini.apini_portals == NULL) {
                 rc = -ENOMEM;
                 goto out;
         }
 
-        for (i = 0; i < ptl_size; i++)
+        for (i = 0; i < lnet_apini.apini_nportals; i++)
                 CFS_INIT_LIST_HEAD(&(lnet_apini.apini_portals[i]));
 
-        /* max_{mes,mds,eqs} set in ptl_descriptor_setup */
-
-        /* We don't have an access control table! */
-        lnet_apini.apini_actual_limits.max_ac_index = -1;
-
-        lnet_apini.apini_actual_limits.max_pt_index = ptl_size - 1;
-        lnet_apini.apini_actual_limits.max_md_iovecs = PTL_MD_MAX_IOV;
-        lnet_apini.apini_actual_limits.max_me_list = INT_MAX;
-
-        /* We don't support LNetGetPut! */
-        lnet_apini.apini_actual_limits.max_getput_md = 0;
-
-        if (actual_limits != NULL)
-                *actual_limits = lnet_apini.apini_actual_limits;
  out:
         if (rc != 0) {
                 ptl_cleanup_handle_hash ();
@@ -825,7 +790,7 @@ extern ptl_nal_t tcpnal_nal;
 #endif
 
 int
-LNetInit(int *max_interfaces)
+LNetInit(void)
 {
         ptl_assert_wire_constants ();
 
@@ -847,9 +812,6 @@ LNetInit(int *max_interfaces)
 #endif
 
         lnet_apini.apini_init = 1;
-
-        if (max_interfaces != NULL)
-                *max_interfaces = 1;
 
         /* NALs in separate modules register themselves when their module
          * loads, and unregister themselves when their module is unloaded.
@@ -881,9 +843,7 @@ LNetFini(void)
 }
 
 int
-LNetNIInit(lnet_interface_t interface, lnet_pid_t requested_pid,
-          lnet_ni_limits_t *requested_limits, lnet_ni_limits_t *actual_limits,
-          lnet_handle_ni_t *handle)
+LNetNIInit(lnet_pid_t requested_pid)
 {
         int         rc;
 
@@ -897,7 +857,7 @@ LNetNIInit(lnet_interface_t interface, lnet_pid_t requested_pid,
                 goto out;
         }
 
-        rc = lnet_apini_init(requested_pid, requested_limits, actual_limits);
+        rc = lnet_apini_init(requested_pid);
         if (rc != 0)
                 goto out;
 
@@ -924,17 +884,13 @@ LNetNIInit(lnet_interface_t interface, lnet_pid_t requested_pid,
 
         lnet_apini.apini_refcount = 1;
 
-        memset (handle, 0, sizeof(*handle));
-        LASSERT (!LNetHandleIsEqual(*handle, LNET_INVALID_HANDLE));
-        /* Handle can be anything; LNET_INVALID_HANDLE isn't wise though :) */
-
  out:
         PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
         return rc;
 }
 
 int
-LNetNIFini(lnet_handle_ni_t ni)
+LNetNIFini()
 {
         PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
 
@@ -954,35 +910,20 @@ LNetNIFini(lnet_handle_ni_t ni)
 }
 
 int
-LNetNICtl(lnet_handle_ni_t nih, unsigned int cmd, void *arg)
+LNetCtl(unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
-        struct list_head         *tmp;
+        lnet_process_id_t         id;
         ptl_ni_t                 *ni;
         int                       rc;
-        unsigned long             flags;
-        int                       count;
 
         LASSERT (lnet_apini.apini_init);
         LASSERT (lnet_apini.apini_refcount > 0);
 
         switch (cmd) {
         case IOC_PORTAL_GET_NI:
-                count = data->ioc_count;
-                data->ioc_nid = LNET_NID_ANY;
-                rc = -ENOENT;
-
-                PTL_LOCK(flags);
-                list_for_each (tmp, &lnet_apini.apini_nis) {
-                        if (count-- != 0)
-                                continue;
-         
-                        ni = list_entry(tmp, ptl_ni_t, ni_list);
-                        data->ioc_nid = ni->ni_nid;
-                        rc = 0;
-                        break;
-                }
-                PTL_UNLOCK(flags);
+                rc = LNetGetId(data->ioc_count, &id);
+                data->ioc_nid = id.nid;
                 return rc;
 
         case IOC_PORTAL_FAIL_NID:
@@ -1011,25 +952,23 @@ LNetNICtl(lnet_handle_ni_t nih, unsigned int cmd, void *arg)
 }
 
 int
-LNetGetId(lnet_handle_ni_t ni_handle, lnet_process_id_t *id)
+LNetGetId(unsigned int index, lnet_process_id_t *id)
 {
         ptl_ni_t         *ni;
         unsigned long     flags;
         struct list_head *tmp;
-        int         rc = -EINVAL;
+        int               rc = -ENOENT;
 
         LASSERT (lnet_apini.apini_init);
         LASSERT (lnet_apini.apini_refcount > 0);
 
-        /* pretty useless; just return the NID of the first local interface,
-         * that isn't LONAL (it has the same NID on all nodes) */
-
         PTL_LOCK(flags);
 
         list_for_each(tmp, &lnet_apini.apini_nis) {
-                ni = list_entry(tmp, ptl_ni_t, ni_list);
-                if (ni->ni_nal->nal_type == LONAL)
+                if (index-- != 0)
                         continue;
+                
+                ni = list_entry(tmp, ptl_ni_t, ni_list);
 
                 id->nid = ni->ni_nid;
                 id->pid = lnet_apini.apini_pid;
@@ -1042,58 +981,10 @@ LNetGetId(lnet_handle_ni_t ni_handle, lnet_process_id_t *id)
         return rc;
 }
 
-int
-LNetNIHandle(lnet_handle_any_t handle_in, lnet_handle_ni_t *ni_out)
-{
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
-
-        *ni_out = handle_in;
-        return 0;
-}
-
 void
 LNetSnprintHandle(char *str, int len, lnet_handle_any_t h)
 {
         snprintf(str, len, LPX64, h.cookie);
 }
 
-int
-LNetGetUid(lnet_handle_ni_t ni_handle, lnet_uid_t *uid)
-{
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
-        
-        *uid = 0;                               /* fake it */
-        return 0;
-}
 
-int
-LNetNIDist(lnet_handle_ni_t interface_in, lnet_process_id_t process_in,
-          unsigned long *distance_out)
-{
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
-
-        return 1;                               /* fake it */
-}
-
-int 
-LNetNIStatus(lnet_handle_ni_t interface_in, int register_in,
-            lnet_sr_value_t *status_out)
-{
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
-
-        return -EPERM;                        /* not supported */
-}
-
-int
-LNetACEntry(lnet_handle_ni_t ni_in, lnet_ac_index_t index_in,
-           lnet_process_id_t match_id_in, lnet_pt_index_t portal_in)
-{
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
-
-        return -EPERM;                        /* not supported */
-}

@@ -32,7 +32,6 @@ ptl_nal_t kibnal_nal = {
         .nal_recv          = kibnal_recv,
 };
 
-lnet_handle_ni_t         kibnal_ni;
 kib_tunables_t          kibnal_tunables;
 
 kib_data_t              kibnal_data = {

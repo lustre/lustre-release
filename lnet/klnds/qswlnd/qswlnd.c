@@ -687,7 +687,7 @@ kqswnal_initialise (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel Quadrics/Elan NAL v1.01");
+MODULE_DESCRIPTION("Kernel Quadrics/Elan LND v1.01");
 MODULE_LICENSE("GPL");
 
 module_init (kqswnal_initialise);

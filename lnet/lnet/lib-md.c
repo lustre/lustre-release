@@ -240,8 +240,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 }
 
 int
-LNetMDBind(lnet_handle_ni_t nih, lnet_md_t umd,
-          lnet_unlink_t unlink, lnet_handle_md_t *handle)
+LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
         ptl_libmd_t  *md;
         unsigned long flags;
@@ -302,7 +301,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
                 memset(&ev, 0, sizeof(ev));
 
                 ev.type = LNET_EVENT_UNLINK;
-                ev.ni_fail_type = 0;
+                ev.status = 0;
                 ev.unlinked = 1;
                 ptl_md_deconstruct(md, &ev.md);
                 ptl_md2handle(&ev.md_handle, md);
