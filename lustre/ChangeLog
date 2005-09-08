@@ -36,6 +36,13 @@ Details    : If an llog record is corrupted/zeroed, it is possible to loop
 	     forever in llog_process().  Validate the llog record length
 	     and skip the remainder of the block on error.
 
+Severity   : minor
+Frequency  : occasional (liblustre only)
+Bugzilla   : 6363
+Description: liblustre could not open files whose last component is a symlink
+Details    : sysio_path_walk() would incorrectly pass the open intent to
+	     intermediate path components.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
