@@ -477,7 +477,7 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
                 RETURN(NULL);
         }
 
-        CDEBUG(D_IOCTL, "looking for export cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_INFO, "looking for export cookie "LPX64"\n", conn->cookie);
         export = class_handle2object(conn->cookie);
         RETURN(export);
 }
@@ -610,7 +610,7 @@ struct obd_import *class_import_get(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) >= 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
-        CDEBUG(D_IOCTL, "import %p refcount=%d\n", import,
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
                atomic_read(&import->imp_refcount));
         return import;
 }
@@ -620,7 +620,7 @@ void class_import_put(struct obd_import *import)
 {
         ENTRY;
 
-        CDEBUG(D_IOCTL, "import %p refcount=%d\n", import,
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
                atomic_read(&import->imp_refcount) - 1);
 
         LASSERT(atomic_read(&import->imp_refcount) > 0);
@@ -1030,8 +1030,6 @@ void class_fail_export(struct obd_export *exp)
 EXPORT_SYMBOL(class_fail_export);
 
 /* Ping evictor thread */
-#define D_PET D_HA
-
 #ifdef __KERNEL__
 #define PET_READY     1
 #define PET_TERMINATE 2
@@ -1080,7 +1078,7 @@ static int ping_evictor_main(void *arg)
         SIGNAL_MASK_UNLOCK(current, flags);
         unlock_kernel();
 
-        CDEBUG(D_PET, "Starting Ping Evictor\n");
+        CDEBUG(D_HA, "Starting Ping Evictor\n");
         pet_exp = NULL;
         pet_state = PET_READY;
         while (1) {
@@ -1092,7 +1090,7 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
 
-                CDEBUG(D_PET, "evicting all exports of obd %s older than %ld\n",
+                CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
                        obd->obd_name, expire_time);
 
                 /* Exports can't be deleted out of the list, which means we
@@ -1134,7 +1132,7 @@ static int ping_evictor_main(void *arg)
                 class_export_put(pet_exp);
                 pet_exp = NULL;
         }
-        CDEBUG(D_PET, "Exiting Ping Evictor\n");
+        CDEBUG(D_HA, "Exiting Ping Evictor\n");
 
         RETURN(0);
 }
@@ -1176,6 +1174,7 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 {
         struct obd_export *oldest_exp;
         time_t oldest_time;
+        char str[PTL_NALFMT_SIZE];
 
         ENTRY;
 
@@ -1189,7 +1188,7 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
         exp->exp_last_request_time = max(exp->exp_last_request_time,
                                          (time_t)CURRENT_SECONDS + extra_delay);
 
-        CDEBUG(D_PET, "updating export %s at %ld\n",
+        CDEBUG(D_INFO, "updating export %s at %ld\n",
                exp->exp_client_uuid.uuid,
                exp->exp_last_request_time);
 
@@ -1230,9 +1229,10 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                            ptlrpc_pinger_main), we better wait for 3. */
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
                                 3 * PING_INTERVAL;
-                        CDEBUG(D_PET,
-                               "Thinking about evicting old export from %ld\n",
-                               oldest_time);
+                        CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
+                               exp->exp_obd->obd_name,
+                               ptlrpc_peernid2str(&exp->exp_connection->c_peer,
+                                                  str), oldest_time);
                 }
         } else {
                 if (CURRENT_SECONDS > (exp->exp_obd->obd_eviction_timer +

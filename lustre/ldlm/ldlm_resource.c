@@ -565,7 +565,7 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
         LASSERT(res != NULL);
         LASSERT(res != LP_POISON);
         atomic_inc(&res->lr_refcount);
-        CDEBUG(D_DLMTRACE, "getref res: %p count: %d\n", res,
+        CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
         return res;
 }
@@ -576,7 +576,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "putref res: %p count: %d\n", res,
+        CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
         LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
