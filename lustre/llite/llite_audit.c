@@ -40,17 +40,22 @@ int ll_set_audit(struct inode * inode, __u64 arg)
 {
         struct audit_attr_msg msg;
         struct obd_export * exp = ll_i2mdexp(inode);
+        struct ll_sb_info * sbi = ll_s2sbi(inode->i_sb);
+        struct ll_inode_info *lli = ll_i2info(inode);
         int rc;
 
         msg.attr = arg;
-        msg.id = ll_i2info(inode)->lli_id;
+        msg.id = lli->lli_id;
         //set audit on MDS (fs/dir/file)
         rc = obd_set_info(exp, 5, "audit", sizeof(msg), &msg);
         
         //if fs audit is being set for fs then pass attr to all OSS
         if (IS_AUDIT_OP(arg, AUDIT_FS)) {
+                sbi->ll_audit_mask = arg;
                 exp = ll_i2dtexp(inode);
                 rc = obd_set_info(exp, 5, "audit", sizeof(msg), &msg);
+        } else {
+                lli->lli_audit_mask = arg;
         }
         return rc;
 }
