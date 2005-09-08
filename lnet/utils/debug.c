@@ -664,9 +664,19 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
+        
+        /*
+         * The following 3 are for testing ptllnd 
+         * and are no longer part of a shipping product
+         */        
+        {"libptl", "portals/libptl"},
+        {"portals", "portals/portals"},
+        {"ksocknal", "portals/knals/socknal"},
+        
         {"libcfs", "lnet/libcfs"},
-        {"portals", "lnet/portals"},
-        {"ksocknal", "lnet/knals/socknal"},
+        {"lnet", "lnet/lnet"},
+        {"ksocklnd", "lnet/klnds/socklnd"},
+        {"kptllnd", "lnet/klnds/ptllnd"},
         {"kptlrouter", "lnet/router"},
         {"lvfs", "lustre/lvfs"},
         {"obdclass", "lustre/obdclass"},
