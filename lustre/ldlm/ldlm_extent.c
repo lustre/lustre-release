@@ -134,6 +134,9 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 {
         struct ldlm_extent new_ex = { .start = 0, .end = ~0};
 
+        if (lock->l_req_mode == LCK_GROUP)
+                return;
+
         ldlm_extent_internal_policy(&res->lr_granted, lock, &new_ex);
         ldlm_extent_internal_policy(&res->lr_waiting, lock, &new_ex);
 
@@ -156,139 +159,126 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
  */
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-                         int *flags, ldlm_error_t *err,
-                         struct list_head *work_list)
+                         int *flags, struct list_head *work_list,
+                         struct list_head **insertp)
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
         ldlm_mode_t req_mode = req->l_req_mode;
-        __u64 req_start = req->l_req_extent.start;
-        __u64 req_end = req->l_req_extent.end;
         int compat = 1;
-        int scan = 0;
         ENTRY;
 
         lockmode_verify(req_mode);
 
-        list_for_each(tmp, queue) {
-                lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+        if (req->l_req_mode == LCK_GROUP) {
+                int found = 0;
 
-                if (req == lock)
-                        RETURN(compat);
+                list_for_each(tmp, queue) {
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                        if (req == lock)
+                                break;
 
-                if (scan) {
-                        /* We only get here if we are queuing GROUP lock
-                           and met some incompatible one. The main idea of this
-                           code is to insert GROUP lock past compatible GROUP
-                           lock in the waiting queue or if there is not any,
-                           then in front of first non-GROUP lock */
                         if (lock->l_req_mode != LCK_GROUP) {
-                        /* Ok, we hit non-GROUP lock, there should be no
-                           more GROUP locks later on, queue in front of
-                           first non-GROUP lock */
+                                /* group locks are not blocked by waiting PR|PW
+                                 * locks. also, any group locks that could have
+                                 * blocked us would have appeared before this
+                                 * PR|PW lock in the list.  */
+                                if (lock->l_req_mode != lock->l_granted_mode)
+                                        break;
 
-                                ldlm_resource_insert_lock_after(lock, req);
-                                list_del_init(&lock->l_res_link);
-                                ldlm_resource_insert_lock_after(req, lock);
-                                RETURN(0);
-                        }
-                        if (req->l_policy_data.l_extent.gid ==
-                             lock->l_policy_data.l_extent.gid) {
-                                /* found it */
-                                ldlm_resource_insert_lock_after(lock,
-                                                                req);
-                                RETURN(0);
-                        }
-                        continue;
-                }
+                                compat = 0;
+                                if (!work_list)
+                                        break;
 
-                /* locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                        /* non-group locks are compatible, overlap doesn't
-                           matter */
-                        if (req_mode != LCK_GROUP)
+                                if (lock->l_blocking_ast)
+                                        ldlm_add_ast_work_item(lock, req,
+                                                               work_list);
                                 continue;
-                                
-                        /* If we are trying to get a GROUP lock and there is
-                           another one of this kind, we need to compare gid */
-                        if (req->l_policy_data.l_extent.gid ==
-                            lock->l_policy_data.l_extent.gid) {
-                                if (lock->l_req_mode == lock->l_granted_mode)
-                                        RETURN(2);
-
-                                /* If we are in nonblocking mode - return
-                                   immediately */
-                                if (*flags & LDLM_FL_BLOCK_NOWAIT) {
-                                        compat = -EWOULDBLOCK;
-                                        goto destroylock;
-                                }
-                                /* If this group lock is compatible with another
-                                 * group lock on the waiting list, they must be
-                                 * together in the list, so they can be granted
-                                 * at the same time.  Otherwise the later lock
-                                 * can get stuck behind another, incompatible,
-                                 * lock. */
-                                ldlm_resource_insert_lock_after(lock, req);
-                                /* Because 'lock' is not granted, we can stop
-                                 * processing this queue and return immediately.
-                                 * There is no need to check the rest of the
-                                 * list. */
-                                RETURN(0);
                         }
-                }
 
-                if (req_mode == LCK_GROUP &&
-                    (lock->l_req_mode != lock->l_granted_mode)) {
-                        scan = 1;
-                        compat = 0;
-                        if (lock->l_req_mode != LCK_GROUP) {
-                        /* Ok, we hit non-GROUP lock, there should be no
-                           more GROUP locks later on, queue in front of
-                           first non-GROUP lock */
+                        /* no blocking ASTs are sent for group locks. */
 
-                                ldlm_resource_insert_lock_after(lock, req);
-                                list_del_init(&lock->l_res_link);
-                                ldlm_resource_insert_lock_after(req, lock);
-                                RETURN(0);
-                        }
-                        if (req->l_policy_data.l_extent.gid ==
-                             lock->l_policy_data.l_extent.gid) {
-                                /* found it */
-                                ldlm_resource_insert_lock_after(lock, req);
-                                RETURN(0);
-                        }
-                        continue;
-                }
+                        if (lock->l_policy_data.l_extent.gid !=
+                            req->l_policy_data.l_extent.gid) {
+                                if (*flags & LDLM_FL_BLOCK_NOWAIT)
+                                        RETURN(-EWOULDBLOCK);
 
-                if (lock->l_req_mode == LCK_GROUP) {
-                        /* If compared lock is GROUP, then requested is PR/PW/=>
-                         * this is not compatible; extent range does not
-                         * matter */
-                        if (*flags & LDLM_FL_BLOCK_NOWAIT) {
-                                compat = -EWOULDBLOCK;
-                                goto destroylock;
-                        } else {
+                                compat = 0;
+
+                                /* there's a blocking group lock in front
+                                 * of us on the queue.  It can be held
+                                 * indefinitely, so don't timeout. */
                                 *flags |= LDLM_FL_NO_TIMEOUT;
+
+                                /* the only reason to continue traversing the
+                                 * list at this point is to find the proper
+                                 * place to insert the lock in the waitq. */
+                                if (insertp && !found)
+                                        continue;
+
+                                break;
                         }
-                } else if (lock->l_policy_data.l_extent.end < req_start ||
-                           lock->l_policy_data.l_extent.start > req_end) {
-                        /* if a non grouplock doesn't overlap skip it */
-                        continue;
+
+                        /* if a group lock with this gid has already been
+                         * granted then grant this one. */
+                        if (lock->l_req_mode == lock->l_granted_mode) {
+                                compat = 2;
+                                break;
+                        }
+                        found = 1;
+                }
+        } else {
+                __u64 req_start = req->l_req_extent.start;
+                __u64 req_end = req->l_req_extent.end;
+
+                list_for_each(tmp, queue) {
+                        lock = list_entry(tmp, struct ldlm_lock, l_res_link);
+                        if (req == lock)
+                                break;
+
+                        if (lock->l_req_mode == LCK_GROUP) {
+                                if (*flags & LDLM_FL_BLOCK_NOWAIT)
+                                        RETURN(-EWOULDBLOCK);
+
+                                /* No blocking ASTs are sent for group locks. */
+                                compat = 0;
+
+                                /* there's a blocking group lock in front
+                                 * of us on the queue.  It can be held
+                                 * indefinitely, so don't timeout. */
+                                *flags |= LDLM_FL_NO_TIMEOUT;
+
+                                if (work_list)
+                                        continue;
+                                else
+                                        break;
+                        }
+
+                        /* locks are compatible, overlap doesn't matter */
+                        if (lockmode_compat(lock->l_req_mode, req_mode))
+                                continue;
+
+                        if (lock->l_policy_data.l_extent.end < req_start ||
+                            lock->l_policy_data.l_extent.start > req_end)
+                                continue;
+
+                        compat = 0;
+
+                        if (!work_list)
+                                break;
+
+                        if (lock->l_blocking_ast)
+                                ldlm_add_ast_work_item(lock, req, work_list);
                 }
 
-                if (!work_list)
-                        RETURN(0);
-
-                compat = 0;
-                if (lock->l_blocking_ast)
-                        ldlm_add_ast_work_item(lock, req, work_list);
+                /* Ensure we scan entire list if insertp is requested so that
+                 * the new request will be appended to the end of the list. */
+                LASSERT((insertp == NULL) || (tmp == queue));
         }
 
-        return(compat);
-destroylock:
-        list_del_init(&req->l_res_link);
-        ldlm_lock_destroy(req);
-        *err = compat;
+        if (insertp)
+                *insertp = tmp;
+
         RETURN(compat);
 }
 
@@ -306,6 +296,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 {
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        struct list_head *insertp = NULL;
         int rc, rc2;
         ENTRY;
 
@@ -313,17 +304,16 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         *err = ELDLM_OK;
 
         if (!first_enq) {
-                /* Careful observers will note that we don't handle -EWOULDBLOCK
-                 * here, but it's ok for a non-obvious reason -- compat_queue
-                 * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT).
-                 * flags should always be zero here, and if that ever stops
-                 * being true, we want to find out. */
+                /* -EWOULDBLOCK can't occur here since (flags & BLOCK_NOWAIT)
+                 * lock requests would either be granted or fail on their
+                 * first_enq. flags should always be zero here, and if that
+                 * ever changes we want to find out. */
                 LASSERT(*flags == 0);
-                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags,
-                                              err, NULL);
+                rc = ldlm_extent_compat_queue(&res->lr_granted, lock,
+                                              flags, NULL, NULL);
                 if (rc == 1) {
                         rc = ldlm_extent_compat_queue(&res->lr_waiting, lock,
-                                                      flags, err, NULL);
+                                                      flags, NULL, NULL);
                 }
                 if (rc == 0)
                         RETURN(LDLM_ITER_STOP);
@@ -335,19 +325,21 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
  restart:
-        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err, &rpc_list);
+        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, &rpc_list,
+                                      NULL);
         if (rc < 0)
-                GOTO(out, rc); /* lock was destroyed */
-        if (rc == 2) {
+                GOTO(destroylock, rc);
+        if (rc == 2)
                 goto grant;
-        }
 
-        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, err, &rpc_list);
+        /* Traverse the waiting list in case there are other conflicting
+         * lock requests ahead of us in the queue and send blocking ASTs */
+        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, &rpc_list,
+                                       &insertp);
         if (rc2 < 0)
-                GOTO(out, rc = rc2); /* lock was destroyed */
-
+                GOTO(destroylock, rc);
         if (rc + rc2 == 2) {
-        grant:
+ grant:
                 ldlm_extent_policy(res, lock, flags);
                 ldlm_resource_unlink_lock(lock);
                 ldlm_grant_lock(lock, NULL);
@@ -359,7 +351,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * terrible folly -- if we goto restart, we could get
                  * re-ordered!  Causes deadlock, because ASTs aren't sent! */
                 if (list_empty(&lock->l_res_link))
-                        ldlm_resource_add_lock(res, &res->lr_waiting, lock);
+                        ldlm_resource_add_lock(res, insertp, lock);
                 unlock_res(res);
                 rc = ldlm_run_bl_ast_work(&rpc_list);
                 lock_res(res);
@@ -367,8 +359,15 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         }
-        rc = 0;
-out:
+
+        RETURN(0);
+
+ destroylock:
+        list_del_init(&lock->l_res_link);
+        unlock_res(res);
+        ldlm_lock_destroy(lock);
+        lock_res(res);
+        *err = rc;
         RETURN(rc);
 }
 

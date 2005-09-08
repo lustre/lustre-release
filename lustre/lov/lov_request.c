@@ -315,6 +315,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_gen = loi->loi_ost_gen;
@@ -424,6 +425,7 @@ int lov_prep_match_set(struct obd_export *exp, struct lov_stripe_md *lsm,
 
                 req->rq_extent.start = start;
                 req->rq_extent.end = end;
+                req->rq_extent.gid = policy->l_extent.gid;
 
                 req->rq_idx = loi->loi_ost_idx;
                 req->rq_gen = loi->loi_ost_gen;
@@ -1324,6 +1326,7 @@ int lov_prep_punch_set(struct obd_export *exp, struct obdo *src_oa,
 
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
 
                 lov_set_add_req(req, set);
         }
@@ -1409,6 +1412,8 @@ int lov_prep_sync_set(struct obd_export *exp, struct obdo *src_oa,
                 req->rq_oa->o_id = loi->loi_id;
                 req->rq_extent.start = rs;
                 req->rq_extent.end = re;
+                req->rq_extent.gid = -1;
+
                 lov_set_add_req(req, set);
         }
         if (!set->set_count)

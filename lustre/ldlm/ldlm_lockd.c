@@ -478,7 +478,8 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         do_gettimeofday(&granted_time);
         total_enqueue_wait = timeval_sub(&granted_time, &lock->l_enqueued_time);
 
-        if (total_enqueue_wait / 1000000 > obd_timeout)
+        if (((flags & LDLM_FL_NO_TIMEOUT) == 0) &&
+            ((total_enqueue_wait / 1000000) > obd_timeout))
                 LDLM_ERROR(lock, "enqueue wait took %ldus", total_enqueue_wait);
 
         lock_res_and_lock(lock);

@@ -217,8 +217,7 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
         /* XXX for debug write replay without smfs and kml */
         res_id.name[0]= oa->o_id;
         res_id.name[1]= oa->o_gr;
-        policy.l_extent.start = extent->start;
-        policy.l_extent.end = extent->end;
+        policy.l_extent = *extent;
         
         /* get extent read lock on the source replay file */
         rc = ldlm_cli_enqueue(NULL, NULL, cache->obd_namespace, res_id,

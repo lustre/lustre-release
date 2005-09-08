@@ -1686,8 +1686,7 @@ static int lov_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                 LASSERT(lov_lockhp);
 
                 *flags = save_flags;
-                sub_policy.l_extent.start = req->rq_extent.start;
-                sub_policy.l_extent.end = req->rq_extent.end;
+                sub_policy.l_extent = req->rq_extent;
 
                 rc = obd_enqueue(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,
                                  type, &sub_policy, mode, flags, bl_cb,
@@ -1731,8 +1730,7 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lov_lockhp = set->set_lockh->llh_handles + req->rq_stripe;
                 LASSERT(lov_lockhp);
 
-                sub_policy.l_extent.start = req->rq_extent.start;
-                sub_policy.l_extent.end = req->rq_extent.end;
+                sub_policy.l_extent = req->rq_extent;
                 lov_flags = *flags;
 
                 rc = obd_match(lov->tgts[req->rq_idx].ltd_exp, req->rq_md,

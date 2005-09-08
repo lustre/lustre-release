@@ -2764,11 +2764,7 @@ static int osc_cancel(struct obd_export *exp, struct lov_stripe_md *md,
 {
         ENTRY;
 
-        if (mode == LCK_GROUP)
-                ldlm_lock_decref_and_cancel(lockh, mode);
-        else
-                ldlm_lock_decref(lockh, mode);
-
+        ldlm_lock_decref(lockh, mode);
         RETURN(0);
 }
 

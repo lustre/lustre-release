@@ -498,11 +498,11 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 lock->l_writers--;
         }
 
-        if (lock->l_flags & LDLM_FL_LOCAL &&
+        if (((lock->l_flags & LDLM_FL_LOCAL) || (mode == LCK_GROUP)) &&
             !lock->l_readers && !lock->l_writers) {
-                /* If this is a local lock on a server namespace and this was
-                 * the last reference, cancel the lock. */
-                CDEBUG(D_INFO, "forcing cancel of local lock\n");
+                /* If this is a local lock on a server namespace or a group
+                 * lock and this was the last reference, cancel the lock. */
+                CDEBUG(D_INFO, "forcing cancel of local or group lock\n");
                 lock->l_flags |= LDLM_FL_CBPENDING;
         }
 
@@ -625,16 +625,19 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 if (!(lock->l_req_mode & mode))
                         continue;
 
-                if (lock->l_resource->lr_type == LDLM_EXTENT &&
-                    (lock->l_policy_data.l_extent.start >
-                     policy->l_extent.start ||
-                     lock->l_policy_data.l_extent.end < policy->l_extent.end))
-                        continue;
-
-                if (lock->l_resource->lr_type == LDLM_EXTENT &&
-                    mode == LCK_GROUP &&
-                    lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
-                        continue;
+                if (lock->l_resource->lr_type == LDLM_EXTENT) {
+                        if (mode == LCK_GROUP) {
+                                if (lock->l_policy_data.l_extent.gid !=
+                                    policy->l_extent.gid)
+                                        continue;
+                        } else {
+                                if ((lock->l_policy_data.l_extent.start >
+                                     policy->l_extent.start) ||
+                                    (lock->l_policy_data.l_extent.end <
+                                     policy->l_extent.end))
+                                        continue;
+                        }
+                }
 
                 /* We match if we have existing lock with same or wider set
                    of bits. */
@@ -1285,11 +1288,13 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                ldlm_lockname[lock->l_granted_mode],
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
-                CDEBUG(level, "  Extent: "LPU64" -> "LPU64
-                       " (req "LPU64"-"LPU64")\n",
+                CDEBUG(level, "  Extent: "LPU64" -> "LPU64" gid: "LPU64
+                       " (req "LPU64"-"LPU64" gid: "LPU64")\n",
                        lock->l_policy_data.l_extent.start,
                        lock->l_policy_data.l_extent.end,
-                       lock->l_req_extent.start, lock->l_req_extent.end);
+                       lock->l_policy_data.l_extent.gid,
+                       lock->l_req_extent.start, lock->l_req_extent.end,
+                       lock->l_req_extent.gid);
         else if (lock->l_resource->lr_type == LDLM_FLOCK)
                 CDEBUG(level, "  Pid: "LPU64" Extent: "LPU64" -> "LPU64"\n",
                        lock->l_policy_data.l_flock.pid,

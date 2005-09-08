@@ -238,10 +238,9 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 #endif
 
-        /* 
-         * all real clients should perform actual connection rightaway, because
+        /* all real clients should perform actual connection right away, because
          * it is possible, that LMV will not have opportunity to connect
-         * targets, as MDC stuff will bit called directly, for instance while
+         * targets, as MDC stuff will be called directly, for instance while
          * reading ../mdc/../kbytesfree procfs file, etc.
          */
         if (flags & OBD_OPT_REAL_CLIENT)
