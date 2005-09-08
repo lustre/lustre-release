@@ -7,16 +7,16 @@ Frequency  : rare
 Bugzilla   : 7407
 Description: Running on many-way SMP OSTs can trigger oops in llcd_send()
 Details    : A race between allocating a new llcd and re-getting the llcd_lock
-             allowed another thread to grab newly-allocated llcd.
+	     allowed another thread to grab newly-allocated llcd.
 
 Severity   : enhancement
 Bugzilla   : 7116
 Description: 2.6 OST async journal commit and locking fix to improve performance
 Details    : The filter_direct_io()+filter_commitrw_write() journal commits for
-             2.6 kernels are now async as they already were in 2.4 kernels so
-             that they can commit concurrently with the network bulk transfer.
-             For block-allocated files the filter allocation semaphore is held
-             to avoid filesystem fragmentation during allocation.  BKL lock
+	     2.6 kernels are now async as they already were in 2.4 kernels so
+	     that they can commit concurrently with the network bulk transfer.
+	     For block-allocated files the filter allocation semaphore is held
+	     to avoid filesystem fragmentation during allocation.  BKL lock
 	     removed for 2.6 xattr operations where it is no longer needed.
 
 Severity   : minor
@@ -27,6 +27,14 @@ Details    : In some more complicated routing and multiple-network
 	     configurations, lconf will avoid trying to make a network
 	     connection to a disjoint part of the IP space.  It was doing the
 	     math incorrectly for one set of cases.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7359
+Description: Fix for potential infinite loop processing records in an llog.
+Details    : If an llog record is corrupted/zeroed, it is possible to loop
+	     forever in llog_process().  Validate the llog record length
+	     and skip the remainder of the block on error.
 
 ------------------------------------------------------------------------------
 
@@ -39,31 +47,31 @@ Frequency  : rare
 Bugzilla   : 7264
 Description: Mounting an ldiskfs file system with mballoc may crash OST node.
 Details    : ldiskfs mballoc code may reference an uninitialized buddy struct
-             at startup during orphan unlinking.  Instead, skip buddy update
-             before setup, as it will be regenerated after recovery is complete.
+	     at startup during orphan unlinking.  Instead, skip buddy update
+	     before setup, as it will be regenerated after recovery is complete.
 
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 7039
 Description: If an OST is inactive, its locks might reference stale inodes.
 Details    : lov_change_cbdata() must iterate over all namespaces, even if
-             they are inactive to clear inode references from the lock.
+	     they are inactive to clear inode references from the lock.
 
 Severity   : enhancement
 Frequency  : occasional, if non-standard max_dirty_mb used
 Bugzilla   : 7138
 Description: Client will block write RPCs if not enough grant
 Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
-             then the client will block writes while waiting for another RPC
-             to complete instead of consuming its dirty limit.  With change
-             we get improved performance when max_dirty_mb is small.
+	     then the client will block writes while waiting for another RPC
+	     to complete instead of consuming its dirty limit.  With change
+	     we get improved performance when max_dirty_mb is small.
 
 Severity   : enhancement
 Bugzilla   : 3389, 6253
 Description: Add support for supplementary groups on the MDS.
 Details    : The MDS has an upcall /proc/fs/lustre/mds/{mds}/group_upcall
-             (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
-             lookups for user supplementary groups into a cache.
+	     (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
+	     lookups for user supplementary groups into a cache.
 
 Severity   : minor
 Bugzilla   : 7278
