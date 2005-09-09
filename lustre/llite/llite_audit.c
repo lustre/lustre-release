@@ -46,7 +46,7 @@ int ll_set_audit(struct inode * inode, __u64 arg)
 
         msg.attr = arg;
         msg.id = lli->lli_id;
-        //set audit on MDS (fs/dir/file)
+        CWARN("Set audit %x for "DLID4"\n", (__u32)arg, OLID4(&lli->lli_id));
         rc = obd_set_info(exp, 5, "audit", sizeof(msg), &msg);
         
         //if fs audit is being set for fs then pass attr to all OSS
