@@ -260,7 +260,8 @@ int mds_set_audit(struct obd_device * obd, void * val)
         if (inode && S_ISREG(inode->i_mode))
                 mds_set_obj_audit(obd, inode, &msg->attr);
         
-        l_dput(dentry);
+        if (dentry)
+                l_dput(dentry);
         
         //pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
