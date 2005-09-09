@@ -93,52 +93,38 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
         page_size = LOV_MIN_STRIPE_SIZE;
         if (getpagesize() > page_size) {
                 page_size = getpagesize();
-                fprintf(stderr, "WARNING: your page size (%u) is larger than "
+                fprintf(stderr, "warning: your page size (%u) is larger than "
                         "expected (%u).\n", page_size, LOV_MIN_STRIPE_SIZE);
         }
-        if ((stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) &&
-            !(isdir && stripe_size == -1)) {
-                rc = -EINVAL;
+        if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+                errno = rc = -EINVAL;
                 err_msg("error: stripe_size must be an even "
-                        "multiple of %d bytes.\n", page_size);
+                        "multiple of %d bytes", page_size);
                 goto out;
         }
         if (stripe_offset < -1 || stripe_offset > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
-                err_msg("error: bad stripe offset %d\n", stripe_offset);
+                err_msg("error: bad stripe offset %d", stripe_offset);
                 goto out;
         }
         if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
                 errno = rc = -EINVAL;
-                err_msg("error: bad stripe count %d\n", stripe_count);
+                err_msg("error: bad stripe count %d", stripe_count);
                 goto out;
         }
         if (stripe_count > 0 && (__u64)stripe_size * stripe_count > ~0UL) {
                 errno = rc = -EINVAL;
                 err_msg("error: stripe_size %ld * stripe_count %d "
-                        "exceeds %lu bytes.\n", ~0UL);
+                        "exceeds %lu bytes", ~0UL);
                 goto out;
         }
 
-        /*  Initialize IOCTL striping pattern structure  */
+        /*  Initialize IOCTL striping pattern structure */
         lum.lmm_magic = LOV_USER_MAGIC;
         lum.lmm_pattern = stripe_pattern;
         lum.lmm_stripe_size = stripe_size;
         lum.lmm_stripe_count = stripe_count;
         lum.lmm_stripe_offset = stripe_offset;
-
-        /* setting stripe pattern 0 -1 0 to a dir means to delete it */
-        if (isdir) {
-                if (stripe_size == 0 && stripe_count == 0 &&
-                    stripe_offset == -1)
-                        lum.lmm_stripe_size = -1;
-        } else {
-                if (stripe_size == -1) {
-                        errno = rc = -EPERM;
-                        err_msg("deleting file stripe info is not allowed\n");
-                        goto out;
-                }
-        }
 
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
                 char *errmsg = "stripe already set";

@@ -138,30 +138,30 @@ static int lfs_setstripe(int argc, char **argv)
         if (argc == 3) {
                 if (strcmp(argv[1], "-d") != 0)
                         return CMD_HELP;
-                
+
                 fname = argv[2];
-                st_size = -1;
+                st_size = 0;
+                st_offset = -1;
                 st_count = 0;
-                st_offset = 0;
         } else {
                 fname = argv[1];
 
-                // get the stripe size
+                /* get the stripe size */
                 st_size = strtoul(argv[2], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
                         return CMD_HELP;
                 }
-                
-                // get the stripe offset
+
+                /* get the stripe offset */
                 st_offset = strtoul(argv[3], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
                         return CMD_HELP;
                 }
-                // get the stripe count
+                /* get the stripe count */
                 st_count = strtoul(argv[4], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe count '%s'\n",

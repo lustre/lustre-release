@@ -50,6 +50,14 @@ Description: Tuning the MDC DLM LRU size to zero triggers client LASSERT
 Details    : llu_lookup_finish_locks() tries to set lock data on a lock
 	     after it has been released, only do this for referenced locks
 
+Severity   : enhancement
+Bugzilla   : 7328
+Description: specifying an (invalid) directory default stripe_size of -1
+	     would reset the directory default striping
+Details    : stripe_size -1 was used internally to signal directory stripe
+	     removal, now use "all default" to signal dir stripe removal
+	     as a directory striping of "all default" is not useful
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

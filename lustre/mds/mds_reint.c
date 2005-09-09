@@ -208,6 +208,8 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
 
         if (!(ia_valid & ATTR_CTIME_SET))
                 LTIME_S(attr->ia_ctime) = now;
+        else
+                attr->ia_valid &= ~ATTR_CTIME_SET;
         if (!(ia_valid & ATTR_ATIME_SET))
                 LTIME_S(attr->ia_atime) = now;
         if (!(ia_valid & ATTR_MTIME_SET))
@@ -395,7 +397,8 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
-                CERROR("Error unpack md %p\n", lmm);
+                CERROR("Error unpack md %p for inode %lu\n", lmm,
+                       inode->i_ino);
                 GOTO(out, rc);
         }
 
@@ -513,10 +516,10 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (rec->ur_iattr.ia_valid & ATTR_ATTR_FLAG)    /* ioctl */
+        if (rec->ur_iattr.ia_valid & ATTR_ATTR_FLAG) {  /* ioctl */
                 rc = fsfilt_iocontrol(obd, inode, NULL, EXT3_IOC_SETFLAGS,
                                       (long)&rec->ur_iattr.ia_attr_flags);
-        else {                                            /* setattr */
+        } else if (rec->ur_iattr.ia_valid) {            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && S_ISREG(inode->i_mode) &&
@@ -544,9 +547,14 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
 
                 lum = rec->ur_eadata;
-                /* if lmm_stripe_size is -1 then delete stripe info from dir */
+                /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
+                 * values specified) then delete default striping from dir. */
                 if (S_ISDIR(inode->i_mode) &&
-                    lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
+                    ((lum->lmm_stripe_size == 0 &&
+                      lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1) &&
+                      lum->lmm_stripe_count == 0) ||
+                    /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
+                    lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1))){
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0);
                         if (rc)
                                 GOTO(cleanup, rc);
