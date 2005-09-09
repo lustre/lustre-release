@@ -248,7 +248,8 @@ int mds_set_audit(struct obd_device * obd, void * val)
 
         dentry = mds_id2dentry(obd, &msg->id, NULL);
         if (IS_ERR(dentry)) {
-                CERROR("Cannot get dentry\n");
+                CERROR("Cannot get dentry "DLID4" err=%li\n", OLID4(&msg->id),
+                       PTR_ERR(dentry));
                 RETURN(PTR_ERR(dentry));
         }
             
