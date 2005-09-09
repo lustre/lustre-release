@@ -70,8 +70,8 @@ EXPORT_SYMBOL(ll_capa_timer);
 static inline int const
 capa_hashfn(unsigned int uid, int capa_op, __u64 mdsid, unsigned long ino)
 {
-        return (ino ^ uid) * (unsigned long)capa_op * (unsigned long)mdsid %
-               NR_CAPAHASH;
+        return (ino ^ uid) * (unsigned long)capa_op * (unsigned long)(mdsid + 1)
+               % NR_CAPAHASH;
 }
 
 int capa_op(int flags)
@@ -188,13 +188,14 @@ int capa_cache_init(void)
 
 void capa_cache_cleanup(void)
 {
-        struct obd_capa *ocapa;
-        struct hlist_node *pos, *n;
+        struct obd_capa *ocapa, *tmp;
+        int i;
 
-        hlist_for_each_entry_safe(ocapa, pos, n, capa_hash, c_hash) {
-                LASSERT(ocapa->c_type != CLIENT_CAPA);
-                __capa_put(ocapa);
-                destroy_capa(ocapa);
+        for (i = MDS_CAPA; i <= FILTER_CAPA; i++) {
+                list_for_each_entry_safe(ocapa, tmp, &capa_list[i], c_list) {
+                        __capa_put(ocapa);
+                        destroy_capa(ocapa);
+                }
         }
 
         OBD_FREE(capa_hash, PAGE_SIZE);
@@ -242,7 +243,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
                 do_update_capa(ocapa, capa);
                 ocapa->c_type = type;
                 list_add_capa(ocapa, &capa_list[type]);
-                hlist_add_head(&ocapa->c_hash, capa_hash);
+                hlist_add_head(&ocapa->c_hash, head);
                 if (type == CLIENT_CAPA)
                         INIT_LIST_HEAD(&ocapa->c_lli_list);
 

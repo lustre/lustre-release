@@ -935,7 +935,7 @@ int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int fla
 
         if (local)
                 RETURN(mds->mds_num);
-        
+
         if (flags & REC_REINT_CREATE) {
                 i = mds->mds_num;
         } else if (mds->mds_md_exp != NULL && peer != NULL) {

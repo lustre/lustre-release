@@ -258,8 +258,6 @@ mds_update_capa_key(struct obd_device *obd, struct mds_capa_key *mkey,
         if (rc2)
                 GOTO(out, rc2);
         
-        CDEBUG(D_INFO, "wrote capa keyid %u\n", keyid);
-
         spin_lock(&mds_capa_lock);
         list_del_init(&CUR_CAPA_KEY_LIST(mds));
         mds->mds_capa_key_idx = to_update;
@@ -269,7 +267,7 @@ mds_update_capa_key(struct obd_device *obd, struct mds_capa_key *mkey,
         if (time_before(expiry, mds_eck_timer.expires) ||
             !timer_pending(&mds_eck_timer)) {
                 mod_timer(&mds_eck_timer, expiry);
-                CDEBUG(D_INFO, "mds_eck_timer %lu", expiry);
+                CDEBUG(D_INFO, "mds_eck_timer %lu\n", expiry);
         }
         spin_unlock(&mds_capa_lock);
 
