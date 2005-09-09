@@ -4,9 +4,9 @@
 # See the file COPYING in this distribution
 
 if MODULES
-#if BUILD_PTLLND
+if BUILD_PTLLND
 modulenet_DATA = kptllnd$(KMODEXT)
-#endif
+endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c

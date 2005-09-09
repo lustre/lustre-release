@@ -4,7 +4,7 @@
 @BUILD_IIBLND_TRUE@subdir-m += iiblnd
 @BUILD_VIBLND_TRUE@subdir-m += viblnd
 @BUILD_QSWLND_TRUE@subdir-m += qswlnd
-subdir-m += ptllnd
+@BUILD_PTLLND_TRUE@subdir-m += ptllnd
 subdir-m += socklnd
 
 @INCLUDE_RULES@

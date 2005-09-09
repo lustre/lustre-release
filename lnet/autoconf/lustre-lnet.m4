@@ -84,22 +84,17 @@ fi
 #
 AC_DEFUN([LN_CONFIG_PORTALS],
 [AC_MSG_CHECKING([for Portals API headers])
-AC_ARG_WITH([portals],
-	AC_HELP_STRING([--with-portals=path],
-		       [set path to portals includes]),
-	[PORTALS=$with_portals],
-        [PORTALS=$with_portals])
-AC_MSG_RESULT([$PORTALS])
 
-AC_MSG_CHECKING([if Portals headers are present])
-if test -e $PORTALS/portals/api.h ; then
+if test $PORTALS ; then
 	AC_MSG_RESULT([yes])
 	PTLLND="ptllnd"
-        PTLLNDCPPFLAGS="-I$PORTALS"
+        PTLLNDCPPFLAGS="-I$PORTALS/include"
+	AC_MSG_RESULT([$PORTALS])
 else
 	AC_MSG_RESULT([no])
 	PTLLND=""
 	PTLLNDCPPFLAGS=""
+	AC_MSG_RESULT([no])
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)
