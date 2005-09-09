@@ -1087,6 +1087,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         struct list_head *tmp;
         ldlm_error_t err;
         int tmpflags = 0, rc, repsize[2] = {sizeof(*rep), sizeof(*reply_lvb)};
+        int only_liblustre = 0;
         ENTRY;
 
         policy = ldlm_get_processing_policy(res);
@@ -1154,6 +1155,15 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tmplock->l_policy_data.l_extent.end <= reply_lvb->lvb_size)
                         continue;
 
+                /* Don't send glimpse ASTs to liblustre clients.  They aren't
+                 * listening for them, and they do entirely synchronous I/O
+                 * anyways. */
+                if (tmplock->l_export == NULL ||
+                    tmplock->l_export->exp_libclient == 1) {
+                        only_liblustre = 1;
+                        continue;
+                }
+
                 if (l == NULL) {
                         l = LDLM_LOCK_GET(tmplock);
                         continue;
@@ -1169,8 +1179,26 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         l_unlock(&res->lr_namespace->ns_lock);
 
         /* There were no PW locks beyond the size in the LVB; finished. */
-        if (l == NULL)
+        if (l == NULL) {
+                if (only_liblustre) {
+                        /* If we discovered a liblustre client with a PW lock,
+                         * however, the LVB may be out of date!  The LVB is
+                         * updated only on glimpse (which we don't do for
+                         * liblustre clients) and cancel (which the client
+                         * obviously has not yet done).  So if it has written
+                         * data but kept the lock, the LVB is stale and needs
+                         * to be updated from disk.
+                         *
+                         * Of course, this will all disappear when we switch to
+                         * taking liblustre locks on the OST. */
+                        if (res->lr_namespace->ns_lvbo &&
+                            res->lr_namespace->ns_lvbo->lvbo_update) {
+                                res->lr_namespace->ns_lvbo->lvbo_update
+                                                             (res, NULL, 0, 1);
+                        }
+                }
                 RETURN(ELDLM_LOCK_ABORTED);
+        }
 
         if (l->l_glimpse_ast == NULL) {
                 /* We are racing with unlink(); just return -ENOENT */
@@ -1180,6 +1208,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         LASSERTF(l->l_glimpse_ast != NULL, "l == %p", l);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+        /* Update the LVB from disk if the AST failed (this is a legal race) */
         if (rc != 0 && res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
                 res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
@@ -1871,8 +1900,7 @@ static int filter_getattr(struct obd_export *exp, struct obdo *oa,
 
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
+                CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -2591,8 +2619,7 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
 
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
+                CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -2626,17 +2653,14 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                            void *key, __u32 vallen, void *val)
 {
         struct obd_device *obd;
-        struct lustre_handle conn;
         struct llog_ctxt *ctxt;
+        char str[PTL_NALFMT_SIZE];
         int rc = 0;
         ENTRY;
 
-        conn.cookie = exp->exp_handle.h_cookie;
-
         obd = exp->exp_obd;
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid exp %p cookie "LPX64"\n",
-                       exp, conn.cookie);
+                CDEBUG(D_IOCTL, "invalid export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -2644,14 +2668,14 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
             memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
-        CWARN("%s: received MDS connection ("LPX64")\n",
-              obd->obd_name, conn.cookie);
-        memcpy(&obd->u.filter.fo_mdc_conn, &conn, sizeof(conn));
+        CWARN("%s: received MDS connection from %s\n", obd->obd_name,
+              ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
+        obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-        
+
         filter_quota_set_info(exp, obd);
 
         RETURN(rc);

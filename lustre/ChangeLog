@@ -58,6 +58,14 @@ Details    : stripe_size -1 was used internally to signal directory stripe
 	     removal, now use "all default" to signal dir stripe removal
 	     as a directory striping of "all default" is not useful
 
+Severity   : minor
+Frequency  : common for large clusters running liblustre clients
+Bugzilla   : 7198
+Description: doing an ls when liblustre clients are running is slow
+Details    : sending a glimpse AST to a liblustre client waits for every AST
+	     to time out, as liblustre clients will not respond.  Since they
+	     cannot cache data we refresh the OST lock LVB from disk instead.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
