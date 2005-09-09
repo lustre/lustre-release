@@ -521,6 +521,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         do_gettimeofday(&now);
                         if (rc == -ETIMEDOUT) {
+                                char cln_str[PTL_NALFMT_SIZE];
                                 DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT"
                                           ", exp_conn_cnt = %u, real wait %us"
                                           ", arrived %u.%u, served %u.%u",
@@ -530,6 +531,8 @@ static int ost_brw_read(struct ptlrpc_request *req)
                                           (unsigned) req->rq_arrival_time.tv_usec,
                                           (unsigned) req->rq_rpcd_start.tv_sec,
                                           (unsigned) req->rq_rpcd_start.tv_usec);
+                                CDEBUG(D_ERROR, "bulk PUT timeout: client %s\n",
+                                       ptlrpc_peernid2str(&req->rq_peer, cln_str));
                                 ptlrpc_abort_bulk(desc);
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
@@ -728,10 +731,13 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
                 do_gettimeofday(&now);
                 if (rc == -ETIMEDOUT) {
+                        char cln_str[PTL_NALFMT_SIZE];
                         DEBUG_REQ(D_ERROR, req, "timeout on bulk GET, "
                                   "exp_conn_cnt = %u, real wait %us\n",
                                   req->rq_export->exp_conn_cnt,
                                   (unsigned) (now.tv_sec - tstart.tv_sec));
+                        CDEBUG(D_ERROR, "bulk GET timeout: client %s\n",
+                               ptlrpc_peernid2str(&req->rq_peer, cln_str));
                         ptlrpc_abort_bulk(desc);
                 } else if (!desc->bd_success ||
                            desc->bd_nob_transferred != desc->bd_nob) {
