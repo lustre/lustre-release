@@ -245,19 +245,19 @@ int mds_set_audit(struct obd_device * obd, void * val)
         ENTRY;
         
         //push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-        dentry = mds_id2dentry(obd, &msg->id, NULL);
-        if (IS_ERR(dentry)) {
-                CERROR("Cannot get dentry "DLID4" err=%li\n", OLID4(&msg->id),
-                       PTR_ERR(dentry));
-                RETURN(PTR_ERR(dentry));
+        if (IS_AUDIT_OP(msg->attr, AUDIT_FS) == 0) {
+                dentry = mds_id2dentry(obd, &msg->id, NULL);
+                if (IS_ERR(dentry)) {
+                        CERROR("Cannot get dentry "DLID4" err=%li\n", OLID4(&msg->id),
+                                PTR_ERR(dentry));
+                        RETURN(PTR_ERR(dentry));
+                }
+                inode = dentry->d_inode;
         }
-            
-        inode = dentry->d_inode;
-        fsfilt_set_info(obd, inode->i_sb, inode,
+        fsfilt_set_info(obd, obd->u.mds.mds_sb, inode,
                         5, "audit", sizeof(msg->attr), &msg->attr);
         
-        if (S_ISREG(inode->i_mode) && !IS_AUDIT_OP(msg->attr, AUDIT_FS))
+        if (inode && S_ISREG(inode->i_mode))
                 mds_set_obj_audit(obd, inode, &msg->attr);
         
         l_dput(dentry);
