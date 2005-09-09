@@ -423,9 +423,12 @@ CDEBUG(level, "@@@ " fmt                                                       \
        REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
        req->rq_transno,                                                        \
        req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
-       req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid : "<?>",  \
+       req->rq_import ? (char *)req->rq_import->imp_target_uuid.uuid :         \
+          req->rq_export ? (char*)req->rq_export->exp_client_uuid.uuid : "<?>",\
        req->rq_import ?                                                        \
-          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid : "<?>",  \
+          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :         \
+          req->rq_export ?                                                     \
+          (char*)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",   \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
        req->rq_reqlen, req->rq_replen,                                         \
