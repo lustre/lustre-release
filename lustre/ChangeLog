@@ -43,6 +43,13 @@ Description: liblustre could not open files whose last component is a symlink
 Details    : sysio_path_walk() would incorrectly pass the open intent to
 	     intermediate path components.
 
+Severity   : minor
+Frequency  : rare (liblustre only with non-standard tuning)
+Bugzilla   : 7201 (7350)
+Description: Tuning the MDC DLM LRU size to zero triggers client LASSERT
+Details    : llu_lookup_finish_locks() tries to set lock data on a lock
+	     after it has been released, only do this for referenced locks
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

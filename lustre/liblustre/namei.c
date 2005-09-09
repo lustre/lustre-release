@@ -104,11 +104,12 @@ void unhook_stale_inode(struct pnode *pno)
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
+        struct inode *inode;
         LASSERT(it);
         LASSERT(pnode);
 
-        if (it && pnode->p_base->pb_ino != NULL) {
-                struct inode *inode = pnode->p_base->pb_ino;
+        inode = pnode->p_base->pb_ino;
+        if (it->d.lustre.it_lock_mode && inode != NULL) {
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
                        inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
