@@ -443,10 +443,9 @@ int ll_file_open(struct inode *inode, struct file *file)
                 oit.it_flags |= 2;
 
         it = file->f_it;
-        /*
-         * sometimes LUSTRE_IT(it) may not be allocated like opening file by
-         * dentry_open() from GNS stuff.
-         */
+        
+        /* sometimes LUSTRE_IT(it) may not be allocated like opening file by
+         * dentry_open() from GNS stuff. */
         if (!it || !LUSTRE_IT(it)) {
                 it = &oit;
                 rc = ll_intent_alloc(it);
@@ -456,10 +455,8 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         
-        /*
-         * mdc_intent_lock() didn't get a request ref if there was an open
-         * error, so don't do cleanup on the * request here (bug 3430)
-         */
+        /* mdc_intent_lock() didn't get a request ref if there was an open
+         * error, so don't do cleanup on the * request here (bug 3430) */
         if (LUSTRE_IT(it)->it_disposition) {
     		rc = it_open_error(DISP_OPEN_OPEN, it);
     		if (rc)
@@ -579,14 +576,15 @@ int ll_file_open(struct inode *inode, struct file *file)
         GOTO(out, rc);
  out:
         /* audit stuff if there was no RPC */
-        if (LUSTRE_IT(it)->it_data == 0) {
+        if (LUSTRE_IT(it)->it_data == 0)
                 ll_audit_log(inode, AUDIT_OPEN, rc);
-        }
 
         req = LUSTRE_IT(it)->it_data;
         ll_intent_drop_lock(it);
         ll_intent_release(it);
-        ptlrpc_req_finished(req);
+
+        if (req)
+                ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_open_complete(inode);
         } else {

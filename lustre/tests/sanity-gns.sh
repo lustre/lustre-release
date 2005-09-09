@@ -947,6 +947,40 @@ test_2d() {
 
 run_test 2d " odd conditions (mount object is absent) =============="
 
+test_2d1() {
+    local UPCALL="$TMP/gns-upcall-2d1.sh"
+    local LOG="$TMP/gns-log"
+    local OBJECT=".mntinfo"
+    local TIMOUT=5
+    local TICK=1
+
+    disable_gns
+
+    setup_gns $OBJECT $TIMOUT $TICK || 
+	error
+
+    setup_upcall $UPCALL GENERIC $LOG FG ||
+	error
+
+    mkdir -p $DIR/gns_test_2d1
+    cp /etc/termcap $DIR/gns_test_2d1/$OBJECT
+    size=`ls -la $DIR/gns_test_2d1/$OBJECT | awk '{print $5}'`
+    echo "mount object $DIR/gns_test_2d1/$OBJECT size: ${size} bytes"
+    chmod u+s $DIR/gns_test_2d1
+    
+    enable_gns
+
+    check_gns $DIR/gns_test_2d1 $DIR/gns_test_2d1 $TIMOUT $TICK GENERIC OPEN 1
+    
+    disable_gns
+    chmod u-s $DIR/gns_test_2d1
+    rm -fr $DIR/gns_test_2d1
+
+    return 0
+}
+
+run_test 2d1 " odd conditions (mount object is too big) ============"
+
 test_2e() {
     local OBJECT=".mntinfo"
     local TIMOUT=5

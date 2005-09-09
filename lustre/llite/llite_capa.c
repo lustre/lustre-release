@@ -236,6 +236,10 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
         if (!S_ISREG(inode->i_mode))
                 return 0;
 
+        /* GNS code path will have no req */
+        if (!req)
+                return 0;
+
         body = lustre_msg_buf(req->rq_repmsg, 1, sizeof (*body));
         LASSERT(body != NULL);          /* reply already checked out */
         LASSERT_REPSWABBED(req, 1);     /* and swabbed down */
