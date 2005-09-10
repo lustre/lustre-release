@@ -82,6 +82,14 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
         LASSERT(acl == NULL && acl_size == 0);
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        if (current->journal_info != NULL) {
+                CDEBUG(D_ERROR, "calling osc_create() with an "
+                       "open transaction isn't a good idea\n");
+                portals_debug_dumplog();
+        }
+#endif
+
         if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
                 RETURN(osc_real_create(exp, oa, ea, oti));
 
