@@ -255,7 +255,9 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
                 }
         } else {                                /* ni already determined */
                 if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL ||
-                    target_net == PTL_NIDNET(ni->ni_nid)) {
+                    target_net == PTL_NIDNET(ni->ni_nid) ||
+                    (lnet_apini.apini_ptlcompat > 0 &&
+                     PTL_NETNAL(target_net) == 0)) {
                         ptl_ni_addref(ni);      /* extra ref so caller can drop blindly */
                         return target_nid;
                 }

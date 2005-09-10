@@ -127,7 +127,7 @@ struct ptldebug_header {
  * */
 #define LUSTRE_PTL_PID          9
 # else
-#define LUSTRE_PTL_PID          456             /* <= 1023 (TCP reserved port) */
+#define LUSTRE_PTL_PID          12345
 # endif
 
 #define ENTRY_NESTING_SUPPORT (0)

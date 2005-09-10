@@ -160,6 +160,8 @@ lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
                 CLASSERT (PTL_PROTO_ACCEPTOR_VERSION == 1);
 
                 if (accept_proto_version == PTL_PROTO_ACCEPTOR_VERSION) {
+
+                        LASSERT (lnet_apini.apini_ptlcompat < 2); /* no portals peers */
                                 
                         cr.acr_magic   = PTL_PROTO_ACCEPTOR_MAGIC;
                         cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
@@ -438,6 +440,11 @@ lnet_acceptor_start(void)
 	long   pid;
         long   secure;
 
+        /* If we're talking to any portals (pre-LNET) nodes we force the old
+         * acceptor protocol on outgoing connections */
+        if (lnet_apini.apini_ptlcompat > 1)
+                accept_proto_version = 0;
+        
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
 	init_mutex_locked(&lnet_acceptor_state.pta_signal);
 

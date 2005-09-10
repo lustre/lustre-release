@@ -588,6 +588,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
 {
         unsigned long flags;
         lnet_nid_t    gw_nid;
+        lnet_nid_t    src_nid;
         int           niov = 0;
         struct iovec *iov = NULL;
         lnet_kiov_t  *kiov = NULL;
@@ -610,18 +611,32 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         /* set the completion event's initiator.nid now we know it */
         if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
                 msg->msg_ev.initiator.nid = ni->ni_nid;
+
+        src_nid = ni->ni_nid;
+        if (lnet_apini.apini_ptlcompat > 0 &&   /* pretend I'm portals */
+            PTL_NIDNET(target.nid) == 0)        /* If I'm sending to portals */
+                src_nid = PTL_MKNID(0, PTL_NIDADDR(src_nid));
                 
         hdr->type           = cpu_to_le32(type);
         hdr->dest_nid       = cpu_to_le64(target.nid);
         hdr->dest_pid       = cpu_to_le32(target.pid);
-        hdr->src_nid        = cpu_to_le64(ni->ni_nid);
+        hdr->src_nid        = cpu_to_le64(src_nid);
         hdr->src_pid        = cpu_to_le64(lnet_apini.apini_pid);
         hdr->payload_length = cpu_to_le32(len);
 
         if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL) {
-                if (gw_nid != ni->ni_nid) {         /* it's not for me */
-                        routing = gw_nid != target.nid; /* will gateway have to forward? */
-                } else if (implicit_loopback) {    /* force lonal? */
+                if (gw_nid != ni->ni_nid &&
+                    (lnet_apini.apini_ptlcompat == 0 ||
+                     PTL_NIDNET(gw_nid) != 0 ||
+                     PTL_NIDADDR(gw_nid) != PTL_NIDADDR(ni->ni_nid))) {
+                        /* it's not for me: will the gateway have to forward? */
+                        if (gw_nid != target.nid &&
+                            lnet_apini.apini_ptlcompat == 0) {
+                                routing = 1;
+                                target.pid = LUSTRE_SRV_PTL_PID;
+                                target.nid = gw_nid;
+                        }
+                } else if (implicit_loopback) { /* its for me: force lonal? */
                         PTL_LOCK(flags);
                         ptl_ni_decref_locked(ni);
                         ni = ptl_loni;
@@ -634,8 +649,6 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                 }
         }
         
-        target.nid = gw_nid;
-
         if (len != 0) {
                 niov = md->md_niov;
                 if (((md->md_options) & LNET_MD_KIOV) != 0)
@@ -1016,6 +1029,7 @@ lnet_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
 {
         unsigned long  flags;
         int            rc;
+        int            for_me;
         ptl_msg_t     *msg;
         lnet_nid_t     dest_nid;
         __u32          type = le32_to_cpu(hdr->type);
@@ -1026,8 +1040,21 @@ lnet_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
          * If we don't think the packet is for us, return 1 */
 
         dest_nid = le64_to_cpu(hdr->dest_nid);
-        if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL &&
-            dest_nid != ni->ni_nid) {
+
+        for_me = (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL ||
+                  dest_nid == ni->ni_nid ||
+                  (lnet_apini.apini_ptlcompat > 0 &&
+                   PTL_NIDNET(dest_nid) == 0 &&
+                   PTL_NIDADDR(dest_nid) == PTL_NIDADDR(ni->ni_nid)));
+
+        if (!for_me) {
+                if (lnet_apini.apini_ptlcompat > 0) {
+                        CERROR ("%s: Dropping message from %s: wrong nid %s\n",
+                                libcfs_nid2str(ni->ni_nid),
+                                libcfs_nid2str(le64_to_cpu(hdr->src_nid)),
+                                libcfs_nid2str(dest_nid));
+                        return -EIO;
+                }
 
                 if (!ptl_islocalnid(dest_nid))  /* tell NAL to use the router */
                         return 1;               /* to forward */

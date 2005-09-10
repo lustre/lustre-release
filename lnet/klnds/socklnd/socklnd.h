@@ -513,6 +513,7 @@ extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
 extern int ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
+                                lnet_nid_t peer_nid, 
                                 __u32 *ipaddrs, int nipaddrs);
 extern int ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
                                 lnet_process_id_t *id, 

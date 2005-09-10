@@ -733,7 +733,7 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
         char               *buffer = (char *)page_address(krx->krx_kiov[0].kiov_page);
         ptl_hdr_t          *hdr = (ptl_hdr_t *)buffer;
         kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(buffer + KQSW_HDR_SIZE);
-        lnet_nid_t           nid = kqswnal_rx_nid(krx);
+        lnet_nid_t          nid = kqswnal_rx_nid(krx);
 
         /* Note (1) lnet_parse has already flipped hdr.
          *      (2) RDMA addresses are sent in native endian-ness.  When
@@ -748,13 +748,16 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
                 return (NULL);
         }
         
-        if (hdr->src_nid != nid) {
+        if (hdr->src_nid != nid &&
+            (lnet_apini.apini_ptlcompat == 0 ||
+              PTL_NIDNET(hdr->src_nid) != 0 ||
+              PTL_NIDADDR(hdr->src_nid) != PTL_NIDADDR(nid))) {
                 CERROR ("Unexpected optimized get/put source NID %s from %s\n",
                         libcfs_nid2str(hdr->src_nid), libcfs_nid2str(nid));
                 return (NULL);
         }
 
-        LASSERT (nid == expected_nid);
+        LASSERT (hdr->src_nid == expected_nid);
 
         if (buffer + krx->krx_nob < (char *)(rmd + 1)) {
                 /* msg too small to discover rmd size */
@@ -1458,9 +1461,9 @@ void
 kqswnal_parse (kqswnal_rx_t *krx)
 {
         ptl_hdr_t      *hdr = (ptl_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
-        lnet_nid_t       dest_nid;
-        lnet_nid_t       src_nid;
-        lnet_nid_t       sender_nid;
+        lnet_nid_t      dest_nid;
+        lnet_nid_t      src_nid;
+        lnet_nid_t      sender_nid;
         int             payload_nob;
         int             nob;
         int             niov;
@@ -1479,6 +1482,8 @@ kqswnal_parse (kqswnal_rx_t *krx)
                 kqswnal_rx_decref(krx);
                 return;
         }
+
+        LASSERT (lnet_apini.apini_ptlcompat == 0);
 
         dest_nid   = le64_to_cpu(hdr->dest_nid); /* final dest */
         src_nid    = le64_to_cpu(hdr->src_nid); /* original source */

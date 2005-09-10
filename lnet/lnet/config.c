@@ -156,6 +156,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
         char     *str;
         ptl_ni_t *ni;
         __u32     net;
+        int       count = 0;
 
 	if (strlen(networks) > PTL_SINGLE_TEXTBUF_NOB) {
 		/* _WAY_ conservative */
@@ -217,6 +218,12 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                                    str - tokens, strlen(str));
                         goto failed;
                 } 
+
+                if (count++ > 0) {
+                        LCONSOLE_ERROR("Only 1 network supported when "
+                                       "'portals_compatible' is set\n");
+                        goto failed;
+                }
 
                 ni = ptl_new_ni(net, nilist);
                 if (ni == NULL)
@@ -690,6 +697,14 @@ lnet_parse_routes (char *routes)
 	struct list_head  tbs;
 	int               rc = 0;
 
+        if (lnet_apini.apini_ptlcompat > 0 && 
+            routes[0] != 0) {
+                /* Can't route when running in compatibility mode */
+                LCONSOLE_ERROR("Route tables are not supported when "
+                               "'portals_compatible' is set\n");
+                return -EINVAL;
+        }
+        
 	INIT_LIST_HEAD(&tbs);
 
 	if (ptl_str2tbs_sep(&tbs, routes) < 0) {

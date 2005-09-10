@@ -63,5 +63,11 @@
                            tokens available. If there are too few, this, and
                            gmnal_nrx_small are scaled back accordingly. 
 
+5. Network configuration for GM is done in an lmc script as follows...
 
+   GM2NID=${path-to-lustre-tree}/portals/utils/gmnalnid
+
+   ${LMC} --node some_server --add net --nettype gm --nid `$GM2NID -n some_server`
+
+   ${LMC} --node client --add net --nettype gm --nid '*'
 

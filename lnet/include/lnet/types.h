@@ -8,6 +8,12 @@
 typedef __u64 lnet_nid_t;
 typedef __u32 lnet_pid_t;
 
+#define LNET_NID_ANY      ((lnet_nid_t) -1)
+#define LNET_PID_ANY      ((lnet_pid_t) -1)
+
+#define LNET_PID_RESERVED 0xf0000000 /* reserved bits in PID */
+#define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
+
 #define LNET_TIME_FOREVER    (-1)
 
 typedef struct {
@@ -26,9 +32,6 @@ static inline int LNetHandleIsEqual (lnet_handle_any_t h1, lnet_handle_any_t h2)
 {
 	return (h1.cookie == h2.cookie);
 }
-
-#define LNET_NID_ANY      ((lnet_nid_t) -1)
-#define LNET_PID_ANY      ((lnet_pid_t) -1)
 
 typedef struct {
         lnet_nid_t nid;

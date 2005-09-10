@@ -742,7 +742,7 @@ ksocknal_launch_packet (ptl_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                 
                 write_unlock_irqrestore(g_lock, flags);
 
-                if (id.pid > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
+                if ((id.pid & LNET_PID_USERFLAG) != 0) {
                         CERROR("Refusing to create a connection to "
                                "userspace process %s\n", libcfs_id2str(id));
                         return -EHOSTUNREACH;
@@ -1271,8 +1271,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
         
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_HEADER:
-                if (conn->ksnc_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) { 
-                        /* Userspace NAL */
+                if ((conn->ksnc_peer->ksnp_id.pid & LNET_PID_USERFLAG) != 0) { 
+                        /* Userspace peer */
                         lnet_process_id_t *id = &conn->ksnc_peer->ksnp_id;
                         
                         /* Substitute process ID assigned at connection time */
@@ -1636,7 +1636,7 @@ void ksocknal_write_callback (ksock_conn_t *conn)
 }
 
 int
-ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
+ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
                      __u32 *ipaddrs, int nipaddrs)
 {
         /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
@@ -1646,6 +1646,7 @@ ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
         int                 i;
         int                 rc;
+        lnet_nid_t          srcnid;
 
         LASSERT (conn->ksnc_type != SOCKNAL_CONN_NONE);
         LASSERT (0 <= nipaddrs && nipaddrs <= PTL_MAX_INTERFACES);
@@ -1658,7 +1659,16 @@ ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         hmv->version_major = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR);
 
-        hdr.src_nid        = cpu_to_le64 (ni->ni_nid);
+        srcnid = ni->ni_nid;
+        if (lnet_apini.apini_ptlcompat > 1 ||
+            (lnet_apini.apini_ptlcompat > 0 &&
+             PTL_NIDNET(peer_nid) == 0)) {
+                /* Pretend I'm portals if we're in portals compatibility
+                 * phase1, or I'm talking to an old peer  */
+                srcnid = PTL_MKNID(0, PTL_NIDADDR(srcnid));
+        }
+        
+        hdr.src_nid        = cpu_to_le64 (srcnid);
         hdr.src_pid        = cpu_to_le64 (lnet_getpid());
         hdr.type           = cpu_to_le32 (PTL_MSG_HELLO);
         hdr.payload_length = cpu_to_le32 (nipaddrs * sizeof(*ipaddrs));
@@ -1720,7 +1730,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         int                 i;
         int                 type;
         ptl_hdr_t           hdr;
-        lnet_process_id_t    recv_id;
+        lnet_process_id_t   recv_id;
         ptl_magicversion_t *hmv;
 
         active = (peerid->nid != LNET_NID_ANY);
@@ -1814,17 +1824,26 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
 
         if (conn->ksnc_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {          
                 /* Userspace NAL assigns peer process ID from socket */
-                recv_id.pid = conn->ksnc_port;
+                recv_id.pid = conn->ksnc_port | LNET_PID_USERFLAG;
                 recv_id.nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
         } else {
-                recv_id.pid = le32_to_cpu(hdr.src_pid);
-                recv_id.nid = le64_to_cpu (hdr.src_nid);
+                recv_id.nid = le64_to_cpu(hdr.src_nid);
+
+                if (lnet_apini.apini_ptlcompat > 1 && /* portals peers may exist */
+                    PTL_NIDNET(recv_id.nid) == 0) /* this is one */
+                        recv_id.pid = lnet_getpid(); /* give it a sensible pid */
+                else
+                        recv_id.pid = le32_to_cpu(hdr.src_pid);
+
         }
         
         if (!active) {                          /* don't know peer's nid yet */
                 *peerid = recv_id;
         } else if (peerid->pid != recv_id.pid ||
-                   peerid->nid != recv_id.nid) {
+                   (peerid->nid != recv_id.nid &&
+                    (lnet_apini.apini_ptlcompat == 0 ||
+                     PTL_NIDNET(recv_id.nid) != 0 ||
+                     PTL_NIDADDR(recv_id.nid) != PTL_NIDADDR(peerid->nid)))) {
                 LCONSOLE_ERROR("Connected successfully to %s on host "
                                "%u.%u.%u.%u, but they claimed they were "
                                "%s; please check your Lustre "

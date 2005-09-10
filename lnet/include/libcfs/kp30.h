@@ -230,6 +230,7 @@ __u32      libcfs_str2net(char *str);
 lnet_nid_t  libcfs_str2nid(char *str);
 int        libcfs_str2anynid(lnet_nid_t *nid, char *str);
 char      *libcfs_id2str(lnet_process_id_t id);
+void       libcfs_setnet0alias(int type);
 
 #if !CRAY_PORTALS
 /* how a lustre portals NID encodes net:address */
@@ -434,6 +435,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_GET_ROUTE               _IOWR('e', 54, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_UNCONFIGURE             _IOWR('e', 56, IOCTL_PORTAL_TYPE)
+#define IOC_PORTAL_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_PORTAL_TYPE)
 /* nal ioctls */
 #define IOC_PORTAL_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)
@@ -454,15 +456,17 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 enum {
         /* Only add to these values (i.e. don't ever change or redefine them):
          * network addresses depend on them... */
-        LONAL     = 1,
+        QSWNAL    = 1,
         SOCKNAL   = 2,
-        QSWNAL    = 3,
-        GMNAL     = 4,
-        OPENIBNAL = 5,
-        IIBNAL    = 6,
-        VIBNAL    = 7,
-        RANAL     = 8,
-        PTLLND    = 9,
+        GMNAL     = 3,
+        PTLLND    = 4,
+        TCPNAL    = 5,
+        /* unused   6 */
+        OPENIBNAL = 7,
+        IIBNAL    = 8,
+        LONAL     = 9,
+        RANAL     = 10,
+        VIBNAL    = 11,
 };
 
 enum {

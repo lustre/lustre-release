@@ -1003,26 +1003,25 @@ ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
         if (rc != 0)
                 goto failed_1;
 
+        /* Find out/confirm peer's NID and connection type and get the
+         * vector of interfaces she's willing to let me connect to.
+         * Passive connections use the listener timeout since the peer sends
+         * eagerly */
+
         if (route != NULL) {
                 LASSERT(ni == route->ksnr_peer->ksnp_ni);
 
                 /* Active connection sends HELLO eagerly */
                 nipaddrs = ksocknal_local_ipvec(ni, ipaddrs);
+                peerid = route->ksnr_peer->ksnp_id;
 
-                rc = ksocknal_send_hello (ni, conn, ipaddrs, nipaddrs);
+                rc = ksocknal_send_hello (ni, conn, peerid.nid,
+                                          ipaddrs, nipaddrs);
                 if (rc != 0)
                         goto failed_1;
-        }
-
-        /* Find out/confirm peer's NID and connection type and get the
-         * vector of interfaces she's willing to let me connect to.
-         * Passive connections use the listener timeout since the peer sends
-         * eagerly */
-        if (route == NULL) {
+        } else {
                 peerid.nid = LNET_NID_ANY;
                 peerid.pid = LNET_PID_ANY;
-        } else {
-                peerid = route->ksnr_peer->ksnp_id;
         }
 
         rc = ksocknal_recv_hello (ni, conn, &peerid, &incarnation, ipaddrs);
@@ -1062,7 +1061,8 @@ ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
                 write_unlock_irqrestore(global_lock, flags);
 
                 nipaddrs = ksocknal_select_ips(peer, ipaddrs, nipaddrs);
-                rc = ksocknal_send_hello (ni, conn, ipaddrs, nipaddrs);
+                rc = ksocknal_send_hello (ni, conn, peerid.nid,
+                                          ipaddrs, nipaddrs);
                 if (rc < 0)
                         goto failed_2;
         }
@@ -2352,8 +2352,6 @@ ksocknal_module_init (void)
         CLASSERT(sizeof (ksock_tx_t) <= sizeof (kprfd_scratch_t));
         /* check ksnr_connected/connecting field large enough */
         CLASSERT(SOCKNAL_CONN_NTYPES <= 4);
-        /* kernel PID should be in the "secure" TCP port range */
-        CLASSERT(LUSTRE_SRV_PTL_PID <= PTL_ACCEPTOR_MAX_RESERVED_PORT);
         
         rc = ksocknal_lib_tunables_init();
         if (rc != 0)

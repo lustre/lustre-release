@@ -27,6 +27,10 @@ static char *networks = DEFAULT_NETWORKS;
 CFS_MODULE_PARM(networks, "s", charp, 0444,
                 "local networks (default='"DEFAULT_NETWORKS"')");
 
+static char *portals_compatibility = "none";
+CFS_MODULE_PARM(portals_compatibility, "s", charp, 0444,
+                "wire protocol compatibility: 'strong'|'weak'|'none'");
+
 lnet_apini_t      lnet_apini;                   /* THE network interface (at the API) */
 
 void ptl_assert_wire_constants (void)
@@ -392,6 +396,12 @@ lnet_apini_init(lnet_pid_t requested_pid)
 
         lnet_apini.apini_pid = requested_pid;
 
+#ifdef __KERNEL__
+        LASSERT ((requested_pid & LNET_PID_USERFLAG) == 0);
+#else
+        lnet_apini.apini_pid |= LNET_PID_USERFLAG;
+#endif
+
         rc = ptl_descriptor_setup ();
         if (rc != 0)
                 goto out;
@@ -513,7 +523,10 @@ lnet_net2ni (__u32 net)
         list_for_each (tmp, &lnet_apini.apini_nis) {
                 ni = list_entry(tmp, ptl_ni_t, ni_list);
 
-                if (PTL_NIDNET(ni->ni_nid) == net) {
+                if (PTL_NIDNET(ni->ni_nid) == net ||
+                    (lnet_apini.apini_ptlcompat > 0 &&
+                     net == 0 &&
+                     PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL)) {
                         ptl_ni_addref_locked(ni);
                         PTL_UNLOCK(flags);
                         return ni;
@@ -757,10 +770,15 @@ ptl_startup_nalnis (void)
                         goto failed;
                 }
 
-                if (nal->nal_type != LONAL)
+                if (nal->nal_type != LONAL) {
                         LCONSOLE(0, "Added NI %s\n", 
                                  libcfs_nid2str(ni->ni_nid));
 
+                        /* Handle nidstrings for network 0 just like this one */
+                        if (lnet_apini.apini_ptlcompat > 0)
+                                libcfs_setnet0alias(nal->nal_type);
+                }
+                
                 list_del(&ni->ni_list);
                 
                 PTL_LOCK(flags);
@@ -813,6 +831,20 @@ LNetInit(void)
 
         lnet_apini.apini_init = 1;
 
+        if (!strcmp(portals_compatibility, "none")) {
+                lnet_apini.apini_ptlcompat = 0;
+        } else if (!strcmp(portals_compatibility, "weak")) {
+                lnet_apini.apini_ptlcompat = 1;
+                LCONSOLE_WARN("Starting in weak portals-compatible mode\n");
+        } else if (!strcmp(portals_compatibility, "strong")) {
+                lnet_apini.apini_ptlcompat = 2;
+                LCONSOLE_WARN("Starting in strong portals-compatible mode\n");
+        } else {
+                LCONSOLE_ERROR("portals_compatibility=\"%s\" not supported\n",
+                               portals_compatibility);
+                return -1;
+        }
+
         /* NALs in separate modules register themselves when their module
          * loads, and unregister themselves when their module is unloaded.
          * Otherwise they are plugged in explicitly here... */
@@ -821,7 +853,6 @@ LNetInit(void)
 #ifndef __KERNEL__
         lnet_register_nal (&tcpnal_nal);
 #endif
-
         return 0;
 }
 
@@ -934,6 +965,9 @@ LNetCtl(unsigned int cmd, void *arg)
         case IOC_PORTAL_GET_ROUTE:
         case IOC_PORTAL_NOTIFY_ROUTER:
                 return kpr_ctl(cmd, arg);
+
+        case IOC_PORTAL_PORTALS_COMPATIBILITY:
+                return lnet_apini.apini_ptlcompat;
 
         default:
                 ni = lnet_net2ni(data->ioc_net);

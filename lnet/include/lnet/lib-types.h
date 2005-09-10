@@ -219,9 +219,9 @@ typedef struct
 
 typedef struct {
         /* info about peers we are trying to fail */
-        struct list_head  tp_list;             /* apini_test_peers */
+        struct list_head   tp_list;             /* apini_test_peers */
         lnet_nid_t         tp_nid;              /* matching nid */
-        unsigned int      tp_threshold;        /* # failures to simulate */
+        unsigned int       tp_threshold;        /* # failures to simulate */
 } ptl_test_peer_t;
 
 #define PTL_COOKIE_TYPE_MD    1
@@ -354,6 +354,8 @@ typedef struct
         int               apini_init;           /* LNetInit() called? */
         int               apini_refcount;       /* LNetNIInit/LNetNIFini counter */
         int               apini_niinit_self;    /* Have I called LNetNIInit myself? */
+
+        int               apini_ptlcompat;      /* support talking to portals */
         
         struct list_head  apini_nals;           /* registered NALs */
 
