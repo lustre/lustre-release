@@ -812,6 +812,8 @@ static int pages_io(int xfer, loff_t pos)
 
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t50", lustre_path);
 
+        memset(buf_alloc, 0, buf_size);
+
         /* create sample data */
         for (i = 0, buf = buf_alloc; i < _npages; i++) {
                 for (j = 0; j < PAGE_SIZE/sizeof(int); j++, buf++) {
@@ -1006,7 +1008,7 @@ int main(int argc, char * const argv[])
         __liblustre_setup_();
 
         buf_size = _npages * PAGE_SIZE;
-        buf_alloc = calloc(_npages, PAGE_SIZE);
+        buf_alloc = malloc(buf_size);
 
         for (test = testlist; test->test != NULL; test++) {
                 int run = 1, i;
