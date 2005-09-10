@@ -38,7 +38,7 @@ static void usage(void)
 {
 	printf("random-reads: read random chunks of a file.\n");
 	printf("Usage:\n\n");
-	printf("random-reads -f <filename> -s <filesize> -b <buffersize> [-v] [-h] [-C] [-S <seed>] [-n <iterations>] [-w <width>]\n");
+	printf("random-reads -f <filename> -s <filesize> -b <buffersize> -a <adjacent reads> [-v] [-h] [-C] [-S <seed>] [-n <iterations>] [-w <width>]\n");
 }
 
 enum {
@@ -74,6 +74,7 @@ int main(int argc, char **argv)
 	char  *fname = NULL;
 	loff_t size = 0;
 	size_t bsize = 0;
+	int    ad = 1;
 	int    preclean = 0;
 	int    width = 10;
 	unsigned int seed = 0;
@@ -93,7 +94,7 @@ int main(int argc, char **argv)
 	char *buf;
 
 	do {
-		opt = getopt(argc, argv, "f:s:b:vhCS:n:w:");
+		opt = getopt(argc, argv, "f:s:b:va:hCS:n:w:");
 		switch (opt) {
 		case -1:
 			break;
@@ -114,6 +115,9 @@ int main(int argc, char **argv)
 		case 'b':
 			bsize = atol(optarg);
 			break;
+		case 'a':
+			ad = atoi(optarg);
+			break;
 		case 'C':
 			preclean = 1;
 			break;
@@ -129,11 +133,12 @@ int main(int argc, char **argv)
 		}
 	} while (opt != -1);
 
-	if (fname == NULL || size == 0 || bsize == 0) {
+	if (fname == NULL || size == 0 || bsize == 0 || ad <= 0) {
 		usage();
 		return RR_SET;
 	}
 
+	bsize /= ad;
 	nblocks = size / bsize;
 	buf = malloc(bsize);
 	if (buf == NULL) {
@@ -166,16 +171,20 @@ int main(int argc, char **argv)
 	gettimeofday(&start, NULL);
 	for (i = 0; !iterations || i < iterations; i ++) {
 		unsigned long block_nr;
+		int j;
 
 		block_nr = (int) ((double)nblocks*rand()/(RAND_MAX+1.0));
 		if (i % width == 0)
 			LOG(LOG_INFO, "\n%9lu: ", i);
 		LOG(LOG_INFO, "%7lu ", block_nr);
-		ret = pread(fd, buf, bsize, block_nr * bsize);
-		if (ret != bsize) {
-			LOG(LOG_CRIT, "pread(...%zi, %li) got: %zi, %m\n",
-			    bsize, block_nr * bsize, ret);
-			return RR_READ;
+		for (j = 0; j < ad; j++) {
+			ret = pread(fd, buf, bsize, (block_nr + j) * bsize);
+			if (ret != bsize) {
+				LOG(LOG_CRIT,
+				    "pread(...%zi, %li) got: %zi, %m\n",
+				    bsize, block_nr * bsize, ret);
+				return RR_READ;
+			}
 		}
 	}
 	gettimeofday(&stop, NULL);
