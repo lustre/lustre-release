@@ -1651,6 +1651,11 @@ kibnal_module_init (void)
 {
         int    rc;
 
+        if (lnet_apini.apini_ptlcompat != 0) {
+                LCONSOLE_ERROR("OpenIB does not support portals compatibility mode\n");
+                return -ENODEV;
+        }
+        
         rc = kibnal_tunables_init();
         if (rc != 0)
                 return rc;

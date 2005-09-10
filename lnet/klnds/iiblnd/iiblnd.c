@@ -1626,6 +1626,11 @@ kibnal_module_init (void)
 {
         int    rc;
 
+        if (lnet_apini.apini_ptlcompat != 0) {
+                LCONSOLE_ERROR("IIB does not support portals compatibility mode\n");
+                return -ENODEV;
+        }
+        
         if (sizeof(kib_wire_connreq_t) > CM_REQUEST_INFO_USER_LEN) {
                 CERROR("sizeof(kib_wire_connreq_t) > CM_REQUEST_INFO_USER_LEN\n");
                 return -EINVAL;

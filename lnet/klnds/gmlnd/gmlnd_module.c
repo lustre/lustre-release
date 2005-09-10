@@ -84,6 +84,11 @@ gmnal_load(void)
 	int	status;
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
+        if (lnet_apini.apini_ptlcompat != 0) {
+                LCONSOLE_ERROR("GM does not support portals compatibility mode\n");
+                return -ENODEV;
+        }
+        
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         gmnal_tunables.gm_sysctl =
                 register_sysctl_table(gmnal_top_ctl_table, 0);

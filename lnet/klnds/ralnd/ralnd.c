@@ -1628,6 +1628,11 @@ kranal_module_init (void)
 {
         int    rc;
 
+        if (lnet_apini.apini_ptlcompat != 0) {
+                LCONSOLE_ERROR("RA does not support portals compatibility mode\n");
+                return -ENODEV;
+        }
+        
         rc = kranal_tunables_init();
         if (rc != 0)
                 return rc;
