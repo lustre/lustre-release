@@ -218,10 +218,21 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (!inode)
                 RETURN(ERR_PTR(-ENOENT));
 
+        if (inode->i_generation == 0 || inode->i_nlink == 0) {
+                LCONSOLE_WARN("Found inode with zero generation or link -- this"
+                              " may indicate disk corruption (inode: %lu, link:"
+                              " %lu, count: %d)\n", inode->i_ino,
+                              (unsigned long)inode->i_nlink,
+                              atomic_read(&inode->i_count));
+                dput(result);
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
         if (generation && inode->i_generation != generation) {
                 /* we didn't find the right inode.. */
-                CERROR("bad inode %lu, link: %lu ct: %d or generation %u/%u\n",
-                       inode->i_ino, (unsigned long)inode->i_nlink,
+                CDEBUG(D_INODE, "found wrong generation: inode %lu, link: %lu, "
+                       "count: %d, generation %u/%u\n", inode->i_ino,
+                       (unsigned long)inode->i_nlink,
                        atomic_read(&inode->i_count), inode->i_generation,
                        generation);
                 dput(result);
@@ -1591,7 +1602,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                               obd->obd_replayable ? "enabled" : "disabled");
         }
 
-        ldlm_timeout = 6;
+        ldlm_timeout = 2;
         ping_evictor_start();
 
         RETURN(0);

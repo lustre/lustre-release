@@ -397,8 +397,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
-                CERROR("Error unpack md %p for inode %lu\n", lmm,
-                       inode->i_ino);
+                CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
                 GOTO(out, rc);
         }
 
