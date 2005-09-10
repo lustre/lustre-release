@@ -2574,6 +2574,21 @@ filter_create(struct obd_export *exp, struct obdo *oa, void *acl,
 
         CDEBUG(D_INFO, "filter_create(od->o_gr=%d,od->o_id="LPU64")\n",
                group, oa->o_id);
+        if (oa->o_gr == FILTER_GROUP_ECHO) {
+                rc = filter_create_object(obd, oa);
+                if (rc == 0 && ea != NULL) {
+                        struct lov_stripe_md *lsm = *ea;
+                        if (lsm == NULL) {
+                                rc = obd_alloc_memmd(exp, &lsm);
+                                LASSERT(rc >= 0);
+                        }
+                        lsm->lsm_object_id = oa->o_id;
+                        *ea = lsm;
+                        rc = 0;
+                }
+
+                RETURN(rc);
+        }
 
         obd = exp->exp_obd;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
