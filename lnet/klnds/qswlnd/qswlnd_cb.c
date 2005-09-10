@@ -1032,7 +1032,7 @@ kqswnal_send (ptl_ni_t         *ni,
         /* NB 1. hdr is in network byte order */
         /*    2. 'private' depends on the message type */
         
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to %s\n",
+        CDEBUG(D_NET, "sending %u bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
@@ -1044,7 +1044,7 @@ kqswnal_send (ptl_ni_t         *ni,
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
         if (payload_nob > KQSW_MAXPAYLOAD) {
-                CERROR ("request exceeds MTU size "LPSZ" (max %u).\n",
+                CERROR ("request exceeds MTU size %u (max %u).\n",
                         payload_nob, KQSW_MAXPAYLOAD);
                 return (-EIO);
         }
@@ -1236,7 +1236,7 @@ kqswnal_send (ptl_ni_t         *ni,
         rc = kqswnal_launch (ktx);
 
  out:
-        CDEBUG(rc == 0 ? D_NET : D_ERROR, "%s "LPSZ" bytes to %s%s: rc %d\n", 
+        CDEBUG(rc == 0 ? D_NET : D_ERROR, "%s %u bytes to %s%s: rc %d\n", 
                rc == 0 ? "Sent" : "Failed to send",
                payload_nob, libcfs_nid2str(target.nid), 
                routing ? "(routing)" : "", rc);
@@ -1663,7 +1663,7 @@ kqswnal_recv (ptl_ni_t      *ni,
 #endif
         /* NB lnet_parse() has already flipped *hdr */
 
-        CDEBUG(D_NET,"kqswnal_recv, mlen="LPSZ", rlen="LPSZ"\n", mlen, rlen);
+        CDEBUG(D_NET,"kqswnal_recv, mlen=%u, rlen=%u\n", mlen, rlen);
 
         if (ptlmsg == NULL) {                   /* portals is discarding. */
                 LASSERT (mlen == 0);

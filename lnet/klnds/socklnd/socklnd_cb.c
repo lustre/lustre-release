@@ -816,7 +816,7 @@ ksocknal_send(ptl_ni_t         *ni,
         /* NB 'private' is different depending on what we're sending.
          * Just ignore it... */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to %s\n",
+        CDEBUG(D_NET, "sending %u bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);

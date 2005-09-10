@@ -196,8 +196,8 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
                 return 0;
         }
         
-        CERROR ("post rx -> "LPX64" failed %d\n", 
-                conn->ibc_peer->ibp_nid, vvrc);
+        CERROR ("post rx -> %s failed %d\n", 
+                libcfs_nid2str(conn->ibc_peer->ibp_nid), vvrc);
         rc = -EIO;
         kibnal_close_conn(rx->rx_conn, rc);
         /* No more posts for this rx; so lose its ref */
@@ -263,9 +263,8 @@ kibnal_handle_completion(kib_conn_t *conn, int txtype, int status, __u64 cookie)
         if (tx == NULL) {
                 spin_unlock(&conn->ibc_lock);
 
-                CWARN("Unmatched completion type %x cookie "LPX64
-                      " from "LPX64"\n",
-                      txtype, cookie, conn->ibc_peer->ibp_nid);
+                CWARN("Unmatched completion type %x cookie "LPX64" from %s\n",
+                      txtype, cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_close_conn (conn, -EPROTO);
                 return;
         }
@@ -301,8 +300,8 @@ kibnal_send_completion (kib_conn_t *conn, int type, int status, __u64 cookie)
         kib_tx_t    *tx = kibnal_get_idle_tx(0);
         
         if (tx == NULL) {
-                CERROR("Can't get tx for completion %x for "LPX64"\n",
-                       type, conn->ibc_peer->ibp_nid);
+                CERROR("Can't get tx for completion %x for %s\n",
+                       type, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 return;
         }
         
@@ -324,8 +323,8 @@ kibnal_handle_rx (kib_rx_t *rx)
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
 
-        CDEBUG (D_NET, "Received %x[%d] from "LPX64"\n",
-                msg->ibm_type, credits, conn->ibc_peer->ibp_nid);
+        CDEBUG (D_NET, "Received %x[%d] from %s\n",
+                msg->ibm_type, credits, libcfs_nid2str(conn->ibc_peer->ibp_nid));
         
         if (credits != 0) {
                 /* Have I received credits that will let me send? */
@@ -338,8 +337,8 @@ kibnal_handle_rx (kib_rx_t *rx)
 
         switch (msg->ibm_type) {
         default:
-                CERROR("Bad IBNAL message type %x from "LPX64"\n",
-                       msg->ibm_type, conn->ibc_peer->ibp_nid);
+                CERROR("Bad IBNAL message type %x from %s\n",
+                       msg->ibm_type, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 break;
 
         case IBNAL_MSG_NOOP:
@@ -362,7 +361,7 @@ kibnal_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBNAL_MSG_PUT_NAK:
-                CWARN ("PUT_NACK from "LPX64"\n", conn->ibc_peer->ibp_nid);
+                CWARN ("PUT_NACK from %s\n", libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 kibnal_handle_completion(conn, IBNAL_MSG_PUT_REQ, 
                                          msg->ibm_u.completion.ibcm_status,
                                          msg->ibm_u.completion.ibcm_cookie);
@@ -377,8 +376,8 @@ kibnal_handle_rx (kib_rx_t *rx)
                 spin_unlock(&conn->ibc_lock);
 
                 if (tx == NULL) {
-                        CERROR("Unmatched PUT_ACK from "LPX64"\n",
-                               conn->ibc_peer->ibp_nid);
+                        CERROR("Unmatched PUT_ACK from %s\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         kibnal_close_conn(conn, -EPROTO);
                         break;
                 }
@@ -395,8 +394,8 @@ kibnal_handle_rx (kib_rx_t *rx)
                                       &msg->ibm_u.putack.ibpam_rd,
                                       msg->ibm_u.putack.ibpam_dst_cookie);
                 if (rc < 0)
-                        CERROR("Can't setup rdma for PUT to "LPX64": %d\n",
-                               conn->ibc_peer->ibp_nid, rc);
+                        CERROR("Can't setup rdma for PUT to %s: %d\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
 
                 spin_lock(&conn->ibc_lock);
                 if (tx->tx_status == 0 && rc < 0)
@@ -449,31 +448,36 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
                 goto ignore;
 
         if (vvrc != vv_comp_status_success) {
-                CERROR("Rx from "LPX64" failed: %d\n", 
-                       conn->ibc_peer->ibp_nid, vvrc);
+                CERROR("Rx from %s failed: %d\n", 
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid), vvrc);
                 goto failed;
         }
 
         rc = kibnal_unpack_msg(msg, nob);
         if (rc != 0) {
-                CERROR ("Error %d unpacking rx from "LPX64"\n",
-                        rc, conn->ibc_peer->ibp_nid);
+                CERROR ("Error %d unpacking rx from %s\n",
+                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 goto failed;
         }
 
         if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+            (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid &&
+             (lnet_apini.apini_ptlcompat == 0 ||
+              PTL_NIDNET(msg->ibm_dstnid) != 0 ||
+              PTL_NIDADDR(msg->ibm_dstnid) !=
+              PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
-            msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
-                CERROR ("Stale rx from "LPX64"\n",
-                        conn->ibc_peer->ibp_nid);
+                CERROR ("Stale rx from %s\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 goto failed;
         }
 
         if (msg->ibm_seq != rxseq) {
-                CERROR ("Out-of-sequence rx from "LPX64
+                CERROR ("Out-of-sequence rx from %s"
                         ": got "LPD64" but expected "LPD64"\n",
-                        conn->ibc_peer->ibp_nid, msg->ibm_seq, rxseq);
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid),
+                        msg->ibm_seq, rxseq);
                 goto failed;
         }
 
@@ -864,7 +868,8 @@ kibnal_check_sends (kib_conn_t *conn)
 
         /* Don't send anything until after the connection is established */
         if (conn->ibc_state < IBNAL_CONN_ESTABLISHED) {
-                CDEBUG(D_NET, LPX64"too soon\n", conn->ibc_peer->ibp_nid);
+                CDEBUG(D_NET, "%s too soon\n",
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 return;
         }
         
@@ -899,21 +904,21 @@ kibnal_check_sends (kib_conn_t *conn)
                 LASSERT (conn->ibc_credits <= IBNAL_MSG_QUEUE_SIZE);
 
                 if (conn->ibc_nsends_posted == IBNAL_MSG_QUEUE_SIZE) {
-                        CDEBUG(D_NET, LPX64": posted enough\n",
-                               conn->ibc_peer->ibp_nid);
+                        CDEBUG(D_NET, "%s: posted enough\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         break;
                 }
                 
                 if (conn->ibc_credits == 0) {   /* no credits */
-                        CDEBUG(D_NET, LPX64": no credits\n",
-                               conn->ibc_peer->ibp_nid);
+                        CDEBUG(D_NET, "%s: no credits\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         break;
                 }
                 
                 if (conn->ibc_credits == 1 &&   /* last credit reserved for */
                     conn->ibc_outstanding_credits == 0) { /* giving back credits */
-                        CDEBUG(D_NET, LPX64": not using last credit\n",
-                               conn->ibc_peer->ibp_nid);
+                        CDEBUG(D_NET, "%s: not using last credit\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         break;
                 }
                 
@@ -929,8 +934,8 @@ kibnal_check_sends (kib_conn_t *conn)
                         spin_unlock(&conn->ibc_lock);
                         kibnal_tx_done(tx);
                         spin_lock(&conn->ibc_lock);
-                        CDEBUG(D_NET, LPX64": redundant noop\n",
-                               conn->ibc_peer->ibp_nid);
+                        CDEBUG(D_NET, "%s: redundant noop\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         continue;
                 }
 
@@ -960,14 +965,14 @@ kibnal_check_sends (kib_conn_t *conn)
                 LASSERT (tx->tx_nwrq > 0);
 #if 0
                 if (tx->tx_wrq[0].wr_type == vv_wr_rdma_write) 
-                        CDEBUG(D_WARNING, "WORK[0]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
+                        CDEBUG(D_NET, "WORK[0]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
                                tx->tx_wrq[0].scatgat_list->v_address,
                                tx->tx_wrq[0].scatgat_list->length,
                                tx->tx_wrq[0].scatgat_list->l_key,
                                tx->tx_wrq[0].type.send.send_qp_type.rc_type.r_addr,
                                tx->tx_wrq[0].type.send.send_qp_type.rc_type.r_r_key);
                 else
-                        CDEBUG(D_WARNING, "WORK[0]: %s gl %p for %d k %x\n",
+                        CDEBUG(D_NET, "WORK[0]: %s gl %p for %d k %x\n",
                                tx->tx_wrq[0].wr_type == vv_wr_send ? "SEND" : "????",
                                tx->tx_wrq[0].scatgat_list->v_address,
                                tx->tx_wrq[0].scatgat_list->length,
@@ -975,14 +980,14 @@ kibnal_check_sends (kib_conn_t *conn)
 
                 if (tx->tx_nwrq > 1) {
                         if (tx->tx_wrq[1].wr_type == vv_wr_rdma_write) 
-                                CDEBUG(D_WARNING, "WORK[1]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
+                                CDEBUG(D_NET, "WORK[1]: RDMA gl %p for %d k %x -> "LPX64" k %x\n",
                                        tx->tx_wrq[1].scatgat_list->v_address,
                                        tx->tx_wrq[1].scatgat_list->length,
                                        tx->tx_wrq[1].scatgat_list->l_key,
                                        tx->tx_wrq[1].type.send.send_qp_type.rc_type.r_addr,
                                        tx->tx_wrq[1].type.send.send_qp_type.rc_type.r_r_key);
                         else
-                                CDEBUG(D_WARNING, "WORK[1]: %s gl %p for %d k %x\n",
+                                CDEBUG(D_NET, "WORK[1]: %s gl %p for %d k %x\n",
                                        tx->tx_wrq[1].wr_type == vv_wr_send ? "SEND" : "????",
                                        tx->tx_wrq[1].scatgat_list->v_address,
                                        tx->tx_wrq[1].scatgat_list->length,
@@ -1019,11 +1024,11 @@ kibnal_check_sends (kib_conn_t *conn)
                         spin_unlock(&conn->ibc_lock);
                         
                         if (conn->ibc_state == IBNAL_CONN_ESTABLISHED)
-                                CERROR ("Error %d posting transmit to "LPX64"\n", 
-                                        vvrc, conn->ibc_peer->ibp_nid);
+                                CERROR ("Error %d posting transmit to %s\n", 
+                                        vvrc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         else
-                                CDEBUG (D_NET, "Error %d posting transmit to "
-                                        LPX64"\n", rc, conn->ibc_peer->ibp_nid);
+                                CDEBUG (D_NET, "Error %d posting transmit to %s\n",
+                                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                         kibnal_close_conn (conn, rc);
 
@@ -1051,10 +1056,11 @@ kibnal_tx_complete (kib_tx_t *tx, vv_comp_status_t vvrc)
         if (failed &&
             tx->tx_status == 0 &&
             conn->ibc_state == IBNAL_CONN_ESTABLISHED)
-                CERROR("tx -> "LPX64" type %x cookie "LPX64
+                CERROR("tx -> %s type %x cookie "LPX64
                        "sending %d waiting %d: failed %d\n", 
-                       conn->ibc_peer->ibp_nid, tx->tx_msg->ibm_type, 
-                       tx->tx_cookie, tx->tx_sending, tx->tx_waiting, vvrc);
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid),
+                       tx->tx_msg->ibm_type, tx->tx_cookie,
+                       tx->tx_sending, tx->tx_waiting, vvrc);
 
         spin_lock(&conn->ibc_lock);
 
@@ -1424,11 +1430,12 @@ kibnal_send(ptl_ni_t         *ni,
                         /* RDMA not expected */
                         nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
                         if (nob > IBNAL_MSG_SIZE) {
-                                CERROR("REPLY for "LPX64" too big (RDMA not requested):"
+                                CERROR("REPLY for %s too big (RDMA not requested):"
                                        "%d (max for message is %d)\n", 
-                                       target.nid, payload_nob, IBNAL_MSG_SIZE);
-                                CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
-                                       nob, target.nid);
+                                       libcfs_nid2str(target.nid), payload_nob,
+                                       IBNAL_MSG_SIZE);
+                                CERROR("Can't REPLY IMMEDIATE %d to %s\n",
+                                       nob, libcfs_nid2str(target.nid));
                                 return -EIO;
                         }
                         break;
@@ -1436,8 +1443,8 @@ kibnal_send(ptl_ni_t         *ni,
 
                 /* Incoming message consistent with RDMA? */
                 if (rx->rx_msg->ibm_type != IBNAL_MSG_GET_REQ) {
-                        CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
-                               target.nid, rx->rx_msg->ibm_type);
+                        CERROR("REPLY to %s bad msg type %x!!!\n",
+                               libcfs_nid2str(target.nid), rx->rx_msg->ibm_type);
                         return -EIO;
                 }
 
@@ -1446,7 +1453,8 @@ kibnal_send(ptl_ni_t         *ni,
 
                 tx = kibnal_get_idle_tx(0);
                 if (tx == NULL) {
-                        CERROR("Can't get tx for REPLY to "LPX64"\n", target.nid);
+                        CERROR("Can't get tx for REPLY to %s\n",
+                               libcfs_nid2str(target.nid));
                         return -ENOMEM;
                 }
 
@@ -1461,7 +1469,8 @@ kibnal_send(ptl_ni_t         *ni,
                                                   payload_niov, payload_kiov,
                                                   payload_offset, payload_nob);
                 if (rc != 0) {
-                        CERROR("Can't setup GET src for "LPX64": %d\n", target.nid, rc);
+                        CERROR("Can't setup GET src for %s: %d\n",
+                               libcfs_nid2str(target.nid), rc);
                         kibnal_tx_done(tx);
                         return -EIO;
                 }
@@ -1470,8 +1479,8 @@ kibnal_send(ptl_ni_t         *ni,
                                       &rx->rx_msg->ibm_u.get.ibgm_rd,
                                       rx->rx_msg->ibm_u.get.ibgm_cookie);
                 if (rc < 0) {
-                        CERROR("Can't setup rdma for GET from "LPX64": %d\n", 
-                               target.nid, rc);
+                        CERROR("Can't setup rdma for GET from %s: %d\n", 
+                               libcfs_nid2str(target.nid), rc);
                 } else if (rc == 0) {
                         /* No RDMA: local completion may happen now! */
                         lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg, 0);
@@ -1511,7 +1520,8 @@ kibnal_send(ptl_ni_t         *ni,
                                                   ptlmsg->msg_md->md_iov.kiov,
                                                   0, ptlmsg->msg_md->md_length);
                 if (rc != 0) {
-                        CERROR("Can't setup GET sink for "LPX64": %d\n", target.nid, rc);
+                        CERROR("Can't setup GET sink for %s: %d\n",
+                               libcfs_nid2str(target.nid), rc);
                         kibnal_tx_done(tx);
                         return -EIO;
                 }
@@ -1529,7 +1539,8 @@ kibnal_send(ptl_ni_t         *ni,
 
                 tx->tx_ptlmsg[1] = lnet_create_reply_msg(kibnal_data.kib_ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
-                        CERROR("Can't create reply for GET -> "LPX64"\n", target.nid);
+                        CERROR("Can't create reply for GET -> %s\n",
+                               libcfs_nid2str(target.nid));
                         kibnal_tx_done(tx);
                         return -EIO;
                 }
@@ -1561,7 +1572,8 @@ kibnal_send(ptl_ni_t         *ni,
                                                   payload_niov, payload_kiov,
                                                   payload_offset, payload_nob);
                 if (rc != 0) {
-                        CERROR("Can't setup PUT src for "LPX64": %d\n", target.nid, rc);
+                        CERROR("Can't setup PUT src for %s: %d\n",
+                               libcfs_nid2str(target.nid), rc);
                         kibnal_tx_done(tx);
                         return -EIO;
                 }
@@ -1583,7 +1595,8 @@ kibnal_send(ptl_ni_t         *ni,
         tx = kibnal_get_idle_tx(!(type == PTL_MSG_ACK ||
                                   type == PTL_MSG_REPLY));
         if (tx == NULL) {
-                CERROR ("Can't send %d to "LPX64": tx descs exhausted\n", type, target.nid);
+                CERROR ("Can't send %d to %s: tx descs exhausted\n",
+                        type, libcfs_nid2str(target.nid));
                 return -ENOMEM;
         }
 
@@ -1610,9 +1623,9 @@ kibnal_send(ptl_ni_t         *ni,
 }
 
 int
-kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                unsigned int offset, unsigned int mlen, unsigned int rlen)
+kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
+             unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+             unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         kib_rx_t    *rx = private;
         kib_msg_t   *rxmsg = rx->rx_msg;
@@ -1635,8 +1648,9 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         case IBNAL_MSG_IMMEDIATE:
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[rlen]);
                 if (nob > IBNAL_MSG_SIZE) {
-                        CERROR ("Immediate message from "LPX64" too big: %d\n",
-                                rxmsg->ibm_u.immediate.ibim_hdr.src_nid, rlen);
+                        CERROR ("Immediate message from %s too big: %d\n",
+                                libcfs_nid2str(rxmsg->ibm_u.immediate.ibim_hdr.src_nid),
+                                rlen);
                         return (-EIO);
                 }
 
@@ -1663,8 +1677,8 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
                 tx = kibnal_get_idle_tx(0);
                 if (tx == NULL) {
-                        CERROR("Can't allocate tx for "LPX64"\n",
-                               conn->ibc_peer->ibp_nid);
+                        CERROR("Can't allocate tx for %s\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         return -ENOMEM;
                 }
 
@@ -1680,8 +1694,8 @@ kibnal_recvmsg (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                                                   vv_acc_r_mem_write,
                                                   niov, kiov, offset, mlen);
                 if (rc != 0) {
-                        CERROR("Can't setup PUT sink for "LPX64": %d\n",
-                               conn->ibc_peer->ibp_nid, rc);
+                        CERROR("Can't setup PUT sink for %s: %d\n",
+                               libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
                         kibnal_tx_done(tx);
                         return -EIO;
                 }
@@ -1774,13 +1788,14 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
         if (error == 0 &&
             list_empty(&conn->ibc_tx_queue) &&
             list_empty(&conn->ibc_active_txs)) {
-                CDEBUG(D_NET, "closing conn to "LPX64
+                CDEBUG(D_NET, "closing conn to %s"
                        " rx# "LPD64" tx# "LPD64"\n", 
-                       peer->ibp_nid, conn->ibc_txseq, conn->ibc_rxseq);
+                       libcfs_nid2str(peer->ibp_nid),
+                       conn->ibc_txseq, conn->ibc_rxseq);
         } else {
-                CERROR("Closing conn to "LPX64": error %d%s%s"
+                CERROR("Closing conn to %s: error %d%s%s"
                        " rx# "LPD64" tx# "LPD64"\n",
-                       peer->ibp_nid, error,
+                       libcfs_nid2str(peer->ibp_nid), error,
                        list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
                        conn->ibc_txseq, conn->ibc_rxseq);
@@ -1933,6 +1948,8 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
         kib_tx_t         *tx;
         unsigned long     flags;
 
+        CDEBUG(D_NET,"!!\n");
+
         /* Only the connd creates conns => single threaded */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
@@ -1984,7 +2001,8 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
         if (list_empty (&zombies)) 
                 return;
         
-        CERROR ("Deleting messages for "LPX64": connection failed\n", peer->ibp_nid);
+        CERROR ("Deleting messages for %s: connection failed\n",
+                libcfs_nid2str(peer->ibp_nid));
         do {
                 tx = list_entry (zombies.next, kib_tx_t, tx_list);
 
@@ -2005,6 +2023,8 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
         kib_peer_t        *peer2;
         unsigned long      flags;
         kib_tx_t          *tx;
+
+        CDEBUG(D_NET,"%d\n", status);
 
         /* Only the connd creates conns => single threaded */
         LASSERT (!in_interrupt());
@@ -2281,48 +2301,57 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         }
 
         if (rxmsg.ibm_type != IBNAL_MSG_CONNREQ) {
-                CERROR("Unexpected connreq msg type: %x from "LPX64"\n",
-                       rxmsg.ibm_type, rxmsg.ibm_srcnid);
+                CERROR("Unexpected connreq msg type: %x from %s\n",
+                       rxmsg.ibm_type, libcfs_nid2str(rxmsg.ibm_srcnid));
                 goto reject;
         }
 
-        if (rxmsg.ibm_dstnid != kibnal_data.kib_ni->ni_nid) {
-                CERROR("Can't accept "LPX64": bad dst nid "LPX64"\n",
-                       rxmsg.ibm_srcnid, rxmsg.ibm_dstnid);
+        if (rxmsg.ibm_dstnid != kibnal_data.kib_ni->ni_nid &&
+            (lnet_apini.apini_ptlcompat == 0 ||
+             PTL_NIDNET(rxmsg.ibm_dstnid) != 0 ||
+             PTL_NIDADDR(rxmsg.ibm_dstnid) != PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) {
+                CERROR("Can't accept %s: bad dst nid %s\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), 
+                       libcfs_nid2str(rxmsg.ibm_dstnid));
                 goto reject;
         }
 
         if (rxmsg.ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
-                CERROR("Can't accept "LPX64": incompatible queue depth %d (%d wanted)\n",
-                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_queue_depth, 
+                CERROR("Can't accept %s: incompatible queue depth %d (%d wanted)\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), 
+                       rxmsg.ibm_u.connparams.ibcp_queue_depth, 
                        IBNAL_MSG_QUEUE_SIZE);
                 goto reject;
         }
 
         if (rxmsg.ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
-                CERROR("Can't accept "LPX64": message size %d too big (%d max)\n",
-                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_max_msg_size, 
+                CERROR("Can't accept %s: message size %d too big (%d max)\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), 
+                       rxmsg.ibm_u.connparams.ibcp_max_msg_size, 
                        IBNAL_MSG_SIZE);
                 goto reject;
         }
                 
         if (rxmsg.ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
-                CERROR("Can't accept "LPX64": max frags %d too big (%d max)\n",
-                       rxmsg.ibm_srcnid, rxmsg.ibm_u.connparams.ibcp_max_frags, 
+                CERROR("Can't accept %s: max frags %d too big (%d max)\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), 
+                       rxmsg.ibm_u.connparams.ibcp_max_frags, 
                        IBNAL_MAX_RDMA_FRAGS);
                 goto reject;
         }
                 
         conn = kibnal_create_conn(cep);
         if (conn == NULL) {
-                CERROR("Can't create conn for "LPX64"\n", rxmsg.ibm_srcnid);
+                CERROR("Can't create conn for %s\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid));
                 goto reject;
         }
         
         /* assume 'rxmsg.ibm_srcnid' is a new peer */
         rc = kibnal_create_peer (&tmp_peer, rxmsg.ibm_srcnid);
         if (rc != 0) {
-                CERROR("Can't create tmp peer for "LPX64"\n", rxmsg.ibm_srcnid);
+                CERROR("Can't create tmp peer for %s\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid));
                 kibnal_conn_decref(conn);
                 conn = NULL;
                 goto reject;
@@ -2355,7 +2384,8 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
 
         rc = kibnal_post_receives(conn);
         if (rc != 0) {
-                CERROR("Can't post receives for "LPX64"\n", rxmsg.ibm_srcnid);
+                CERROR("Can't post receives for %s\n", 
+                       libcfs_nid2str(rxmsg.ibm_srcnid));
                 goto reject;
         }
 
@@ -2399,7 +2429,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         rc = -EIO;
                 
  reject:
-        CERROR("Rejected connreq from "LPX64"\n", rxmsg.ibm_srcnid);
+        CERROR("Rejected connreq from %s\n", libcfs_nid2str(rxmsg.ibm_srcnid));
 
         memset(&reject, 0, sizeof(reject));
         reject.reason = cm_rej_code_usr_rej;
@@ -2474,6 +2504,8 @@ kibnal_connect_conn (kib_conn_t *conn)
         kib_connvars_t           *cv = conn->ibc_connvars;
         kib_peer_t               *peer = conn->ibc_peer;
         cm_return_t               cmrc;
+
+        CDEBUG(D_NET,"!!\n");
         
         /* Only called by connd => statics OK */
         LASSERT (!in_interrupt());
@@ -2509,7 +2541,8 @@ kibnal_connect_conn (kib_conn_t *conn)
         /* ...and copy into cmreq to avoid alignment issues */
         memcpy(&cmreq.priv_data, &msg, msg.ibm_nob);
         
-        CDEBUG(D_NET, "Connecting %p to "LPX64"\n", conn, peer->ibp_nid);
+        CDEBUG(D_NET, "Connecting %p to %s\n", conn,
+               libcfs_nid2str(peer->ibp_nid));
 
         kibnal_conn_addref(conn);               /* ++ref for CM callback */
         kibnal_set_conn_state(conn, IBNAL_CONN_ACTIVE_CONNECT);
@@ -2517,12 +2550,12 @@ kibnal_connect_conn (kib_conn_t *conn)
         cmrc = cm_connect(conn->ibc_cep, &cmreq, 
                           kibnal_active_connect_callback, conn);
         if (cmrc == cm_stat_success) {
-                CDEBUG(D_NET, "connection REQ sent to "LPX64"\n",
-                       peer->ibp_nid);
+                CDEBUG(D_NET, "connection REQ sent to %s\n",
+                       libcfs_nid2str(peer->ibp_nid));
                 return;
         }
 
-        CERROR ("Connect "LPX64" failed: %d\n", peer->ibp_nid, cmrc);
+        CERROR ("Connect %s failed: %d\n", libcfs_nid2str(peer->ibp_nid), cmrc);
         kibnal_conn_decref(conn);       /* drop callback's ref */
         kibnal_connreq_done(conn, 1, -EHOSTUNREACH);
 }
@@ -2541,6 +2574,8 @@ kibnal_check_connreply (kib_conn_t *conn)
         cm_cep_handle_t   cep;
         unsigned long     flags;
         int               rc;
+
+        CDEBUG(D_NET,"!!\n");
 
         /* Only called by connd => statics OK */
         LASSERT (!in_interrupt());
@@ -2561,51 +2596,60 @@ kibnal_check_connreply (kib_conn_t *conn)
 
                 rc = kibnal_unpack_msg(&msg, msgnob);
                 if (rc != 0) {
-                        CERROR("Can't unpack reply from "LPX64"\n",
-                               peer->ibp_nid);
+                        CERROR("Can't unpack reply from %s\n",
+                               libcfs_nid2str(peer->ibp_nid));
                         kibnal_connreq_done(conn, 1, rc);
                         return;
                 }
 
                 if (msg.ibm_type != IBNAL_MSG_CONNACK ) {
-                        CERROR("Unexpected message type %d from "LPX64"\n",
-                               msg.ibm_type, peer->ibp_nid);
+                        CERROR("Unexpected message type %d from %s\n",
+                               msg.ibm_type, libcfs_nid2str(peer->ibp_nid));
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
 
                 if (msg.ibm_u.connparams.ibcp_queue_depth != IBNAL_MSG_QUEUE_SIZE) {
-                        CERROR(LPX64" has incompatible queue depth %d(%d wanted)\n",
-                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_queue_depth,
+                        CERROR("%s has incompatible queue depth %d(%d wanted)\n",
+                               libcfs_nid2str(peer->ibp_nid), 
+                               msg.ibm_u.connparams.ibcp_queue_depth,
                                IBNAL_MSG_QUEUE_SIZE);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
                 
                 if (msg.ibm_u.connparams.ibcp_max_msg_size > IBNAL_MSG_SIZE) {
-                        CERROR(LPX64" max message size %d too big (%d max)\n",
-                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_max_msg_size, 
+                        CERROR("%s max message size %d too big (%d max)\n",
+                               libcfs_nid2str(peer->ibp_nid), 
+                               msg.ibm_u.connparams.ibcp_max_msg_size, 
                                IBNAL_MSG_SIZE);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
 
                 if (msg.ibm_u.connparams.ibcp_max_frags > IBNAL_MAX_RDMA_FRAGS) {
-                        CERROR(LPX64" max frags %d too big (%d max)\n",
-                               peer->ibp_nid, msg.ibm_u.connparams.ibcp_max_frags, 
+                        CERROR("%s max frags %d too big (%d max)\n",
+                               libcfs_nid2str(peer->ibp_nid),
+                               msg.ibm_u.connparams.ibcp_max_frags, 
                                IBNAL_MAX_RDMA_FRAGS);
                         kibnal_connreq_done(conn, 1, -EPROTO);
                         return;
                 }
                 
                 read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                rc = (msg.ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
-                      msg.ibm_dststamp != kibnal_data.kib_incarnation) ?
-                     -ESTALE : 0;
+                if ((msg.ibm_dstnid == kibnal_data.kib_ni->ni_nid ||
+                     (lnet_apini.apini_ptlcompat > 0 &&
+                      PTL_NIDNET(msg.ibm_dstnid) == 0 &&
+                      PTL_NIDADDR(msg.ibm_dstnid) ==
+                      PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) &&
+                    msg.ibm_dststamp == kibnal_data.kib_incarnation)
+                        rc = 0;
+                else
+                        rc = -ESTALE;
                 read_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
                 if (rc != 0) {
-                        CERROR("Stale connection reply from "LPX64"\n",
-                               peer->ibp_nid);
+                        CERROR("Stale connection reply from %s\n",
+                               libcfs_nid2str(peer->ibp_nid));
                         kibnal_connreq_done(conn, 1, rc);
                         return;
                 }
@@ -2615,8 +2659,8 @@ kibnal_check_connreply (kib_conn_t *conn)
                 
                 rc = kibnal_post_receives(conn);
                 if (rc != 0) {
-                        CERROR("Can't post receives for "LPX64"\n",
-                               peer->ibp_nid);
+                        CERROR("Can't post receives for %s\n",
+                               libcfs_nid2str(peer->ibp_nid));
                         kibnal_connreq_done(conn, 1, rc);
                         return;
                 }
@@ -2646,7 +2690,8 @@ kibnal_check_connreply (kib_conn_t *conn)
                         return;
                 }
 
-                CERROR("cm_accept "LPX64" failed: %d\n", peer->ibp_nid, cmrc);
+                CERROR("cm_accept %s failed: %d\n", 
+                       libcfs_nid2str(peer->ibp_nid), cmrc);
                 /* Back out of RTU: no callback coming */
                 kibnal_set_conn_state(conn, IBNAL_CONN_ACTIVE_CHECK_REPLY);
                 kibnal_conn_decref(conn);
@@ -2657,13 +2702,14 @@ kibnal_check_connreply (kib_conn_t *conn)
         if (cv->cv_conndata.status == cm_event_conn_reject) {
 
                 if (cv->cv_conndata.data.reject.reason != cm_rej_code_stale_conn) {
-                        CERROR("conn -> "LPX64" rejected: %d\n", peer->ibp_nid,
+                        CERROR("conn -> %s rejected: %d\n", 
+                               libcfs_nid2str(peer->ibp_nid),
                                cv->cv_conndata.data.reject.reason);
                         kibnal_connreq_done(conn, 1, -ECONNREFUSED);
                         return;
                 }
 
-                CWARN ("conn -> "LPX64" stale: retrying\n", peer->ibp_nid);
+                CWARN ("conn -> %s stale: retrying\n", libcfs_nid2str(peer->ibp_nid));
 
                 cep = cm_create_cep(cm_cep_transp_rc);
                 if (cep == NULL) {
@@ -2685,7 +2731,7 @@ kibnal_check_connreply (kib_conn_t *conn)
                 return;
         }
 
-        CERROR("conn -> "LPX64" failed: %d\n", peer->ibp_nid,
+        CERROR("conn -> %s failed: %d\n", libcfs_nid2str(peer->ibp_nid),
                cv->cv_conndata.status);
         kibnal_connreq_done(conn, 1, -ECONNABORTED);
 }
@@ -2701,6 +2747,8 @@ kibnal_arp_done (kib_conn_t *conn)
         int                   rc;
         unsigned long         flags;
 
+        CDEBUG(D_NET,"!!\n");
+
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
         LASSERT (conn->ibc_state == IBNAL_CONN_ACTIVE_ARP);
@@ -2713,18 +2761,19 @@ kibnal_arp_done (kib_conn_t *conn)
                         /* final ARP attempt failed */
                         write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
                                                 flags);
-                        CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n", 
-                               peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
-                               cv->cv_arprc);
+                        CERROR("Arp %s at %u.%u.%u.%u failed: %d\n", 
+                               libcfs_nid2str(peer->ibp_nid), 
+                               HIPQUAD(peer->ibp_ip), cv->cv_arprc);
                 } else {
                         /* Retry ARP: ibp_connecting++ so terminating conn
                          * doesn't end peer's connection attempt */
                         peer->ibp_connecting++;
                         write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
                                                 flags);
-                        CWARN("Arp "LPX64"@%u.%u.%u.%u failed: %d "
+                        CWARN("Arp %s at %u.%u.%u.%u failed: %d "
                               "(%d attempts left)\n", 
-                              peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
+                              libcfs_nid2str(peer->ibp_nid), 
+                              HIPQUAD(peer->ibp_ip), 
                               cv->cv_arprc, peer->ibp_arp_count);
 
                         kibnal_schedule_peer_arp(peer);
@@ -2734,7 +2783,8 @@ kibnal_arp_done (kib_conn_t *conn)
         }
 
         if ((arp->mask & IBAT_PRI_PATH_VALID) != 0) {
-                CDEBUG(D_NET, "Got valid path for "LPX64"\n", peer->ibp_nid);
+                CDEBUG(D_NET, "Got valid path for %s\n",
+                       libcfs_nid2str(peer->ibp_nid));
 
                 *path = *arp->primary_path;
 
@@ -2753,8 +2803,8 @@ kibnal_arp_done (kib_conn_t *conn)
                 path->mtu = IBNAL_IB_MTU;
 
         } else if ((arp->mask & IBAT_LID_VALID) != 0) {
-                CWARN("Creating new path record for "LPX64"@%u.%u.%u.%u\n",
-                      peer->ibp_nid, HIPQUAD(peer->ibp_ip));
+                CWARN("Creating new path record for %s at %u.%u.%u.%u\n",
+                      libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
 
                 cv->cv_pkey_index = IBNAL_PKEY_IDX;
                 cv->cv_sgid_index = IBNAL_SGID_IDX;
@@ -2779,8 +2829,8 @@ kibnal_arp_done (kib_conn_t *conn)
                 path->pkey          = IBNAL_PKEY;
                 path->traffic_class = IBNAL_TRAFFIC_CLASS;
         } else {
-                CERROR("Can't Arp "LPX64"@%u.%u.%u.%u: no PATH or LID\n", 
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip));
+                CERROR("Can't Arp %s @%u.%u.%u.%u: no PATH or LID\n", 
+                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
                 kibnal_connreq_done(conn, 1, -ENETUNREACH);
                 return;
         }
@@ -2802,11 +2852,11 @@ kibnal_arp_callback (ibat_stat_t arprc, ibat_arp_data_t *arp_data, void *arg)
         kib_peer_t      *peer = conn->ibc_peer;
 
         if (arprc != ibat_stat_ok)
-                CERROR("Arp "LPX64"@%u.%u.%u.%u failed: %d\n",
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), arprc);
+                CERROR("Arp %s at %u.%u.%u.%u failed: %d\n",
+                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip), arprc);
         else
-                CDEBUG(D_NET, "Arp "LPX64"@%u.%u.%u.%u OK: LID %s PATH %s\n",
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), 
+                CDEBUG(D_NET, "Arp %s at %u.%u.%u.%u OK: LID %s PATH %s\n",
+                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip), 
                        (arp_data->mask & IBAT_LID_VALID) == 0 ? "invalid" : "valid",
                        (arp_data->mask & IBAT_PRI_PATH_VALID) == 0 ? "invalid" : "valid");
 
@@ -2833,18 +2883,20 @@ kibnal_arp_peer (kib_peer_t *peer)
         LASSERT (peer->ibp_connecting != 0);
         LASSERT (peer->ibp_arp_count > 0);
 
+        CDEBUG(D_NET,"!!\n");
+
         cep = cm_create_cep(cm_cep_transp_rc);
         if (cep == NULL) {
-                CERROR ("Can't create cep for conn->"LPX64"\n",
-                        peer->ibp_nid);
+                CERROR ("Can't create cep for conn->%s\n",
+                        libcfs_nid2str(peer->ibp_nid));
                 kibnal_peer_connect_failed(peer, 1);
                 return;
         }
 
         conn = kibnal_create_conn(cep);
         if (conn == NULL) {
-                CERROR ("Can't allocate conn->"LPX64"\n",
-                        peer->ibp_nid);
+                CERROR ("Can't allocate conn->%s\n",
+                        libcfs_nid2str(peer->ibp_nid));
                 cm_destroy_cep(cep);
                 kibnal_peer_connect_failed(peer, 1);
                 return;
@@ -2958,8 +3010,8 @@ kibnal_check_conns (int idx)
                         read_unlock_irqrestore(&kibnal_data.kib_global_lock, 
                                                flags);
 
-                        CERROR("Timed out RDMA with "LPX64"\n",
-                               peer->ibp_nid);
+                        CERROR("Timed out RDMA with %s\n",
+                               libcfs_nid2str(peer->ibp_nid));
 
                         kibnal_close_conn (conn, -ETIMEDOUT);
                         kibnal_conn_decref(conn); /* ...until here */
