@@ -1659,14 +1659,7 @@ ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn, lnet_nid_t peer_nid,
         hmv->version_major = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR);
         hmv->version_minor = cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR);
 
-        srcnid = ni->ni_nid;
-        if (lnet_apini.apini_ptlcompat > 1 ||
-            (lnet_apini.apini_ptlcompat > 0 &&
-             PTL_NIDNET(peer_nid) == 0)) {
-                /* Pretend I'm portals if we're in portals compatibility
-                 * phase1, or I'm talking to an old peer  */
-                srcnid = PTL_MKNID(0, PTL_NIDADDR(srcnid));
-        }
+        srcnid = lnet_ptlcompat_srcnid(ni->ni_nid, peer_nid);
         
         hdr.src_nid        = cpu_to_le64 (srcnid);
         hdr.src_pid        = cpu_to_le64 (lnet_getpid());
@@ -1840,10 +1833,7 @@ ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn,
         if (!active) {                          /* don't know peer's nid yet */
                 *peerid = recv_id;
         } else if (peerid->pid != recv_id.pid ||
-                   (peerid->nid != recv_id.nid &&
-                    (lnet_apini.apini_ptlcompat == 0 ||
-                     PTL_NIDNET(recv_id.nid) != 0 ||
-                     PTL_NIDADDR(recv_id.nid) != PTL_NIDADDR(peerid->nid)))) {
+                   !lnet_ptlcompat_matchnid(peerid->nid, recv_id.nid)) {
                 LCONSOLE_ERROR("Connected successfully to %s on host "
                                "%u.%u.%u.%u, but they claimed they were "
                                "%s; please check your Lustre "

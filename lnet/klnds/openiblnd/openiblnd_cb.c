@@ -219,8 +219,8 @@ kibnal_complete_passive_rdma(kib_conn_t *conn, __u64 cookie, int status)
                 
         spin_unlock_irqrestore (&conn->ibc_lock, flags);
 
-        CERROR ("Unmatched (late?) RDMA completion "LPX64" from "LPX64"\n",
-                cookie, conn->ibc_peer->ibp_nid);
+        CERROR ("Unmatched (late?) RDMA completion "LPX64" from %s\n",
+                cookie, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 }
 
 void
@@ -266,12 +266,12 @@ kibnal_post_rx (kib_rx_t *rx, int do_credits)
         }
 
         if (conn->ibc_state == IBNAL_CONN_ESTABLISHED) {
-                CERROR ("Error posting receive -> "LPX64": %d\n",
-                        conn->ibc_peer->ibp_nid, rc);
+                CERROR ("Error posting receive -> %s: %d\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
                 kibnal_close_conn (rx->rx_conn, rc);
         } else {
-                CDEBUG (D_NET, "Error posting receive -> "LPX64": %d\n",
-                        conn->ibc_peer->ibp_nid, rc);
+                CDEBUG (D_NET, "Error posting receive -> %s: %d\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
         }
 
         /* Drop rx's ref */
@@ -302,24 +302,25 @@ kibnal_rx_callback (struct ib_cq_entry *e)
         LASSERT (conn->ibc_state == IBNAL_CONN_ESTABLISHED);
 
         if (e->status != IB_COMPLETION_STATUS_SUCCESS) {
-                CERROR("Rx from "LPX64" failed: %d\n", 
-                       conn->ibc_peer->ibp_nid, e->status);
+                CERROR("Rx from %s failed: %d\n", 
+                       libcfs_nid2str(conn->ibc_peer->ibp_nid), e->status);
                 goto failed;
         }
 
         rc = kibnal_unpack_msg(msg, e->bytes_transferred);
         if (rc != 0) {
-                CERROR ("Error %d unpacking rx from "LPX64"\n",
-                        rc, conn->ibc_peer->ibp_nid);
+                CERROR ("Error %d unpacking rx from %s\n",
+                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 goto failed;
         }
 
         if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+            !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
-            msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
-                CERROR ("Stale rx from "LPX64"\n",
-                        conn->ibc_peer->ibp_nid);
+                CERROR ("Stale rx from %s\n",
+                        libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 goto failed;
         }
 
@@ -363,8 +364,8 @@ kibnal_rx_callback (struct ib_cq_entry *e)
                 return;
                         
         default:
-                CERROR ("Bad msg type %x from "LPX64"\n",
-                        msg->ibm_type, conn->ibc_peer->ibp_nid);
+                CERROR ("Bad msg type %x from %s\n",
+                        msg->ibm_type, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                 goto failed;
         }
 
@@ -403,8 +404,8 @@ kibnal_rx (kib_rx_t *rx)
 
                 /* Otherwise, I'll send a failed completion now to prevent
                  * the peer's GET blocking for the full timeout. */
-                CERROR ("Completing unmatched RDMA GET from "LPX64"\n",
-                        rx->rx_conn->ibc_peer->ibp_nid);
+                CERROR ("Completing unmatched RDMA GET from %s\n",
+                        libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
                 kibnal_start_active_rdma (IBNAL_MSG_GET_DONE, -EIO,
                                           rx, NULL, 0, NULL, NULL, 0, 0);
                 break;
@@ -419,8 +420,8 @@ kibnal_rx (kib_rx_t *rx)
                  * inconsistent with this message type, so it's the
                  * sender's fault for sending garbage and she can time
                  * herself out... */
-                CERROR ("Uncompleted RMDA PUT from "LPX64"\n",
-                        rx->rx_conn->ibc_peer->ibp_nid);
+                CERROR ("Uncompleted RMDA PUT from %s\n",
+                        libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
@@ -759,11 +760,11 @@ kibnal_check_sends (kib_conn_t *conn)
                         spin_unlock_irqrestore (&conn->ibc_lock, flags);
                         
                         if (conn->ibc_state == IBNAL_CONN_ESTABLISHED)
-                                CERROR ("Error %d posting transmit to "LPX64"\n", 
-                                        rc, conn->ibc_peer->ibp_nid);
+                                CERROR ("Error %d posting transmit to %s\n", 
+                                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
                         else
-                                CDEBUG (D_NET, "Error %d posting transmit to "
-                                        LPX64"\n", rc, conn->ibc_peer->ibp_nid);
+                                CDEBUG (D_NET, "Error %d posting transmit to %s\n",
+                                        rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
                         kibnal_close_conn (conn, rc);
 
@@ -806,8 +807,8 @@ kibnal_tx_callback (struct ib_cq_entry *e)
         if (idle)
                 list_del(&tx->tx_list);
 
-        CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
-               conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
+        CDEBUG(D_NET, "++conn[%p] state %d -> %s (%d)\n",
+               conn, conn->ibc_state, libcfs_nid2str(conn->ibc_peer->ibp_nid),
                atomic_read (&conn->ibc_refcount));
         atomic_inc (&conn->ibc_refcount);
 
@@ -1725,7 +1726,8 @@ kibnal_accept_connreq (kib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
          * NB If my incarnation changes after this, the peer will get nuked and
          * we'll spot that when the connection is finally added into the peer's
          * connlist */
-        if (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
                 
@@ -1977,8 +1979,9 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 }
 
                 if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+                    !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                             msg->ibm_dstnid) ||
                     msg->ibm_srcstamp != conn->ibc_incarnation ||
-                    msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
                     msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                         CERROR("Stale conn ack from "LPX64"\n",
                                conn->ibc_peer->ibp_nid);

@@ -66,7 +66,8 @@ kibnal_pack_msg(kib_msg_t *msg, int credits, lnet_nid_t dstnid, __u64 dststamp)
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = kibnal_data.kib_ni->ni_nid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(kibnal_data.kib_ni->ni_nid,
+                                                  dstnid);
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
@@ -140,7 +141,7 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
         }
         
         if (msg->ibm_srcnid == LNET_NID_ANY) {
-                CERROR("Bad src nid: "LPX64"\n", msg->ibm_srcnid);
+                CERROR("Bad src nid: %s\n", libcfs_nid2str(msg->ibm_srcnid));
                 return -EPROTO;
         }
 
@@ -234,51 +235,54 @@ kibnal_make_svcqry (kib_conn_t *conn)
         
         rc = libcfs_sock_write(sock, msg, msg->ibm_nob, 0);
         if (rc != 0) {
-                CERROR("Error %d sending svcqry to "
-                       LPX64"@%u.%u.%u.%u/%d\n", rc, 
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Error %d sending svcqry to %s at %u.%u.%u.%u/%d\n", 
+                       rc, libcfs_nid2str(peer->ibp_nid), 
+                       HIPQUAD(peer->ibp_ip), peer->ibp_port);
                 goto out;
         }
 
         nob = offsetof(kib_msg_t, ibm_u) + sizeof(msg->ibm_u.svcrsp);
         rc = libcfs_sock_read(sock, msg, nob, *kibnal_tunables.kib_timeout);
         if (rc != 0) {
-                CERROR("Error %d receiving svcrsp from "
-                       LPX64"@%u.%u.%u.%u/%d\n", rc, 
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Error %d receiving svcrsp from %s at %u.%u.%u.%u/%d\n", 
+                       rc, libcfs_nid2str(peer->ibp_nid), 
+                       HIPQUAD(peer->ibp_ip), peer->ibp_port);
                 goto out;
         }
 
         rc = kibnal_unpack_msg(msg, nob);
         if (rc != 0) {
-                CERROR("Error %d unpacking svcrsp from "
-                       LPX64"@%u.%u.%u.%u/%d\n", rc,
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Error %d unpacking svcrsp from %s at %u.%u.%u.%u/%d\n", 
+                       rc, libcfs_nid2str(peer->ibp_nid), 
+                       HIPQUAD(peer->ibp_ip), peer->ibp_port);
                 goto out;
         }
                        
         if (msg->ibm_type != IBNAL_MSG_SVCRSP) {
-                CERROR("Unexpected response type %d from "
-                       LPX64"@%u.%u.%u.%u/%d\n", msg->ibm_type, 
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Unexpected response type %d from %s at %u.%u.%u.%u/%d\n", 
+                       msg->ibm_type, libcfs_nid2str(peer->ibp_nid), 
+                       HIPQUAD(peer->ibp_ip), peer->ibp_port);
                 rc = -EPROTO;
                 goto out;
         }
         
-        if (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid ||
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid) ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
-                CERROR("Unexpected dst NID/stamp "LPX64"/"LPX64" from "
-                       LPX64"@%u.%u.%u.%u/%d\n", 
-                       msg->ibm_dstnid, msg->ibm_dststamp,
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Unexpected dst NID/stamp %s/"LPX64" from "
+                       "%s at %u.%u.%u.%u/%d\n", 
+                       libcfs_nid2str(msg->ibm_dstnid), msg->ibm_dststamp,
+                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip), 
+                       peer->ibp_port);
                 rc = -EPROTO;
                 goto out;
         }
 
         if (msg->ibm_srcnid != peer->ibp_nid) {
-                CERROR("Unexpected src NID "LPX64" from "
-                       LPX64"@%u.%u.%u.%u/%d\n", msg->ibm_srcnid,
-                       peer->ibp_nid, HIPQUAD(peer->ibp_ip), peer->ibp_port);
+                CERROR("Unexpected src NID %s from %s at %u.%u.%u.%u/%d\n", 
+                       libcfs_nid2str(msg->ibm_srcnid),
+                       libcfs_nid2str(peer->ibp_nid), 
+                       HIPQUAD(peer->ibp_ip), peer->ibp_port);
                 rc = -EPROTO;
                 goto out;
         }
@@ -359,10 +363,11 @@ kibnal_handle_svcqry (struct socket *sock)
                 goto out;
         }
         
-        if (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid) {
-                CERROR("Unexpected dstnid "LPX64"(expected "LPX64" "
-                       "from %u.%u.%u.%u/%d\n", msg->ibm_dstnid,
-                       kibnal_data.kib_ni->ni_nid,
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     msg->ibm_dstnid)) {
+                CERROR("Unexpected dstnid %s: expected %s from %u.%u.%u.%u/%d\n",
+                       libcfs_nid2str(msg->ibm_dstnid),
+                       libcfs_nid2str(kibnal_data.kib_ni->ni_nid),
                        HIPQUAD(peer_ip), peer_port);
                 goto out;
         }
@@ -536,7 +541,8 @@ kibnal_destroy_peer (kib_peer_t *peer)
 {
         unsigned long flags;
 
-        CDEBUG (D_NET, "peer "LPX64" %p deleted\n", peer->ibp_nid, peer);
+        CDEBUG (D_NET, "peer %s %p deleted\n", 
+                libcfs_nid2str(peer->ibp_nid), peer);
 
         LASSERT (atomic_read (&peer->ibp_refcount) == 0);
         LASSERT (peer->ibp_persistence == 0);
@@ -558,8 +564,8 @@ kibnal_destroy_peer (kib_peer_t *peer)
 void
 kibnal_put_peer (kib_peer_t *peer)
 {
-        CDEBUG (D_OTHER, "putting peer[%p] -> "LPX64" (%d)\n",
-                peer, peer->ibp_nid,
+        CDEBUG (D_OTHER, "putting peer[%p] -> %s (%d)\n",
+                peer, libcfs_nid2str(peer->ibp_nid),
                 atomic_read (&peer->ibp_refcount));
 
         LASSERT (atomic_read (&peer->ibp_refcount) > 0);
@@ -587,8 +593,9 @@ kibnal_find_peer_locked (lnet_nid_t nid)
                 if (peer->ibp_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read (&peer->ibp_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid), 
+                       atomic_read (&peer->ibp_refcount));
                 return (peer);
         }
         return (NULL);
@@ -784,8 +791,9 @@ kibnal_get_conn_by_idx (int index)
                                         continue;
 
                                 conn = list_entry (ctmp, kib_conn_t, ibc_list);
-                                CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
-                                       conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
+                                CDEBUG(D_NET, "++conn[%p] state %d -> %s (%d)\n",
+                                       conn, conn->ibc_state, 
+                                       libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                        atomic_read (&conn->ibc_refcount));
                                 atomic_inc (&conn->ibc_refcount);
                                 read_unlock_irqrestore(&kibnal_data.kib_global_lock,
@@ -974,8 +982,9 @@ kibnal_put_conn (kib_conn_t *conn)
 {
         unsigned long flags;
 
-        CDEBUG (D_NET, "putting conn[%p] state %d -> "LPX64" (%d)\n",
-                conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
+        CDEBUG (D_NET, "putting conn[%p] state %d -> %s (%d)\n",
+                conn, conn->ibc_state, 
+                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                 atomic_read (&conn->ibc_refcount));
 
         LASSERT (atomic_read (&conn->ibc_refcount) > 0);
@@ -1025,9 +1034,10 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
                 if (conn->ibc_incarnation == incarnation)
                         continue;
 
-                CDEBUG(D_NET, "Closing stale conn %p nid:"LPX64
+                CDEBUG(D_NET, "Closing stale conn %p nid: %s"
                        " incarnation:"LPX64"("LPX64")\n", conn,
-                       peer->ibp_nid, conn->ibc_incarnation, incarnation);
+                       libcfs_nid2str(peer->ibp_nid), 
+                       conn->ibc_incarnation, incarnation);
                 
                 count++;
                 kibnal_close_conn_locked (conn, -ESTALE);
@@ -1651,11 +1661,6 @@ kibnal_module_init (void)
 {
         int    rc;
 
-        if (lnet_apini.apini_ptlcompat != 0) {
-                LCONSOLE_ERROR("OpenIB does not support portals compatibility mode\n");
-                return -ENODEV;
-        }
-        
         rc = kibnal_tunables_init();
         if (rc != 0)
                 return rc;

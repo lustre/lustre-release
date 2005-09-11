@@ -176,12 +176,6 @@ void
 kibnal_pack_msg(kib_msg_t *msg, int credits, lnet_nid_t dstnid, 
                 __u64 dststamp, __u64 seq)
 {
-        lnet_nid_t srcnid = kibnal_data.kib_ni->ni_nid;
-        
-        if (lnet_apini.apini_ptlcompat > 0 &&   /* pretend I'm portals */
-            PTL_NIDNET(dstnid) == 0)            /* if I'm sending to portals */
-                srcnid = PTL_MKNID(0, PTL_NIDADDR(srcnid));
-                
         /* CAVEAT EMPTOR! all message fields not set here should have been
          * initialised previously. */
         msg->ibm_magic    = IBNAL_MSG_MAGIC;
@@ -190,7 +184,8 @@ kibnal_pack_msg(kib_msg_t *msg, int credits, lnet_nid_t dstnid,
         msg->ibm_credits  = credits;
         /*   ibm_nob */
         msg->ibm_cksum    = 0;
-        msg->ibm_srcnid   = srcnid;
+        msg->ibm_srcnid   = lnet_ptlcompat_srcnid(kibnal_data.kib_ni->ni_nid,
+                                                  dstnid);
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;

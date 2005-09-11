@@ -435,6 +435,26 @@ ptl_ni_decref(ptl_ni_t *ni)
         PTL_UNLOCK(flags);
 }
 
+static inline lnet_nid_t
+lnet_ptlcompat_srcnid(lnet_nid_t src, lnet_nid_t dst)
+{
+        /* Give myself a portals srcnid if I'm sending to portals */
+        if (lnet_apini.apini_ptlcompat > 0 &&   
+            PTL_NIDNET(dst) == 0)
+                return PTL_MKNID(0, PTL_NIDADDR(src));
+        
+        return src;
+}
+
+static inline int
+lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid) 
+{
+        return ((ptl_nid == lnet_nid) ||
+                (lnet_apini.apini_ptlcompat > 0 &&
+                 PTL_NIDNET(ptl_nid) == 0 &&
+                 PTL_NIDADDR(ptl_nid) == PTL_NIDADDR(lnet_nid)));
+}
+
 extern ptl_nal_t ptl_lonal;
 extern ptl_ni_t *ptl_loni;
 

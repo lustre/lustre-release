@@ -748,10 +748,7 @@ kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
                 return (NULL);
         }
         
-        if (hdr->src_nid != nid &&
-            (lnet_apini.apini_ptlcompat == 0 ||
-              PTL_NIDNET(hdr->src_nid) != 0 ||
-              PTL_NIDADDR(hdr->src_nid) != PTL_NIDADDR(nid))) {
+        if (!lnet_ptlcompat_matchnid(nid, hdr->src_nid)) {
                 CERROR ("Unexpected optimized get/put source NID %s from %s\n",
                         libcfs_nid2str(hdr->src_nid), libcfs_nid2str(nid));
                 return (NULL);

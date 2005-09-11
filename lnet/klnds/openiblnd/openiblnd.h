@@ -523,9 +523,6 @@ extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
 extern void kibnal_handle_svcqry (struct socket *sock);
 extern int kibnal_make_svcqry (kib_conn_t *conn);
 extern void kibnal_free_acceptsock (kib_acceptsock_t *as);
-extern int kibnal_listener_procint(ctl_table *table, int write, 
-                                   struct file *filp, void *buffer, 
-                                   unisgned int *lenp);
 extern int kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid);
 extern void kibnal_put_peer (kib_peer_t *peer);
 extern int kibnal_add_persistent_peer(lnet_nid_t nid, __u32 ip, int port);

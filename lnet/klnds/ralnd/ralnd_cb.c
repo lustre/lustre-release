@@ -604,9 +604,9 @@ kranal_consume_rxmsg (kra_conn_t *conn, void *buffer, int nob)
         conn->rac_rxmsg = NULL;
 
         if (nob_received < nob) {
-                CWARN("Incomplete immediate msg from "LPX64
-                      ": expected %d, got %d\n",
-                      conn->rac_peer->rap_nid, nob, nob_received);
+                CWARN("Incomplete immediate msg from %s: expected %d, got %d\n",
+                      libcfs_nid2str(conn->rac_peer->rap_nid), 
+                      nob, nob_received);
                 return -EPROTO;
         }
 
@@ -659,8 +659,8 @@ kranal_send (ptl_ni_t         *ni,
 
                 if (conn->rac_rxmsg->ram_type == RANAL_MSG_IMMEDIATE) {
                         if (nob > RANAL_FMA_MAX_DATA) {
-                                CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
-                                       nob, target.nid);
+                                CERROR("Can't REPLY IMMEDIATE %d to %s\n",
+                                       nob, libcfs_nid2str(target.nid));
                                 return -EIO;
                         }
                         break;                  /* RDMA not expected */
@@ -668,8 +668,9 @@ kranal_send (ptl_ni_t         *ni,
 
                 /* Incoming message consistent with RDMA? */
                 if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
-                        CERROR("REPLY to "LPX64" bad msg type %x!!!\n",
-                               target.nid, conn->rac_rxmsg->ram_type);
+                        CERROR("REPLY to %s bad msg type %x!!!\n",
+                               libcfs_nid2str(target.nid), 
+                               conn->rac_rxmsg->ram_type);
                         return -EIO;
                 }
 
@@ -734,7 +735,8 @@ kranal_send (ptl_ni_t         *ni,
 
                 tx->tx_ptlmsg[1] = lnet_create_reply_msg(ni, target.nid, ptlmsg);
                 if (tx->tx_ptlmsg[1] == NULL) {
-                        CERROR("Can't create reply for GET to "LPX64"\n", target.nid);
+                        CERROR("Can't create reply for GET to %s\n", 
+                               libcfs_nid2str(target.nid));
                         kranal_tx_done(tx, rc);
                         return -EIO;
                 }
@@ -917,8 +919,8 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
         if (!conn->rac_close_sent &&
             time_after_eq(now, conn->rac_last_tx + conn->rac_keepalive * HZ)) {
                 /* not sent in a while; schedule conn so scheduler sends a keepalive */
-                CDEBUG(D_NET, "Scheduling keepalive %p->"LPX64"\n",
-                       conn, conn->rac_peer->rap_nid);
+                CDEBUG(D_NET, "Scheduling keepalive %p->%s\n",
+                       conn, libcfs_nid2str(conn->rac_peer->rap_nid));
                 kranal_schedule_conn(conn);
         }
 
@@ -926,10 +928,11 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 
         if (!conn->rac_close_recvd &&
             time_after_eq(now, conn->rac_last_rx + timeout)) {
-                CERROR("%s received from "LPX64" within %lu seconds\n",
+                CERROR("%s received from %s within %lu seconds\n",
                        (conn->rac_state == RANAL_CONN_ESTABLISHED) ?
                        "Nothing" : "CLOSE not",
-                       conn->rac_peer->rap_nid, (now - conn->rac_last_rx)/HZ);
+                       libcfs_nid2str(conn->rac_peer->rap_nid), 
+                       (now - conn->rac_last_rx)/HZ);
                 return -ETIMEDOUT;
         }
 
@@ -947,8 +950,9 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on fmaq for "LPX64" blocked %lu seconds\n",
-                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on fmaq for %s blocked %lu seconds\n",
+                               libcfs_nid2str(conn->rac_peer->rap_nid),
+                               (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -958,8 +962,9 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on rdmaq for "LPX64" blocked %lu seconds\n",
-                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on rdmaq for %s blocked %lu seconds\n",
+                               libcfs_nid2str(conn->rac_peer->rap_nid), 
+                               (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -969,8 +974,9 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on replyq for "LPX64" blocked %lu seconds\n",
-                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on replyq for %s blocked %lu seconds\n",
+                               libcfs_nid2str(conn->rac_peer->rap_nid),
+                               (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -1008,8 +1014,9 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
                 kranal_conn_addref(conn);
                 read_unlock(&kranal_data.kra_global_lock);
 
-                CERROR("Conn to "LPX64", cqid %d timed out\n",
-                       conn->rac_peer->rap_nid, conn->rac_cqid);
+                CERROR("Conn to %s, cqid %d timed out\n",
+                       libcfs_nid2str(conn->rac_peer->rap_nid), 
+                       conn->rac_cqid);
 
                 write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -1447,7 +1454,8 @@ kranal_process_fmaq (kra_conn_t *conn)
                 if (conn->rac_close_sent)
                         return;
 
-                CWARN("sending CLOSE to "LPX64"\n", conn->rac_peer->rap_nid);
+                CWARN("sending CLOSE to %s\n", 
+                      libcfs_nid2str(conn->rac_peer->rap_nid));
                 kranal_init_msg(&conn->rac_msg, RANAL_MSG_CLOSE);
                 rc = kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
                 if (rc != 0)
@@ -1474,8 +1482,8 @@ kranal_process_fmaq (kra_conn_t *conn)
 
                 if (time_after_eq(jiffies,
                                   conn->rac_last_tx + conn->rac_keepalive * HZ)) {
-                        CDEBUG(D_NET, "sending NOOP -> "LPX64" (%p idle %lu(%ld))\n",
-                               conn->rac_peer->rap_nid, conn,
+                        CDEBUG(D_NET, "sending NOOP -> %s (%p idle %lu(%ld))\n",
+                               libcfs_nid2str(conn->rac_peer->rap_nid), conn,
                                (jiffies - conn->rac_last_tx)/HZ, conn->rac_keepalive);
                         kranal_init_msg(&conn->rac_msg, RANAL_MSG_NOOP);
                         kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
@@ -1599,9 +1607,9 @@ kranal_match_reply(kra_conn_t *conn, int type, __u64 cookie)
                 if (tx->tx_msg.ram_type != type) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
                         CWARN("Unexpected type %x (%x expected) "
-                              "matched reply from "LPX64"\n",
+                              "matched reply from %s\n",
                               tx->tx_msg.ram_type, type,
-                              conn->rac_peer->rap_nid);
+                              libcfs_nid2str(conn->rac_peer->rap_nid));
                         return NULL;
                 }
 
@@ -1611,8 +1619,8 @@ kranal_match_reply(kra_conn_t *conn, int type, __u64 cookie)
         }
 
         spin_unlock_irqrestore(&conn->rac_lock, flags);
-        CWARN("Unmatched reply %02x/"LPX64" from "LPX64"\n",
-              type, cookie, conn->rac_peer->rap_nid);
+        CWARN("Unmatched reply %02x/"LPX64" from %s\n",
+              type, cookie, libcfs_nid2str(conn->rac_peer->rap_nid));
         return NULL;
 }
 
@@ -1644,8 +1652,8 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
         if (msg->ram_magic != RANAL_MSG_MAGIC) {
                 if (__swab32(msg->ram_magic) != RANAL_MSG_MAGIC) {
-                        CERROR("Unexpected magic %08x from "LPX64"\n",
-                               msg->ram_magic, peer->rap_nid);
+                        CERROR("Unexpected magic %08x from %s\n",
+                               msg->ram_magic, libcfs_nid2str(peer->rap_nid));
                         goto out;
                 }
 
@@ -1672,28 +1680,29 @@ kranal_check_fma_rx (kra_conn_t *conn)
         }
 
         if (msg->ram_version != RANAL_MSG_VERSION) {
-                CERROR("Unexpected protocol version %d from "LPX64"\n",
-                       msg->ram_version, peer->rap_nid);
+                CERROR("Unexpected protocol version %d from %s\n",
+                       msg->ram_version, libcfs_nid2str(peer->rap_nid));
                 goto out;
         }
 
         if (msg->ram_srcnid != peer->rap_nid) {
-                CERROR("Unexpected peer "LPX64" from "LPX64"\n",
-                       msg->ram_srcnid, peer->rap_nid);
+                CERROR("Unexpected peer %s from %s\n",
+                       libcfs_nid2str(msg->ram_srcnid), 
+                       libcfs_nid2str(peer->rap_nid));
                 goto out;
         }
 
         if (msg->ram_connstamp != conn->rac_peer_connstamp) {
                 CERROR("Unexpected connstamp "LPX64"("LPX64
-                       " expected) from "LPX64"\n",
+                       " expected) from %s\n",
                        msg->ram_connstamp, conn->rac_peer_connstamp,
-                       peer->rap_nid);
+                       libcfs_nid2str(peer->rap_nid));
                 goto out;
         }
 
         if (msg->ram_seq != seq) {
-                CERROR("Unexpected sequence number %d(%d expected) from "
-                       LPX64"\n", msg->ram_seq, seq, peer->rap_nid);
+                CERROR("Unexpected sequence number %d(%d expected) from %s\n",
+                       msg->ram_seq, seq, libcfs_nid2str(peer->rap_nid));
                 goto out;
         }
 
@@ -1704,13 +1713,13 @@ kranal_check_fma_rx (kra_conn_t *conn)
         }
 
         if (conn->rac_close_recvd) {
-                CERROR("Unexpected message %d after CLOSE from "LPX64"\n",
-                       msg->ram_type, conn->rac_peer->rap_nid);
+                CERROR("Unexpected message %d after CLOSE from %s\n",
+                       msg->ram_type, libcfs_nid2str(conn->rac_peer->rap_nid));
                 goto out;
         }
 
         if (msg->ram_type == RANAL_MSG_CLOSE) {
-                CWARN("RX CLOSE from "LPX64"\n", conn->rac_peer->rap_nid);
+                CWARN("RX CLOSE from %s\n", libcfs_nid2str(conn->rac_peer->rap_nid));
                 conn->rac_close_recvd = 1;
                 write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -1866,8 +1875,8 @@ kranal_complete_closed_conn (kra_conn_t *conn)
                 kranal_tx_done(tx, -ECONNABORTED);
         }
 
-        CDEBUG(D_WARNING, "Closed conn %p -> "LPX64": nmsg %d nreplies %d\n",
-               conn, conn->rac_peer->rap_nid, nfma, nreplies);
+        CDEBUG(D_WARNING, "Closed conn %p -> %s: nmsg %d nreplies %d\n",
+               conn, libcfs_nid2str(conn->rac_peer->rap_nid), nfma, nreplies);
 }
 
 int

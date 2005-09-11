@@ -47,7 +47,8 @@ kranal_pack_connreq(kra_connreq_t *connreq, kra_conn_t *conn, lnet_nid_t dstnid)
         connreq->racr_magic     = RANAL_MSG_MAGIC;
         connreq->racr_version   = RANAL_MSG_VERSION;
         connreq->racr_devid     = conn->rac_device->rad_id;
-        connreq->racr_srcnid    = kranal_data.kra_ni->ni_nid;
+        connreq->racr_srcnid    = lnet_ptlcompat_srcnid(kranal_data.kra_ni->ni_nid,
+                                                        dstnid);
         connreq->racr_dstnid    = dstnid;
         connreq->racr_peerstamp = kranal_data.kra_peerstamp;
         connreq->racr_connstamp = conn->rac_my_connstamp;
@@ -146,8 +147,9 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
                         continue;
 
                 if (conn->rac_peerstamp != newconn->rac_peerstamp) {
-                        CDEBUG(D_NET, "Closing stale conn nid:"LPX64
-                               " peerstamp:"LPX64"("LPX64")\n", peer->rap_nid,
+                        CDEBUG(D_NET, "Closing stale conn nid: %s "
+                               " peerstamp:"LPX64"("LPX64")\n", 
+                               libcfs_nid2str(peer->rap_nid),
                                conn->rac_peerstamp, newconn->rac_peerstamp);
                         LASSERT (conn->rac_peerstamp < newconn->rac_peerstamp);
                         count++;
@@ -165,8 +167,9 @@ kranal_close_stale_conns_locked (kra_peer_t *peer, kra_conn_t *newconn)
 
                 LASSERT (conn->rac_peer_connstamp < newconn->rac_peer_connstamp);
 
-                CDEBUG(D_NET, "Closing stale conn nid:"LPX64
-                       " connstamp:"LPX64"("LPX64")\n", peer->rap_nid,
+                CDEBUG(D_NET, "Closing stale conn nid: %s"
+                       " connstamp:"LPX64"("LPX64")\n", 
+                       libcfs_nid2str(peer->rap_nid),
                        conn->rac_peer_connstamp, newconn->rac_peer_connstamp);
 
                 count++;
@@ -332,7 +335,8 @@ kranal_close_conn_locked (kra_conn_t *conn, int error)
         kra_peer_t        *peer = conn->rac_peer;
 
         CDEBUG(error == 0 ? D_NET : D_ERROR,
-               "closing conn to "LPX64": error %d\n", peer->rap_nid, error);
+               "closing conn to %s: error %d\n", 
+               libcfs_nid2str(peer->rap_nid), error);
 
         LASSERT (!in_interrupt());
         LASSERT (conn->rac_state == RANAL_CONN_ESTABLISHED);
@@ -531,9 +535,10 @@ kranal_active_conn_handshake(kra_peer_t *peer,
 
         if (connreq.racr_srcnid != peer->rap_nid) {
                 CERROR("Unexpected srcnid from %u.%u.%u.%u/%d: "
-                       "received "LPX64" expected "LPX64"\n",
+                       "received %s expected %s\n",
                        HIPQUAD(peer->rap_ip), peer->rap_port,
-                       connreq.racr_srcnid, peer->rap_nid);
+                       libcfs_nid2str(connreq.racr_srcnid), 
+                       libcfs_nid2str(peer->rap_nid));
                 goto failed_1;
         }
 
@@ -632,12 +637,12 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* Refuse connection if peer thinks we are a different NID.  We check
          * this while holding the global lock, to synch with connection
          * destruction on NID change. */
-        if (dst_nid != kranal_data.kra_ni->ni_nid) {
+        if (!lnet_ptlcompat_matchnid(kranal_data.kra_ni->ni_nid, dst_nid)) {
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
-                CERROR("Stale/bad connection with "LPX64
-                       ": dst_nid "LPX64", expected "LPX64"\n",
-                       peer_nid, dst_nid, kranal_data.kra_ni->ni_nid);
+                CERROR("Stale/bad connection with %s: dst_nid %s, expected %s\n",
+                       libcfs_nid2str(peer_nid), libcfs_nid2str(dst_nid), 
+                       libcfs_nid2str(kranal_data.kra_ni->ni_nid));
                 rc = -ESTALE;
                 goto failed;
         }
@@ -650,8 +655,8 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                 LASSERT (!list_empty(&peer->rap_conns));
                 LASSERT (list_empty(&peer->rap_tx_queue));
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
-                CWARN("Not creating duplicate connection to "LPX64": %d\n",
-                      peer_nid, rc);
+                CWARN("Not creating duplicate connection to %s: %d\n",
+                      libcfs_nid2str(peer_nid), rc);
                 rc = 0;
                 goto failed;
         }
@@ -689,10 +694,12 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         /* CAVEAT EMPTOR: passive peer can disappear NOW */
 
         if (nstale != 0)
-                CWARN("Closed %d stale conns to "LPX64"\n", nstale, peer_nid);
+                CWARN("Closed %d stale conns to %s\n", nstale, 
+                      libcfs_nid2str(peer_nid));
 
-        CDEBUG(D_WARNING, "New connection to "LPX64" on devid[%d] = %d\n",
-               peer_nid, conn->rac_device->rad_idx, conn->rac_device->rad_id);
+        CDEBUG(D_WARNING, "New connection to %s on devid[%d] = %d\n",
+               libcfs_nid2str(peer_nid), 
+               conn->rac_device->rad_idx, conn->rac_device->rad_id);
 
         /* Ensure conn gets checked.  Transmits may have been queued and an
          * FMA event may have happened before it got in the cq hash table */
@@ -716,11 +723,13 @@ kranal_connect (kra_peer_t *peer)
 
         LASSERT (peer->rap_connecting);
 
-        CDEBUG(D_NET, "About to handshake "LPX64"\n", peer->rap_nid);
+        CDEBUG(D_NET, "About to handshake %s\n", 
+               libcfs_nid2str(peer->rap_nid));
 
         rc = kranal_conn_handshake(NULL, peer);
 
-        CDEBUG(D_NET, "Done handshake "LPX64":%d \n", peer->rap_nid, rc);
+        CDEBUG(D_NET, "Done handshake %s:%d \n", 
+               libcfs_nid2str(peer->rap_nid), rc);
 
         write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
@@ -757,8 +766,8 @@ kranal_connect (kra_peer_t *peer)
         if (list_empty(&zombies))
                 return;
 
-        CWARN("Dropping packets for "LPX64": connection failed\n",
-              peer->rap_nid);
+        CWARN("Dropping packets for %s: connection failed\n",
+              libcfs_nid2str(peer->rap_nid));
 
         do {
                 tx = list_entry(zombies.next, kra_tx_t, tx_list);
@@ -854,7 +863,8 @@ kranal_destroy_peer (kra_peer_t *peer)
 {
         unsigned long flags;
 
-        CDEBUG(D_NET, "peer "LPX64" %p deleted\n", peer->rap_nid, peer);
+        CDEBUG(D_NET, "peer %s %p deleted\n", 
+               libcfs_nid2str(peer->rap_nid), peer);
 
         LASSERT (atomic_read(&peer->rap_refcount) == 0);
         LASSERT (peer->rap_persistence == 0);
@@ -890,8 +900,9 @@ kranal_find_peer_locked (lnet_nid_t nid)
                 if (peer->rap_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read(&peer->rap_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid), 
+                       atomic_read(&peer->rap_refcount));
                 return peer;
         }
         return NULL;
@@ -1078,8 +1089,8 @@ kranal_get_conn_by_idx (int index)
                                         continue;
 
                                 conn = list_entry(ctmp, kra_conn_t, rac_list);
-                                CDEBUG(D_NET, "++conn[%p] -> "LPX64" (%d)\n",
-                                       conn, conn->rac_peer->rap_nid,
+                                CDEBUG(D_NET, "++conn[%p] -> %s (%d)\n", conn, 
+                                       libcfs_nid2str(conn->rac_peer->rap_nid),
                                        atomic_read(&conn->rac_refcount));
                                 atomic_inc(&conn->rac_refcount);
                                 read_unlock(&kranal_data.kra_global_lock);
@@ -1628,11 +1639,6 @@ kranal_module_init (void)
 {
         int    rc;
 
-        if (lnet_apini.apini_ptlcompat != 0) {
-                LCONSOLE_ERROR("RA does not support portals compatibility mode\n");
-                return -ENODEV;
-        }
-        
         rc = kranal_tunables_init();
         if (rc != 0)
                 return rc;

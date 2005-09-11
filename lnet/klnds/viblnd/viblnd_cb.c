@@ -461,11 +461,8 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
         }
 
         if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
-            (msg->ibm_dstnid != kibnal_data.kib_ni->ni_nid &&
-             (lnet_apini.apini_ptlcompat == 0 ||
-              PTL_NIDNET(msg->ibm_dstnid) != 0 ||
-              PTL_NIDADDR(msg->ibm_dstnid) !=
-              PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) ||
+            !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid, 
+                                     msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
             msg->ibm_dststamp != kibnal_data.kib_incarnation) {
                 CERROR ("Stale rx from %s\n",
@@ -1948,8 +1945,6 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active)
         kib_tx_t         *tx;
         unsigned long     flags;
 
-        CDEBUG(D_NET,"!!\n");
-
         /* Only the connd creates conns => single threaded */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
@@ -2306,10 +2301,8 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
                 goto reject;
         }
 
-        if (rxmsg.ibm_dstnid != kibnal_data.kib_ni->ni_nid &&
-            (lnet_apini.apini_ptlcompat == 0 ||
-             PTL_NIDNET(rxmsg.ibm_dstnid) != 0 ||
-             PTL_NIDADDR(rxmsg.ibm_dstnid) != PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) {
+        if (!lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                     rxmsg.ibm_dstnid)) {
                 CERROR("Can't accept %s: bad dst nid %s\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), 
                        libcfs_nid2str(rxmsg.ibm_dstnid));
@@ -2505,8 +2498,6 @@ kibnal_connect_conn (kib_conn_t *conn)
         kib_peer_t               *peer = conn->ibc_peer;
         cm_return_t               cmrc;
 
-        CDEBUG(D_NET,"!!\n");
-        
         /* Only called by connd => statics OK */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
@@ -2575,8 +2566,6 @@ kibnal_check_connreply (kib_conn_t *conn)
         unsigned long     flags;
         int               rc;
 
-        CDEBUG(D_NET,"!!\n");
-
         /* Only called by connd => statics OK */
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
@@ -2637,11 +2626,8 @@ kibnal_check_connreply (kib_conn_t *conn)
                 }
                 
                 read_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                if ((msg.ibm_dstnid == kibnal_data.kib_ni->ni_nid ||
-                     (lnet_apini.apini_ptlcompat > 0 &&
-                      PTL_NIDNET(msg.ibm_dstnid) == 0 &&
-                      PTL_NIDADDR(msg.ibm_dstnid) ==
-                      PTL_NIDADDR(kibnal_data.kib_ni->ni_nid))) &&
+                if (lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
+                                            msg.ibm_dstnid) &&
                     msg.ibm_dststamp == kibnal_data.kib_incarnation)
                         rc = 0;
                 else
@@ -2746,8 +2732,6 @@ kibnal_arp_done (kib_conn_t *conn)
         vv_return_t           vvrc;
         int                   rc;
         unsigned long         flags;
-
-        CDEBUG(D_NET,"!!\n");
 
         LASSERT (!in_interrupt());
         LASSERT (current == kibnal_data.kib_connd);
@@ -2882,8 +2866,6 @@ kibnal_arp_peer (kib_peer_t *peer)
         LASSERT (current == kibnal_data.kib_connd);
         LASSERT (peer->ibp_connecting != 0);
         LASSERT (peer->ibp_arp_count > 0);
-
-        CDEBUG(D_NET,"!!\n");
 
         cep = cm_create_cep(cm_cep_transp_rc);
         if (cep == NULL) {
@@ -3237,8 +3219,6 @@ void
 kibnal_cq_callback (unsigned long unused_context)
 {
         unsigned long    flags;
-
-        CDEBUG(D_NET, "!!\n");
 
         spin_lock_irqsave(&kibnal_data.kib_sched_lock, flags);
         kibnal_data.kib_ready = 1;

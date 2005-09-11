@@ -612,10 +612,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         if (type == PTL_MSG_PUT || type == PTL_MSG_GET)
                 msg->msg_ev.initiator.nid = ni->ni_nid;
 
-        src_nid = ni->ni_nid;
-        if (lnet_apini.apini_ptlcompat > 0 &&   /* pretend I'm portals */
-            PTL_NIDNET(target.nid) == 0)        /* If I'm sending to portals */
-                src_nid = PTL_MKNID(0, PTL_NIDADDR(src_nid));
+        src_nid = lnet_ptlcompat_srcnid(ni->ni_nid, target.nid);
                 
         hdr->type           = cpu_to_le32(type);
         hdr->dest_nid       = cpu_to_le64(target.nid);
@@ -625,10 +622,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         hdr->payload_length = cpu_to_le32(len);
 
         if (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) != LONAL) {
-                if (gw_nid != ni->ni_nid &&
-                    (lnet_apini.apini_ptlcompat == 0 ||
-                     PTL_NIDNET(gw_nid) != 0 ||
-                     PTL_NIDADDR(gw_nid) != PTL_NIDADDR(ni->ni_nid))) {
+                if (!lnet_ptlcompat_matchnid(ni->ni_nid, gw_nid)) {
                         /* it's not for me: will the gateway have to forward? */
                         if (gw_nid != target.nid &&
                             lnet_apini.apini_ptlcompat == 0) {
@@ -1042,10 +1036,7 @@ lnet_parse(ptl_ni_t *ni, ptl_hdr_t *hdr, void *private)
         dest_nid = le64_to_cpu(hdr->dest_nid);
 
         for_me = (PTL_NETNAL(PTL_NIDNET(ni->ni_nid)) == LONAL ||
-                  dest_nid == ni->ni_nid ||
-                  (lnet_apini.apini_ptlcompat > 0 &&
-                   PTL_NIDNET(dest_nid) == 0 &&
-                   PTL_NIDADDR(dest_nid) == PTL_NIDADDR(ni->ni_nid)));
+                  lnet_ptlcompat_matchnid(ni->ni_nid, dest_nid));
 
         if (!for_me) {
                 if (lnet_apini.apini_ptlcompat > 0) {
