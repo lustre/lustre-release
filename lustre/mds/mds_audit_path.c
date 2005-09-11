@@ -73,6 +73,10 @@ static int filldir(void *__buf, const char *name, int namlen,
 
         LASSERT(sd != NULL);
 
+        /* skip non-cross_ref entries if we need cross-ref */
+        if (sd->cross_ref && d_type & 128)
+                RETURN(0);
+
         if (ino == sd->i_num) {
                 strncpy(sd->name, name, namlen);
                 sd->rc = 0;
@@ -398,17 +402,16 @@ scan_audit_log_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
                 RETURN(0);
         }
 
-        ad_rec = (struct audit_record *)((char *)rec + sizeof(*rec));
+        ad_rec = (struct audit_record *)(rec + 1);
 
         if (ad_rec->result || 
             ad_rec->opcode != AUDIT_UNLINK ||
             ad_rec->opcode != AUDIT_RENAME)
                 RETURN(0);
 
-        cid_rec = (struct audit_id_record *)((char *)ad_rec + sizeof(*ad_rec));
+        cid_rec = (struct audit_id_record *)(ad_rec + 1);
         pid_rec = cid_rec + 1;
-        nm_rec = (struct audit_name_record *)
-                ((char *)pid_rec + sizeof(*pid_rec));
+        nm_rec = (struct audit_name_record *)(pid_rec + 1);
         
         if (cid_rec->au_num == id_ino(&pkg->pp_id1) &&
             cid_rec->au_gen == id_gen(&pkg->pp_id1)) {
