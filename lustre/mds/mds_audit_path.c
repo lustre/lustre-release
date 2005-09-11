@@ -54,7 +54,8 @@
 
 struct scan_dir_data {
         int               rc;
-        struct lustre_id *id;
+        __u32            i_num;
+        __u8             cross_ref;
         char             *name;
 };
 
@@ -72,7 +73,7 @@ static int filldir(void *__buf, const char *name, int namlen,
 
         LASSERT(sd != NULL);
 
-        if (ino == id_ino(sd->id)) {
+        if (ino == sd->i_num) {
                 strncpy(sd->name, name, namlen);
                 sd->rc = 0;
                 RETURN(-EINTR); /* break the readdir loop */
@@ -80,8 +81,8 @@ static int filldir(void *__buf, const char *name, int namlen,
         RETURN(0);
 }
 
-int 
-scan_name_in_parent(struct lustre_id *pid, struct lustre_id *id, char *name)
+static int scan_name_in_parent(struct lustre_id *pid, struct lustre_id *id,
+                               char *name, int cr)
 {
         struct file * file;
         char *pname;
@@ -103,8 +104,9 @@ scan_name_in_parent(struct lustre_id *pid, struct lustre_id *id, char *name)
                 GOTO(out, rc = PTR_ERR(file));
         }
         
-        sd.id = id;
+        sd.i_num = id_ino(id);
         sd.name = name;
+        sd.cross_ref = cr;
         sd.rc = -ENOENT;
         vfs_readdir(file, filldir, &sd);
 
@@ -185,30 +187,26 @@ out:
 static int local_parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
 {
         struct lvfs_run_ctxt saved;
-        int rc = 0;
+        int rc = 0, cross_ref = 0;
         ENTRY;
 
         pkg->pp_rc = 0;
         pkg->pp_type = 0;
         memset(pkg->pp_name, 0, sizeof(pkg->pp_name));
 
-        LASSERT(obd->u.mds.mds_num == id_group(&pkg->pp_id1));
+        //LASSERT(obd->u.mds.mds_num == id_group(&pkg->pp_id1));
 
         /* pp_id2 is present, which indicating we want to scan parent 
          * dir(pp_id2) to find the cross-ref entry(pp_id1) */
         if (id_fid(&pkg->pp_id2)) {
-                /* 
-                LASSERT(S_ISDIR(id_type(&pkg->pp_id1)));
-                LASSERT(S_ISDIR(id_type(&pkg->pp_id2)));
-                */
                 pkg->pp_type = PP_DIR;
-                goto scan;
+                cross_ref = 1;                
+        } else {
+                rc = id2pid(obd, &pkg->pp_id1, &pkg->pp_id2, &pkg->pp_type);
+                if (rc)
+                        GOTO(out, rc);
         }
 
-        rc = id2pid(obd, &pkg->pp_id1, &pkg->pp_id2, &pkg->pp_type);
-        if (rc)
-                GOTO(out, rc);
-scan:
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         
         switch (pkg->pp_type) {
@@ -216,7 +214,7 @@ scan:
         case PP_DIR:
         case PP_SPLIT_MASTER:
                 rc = scan_name_in_parent(&pkg->pp_id2, &pkg->pp_id1,
-                                         pkg->pp_name);
+                                         pkg->pp_name, cross_ref);
                 if (rc) 
                         CERROR("scan "LPU64" in parent failed. rc=%d\n",
                                id_ino(&pkg->pp_id1), rc);
@@ -275,6 +273,10 @@ static int parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
         
         LASSERT(mds_num >= 0);
 
+        //for cross-ref dir we should send request to parent's MDS
+        if (pkg->pp_type == PP_CROSS_DIR)
+                mds_num = id_group(&pkg->pp_id2);
+        
         if (mds_num == obd->u.mds.mds_num) {
                 rc = local_parse_id(obd, pkg);
         } else {
@@ -365,11 +367,10 @@ mds_id2name(struct obd_device *obd, struct lustre_id *id,
                 case PP_SPLIT_SLAVE:
                         pkg->pp_id1 = pkg->pp_id2;
                         memset(&pkg->pp_id2, 0, sizeof(struct lustre_id));
-                        break;
                 case PP_CROSS_DIR:
                         break;
                 default:
-                        LBUG();
+                        CERROR("Wrong id = %i\n", pkg->pp_type);
                         break;
                 }
                 
@@ -546,7 +547,6 @@ mds_audit_id2name(struct obd_device *obd, char **name, int *namelen,
                 RETURN(0);
 next:
         memset(&parent_id, 0, sizeof(parent_id));
-
         rc = mds_id2name(obd, &cur_id, &list, &parent_id);
         if (rc == -ENOENT) {
                 /* can't reconstruct name from id, turn to audit log */
