@@ -128,7 +128,7 @@ static int
 transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void * data)
 {
         struct audit_id_record *id_rec = 
-                (struct audit_id_record *)((char *)rec + sizeof(*rec));
+                (struct audit_id_record *)(rec + 1);
         struct audit_name_record *name_rec = NULL;
         int (*audit_id2name)(struct obd_device *obd, char **name, 
                      int *namelen, struct lustre_id *id) = data;
@@ -142,6 +142,8 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
         n = construct_header(buf, PAGE_SIZE, rec, id_rec);
         if (n < 0)
                 RETURN(n);
+        /* let's use remaining space */
+        n = PAGE_SIZE - n;
         
         switch (rec->opcode)
         {
@@ -154,7 +156,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
                 default:
                         break;
         }
-                
+        
         if (audit_id2name) {
                 char *name = NULL;
                 struct lustre_id id;
@@ -165,24 +167,27 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
                 //LASSERT(id_type(&id) & S_IFMT);
                 rc = audit_id2name(obd, &name, &namelen, &id);
                 if (rc < 0) {
-                        strncat(buf, "unknown", PAGE_SIZE - n);
-                        n += strlen("unknown");
+                        strncat(buf, "unknown", n);
+                        n -= strlen("unknown");
                 } else if (namelen == 0) {
                         //root itself
                         if (type != SMFS_AUDIT_NAME_REC)
                                 strcat(buf, "/");
                 } else {
-                        strncat(buf, name, PAGE_SIZE - n);
-                        n += namelen;
+                        strncat(buf, name, n);
+                        n -= namelen;
                         OBD_FREE(name, namelen);
                 } 
         }
-        
-        if (type == SMFS_AUDIT_NAME_REC) {
-                name_rec = (struct audit_name_record *)((char *)(++id_rec));
-                strncat(buf, "/", 1);
-                n += 1;
-                strncat(buf, name_rec->name, PAGE_SIZE - n);
+
+        if (type == SMFS_AUDIT_NAME_REC && n > 0) {
+                name_rec = (struct audit_name_record *)(++id_rec);
+                strcat(buf, "/");
+                n -= 1;
+                /* get minimum size to copy name with exact len */
+                if (n > name_rec->name_len)
+                        n = name_rec->name_len; 
+                strncat(buf, name_rec->name, n);
         }
         
         CDEBUG(D_INFO, "%s\n", buf);
