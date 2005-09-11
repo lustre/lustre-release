@@ -655,6 +655,8 @@ int mds_dt_synchronize(void *data)
         down(&mds->mds_orphan_recovery_sem);
 
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
+        CWARN("MDS %s: %s now active, repairing the connection\n",
+              obd->obd_name, uuid->uuid);
 
         group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         rc = obd_set_info(watched->obd_self_export, strlen("mds_conn"),
