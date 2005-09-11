@@ -83,13 +83,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(acl == NULL && acl_size == 0);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (current->journal_info != NULL) {
-                static int dump_counter = 0;
-                CDEBUG(D_ERROR, "calling osc_create() with an "
-                       "open transaction isn't a good idea\n");
-                if (dump_counter++ % 100 == 0)
-                        portals_debug_dumpstack(NULL);
-        }
+        if (current->journal_info != NULL)
+                CWARN("calling osc_create() with an "
+                      "open transaction isn't a good idea\n");
 #endif
 
         if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)

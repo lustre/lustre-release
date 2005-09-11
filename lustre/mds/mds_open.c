@@ -1272,13 +1272,8 @@ got_child:
                         }
                 }
 
-                if (!(rec->ur_flags & O_EXCL)) { /* bug 3313 */
-                        rc = fsfilt_commit(obd, dchild->d_inode->i_sb,
-                                           dchild->d_inode, handle, 
-                                           req->rq_export->exp_sync);
-                        handle = NULL;
-                }
-
+                rc = fsfilt_commit(obd, dchild->d_inode->i_sb, dchild->d_inode, handle, 0);
+                handle = NULL;
                 acc_mode = 0;           /* Don't check for permissions */
         }
         mds_pack_inode2body(obd, body, dchild->d_inode, 1);
