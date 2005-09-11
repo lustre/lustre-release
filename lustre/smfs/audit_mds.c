@@ -57,6 +57,9 @@ static inline int audit_fill_id_rec (char **pbuf, struct inode * inode)
         if (rc > 0) {
                 rec->au_fid = fid.lf_id;
                 rec->au_mds = fid.lf_group;
+        } else {
+                //try to add group at least
+                rec->au_mds = S2SMI(inode->i_sb)->smsi_exp->exp_obd->u.mds.mds_num;
         }
         
         *pbuf += len;
