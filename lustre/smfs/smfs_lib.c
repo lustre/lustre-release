@@ -192,6 +192,7 @@ static void smfs_mds_flags(struct mds_obd *mds, struct inode *root)
         
         /* enable plugins for all in ROOT */        
         SMFS_SET(I2SMI(root)->smi_flags, SMFS_PLG_ALL);
+        SMFS_SET(I2SMI(mds->mds_unnamed_dir->d_inode)->smi_flags, SMFS_PLG_ALL);
 }
 
 extern int (*audit_id2name_superhack) (struct obd_device *obd, char **name,
