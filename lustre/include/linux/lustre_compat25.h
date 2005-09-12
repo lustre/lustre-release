@@ -138,6 +138,10 @@ static inline int cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#define __d_rehash(dentry, lock) d_rehash_cond(dentry, lock)
+#endif
+
 #else /* 2.4.. */
 
 #ifdef HAVE_MM_INLINE
@@ -218,8 +222,8 @@ static inline void ll_redirty_page(struct page *page)
 
 static inline void __d_drop(struct dentry *dentry)
 {
-	list_del(&dentry->d_hash);
-	INIT_LIST_HEAD(&dentry->d_hash);
+        list_del(&dentry->d_hash);
+        INIT_LIST_HEAD(&dentry->d_hash);
 }
 
 static inline void lustre_daemonize_helper(void)
