@@ -575,7 +575,7 @@ next:
                 item = list_entry(pos, struct name_item, link);
                 *namelen += strlen(item->name) + 1;
         }
-        OBD_ALLOC(*name, *namelen);
+        OBD_ALLOC(*name, *namelen + 1);
         if (*name == NULL)
                 rc = -ENOMEM;
 out:
@@ -587,6 +587,7 @@ out:
                 }
                 list_del_init(&item->link);
                 OBD_FREE(item, sizeof(*item));
+                LASSERT(strlen(*name) < *namelen);
         }
         RETURN(rc);
 }
