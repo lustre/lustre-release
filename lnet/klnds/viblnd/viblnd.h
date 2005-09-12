@@ -483,8 +483,8 @@ do {                                                                          \
 
 #define kibnal_peer_addref(peer)                                \
 do {                                                            \
-        CDEBUG(D_NET, "peer[%p] -> "LPX64" (%d)++\n",           \
-               (peer), (peer)->ibp_nid,                         \
+        CDEBUG(D_NET, "peer[%p] -> %s (%d)++\n",                \
+               (peer), libcfs_nid2str((peer)->ibp_nid),         \
                atomic_read (&(peer)->ibp_refcount));            \
         LASSERT(atomic_read(&(peer)->ibp_refcount) > 0);        \
         atomic_inc(&(peer)->ibp_refcount);                      \
@@ -492,8 +492,8 @@ do {                                                            \
 
 #define kibnal_peer_decref(peer)                                \
 do {                                                            \
-        CDEBUG(D_NET, "peer[%p] -> "LPX64" (%d)--\n",           \
-               (peer), (peer)->ibp_nid,                         \
+        CDEBUG(D_NET, "peer[%p] -> %s (%d)--\n",                \
+               (peer), libcfs_nid2str((peer)->ibp_nid),         \
                atomic_read (&(peer)->ibp_refcount));            \
         LASSERT(atomic_read(&(peer)->ibp_refcount) > 0);        \
         if (atomic_dec_and_test(&(peer)->ibp_refcount))         \

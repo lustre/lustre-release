@@ -88,8 +88,8 @@ lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
                                msg->msg_ev.initiator, NULL, 0, 0);
                 if (rc != 0) {
                         /* send failed: there's nothing else to clean up. */
-                        CERROR("Error %d sending ACK to "LPX64"\n",
-                               rc, msg->msg_ev.initiator.nid);
+                        CERROR("Error %d sending ACK to %s\n",
+                               rc, libcfs_id2str(msg->msg_ev.initiator));
                 }
         }
 

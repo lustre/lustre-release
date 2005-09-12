@@ -165,9 +165,10 @@ static void pingsrv_callback(lnet_event_t *ev)
         }
         server->evnt = *ev;
         
-        CWARN ("received ping from nid "LPX64" "
+        CWARN ("received ping from nid %s "
                "(off=%u rlen=%u mlen=%u head=%x seq=%d size=%d)\n",
-               ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
+               libcfs_nid2str(ev->initiator.nid), 
+               ev->offset, ev->rlength, ev->mlength,
                __le32_to_cpu(*((int *)(ev->md.start + ev->offset))),
                __le32_to_cpu(*((int *)(ev->md.start + ev->offset + sizeof(unsigned)))),
                __le32_to_cpu(*((int *)(ev->md.start + ev->offset + 2 * 

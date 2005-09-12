@@ -202,10 +202,12 @@ kpr_ge_isbetter (kpr_gateway_entry_t *ge1, kpr_gateway_entry_t *ge2)
                        atomic_read (&ge2->kpge_weight)) & significant_bits;
         int    rc = (diff > (significant_bits >> 1));
 
-        CDEBUG(D_NET, "[%p]"LPX64"=%d %s [%p]"LPX64"=%d\n",
-               ge1, ge1->kpge_nid, atomic_read (&ge1->kpge_weight),
+        CDEBUG(D_NET, "[%p]%s=%d %s [%p]%s=%d\n",
+               ge1, libcfs_nid2str(ge1->kpge_nid), 
+               atomic_read (&ge1->kpge_weight),
                rc ? ">" : "<",
-               ge2, ge2->kpge_nid, atomic_read (&ge2->kpge_weight));
+               ge2, libcfs_nid2str(ge2->kpge_nid), 
+               atomic_read (&ge2->kpge_weight));
 
         return (rc);
 }
@@ -221,8 +223,8 @@ kpr_update_weight (kpr_gateway_entry_t *ge, int nob)
          * rounded and scaled to the portals header size, so we get better
          * use of the significant bits in kpge_weight. */
 
-        CDEBUG(D_NET, "gateway [%p]"LPX64" += %d\n", ge,
-               ge->kpge_nid, weight);
+        CDEBUG(D_NET, "gateway [%p]%s += %d\n", ge,
+               libcfs_nid2str(ge->kpge_nid), weight);
         
         atomic_add (weight, &ge->kpge_weight);
 }
@@ -244,7 +246,7 @@ lnet_lookup (ptl_ni_t **nip, lnet_nid_t target_nid, int nob)
 
         /* Return the NID I must send to, to reach 'target_nid' */
         
-        CDEBUG (D_NET, "lookup "LPX64" from %s\n", target_nid, 
+        CDEBUG (D_NET, "lookup %s from %s\n", libcfs_nid2str(target_nid), 
                 (ni == NULL) ? "<>" : libcfs_nid2str(ni->ni_nid));
 
         if (ni == NULL) {                       /* ni not determined yet */

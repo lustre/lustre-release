@@ -286,8 +286,8 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 extern void (kping_client)(struct portal_ioctl_data *);
                 void (*ping)(struct portal_ioctl_data *);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
-                       data->ioc_count, data->ioc_nid,
+                CDEBUG(D_IOCTL, "doing %d pings to nid %s (%s)\n",
+                       data->ioc_count, libcfs_nid2str(data->ioc_nid),
                        libcfs_nid2str(data->ioc_nid));
                 ping = PORTAL_SYMBOL_GET(kping_client);
                 if (!ping)

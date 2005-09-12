@@ -713,24 +713,26 @@ static inline int wrq_signals_completion(IB_WORK_REQ *wrq)
 /* these are purposely avoiding using local vars so they don't increase
  * stack consumption. */
 
-#define kib_peer_addref(peer) do {                                      \
-        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",          \
-                 atomic_read(&peer->ibp_refcount));                     \
-        CDEBUG(D_NET, "++peer[%p] -> "LPX64" (%d)\n",                   \
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount)); \
-        atomic_inc(&peer->ibp_refcount);                                \
+#define kib_peer_addref(peer) do {                              \
+        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",  \
+                 atomic_read(&peer->ibp_refcount));             \
+        CDEBUG(D_NET, "++peer[%p] -> %s (%d)\n",                \
+               peer, libcfs_nid2str(peer->ibp_nid),             \
+               atomic_read (&peer->ibp_refcount));              \
+        atomic_inc(&peer->ibp_refcount);                        \
 } while (0)
 
-#define kib_peer_decref(peer) do {                                      \
-        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",          \
-                 atomic_read(&peer->ibp_refcount));                     \
-        CDEBUG(D_NET, "--peer[%p] -> "LPX64" (%d)\n",                   \
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount)); \
-        if (atomic_dec_and_test (&peer->ibp_refcount)) {                \
-                CDEBUG (D_NET, "destroying peer "LPX64" %p\n",          \
-                        peer->ibp_nid, peer);                           \
-                kibnal_destroy_peer (peer);                             \
-        }                                                               \
+#define kib_peer_decref(peer) do {                              \
+        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",  \
+                 atomic_read(&peer->ibp_refcount));             \
+        CDEBUG(D_NET, "--peer[%p] -> %s (%d)\n",                \
+               peer, libcfs_nid2str(peer->ibp_nid),             \
+               atomic_read (&peer->ibp_refcount));              \
+        if (atomic_dec_and_test (&peer->ibp_refcount)) {        \
+                CDEBUG (D_NET, "destroying peer %s %p\n",       \
+                        libcfs_nid2str(peer->ibp_nid), peer);   \
+                kibnal_destroy_peer (peer);                     \
+        }                                                       \
 } while (0)
 
 /******************************************************************************/

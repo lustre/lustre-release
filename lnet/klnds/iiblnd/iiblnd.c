@@ -60,7 +60,8 @@ static ctl_table kibnal_top_ctl_table[] = {
 void
 print_service(IB_SERVICE_RECORD *service, char *tag, int rc)
 {
-        char name[32];
+        char        name[32];
+        lnet_nid_t  nid;
 
         if (service == NULL) 
         {
@@ -70,14 +71,15 @@ print_service(IB_SERVICE_RECORD *service, char *tag, int rc)
         }
         strncpy (name, service->ServiceName, sizeof(name)-1);
         name[sizeof(name)-1] = 0;
+        nid = *kibnal_service_nid_field(service);
         
         CWARN("tag       : %s\n"
               "status    : %d\n"
               "service id: "LPX64"\n"
               "name      : %s\n"
-              "NID       : "LPX64"\n", tag, rc,
+              "NID       : %s\n", tag, rc,
               service->RID.ServiceID, name,
-              *kibnal_service_nid_field(service));
+              libcfs_nid2str(nid));
 }
 #endif
 
@@ -176,9 +178,10 @@ kibnal_advertise (void)
         fill_fod(fod, FabOpSetServiceRecord);
         svc = &fod->Value.ServiceRecordValue.ServiceRecord;
 
-        CDEBUG(D_NET, "Advertising service id "LPX64" %s:"LPX64"\n", 
+        CDEBUG(D_NET, "Advertising service id "LPX64" %s:%s\n", 
                svc->RID.ServiceID, 
-               svc->ServiceName, *kibnal_service_nid_field(svc));
+               svc->ServiceName, 
+               libcfs_nid2str(*kibnal_service_nid_field(svc)));
 
         frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
                                             kibnal_data.kib_port_guid,
@@ -186,8 +189,8 @@ kibnal_advertise (void)
                                             NULL, &frc2);
 
         if (frc != FSUCCESS && frc != FPENDING) {
-                CERROR ("Immediate error %d advertising NID "LPX64"\n",
-                        frc, kibnal_data.kib_ni->ni_nid);
+                CERROR ("Immediate error %d advertising NID %s\n",
+                        frc, libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
                 goto out;
         }
 
@@ -195,8 +198,8 @@ kibnal_advertise (void)
 
         frc = frc2;
         if (frc != FSUCCESS)
-                CERROR ("Error %d advertising BUD "LPX64"\n",
-                        frc, kibnal_data.kib_ni->ni_nid);
+                CERROR ("Error %d advertising BUD %s\n",
+                        frc, libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
 out:
         PORTAL_FREE(fod, sizeof(*fod));
         return (frc == FSUCCESS) ? 0 : -EINVAL;
@@ -219,8 +222,9 @@ kibnal_unadvertise (int expect_success)
         fill_fod(fod, FabOpDeleteServiceRecord);
         svc = &fod->Value.ServiceRecordValue.ServiceRecord;
 
-        CDEBUG(D_NET, "Unadvertising service %s:"LPX64"\n",
-               svc->ServiceName, *kibnal_service_nid_field(svc));
+        CDEBUG(D_NET, "Unadvertising service %s:%s\n",
+               svc->ServiceName, 
+               libcfs_nid2str(*kibnal_service_nid_field(svc)));
         
         frc = iibt_sd_port_fabric_operation(kibnal_data.kib_sd,
                                             kibnal_data.kib_port_guid,
@@ -228,8 +232,8 @@ kibnal_unadvertise (int expect_success)
                                             NULL, &frc2);
 
         if (frc != FSUCCESS && frc != FPENDING) {
-                CERROR ("Immediate error %d unadvertising NID "LPX64"\n",
-                        frc, kibnal_data.kib_ni->ni_nid);
+                CERROR ("Immediate error %d unadvertising NID %s\n",
+                        frc, libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
                 goto out;
         }
 
@@ -239,11 +243,11 @@ kibnal_unadvertise (int expect_success)
                 goto out;
 
         if (expect_success)
-                CERROR("Error %d unadvertising NID "LPX64"\n",
-                       frc2, kibnal_data.kib_ni->ni_nid);
+                CERROR("Error %d unadvertising NID %s\n",
+                       frc2, libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
         else
-                CWARN("Removed conflicting NID "LPX64"\n",
-                      kibnal_data.kib_ni->ni_nid);
+                CWARN("Removed conflicting NID %s\n",
+                      libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
  out:
         PORTAL_FREE(fod, sizeof(*fod));
 }
@@ -255,8 +259,9 @@ kibnal_set_mynid(lnet_nid_t nid)
         int            rc;
         FSTATUS        frc;
 
-        CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, kibnal_data.kib_ni->ni_nid);
+        CDEBUG(D_IOCTL, "setting mynid to %s (old nid=%s)\n",
+               libcfs_nid2str(nid), 
+               libcfs_nid2str(kibnal_data.kib_ni->ni_nid));
 
         do_gettimeofday(&tv);
 
@@ -268,8 +273,9 @@ kibnal_set_mynid(lnet_nid_t nid)
                 return (0);
         }
 
-        CDEBUG(D_NET, "NID "LPX64"("LPX64")\n",
-               kibnal_data.kib_ni->ni_nid, nid);
+        CDEBUG(D_NET, "NID %s(%s)\n",
+               libcfs_nid2str(kibnal_data.kib_ni->ni_nid), 
+               libcfs_nid2str(nid));
         
         if (kibnal_data.kib_ni->ni_nid != LNET_NID_ANY) {
 
@@ -410,8 +416,9 @@ kibnal_find_peer_locked (lnet_nid_t nid)
                 if (peer->ibp_nid != nid)
                         continue;
 
-                CDEBUG(D_NET, "got peer [%p] -> "LPX64" (%d)\n",
-                       peer, nid, atomic_read (&peer->ibp_refcount));
+                CDEBUG(D_NET, "got peer [%p] -> %s (%d)\n",
+                       peer, libcfs_nid2str(nid), 
+                       atomic_read (&peer->ibp_refcount));
                 return (peer);
         }
         return (NULL);
@@ -601,8 +608,9 @@ kibnal_get_conn_by_idx (int index)
                                         continue;
 
                                 conn = list_entry (ctmp, kib_conn_t, ibc_list);
-                                CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
-                                       conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
+                                CDEBUG(D_NET, "++conn[%p] state %d -> %s (%d)\n",
+                                       conn, conn->ibc_state, 
+                                       libcfs_nid2str(conn->ibc_peer->ibp_nid),
                                        atomic_read (&conn->ibc_refcount));
                                 atomic_inc (&conn->ibc_refcount);
                                 read_unlock_irqrestore(&kibnal_data.kib_global_lock,
@@ -807,8 +815,9 @@ kibnal_put_conn (kib_conn_t *conn)
 {
         unsigned long flags;
 
-        CDEBUG (D_NET, "putting conn[%p] state %d -> "LPX64" (%d)\n",
-                conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
+        CDEBUG (D_NET, "putting conn[%p] state %d -> %s (%d)\n",
+                conn, conn->ibc_state, 
+                libcfs_nid2str(conn->ibc_peer->ibp_nid),
                 atomic_read (&conn->ibc_refcount));
 
         LASSERT (atomic_read (&conn->ibc_refcount) > 0);
@@ -858,8 +867,9 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
                 if (conn->ibc_incarnation == incarnation)
                         continue;
 
-                CDEBUG(D_NET, "Closing stale conn nid:"LPX64" incarnation:"LPX64"("LPX64")\n",
-                       peer->ibp_nid, conn->ibc_incarnation, incarnation);
+                CDEBUG(D_NET, "Closing stale conn nid:%s incarnation:"LPX64"("LPX64")\n",
+                       libcfs_nid2str(peer->ibp_nid), 
+                       conn->ibc_incarnation, incarnation);
                 
                 count++;
                 kibnal_close_conn_locked (conn, -ESTALE);

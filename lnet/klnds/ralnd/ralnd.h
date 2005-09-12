@@ -364,7 +364,7 @@ extern void kranal_destroy_conn(kra_conn_t *conn);
 static inline void
 kranal_peer_addref(kra_peer_t *peer)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
         LASSERT(atomic_read(&peer->rap_refcount) > 0);
         atomic_inc(&peer->rap_refcount);
 }
@@ -372,7 +372,7 @@ kranal_peer_addref(kra_peer_t *peer)
 static inline void
 kranal_peer_decref(kra_peer_t *peer)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", peer, libcfs_nid2str(peer->rap_nid));
         LASSERT(atomic_read(&peer->rap_refcount) > 0);
         if (atomic_dec_and_test(&peer->rap_refcount))
                 kranal_destroy_peer(peer);
@@ -396,7 +396,8 @@ kranal_peer_active(kra_peer_t *peer)
 static inline void
 kranal_conn_addref(kra_conn_t *conn)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", conn, 
+               libcfs_nid2str(conn->rac_peer->rap_nid));
         LASSERT(atomic_read(&conn->rac_refcount) > 0);
         atomic_inc(&conn->rac_refcount);
 }
@@ -404,7 +405,8 @@ kranal_conn_addref(kra_conn_t *conn)
 static inline void
 kranal_conn_decref(kra_conn_t *conn)
 {
-        CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
+        CDEBUG(D_NET, "%p->%s\n", conn,
+               libcfs_nid2str(conn->rac_peer->rap_nid));
         LASSERT(atomic_read(&conn->rac_refcount) > 0);
         if (atomic_dec_and_test(&conn->rac_refcount))
                 kranal_destroy_conn(conn);

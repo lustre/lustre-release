@@ -117,9 +117,9 @@ pingcli_start(struct portal_ioctl_data *args)
         client->size = args->ioc_u32[0];
         client->timeout = args->ioc_u32[1];
         
-       CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
+       CDEBUG (D_OTHER, "pingcli_setup args: nid %s (%s),  \
                         size %u, count: %u, timeout: %u\n",
-                        client->nid,
+                        libcfs_nid2str(client->nid),
                         libcfs_nid2str(client->nid),
                         client->size, client->count, client->timeout);
 
