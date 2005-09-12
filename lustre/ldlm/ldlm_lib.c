@@ -524,7 +524,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
         conn->cookie = exp->exp_handle.h_cookie;
         CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
                cluuid->uuid, exp);
-        CDEBUG(D_IOCTL,"connect: cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_IOCTL, "connect: cookie "LPX64"\n", conn->cookie);
         RETURN(0);
 }
 
@@ -703,7 +703,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 export->exp_libclient = 1;
+                spin_lock(&target->obd_dev_lock);
                 list_del_init(&export->exp_obd_chain_timed);
+                spin_unlock(&target->obd_dev_lock);
         }
 
         if (export->exp_connection != NULL)

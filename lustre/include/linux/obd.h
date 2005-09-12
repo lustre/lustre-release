@@ -536,14 +536,14 @@ struct obd_device {
                 obd_force:1, obd_fail:1;
         atomic_t obd_refcount;
         wait_queue_head_t obd_refcount_waitq;
-        struct proc_dir_entry *obd_proc_entry;
-        struct list_head       obd_exports;
-        int                    obd_num_exports;
-        struct ldlm_namespace *obd_namespace;
-        struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
+        struct proc_dir_entry  *obd_proc_entry;
+        struct list_head        obd_exports;
+        int                     obd_num_exports;
+        struct ldlm_namespace  *obd_namespace;
+        struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
-        spinlock_t             obd_dev_lock;
-        __u64                  obd_last_committed;
+        spinlock_t              obd_dev_lock;
+        __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;
@@ -552,7 +552,8 @@ struct obd_device {
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
-        struct list_head        obd_exports_timed;  /* for ping evictor */
+        /* list of exports in LRU order, for ping evictor, with obd_dev_lock */
+        struct list_head        obd_exports_timed;
         time_t                  obd_eviction_timer; /* for ping evictor */
 
         /* XXX encapsulate all this recovery data into one struct */
