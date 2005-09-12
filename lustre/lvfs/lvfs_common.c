@@ -33,14 +33,5 @@ struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *ctxt, __u64 id,
         return ctxt->cb_ops.l_fid2dentry(id, gen, gr, data);
 }
 
-int lvfs_open_llog(struct lvfs_run_ctxt *ctxt, __u64 id,
-                   struct dentry *dentry, void *data)
-{
-        if (ctxt->cb_ops.l_open_llog)
-                return ctxt->cb_ops.l_open_llog(id, dentry, data);
-        else
-                return 0;
-}
 
 EXPORT_SYMBOL(lvfs_fid2dentry);
-EXPORT_SYMBOL(lvfs_open_llog);

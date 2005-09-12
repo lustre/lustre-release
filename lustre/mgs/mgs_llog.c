@@ -123,8 +123,7 @@ static int mgs_start_record(struct obd_device *obd,
         rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                          llh_res, NULL, fsname, name);
         if (rc == 0)
-                llog_init_handle(*llh_res, LLOG_F_IS_PLAIN, 
-                                 &cfg_uuid);
+                llog_init_handle(mul->mul_llh, LLOG_F_IS_PLAIN, &cfg_uuid);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
@@ -236,6 +235,37 @@ static int mgs_do_record(struct obd_device *obd,
         RETURN(rc);
 }
 
+int mgs_update_llog(struct obd_device *obd,
+                    struct obd_ioctl_data *data)
+{       
+        struct mgs_obd *mgs = &obd->u.mgs;
+        struct mgs_update_llh *mul;
+        char *name = data->ioc_inlbuf1;
+        char *fsname = data->ioc_inlbuf2;
+        int rc;
+
+        /*First phase: writing mds log  */
+        logname  = name;
+        data->ioc_inlbuf1 = logname;
+        data->ioc_inllen1 = strlen(data->ioc_inlbuf1) + 1;
+        data->ioc_inlbuf2 = fsname;
+        data->ioc_inllen2 = strlen(data->ioc_inlbuf2) + 1;
+        
+        rc = mgs_clear_record(obd, data);
+        if (rc) {
+                CERROR("failed to clear log %s: %d\n", logname, rc);
+                RETURN(rc);
+        }
+
+        rc = mgs_start_record(obd, data);
+        if (rc) {
+                CERROR("failed to record log %s: %d\n", logname, rc);
+                RETURN(rc);
+        }
+        sprintf(lovuuid, "lov_%s_%s", fsname, name);
+        
+}
+
 int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                   void *karg, void *uarg)
 {
@@ -270,6 +300,10 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
 
+        case OBD_IOC_UPDATE_LOG: {
+                rc = mgs_update_llog(obd, data);
+                RETURN(rc);
+        }
         case OBD_IOC_PARSE: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);

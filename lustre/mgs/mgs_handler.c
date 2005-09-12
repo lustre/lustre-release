@@ -393,9 +393,13 @@ static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
         return mgs_fid2dentry(&obd->u.mgs, &fid, NULL);
 }
 
-static int mgs_lvfs_open_llog(__u64 id, struct dentry *dentry , void *data)
+static int mgs_open_llog(__u64 id, void *data, void *handle)
 {
         struct obd_device *obd = data; 
+        struct mgs_update_llh *mul = handle;
+        struct llog_handle *lgh = &mul->mul_lgh;
+        struct dentry *dentry = lgh->lgh_file->f_dentry;
+        __u64  id = dentry->d_inode->i_ino;
         struct mgs_obd *mgs = &obd->u.mgs;
         struct mgs_open_llog *mollog, *n;
         struct list_head *llog_list = &mgs->mgs_open_llogs;
@@ -426,6 +430,7 @@ static int mgs_lvfs_open_llog(__u64 id, struct dentry *dentry , void *data)
         list_add(&mollog->mol_list, &mgs->mgs_open_llogs);
         spin_unlock(&mgs->mgs_llogs_lock);
 
+        lgh->
         return 0;
 }
 

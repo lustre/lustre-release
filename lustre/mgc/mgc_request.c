@@ -58,6 +58,7 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         struct dentry *dentry;
         int err = 0;
 
+
         LASSERT(sbi);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(sbi->lsi_ldd));
