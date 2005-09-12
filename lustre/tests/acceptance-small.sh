@@ -21,8 +21,8 @@ fi
 [ "$COUNT" ] || COUNT=1000
 #[ "$DEBUG_LVL" ] || DEBUG_LVL=0x370200
 [ "$DEBUG_LVL" ] || DEBUG_LVL=0
-[ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo $DEBUG_LVL > /proc/sys/portals/debug"
-[ "$DEBUG_ON" ] || DEBUG_ON="eval echo -1 > /proc/sys/portals/debug"
+[ "$DEBUG_OFF" ] || DEBUG_OFF="sysctl -w portals.debug=$DEBUG_LVL"
+[ "$DEBUG_ON" ] || DEBUG_ON="sysctl -w portals.debug=0x33f0480"
 
 LIBLUSTRE=${LIBLUSTRE:-../liblustre}
 LIBLUSTRETESTS=${LIBLUSTRETESTS:-$LIBLUSTRE/tests}
@@ -151,11 +151,10 @@ for NAME in $CONFIGS; do
 
 	if [ "$LIBLUSTRE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
-		IPADDR=`ping -c 1 $MDSNODE|head -n 1|sed -e "s/[^(]*(//" -e "s/).*//"`
 		export LIBLUSTRE_MOUNT_POINT=$MOUNT2
-		export LIBLUSTRE_MOUNT_TARGET=$IPADDR:/$MDSNAME/$CLIENT
+		export LIBLUSTRE_MOUNT_TARGET=$MDSNODE:/$MDSNAME/$CLIENT
 		export LIBLUSTRE_TIMEOUT=`cat /proc/sys/lustre/timeout`
-		export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/portals/debug`
+		#export LIBLUSTRE_DEBUG_MASK=`cat /proc/sys/portals/debug`
 		if [ -x $LIBLUSTRETESTS/sanity ]; then
 			$LIBLUSTRETESTS/sanity --target=$LIBLUSTRE_MOUNT_TARGET
 		fi
