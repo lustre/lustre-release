@@ -296,7 +296,7 @@ typedef struct ptl_nal
 	 * lnet_finalize() */
 	int (*nal_send) (struct ptl_ni *ni, void *private, ptl_msg_t *msg, 
                          ptl_hdr_t *hdr, int type, lnet_process_id_t target,
-                         int routing, unsigned int niov, 
+                         int target_is_router, int routing, unsigned int niov, 
                          struct iovec *iov, lnet_kiov_t *kiov,
                          unsigned int offset, unsigned int mlen);
 

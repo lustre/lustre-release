@@ -460,7 +460,7 @@ enum {
         SOCKNAL   = 2,
         GMNAL     = 3,
         PTLLND    = 4,
-        TCPNAL    = 5,
+        /* unused   5 */
         /* unused   6 */
         OPENIBNAL = 7,
         IIBNAL    = 8,

@@ -592,7 +592,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
         int           niov = 0;
         struct iovec *iov = NULL;
         lnet_kiov_t  *kiov = NULL;
-        int           routing = 0;
+        int           target_is_router = 0;
         int           rc;
 
         /* CAVEAT EMPTOR! ni != NULL == interface pre-determined (ACK) */
@@ -626,7 +626,7 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                         /* it's not for me: will the gateway have to forward? */
                         if (gw_nid != target.nid &&
                             lnet_apini.apini_ptlcompat == 0) {
-                                routing = 1;
+                                target_is_router = 1;
                                 target.pid = LUSTRE_SRV_PTL_PID;
                                 target.nid = gw_nid;
                         }
@@ -651,7 +651,8 @@ ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
                         iov = md->md_iov.iov;
         }
         
-        rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, type, target, routing,
+        rc = (ni->ni_nal->nal_send)(ni, private, msg, hdr, type, target, 
+                                    target_is_router, 0,
                                     niov, iov, kiov, offset, len);
 
         ptl_ni_decref(ni);                      /* lose ref from lnet_lookup */

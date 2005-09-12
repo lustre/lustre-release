@@ -1011,6 +1011,7 @@ kqswnal_send (ptl_ni_t         *ni,
               ptl_hdr_t        *hdr,
               int               type,
               lnet_process_id_t target,
+              int               target_is_router,
               int               routing,
               unsigned int      payload_niov,
               struct iovec     *payload_iov,
@@ -1046,24 +1047,30 @@ kqswnal_send (ptl_ni_t         *ni,
                 return (-EIO);
         }
 
-        if (type == PTL_MSG_REPLY &&            /* can I look in 'private' */
-            ((kqswnal_rx_t *)private)->krx_rpc_reply_needed) { /* is it an RPC */
-                /* Must be a REPLY for an optimized GET */
-                rc = kqswnal_rdma ((kqswnal_rx_t *)private, ptlmsg, PTL_MSG_GET,
-                                   payload_niov, payload_iov, payload_kiov, 
-                                   payload_offset, payload_nob);
-                return ((rc == 0) ? 0 : -EIO);
+        if (type == PTL_MSG_REPLY) {
+                kqswnal_rx_t *rx = (kqswnal_rx_t *)private;
+                
+                LASSERT (routing || rx != NULL);
+                
+                if (!routing && rx->krx_rpc_reply_needed) { /* is it an RPC */
+                        /* Must be a REPLY for an optimized GET */
+                        rc = kqswnal_rdma (
+                                rx, ptlmsg, PTL_MSG_GET,
+                                payload_niov, payload_iov, payload_kiov, 
+                                payload_offset, payload_nob);
+                        return ((rc == 0) ? 0 : -EIO);
+                }
         }
 
-        
         if (kqswnal_nid2elanid (target.nid) < 0) {
                 CERROR("%s not in my cluster\n", libcfs_nid2str(target.nid));
                 return -EIO;
         }
 
         /* I may not block for a transmit descriptor if I might block the
-         * receiver, or an interrupt handler. */
-        ktx = kqswnal_get_idle_tx(NULL, !(type == PTL_MSG_ACK ||
+         * router, receiver, or an interrupt handler. */
+        ktx = kqswnal_get_idle_tx(NULL, !(routing ||
+                                          type == PTL_MSG_ACK ||
                                           type == PTL_MSG_REPLY ||
                                           in_interrupt()));
         if (ktx == NULL) {
@@ -1122,7 +1129,8 @@ kqswnal_send (ptl_ni_t         *ni,
          * portals header. */
         ktx->ktx_nfrag = ktx->ktx_firsttmpfrag = 1;
 
-        if ((!routing &&                        /* target.nid is final dest */
+        if ((!target_is_router &&               /* target.nid is final dest */
+             !routing &&                        /* I'm the source */
              type == PTL_MSG_GET &&             /* optimize GET? */
              *kqswnal_tunables.kqn_optimized_gets != 0 &&
              ptlmsg->msg_md->md_length >= 
@@ -1234,9 +1242,10 @@ kqswnal_send (ptl_ni_t         *ni,
 
  out:
         CDEBUG(rc == 0 ? D_NET : D_ERROR, "%s %u bytes to %s%s: rc %d\n", 
-               rc == 0 ? "Sent" : "Failed to send",
+               routing ? (rc == 0 ? "Routed" : "Failed to route") :
+                         (rc == 0 ? "Sent" : "Failed to send"),
                payload_nob, libcfs_nid2str(target.nid), 
-               routing ? "(routing)" : "", rc);
+               target_is_router ? "(router)" : "", rc);
 
         if (rc != 0) {
                 if (ktx->ktx_state == KTX_GETTING &&

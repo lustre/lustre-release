@@ -620,6 +620,7 @@ kranal_send (ptl_ni_t         *ni,
              ptl_hdr_t        *hdr,
              int               type,
              lnet_process_id_t target,
+             int               target_is_router,
              int               routing,
              unsigned int      niov,
              struct iovec     *iov,
@@ -652,55 +653,9 @@ kranal_send (ptl_ni_t         *ni,
         default:
                 LBUG();
 
-        case PTL_MSG_REPLY: {
-                /* reply's 'private' is the conn that received the GET_REQ */
-                conn = private;
-                LASSERT (conn->rac_rxmsg != NULL);
-
-                if (conn->rac_rxmsg->ram_type == RANAL_MSG_IMMEDIATE) {
-                        if (nob > RANAL_FMA_MAX_DATA) {
-                                CERROR("Can't REPLY IMMEDIATE %d to %s\n",
-                                       nob, libcfs_nid2str(target.nid));
-                                return -EIO;
-                        }
-                        break;                  /* RDMA not expected */
-                }
-
-                /* Incoming message consistent with RDMA? */
-                if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
-                        CERROR("REPLY to %s bad msg type %x!!!\n",
-                               libcfs_nid2str(target.nid), 
-                               conn->rac_rxmsg->ram_type);
-                        return -EIO;
-                }
-
-                tx = kranal_get_idle_tx(0);
-                if (tx == NULL)
-                        return -EIO;
-
-                rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, offset, nob);
-                if (rc != 0) {
-                        kranal_tx_done(tx, rc);
-                        return -EIO;
-                }
-
-                tx->tx_conn = conn;
-                tx->tx_ptlmsg[0] = ptlmsg;
-
-                rc = kranal_map_buffer(tx);
-                if (rc != 0) {
-                        kranal_tx_done(tx, rc);
-                        return -EIO;
-                }
-
-                kranal_rdma(tx, RANAL_MSG_GET_DONE,
-                            &conn->rac_rxmsg->ram_u.get.ragm_desc, nob,
-                            conn->rac_rxmsg->ram_u.get.ragm_cookie);
-
-                /* flag matched by consuming rx message */
-                kranal_consume_rxmsg(conn, NULL, 0);
-                return 0;
-        }
+        case PTL_MSG_ACK:
+                LASSERT (nob == 0);
+                break;
 
         case PTL_MSG_GET:
                 LASSERT (niov == 0);
@@ -711,10 +666,13 @@ kranal_send (ptl_ni_t         *ni,
                  * IMMEDIATE GET if the sink buffer is mapped already and small
                  * enough for FMA */
 
+                if (routing || target_is_router)
+                        break;                  /* send IMMEDIATE */
+
                 if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0 &&
                     ptlmsg->msg_md->md_length <= RANAL_FMA_MAX_DATA &&
                     ptlmsg->msg_md->md_length <= *kranal_tunables.kra_max_immediate)
-                        break;
+                        break;                  /* send IMMEDIATE */
 
                 tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_GET_REQ);
                 if (tx == NULL)
@@ -747,9 +705,53 @@ kranal_send (ptl_ni_t         *ni,
                 kranal_launch_tx(tx, target.nid);
                 return 0;
 
-        case PTL_MSG_ACK:
-                LASSERT (nob == 0);
-                break;
+        case PTL_MSG_REPLY:
+                /* reply's 'private' is the conn that received the GET_REQ */
+                conn = private;
+
+                LASSERT (routing || conn != NULL);
+                
+                LASSERT (conn->rac_rxmsg != NULL);
+
+                if (!routing && conn->rac_rxmsg->ram_type != RANAL_MSG_IMMEDIATE) {
+                        /* Incoming message consistent with RDMA? */
+                        if (conn->rac_rxmsg->ram_type != RANAL_MSG_GET_REQ) {
+                                CERROR("REPLY to %s bad msg type %x!!!\n",
+                                       libcfs_nid2str(target.nid), 
+                                       conn->rac_rxmsg->ram_type);
+                                return -EIO;
+                        }
+
+                        tx = kranal_get_idle_tx(0);
+                        if (tx == NULL)
+                                return -EIO;
+
+                        rc = kranal_setup_rdma_buffer(tx, niov, iov, kiov, 
+                                                      offset, nob);
+                        if (rc != 0) {
+                                kranal_tx_done(tx, rc);
+                                return -EIO;
+                        }
+
+                        tx->tx_conn = conn;
+                        tx->tx_ptlmsg[0] = ptlmsg;
+
+                        rc = kranal_map_buffer(tx);
+                        if (rc != 0) {
+                                kranal_tx_done(tx, rc);
+                                return -EIO;
+                        }
+
+                        kranal_rdma(tx, RANAL_MSG_GET_DONE,
+                                    &conn->rac_rxmsg->ram_u.get.ragm_desc, nob,
+                                    conn->rac_rxmsg->ram_u.get.ragm_cookie);
+
+                        /* flag matched by consuming rx message */
+                        kranal_consume_rxmsg(conn, NULL, 0);
+                        return 0;
+                }
+
+                /* Fall through and handle like PUT */
 
         case PTL_MSG_PUT:
                 if (kiov == NULL &&             /* not paged */
@@ -757,7 +759,10 @@ kranal_send (ptl_ni_t         *ni,
                     nob <= *kranal_tunables.kra_max_immediate)
                         break;                  /* send IMMEDIATE */
 
-                tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_PUT_REQ);
+                tx = kranal_new_tx_msg(!(routing ||
+                                         type == PTL_MSG_REPLY ||
+                                         in_interrupt()), 
+                                       RANAL_MSG_PUT_REQ);
                 if (tx == NULL)
                         return -ENOMEM;
 
@@ -774,10 +779,13 @@ kranal_send (ptl_ni_t         *ni,
                 return 0;
         }
 
+        /* send IMMEDIATE */
+
         LASSERT (kiov == NULL);
         LASSERT (nob <= RANAL_FMA_MAX_DATA);
 
-        tx = kranal_new_tx_msg(!(type == PTL_MSG_ACK ||
+        tx = kranal_new_tx_msg(!(routing ||
+                                 type == PTL_MSG_ACK ||
                                  type == PTL_MSG_REPLY ||
                                  in_interrupt()),
                                RANAL_MSG_IMMEDIATE);

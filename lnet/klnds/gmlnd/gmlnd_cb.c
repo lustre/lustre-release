@@ -59,7 +59,8 @@ gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
 int
 gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-           ptl_hdr_t *hdr, int type, lnet_process_id_t pid, int routing,
+           ptl_hdr_t *hdr, int type, lnet_process_id_t target, 
+           int target_is_router, int routing,
            unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
            unsigned int offset, unsigned int len)
 {
@@ -71,28 +72,30 @@ gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
 
         /* I may not block for a tx if I'm responding to an incoming message */
         tx = gmnal_get_tx(gmni, 
-                          !(type == PTL_MSG_ACK || type == PTL_MSG_REPLY));
+                          !(routing ||
+                            type == PTL_MSG_ACK || 
+                            type == PTL_MSG_REPLY));
         if (tx == NULL) {
                 if (!gmni->gmni_shutdown)
                         CERROR ("Can't get tx for msg type %d for %s\n",
-                                type, libcfs_nid2str(pid.nid));
+                                type, libcfs_nid2str(target.nid));
                 return -EIO;
         }
 
-        tx->tx_nid = pid.nid;
+        tx->tx_nid = target.nid;
 
-        gmrc = gm_global_id_to_node_id(gmni->gmni_port, PTL_NIDADDR(pid.nid),
+        gmrc = gm_global_id_to_node_id(gmni->gmni_port, PTL_NIDADDR(target.nid),
                                        &tx->tx_gmlid);
         if (gmrc != GM_SUCCESS) {
                 CERROR("Can't map Nid %s to a GM local ID: %d\n", 
-                       libcfs_nid2str(pid.nid), gmrc);
+                       libcfs_nid2str(target.nid), gmrc);
                 /* NB tx_ptlmsg not set => doesn't finalize */
                 gmnal_tx_done(tx, -EIO);
                 return -EIO;
         }
 
         gmnal_pack_msg(gmni, GMNAL_NETBUF_MSG(&tx->tx_buf), 
-                       pid.nid, GMNAL_MSG_IMMEDIATE);
+                       target.nid, GMNAL_MSG_IMMEDIATE);
         GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_u.immediate.gmim_hdr = *hdr;
         tx->tx_msgnob = offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[0]);
 

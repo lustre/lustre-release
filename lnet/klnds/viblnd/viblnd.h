@@ -408,7 +408,8 @@ void kibnal_shutdown (ptl_ni_t *ni);
 int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
 int kibnal_send (ptl_ni_t *ni, void *private,
                  ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                 int type, lnet_process_id_t tgt, int routing,
+                 int type, lnet_process_id_t tgt, 
+                 int tgt_is_router, int routing,
                  unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                  unsigned int offset, unsigned int nob);
 int kibnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 

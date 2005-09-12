@@ -1015,8 +1015,8 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
 }
 
 int
-kibnal_start_passive_rdma (int type, lnet_nid_t nid,
-                            ptl_msg_t *ptlmsg, ptl_hdr_t *hdr)
+kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
+                           ptl_msg_t *ptlmsg, ptl_hdr_t *hdr)
 {
         int         nob = ptlmsg->msg_md->md_length;
         kib_tx_t   *tx;
@@ -1036,8 +1036,13 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid,
                          IB_ACCESS_LOCAL_WRITE;
         }
 
-        tx = kibnal_get_idle_tx (1);           /* May block; caller is an app thread */
-        LASSERT (tx != NULL);
+        tx = kibnal_get_idle_tx (may_block);
+        if (tx == NULL) {
+                CERROR("Can't allocate %s txd for %s\n",
+                       (type == IBNAL_MSG_PUT_RDMA) ? "PUT/REPLY" : "GET",
+                       libcfs_nid2str(nid));
+                return -ENOMEM;
+        }
 
         if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0) 
                 rc = kibnal_map_iov (tx, access,
@@ -1235,6 +1240,7 @@ kibnal_send(ptl_ni_t         *ni,
             ptl_hdr_t        *hdr, 
             int               type, 
             lnet_process_id_t target,
+            int               target_is_router,
             int               routing,
             unsigned int      payload_niov, 
             struct iovec     *payload_iov, 
@@ -1259,70 +1265,67 @@ kibnal_send(ptl_ni_t         *ni,
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
-        if (routing) {
-                CERROR ("Can't route\n");
-                return -EIO;
-        }
-        
         switch (type) {
         default:
                 LBUG();
                 return (-EIO);
                 
+        case PTL_MSG_ACK:
+                LASSERT (payload_nob == 0);
+                break;
+
+        case PTL_MSG_GET:
+                if (routing || target_is_router)
+                        break;                  /* send IMMEDIATE */ 
+                
+                /* is the REPLY message too small for RDMA? */
+                nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[ptlmsg->msg_md->md_length]);
+                if (nob <= IBNAL_MSG_SIZE)
+                        break;                  /* send IMMEDIATE */
+                
+                return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, 1,
+                                                 target.nid, ptlmsg, hdr);
+
         case PTL_MSG_REPLY: {
                 /* reply's 'private' is the incoming receive */
                 kib_rx_t *rx = private;
 
+                LASSERT (routing || rx != NULL);
+
                 /* RDMA reply expected? */
-                if (rx->rx_msg->ibm_type == IBNAL_MSG_GET_RDMA) {
+                if (!routing && rx->rx_msg->ibm_type != IBNAL_MSG_IMMEDIATE) {
+                        /* Incoming message consistent with RDMA? */
+                        if (rx->rx_msg->ibm_type != IBNAL_MSG_GET_RDMA) {
+                                CERROR ("REPLY to %s bad ibm type %d!!!\n",
+                                        libcfs_nid2str(target.nid), 
+                                        rx->rx_msg->ibm_type);
+                                return (-EIO);
+                        }
+
                         kibnal_start_active_rdma(IBNAL_MSG_GET_DONE, 0,
                                                  rx, ptlmsg, payload_niov, 
                                                  payload_iov, payload_kiov,
                                                  payload_offset, payload_nob);
                         return (0);
                 }
-                
-                /* Incoming message consistent with immediate reply? */
-                if (rx->rx_msg->ibm_type != IBNAL_MSG_IMMEDIATE) {
-                        CERROR ("REPLY to %s bad opbm type %d!!!\n",
-                                libcfs_nid2str(target.nid), 
-                                rx->rx_msg->ibm_type);
-                        return (-EIO);
-                }
-
-                /* Will it fit in a message? */
-                nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob > IBNAL_MSG_SIZE) {
-                        CERROR("REPLY for %s too big (RDMA not requested): %d\n", 
-                               libcfs_nid2str(target.nid), payload_nob);
-                        return (-EIO);
-                }
-                break;
+                /* Fall through to handle like PUT */
         }
-
-        case PTL_MSG_GET:
-                /* might the REPLY message be big enough to need RDMA? */
-                nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[ptlmsg->msg_md->md_length]);
-                if (nob > IBNAL_MSG_SIZE)
-                        return (kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, 
-                                                          target.nid, ptlmsg, hdr));
-                break;
-
-        case PTL_MSG_ACK:
-                LASSERT (payload_nob == 0);
-                break;
 
         case PTL_MSG_PUT:
-                /* Is the payload big enough to need RDMA? */
+                /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
-                if (nob > IBNAL_MSG_SIZE)
-                        return (kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA,
-                                                          target.nid, ptlmsg, hdr));
+                if (nob <= IBNAL_MSG_SIZE)
+                        break;                  /* send IMMEDIATE */
                 
-                break;
+                return kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA,
+                                                 !(routing || type == PTL_MSG_REPLY),
+                                                 target.nid, ptlmsg, hdr);
         }
 
-        tx = kibnal_get_idle_tx(!(type == PTL_MSG_ACK ||
+        /* Send IMMEDIATE */
+
+        tx = kibnal_get_idle_tx(!(routing ||
+                                  type == PTL_MSG_ACK ||
                                   type == PTL_MSG_REPLY ||
                                   in_interrupt()));
         if (tx == NULL) {
