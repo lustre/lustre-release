@@ -1691,8 +1691,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
         /* 2.6 implements filemap_fdatawait() using PG_writeback which we
          * don't support now. so, wait until all submited llaps are gone */
-        if (ll_is_inode_dirty(mapping->host))
-                CWARN("fsync() against "DLID4"\n", OLID4(&lli->lli_id));
         wait_event(lli->lli_dirty_wait, !ll_is_inode_dirty(mapping->host));
 
         ll_inode2id(&id, inode);
