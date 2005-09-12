@@ -74,7 +74,7 @@ static int filldir(void *__buf, const char *name, int namlen,
         LASSERT(sd != NULL);
 
         /* skip non-cross_ref entries if we need cross-ref */
-        if (sd->cross_ref && d_type & 128)
+        if (sd->cross_ref && !(d_type & 128))
                 RETURN(0);
 
         if (ino == sd->i_num) {
@@ -198,14 +198,14 @@ static int local_parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
         pkg->pp_type = 0;
         memset(pkg->pp_name, 0, sizeof(pkg->pp_name));
 
-        //LASSERT(obd->u.mds.mds_num == id_group(&pkg->pp_id1));
-
         /* pp_id2 is present, which indicating we want to scan parent 
          * dir(pp_id2) to find the cross-ref entry(pp_id1) */
         if (id_fid(&pkg->pp_id2)) {
+                LASSERT(obd->u.mds.mds_num == id_group(&pkg->pp_id2));
                 pkg->pp_type = PP_DIR;
                 cross_ref = 1;                
         } else {
+                LASSERT(obd->u.mds.mds_num == id_group(&pkg->pp_id1));
                 rc = id2pid(obd, &pkg->pp_id1, &pkg->pp_id2, &pkg->pp_type);
                 if (rc)
                         GOTO(out, rc);
@@ -367,7 +367,7 @@ mds_id2name(struct obd_device *obd, struct lustre_id *id,
                         INIT_LIST_HEAD(&item->link);
                         list_add(&item->link, list);
                         memcpy(item->name, pkg->pp_name, sizeof(item->name));
-                        
+
                 case PP_SPLIT_SLAVE:
                         pkg->pp_id1 = pkg->pp_id2;
                         memset(&pkg->pp_id2, 0, sizeof(struct lustre_id));
@@ -397,10 +397,9 @@ scan_audit_log_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
-        if (rec->lrh_type != SMFS_AUDIT_NAME_REC &&
-            rec->lrh_type != LLOG_GEN_REC) {
+
+        if (rec->lrh_type != SMFS_AUDIT_NAME_REC)
                 RETURN(0);
-        }
 
         ad_rec = (struct audit_record *)(rec + 1);
 
