@@ -157,7 +157,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
                         break;
         }
         
-        if (0 && audit_id2name) {
+        if (audit_id2name) {
                 char *name = NULL;
                 struct lustre_id id;
                 int namelen = 0;
