@@ -756,7 +756,7 @@ int mdc_close(struct obd_export *exp, struct mdc_op_data *op_data,
                               MDS_CLOSE, 3, reqsize, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
-        req->rq_request_portal = MDS_CLOSE_PORTAL;
+        //req->rq_request_portal = MDS_CLOSE_PORTAL;
 
         /* ensure that this close's handle is fixed up during replay. */
         LASSERT(och != NULL);
