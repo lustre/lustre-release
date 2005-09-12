@@ -827,17 +827,14 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lvfs_run_ctxt saved;
-        struct config_llog_instance cfg;
         struct llog_ctxt *ctxt;
         char *profile = mds->mds_profile, *name;
-        int rc, version, namelen;
+         int rc, version, namelen, value;
+        __u32 valsize;
         ENTRY;
 
         if (profile == NULL)
                 RETURN(0);
-
-        cfg.cfg_instance = NULL;
-        cfg.cfg_uuid = mds->mds_dt_uuid;
 
         namelen = strlen(profile) + 20; /* -clean-######### */
         OBD_ALLOC(name, namelen);
@@ -854,8 +851,18 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
-        rc = class_config_process_llog(ctxt, name, &cfg);
+        rc = class_config_process_llog(ctxt, name, NULL);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        /* retrieve size of EA */
+        rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
+                          "mdsize", &valsize, &value);
+        
+        if (value > mds->mds_max_mdsize)
+                mds->mds_max_mdsize = value;
+
+        CDEBUG(D_INFO, "mds max md size %d \n", mds->mds_max_mdsize);
+        
         if (rc == 0)
                 mds->mds_config_version = version;
         CWARN("Finished applying configuration log %s: %d\n", name, rc);
