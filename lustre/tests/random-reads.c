@@ -34,6 +34,8 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
+long long atoll(const char *nptr);
+
 static void usage(void)
 {
 	printf("random-reads: read random chunks of a file.\n");
