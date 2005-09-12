@@ -2739,32 +2739,12 @@ kibnal_arp_done (kib_conn_t *conn)
         LASSERT (peer->ibp_arp_count > 0);
         
         if (cv->cv_arprc != ibat_stat_ok) {
-                write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
-                peer->ibp_arp_count--;
-                if (peer->ibp_arp_count == 0) {
-                        /* final ARP attempt failed */
-                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
-                                                flags);
-                        CERROR("Arp %s at %u.%u.%u.%u failed: %d\n", 
-                               libcfs_nid2str(peer->ibp_nid), 
-                               HIPQUAD(peer->ibp_ip), cv->cv_arprc);
-                } else {
-                        /* Retry ARP: ibp_connecting++ so terminating conn
-                         * doesn't end peer's connection attempt */
-                        peer->ibp_connecting++;
-                        write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
-                                                flags);
-                        CWARN("Arp %s at %u.%u.%u.%u failed: %d "
-                              "(%d attempts left)\n", 
-                              libcfs_nid2str(peer->ibp_nid), 
-                              HIPQUAD(peer->ibp_ip), 
-                              cv->cv_arprc, peer->ibp_arp_count);
-
-                        kibnal_schedule_peer_arp(peer);
-                }
-                kibnal_connreq_done(conn, 1, -ENETUNREACH);
-                return;
+                CWARN("Arp %s @ %u.%u.%u.%u failed: %d\n", 
+                      libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip),
+                      cv->cv_arprc);
+                goto failed;
         }
+        
 
         if ((arp->mask & IBAT_PRI_PATH_VALID) != 0) {
                 CDEBUG(D_NET, "Got valid path for %s\n",
@@ -2774,20 +2754,35 @@ kibnal_arp_done (kib_conn_t *conn)
 
                 vvrc = base_gid2port_num(kibnal_data.kib_hca, &path->sgid,
                                          &cv->cv_port);
-                LASSERT (vvrc == vv_return_ok);
+                if (vvrc != vv_return_ok) {
+                        CWARN("base_gid2port_num failed for %s @ %u.%u.%u.%u: %d\n", 
+                              libcfs_nid2str(peer->ibp_nid),
+                              HIPQUAD(peer->ibp_ip), vvrc);
+                        goto failed;
+                }
 
                 vvrc = gid2gid_index(kibnal_data.kib_hca, cv->cv_port,
                                      &path->sgid, &cv->cv_sgid_index);
-                LASSERT (vvrc == vv_return_ok);
+                if (vvrc != vv_return_ok) {
+                        CWARN("gid2gid_index failed for %s @ %u.%u.%u.%u: %d\n", 
+                              libcfs_nid2str(peer->ibp_nid),
+                              HIPQUAD(peer->ibp_ip), vvrc);
+                        goto failed;
+                }
 
                 vvrc = pkey2pkey_index(kibnal_data.kib_hca, cv->cv_port,
                                        path->pkey, &cv->cv_pkey_index);
-                LASSERT (vvrc == vv_return_ok);
+                if (vvrc != vv_return_ok) {
+                        CWARN("pkey2pkey_index failed for %s @ %u.%u.%u.%u: %d\n", 
+                              libcfs_nid2str(peer->ibp_nid), 
+                              HIPQUAD(peer->ibp_ip), vvrc);
+                        goto failed;
+                }
 
                 path->mtu = IBNAL_IB_MTU;
 
         } else if ((arp->mask & IBAT_LID_VALID) != 0) {
-                CWARN("Creating new path record for %s at %u.%u.%u.%u\n",
+                CWARN("Creating new path record for %s @ %u.%u.%u.%u\n",
                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
 
                 cv->cv_pkey_index = IBNAL_PKEY_IDX;
@@ -2798,11 +2793,21 @@ kibnal_arp_done (kib_conn_t *conn)
 
                 vvrc = port_num2base_gid(kibnal_data.kib_hca, cv->cv_port,
                                          &path->sgid);
-                LASSERT (vvrc == vv_return_ok);
+                if (vvrc != vv_return_ok) {
+                        CWARN("port_num2base_gid failed for %s @ %u.%u.%u.%u: %d\n", 
+                              libcfs_nid2str(peer->ibp_ip),
+                              HIPQUAD(peer->ibp_ip), vvrc);
+                        goto failed;
+                }
 
                 vvrc = port_num2base_lid(kibnal_data.kib_hca, cv->cv_port,
                                          &path->slid);
-                LASSERT (vvrc == vv_return_ok);
+                if (vvrc != vv_return_ok) {
+                        CWARN("port_num2base_lid failed for %s @ %u.%u.%u.%u: %d\n", 
+                              libcfs_nid2str(peer->ibp_ip), 
+                              HIPQUAD(peer->ibp_ip), vvrc);
+                        goto failed;
+                }
 
                 path->dgid          = arp->gid;
                 path->sl            = IBNAL_SERVICE_LEVEL;
@@ -2813,10 +2818,9 @@ kibnal_arp_done (kib_conn_t *conn)
                 path->pkey          = IBNAL_PKEY;
                 path->traffic_class = IBNAL_TRAFFIC_CLASS;
         } else {
-                CERROR("Can't Arp %s @%u.%u.%u.%u: no PATH or LID\n", 
-                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
-                kibnal_connreq_done(conn, 1, -ENETUNREACH);
-                return;
+                CWARN("Arp for %s @ %u.%u.%u.%u returned neither PATH nor LID\n",
+                      libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
+                goto failed;
         }
 
         rc = kibnal_set_qp_state(conn, vv_qp_state_init);
@@ -2826,6 +2830,30 @@ kibnal_arp_done (kib_conn_t *conn)
 
         /* do the actual connection request */
         kibnal_connect_conn(conn);
+        return;
+
+ failed:
+        write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+        peer->ibp_arp_count--;
+        if (peer->ibp_arp_count == 0) {
+                /* final ARP attempt failed */
+                write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                        flags);
+                CERROR("Arp %s @ %u.%u.%u.%u failed (final attempt)\n", 
+                       libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip));
+        } else {
+                /* Retry ARP: ibp_connecting++ so terminating conn
+                 * doesn't end peer's connection attempt */
+                peer->ibp_connecting++;
+                write_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                                        flags);
+                CWARN("Arp %s @ %u.%u.%u.%u failed (%d attempts left)\n",
+                      libcfs_nid2str(peer->ibp_nid), HIPQUAD(peer->ibp_ip), 
+                      peer->ibp_arp_count);
+                
+                kibnal_schedule_peer_arp(peer);
+        }
+        kibnal_connreq_done(conn, 1, -ENETUNREACH);
 }
 
 void
