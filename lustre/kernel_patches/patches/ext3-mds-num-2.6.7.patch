@@ -202,8 +202,8 @@ Index: linux-2.6.7/fs/ext3/dir.c
  
  static unsigned char get_dtype(struct super_block *sb, int filetype)
  {
-+	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM))
-+		return DT_UNKNOWN;
++	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_MDSNUM) && filetype == 128)
++		return 128;
 +
  	if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_FILETYPE) ||
  	    (filetype >= EXT3_FT_MAX))
