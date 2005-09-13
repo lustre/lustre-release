@@ -520,10 +520,10 @@ static int ll_crypt_cb(struct page *page, __u64 offset, __u64 count,
         ptr = (char *)kmap(page);
         key_ptr = ptr;
         ptr += offset & (PAGE_SIZE - 1); 
-        CDEBUG(D_INFO, "ptr is %s \n", ptr);
+        //CDEBUG(D_INFO, "ptr is %s \n", ptr);
         for (i = 0; i < count; i++) 
                 *ptr++ ^= (__u8)data_key; 
-        CDEBUG(D_INFO, "encrypted ptr is %s \n", key_ptr);
+        //CDEBUG(D_INFO, "encrypted ptr is %s \n", key_ptr);
         kunmap(page);
         
         RETURN(rc); 
