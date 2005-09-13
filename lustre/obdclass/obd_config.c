@@ -613,8 +613,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 obd_timeout = max(lcfg->lcfg_num, 1U);
                 if (ldlm_timeout >= obd_timeout)
                         ldlm_timeout = max(obd_timeout / 3, 1U);
-                else if (ldlm_timeout < 10 && obd_timeout >= ldlm_timeout * 4)
-                        ldlm_timeout = min(obd_timeout / 3, 30U);
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
