@@ -381,6 +381,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                         spin_lock(&ns->ns_hash_lock);
                         tmp  = tmp->next;
 
+#if 0
                         /* XXX what a mess: don't force cleanup if we're
                          * local_only (which is only used by recovery).  In that
                          * case, we probably still have outstanding lock refs
@@ -393,6 +394,18 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                                 ldlm_resource_dump(D_ERROR, res);
                                 atomic_set(&res->lr_refcount, 1);
                                 ldlm_resource_putref_locked(res);
+                        }
+#endif
+                        /* XXX: former stuff caused issues in case of race
+                         * between ldlm_namespace_cleanup() and lockd() when
+                         * client gets blocking ast when lock gets distracted by
+                         * server. This is 1_4 branch solution, let's see how
+                         * will it behave. */
+                        if (!ldlm_resource_putref_locked(res)) {
+                                CERROR("Namespace %s resource refcount nonzero "
+                                       "(%d) after lock cleanup; forcing cleanup.\n",
+                                       ns->ns_name, atomic_read(&res->lr_refcount));
+                                ldlm_resource_dump(D_ERROR, res);
                         }
                 }
                 spin_unlock(&ns->ns_hash_lock);
