@@ -414,6 +414,15 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
         return ELDLM_OK;
 }
 
+static inline int ldlm_ns_refcount_atomic(struct ldlm_namespace *ns)
+{
+        int refcount;
+        spin_lock(&ns->ns_hash_lock);
+        refcount = ns->ns_refcount;
+        spin_unlock(&ns->ns_hash_lock);
+        return refcount;
+}
+
 /* Cleanup, but also free, the namespace */
 int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
@@ -439,6 +448,26 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                 }
         }
 #endif
+
+        if (ldlm_ns_refcount_atomic(ns) > 0) {
+                struct l_wait_info lwi = LWI_INTR(NULL, NULL);
+                int rc;
+                CDEBUG(D_DLMTRACE,
+                       "dlm namespace %s free waiting on refcount %d\n",
+                       ns->ns_name, ns->ns_refcount);
+                rc = l_wait_event(ns->ns_waitq,
+                                  ldlm_ns_refcount_atomic(ns) == 0, &lwi);
+                if (ldlm_ns_refcount_atomic(ns)) {
+                        CDEBUG(D_ERROR, "Lock manager: wait for %s namespace "
+                               "cleanup aborted with %d resources in "
+                               "use. (%d)\nI'm going to try to clean "
+                               "up anyway, but I might need a reboot "
+                               "of this node.\n", ns->ns_name,
+                               ldlm_ns_refcount_atomic(ns), rc);
+                }
+                CDEBUG(D_DLMTRACE,
+                       "dlm namespace %s free done waiting\n", ns->ns_name);
+        }
 
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
