@@ -66,6 +66,16 @@ Details    : sending a glimpse AST to a liblustre client waits for every AST
 	     to time out, as liblustre clients will not respond.  Since they
 	     cannot cache data we refresh the OST lock LVB from disk instead.
 
+Severity   : minor
+Frequency  : rare (only HPUX clients mounting unsupported re-exported NFS vol)
+Bugzilla   : 5781
+Description: an HPUX NFS client would get -EACCESS when ftruncate()ing a newly
+             created file with mode 000
+Details    : the Linux NFS server relies on an MDS_OPEN_OWNEROVERRIDE hack to
+	     allow an ftruncate() as a non-root user to a file with mode 000.
+	     Lustre now respects this flag to disable mode checks when
+	     truncating a file owned by the user
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

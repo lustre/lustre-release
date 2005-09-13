@@ -225,7 +225,10 @@ int mds_fix_attr(struct inode *inode, struct mds_update_record *rec)
                         RETURN(error);
         }
 
-        if (ia_valid & ATTR_SIZE) {
+        if (ia_valid & ATTR_SIZE &&
+            /* NFSD hack for open(O_CREAT|O_TRUNC)=mknod+truncate (bug 5781) */
+            !(rec->ur_uc.luc_fsuid == inode->i_uid &&
+              ia_valid & MDS_OPEN_OWNEROVERRIDE)) {
                 if ((error = ll_permission(inode, MAY_WRITE, NULL)) != 0)
                         RETURN(error);
         }
