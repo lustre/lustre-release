@@ -2316,6 +2316,8 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa)
         int err = 0, rc = 0;
         void *handle = NULL;
         void *lock = NULL;
+	obd_uid uid;
+	obd_gid gid;
         ENTRY;
 
         filter = &obd->u.filter;
@@ -2349,10 +2351,13 @@ int filter_create_object(struct obd_device *obd, struct obdo *oa)
                 GOTO(cleanup, rc = PTR_ERR(handle));
         cleanup_phase = 3;
 
-        uc.luc_uid = oa->o_uid;
-        uc.luc_gid = oa->o_gid;
-        uc.luc_fsuid = oa->o_uid;
-        uc.luc_fsgid = oa->o_gid;
+        uid = oa->o_valid & OBD_MD_FLUID ? oa->o_uid : 0;
+        gid = oa->o_valid & OBD_MD_FLGID ? oa->o_gid : 0;
+        
+        uc.luc_uid = uid;
+        uc.luc_gid = gid;
+        uc.luc_fsuid = uid;
+        uc.luc_fsgid = gid;
         uc.luc_cap = current->cap_effective;
         cap_raise(uc.luc_cap, CAP_SYS_RESOURCE);
 
