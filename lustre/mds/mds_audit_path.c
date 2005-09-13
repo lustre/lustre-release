@@ -299,7 +299,7 @@ static int parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
                         RETURN(rc);
 
                 exp = lmv->tgts[mds_num].ltd_exp;
-                LASSERT(exp);
+                LASSERTF(exp, "No export for MDS #%i\n", mds_num);
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), 
                                       LUSTRE_MDS_VERSION, MDS_PARSE_ID, 1, 
@@ -399,21 +399,20 @@ scan_audit_log_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
-
+        
         if (rec->lrh_type != SMFS_AUDIT_NAME_REC)
                 RETURN(0);
-
+        
         ad_rec = (struct audit_record *)(rec + 1);
-
-        if (ad_rec->result || 
-            ad_rec->opcode != AUDIT_UNLINK ||
-            ad_rec->opcode != AUDIT_RENAME)
+        if (ad_rec->result ||
+            (ad_rec->opcode != AUDIT_UNLINK &&
+             ad_rec->opcode != AUDIT_RENAME))
                 RETURN(0);
 
         cid_rec = (struct audit_id_record *)(ad_rec + 1);
         pid_rec = cid_rec + 1;
         nm_rec = (struct audit_name_record *)(pid_rec + 1);
-        
+                
         if (cid_rec->au_num == id_ino(&pkg->pp_id1) &&
             cid_rec->au_gen == id_gen(&pkg->pp_id1)) {
                 LASSERT(pid_rec->au_fid);
@@ -426,7 +425,6 @@ scan_audit_log_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
                 /* get name */
                 memcpy(pkg->pp_name, nm_rec->name, 
                        le32_to_cpu(nm_rec->name_len));
-
                 RETURN(LLOG_PROC_BREAK);
         }
         RETURN(0);
@@ -490,7 +488,7 @@ scan_audit_log(struct obd_device *obd, struct lustre_id *cur_id,
                         RETURN(rc);
 
                 exp = lmv->tgts[mds_num].ltd_exp;
-                LASSERT(exp);
+                LASSERTF(exp, "No export for MDS #%i\n", mds_num);
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), 
                                       LUSTRE_MDS_VERSION, MDS_PARSE_ID, 1, 
