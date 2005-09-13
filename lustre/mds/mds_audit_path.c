@@ -576,7 +576,7 @@ next:
                 *namelen += strlen(item->name) + 1;
         }
         
-        *namelen++;     /* for the ending '\0' of string */
+        (*namelen)++;     /* for the ending '\0' of string */
         OBD_ALLOC(*name, *namelen);
         if (*name == NULL)
                 rc = -ENOMEM;
