@@ -112,10 +112,11 @@ static int scan_name_in_parent(struct lustre_id *pid, struct lustre_id *id,
         sd.name = name;
         sd.cross_ref = cr;
         sd.rc = -ENOENT;
-        vfs_readdir(file, filldir, &sd);
+        rc = vfs_readdir(file, filldir, &sd);
+        if (!rc) 
+                rc = sd.rc;
 
         filp_close(file, 0);
-        rc = sd.rc;
 
 out:
         OBD_FREE(pname, len);
@@ -162,6 +163,7 @@ id2pid(struct obd_device *obd, struct lustre_id *id, struct lustre_id *pid,
                 } else {
                         *type = PP_SPLIT_SLAVE;
                         *pid = mea->mea_ids[mea->mea_master];
+                        LASSERT(id_fid(pid));
                 }
                                 
         } else {
@@ -275,12 +277,12 @@ static int parse_id(struct obd_device *obd, struct parseid_pkg *pkg)
         int mds_num = id_group(&pkg->pp_id1);
         ENTRY;
         
-        LASSERT(mds_num >= 0);
-
         //for cross-ref dir we should send request to parent's MDS
         if (pkg->pp_type == PP_CROSS_DIR)
                 mds_num = id_group(&pkg->pp_id2);
         
+        LASSERT(mds_num >= 0);
+
         if (mds_num == obd->u.mds.mds_num) {
                 rc = local_parse_id(obd, pkg);
         } else {
@@ -414,6 +416,7 @@ scan_audit_log_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void *data)
         
         if (cid_rec->au_num == id_ino(&pkg->pp_id1) &&
             cid_rec->au_gen == id_gen(&pkg->pp_id1)) {
+                LASSERT(pid_rec->au_fid);
                 /* get parent id */
                 id_ino(&pkg->pp_id2) = pid_rec->au_num;
                 id_gen(&pkg->pp_id2) = pid_rec->au_gen;
@@ -438,18 +441,21 @@ local_scan_audit_log(struct obd_device *obd, struct parseid_pkg *pkg)
         int rc = 0;
         ENTRY;
 
+        pkg->pp_rc = 0;
         if (ctxt)
                 llh = ctxt->loc_handle;
 
         if (llh == NULL)
-                RETURN(-ENOENT);
+                GOTO(out, rc = -ENOENT);
 
         rc = llog_cat_process(llh, (llog_cb_t)&scan_audit_log_cb, (void *)pkg);
         if (rc != LLOG_PROC_BREAK) {
                 CWARN("process catalog log failed: rc(%d)\n", rc);
-                RETURN(-ENOENT);
+                rc = -ENOENT;
         }
-        RETURN(0);
+out:
+        pkg->pp_rc = rc;
+        RETURN(rc);
 }
 
 static int 
@@ -545,8 +551,13 @@ mds_audit_id2name(struct obd_device *obd, char **name, int *namelen,
         INIT_LIST_HEAD(&list);
 
         cur_id = *id;
+        if (!id_fid(&cur_id)) {
+                CERROR("Invalid id!\n");
+                RETURN(-EINVAL);
+        }
         if (id_fid(&cur_id) == ROOT_FID)
                 RETURN(0);
+        
 next:
         memset(&parent_id, 0, sizeof(parent_id));
         rc = mds_id2name(obd, &cur_id, &list, &parent_id);
