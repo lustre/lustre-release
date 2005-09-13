@@ -173,11 +173,12 @@ int static audit_mds_setattr_rec(struct inode * inode, void * arg,
                               struct audit_priv * priv, char * buffer,
                               __u32 *type)
 {
-        //struct hook_attr_msg * msg = arg;
+        struct hook_attr_msg * msg = arg;
         struct audit_record * rec = (void*)buffer;
         char * pbuf = buffer + sizeof(*rec);
         int len = sizeof(*rec);
         
+        rec->nid = msg->attr->ia_valid;
         rec->opcode = AUDIT_SETATTR;
         len += audit_fill_id_rec(&pbuf, inode);
         *type = SMFS_AUDIT_GEN_REC;
