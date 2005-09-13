@@ -581,13 +581,14 @@ next:
 out:
         list_for_each_safe (pos, n, &list) {
                 item = list_entry(pos, struct name_item, link);
+                
                 if (!rc) {
                         strcat(*name, "/");
                         strcat(*name, item->name);
                 }
                 list_del_init(&item->link);
                 OBD_FREE(item, sizeof(*item));
-                LASSERT(strlen(*name) < *namelen);
+                LASSERT(strlen(*name) <= *namelen);
         }
         RETURN(rc);
 }
