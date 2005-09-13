@@ -68,18 +68,18 @@ void libcfs_init_nidstrings (void)
 static char *
 libcfs_next_nidstring (void)
 {
-	char          *str;
-	unsigned long  flags;
+        char          *str;
+        unsigned long  flags;
 
-	NIDSTR_LOCK(flags);
+        NIDSTR_LOCK(flags);
 
-	str = libcfs_nidstrings[libcfs_nidstring_idx++];
-	if (libcfs_nidstring_idx ==
-	    sizeof(libcfs_nidstrings)/sizeof(libcfs_nidstrings[0]))
-		libcfs_nidstring_idx = 0;
+        str = libcfs_nidstrings[libcfs_nidstring_idx++];
+        if (libcfs_nidstring_idx ==
+            sizeof(libcfs_nidstrings)/sizeof(libcfs_nidstrings[0]))
+                libcfs_nidstring_idx = 0;
 
         NIDSTR_UNLOCK(flags);
-	return str;
+        return str;
 }
 
 #if !CRAY_PORTALS
@@ -313,7 +313,7 @@ libcfs_net2str(__u32 net)
         int               nal = PTL_NETNAL(net);
         int               num = PTL_NETNUM(net);
         struct nalstrfns *nf  = libcfs_nal2nalstrfns(nal);
-	char             *str = libcfs_next_nidstring();
+        char             *str = libcfs_next_nidstring();
 
         if (nf == NULL) 
                 snprintf(str, PTL_NIDSTR_SIZE, "<%u:%u>", nal, num);
@@ -333,14 +333,14 @@ libcfs_nid2str(lnet_nid_t nid)
         int             nal = PTL_NETNAL(net);
         int             nnum = PTL_NETNUM(net);
         struct nalstrfns *nf;
-	char           *str;
+        char           *str;
         int             nob;
 
         if (nid == LNET_NID_ANY)
                 return "LNET_NID_ANY";
 
         nf = libcfs_nal2nalstrfns(PTL_NETNAL(net));
-	str = libcfs_next_nidstring();
+        str = libcfs_next_nidstring();
 
         if (nf == NULL)
                 snprintf(str, PTL_NIDSTR_SIZE, "%x@<%u:%u>", addr, nal, nnum);
@@ -466,7 +466,7 @@ libcfs_nid2str(lnet_nid_t nid)
 {
         char    *str = libcfs_next_nidstring();
         
-	snprintf(str, PTL_NIDSTR_SIZE, "%llx", (unsigned long long)nid);
+        snprintf(str, PTL_NIDSTR_SIZE, "%llx", (unsigned long long)nid);
 }
 
 __u32
@@ -558,4 +558,11 @@ EXPORT_SYMBOL(libcfs_str2nid);
 EXPORT_SYMBOL(libcfs_id2str);
 EXPORT_SYMBOL(libcfs_str2anynid);
 EXPORT_SYMBOL(libcfs_setnet0alias);
+#else  /* __KERNEL__ */
+void
+libcfs_setnet0alias(int nal)
+{
+        LCONSOLE_ERROR("Liblustre cannot interoperate with old Portals.\n"
+                       "portals_compatibility must be set to 'none'.\n");
+}
 #endif
