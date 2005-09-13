@@ -159,7 +159,7 @@ int mdc_intent_lock(struct obd_export *exp,
                     void *lmm, int lmmsize,
                     struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
-                    ldlm_blocking_callback cb_blocking);
+                    ldlm_blocking_callback cb_blocking, int extra_lock_flags);
 int mdc_enqueue(struct obd_export *exp,
                 int lock_type,
                 struct lookup_intent *it,
@@ -170,7 +170,7 @@ int mdc_enqueue(struct obd_export *exp,
                 int lmmlen,
                 ldlm_completion_callback cb_completion,
                 ldlm_blocking_callback cb_blocking,
-                void *cb_data);
+                void *cb_data, int extra_lock_flags);
 
 /* mdc/mdc_request.c */
 int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp);

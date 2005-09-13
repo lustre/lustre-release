@@ -387,6 +387,62 @@ int ptlrpc_error(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+int ptl_send_rpc_nowait(struct ptlrpc_request *request)
+{
+        int rc;
+        struct ptlrpc_connection *connection;
+        unsigned long flags;
+        ENTRY;
+
+        LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
+
+        if (request->rq_import->imp_obd &&
+            request->rq_import->imp_obd->obd_fail) {
+                CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
+                       request->rq_import->imp_obd->obd_name);
+                /* this prevents us from waiting in ptlrpc_queue_wait */
+                request->rq_err = 1;
+                RETURN(-ENODEV);
+        }
+        
+        connection = request->rq_import->imp_connection;
+
+        request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
+        request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
+        request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
+
+        spin_lock_irqsave (&request->rq_lock, flags);
+        /* If the MD attach succeeds, there _will_ be a reply_in callback */
+        request->rq_receiving_reply = 0;
+        /* Clear any flags that may be present from previous sends. */
+        request->rq_replied = 0;
+        request->rq_err = 0;
+        request->rq_timedout = 0;
+        request->rq_net_err = 0;
+        request->rq_resend = 0;
+        request->rq_restart = 0;
+        spin_unlock_irqrestore (&request->rq_lock, flags);
+
+        ptlrpc_request_addref(request);       /* +1 ref for the SENT callback */
+
+        request->rq_sent = CURRENT_SECONDS;
+        ptlrpc_pinger_sending_on_import(request->rq_import);
+        rc = ptl_send_buf(&request->rq_req_md_h, 
+                          request->rq_reqmsg, request->rq_reqlen,
+                          PTL_NOACK_REQ, &request->rq_req_cbid, 
+                          connection,
+                          request->rq_request_portal,
+                          request->rq_xid);
+        if (rc == 0) {
+                ptlrpc_lprocfs_rpc_sent(request);
+        } else {
+                ptlrpc_req_finished (request);          /* drop callback ref */
+        }
+
+        return rc;
+}
+
+
 int ptl_send_rpc(struct ptlrpc_request *request)
 {
         int rc;

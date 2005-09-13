@@ -154,7 +154,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
-                         ll_mdc_blocking_ast, NULL);
+                         ll_mdc_blocking_ast, NULL, 0);
         if (rc < 0)
                 CERROR("lock enqueue: err: %d\n", rc);
         RETURN(rc);

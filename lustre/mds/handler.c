@@ -671,7 +671,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         return(rc);
 }
 
-static int mds_getattr_name(int offset, struct ptlrpc_request *req,
+static int mds_getattr_name(int offset, struct ptlrpc_request *req, int flags,
                             struct lustre_handle *child_lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
@@ -753,7 +753,8 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                 rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
                                                  &parent_lockh, &dparent,
                                                  LCK_PR, name, namesize,
-                                                 child_lockh, &dchild, LCK_PR);
+                                                 child_lockh, &dchild, LCK_PR,
+                                                 flags);
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
@@ -1238,7 +1239,7 @@ int mds_handle(struct ptlrpc_request *req)
                  * want to cancel.
                  */
                 lockh.cookie = 0;
-                rc = mds_getattr_name(0, req, &lockh);
+                rc = mds_getattr_name(0, req, 0, &lockh);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
                 if (rc == 0 && lockh.cookie)
@@ -1990,7 +1991,9 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         case IT_LOOKUP:
         case IT_READDIR:
                 fixup_handle_for_resent_req(req, lock, &new_lock, &lockh);
-                rep->lock_policy_res2 = mds_getattr_name(offset, req, &lockh);
+                rep->lock_policy_res2 = mds_getattr_name(offset, req,
+                                                     flags & LDLM_INHERIT_FLAGS,
+                                                     &lockh);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
                    - replay: returns 0 & req->status is old status

@@ -101,6 +101,13 @@ typedef enum {
 /* Flags sent in AST lock_flags to be mapped into the receiving lock. */
 #define LDLM_AST_FLAGS         (LDLM_FL_DISCARD_DATA)
 
+/* Immediatelly cancel such locks when they block some other locks. Send
+   cancel notification to original lock holder, but expect no reply. */
+#define LDLM_FL_CANCEL_ON_BLOCK 0x800000
+
+/* Flags flags inherited from parent lock when doing intents. */
+#define LDLM_INHERIT_FLAGS         (LDLM_FL_CANCEL_ON_BLOCK)
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1

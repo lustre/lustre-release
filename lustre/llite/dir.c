@@ -224,7 +224,8 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_PLAIN, &it,
                                  LCK_PR, &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
+                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir,
+                                 0);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)

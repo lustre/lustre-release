@@ -182,6 +182,7 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
         lock->l_flags |= LDLM_FL_LOCAL;
+        lock->l_flags |= *flags & LDLM_INHERIT_FLAGS;
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
                 memcpy(&lock->l_policy_data, policy, sizeof(*policy));
@@ -360,6 +361,7 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
         *flags = reply->lock_flags;
+        lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
@@ -570,7 +572,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 /* Set this flag to prevent others from getting new references*/
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                local_only = (lock->l_flags & LDLM_FL_LOCAL_ONLY);
+                local_only = (lock->l_flags &
+                              (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 ldlm_cancel_callback(lock);
 
@@ -608,9 +611,10 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 if (rc == ESTALE) {
                         char str[PTL_NALFMT_SIZE];
                         CERROR("client/server (nid %s) out of sync"
-                               " -- not fatal\n",
+                               " -- not fatal, flags %d\n",
                                ptlrpc_peernid2str(&req->rq_import->
-                                                  imp_connection->c_peer, str));
+                                                  imp_connection->c_peer, str),
+lock->l_flags);
                 } else if (rc == -ETIMEDOUT) {
                         ptlrpc_req_finished(req);
                         GOTO(restart, rc);

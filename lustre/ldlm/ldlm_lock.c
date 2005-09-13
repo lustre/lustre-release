@@ -835,7 +835,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
 
         /* Some flags from the enqueue want to make it into the AST, via the
          * lock's l_flags. */
-        lock->l_flags |= (*flags & LDLM_AST_DISCARD_DATA);
+        lock->l_flags |= (*flags & (LDLM_AST_DISCARD_DATA|LDLM_INHERIT_FLAGS));
 
         /* This distinction between local lock trees is very important; a client
          * namespace only has information about locks taken by that client, and
@@ -941,6 +941,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list)
                 } else {
                         rc = 0;
                 }
+
                 if (rc == -ERESTART)
                         retval = rc;
                 else if (rc)

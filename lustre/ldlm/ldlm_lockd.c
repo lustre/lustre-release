@@ -429,6 +429,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         int rc = 0, size = sizeof(*body);
+        int instant_cancel = 0;
         ENTRY;
 
         if (flag == LDLM_CB_CANCELING) {
@@ -461,6 +462,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 #endif
 
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                instant_cancel = 1;
+
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
         if (req == NULL) {
@@ -476,14 +480,20 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LDLM_DEBUG(lock, "server preparing blocking AST");
         req->rq_replen = lustre_msg_size(0, NULL);
-
-        if (lock->l_granted_mode == lock->l_req_mode)
+        if (instant_cancel) {
+                ldlm_lock_cancel(lock);
+//                ldlm_reprocess_all(lock->l_resource);
+        } else if (lock->l_granted_mode == lock->l_req_mode)
                 ldlm_add_waiting_lock(lock);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_timeout = ldlm_timeout; /* timeout for initial AST reply */
-        rc = ptlrpc_queue_wait(req);
+        if (unlikely(instant_cancel)) {
+                rc = ptl_send_rpc_nowait(req);
+        } else {
+                rc = ptlrpc_queue_wait(req);
+        }
         if (rc != 0)
                 rc = ldlm_handle_ast_error(lock, req, rc, "blocking");
 
@@ -951,6 +961,10 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         LDLM_DEBUG(lock, "client blocking AST callback handler START");
 
         lock->l_flags |= LDLM_FL_CBPENDING;
+
+        if (lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK)
+                lock->l_flags |= LDLM_FL_CANCEL;
+
         do_ast = (!lock->l_readers && !lock->l_writers);
 
         if (do_ast) {
@@ -1237,13 +1251,15 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
-                ldlm_callback_reply(req, 0);
+                if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK))
+                        ldlm_callback_reply(req, 0);
                 if (ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock))
                         ldlm_handle_bl_callback(ns, &dlm_req->lock_desc, lock);
                 break;
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
-                ldlm_callback_reply(req, 0);
+                if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK))
+                        ldlm_callback_reply(req, 0);
                 ldlm_handle_cp_callback(req, ns, dlm_req, lock);
                 break;
         case LDLM_GL_CALLBACK:
