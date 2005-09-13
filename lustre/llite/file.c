@@ -1271,7 +1271,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf,
 
         EXIT;
 out:
-        ll_audit_log(inode, AUDIT_WRITE, retval);
+        /* ll_audit_log(inode, AUDIT_WRITE, retval); */
 
         ll_tree_unlock(&tree, inode);
         /* serialize with mmap/munmap/mremap */
@@ -1852,13 +1852,16 @@ int ll_inode_revalidate_it(struct dentry *dentry)
                             &oit, 0, &req, ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, rc);
-
+        
         rc = revalidate_it_finish(req, 1, &oit, dentry);
         if (rc) {
                 GOTO(out, rc);
         }
 
         ll_lookup_finish_locks(&oit, dentry);
+        
+        if (!req && (it->it_op & IT_GETATTR))
+                ll_audit_log(inode, AUDIT_STAT, 0);
 
         if (!LLI_HAVE_FLSIZE(inode)) {
                 /* if object not yet allocated, don't validate size */
@@ -1874,6 +1877,7 @@ out:
         ll_intent_release(&oit);
         if (req)
                 ptlrpc_req_finished(req);
+        
         return rc;
 }
 
