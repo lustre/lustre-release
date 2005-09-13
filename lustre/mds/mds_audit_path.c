@@ -590,7 +590,7 @@ out:
                 }
                 list_del_init(&item->link);
                 OBD_FREE(item, sizeof(*item));
-                LASSERT(strlen(*name) < namelen);
+                LASSERT(strlen(*name) < *namelen);
         }
         RETURN(rc);
 }
