@@ -228,6 +228,16 @@ ll_gns_mount_object(struct dentry *dentry, struct vfsmount *mnt)
         }
         cleanup_phase = 2;
 
+        /* make sure that inode size is up-to-date */
+        rc = ll_inode_revalidate_it(mntinfo_fd->f_dentry);
+        if (rc < 0) {
+                CERROR("can't revalidate mount object %*s/%*s, err %d\n",
+                       (int)dentry->d_name.len, dentry->d_name.name,
+                       strlen(sbi->ll_gns_oname), sbi->ll_gns_oname,
+                       rc);
+                GOTO(cleanup, rc);
+        }
+
         if (mntinfo_fd->f_dentry->d_inode->i_size > PAGE_SIZE - 1) {
                 CERROR("mount object %*s/%*s is too big (%Ld)\n",
                        (int)dentry->d_name.len, dentry->d_name.name,
