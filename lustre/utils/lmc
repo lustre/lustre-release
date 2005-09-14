@@ -89,6 +89,7 @@ Object creation command summary:
   --node node_name
   --mds mds_name
   --failover
+  --inactive
   --dev path
   --backdev path
   --fstype ldiskfs|ext3
@@ -238,6 +239,7 @@ lmc_options = [
     ('ost', "Specify the OST name.", PARAM,""),
     ('osdtype', "This could obdfilter or obdecho.", PARAM, "obdfilter"),
     ('failover', "Enable failover support on OSTs or MDS?"),
+    ('inactive', "Enable inactive support on failover MDS?"),
     ('group', "", PARAM),
     ('dev', "Path of the device on local system.", PARAM,""),
     ('backdev', "Path of the device for backing storage on local system.", PARAM,""),
@@ -565,7 +567,7 @@ class GenConfig:
     
     def mds(self, name, uuid, mdd_uuid, group="", lmv=""):
         mds = self.newService("mds", name, uuid)
-        mds.appendChild(self.ref("active", mdd_uuid))
+        #mds.appendChild(self.ref("active", mdd_uuid))
         if group:
             self.addElement(mds, "group", group)
         return mds
@@ -1047,6 +1049,9 @@ def add_mds(gen, lustre, options):
     mdd_name = new_name("MDD_" + mds_name +"_" + node_name)
     mdd_uuid = new_uuid(mdd_name)
 
+    if lmv_name:
+        lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
+    
     mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
         mds_uuid = get_option(options, 'mdsuuid')
@@ -1057,19 +1062,19 @@ def add_mds(gen, lustre, options):
             mds_uuid = new_uuid(mds_name)
         mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
+	if lmv_name:
+	    lmv = findByName(lustre,lmv_name, "lmv")
+	    if not lmv:
+                error('add_mds:', '"' + lmv_name + '"', "lmv element not found.")
+       	    lmv_add_mdc(gen, lustre, lmv, mds_uuid)
+       	    if lmv_uuid:
+                mds.appendChild(gen.ref("lmv", lmv_uuid))
     else:
         mds = lookup(lustre, mds_uuid)
-
-    lmv_uuid = ""
-    if lmv_name:
-        lmv = findByName(lustre, lmv_name, "lmv")
-        if not lmv:
-            error('add_mds:', '"' + lmv_name + '"', "lmv element not found.")
-        lmv_add_mdc(gen, lustre, lmv, mds_uuid)
-        lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
-        if lmv_uuid:
-            mds.appendChild(gen.ref("lmv", lmv_uuid))
-    
+ 
+    if not options.inactive:
+            mds.appendChild(gen.ref("active", mdd_uuid))
+   
     if options.failover:
         mds.setAttribute('failover', "1")
 
