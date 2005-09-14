@@ -121,13 +121,13 @@ extern off64_t
 SYSIO_INTERFACE_NAME(lseek64)(int fd, off64_t offset, int whence)
 {
 	_SYSIO_OFF_T off;
-	off_t	rtn;
+	off64_t	rtn;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
 	SYSIO_INTERFACE_ENTER;
 	off = _sysio_lseek(fd, offset, whence);
 	if (off < 0)
-		SYSIO_INTERFACE_RETURN((off_t )-1, (int )off);
+		SYSIO_INTERFACE_RETURN((off64_t )-1, (int )off);
 	rtn = (off64_t )off;
 	assert(rtn == off);
 	SYSIO_INTERFACE_RETURN(rtn, 0);
