@@ -232,7 +232,6 @@ int        libcfs_str2anynid(lnet_nid_t *nid, char *str);
 char      *libcfs_id2str(lnet_process_id_t id);
 void       libcfs_setnet0alias(int type);
 
-#if !CRAY_PORTALS
 /* how a lustre portals NID encodes net:address */
 #define PTL_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
 #define PTL_NIDNET(nid)       ((__u32)(((nid) >> 32)) & 0xffffffff)
@@ -241,7 +240,6 @@ void       libcfs_setnet0alias(int type);
 #define PTL_NETNUM(net)       ((net) & 0xffff)
 #define PTL_NETNAL(net)       (((net) >> 16) & 0xffff)
 #define PTL_MKNET(nal,num)    ((((__u32)(nal))<<16)|((__u32)(num)))
-#endif
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)

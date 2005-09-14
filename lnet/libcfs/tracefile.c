@@ -174,10 +174,6 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         va_list       ap;
         unsigned long flags;
 
-#ifdef CRAY_PORTALS
-        if (mask == D_PORTALS && !(libcfs_debug & D_PORTALS))
-                return;
-#endif
         if (strchr(file, '/'))
                 file = strrchr(file, '/') + 1;
 

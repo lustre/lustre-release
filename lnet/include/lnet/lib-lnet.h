@@ -9,8 +9,6 @@
 #ifndef __LNET_LIB_LNET_H__
 #define __LNET_LIB_LNET_H__
 
-#include "build_check.h"
-
 #if defined(__linux__)
 #include <lnet/linux/lib-lnet.h>
 #elif defined(__APPLE__)

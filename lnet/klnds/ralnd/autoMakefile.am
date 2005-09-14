@@ -4,10 +4,8 @@
 # See the file COPYING in this distribution
 
 if MODULES
-if !CRAY_PORTALS
 if BUILD_RALND
 modulenet_DATA = kralnd$(KMODEXT)
-endif
 endif
 endif
 

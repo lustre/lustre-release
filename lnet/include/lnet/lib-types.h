@@ -10,8 +10,6 @@
 #ifndef __LNET_LIB_TYPES_H__
 #define __LNET_LIB_TYPES_H__
 
-#include "build_check.h"
-
 #if defined(__linux__)
 #include <lnet/linux/lib-types.h>
 #elif defined(__APPLE__)

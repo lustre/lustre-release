@@ -45,12 +45,6 @@
 #ifdef HAVE_ENDIAN_H
 #include <endian.h>
 #endif
-#if CRAY_PORTALS
-#ifdef REDSTORM
-#define __QK__
-#endif
-#include <lnet/ipmap.h>
-#endif
 
 #include <libcfs/portals_utils.h>
 #include <lnet/api-support.h>
@@ -228,29 +222,6 @@ lnet_parse_time (time_t *t, char *str)
         return (0);
 }
 
-#if CRAY_PORTALS
-void cray_not_compatible_msg(char *cmd) 
-{
-        /* Don't complain verbosely if we've not been passed a command
-         * name to complain about! */
-        if (cmd != NULL) 
-                fprintf(stderr, 
-                        "Command %s not compatible with CRAY portals\n",
-                        cmd);
-}
-
-int g_net_is_set (char *cmd)
-{
-        cray_not_compatible_msg(cmd);
-        return 0;
-}
-
-int g_net_is_compatible (char *cmd, ...)
-{
-        cray_not_compatible_msg(cmd);
-        return 0;
-}
-#else
 int g_net_is_set (char *cmd) 
 {
         if (g_net_set)
@@ -290,7 +261,6 @@ int g_net_is_compatible (char *cmd, ...)
                          libcfs_nal2str(PTL_NETNAL(g_net)));
         return 0;
 }
-#endif
 
 int ptl_initialize(int argc, char **argv) 
 {
@@ -301,10 +271,6 @@ int ptl_initialize(int argc, char **argv)
 
 int jt_ptl_network(int argc, char **argv)
 {
-#if CRAY_PORTALS
-        cray_not_compatible_msg(argv[0]);
-        return -1;
-#else
         struct portal_ioctl_data data;
         __u32                    net = PTL_NIDNET(LNET_NID_ANY);
         int                      set = argc >= 2;
@@ -379,7 +345,6 @@ int jt_ptl_network(int argc, char **argv)
         fprintf(stderr,"%s not a local network (%s on its own to list them all)\n",
                 argv[1], argv[0]);
         return -1;
-#endif
 }
 
 int
@@ -915,10 +880,6 @@ int jt_ptl_ping(int argc, char **argv)
 
 int jt_ptl_mynid(int argc, char **argv)
 {
-#if CRAY_PORTALS
-        fprintf(stderr, "command %s not supported\n", argv[0]);
-        return -1;
-#else
         struct portal_ioctl_data data;
         lnet_nid_t                nid;
         int rc;
@@ -946,7 +907,6 @@ int jt_ptl_mynid(int argc, char **argv)
                 printf("registered my nid %s\n", libcfs_nid2str(nid));
 
         return 0;
-#endif
 }
 
 int

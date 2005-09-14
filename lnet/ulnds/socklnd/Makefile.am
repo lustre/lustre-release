@@ -1,7 +1,5 @@
 if LIBLUSTRE
-if !CRAY_PORTALS
 noinst_LIBRARIES = libtcplnd.a
-endif
 endif
 
 noinst_HEADERS =  pqtimer.h dispatch.h table.h timer.h \

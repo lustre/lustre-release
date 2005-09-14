@@ -1,8 +1,6 @@
 #ifndef __LNET_TYPES_H__
 #define __LNET_TYPES_H__
 
-#include "build_check.h"
-
 #include <libcfs/libcfs.h>
 
 typedef __u64 lnet_nid_t;

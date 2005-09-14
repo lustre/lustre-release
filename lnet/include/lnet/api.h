@@ -1,8 +1,6 @@
 #ifndef __LNET_API_H__
 #define __LNET_API_H__
 
-#include "build_check.h"
-
 #include <lnet/types.h>
 
 int LNetInit(void);

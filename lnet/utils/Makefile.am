@@ -22,9 +22,7 @@ lib_LIBRARIES = libptlctl.a
 libptlctl_a_SOURCES = portals.c nidstrings.c debug.c l_ioctl.c parser.c parser.h
 
 if UTILS
-if !CRAY_PORTALS
 sbin_PROGRAMS += ptlctl routerstat wirecheck 
-endif
 if BUILD_GMLND
 sbin_PROGRAMS += gmlndnid
 endif

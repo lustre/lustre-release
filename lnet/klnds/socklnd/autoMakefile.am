@@ -1,10 +1,8 @@
 if MODULES
 if LINUX
-if !CRAY_PORTALS
 
   modulenet_DATA := ksocklnd$(KMODEXT)
 
-endif # !CRAY_PORTALS
 endif # LINUX
 endif # MODULES
 

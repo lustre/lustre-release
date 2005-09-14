@@ -1,6 +1,5 @@
 #ifndef __LNET_API_SUPPORT_H__
 #define __LNET_API_SUPPORT_H__
-#include "build_check.h"
 
 #ifndef __KERNEL__
 # include <stdio.h>

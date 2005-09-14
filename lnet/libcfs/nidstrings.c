@@ -82,7 +82,6 @@ libcfs_next_nidstring (void)
         return str;
 }
 
-#if !CRAY_PORTALS
 static int  libcfs_lo_str2addr(char *str, int nob, __u32 *addr);
 static void libcfs_ip_addr2str(__u32 addr, char *str);
 static int  libcfs_ip_str2addr(char *str, int nob, __u32 *addr);
@@ -430,75 +429,6 @@ libcfs_str2nid(char *str)
         
         return PTL_MKNID(net, addr);
 }
-#else  /* CRAY_PORTALS */
-int
-libcfs_isknown_nal(int nal)
-{
-        return 1;
-}
-
-char *
-libcfs_nal2modname(int nal)
-{
-        return "cray";
-}
-
-char *
-libcfs_nal2str(int nal)
-{
-        return "cray";
-}
-
-int
-libcfs_str2nal(char *str)
-{
-        return 0;
-}
-
-char *
-libcfs_net2str(__u32 net)
-{
-        return "cray";
-}
-
-char *
-libcfs_nid2str(lnet_nid_t nid)
-{
-        char    *str = libcfs_next_nidstring();
-        
-        snprintf(str, PTL_NIDSTR_SIZE, "%llx", (unsigned long long)nid);
-}
-
-__u32
-libcfs_str2net(char *str)
-{
-        return 0;
-}
-
-lnet_nid_t
-libcfs_str2nid(char *str)
-{
-        long long nid;
-        long long mask;
-        int       n = strlen(str);
-        
-        if (sscanf(str,"%llx%n", &nid, &n) >= 1 &&
-            n == strlen(str))
-                goto out;
-        
-        return LNET_NID_ANY;
-        
- out:
-        /* overflow check in case lnet_nid_t smaller than __u64 */
-        mask = 0;
-        mask = (~mask)<<(sizeof(nid)*8);
-        
-        if ((nid & mask) != 0)
-                return LNET_NID_ANY;
-
-        return nid;
-}
-#endif
 
 char *
 libcfs_id2str(lnet_process_id_t id)
@@ -524,7 +454,6 @@ libcfs_str2anynid(lnet_nid_t *nidp, char *str)
 }
 
 #ifdef __KERNEL__
-#if !CRAY_PORTALS
 void
 libcfs_setnet0alias(int nal)
 {
@@ -545,7 +474,6 @@ libcfs_setnet0alias(int nal)
         mb();
         nf0->nf_nal = 0;
 }
-#endif
 
 EXPORT_SYMBOL(libcfs_isknown_nal);
 EXPORT_SYMBOL(libcfs_nal2modname);

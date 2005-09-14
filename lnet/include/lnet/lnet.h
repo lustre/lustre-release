@@ -4,8 +4,6 @@
 #ifndef __LNET_H__
 #define __LNET_H__
 
-#include "build_check.h"
-
 /*
  * lnet.h
  *

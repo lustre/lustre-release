@@ -3,7 +3,6 @@ my_sources =    api-errno.c api-ni.c config.c \
 		lib-md.c lib-move.c lo.c \
 	        router.c acceptor.c
 
-if !CRAY_PORTALS
 
 if LIBLUSTRE
 noinst_LIBRARIES= liblnet.a
@@ -37,8 +36,6 @@ install_data_hook := fix-kext-ownership
 endif # DARWIN
 
 endif # MODULES
-
-endif # CRAY_PORTALS
 
 install-data-hook: $(install_data_hook)
 

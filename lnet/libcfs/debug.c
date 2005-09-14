@@ -136,16 +136,10 @@ static struct notifier_block lustre_panic_notifier = {
 };
 #endif
 
-#ifdef CRAY_PORTALS
-extern void *lus_portals_debug;
-#endif
 
 int portals_debug_init(unsigned long bufsize)
 {
         cfs_waitq_init(&debug_ctlwq);
-#ifdef CRAY_PORTALS
-        lus_portals_debug = &libcfs_debug_msg;
-#endif
 #ifdef PORTALS_DUMP_ON_PANIC
         /* This is currently disabled because it spews far too much to the
          * console on the rare cases it is ever triggered. */
@@ -159,9 +153,6 @@ int portals_debug_cleanup(void)
         tracefile_exit();
 #ifdef PORTALS_DUMP_ON_PANIC
         notifier_chain_unregister(&panic_notifier_list, &lustre_panic_notifier);
-#endif
-#ifdef CRAY_PORTALS
-        lus_portals_debug = NULL;
 #endif
         return 0;
 }

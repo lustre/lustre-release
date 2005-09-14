@@ -5,9 +5,7 @@
 
 if MODULES
 if BUILD_GMLND
-if !CRAY_PORTALS
 modulenet_DATA = kgmlnd$(KMODEXT)
-endif
 endif
 endif
 
