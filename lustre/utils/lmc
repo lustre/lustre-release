@@ -1049,6 +1049,7 @@ def add_mds(gen, lustre, options):
     mdd_name = new_name("MDD_" + mds_name +"_" + node_name)
     mdd_uuid = new_uuid(mdd_name)
 
+    lmv_uuid=""
     if lmv_name:
         lmv_uuid = name2uuid(lustre, lmv_name, fatal=0)
     
