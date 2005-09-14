@@ -212,7 +212,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 /* This structure is used for both request and reply.
- *  
+ *
  * If we eventually have separate connect data for different types, which we
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
@@ -420,6 +420,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
 #define OBD_BRW_DROP            0x80 /* drop the page after IO */
 #define OBD_BRW_NOQUOTA        0x100
+#define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 

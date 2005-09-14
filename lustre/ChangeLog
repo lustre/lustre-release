@@ -2,6 +2,19 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * bug fixes
 
+Severity   : minor
+Frequency  : liblustre-only, when liblustre client dies unexpectedly or becomes
+             busy
+Bugzilla   : 7311
+Description: Avoid taking extent locks on the liblustre client while doing read
+	     or write.
+Details    : Liblustre client cannot handle ASTs in timely manner, so this
+	     patch tries to avoid granting such locks to it in the first place.
+	     Locks are taken by OST. This is version that was
+	     tested by the customer (Cray), newer version including
+	     compatibility server flags and fixes to glimpse handling is
+	     pending customer testing.
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407

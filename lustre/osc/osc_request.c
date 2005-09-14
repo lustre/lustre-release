@@ -817,6 +817,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg->pg, pg->pg->private, pg->pg->index, pg->off,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
                                  pg_prev->off);
+                LASSERT((pga[0].flag & OBD_BRW_SRVLOCK) ==
+                        (pg->flag & OBD_BRW_SRVLOCK));
 
                 ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
                                       pg->count);
@@ -2099,6 +2101,17 @@ static int osc_set_async_flags(struct obd_export *exp,
         oap = oap_from_cookie(cookie);
         if (IS_ERR(oap))
                 RETURN(PTR_ERR(oap));
+
+        /*
+         * bug 7311: OST-side locking is only supported for liblustre for now
+         * (and liblustre never calls obd_set_async_flags(). I hope.), generic
+         * implementation has to handle case where OST-locked page was picked
+         * up by, e.g., ->writepage().
+         */
+        LASSERT(!(oap->oap_brw_flags & OBD_BRW_SRVLOCK));
+#ifndef __KERNEL__
+        LASSERT(0); /* check that liblustre angels do fear to tread here. */
+#endif
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);
