@@ -551,7 +551,7 @@ mds_audit_id2name(struct obd_device *obd, char **name, int *namelen,
         INIT_LIST_HEAD(&list);
 
         cur_id = *id;
-        if (!id_fid(&cur_id)) {
+        if (!id_ino(&cur_id)) {
                 CERROR("Invalid id!\n");
                 RETURN(-EINVAL);
         }
@@ -563,7 +563,6 @@ next:
         rc = mds_id2name(obd, &cur_id, &list, &parent_id);
         if (rc == -ENOENT) {
                 /* can't reconstruct name from id, turn to audit log */
-                LASSERT(id_fid(&parent_id));
                 cur_id = parent_id;
                 memset(&parent_id, 0, sizeof(parent_id));
 
