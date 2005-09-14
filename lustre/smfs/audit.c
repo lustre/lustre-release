@@ -283,6 +283,15 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
         
         ENTRY;
         
+        if (IS_AUDIT_OP((*mask), AUDIT_SYNC)) {
+                struct audit_priv *priv;
+                
+                priv = smfs_get_plg_priv(S2SMI(sb), SMFS_PLG_AUDIT);
+                if (priv)
+                        audit_notify(priv->audit_ctxt->loc_handle, NULL);
+                //to wait for flush
+                return audit_notify(NULL, NULL);
+        }        
         if (IS_AUDIT_OP((*mask), AUDIT_FS))
                 return smfs_set_fs_audit(sb, mask);
 

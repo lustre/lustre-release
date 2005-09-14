@@ -2128,7 +2128,8 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
                 int i;
                 LASSERT(mds < lmv->desc.ld_tgt_count);
                 
-                if (IS_AUDIT_OP(msg->attr, AUDIT_FS)) {
+                if (IS_AUDIT_OP(msg->attr, AUDIT_FS) ||
+                    IS_AUDIT_OP(msg->attr, AUDIT_SYNC)) {
                         //FS audit, send message to all mds
                         for (i = 0; i < lmv->desc.ld_tgt_count;i++) {
                                 obd_set_info(lmv->tgts[i].ltd_exp, 

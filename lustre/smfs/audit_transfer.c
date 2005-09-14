@@ -60,9 +60,25 @@ static DECLARE_MUTEX(transferd_sem);
 static int transferd_users = 0;
 char *buf = NULL;
 
+static int transferd_check(struct transferd_ctl *tc)
+{
+        int rc = 0;
+        ENTRY;
+        
+        if (test_bit(TRANSFERD_STOP, &tc->tc_flags))
+                RETURN(1);
+        
+        spin_lock(&tc->tc_lock);
+        rc = list_empty(&tc->tc_list) ? 0 : 1;
+        spin_unlock(&tc->tc_lock);
+        
+        RETURN(rc);
+}
+
 int audit_notify(struct llog_handle *llh, void * arg)
 {
         struct transfer_item *ti;
+        struct list_head tmp_list;
         ENTRY;
 
         down(&transferd_sem);
@@ -90,6 +106,13 @@ int audit_notify(struct llog_handle *llh, void * arg)
         spin_unlock(&transferd_tc.tc_lock);
 
         wake_up(&transferd_tc.tc_waitq);
+        
+        if (llh == NULL) /* demand to flush list */
+        {
+                struct l_wait_info lwi = { 0 };
+                l_wait_event(transferd_tc.tc_waitq,
+                             transferd_check(&transferd_tc), &lwi);
+        }
 
         RETURN(0);
 }
@@ -235,6 +258,9 @@ static int audit_transfer(struct transfer_item *ti)
         struct llog_handle *llh = ti->ti_llh;
         int rc = 0;
         ENTRY;
+        
+        if (!llh)
+                RETURN(0);
 
         rc = llog_cat_process(llh, (llog_cb_t)&transfer_cb, ti->id2name);
         if (rc)
@@ -243,21 +269,6 @@ static int audit_transfer(struct transfer_item *ti)
         RETURN(0);
 }
 
-static int transferd_check(struct transferd_ctl *tc)
-{
-        int rc = 0;
-        ENTRY;
-        
-        if (test_bit(TRANSFERD_STOP, &tc->tc_flags))
-                RETURN(1);
-        
-        spin_lock(&tc->tc_lock);
-        rc = list_empty(&tc->tc_list) ? 0 : 1;
-        spin_unlock(&tc->tc_lock);
-        
-        RETURN(rc);
-}
-                
 static int transferd(void *arg)
 {
         struct transferd_ctl *tc = arg;

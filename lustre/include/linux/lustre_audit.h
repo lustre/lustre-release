@@ -54,6 +54,7 @@ typedef enum {
 #define AUDIT_FAIL  AUDIT_MAX
 #define AUDIT_DIR   (AUDIT_MAX + 1)
 #define AUDIT_FS    (AUDIT_MAX + 2)
+#define AUDIT_SYNC  (AUDIT_MAX + 3)
 
 #define AUD_BIT(a) (1 << a)
 
