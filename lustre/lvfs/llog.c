@@ -255,7 +255,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
                                 rc = cb(loghandle, rec, data);
                                 if (rc == LLOG_PROC_BREAK) {
-                                        CWARN("recovery from log: "LPX64":%x"
+                                        CDEBUG(D_HA, "recovery from log: "LPX64":%x"
                                               " stopped\n",
                                               loghandle->lgh_id.lgl_oid,
                                               loghandle->lgh_id.lgl_ogen);
