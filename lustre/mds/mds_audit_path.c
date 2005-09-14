@@ -450,6 +450,8 @@ local_scan_audit_log(struct obd_device *obd, struct parseid_pkg *pkg)
         if (rc != LLOG_PROC_BREAK) {
                 CWARN("process catalog log failed: rc(%d)\n", rc);
                 rc = -ENOENT;
+        } else {
+                rc = 0;
         }
 out:
         pkg->pp_rc = rc;
