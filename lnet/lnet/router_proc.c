@@ -23,6 +23,7 @@
 
 #include "router.h"
 #include <linux/seq_file.h>
+#include <linux/lustre_compat25.h>
 
 #define KPR_PROC_STATS  "sys/lnet/router_stats"
 #define KPR_PROC_ROUTES "sys/lnet/routes"
