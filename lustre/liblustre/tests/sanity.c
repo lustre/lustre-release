@@ -22,6 +22,7 @@
  */
 
 #define _BSD_SOURCE
+#define _FILE_OFFSET_BITS 64
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -745,7 +746,7 @@ int t23(char *name)
         long long ret;
         loff_t off;
 
-        ENTRY("handle lseek > 2GB");
+        ENTRY("handle seek > 2GB");
         snprintf(path, MAX_PATH_LENGTH, "%s/f%s", lustre_path, name);
 
         fd = open(path, O_WRONLY | O_CREAT | O_LARGEFILE, 0666);
@@ -766,18 +767,26 @@ int t23(char *name)
         if (ret != buf_size) {
                 printf("write error for %d != %llubytes @ %llu\n",
                        buf_size, ret, (long long)off);
+                if (ret == -1)
+                        perror("write");
                 return -1;
         }
 
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek error for %llu != %llu\n", ret, (long long)off);
+                printf("seek < 2GB error for %llu != %llu\n",
+                       ret, (long long)off);
+                if (ret == -1)
+                        perror("seek < 2GB");
                 return -1;
         }
 
         ret = lseek(fd, off + buf_size - 2, SEEK_SET);
         if (ret != off + buf_size - 2) {
-                printf("seek error for %llu != %llu\n", ret, (long long)off);
+                printf("seek > 2GB error for %llu != %llu\n",
+                       ret, (long long)off);
+                if (ret == -1)
+                        perror("seek > 2GB");
                 return -1;
         }
 
@@ -785,6 +794,8 @@ int t23(char *name)
         if (ret != off) {
                 printf("relative seek error for %d %llu != %llu\n",
                        -buf_size + 2, ret, off);
+                if (ret == -1)
+                        perror("relative seek");
                 return -1;
         }
 
@@ -792,20 +803,25 @@ int t23(char *name)
         if (ret != off + buf_size) {
                 printf("end seek error for %llu != %llu\n",
                        ret, (long long)off + buf_size);
+                if (ret == -1)
+                        perror("end seek");
                 return -1;
         }
 
         ret = lseek(fd, 0, SEEK_SET);
         if (ret != 0) {
-                printf("seek 0 error for %llu != 0\n",
-                       ret);
+                printf("seek 0 error for %llu != 0\n", ret);
+                if (ret == -1)
+                        perror("seek 0");
                 return -1;
         }
 
         off = 2048ULL * 1024 * 1024, SEEK_SET;
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek error for %llu != %llu\n", ret, off);
+                printf("seek 2GB error for %llu != %llu\n", ret, off);
+                if (ret == -1)
+                        perror("seek 2GB");
                 return -1;
         }
 
