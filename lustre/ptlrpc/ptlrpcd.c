@@ -90,10 +90,10 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
                 pc = &ptlrpcd_recovery_pc;
 
         do_gettimeofday(&req->rq_rpcd_start);
-        ptlrpc_set_add_new_req(pc->pc_set, req);
         req->rq_ptlrpcd_data = pc;
+        ptlrpc_set_add_new_req(pc->pc_set, req);
                 
-        ptlrpcd_wake(req);
+        wake_up(&pc->pc_waitq);
 }
 
 static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
