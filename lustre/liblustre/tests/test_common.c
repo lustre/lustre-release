@@ -376,8 +376,23 @@ int t_fcntl(int fd, int cmd, ...)
 		}
 		break;
 	case F_GETLK:
+#ifdef F_GETLK64
+#if F_GETLK64 != F_GETLK
+        case F_GETLK64:
+#endif
+#endif
 	case F_SETLK:
+#ifdef F_SETLK64
+#if F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#endif
 	case F_SETLKW:
+#ifdef F_SETLKW64
+#if F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#endif
 		lock = va_arg(ap, struct flock *);
 		va_end(ap);
 		rc = fcntl(fd, cmd, lock);

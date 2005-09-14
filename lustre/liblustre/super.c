@@ -29,7 +29,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 #ifndef __CYGWIN__
 # include <sys/statvfs.h>
@@ -1438,12 +1438,27 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
                 *rtn = 0;
                 return 0;
         case F_GETLK:
+#ifdef F_GETLK64
+#if F_GETLK64 != F_GETLK
+        case F_GETLK64:
+#endif
+#endif
                 flock = va_arg(ap, struct flock *);
                 err = llu_fcntl_getlk(ino, flock);
                 *rtn = err? -1: 0;
                 return err;
         case F_SETLK:
+#ifdef F_SETLKW64
+#if F_SETLKW64 != F_SETLKW
+        case F_SETLKW64:
+#endif
+#endif
         case F_SETLKW:
+#ifdef F_SETLK64
+#if F_SETLK64 != F_SETLK
+        case F_SETLK64:
+#endif
+#endif
                 flock = va_arg(ap, struct flock *);
                 err = llu_fcntl_setlk(ino, cmd, flock);
                 *rtn = err? -1: 0;
