@@ -160,10 +160,10 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                          int *flags, struct list_head *work_list,
-                         struct list_head **insertp, int count)
+                         struct list_head **insertp)
 {
         struct list_head *tmp;
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock = req;
         ldlm_mode_t req_mode = req->l_req_mode;
         int compat = 1;
         ENTRY;
@@ -233,8 +233,10 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 list_for_each(tmp, queue) {
                         lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-                        if (req == lock)
+                        if (req == lock) {
+                                tmp = tmp->next;
                                 break;
+                        }
 
                         if (lock->l_req_mode == LCK_GROUP) {
                                 if (*flags & LDLM_FL_BLOCK_NOWAIT)
@@ -273,13 +275,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 /* Ensure we scan entire list if insertp is requested so that
                  * the new request will be appended to the end of the list. */
-                if (!((insertp == NULL) || (tmp == queue))) {
-                        unlock_res(req->l_resource);
-                        ldlm_lock_dump(D_ERROR, req, 0);
-                }
-                LASSERTF((insertp == NULL) || (tmp == queue), "insertp = %p, "
-                         "tmp = %p, queue = %p, count = %d\n", insertp, tmp,
-                         queue, count);
+                LASSERTF((insertp == NULL) || (tmp == queue) || (req == lock));
         }
 
         if (insertp)
@@ -303,7 +299,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
         struct list_head *insertp = NULL;
-        int rc, rc2, count = 0;
+        int rc, rc2;
         ENTRY;
 
         LASSERT(list_empty(&res->lr_converting));
@@ -316,10 +312,10 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * ever changes we want to find out. */
                 LASSERT(*flags == 0);
                 rc = ldlm_extent_compat_queue(&res->lr_granted, lock,
-                                              flags, NULL, NULL, -1);
+                                              flags, NULL, NULL);
                 if (rc == 1) {
                         rc = ldlm_extent_compat_queue(&res->lr_waiting, lock,
-                                                      flags, NULL, NULL, -2);
+                                                      flags, NULL, NULL);
                 }
                 if (rc == 0)
                         RETURN(LDLM_ITER_STOP);
@@ -331,9 +327,8 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
  restart:
-        count++;
         rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, &rpc_list,
-                                      NULL, count);
+                                      NULL);
         if (rc < 0)
                 GOTO(destroylock, rc);
         if (rc == 2)
@@ -342,7 +337,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         /* Traverse the waiting list in case there are other conflicting
          * lock requests ahead of us in the queue and send blocking ASTs */
         rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, &rpc_list,
-                                       &insertp, count);
+                                       &insertp);
         if (rc2 < 0)
                 GOTO(destroylock, rc);
         if (rc + rc2 == 2) {
