@@ -457,7 +457,8 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-static int ost_glimpse_callback(struct ldlm_lock *lock, void *reqp)
+/* ->l_glimpse_ast() for DLM extent locks acquired on the server-side. */
+static int ost_glimpse_ast(struct ldlm_lock *lock, void *reqp)
 {
         return -ELDLM_NO_LOCK_DATA;
 }
@@ -485,14 +486,14 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
                 RETURN(0);
 
-        policy.l_extent.start = nb[0].offset & ~CFS_PAGE_MASK;
+        policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
         RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
                                 res_id, LDLM_EXTENT, &policy, mode, &flags,
                                 ost_blocking_ast, ldlm_completion_ast,
-                                ost_glimpse_callback, NULL, NULL, 0, NULL, lh));
+                                ost_glimpse_ast, NULL, NULL, 0, NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,

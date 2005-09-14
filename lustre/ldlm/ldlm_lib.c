@@ -378,6 +378,7 @@ int client_obd_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
+/* ->o_connect() method for client side (OSC and MDC) */
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)

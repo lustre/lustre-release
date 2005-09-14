@@ -619,8 +619,12 @@ struct obd_ops {
         int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
                           int priority);
         int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
+        /* connect to the target device with given connection
+         * data. @ocd->ocd_connect_flags is modified to reflect flags actually
+         * granted by the target, which are guaranteed to be a subset of flags
+         * asked for. If @ocd == NULL, use default parameters. */
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, struct obd_connect_data *);
+                         struct obd_uuid *cluuid, struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,

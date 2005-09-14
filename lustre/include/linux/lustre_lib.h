@@ -719,5 +719,11 @@ do {                                                                           \
         _ret__;                                                         \
 })
 
+#ifdef __KERNEL__
+#define LIBLUSTRE_CLIENT (0)
+#else
+#define LIBLUSTRE_CLIENT (1)
+#endif
+
 #endif /* _LUSTRE_LIB_H */
 

@@ -2,19 +2,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * bug fixes
 
-Severity   : minor
-Frequency  : liblustre-only, when liblustre client dies unexpectedly or becomes
-             busy
-Bugzilla   : 7311
-Description: Avoid taking extent locks on the liblustre client while doing read
-	     or write.
-Details    : Liblustre client cannot handle ASTs in timely manner, so this
-	     patch tries to avoid granting such locks to it in the first place.
-	     Locks are taken by OST. This is version that was
-	     tested by the customer (Cray), newer version including
-	     compatibility server flags and fixes to glimpse handling is
-	     pending customer testing.
-
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -83,7 +70,7 @@ Severity   : minor
 Frequency  : rare (only HPUX clients mounting unsupported re-exported NFS vol)
 Bugzilla   : 5781
 Description: an HPUX NFS client would get -EACCESS when ftruncate()ing a newly
-             created file with mode 000
+	     created file with mode 000
 Details    : the Linux NFS server relies on an MDS_OPEN_OWNEROVERRIDE hack to
 	     allow an ftruncate() as a non-root user to a file with mode 000.
 	     Lustre now respects this flag to disable mode checks when
@@ -91,14 +78,24 @@ Details    : the Linux NFS server relies on an MDS_OPEN_OWNEROVERRIDE hack to
 
 Severity   : minor
 Frequency  : liblustre-only, when liblustre client dies unexpectedly or becomes
-             busy
+	     busy
 Bugzilla   : 7313
 Description: Revoking locks from clients that went dead or catatonic might take
-             a lot of time.
+	     a lot of time.
 Details    : New lock flags FL_CANCEL_ON_BLOCK used by liblustre makes
-             cancellation of such locks instant on servers without waiting for
-             any reply from clients. Clients drops these locks when cancel
-             notification from server is received without replying.
+	     cancellation of such locks instant on servers without waiting for
+	     any reply from clients. Clients drops these locks when cancel
+	     notification from server is received without replying.
+
+Severity   : minor
+Frequency  : liblustre-only, when liblustre client dies or becomes busy
+Bugzilla   : 7311
+Description: Doing ls on Linux clients can take a long time with active
+	     liblustre clients
+Details    : Liblustre client cannot handle ASTs in timely manner, so avoid
+	     granting such locks to it in the first place if possible.  Locks
+	     are taken by proxy on the OST during the read or write and
+	     dropped immediately afterward.
 
 ------------------------------------------------------------------------------
 

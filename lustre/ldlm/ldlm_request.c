@@ -401,7 +401,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }
 
-        if ((*flags) & LDLM_FL_AST_SENT) {
+        if ((*flags) & LDLM_FL_AST_SENT ||
+            /* Cancel extent locks as soon as possible on a liblustre client,
+             * because it cannot handle asynchronous ASTs robustly (see
+             * bug 7311). */
+            (LIBLUSTRE_CLIENT && type == LDLM_EXTENT)) {
                 l_lock(&ns->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 l_unlock(&ns->ns_lock);

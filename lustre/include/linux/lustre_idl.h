@@ -45,6 +45,8 @@
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
+#elif defined(_AIX)
+# include <inttypes.h>
 #else
 # include <stdint.h>
 #endif
@@ -205,10 +207,11 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 
 /* Connect flags */
 
-#define OBD_CONNECT_RDONLY 0x1
+#define OBD_CONNECT_RDONLY       0x1ULL
+#define OBD_CONNECT_SRVLOCK     0x10ULL /* server takes locks for client */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY)
-#define OST_CONNECT_SUPPORTED  (0)
+#define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
 
 /* This structure is used for both request and reply.
