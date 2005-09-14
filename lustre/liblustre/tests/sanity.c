@@ -758,7 +758,7 @@ int t23(char *name)
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
                 printf("seek error for initial %llu != %llu\n",
-                       (long long)off, ret);
+                       ret, (long long)off);
                 return -1;
         }
 
@@ -771,30 +771,45 @@ int t23(char *name)
 
         ret = lseek(fd, off, SEEK_SET);
         if (ret != off) {
-                printf("seek error for %llu != %llu\n", (long long)off, ret);
+                printf("seek error for %llu != %llu\n", ret, (long long)off);
                 return -1;
         }
 
         ret = lseek(fd, off + buf_size - 2, SEEK_SET);
         if (ret != off + buf_size - 2) {
-                printf("seek error for %llu != %llu\n", (long long)off, ret);
+                printf("seek error for %llu != %llu\n", ret, (long long)off);
                 return -1;
         }
 
         ret = lseek(fd, -buf_size + 2, SEEK_CUR);
         if (ret != off) {
-                printf("relative seek error for %d != %llu\n",
-                       -buf_size + 2, off);
+                printf("relative seek error for %d %llu != %llu\n",
+                       -buf_size + 2, ret, off);
                 return -1;
         }
 
         ret = lseek(fd, 0, SEEK_END);
         if (ret != off + buf_size) {
                 printf("end seek error for %llu != %llu\n",
-                       (long long)off + buf_size, ret);
+                       ret, (long long)off + buf_size);
                 return -1;
         }
 
+        ret = lseek(fd, 0, SEEK_SET);
+        if (ret != 0) {
+                printf("seek 0 error for %llu != 0\n",
+                       ret);
+                return -1;
+        }
+
+        off = 2048ULL * 1024 * 1024, SEEK_SET;
+        ret = lseek(fd, off, SEEK_SET);
+        if (ret != off) {
+                printf("seek error for %llu != %llu\n", ret, off);
+                return -1;
+        }
+
+        close(fd);
         LEAVE();
 }
 
