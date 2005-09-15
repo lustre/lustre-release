@@ -2156,7 +2156,39 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
         }
         EXIT;
 cleanup:
-        if (rc)
+        if (rc == 0) {
+                struct dentry *chkdentry;
+                chkdentry = ll_lookup_one_len(rec->ur_name, dparent,
+                                              rec->ur_namelen - 1);
+                if (!IS_ERR(chkdentry)) {
+                        if (chkdentry->d_inode) {
+                                /* it was cross-ref before */
+                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%p) -> %lu/%u, was %p\n",
+                                       dparent->d_inode->i_ino,
+                                       dparent->d_inode->i_generation,
+                                       chkdentry->d_name.len,
+                                       chkdentry->d_name.name,
+                                       atomic_read(&chkdentry->d_count),
+                                       chkdentry, chkdentry->d_inode->i_ino,
+                                       chkdentry->d_inode->i_generation, dchild);
+                        } else if (chkdentry->d_flags & DCACHE_CROSS_REF) {
+                                /* it's still in dcache? on a platter?! */
+                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%p) -> %u/%u, was %p\n",
+                                       dparent->d_inode->i_ino,
+                                       dparent->d_inode->i_generation,
+                                       chkdentry->d_name.len,
+                                       chkdentry->d_name.name,
+                                       atomic_read(&chkdentry->d_count),
+                                       chkdentry, chkdentry->d_inum,
+                                       chkdentry->d_generation, dchild);
+                        } else {
+                                /* didn't find removed dir entry - fine! */
+                        }
+                        l_dput(chkdentry);
+                } else
+                        CDEBUG(D_ERROR, "child lookup error %ld\n",
+                               PTR_ERR(chkdentry));
+        } else if (rc != -EISDIR)
                 CERROR("can't unlink inode "DLID4": %d\n",
                        OLID4(&op_data->id1), rc);
         req->rq_status = rc;
