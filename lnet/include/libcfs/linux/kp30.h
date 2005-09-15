@@ -44,6 +44,7 @@
 # endif
 # if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #  include <linux/kallsyms.h>
+#  include <linux/moduleparam.h>
 # endif
 
 #include <libcfs/linux/portals_compat25.h>
