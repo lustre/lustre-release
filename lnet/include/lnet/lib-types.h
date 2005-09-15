@@ -120,10 +120,6 @@ typedef struct {
 #define PTL_PROTO_TCP_VERSION_MAJOR        1
 #define PTL_PROTO_TCP_VERSION_MINOR        0
 
-/* limit on the number of entries in discontiguous MDs */
-#define PTL_MTU        (1<<20)
-#define PTL_MD_MAX_IOV 256
-
 /* Acceptor connection request */
 typedef struct {
         __u32       acr_magic;                  /* PTL_ACCEPTOR_PROTO_MAGIC */
