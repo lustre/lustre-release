@@ -78,7 +78,6 @@ static int transferd_check(struct transferd_ctl *tc)
 int audit_notify(struct llog_handle *llh, void * arg)
 {
         struct transfer_item *ti;
-        struct list_head tmp_list;
         ENTRY;
 
         down(&transferd_sem);

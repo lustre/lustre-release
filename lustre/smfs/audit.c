@@ -367,7 +367,8 @@ static int smfs_audit_post_op(hook_op code, struct inode * inode, void * msg,
         if (rc != 0) {
                 CERROR("Error adding audit record: %d\n", rc);
                 rc= -EINVAL;
-        } else {
+        /* delay notify for create op */
+        } else if (!(code == HOOK_CREATE && ret == 0)) { 
                 audit_notify(priv->audit_ctxt->loc_handle, priv->au_id2name);
         }
         
