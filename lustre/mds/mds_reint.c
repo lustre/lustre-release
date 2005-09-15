@@ -2163,23 +2163,25 @@ cleanup:
                 if (!IS_ERR(chkdentry)) {
                         if (chkdentry->d_inode) {
                                 /* it was cross-ref before */
-                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%p) -> %lu/%u, was %p\n",
+                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%x,%p) -> %lu/%u, was %p\n",
                                        dparent->d_inode->i_ino,
                                        dparent->d_inode->i_generation,
                                        chkdentry->d_name.len,
                                        chkdentry->d_name.name,
                                        atomic_read(&chkdentry->d_count),
-                                       chkdentry, chkdentry->d_inode->i_ino,
+                                       chkdentry->d_flags, chkdentry,
+                                       chkdentry->d_inode->i_ino,
                                        chkdentry->d_inode->i_generation, dchild);
                         } else if (chkdentry->d_flags & DCACHE_CROSS_REF) {
                                 /* it's still in dcache? on a platter?! */
-                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%p) -> %u/%u, was %p\n",
+                                CDEBUG(D_ERROR, "%lu/%u:%*s(%d,%x,%p) -> %u/%u, was %p\n",
                                        dparent->d_inode->i_ino,
                                        dparent->d_inode->i_generation,
                                        chkdentry->d_name.len,
                                        chkdentry->d_name.name,
                                        atomic_read(&chkdentry->d_count),
-                                       chkdentry, chkdentry->d_inum,
+                                       chkdentry->d_flags, chkdentry,
+                                       chkdentry->d_inum,
                                        chkdentry->d_generation, dchild);
                         } else {
                                 /* didn't find removed dir entry - fine! */

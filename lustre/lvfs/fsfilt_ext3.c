@@ -1261,6 +1261,53 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
         return 0;
 }
 
+static inline int ext3_match (int len, const char * const name,
+			      struct ext3_dir_entry_2 * de)
+{
+	if (len != de->name_len)
+		return 0;
+	if (!de->inode)
+		return 0;
+	return !memcmp(name, de->name, len);
+}
+static int fsfilt_ext3_scan_for_entry(struct dentry *dentry)
+{
+        struct inode *dir = dentry->d_parent->d_inode;
+        int blksize = dir->i_sb->s_blocksize;
+        int blk = 0, err, num = 0, de_len;
+	struct ext3_dir_entry_2 * de;
+        int count = dir->i_size;
+        struct qstr *name;
+        char *dlimit;
+
+        name = &dentry->d_name;
+        while (count > 0) {
+                struct buffer_head *bh;
+
+                bh = ext3_bread(NULL, dir, blk++, 0, &err);
+                if (bh == NULL) {
+                        CERROR("error read dir %lu+%d: %d\n",
+                               dir->i_ino, blk, err);
+                        break;
+                }
+
+                dlimit = bh->b_data + blksize;
+                de = (struct ext3_dir_entry_2 *) bh->b_data;
+                while ((char *) de < dlimit) {
+                        if ((char *) de + name->len <= dlimit &&
+                                        ext3_match(name->len, name->name, de))
+                                num++;
+                        de_len = le16_to_cpu(de->rec_len);
+                        de = (struct ext3_dir_entry_2 *) ((char *) de + de_len);
+                }
+
+                count -= blksize;
+                brelse(bh);
+        }
+
+        return num;
+}
+
 extern int ext3_add_dir_entry(struct dentry *dentry);
 extern int ext3_del_dir_entry(struct dentry *dentry);
 
@@ -1273,6 +1320,7 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
                                      unsigned long fid)
 {
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
+        struct mds_obd *mdsobd = &obd->u.mds;
         struct dentry *dentry;
         int err;
         LASSERT(ino != 0);
@@ -1297,6 +1345,14 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
          * it cross-ref by subsequent lookups */
         d_drop(dentry);
 
+        if (parent->d_inode->i_ino == id_ino(&mdsobd->mds_rootid)) {
+                err = fsfilt_ext3_scan_for_entry(dentry);
+                if (err != 0)
+                        CDEBUG(D_ERROR, "existing %d entry %*s in %lu/%u\n",
+                               err, dentry->d_name.len, dentry->d_name.name,
+                               parent->d_inode->i_ino, parent->d_inode->i_generation);
+        }
+
         dentry->d_flags |= DCACHE_CROSS_REF;
         dentry->d_inum = ino;
         dentry->d_mdsnum = mds;
@@ -1319,10 +1375,19 @@ static int fsfilt_ext3_del_dir_entry(struct obd_device *obd,
                                  struct dentry *dentry)
 {
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
+        struct inode *dir = dentry->d_parent->d_inode;
+        struct mds_obd *mdsobd = &obd->u.mds;
         int err;
         lock_24kernel();
         err = ext3_del_dir_entry(dentry);
         unlock_24kernel();
+        if (!err && dir->i_ino == id_ino(&mdsobd->mds_rootid)) {
+                int num = fsfilt_ext3_scan_for_entry(dentry);
+                if (num != 0)
+                        CDEBUG(D_ERROR, "existing %d entry %*s in %lu/%u\n",
+                               err, dentry->d_name.len, dentry->d_name.name,
+                               dir->i_ino, dir->i_generation);
+        }
         if (err == 0)
                 d_drop(dentry);
         return err;
