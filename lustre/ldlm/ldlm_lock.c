@@ -291,8 +291,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         RETURN(lock);
 }
 
-void unlock_bitlock(struct ldlm_lock *lock);
-
 int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
                               struct ldlm_res_id new_resid)
 {

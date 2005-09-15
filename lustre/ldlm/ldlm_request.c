@@ -424,11 +424,13 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         if (!is_replay) {
                 rc = ldlm_lock_enqueue(ns, &lock, NULL, flags);
                 if (lock->l_completion_ast != NULL) {
+                        /* since the lock made it to the server at this point
+                         * it's the completion AST's responsibilty to cleanup 
+                         * the lock if the completion processing fails since
+                         * it's no longer a simple local lock cancel. */
                         int err = lock->l_completion_ast(lock, *flags, NULL);
                         if (!rc)
                                 rc = err;
-                        if (rc)
-                                cleanup_phase = 2;
                 }
         }
 

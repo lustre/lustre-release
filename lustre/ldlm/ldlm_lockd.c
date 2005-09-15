@@ -1054,6 +1054,7 @@ static int ldlm_msg_check_version(struct lustre_msg *msg)
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
         case LDLM_GL_CALLBACK:
+        case LDLM_FLK_DEADLOCK_CHK:
                 rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1572,6 +1573,7 @@ void __exit ldlm_exit(void)
 
 /* ldlm_flock.c */
 EXPORT_SYMBOL(ldlm_flock_completion_ast);
+EXPORT_SYMBOL(ldlm_handle_flock_deadlock_check);
 
 /* ldlm_extent.c */
 EXPORT_SYMBOL(ldlm_extent_shift_kms);

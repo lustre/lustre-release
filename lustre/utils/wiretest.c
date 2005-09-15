@@ -166,7 +166,9 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)LDLM_BL_CALLBACK);
         LASSERTF(LDLM_CP_CALLBACK == 105, " found %llu\n",
                  (unsigned long long)LDLM_CP_CALLBACK);
-        LASSERTF(LDLM_LAST_OPC == 107, " found %llu\n",
+        LASSERTF(LDLM_FLK_DEADLOCK_CHK == 107, " found %llu\n",
+                 (unsigned long long)LDLM_FLK_DEADLOCK_CHK);
+        LASSERTF(LDLM_LAST_OPC == 108, " found %llu\n",
                  (unsigned long long)LDLM_LAST_OPC);
         LASSERTF(LCK_EX == 1, " found %llu\n",
                  (unsigned long long)LCK_EX);
@@ -922,14 +924,18 @@ void lustre_assert_wire_constants(void)
                  (unsigned long long)(int)offsetof(struct ldlm_flock, pid));
         LASSERTF((int)sizeof(((struct ldlm_flock *)0)->pid) == 8, " found %llu\n",
                  (unsigned long long)(int)sizeof(((struct ldlm_flock *)0)->pid));
-        LASSERTF((int)offsetof(struct ldlm_flock, blocking_pid) == 24, " found %llu\n",
+        LASSERTF((int)offsetof(struct ldlm_flock, nid) == 24, " found %llu\n",
+                 (unsigned long long)(int)offsetof(struct ldlm_flock, nid));
+        LASSERTF((int)sizeof(((struct ldlm_flock *)0)->nid) == 8, " found %llu\n",
+                 (unsigned long long)(int)sizeof(((struct ldlm_flock *)0)->nid));
+        LASSERTF((int)offsetof(struct ldlm_flock, blocking_pid) == 32, " found %llu\n",
                  (unsigned long long)(int)offsetof(struct ldlm_flock, blocking_pid));
         LASSERTF((int)sizeof(((struct ldlm_flock *)0)->blocking_pid) == 8, " found %llu\n",
                  (unsigned long long)(int)sizeof(((struct ldlm_flock *)0)->blocking_pid));
-        LASSERTF((int)offsetof(struct ldlm_flock, blocking_export) == 32, " found %llu\n",
-                 (unsigned long long)(int)offsetof(struct ldlm_flock, blocking_export));
-        LASSERTF((int)sizeof(((struct ldlm_flock *)0)->blocking_export) == 8, " found %llu\n",
-                 (unsigned long long)(int)sizeof(((struct ldlm_flock *)0)->blocking_export));
+        LASSERTF((int)offsetof(struct ldlm_flock, blocking_nid) == 40, " found %llu\n",
+                 (unsigned long long)(int)offsetof(struct ldlm_flock, blocking_nid));
+        LASSERTF((int)sizeof(((struct ldlm_flock *)0)->blocking_nid) == 8, " found %llu\n",
+                 (unsigned long long)(int)sizeof(((struct ldlm_flock *)0)->blocking_nid));
 
         /* Checks for struct ldlm_intent */
         LASSERTF((int)sizeof(struct ldlm_intent) == 8, " found %llu\n",

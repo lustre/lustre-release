@@ -849,7 +849,9 @@ void lustre_swab_ldlm_policy_data(ldlm_policy_data_t *d)
         __swab64s(&d->l_flock.start);
         __swab64s(&d->l_flock.end);
         __swab64s(&d->l_flock.pid);
+        __swab64s(&d->l_flock.nid);
         __swab64s(&d->l_flock.blocking_pid);
+        __swab64s(&d->l_flock.blocking_nid);
 }
 
 void lustre_swab_ldlm_intent(struct ldlm_intent *i)

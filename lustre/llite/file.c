@@ -34,6 +34,7 @@
 #endif
 #include <linux/obd_lov.h>
 #include <linux/lustre_audit.h>
+#include <linux/lustre_net.h>
 #include "llite_internal.h"
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
@@ -1724,33 +1725,35 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         RETURN(rc);
 }
 
-int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
+int ll_file_flock(struct file *file, int cmd, struct file_lock *fl)
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_inode_info *li = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct obd_device *obddev;
-        struct ldlm_res_id res_id =
-                { .name = {id_fid(&li->lli_id), id_group(&li->lli_id), LDLM_FLOCK} };
+        struct obd_device *obd = md_get_real_obd(sbi->ll_md_exp, &li->lli_id);
+        struct ldlm_res_id res_id = { .name = {id_fid(&li->lli_id),
+                                      id_group(&li->lli_id), LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
+        struct ptlrpc_connection *conn;
+        ptl_process_id_t ptlpid;
         ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
         int flags = 0;
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu file_lock=%p\n",
-               inode->i_ino, file_lock);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu cmd=%d file_lock=%p\n",
+               inode->i_ino, cmd, fl);
 
-        flock.l_flock.pid = file_lock->fl_pid;
-        flock.l_flock.start = file_lock->fl_start;
-        flock.l_flock.end = file_lock->fl_end;
+        if (!(fl->fl_flags & FL_POSIX))
+                RETURN(-ENOSYS);
 
-        switch (file_lock->fl_type) {
+        switch (fl->fl_type) {
         case F_RDLCK:
                 mode = LCK_PR;
                 break;
         case F_UNLCK:
+
                 /* An unlock request may or may not have any relation to
                  * existing locks so we may not be able to pass a lock handle
                  * via a normal ldlm_lock_cancel() request. The request may even
@@ -1765,22 +1768,21 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 mode = LCK_PW;
                 break;
         default:
-                CERROR("unknown fcntl lock type: %d\n", file_lock->fl_type);
-                LBUG();
+                CERROR("unknown fcntl lock type: %d\n", fl->fl_type);
+                RETURN(-EINVAL);
         }
 
         switch (cmd) {
-        case F_SETLKW:
-#ifdef F_SETLKW64
-        case F_SETLKW64:
-#endif
-                flags = 0;
-                break;
         case F_SETLK:
 #ifdef F_SETLK64
         case F_SETLK64:
 #endif
-                flags = LDLM_FL_BLOCK_NOWAIT;
+                flags |= LDLM_FL_BLOCK_NOWAIT;
+                break;
+        case F_SETLKW:
+#ifdef F_SETLKW64
+        case F_SETLKW64:
+#endif
                 break;
         case F_GETLK:
 #ifdef F_GETLK64
@@ -1789,23 +1791,88 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                 flags = LDLM_FL_TEST_LOCK;
                 /* Save the old mode so that if the mode in the lock changes we
                  * can decrement the appropriate reader or writer refcount. */
-                file_lock->fl_type = mode;
+                fl->fl_type = mode;
                 break;
         default:
                 CERROR("unknown fcntl lock command: %d\n", cmd);
-                LBUG();
+                RETURN(-EINVAL);
         }
+
+        /* Since we're called on every close to remove any oustanding Posix
+         * flocks owned by the process it's worth a little effort to avoid
+         * the RPCs if there are no flocks on this file from this node. */
+        if (mode == LCK_NL && fl->fl_start == 0 && fl->fl_end >= OFFSET_MAX) {
+                struct ldlm_resource *res;
+
+                res = ldlm_resource_get(obd->obd_namespace, NULL,
+                                        res_id, LDLM_FLOCK, 0);
+                if (res == NULL)
+                        RETURN(0);
+
+                ldlm_resource_putref(res);
+        }
+
+        conn = class_exp2cliimp(obd->obd_self_export)->imp_connection;
+        if (!conn || !conn->c_peer.peer_ni) 
+                RETURN(-ENOTCONN);
+                
+        rc = PtlGetId(conn->c_peer.peer_ni->pni_ni_h, &ptlpid);
+        if (rc != PTL_OK)
+                RETURN(-ENOTCONN);
+
+        flock.l_flock.start = fl->fl_start;
+        flock.l_flock.end = fl->fl_end;
+        /* XXX - ptlpid.pid is currently coming back a constant; i.e. 12345. */
+        flock.l_flock.pid = fl->fl_pid;
+        flock.l_flock.nid = ptlpid.nid;
+        flock.l_flock.blocking_pid = 0;
+        flock.l_flock.blocking_nid = 0;
 
         CDEBUG(D_DLMTRACE, "inode=%lu, pid="LPU64", flags=%#x, mode=%u, "
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        obddev = md_get_real_obd(sbi->ll_md_exp, &li->lli_id);
-        rc = ldlm_cli_enqueue(obddev->obd_self_export, NULL,
-                              obddev->obd_namespace,
+        rc = ldlm_cli_enqueue(obd->obd_self_export, NULL, obd->obd_namespace,
                               res_id, LDLM_FLOCK, &flock, mode, &flags,
-                              NULL, ldlm_flock_completion_ast, NULL, file_lock,
+                              NULL, ldlm_flock_completion_ast, NULL,
+                              md_get_real_obd(sbi->ll_md_exp, &sbi->ll_rootid),
                               NULL, 0, NULL, &lockh);
+
+        if (flags & LDLM_FL_TEST_LOCK) {
+                struct ldlm_lock *lock = ldlm_handle2lock(&lockh);
+
+                fl->fl_start = lock->l_policy_data.l_flock.start;
+                fl->fl_end = lock->l_policy_data.l_flock.end;
+                fl->fl_pid = lock->l_policy_data.l_flock.pid;
+
+                switch (lock->l_granted_mode) {
+                case LCK_PR:
+                        fl->fl_type = F_RDLCK;
+                        break;
+                case LCK_PW:
+                        fl->fl_type = F_WRLCK;
+                        break;
+                case LCK_NL:
+                        fl->fl_type = F_UNLCK;
+                        break;
+                default:
+                        CERROR("unexpected lock type: %d returned from server."
+                               "\n", lock->l_granted_mode);
+                        rc = -EINVAL;
+                        break;
+                }
+
+                /* offset the addref() done by ldlm_handle2lock() above. */
+                LDLM_LOCK_PUT(lock);
+                ldlm_lock_decref(&lockh, mode);
+                ldlm_cli_cancel(&lockh);
+
+                /* the LDLM_CBPENDING flag was set in the lock by the
+                 * completion AST so the ldlm_lock_decref() call above
+                 * scheduled a blocking AST which will do the final
+                 * lock put on the lock. */
+        }
+
         RETURN(rc);
 }
 

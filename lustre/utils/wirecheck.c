@@ -395,8 +395,9 @@ check_ldlm_flock(void)
         CHECK_MEMBER(ldlm_flock, start);
         CHECK_MEMBER(ldlm_flock, end);
         CHECK_MEMBER(ldlm_flock, pid);
+        CHECK_MEMBER(ldlm_flock, nid);
         CHECK_MEMBER(ldlm_flock, blocking_pid);
-        CHECK_MEMBER(ldlm_flock, blocking_export);
+        CHECK_MEMBER(ldlm_flock, blocking_nid);
 }
 
 void
@@ -848,6 +849,7 @@ main(int argc, char **argv)
         CHECK_VALUE(LDLM_CANCEL);
         CHECK_VALUE(LDLM_BL_CALLBACK);
         CHECK_VALUE(LDLM_CP_CALLBACK);
+        CHECK_VALUE(LDLM_FLK_DEADLOCK_CHK);
         CHECK_VALUE(LDLM_LAST_OPC);
 
         CHECK_VALUE(LCK_EX);

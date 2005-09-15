@@ -901,12 +901,13 @@ struct lmv_desc {
  */
 /* opcodes -- MUST be distinct from OST/MDS opcodes */
 typedef enum {
-        LDLM_ENQUEUE     = 101,
-        LDLM_CONVERT     = 102,
-        LDLM_CANCEL      = 103,
-        LDLM_BL_CALLBACK = 104,
-        LDLM_CP_CALLBACK = 105,
-        LDLM_GL_CALLBACK = 106,
+        LDLM_ENQUEUE          = 101,
+        LDLM_CONVERT          = 102,
+        LDLM_CANCEL           = 103,
+        LDLM_BL_CALLBACK      = 104,
+        LDLM_CP_CALLBACK      = 105,
+        LDLM_GL_CALLBACK      = 106,
+        LDLM_FLK_DEADLOCK_CHK = 107,
         LDLM_LAST_OPC
 } ldlm_cmd_t;
 #define LDLM_FIRST_OPC LDLM_ENQUEUE
@@ -942,8 +943,9 @@ struct ldlm_flock {
         __u64 start;
         __u64 end;
         __u64 pid;
+        __u64 nid;
         __u64 blocking_pid;
-        __u64 blocking_export;
+        __u64 blocking_nid;
 };
 
 /* it's important that the fields of the ldlm_extent structure match

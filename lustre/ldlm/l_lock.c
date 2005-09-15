@@ -64,19 +64,10 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
                 return res;
         } 
 
-        bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
-        LASSERT(lock->l_pidb == 0);
+        lock_bitlock(lock);
         res = lock->l_resource;
-        lock->l_pidb = current->pid;
         lock_res(res);
         return res;
-}
-
-void unlock_bitlock(struct ldlm_lock *lock)
-{
-        LASSERT(lock->l_pidb == current->pid);
-        lock->l_pidb = 0;
-        bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
 }
 
 void unlock_res_and_lock(struct ldlm_lock *lock)

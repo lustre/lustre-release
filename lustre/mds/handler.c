@@ -2927,6 +2927,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
         case LDLM_CONVERT:
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
+        case LDLM_FLK_DEADLOCK_CHK:
                 rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -3236,6 +3237,10 @@ int mds_handle(struct ptlrpc_request *req)
                 CERROR("callbacks should not happen on MDS\n");
                 LBUG();
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+                break;
+        case LDLM_FLK_DEADLOCK_CHK:
+                DEBUG_REQ(D_INODE, req, "flock deadlock check");
+                rc = ldlm_handle_flock_deadlock_check(req);
                 break;
         case LLOG_ORIGIN_HANDLE_OPEN:
                 DEBUG_REQ(D_INODE, req, "llog_init");

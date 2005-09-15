@@ -615,6 +615,22 @@ do {                                                                           \
             set_current_state(TASK_INTERRUPTIBLE);                             \
             if (condition)                                                     \
                     break;                                                     \
+            if (signal_pending(current)) {                                     \
+                    if (!info->lwi_timeout || __timed_out) {                   \
+                            break;                                             \
+                    } else {                                                   \
+                            /* We have to do this here because some signals */ \
+                            /* are not blockable - ie from strace(1).       */ \
+                            /* In these cases we want to schedule_timeout() */ \
+                            /* again, because we don't want that to return  */ \
+                            /* -EINTR when the RPC actually succeeded.      */ \
+                            /* the RECALC_SIGPENDING below will deliver the */ \
+                            /* signal properly.                             */ \
+                            SIGNAL_MASK_LOCK(current, irqflags);               \
+                            CLEAR_SIGPENDING;                                  \
+                            SIGNAL_MASK_UNLOCK(current, irqflags);             \
+                    }                                                          \
+            }                                                                  \
             if (info->lwi_timeout && !__timed_out) {                           \
                 timeout_remaining = schedule_timeout(timeout_remaining);       \
                 if (timeout_remaining == 0) {                                  \
@@ -631,24 +647,6 @@ do {                                                                           \
             } else {                                                           \
                 schedule();                                                    \
             }                                                                  \
-            if (condition)                                                     \
-                    break;                                                     \
-            if (signal_pending(current)) {                                     \
-                    if (__timed_out) {                                         \
-                            break;                                             \
-                    } else {                                                   \
-                            /* We have to do this here because some signals */ \
-                            /* are not blockable - ie from strace(1).       */ \
-                            /* In these cases we want to schedule_timeout() */ \
-                            /* again, because we don't want that to return  */ \
-                            /* -EINTR when the RPC actually succeeded.      */ \
-                            /* the RECALC_SIGPENDING below will deliver the */ \
-                            /* signal properly.                             */ \
-                            SIGNAL_MASK_LOCK(current, irqflags);               \
-                            CLEAR_SIGPENDING;                                  \
-                            SIGNAL_MASK_UNLOCK(current, irqflags);             \
-                    }                                                          \
-            }                                                                  \
         }                                                                      \
                                                                                \
         SIGNAL_MASK_LOCK(current, irqflags);                                   \
@@ -656,7 +654,7 @@ do {                                                                           \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
                                                                                \
-        if (__timed_out && signal_pending(current)) {                          \
+        if ((!info->lwi_timeout || __timed_out) && signal_pending(current)) {  \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \

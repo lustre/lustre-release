@@ -67,12 +67,15 @@ typedef enum {
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 #define LDLM_FL_CONFIG_CHANGE  0x020000 /* see ldlm_cli_cancel_unused */
 
-#define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
+#define LDLM_FL_NO_TIMEOUT     0x040000 /* Blocked by group lock - wait
                                          * indefinitely */
 
 /* file & record locking */
-#define LDLM_FL_BLOCK_NOWAIT   0x040000 /* server told not to wait if blocked */
-#define LDLM_FL_TEST_LOCK      0x080000 /* return blocking lock */
+#define LDLM_FL_BLOCK_NOWAIT   0x080000 /* server told not to wait if blocked */
+#define LDLM_FL_TEST_LOCK      0x100000 /* return blocking lock */
+#define LDLM_FL_GET_BLOCKING   0x200000 /* return updated blocking proc info */
+#define LDLM_FL_DEADLOCK_CHK   0x400000 /* check for deadlock */
+#define LDLM_FL_DEADLOCK_DEL   0x800000 /* lock no longer blocked */
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
@@ -418,9 +421,9 @@ do {                                                                          \
         if (lock->l_resource->lr_type == LDLM_FLOCK) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s pid: "  \
-		       LPU64" " "["LPU64"->"LPU64"] flags: %x remote: "LPX64  \
-                       " expref: %d pid: %u\n" , ## a,                        \
+                       "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s "       \
+		       "pid: "LPU64" nid: "LPU64" ["LPU64"->"LPU64"] "        \
+                       "flags: %x remote: "LPX64" expref: %d pid: %u\n", ## a,\
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
@@ -432,6 +435,7 @@ do {                                                                          \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_policy_data.l_flock.pid,                       \
+                       lock->l_policy_data.l_flock.nid,                       \
                        lock->l_policy_data.l_flock.start,                     \
                        lock->l_policy_data.l_flock.end,                       \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
@@ -523,6 +527,7 @@ void ldlm_change_cbdata(struct ldlm_namespace *, struct ldlm_res_id *,
 
 /* ldlm_flock.c */
 int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
+int ldlm_handle_flock_deadlock_check(struct ptlrpc_request *req);
 
 /* ldlm_extent.c */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms);
@@ -681,6 +686,20 @@ static inline void unlock_res(struct ldlm_resource *res)
 static inline void check_res_locked(struct ldlm_resource *res)
 {
         LASSERT_SPIN_LOCKED(&res->lr_lock);
+}
+
+static inline void lock_bitlock(struct ldlm_lock *lock)
+{
+        bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
+        LASSERT(lock->l_pidb == 0);
+        lock->l_pidb = current->pid;
+}
+
+static inline void unlock_bitlock(struct ldlm_lock *lock)
+{
+        LASSERT(lock->l_pidb == current->pid);
+        lock->l_pidb = 0;
+        bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
 }
 
 struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
