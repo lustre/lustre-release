@@ -687,7 +687,7 @@ static inline void check_res_locked(struct ldlm_resource *res)
 {
         LASSERT_SPIN_LOCKED(&res->lr_lock);
 }
-
+#ifdef __KERNEL__
 static inline void lock_bitlock(struct ldlm_lock *lock)
 {
         bit_spin_lock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
@@ -701,7 +701,7 @@ static inline void unlock_bitlock(struct ldlm_lock *lock)
         lock->l_pidb = 0;
         bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
 }
-
+#endif
 struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
 void unlock_res_and_lock(struct ldlm_lock *lock);
 

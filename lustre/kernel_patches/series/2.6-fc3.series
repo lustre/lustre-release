@@ -33,3 +33,4 @@ highmem-split-2.6.10-fc3.patch
 pag-basic-2.6.10-fc3.patch
 sd_iostats-2.6-rhel4.patch
 scsi-max-phys-segments-256.patch
+linux-2.6.10-flock.patch
