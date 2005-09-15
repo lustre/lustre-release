@@ -67,8 +67,11 @@ int mds_audit(struct ptlrpc_request *req, struct dentry *dentry,
                 .namelen = 0,
         };
         int rc = 0;
-        
         ENTRY;
+        
+        /* don't catch request to cross-ref */
+        if (dentry->d_flags & DCACHE_CROSS_REF)
+                RETURN(0);
         
         info.m.nid = nid;
         info.m.uid = current->uid;
