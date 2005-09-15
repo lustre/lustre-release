@@ -68,10 +68,9 @@ EXPORT_SYMBOL(capa_list);
 EXPORT_SYMBOL(ll_capa_timer);
 
 static inline int const
-capa_hashfn(unsigned int uid, int capa_op, __u64 mdsid, unsigned long ino)
+capa_hashfn(unsigned int uid, __u64 mdsid, unsigned long ino)
 {
-        return (ino ^ uid) * (unsigned long)capa_op * (unsigned long)(mdsid + 1)
-               % NR_CAPAHASH;
+        return (ino ^ uid) * (unsigned long)(mdsid + 1) % NR_CAPAHASH;
 }
 
 int capa_op(int flags)
@@ -285,8 +284,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
 struct obd_capa *
 capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino, int type)
 {
-        struct hlist_head *head = capa_hash +
-                                  capa_hashfn(uid, capa_op, mdsid, ino);
+        struct hlist_head *head = capa_hash + capa_hashfn(uid, mdsid, ino);
         struct obd_capa *ocapa;
 
         ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, type);
@@ -319,7 +317,7 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
         __u64 mdsid = capa->lc_mdsid;
         unsigned long ino = capa->lc_ino;
         struct hlist_head *head = capa_hash +
-                                  capa_hashfn(uid, capa_op, mdsid, ino);
+                                  capa_hashfn(uid, mdsid, ino);
         struct obd_capa *ocapa;
 
         spin_lock(&capa_lock);
