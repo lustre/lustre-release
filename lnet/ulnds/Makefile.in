@@ -1,0 +1,4 @@
+subdir-m += socklnd
+
+@INCLUDE_RULES@
+

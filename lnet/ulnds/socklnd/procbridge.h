@@ -46,10 +46,10 @@ extern void procbridge_shutdown (ptl_ni_t *);
 extern int tcpnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
                        ptl_hdr_t *hdr, int type, lnet_process_id_t target,
                        int routing, unsigned int niov, 
-                       struct iovec *iov, ptl_kiov_t *kiov,
+                       struct iovec *iov, lnet_kiov_t *kiov,
                        unsigned int offset, unsigned int len);
 int tcpnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *cookie,
-                unsigned int niov, struct iovec *iov, ptl_kiov_t *kiov,
+                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
 
 

@@ -49,7 +49,7 @@ int tcpnal_send(ptl_ni_t         *ni,
                 int               routing,
                 unsigned int      niov,
                 struct iovec     *iov,
-                ptl_kiov_t        kiov,
+                lnet_kiov_t      *kiov,
                 unsigned int      offset,
                 unsigned int      len)
 {
@@ -136,7 +136,7 @@ int tcpnal_recv(ptl_ni_t     *ni,
                 ptl_msg_t    *cookie,
                 unsigned int  niov,
                 struct iovec *iov,
-                plt_kiov_t   *kiov,
+                lnet_kiov_t  *kiov,
                 unsigned int  offset,
                 unsigned int  mlen,
                 unsigned int  rlen)

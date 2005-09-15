@@ -78,18 +78,22 @@ fi
 ])
 
 #
-# LN_CONFIG_PORTALS
+# LN_CONFIG_PTLLND
 #
 # configure support for Portals
 #
-AC_DEFUN([LN_CONFIG_PORTALS],
+AC_DEFUN([LN_CONFIG_PTLLND],
 [AC_MSG_CHECKING([for Portals API headers])
 
-if test $PORTALS ; then
+if test $PORTALS -o test $LUSTRE_PORTALS ; then
 	AC_MSG_RESULT([yes])
 	PTLLND="ptllnd"
-        PTLLNDCPPFLAGS="-I$PORTALS/include"
-	AC_MSG_RESULT([$PORTALS])
+	if test $PORTALS ; then
+        	PTLLNDCPPFLAGS="-I$PORTALS/include"
+	else
+        	PTLLNDCPPFLAGS="-I$LUSTRE_PORTALS/include"
+	fi
+	AC_MSG_RESULT([$LUSTRE_PORTALS])
 else
 	AC_MSG_RESULT([no])
 	PTLLND=""
@@ -671,7 +675,7 @@ LN_CONFIG_OPENIB
 LN_CONFIG_VIB
 LN_CONFIG_IIB
 LN_CONFIG_RALND
-LN_CONFIG_PORTALS
+LN_CONFIG_PTLLND
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
@@ -864,6 +868,8 @@ lnet/lnet/autoMakefile
 lnet/tests/Makefile
 lnet/tests/autoMakefile
 lnet/ulnds/Makefile
+lnet/ulnds/autoMakefile
+lnet/ulnds/socklnd/Makefile
 lnet/utils/Makefile
 ])
 case $lb_target_os in
