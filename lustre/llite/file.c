@@ -1860,10 +1860,10 @@ int ll_inode_revalidate_it(struct dentry *dentry)
 
         ll_lookup_finish_locks(&oit, dentry);
         
-        /*
+        
         if (!req && (oit.it_op & IT_GETATTR))
                 ll_audit_log(inode, AUDIT_STAT, 0);
-        */
+        
         if (!LLI_HAVE_FLSIZE(inode)) {
                 /* if object not yet allocated, don't validate size */
                 lsm = lli->lli_smd;

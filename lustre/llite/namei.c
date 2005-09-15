@@ -409,10 +409,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         ll_lookup_finish_locks(it, dentry);
-        /*
+        
         if (!req && (it->it_op & IT_GETATTR) && dentry->d_inode)
                 ll_audit_log(dentry->d_inode, AUDIT_STAT, 0);
-        */
+        
         if (nd && dentry->d_inode != NULL &&
             dentry->d_inode->i_mode & S_ISUID && S_ISDIR(dentry->d_inode->i_mode) &&
             ((gns_flags & LOOKUP_CONTINUE) || (gns_it & (IT_CHDIR | IT_OPEN))))
