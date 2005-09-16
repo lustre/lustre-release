@@ -238,7 +238,8 @@ static int smfs_do_lookup (struct inode * dir,
                                                 dir->i_ino, tmp->d_parent->d_name.len,
                                                 tmp->d_parent->d_name.name,
                                                 cache_dir->i_nlink);
-                                CDEBUG(D_ERROR, "rc = %d\n", rc);
+                                CDEBUG(D_ERROR, "i_mode %o, rc = %d\n",
+                                       ind->i_mode, rc);
 
                                 if (is_bad_inode(ind))
                                         CDEBUG(D_ERROR, "bad inode returned %lu/%u\n",
