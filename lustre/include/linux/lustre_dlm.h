@@ -65,7 +65,6 @@ typedef enum {
 #define LDLM_FL_LOCAL          0x004000 /* local lock (ie, no srv/cli split) */
 #define LDLM_FL_WARN           0x008000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
-#define LDLM_FL_CONFIG_CHANGE  0x020000 /* see ldlm_cli_cancel_unused */
 
 #define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
                                          * indefinitely */
@@ -76,6 +75,8 @@ typedef enum {
 #define LDLM_FL_GET_BLOCKING   0x10000000 /* return updated blocking proc info */
 #define LDLM_FL_DEADLOCK_CHK   0x20000000 /* check for deadlock */
 #define LDLM_FL_DEADLOCK_DEL   0x40000000 /* lock no longer blocked */
+
+#define LDLM_FL_CONFIG_CHANGE  0x80000000 /* see ldlm_cli_cancel_unused */
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
