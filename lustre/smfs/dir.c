@@ -426,7 +426,7 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         struct dentry *cache_parent = NULL;
         void   *handle = NULL;
         int    rc = 0;
-        //int    mode = 0;
+        
         struct hook_unlink_msg msg = {
                 .dentry = dentry,
                 .mode = dentry->d_inode->i_mode
@@ -462,7 +462,12 @@ static int smfs_unlink(struct inode * dir, struct dentry *dentry)
         SMFS_PRE_HOOK(dir, HOOK_UNLINK, &msg); 
         
         rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
-                
+        
+        /* We don't d_delete() NFS sillyrenamed files--they still exist. */
+	if (!rc && !(cache_dentry->d_flags & DCACHE_NFSFS_RENAMED)) {
+		d_delete(cache_dentry);
+        }
+
         SMFS_POST_HOOK(dir, HOOK_UNLINK, &msg, rc); 
         if (!rc) {
                 post_smfs_inode(dentry->d_inode, cache_inode);
@@ -656,8 +661,10 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                 post_smfs_inode(inode, cache_inode);
                 //like vfs_rmdir is doing with inode
                 cache_inode->i_flags |= S_DEAD;
+                d_delete(cache_dentry);
         }
         smfs_trans_commit(dir, handle, 0);
+        
         dput(cache_dentry);
 exit:
         post_smfs_dentry(cache_dentry);
