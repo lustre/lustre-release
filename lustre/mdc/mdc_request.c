@@ -673,6 +673,10 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         mod->mod_och = och;
         mod->mod_open_req = ptlrpc_request_addref(open_req);
 
+        if (memcmp(&rec->cr_replayid, &body->id1, sizeof(rec->cr_replayid)))
+                CDEBUG(D_ERROR, DLID4" != "DLID4"\n", OLID4(&rec->cr_replayid),
+                       OLID4(&body->id1));
+                        
         memcpy(&rec->cr_replayid, &body->id1, sizeof rec->cr_replayid);
         memcpy(&rec->cr_ioepoch, &body->io_epoch, sizeof rec->cr_ioepoch);
         open_req->rq_replay_cb = mdc_replay_open;

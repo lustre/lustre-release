@@ -428,6 +428,9 @@ int mdc_enqueue(struct obd_export *exp,
                         RETURN (-EPROTO);
                 }
 
+                if ((it->it_op & IT_OPEN) && (LUSTRE_IT(it)->it_status >= 0))
+                        mdc_store_inode_generation(exp, req, MDS_REQ_INTENT_REC_OFF, 1);
+
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */
