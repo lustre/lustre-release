@@ -34,6 +34,16 @@ Index: linux-2.6.10/fs/ext3/inode.c
  	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
  	rc = ext3_journal_dirty_metadata(handle, bh);
  	if (!err)
+@@ -2875,6 +2875,7 @@
+ {
+ 	int err = 0;
+ 	if (handle) {
+-		err = ext3_get_inode_loc(inode, iloc, 1);
++		err = ext3_get_inode_loc(inode, iloc, EXT3_I(inode)->i_state &
++							EXT3_STATE_NEW);
+ 		if (!err) {
+ 			BUFFER_TRACE(iloc->bh, "get_write_access");
+ 			err = ext3_journal_get_write_access(handle, iloc->bh);
 Index: linux-2.6.10/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.6.10.orig/fs/ext3/ialloc.c	2005-03-31 20:12:28.734802760 +0800
@@ -113,7 +123,7 @@ Index: linux-2.6.10/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return -ENOENT;
 +
-+	ret = ext3_get_inode_loc(inode, &iloc, 1);
++	ret = ext3_get_inode_loc(inode, &iloc, 0);
 +	if (ret)
 +		return ret;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -252,7 +262,7 @@ Index: linux-2.6.10/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return 0;
 +
-+	ret = ext3_get_inode_loc(inode, &iloc, 1);
++	ret = ext3_get_inode_loc(inode, &iloc, 0);
 +	if (ret)
 +		return ret;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -399,7 +409,7 @@ Index: linux-2.6.10/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return ret;
 +
-+	err = ext3_get_inode_loc(inode, &iloc, 1);
++	err = ext3_get_inode_loc(inode, &iloc, 0);
 +	if (err)
 +		return -EIO;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -530,7 +540,7 @@ Index: linux-2.6.10/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return -ENOSPC;
 +
-+	err = ext3_get_inode_loc(inode, &iloc, 1);
++	err = ext3_get_inode_loc(inode, &iloc, 0);
 +	if (err)
 +		return err;
 +	raw_inode = ext3_raw_inode(&iloc);
