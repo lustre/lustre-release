@@ -2060,8 +2060,7 @@ static int mds_copy_unlink_reply(struct ptlrpc_request *master,
         memcpy(body2, body, sizeof(*body));
         body2->valid &= ~OBD_MD_FLCOOKIE;
 
-        if (!(body->valid & OBD_MD_FLEASIZE) &&
-            !(body->valid & OBD_MD_FLDIREA))
+        if (!(body->valid & (OBD_MD_FLEASIZE | OBD_MD_FLDIREA)))
                 RETURN(0);
 
         if (body->eadatasize == 0) {
@@ -2137,6 +2136,9 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
 
         if (request) {
                 if (rc == 0)
+			/* with MOD this is not really needed, as cookie and EA
+			 * is not needed on client as it does not call
+			 * OST_DESTROY anymore, MDS does it. */
                         mds_copy_unlink_reply(req, request);
                 ptlrpc_req_finished(request);
         }
@@ -2144,8 +2146,11 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
         if (rc == 0) {
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_RMDIR,
                                       NULL);
-                if (IS_ERR(handle))
+                if (IS_ERR(handle)) {
+                        CERROR("can't start transaction, err %d\n",
+			       (int)PTR_ERR(handle));
                         GOTO(cleanup, rc = PTR_ERR(handle));
+		}
                 rc = fsfilt_del_dir_entry(req->rq_export->exp_obd, dchild);
                 if (rc)
                         CERROR("can't remove direntry: %d\n", rc);
@@ -2191,7 +2196,7 @@ cleanup:
                         CDEBUG(D_ERROR, "child lookup error %ld\n",
                                PTR_ERR(chkdentry));
         } else if (rc != -EISDIR)
-                CERROR("can't unlink inode "DLID4": %d\n",
+                CERROR("error while unlinking inode "DLID4": %d\n",
                        OLID4(&op_data->id1), rc);
         req->rq_status = rc;
 
@@ -2230,7 +2235,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         int unlink_by_id = 0;
         int update_mode;
         ENTRY;
-
+	
         LASSERT(offset == 1 || offset == 3);
 
         DEBUG_REQ(D_INODE, req, "parent ino "LPU64"/%u, child %s",
@@ -2384,8 +2389,11 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 shrink_dcache_parent(dchild);
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_RMDIR,
                                       NULL);
-                if (IS_ERR(handle))
+                if (IS_ERR(handle)) {
+			CERROR("can't start transaction, err %d\n",
+			       (int)PTR_ERR(handle));
                         GOTO(cleanup, rc = PTR_ERR(handle));
+		}
                 rc = vfs_rmdir(dparent->d_inode, dchild);
                 break;
         case S_IFREG: {
@@ -2465,11 +2473,16 @@ cleanup:
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
         }
+
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0);
-        if (!rc)
+        if (!rc) {
                 (void)obd_set_info(mds->mds_dt_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
+	} else {
+		CERROR("error while unlinking object "DLID4", err %d\n",
+		       OLID4(rec->ur_id1), rc);
+	}
         
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
