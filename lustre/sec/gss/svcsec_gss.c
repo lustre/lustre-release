@@ -1626,8 +1626,19 @@ int gss_svc_init(void)
 void gss_svc_exit(void)
 {
         int rc;
-        if ((rc = cache_unregister(&rsi_cache)))
-                CERROR("unregister rsi cache: %d\n", rc);
+
+        /* XXX rsi didn't take module refcount. without really
+         * cleanup it we can't simply go, later user-space operations
+         * will certainly cause oops.
+         * use space might slow or stuck on something, wait it for
+         * a bit -- bad hack.
+         */
+        while ((rc = cache_unregister(&rsi_cache))) {
+                CERROR("unregister rsi cache: %d. Try again\n", rc);
+                schedule_timeout(2 * HZ);
+                cache_purge(&rsi_cache);
+        }
+
         if ((rc = cache_unregister(&rsc_cache)))
                 CERROR("unregister rsc cache: %d\n", rc);
         if ((rc = svcsec_unregister(&svcsec_gss)))
