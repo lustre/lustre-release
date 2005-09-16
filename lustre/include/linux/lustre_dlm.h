@@ -67,15 +67,15 @@ typedef enum {
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 #define LDLM_FL_CONFIG_CHANGE  0x020000 /* see ldlm_cli_cancel_unused */
 
-#define LDLM_FL_NO_TIMEOUT     0x040000 /* Blocked by group lock - wait
+#define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
                                          * indefinitely */
 
 /* file & record locking */
-#define LDLM_FL_BLOCK_NOWAIT   0x080000 /* server told not to wait if blocked */
-#define LDLM_FL_TEST_LOCK      0x100000 /* return blocking lock */
-#define LDLM_FL_GET_BLOCKING   0x200000 /* return updated blocking proc info */
-#define LDLM_FL_DEADLOCK_CHK   0x400000 /* check for deadlock */
-#define LDLM_FL_DEADLOCK_DEL   0x800000 /* lock no longer blocked */
+#define LDLM_FL_BLOCK_NOWAIT   0x040000 /* server told not to wait if blocked */
+#define LDLM_FL_TEST_LOCK      0x080000 /* return blocking lock */
+#define LDLM_FL_GET_BLOCKING   0x10000000 /* return updated blocking proc info */
+#define LDLM_FL_DEADLOCK_CHK   0x20000000 /* check for deadlock */
+#define LDLM_FL_DEADLOCK_DEL   0x40000000 /* lock no longer blocked */
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
