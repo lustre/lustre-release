@@ -120,7 +120,7 @@ static int ll_capa_thread(void *arg)
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
-                struct obd_capa *ocapa, *tmp, *next = NULL;
+                struct obd_capa *ocapa, tcapa, *tmp, *next = NULL;
                 unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
                 struct inode *inode;
 
@@ -143,9 +143,11 @@ static int ll_capa_thread(void *arg)
                                 inode = igrab(ocapa->c_inode);
                                 if (inode == NULL)
                                         continue;
+
+                                tcapa = *ocapa;
                                 spin_unlock(&capa_lock);
 
-                                rc = ll_renew_capa(ocapa);
+                                rc = ll_renew_capa(&tcapa);
                                 iput(inode);
 
                                 if (rc)
