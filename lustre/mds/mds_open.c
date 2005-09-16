@@ -1541,8 +1541,11 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                                request_body->io_epoch);
                 i_size_write(inode, request_body->size);
                 inode->i_blocks = request_body->blocks;
+                LTIME_S(inode->i_mtime) = (request_body->mtime);
+
+                LTIME_S(iattr.ia_mtime) = request_body->mtime;
                 iattr.ia_size = inode->i_size;
-                iattr.ia_valid |= ATTR_SIZE;
+                iattr.ia_valid |= ATTR_SIZE|ATTR_MTIME;
                 mds_inode_unset_attrs_old(inode);
         }
 
@@ -1766,6 +1769,7 @@ static int mds_extent_lock_callback(struct ldlm_lock *lock,
 }
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 __u64 lov_merge_blocks(struct lov_stripe_md *lsm);
+__u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 int mds_validate_size(struct obd_device *obd, struct inode *inode,
                       struct mds_body *body, struct iattr *iattr)
@@ -1854,8 +1858,11 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
 
         i_size_write(inode, lov_merge_size(lsm, 0));
         inode->i_blocks = lov_merge_blocks(lsm);
+        LTIME_S(inode->i_mtime) = lov_merge_mtime(lsm, LTIME_S(inode->i_mtime));
         iattr->ia_size = inode->i_size;
-        iattr->ia_valid |= ATTR_SIZE;
+        LTIME_S(iattr->ia_mtime) = LTIME_S(inode->i_mtime);
+        iattr->ia_valid |= ATTR_SIZE | ATTR_MTIME;
+        
         DOWN_WRITE_I_ALLOC_SEM(inode);
         mds_inode_unset_attrs_old(inode);
         UP_WRITE_I_ALLOC_SEM(inode);

@@ -41,7 +41,8 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 __u64 lov_merge_blocks(struct lov_stripe_md *lsm);
 __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
-int ll_validate_size(struct inode *inode, __u64 *size, __u64 *blocks)
+int ll_validate_size(struct inode *inode, __u64 *size, __u64 *blocks,
+                     __u64 *mtime)
 {
         ldlm_policy_data_t extent = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct obd_export *exp = ll_i2sbi(inode)->ll_dt_exp;
@@ -68,6 +69,8 @@ int ll_validate_size(struct inode *inode, __u64 *size, __u64 *blocks)
         down(&lli->lli_size_sem);
         *size = lov_merge_size(lli->lli_smd, 0);
         *blocks = lov_merge_blocks(lli->lli_smd);
+        *mtime = lov_merge_mtime(lli->lli_smd, LTIME_S(inode->i_mtime));
+
         up(&lli->lli_size_sem);
 
 finish:
@@ -121,8 +124,9 @@ int ll_md_och_close(struct obd_export *md_exp, struct inode *inode,
                 op_data->io_epoch = epoch;
                 op_data->flags |= MDS_BFLAG_DIRTY_EPOCH;
                 op_data->valid |= OBD_MD_FLFLAGS | OBD_MD_FLEPOCH;
-                if (ll_validate_size(inode, &op_data->size, &op_data->blocks))
-                        op_data->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                if (ll_validate_size(inode, &op_data->size, &op_data->blocks,
+                                     &op_data->mtime))
+                        op_data->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLMTIME;
         }
 
         rc = md_close(md_exp, op_data, och, &req);
@@ -1038,10 +1042,9 @@ int ll_glimpse_size(struct inode *inode)
         down(&lli->lli_size_sem);
         inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
-        up(&lli->lli_size_sem);
-
         LTIME_S(inode->i_mtime) = lov_merge_mtime(lli->lli_smd,
                                                   LTIME_S(inode->i_mtime));
+        up(&lli->lli_size_sem);
 
         CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
                (__u64)inode->i_size, (__u64)inode->i_blocks);

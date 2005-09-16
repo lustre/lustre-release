@@ -1233,6 +1233,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
                     !(body->valid & OBD_MD_FLDIREA))
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
+                
         } else if (S_ISLNK(inode->i_mode) &&
                    (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 rc = mds_pack_link(dentry, req, body, reply_off);
@@ -1464,7 +1465,7 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
         
         /* XXX: quite a ugly hack, need to check old code
          * drop FLSIZE/FLBLOCKS prior any checking to */
-        body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+        body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS|OBD_MD_FLMTIME);
         
         if (obd->obd_recovering) {
                 CDEBUG(D_INODE, "size for "DLID4" is unknown yet (recovering)\n",
@@ -1481,7 +1482,7 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
         }
         CDEBUG(D_INODE, "MDS returns "LPD64"/"LPD64" for"DLID4"\n",
                body->size, body->blocks, OLID4(&body->id1));
-        body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        body->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLMTIME;
         RETURN(0);
 }
 
@@ -2789,7 +2790,7 @@ static int mdt_set_info(struct ptlrpc_request *req)
                                        lustre_swab_audit_attr);
 
                 msg = *p;
-                CDEBUG(D_INFO, "Get new audit setting 0x%x\n", (__u32)msg.attr);
+                //CDEBUG(D_INFO, "Get new audit setting 0x%x\n", (__u32)msg.attr);
                 rc = obd_set_info(exp, keylen, key, sizeof(msg), &msg);
 
                 req->rq_repmsg->status = rc;
