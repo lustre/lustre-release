@@ -201,7 +201,13 @@ void libcfs_debug_msg(int subsys, int mask, char *file, const char *fn,
         debug_buf = cfs_page_address(tage->page) + tage->used + known_size;
 
         max_nob = CFS_PAGE_SIZE - tage->used - known_size;
-        LASSERT(max_nob > 0);
+        if (max_nob <= 0) {
+                printk(KERN_EMERG "negative max_nob: %i\n", max_nob);
+                debug_buf = format;
+                needed = strlen(format);
+                mask |= D_ERROR;
+                goto out;
+        }
         va_start(ap, format);
         needed = vsnprintf(debug_buf, max_nob, format, ap);
         va_end(ap);
