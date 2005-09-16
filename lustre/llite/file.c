@@ -1932,8 +1932,6 @@ int ll_inode_revalidate_it(struct dentry *dentry)
                 ll_audit_log(inode, AUDIT_STAT, 0);
         */
         
-        /* XXX temp fix for inconsistent mtime on different client */
-#if 0
         if (!LLI_HAVE_FLSIZE(inode)) {
                 /* if object not yet allocated, don't validate size */
                 lsm = lli->lli_smd;
@@ -1943,10 +1941,7 @@ int ll_inode_revalidate_it(struct dentry *dentry)
                         rc = ll_glimpse_size(inode);
                 }
         }
-#endif
-        if (lsm != NULL)
-                rc = ll_glimpse_size(inode);
-        
+
         EXIT;
 out:
         ll_intent_release(&oit);
