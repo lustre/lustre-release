@@ -29,11 +29,11 @@ int
 LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback, 
             lnet_handle_eq_t *handle)
 {
-        ptl_eq_t      *eq;
+        lnet_eq_t     *eq;
         unsigned long  flags;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
         
         /* We need count to be a power of 2 so that when eq_{enq,deq}_seq
          * overflow, they don't skip entries, so the queue has the same
@@ -50,15 +50,15 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
         if (count == 0)        /* catch bad parameter / overflow on roundup */
                 return (-EINVAL);
         
-        eq = ptl_eq_alloc();
+        eq = lnet_eq_alloc();
         if (eq == NULL)
                 return (-ENOMEM);
 
         PORTAL_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
         if (eq->eq_events == NULL) {
-                PTL_LOCK(flags);
-                ptl_eq_free (eq);
-                PTL_UNLOCK(flags);
+                LNET_LOCK(flags);
+                lnet_eq_free (eq);
+                LNET_UNLOCK(flags);
         }
 
         /* NB this resets all event sequence numbers to 0, to be earlier
@@ -71,38 +71,38 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
         eq->eq_refcount = 0;
         eq->eq_callback = callback;
 
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
-        ptl_initialise_handle (&eq->eq_lh, PTL_COOKIE_TYPE_EQ);
-        list_add (&eq->eq_list, &lnet_apini.apini_active_eqs);
+        lnet_initialise_handle (&eq->eq_lh, LNET_COOKIE_TYPE_EQ);
+        list_add (&eq->eq_list, &the_lnet.ln_active_eqs);
 
-        PTL_UNLOCK(flags);
+        LNET_UNLOCK(flags);
 
-        ptl_eq2handle(handle, eq);
+        lnet_eq2handle(handle, eq);
         return (0);
 }
 
 int
 LNetEQFree(lnet_handle_eq_t eqh)
 {
-        ptl_eq_t      *eq;
+        lnet_eq_t     *eq;
         int            size;
-        lnet_event_t   *events;
+        lnet_event_t  *events;
         unsigned long  flags;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
         
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
-        eq = ptl_handle2eq(&eqh);
+        eq = lnet_handle2eq(&eqh);
         if (eq == NULL) {
-                PTL_UNLOCK(flags);
+                LNET_UNLOCK(flags);
                 return (-ENOENT);
         }
 
         if (eq->eq_refcount != 0) {
-                PTL_UNLOCK(flags);
+                LNET_UNLOCK(flags);
                 return (-EBUSY);
         }
 
@@ -110,11 +110,11 @@ LNetEQFree(lnet_handle_eq_t eqh)
         events  = eq->eq_events;
         size    = eq->eq_size;
 
-        ptl_invalidate_handle (&eq->eq_lh);
+        lnet_invalidate_handle (&eq->eq_lh);
         list_del (&eq->eq_list);
-        ptl_eq_free (eq);
+        lnet_eq_free (eq);
 
-        PTL_UNLOCK(flags);
+        LNET_UNLOCK(flags);
 
         PORTAL_FREE(events, size * sizeof (lnet_event_t));
 
@@ -122,11 +122,11 @@ LNetEQFree(lnet_handle_eq_t eqh)
 }
 
 int
-lib_get_event (ptl_eq_t *eq, lnet_event_t *ev)
+lib_get_event (lnet_eq_t *eq, lnet_event_t *ev)
 {
-        int          new_index = eq->eq_deq_seq & (eq->eq_size - 1);
+        int           new_index = eq->eq_deq_seq & (eq->eq_size - 1);
         lnet_event_t *new_event = &eq->eq_events[new_index];
-        int          rc;
+        int           rc;
         ENTRY;
 
         CDEBUG(D_INFO, "event: %p, sequence: %lu, eq->size: %u\n",
@@ -173,7 +173,7 @@ LNetEQWait (lnet_handle_eq_t eventq, lnet_event_t *event)
 
 int
 LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
-           lnet_event_t *event, int *which)
+            lnet_event_t *event, int *which)
 {
         unsigned long    flags;
         int              i;
@@ -188,28 +188,28 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 #endif
         ENTRY;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
 
         if (neq < 1)
                 RETURN(-ENOENT);
 
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
         for (;;) {
                 for (i = 0; i < neq; i++) {
-                        ptl_eq_t *eq = ptl_handle2eq(&eventqs[i]);
+                        lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
 
                         rc = lib_get_event (eq, event);
                         if (rc != 0) {
-                                PTL_UNLOCK(flags);
+                                LNET_UNLOCK(flags);
                                 *which = i;
                                 RETURN(rc);
                         }
                 }
                 
                 if (timeout_ms == 0) {
-                        PTL_UNLOCK (flags);
+                        LNET_UNLOCK (flags);
                         RETURN (0);
                 }
 
@@ -219,9 +219,9 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 #ifdef __KERNEL__
                 cfs_waitlink_init(&wl);
                 set_current_state(TASK_INTERRUPTIBLE);
-                cfs_waitq_add(&lnet_apini.apini_waitq, &wl);
+                cfs_waitq_add(&the_lnet.ln_waitq, &wl);
 
-                PTL_UNLOCK(flags);
+                LNET_UNLOCK(flags);
 
                 if (timeout_ms < 0) {
                         cfs_waitq_wait (&wl);
@@ -236,12 +236,12 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 timeout_ms = 0;
                 }
                 
-                PTL_LOCK(flags);
-                cfs_waitq_del(&lnet_apini.apini_waitq, &wl);
+                LNET_LOCK(flags);
+                cfs_waitq_del(&the_lnet.ln_waitq, &wl);
 #else
                 if (timeout_ms < 0) {
-                        pthread_cond_wait(&lnet_apini.apini_cond, 
-                                          &lnet_apini.apini_mutex);
+                        pthread_cond_wait(&the_lnet.ln_cond, 
+                                          &the_lnet.ln_mutex);
                 } else {
                         gettimeofday(&then, NULL);
                         
@@ -253,8 +253,8 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 ts.tv_nsec -= 1000000000;
                         }
                         
-                        pthread_cond_timedwait(&lnet_apini.apini_cond,
-                                               &lnet_apini.apini_mutex, &ts);
+                        pthread_cond_timedwait(&the_lnet.ln_cond,
+                                               &the_lnet.ln_mutex, &ts);
                         
                         gettimeofday(&now, NULL);
                         timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +

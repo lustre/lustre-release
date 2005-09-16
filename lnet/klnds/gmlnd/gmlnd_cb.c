@@ -28,8 +28,9 @@
 #include "gmlnd.h"
 
 int
-gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-           unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+gmnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+           int delayed, unsigned int niov, 
+           struct iovec *iov, lnet_kiov_t *kiov,
            unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         gmnal_ni_t      *gmni = ni->ni_data;
@@ -46,35 +47,48 @@ gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         if (rx->rx_recv_nob < nob) {
                 CERROR("Short message from nid %s: got %d, need %d\n",
                        libcfs_nid2str(msg->gmm_srcnid), rx->rx_recv_nob, nob);
+                gmnal_post_rx(gmni, rx);
                 return -EIO;
         }
 
-        gmnal_copy_from_netbuf(niov, iov, kiov, offset,
-                               npages, &rx->rx_buf, payload_offset, 
-                               mlen);
+        if (kiov != NULL)
+                lnet_copy_kiov2kiov(niov, kiov, offset,
+                                    npages, rx->rx_buf.nb_kiov, payload_offset, 
+                                    mlen);
+        else
+                lnet_copy_kiov2iov(niov, iov, offset,
+                                   npages, rx->rx_buf.nb_kiov, payload_offset,
+                                   mlen);
 
-        lnet_finalize(ni, private, ptlmsg, 0);
+        lnet_finalize(ni, private, lntmsg, 0);
+        gmnal_post_rx(gmni, rx);
 	return 0;
 }
 
 int
-gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-           ptl_hdr_t *hdr, int type, lnet_process_id_t target, 
-           int target_is_router, int routing,
-           unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-           unsigned int offset, unsigned int len)
+gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
-	gmnal_ni_t	*gmni = ni->ni_data;
-        gm_status_t      gmrc;
-	gmnal_tx_t      *tx;
+        lnet_hdr_t       *hdr= &lntmsg->msg_hdr;
+        int               type = lntmsg->msg_type;
+        lnet_process_id_t target = lntmsg->msg_target;
+        int               target_is_router = lntmsg->msg_target_is_router;
+        int               routing = lntmsg->msg_routing;
+        unsigned int      niov = lntmsg->msg_niov;
+        struct iovec     *iov = lntmsg->msg_iov;
+        lnet_kiov_t      *kiov = lntmsg->msg_kiov;
+        unsigned int      offset = lntmsg->msg_offset;
+        unsigned int      len = lntmsg->msg_len;
+	gmnal_ni_t       *gmni = ni->ni_data;
+        gm_status_t       gmrc;
+	gmnal_tx_t       *tx;
 
         LASSERT (iov == NULL || kiov == NULL);
 
         /* I may not block for a tx if I'm responding to an incoming message */
         tx = gmnal_get_tx(gmni, 
                           !(routing ||
-                            type == PTL_MSG_ACK || 
-                            type == PTL_MSG_REPLY));
+                            type == LNET_MSG_ACK || 
+                            type == LNET_MSG_REPLY));
         if (tx == NULL) {
                 if (!gmni->gmni_shutdown)
                         CERROR ("Can't get tx for msg type %d for %s\n",
@@ -89,7 +103,7 @@ gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         if (gmrc != GM_SUCCESS) {
                 CERROR("Can't map Nid %s to a GM local ID: %d\n", 
                        libcfs_nid2str(target.nid), gmrc);
-                /* NB tx_ptlmsg not set => doesn't finalize */
+                /* NB tx_lntmsg not set => doesn't finalize */
                 gmnal_tx_done(tx, -EIO);
                 return -EIO;
         }
@@ -102,18 +116,20 @@ gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         if (tx->tx_msgnob + len <= gmni->gmni_small_msgsize) {
                 /* whole message fits in tx_buf */
                 char *buffer = &(GMNAL_NETBUF_MSG(&tx->tx_buf)->gmm_u.immediate.gmim_payload[0]);
-        
+
                 if (iov != NULL)
-                        lnet_copy_iov2buf(buffer, niov, iov, offset, len);
+                        lnet_copy_iov2flat(len, buffer, 0,
+                                           niov, iov, offset, len);
                 else
-                        lnet_copy_kiov2buf(buffer, niov, kiov, offset, len);
+                        lnet_copy_kiov2flat(len, buffer, 0,
+                                            niov, kiov, offset, len);
                 
                 tx->tx_msgnob += len;
                 tx->tx_large_nob = 0;
 
                 /* We've copied everything... */
-                LASSERT(tx->tx_ptlmsg == NULL);
-                lnet_finalize(ni, NULL, ptlmsg, 0);
+                LASSERT(tx->tx_lntmsg == NULL);
+                lnet_finalize(ni, NULL, lntmsg, 0);
         } else {
                 /* stash payload pts to copy later */
                 tx->tx_large_nob = len;
@@ -125,7 +141,7 @@ gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
                         tx->tx_large_frags.iov = iov;
 
                 /* finalize later */
-                tx->tx_ptlmsg = ptlmsg;
+                tx->tx_lntmsg = lntmsg;
         }
         
         spin_lock(&gmni->gmni_tx_lock);

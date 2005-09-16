@@ -214,7 +214,7 @@ typedef struct
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
-        ptl_ni_t         *kib_ni;               /* _the_ nal instance */
+        lnet_ni_t        *kib_ni;               /* _the_ nal instance */
 
         vv_gid_t          kib_port_gid;         /* device/port GID */
         vv_p_key_t        kib_port_pkey;        /* device/port pkey */
@@ -282,7 +282,7 @@ typedef struct kib_rx                           /* receive message */
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
         int                       rx_responded; /* responded to peer? */
-        int                       rx_posted;    /* posted? */
+        int                       rx_nob;       /* # bytes received (-1 while posted) */
         vv_l_key_t                rx_lkey;      /* local key */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
         vv_wr_t                   rx_wrq;       /* receive work item */
@@ -300,7 +300,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_status;    /* completion status */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
-        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
         vv_l_key_t                tx_lkey;      /* local key for message buffer */
         kib_msg_t                *tx_msg;       /* message buffer (host vaddr) */
         int                       tx_nwrq;      /* # send work items */
@@ -403,17 +403,13 @@ typedef struct kib_peer
 extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
-int kibnal_startup (ptl_ni_t *ni);
-void kibnal_shutdown (ptl_ni_t *ni);
-int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int kibnal_send (ptl_ni_t *ni, void *private,
-                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                 int type, lnet_process_id_t tgt, 
-                 int tgt_is_router, int routing,
-                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                 unsigned int offset, unsigned int nob);
-int kibnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+int kibnal_startup (lnet_ni_t *ni);
+void kibnal_shutdown (lnet_ni_t *ni);
+int kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int kibnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int kibnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
+                int delayed, unsigned int niov, 
+                struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);

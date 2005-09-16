@@ -220,10 +220,10 @@ void libcfs_debug_dumplog(void);
 #define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 
 /* support decl needed both by kernel and liblustre */
-int        libcfs_isknown_nal(int type);
-char      *libcfs_nal2modname(int type);
-char      *libcfs_nal2str(int type);
-int        libcfs_str2nal(char *str);
+int        libcfs_isknown_lnd(int type);
+char      *libcfs_lnd2modname(int type);
+char      *libcfs_lnd2str(int type);
+int        libcfs_str2lnd(char *str);
 char      *libcfs_net2str(__u32 net);
 char      *libcfs_nid2str(lnet_nid_t nid);
 __u32      libcfs_str2net(char *str);
@@ -238,8 +238,8 @@ void       libcfs_setnet0alias(int type);
 #define PTL_MKNID(net,addr)   ((((__u64)(net))<<32)|((__u64)(addr)))
 /* how net encodes type:number */
 #define PTL_NETNUM(net)       ((net) & 0xffff)
-#define PTL_NETNAL(net)       (((net) >> 16) & 0xffff)
-#define PTL_MKNET(nal,num)    ((((__u32)(nal))<<16)|((__u32)(num)))
+#define PTL_NETTYP(net)       (((net) >> 16) & 0xffff)
+#define PTL_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -425,7 +425,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_MEMHOG                  _IOWR('e', 36, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_PING                    _IOWR('e', 37, IOCTL_PORTAL_TYPE)
-/* portals ioctls */
+/* lnet ioctls */
 #define IOC_PORTAL_GET_NI                  _IOWR('e', 50, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 51, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_ADD_ROUTE               _IOWR('e', 52, IOCTL_PORTAL_TYPE)
@@ -434,7 +434,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_UNCONFIGURE             _IOWR('e', 56, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_PORTAL_TYPE)
-/* nal ioctls */
+/* lnd ioctls */
 #define IOC_PORTAL_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_PUSH_CONNECTION         _IOWR('e', 72, IOCTL_PORTAL_TYPE)
@@ -454,17 +454,17 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 enum {
         /* Only add to these values (i.e. don't ever change or redefine them):
          * network addresses depend on them... */
-        QSWNAL    = 1,
-        SOCKNAL   = 2,
-        GMNAL     = 3,
+        QSWLND    = 1,
+        SOCKLND   = 2,
+        GMLND     = 3,
         PTLLND    = 4,
         /* unused   5 */
         /* unused   6 */
-        OPENIBNAL = 7,
-        IIBNAL    = 8,
-        LONAL     = 9,
-        RANAL     = 10,
-        VIBNAL    = 11,
+        OPENIBLND = 7,
+        IIBLND    = 8,
+        LOLND     = 9,
+        RALND     = 10,
+        VIBLND    = 11,
 };
 
 enum {

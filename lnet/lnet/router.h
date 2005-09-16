@@ -18,8 +18,8 @@
  *
  */
 
-#ifndef _KPTLROUTER_H
-#define _KPTLROUTER_H
+#ifndef _KLNETROUTER_H
+#define _KLNETROUTER_H
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif

@@ -50,7 +50,7 @@
 
 /* tunables (via environment) */
 int tcpnal_acceptor_port = 988;
-int tcpnal_buffer_size   = 2 * (PTL_MTU + sizeof(ptl_hdr_t));
+int tcpnal_buffer_size   = 2 * (PTL_MTU + sizeof(lnet_hdr_t));
 int tcpnal_nagle         = 0;
 
 int
@@ -92,7 +92,7 @@ tcpnal_set_global_params (void)
  */
 static int compare_connection(void *arg1, void *arg2)
 {
-    connection c = arg1;
+    connection  c = arg1;
     lnet_nid_t *nid = arg2;
 
     return (c->peer_nid == *nid);
@@ -177,7 +177,7 @@ static int connection_input(void *d)
 
 static connection 
 allocate_connection(manager        m,
-                    lnet_nid_t      nid,
+                    lnet_nid_t     nid,
                     int            fd)
 {
     connection c=malloc(sizeof(struct connection));
@@ -239,28 +239,28 @@ tcpnal_read(lnet_nid_t nid, int sockfd, void *buffer, int nob)
 int
 tcpnal_hello (int sockfd, lnet_nid_t nid)
 {
-        struct timeval         tv;
-        __u64                  incarnation;
-        int                    rc;
-        int                    nob;
+        struct timeval          tv;
+        __u64                   incarnation;
+        int                     rc;
+        int                     nob;
         lnet_acceptor_connreq_t cr;
-        ptl_hdr_t              hdr;
-        ptl_magicversion_t     hmv;
+        lnet_hdr_t              hdr;
+        lnet_magicversion_t     hmv;
 
         gettimeofday(&tv, NULL);
         incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
         memset(&cr, 0, sizeof(cr));
-        cr.acr_magic   = PTL_PROTO_ACCEPTOR_MAGIC;
-        cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
+        cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
+        cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
         cr.acr_nid     = nid;
 
         /* hmv initialised and copied separately into hdr; compiler "optimize"
          * likely due to confusion about pointer alias of hmv and hdr when this
          * was done in-place. */
-        hmv.magic         = cpu_to_le32(PTL_PROTO_TCP_MAGIC);
-        hmv.version_major = cpu_to_le32(PTL_PROTO_TCP_VERSION_MAJOR);
-        hmv.version_minor = cpu_to_le32(PTL_PROTO_TCP_VERSION_MINOR);
+        hmv.magic         = cpu_to_le32(LNET_PROTO_TCP_MAGIC);
+        hmv.version_major = cpu_to_le32(LNET_PROTO_TCP_VERSION_MAJOR);
+        hmv.version_minor = cpu_to_le32(LNET_PROTO_TCP_VERSION_MINOR);
 
         memset (&hdr, 0, sizeof (hdr));
 
@@ -269,8 +269,8 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
 
         /* hdr.src_nid/src_pid are ignored at dest */
 
-        hdr.type    = cpu_to_le32(PTL_MSG_HELLO);
-        hdr.msg.hello.type = cpu_to_le32(SOCKNAL_CONN_ANY);
+        hdr.type    = cpu_to_le32(LNET_MSG_HELLO);
+        hdr.msg.hello.type = cpu_to_le32(SOCKLND_CONN_ANY);
         hdr.msg.hello.incarnation = cpu_to_le64(incarnation);
 
         /* I don't send any interface info */
@@ -288,26 +288,26 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
         if (rc != 0)
                 return -1;
         
-        if (hmv.magic != le32_to_cpu(PTL_PROTO_TCP_MAGIC)) {
+        if (hmv.magic != le32_to_cpu(LNET_PROTO_TCP_MAGIC)) {
                 CERROR ("Bad magic %#08x (%#08x expected) from %s\n",
-                        cpu_to_le32(hmv.magic), PTL_PROTO_TCP_MAGIC, 
+                        cpu_to_le32(hmv.magic), LNET_PROTO_TCP_MAGIC, 
                         libcfs_nid2str(nid));
                 return -1;
         }
 
-        if (hmv.version_major != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MAJOR) ||
-            hmv.version_minor != cpu_to_le16 (PTL_PROTO_TCP_VERSION_MINOR)) {
+        if (hmv.version_major != cpu_to_le16 (LNET_PROTO_TCP_VERSION_MAJOR) ||
+            hmv.version_minor != cpu_to_le16 (LNET_PROTO_TCP_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
                         " from %s\n",
                         le16_to_cpu (hmv.version_major),
                         le16_to_cpu (hmv.version_minor),
-                        PTL_PROTO_TCP_VERSION_MAJOR,
-                        PTL_PROTO_TCP_VERSION_MINOR,
+                        LNET_PROTO_TCP_VERSION_MAJOR,
+                        LNET_PROTO_TCP_VERSION_MINOR,
                         libcfs_nid2str(nid));
                 return -1;
         }
 
-#if (PTL_PROTO_TCP_VERSION_MAJOR != 1)
+#if (LNET_PROTO_TCP_VERSION_MAJOR != 1)
 # error "This code only understands protocol version 1.x"
 #endif
         /* version 1 sends magic/version as the dest_nid of a 'hello' header,
@@ -319,7 +319,7 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
                 return -1;
 
         /* ...and check we got what we expected */
-        if (hdr.type != cpu_to_le32 (PTL_MSG_HELLO)) {
+        if (hdr.type != cpu_to_le32 (LNET_MSG_HELLO)) {
                 CERROR ("Expecting a HELLO hdr "
                         " but got type %d with %d payload from %s\n",
                         le32_to_cpu (hdr.type),
@@ -356,7 +356,7 @@ tcpnal_hello (int sockfd, lnet_nid_t nid)
  * Returns: an allocated connection structure, either
  *          a pre-existing one, or a new connection
  */
-connection force_tcp_connection(manager m,
+connection force_tcp_connection(manager    m,
                                 lnet_nid_t nid,
                                 procbridge pb)
 {

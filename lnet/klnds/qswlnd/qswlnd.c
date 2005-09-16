@@ -22,15 +22,14 @@
 #include "qswlnd.h"
 
 
-ptl_nal_t kqswnal_nal =
+lnd_t the_kqswlnd =
 {
-	.nal_type       = QSWNAL,
-	.nal_startup    = kqswnal_startup,
-	.nal_shutdown   = kqswnal_shutdown,
-	.nal_ctl        = kqswnal_ctl,
-	.nal_send       = kqswnal_send,
-        .nal_recv       = kqswnal_recv,
-	.nal_fwd        = kqswnal_fwd_packet,
+	.lnd_type       = QSWLND,
+	.lnd_startup    = kqswnal_startup,
+	.lnd_shutdown   = kqswnal_shutdown,
+	.lnd_ctl        = kqswnal_ctl,
+	.lnd_send       = kqswnal_send,
+        .lnd_recv       = kqswnal_recv,
 };
 
 kqswnal_data_t		kqswnal_data;
@@ -41,7 +40,7 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 	unsigned long      flags;
 	struct list_head  *tmp;
 	kqswnal_tx_t      *ktx;
-	ptl_hdr_t         *hdr;
+	lnet_hdr_t        *hdr;
 	int                index = data->ioc_count;
 	int                rc = -ENOENT;
 
@@ -52,7 +51,7 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 			continue;
 
 		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
-		hdr = (ptl_hdr_t *)ktx->ktx_buffer;
+		hdr = (lnet_hdr_t *)ktx->ktx_buffer;
 
 		data->ioc_count  = le32_to_cpu(hdr->payload_length);
 		data->ioc_nid    = le64_to_cpu(hdr->dest_nid);
@@ -71,7 +70,7 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 }
 
 int
-kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg)
+kqswnal_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
 	struct portal_ioctl_data *data = arg;
 
@@ -98,7 +97,7 @@ kqswnal_ctl (ptl_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 void
-kqswnal_shutdown(ptl_ni_t *ni)
+kqswnal_shutdown(lnet_ni_t *ni)
 {
 	unsigned long flags;
 	kqswnal_tx_t *ktx;
@@ -147,7 +146,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 	/* NB ep_free_rcvr() returns only after we've freed off all receive
 	 * buffers (see shutdown handling in kqswnal_requeue_rx()).  This
 	 * means we must have completed any messages we passed to
-	 * lnet_parse() or lnet_fwd_start(). */
+	 * lnet_parse() */
 
 	if (kqswnal_data.kqn_eptx != NULL)
 		ep_free_xmtr (kqswnal_data.kqn_eptx);
@@ -192,20 +191,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 #if MULTIRAIL_EKC
 	LASSERT (list_empty (&kqswnal_data.kqn_readyrxds));
 	LASSERT (list_empty (&kqswnal_data.kqn_delayedtxds));
-	LASSERT (list_empty (&kqswnal_data.kqn_delayedfwds));
 #endif
-
-	/**********************************************************************/
-	/* Complete any blocked forwarding packets, with error
-	 */
-
-	while (!list_empty (&kqswnal_data.kqn_idletxd_fwdq))
-	{
-		kpr_fwd_desc_t *fwd = list_entry (kqswnal_data.kqn_idletxd_fwdq.next,
-						  kpr_fwd_desc_t, kprfd_list);
-		list_del (&fwd->kprfd_list);
-		lnet_fwd_done (ni, fwd, -ESHUTDOWN);
-	}
 
 	/**********************************************************************/
 	/* Unmap message buffers and free all descriptors and buffers
@@ -300,7 +286,7 @@ kqswnal_shutdown(ptl_ni_t *ni)
 }
 
 int
-kqswnal_startup (ptl_ni_t *ni)
+kqswnal_startup (lnet_ni_t *ni)
 {
 #if MULTIRAIL_EKC
 	EP_RAILMASK       all_rails = EP_RAILMASK_ALL;
@@ -313,7 +299,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	kqswnal_tx_t     *ktx;
 	int               elan_page_idx;
 
-	LASSERT (ni->ni_nal == &kqswnal_nal);
+	LASSERT (ni->ni_lnd == &the_kqswlnd);
 
 	/* Only 1 instance supported */
 	if (kqswnal_data.kqn_init != KQN_INIT_NOTHING) {
@@ -339,9 +325,7 @@ kqswnal_startup (ptl_ni_t *ni)
 	INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
 	spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
 	init_waitqueue_head (&kqswnal_data.kqn_idletxd_waitq);
-	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxd_fwdq);
 
-	INIT_LIST_HEAD (&kqswnal_data.kqn_delayedfwds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_delayedtxds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
 
@@ -591,9 +575,10 @@ kqswnal_startup (ptl_ni_t *ni)
 				return (-ENOMEM);
 			}
 
-			krx->krx_kiov[j].kiov_page = page;
+			krx->krx_kiov[j] = (lnet_kiov_t) {.kiov_page = page,
+							  .kiov_offset = 0,
+							  .kiov_len = PAGE_SIZE};
 			LASSERT(page_address(page) != NULL);
-
 #if MULTIRAIL_EKC
 			ep_dvma_load(kqswnal_data.kqn_ep, NULL,
 				     page_address(page),
@@ -670,7 +655,7 @@ kqswnal_startup (ptl_ni_t *ni)
 void __exit
 kqswnal_finalise (void)
 {
-	lnet_unregister_nal(&kqswnal_nal);
+	lnet_unregister_lnd(&the_kqswlnd);
 	kqswnal_tunables_fini();
 }
 
@@ -682,7 +667,7 @@ kqswnal_initialise (void)
 	if (rc != 0)
 		return rc;
 
-	lnet_register_nal(&kqswnal_nal);
+	lnet_register_lnd(&the_kqswlnd);
 	return (0);
 }
 

@@ -172,7 +172,7 @@ ksocknal_lib_sock_irq (struct socket *sock)
 #if CPU_AFFINITY
         struct dst_entry  *dst;
 
-        if (!ksocknal_tunables.ksnd_irq_affinity)
+        if (!*ksocknal_tunables.ksnd_irq_affinity)
                 return 0;
 
         dst = sk_dst_get (sock->sk);
@@ -254,10 +254,10 @@ ksocknal_lib_send_iov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX
                 struct iovec    scratch;
                 struct iovec   *scratchiov = &scratch;
-                int             niov = 1;
+                unsigned int    niov = 1;
 #else
                 struct iovec   *scratchiov = conn->ksnc_tx_scratch_iov;
-                int             niov = tx->tx_niov;
+                unsigned int    niov = tx->tx_niov;
 #endif
                 struct msghdr msg = {
                         .msg_name       = NULL,
@@ -322,13 +322,13 @@ ksocknal_lib_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 #if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
                 struct iovec  scratch;
                 struct iovec *scratchiov = &scratch;
-                int           niov = 1;
+                unsigned int  niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
                 struct iovec *scratchiov = conn->ksnc_tx_scratch_iov;
-                int           niov = tx->tx_nkiov;
+                unsigned int  niov = tx->tx_nkiov;
 #endif
                 struct msghdr msg = {
                         .msg_name       = NULL,
@@ -386,10 +386,10 @@ ksocknal_lib_recv_iov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX
         struct iovec  scratch;
         struct iovec *scratchiov = &scratch;
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
-        int           niov = conn->ksnc_rx_niov;
+        unsigned int  niov = conn->ksnc_rx_niov;
 #endif
         struct iovec *iov = conn->ksnc_rx_iov;
         struct msghdr msg = {
@@ -430,13 +430,13 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
         struct iovec  scratch;
         struct iovec *scratchiov = &scratch;
-        int           niov = 1;
+        unsigned int  niov = 1;
 #else
 #ifdef CONFIG_HIGHMEM
 #warning "XXX risk of kmap deadlock on multiple frags..."
 #endif
         struct iovec *scratchiov = conn->ksnc_rx_scratch_iov;
-        int           niov = conn->ksnc_rx_nkiov;
+        unsigned int  niov = conn->ksnc_rx_nkiov;
 #endif
         lnet_kiov_t   *kiov = conn->ksnc_rx_kiov;
         struct msghdr msg = {
@@ -561,7 +561,7 @@ ksocknal_lib_setup_sock (struct socket *sock)
                 return (rc);
         }
 
-        if (!ksocknal_tunables.ksnd_nagle) {
+        if (!*ksocknal_tunables.ksnd_nagle) {
                 option = 1;
 
                 set_fs (KERNEL_DS);

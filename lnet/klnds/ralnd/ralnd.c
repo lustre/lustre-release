@@ -25,14 +25,14 @@
 static int        kranal_devids[RANAL_MAXDEVS] = {RAPK_MAIN_DEVICE_ID,
                                                   RAPK_EXPANSION_DEVICE_ID};
 
-ptl_nal_t kranal_nal = {
-        .nal_type       = RANAL,
-        .nal_startup    = kranal_startup,
-        .nal_shutdown   = kranal_shutdown,
-        .nal_ctl        = kranal_ctl,
-        .nal_send       = kranal_send,
-        .nal_recv       = kranal_recv,
-        .nal_accept     = kranal_accept,
+lnd_t the_kralnd = {
+        .lnd_type       = RALND,
+        .lnd_startup    = kranal_startup,
+        .lnd_shutdown   = kranal_shutdown,
+        .lnd_ctl        = kranal_ctl,
+        .lnd_send       = kranal_send,
+        .lnd_recv       = kranal_recv,
+        .lnd_accept     = kranal_accept,
 };
 
 kra_data_t              kranal_data;
@@ -786,7 +786,7 @@ kranal_free_acceptsock (kra_acceptsock_t *ras)
 }
 
 int
-kranal_accept (ptl_ni_t *ni, struct socket *sock)
+kranal_accept (lnet_ni_t *ni, struct socket *sock)
 {
         kra_acceptsock_t  *ras;
         int                rc;
@@ -1166,7 +1166,7 @@ kranal_close_matching_conns (lnet_nid_t nid)
 }
 
 int
-kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
+kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
         int                       rc = -EINVAL;
@@ -1354,7 +1354,7 @@ kranal_device_fini(kra_device_t *dev)
 }
 
 void
-kranal_shutdown (ptl_ni_t *ni)
+kranal_shutdown (lnet_ni_t *ni)
 {
         int           i;
         unsigned long flags;
@@ -1480,7 +1480,7 @@ kranal_shutdown (ptl_ni_t *ni)
 }
 
 int
-kranal_startup (ptl_ni_t *ni)
+kranal_startup (lnet_ni_t *ni)
 {
         struct timeval    tv;
         int               pkmem = atomic_read(&libcfs_kmemory);
@@ -1488,7 +1488,7 @@ kranal_startup (ptl_ni_t *ni)
         int               i;
         kra_device_t     *dev;
 
-        LASSERT (ni->ni_nal == &kranal_nal);
+        LASSERT (ni->ni_lnd == &the_kralnd);
 
         /* Only 1 instance supported */
         if (kranal_data.kra_init != RANAL_INIT_NOTHING) {
@@ -1630,7 +1630,7 @@ kranal_startup (ptl_ni_t *ni)
 void __exit
 kranal_module_fini (void)
 {
-        lnet_unregister_nal(&kranal_nal);
+        lnet_unregister_lnd(&the_kralnd);
         kranal_tunables_fini();
 }
 
@@ -1643,7 +1643,7 @@ kranal_module_init (void)
         if (rc != 0)
                 return rc;
 
-        lnet_register_nal(&kranal_nal);
+        lnet_register_lnd(&the_kralnd);
 
         return 0;
 }

@@ -26,26 +26,26 @@
 
 #include <lnet/lib-lnet.h>
 
-/* must be called with PTL_LOCK held */
+/* must be called with LNET_LOCK held */
 void
-ptl_md_unlink(ptl_libmd_t *md)
+lnet_md_unlink(lnet_libmd_t *md)
 {
-        if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) == 0) {
+        if ((md->md_flags & LNET_MD_FLAG_ZOMBIE) == 0) {
                 /* first unlink attempt... */
-                ptl_me_t *me = md->md_me;
+                lnet_me_t *me = md->md_me;
 
-                md->md_flags |= PTL_MD_FLAG_ZOMBIE;
+                md->md_flags |= LNET_MD_FLAG_ZOMBIE;
 
                 /* Disassociate from ME (if any), and unlink it if it was created
                  * with LNET_UNLINK */
                 if (me != NULL) {
                         me->me_md = NULL;
                         if (me->me_unlink == LNET_UNLINK)
-                                ptl_me_unlink(me);
+                                lnet_me_unlink(me);
                 }
 
                 /* emsure all future handle lookups fail */
-                ptl_invalidate_handle(&md->md_lh);
+                lnet_invalidate_handle(&md->md_lh);
         }
 
         if (md->md_pending != 0) {
@@ -61,25 +61,25 @@ ptl_md_unlink(ptl_libmd_t *md)
         }
 
         list_del (&md->md_list);
-        ptl_md_free(md);
+        lnet_md_free(md);
 }
 
-/* must be called with PTL_LOCK held */
+/* must be called with LNET_LOCK held */
 static int
-lib_md_build(ptl_libmd_t *lmd, lnet_md_t *umd, int unlink)
+lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 {
-        ptl_eq_t  *eq = NULL;
-        int        i;
-        int        niov;
-        int        total_length = 0;
+        lnet_eq_t   *eq = NULL;
+        int          i;
+        unsigned int niov;
+        int          total_length = 0;
 
         /* NB we are passed an allocated, but uninitialised/active md.
-         * if we return success, caller may ptl_md_unlink() it.
-         * otherwise caller may only ptl_md_free() it.
+         * if we return success, caller may lnet_md_unlink() it.
+         * otherwise caller may only lnet_md_free() it.
          */
 
         if (!LNetHandleIsEqual (umd->eq_handle, LNET_EQ_NONE)) {
-                eq = ptl_handle2eq(&umd->eq_handle);
+                eq = lnet_handle2eq(&umd->eq_handle);
                 if (eq == NULL)
                         return -ENOENT;
         }
@@ -102,7 +102,7 @@ lib_md_build(ptl_libmd_t *lmd, lnet_md_t *umd, int unlink)
         lmd->md_eq = eq;
         lmd->md_threshold = umd->threshold;
         lmd->md_pending = 0;
-        lmd->md_flags = (unlink == LNET_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
+        lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
 
         if ((umd->options & LNET_MD_IOVEC) != 0) {
 
@@ -168,15 +168,15 @@ lib_md_build(ptl_libmd_t *lmd, lnet_md_t *umd, int unlink)
                 eq->eq_refcount++;
 
         /* It's good; let handle2md succeed and add to active mds */
-        ptl_initialise_handle (&lmd->md_lh, PTL_COOKIE_TYPE_MD);
-        list_add (&lmd->md_list, &lnet_apini.apini_active_mds);
+        lnet_initialise_handle (&lmd->md_lh, LNET_COOKIE_TYPE_MD);
+        list_add (&lmd->md_list, &the_lnet.ln_active_mds);
 
         return 0;
 }
 
-/* must be called with PTL_LOCK held */
+/* must be called with LNET_LOCK held */
 void
-ptl_md_deconstruct(ptl_libmd_t *lmd, lnet_md_t *umd)
+lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd)
 {
         /* NB this doesn't copy out all the iov entries so when a
          * discontiguous MD is copied out, the target gets to know the
@@ -190,32 +190,32 @@ ptl_md_deconstruct(ptl_libmd_t *lmd, lnet_md_t *umd)
         umd->max_size = lmd->md_max_size;
         umd->options = lmd->md_options;
         umd->user_ptr = lmd->md_user_ptr;
-        ptl_eq2handle(&umd->eq_handle, lmd->md_eq);
+        lnet_eq2handle(&umd->eq_handle, lmd->md_eq);
 }
 
 int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
-            lnet_unlink_t unlink, lnet_handle_md_t *handle)
+             lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-        ptl_me_t     *me;
-        ptl_libmd_t  *md;
-        unsigned long flags;
-        int           rc;
+        lnet_me_t     *me;
+        lnet_libmd_t  *md;
+        unsigned long  flags;
+        int            rc;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
                 return -EINVAL;
 
-        md = ptl_md_alloc(&umd);
+        md = lnet_md_alloc(&umd);
         if (md == NULL)
                 return -ENOMEM;
 
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
-        me = ptl_handle2me(&meh);
+        me = lnet_handle2me(&meh);
         if (me == NULL) {
                 rc = -ENOENT;
         } else if (me->me_md != NULL) {
@@ -226,73 +226,73 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
                         me->me_md = md;
                         md->md_me = me;
 
-                        ptl_md2handle(handle, md);
+                        lnet_md2handle(handle, md);
 
-                        PTL_UNLOCK(flags);
+                        LNET_UNLOCK(flags);
                         return (0);
                 }
         }
 
-        ptl_md_free (md);
+        lnet_md_free (md);
 
-        PTL_UNLOCK(flags);
+        LNET_UNLOCK(flags);
         return (rc);
 }
 
 int
 LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-        ptl_libmd_t  *md;
-        unsigned long flags;
-        int           rc;
+        lnet_libmd_t  *md;
+        unsigned long  flags;
+        int            rc;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
             umd.length > PTL_MD_MAX_IOV) /* too many fragments */
                 return -EINVAL;
 
-        md = ptl_md_alloc(&umd);
+        md = lnet_md_alloc(&umd);
         if (md == NULL)
                 return -ENOMEM;
 
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
         rc = lib_md_build(md, &umd, unlink);
 
         if (rc == 0) {
-                ptl_md2handle(handle, md);
+                lnet_md2handle(handle, md);
 
-                PTL_UNLOCK(flags);
+                LNET_UNLOCK(flags);
                 return (0);
         }
 
-        ptl_md_free (md);
+        lnet_md_free (md);
 
-        PTL_UNLOCK(flags);
+        LNET_UNLOCK(flags);
         return (rc);
 }
 
 int
 LNetMDUnlink (lnet_handle_md_t mdh)
 {
-        lnet_event_t      ev;
-        ptl_libmd_t     *md;
+        lnet_event_t     ev;
+        lnet_libmd_t    *md;
         unsigned long    flags;
 
-        LASSERT (lnet_apini.apini_init);
-        LASSERT (lnet_apini.apini_refcount > 0);
+        LASSERT (the_lnet.ln_init);
+        LASSERT (the_lnet.ln_refcount > 0);
         
-        PTL_LOCK(flags);
+        LNET_LOCK(flags);
 
-        md = ptl_handle2md(&mdh);
+        md = lnet_handle2md(&mdh);
         if (md == NULL) {
-                PTL_UNLOCK(flags);
+                LNET_UNLOCK(flags);
                 return -ENOENT;
         }
 
-        /* If the MD is busy, ptl_md_unlink just marks it for deletion, and
+        /* If the MD is busy, lnet_md_unlink just marks it for deletion, and
          * when the NAL is done, the completion event flags that the MD was
          * unlinked.  Otherwise, we enqueue an event now... */
 
@@ -303,15 +303,15 @@ LNetMDUnlink (lnet_handle_md_t mdh)
                 ev.type = LNET_EVENT_UNLINK;
                 ev.status = 0;
                 ev.unlinked = 1;
-                ptl_md_deconstruct(md, &ev.md);
-                ptl_md2handle(&ev.md_handle, md);
+                lnet_md_deconstruct(md, &ev.md);
+                lnet_md2handle(&ev.md_handle, md);
 
-                ptl_enq_event_locked(NULL, md->md_eq, &ev);
+                lnet_enq_event_locked(NULL, md->md_eq, &ev);
         }
 
-        ptl_md_unlink(md);
+        lnet_md_unlink(md);
 
-        PTL_UNLOCK(flags);
+        LNET_UNLOCK(flags);
         return 0;
 }
 

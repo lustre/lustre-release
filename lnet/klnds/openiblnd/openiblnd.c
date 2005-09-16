@@ -23,14 +23,14 @@
 
 #include "openiblnd.h"
 
-ptl_nal_t               kibnal_nal = {
-        .nal_type       = OPENIBNAL,
-        .nal_startup    = kibnal_startup,
-        .nal_shutdown   = kibnal_shutdown,
-        .nal_ctl        = kibnal_ctl,
-        .nal_send       = kibnal_send,
-        .nal_recv       = kibnal_recv,
-        .nal_accept     = kibnal_accept,
+lnd_t the_kiblnd = {
+        .lnd_type       = OPENIBLND,
+        .lnd_startup    = kibnal_startup,
+        .lnd_shutdown   = kibnal_shutdown,
+        .lnd_ctl        = kibnal_ctl,
+        .lnd_send       = kibnal_send,
+        .lnd_recv       = kibnal_recv,
+        .lnd_accept     = kibnal_accept,
 };
 
 kib_data_t              kibnal_data;
@@ -403,7 +403,7 @@ kibnal_free_acceptsock (kib_acceptsock_t *as)
 }
 
 int
-kibnal_accept(ptl_ni_t *ni, struct socket *sock)
+kibnal_accept(lnet_ni_t *ni, struct socket *sock)
 {
         kib_acceptsock_t  *as;
         int                rc;
@@ -1092,7 +1092,7 @@ kibnal_close_matching_conns (lnet_nid_t nid)
 }
 
 int
-kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
+kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
         int                       rc = -EINVAL;
@@ -1303,7 +1303,7 @@ kibnal_setup_tx_descs (void)
 }
 
 void
-kibnal_shutdown (ptl_ni_t *ni)
+kibnal_shutdown (lnet_ni_t *ni)
 {
         int           i;
         int           rc;
@@ -1431,13 +1431,13 @@ kibnal_shutdown (ptl_ni_t *ni)
 }
 
 int
-kibnal_startup (ptl_ni_t *ni)
+kibnal_startup (lnet_ni_t *ni)
 {
         struct timeval    tv;
         int               rc;
         int               i;
 
-        LASSERT (ni->ni_nal == &kibnal_nal);
+        LASSERT (ni->ni_lnd == &the_kiblnd);
 
         /* Only 1 instance supported */
         if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
@@ -1652,7 +1652,7 @@ kibnal_startup (ptl_ni_t *ni)
 void __exit
 kibnal_module_fini (void)
 {
-        lnet_unregister_nal(&kibnal_nal);
+        lnet_unregister_lnd(&the_kiblnd);
         kibnal_tunables_fini();
 }
 
@@ -1665,7 +1665,7 @@ kibnal_module_init (void)
         if (rc != 0)
                 return rc;
         
-        lnet_register_nal(&kibnal_nal);
+        lnet_register_lnd(&the_kiblnd);
 
         return (0);
 }

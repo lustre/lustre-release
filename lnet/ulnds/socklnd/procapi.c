@@ -64,12 +64,12 @@ void procbridge_wakeup_nal(procbridge p)
     syscall(SYS_write, p->notifier[0], buf, sizeof(buf));
 }
 
-ptl_nal_t tcpnal_nal = {
-        .nal_type      = SOCKNAL,
-        .nal_startup   = procbridge_startup,
-        .nal_shutdown  = procbridge_shutdown,
-        .nal_send      = tcpnal_send,
-        .nal_recv      = tcpnal_recv,
+lnd_t the_tcplnd = {
+        .lnd_type      = SOCKLND,
+        .lnd_startup   = procbridge_startup,
+        .lnd_shutdown  = procbridge_shutdown,
+        .lnd_send      = tcpnal_send,
+        .lnd_recv      = tcpnal_recv,
 };
 int       tcpnal_running;
 
@@ -80,7 +80,7 @@ int       tcpnal_running;
  *   its state using PTL_FINI codepoint
  */
 void
-procbridge_shutdown(ptl_ni_t *ni)
+procbridge_shutdown(lnet_ni_t *ni)
 {
     bridge b=(bridge)ni->ni_data;
     procbridge p=(procbridge)b->local;
@@ -117,7 +117,7 @@ procbridge __global_procbridge = NULL;
  * error wrapper to cut down clutter.
  */
 int
-procbridge_startup (ptl_ni_t *ni)
+procbridge_startup (lnet_ni_t *ni)
 {
     procbridge p;
     bridge     b;
@@ -127,7 +127,7 @@ procbridge_startup (ptl_ni_t *ni)
      * which assigns the src nid/pid on incoming non-privileged connections
      * (i.e. us), and we don't accept connections. */
 
-    LASSERT (ni->ni_nal == &tcpnal_nal);
+    LASSERT (ni->ni_lnd == &the_tcplnd);
     LASSERT (!tcpnal_running);                  /* only single instance supported */
     LASSERT (ni->ni_interfaces[0] == NULL);     /* explicit interface(s) not supported */
 

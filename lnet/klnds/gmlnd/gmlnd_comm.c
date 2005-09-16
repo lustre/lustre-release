@@ -149,7 +149,7 @@ gmnal_get_tx(gmnal_ni_t *gmni, int may_block)
         }
         
         if (tx != NULL) {
-                LASSERT (tx->tx_ptlmsg == NULL);
+                LASSERT (tx->tx_lntmsg == NULL);
                 LASSERT (tx->tx_ltxb == NULL);
                 LASSERT (!tx->tx_credit);
                 
@@ -168,7 +168,7 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
         int         wake_sched = 0;
         int         wake_idle = 0;
         
-        LASSERT(tx->tx_ptlmsg == NULL);
+        LASSERT(tx->tx_lntmsg == NULL);
 
         spin_lock(&gmni->gmni_tx_lock);
         
@@ -293,26 +293,35 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
                                GMNAL_NETBUF_MSG(&tx->tx_buf), tx->tx_msgnob);
 
                         /* 2. Copy the payload */
-                        gmnal_copy_to_netbuf(
-                                gmni->gmni_large_pages, 
-                                &ltxb->txb_buf, 
-                                tx->tx_msgnob,
-                                tx->tx_large_niov,
-                                tx->tx_large_iskiov ? NULL : tx->tx_large_frags.iov,
-                                tx->tx_large_iskiov ? tx->tx_large_frags.kiov : NULL,
-                                tx->tx_large_offset,
-                                tx->tx_large_nob);
+                        if (tx->tx_large_iskiov)
+                                lnet_copy_kiov2kiov(
+                                        gmni->gmni_large_pages,
+                                        ltxb->txb_buf.nb_kiov,
+                                        tx->tx_msgnob,
+                                        tx->tx_large_niov,
+                                        tx->tx_large_frags.kiov,
+                                        tx->tx_large_offset,
+                                        tx->tx_large_nob);
+                        else
+                                lnet_copy_iov2kiov(
+                                        gmni->gmni_large_pages,
+                                        ltxb->txb_buf.nb_kiov,
+                                        tx->tx_msgnob,
+                                        tx->tx_large_niov,
+                                        tx->tx_large_frags.iov,
+                                        tx->tx_large_offset,
+                                        tx->tx_large_nob);
 
                         tx->tx_msgnob += tx->tx_large_nob;
 
                         /* We've copied everything... */
-                        lnet_finalize(gmni->gmni_ni, NULL, tx->tx_ptlmsg, 0);
-                        tx->tx_ptlmsg = NULL;
+                        lnet_finalize(gmni->gmni_ni, NULL, tx->tx_lntmsg, 0);
+                        tx->tx_lntmsg = NULL;
 
                         spin_lock(&gmni->gmni_tx_lock);
                 }
 
-                LASSERT (tx->tx_ptlmsg == NULL);
+                LASSERT (tx->tx_lntmsg == NULL);
 
                 list_add_tail(&tx->tx_list, &gmni->gmni_cred_txq);
         }
@@ -385,6 +394,7 @@ gmnal_rx_thread(void *arg)
 	gm_recv_event_t	*rxevent = NULL;
 	gm_recv_t	*recv = NULL;
         gmnal_rx_t      *rx;
+        int              rc;
 
 	libcfs_daemonize("gmnal_rxd");
 
@@ -442,14 +452,18 @@ gmnal_rx_thread(void *arg)
 
                 /* We're connectionless: simply drop packets with
                  * errors */
-                if (gmnal_unpack_msg(gmni, rx) == 0) {
-                        LASSERT (GMNAL_NETBUF_MSG(&rx->rx_buf)->gmm_type == GMNAL_MSG_IMMEDIATE);
-                        (void)lnet_parse(gmni->gmni_ni, 
-                                        &(GMNAL_NETBUF_MSG(&rx->rx_buf)->gmm_u.immediate.gmim_hdr),
-                                        rx);
+                rc = gmnal_unpack_msg(gmni, rx);
+                if (rc == 0) {
+                        gmnal_msg_t *msg = GMNAL_NETBUF_MSG(&rx->rx_buf);
+                        
+                        LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
+                        rc =  lnet_parse(gmni->gmni_ni, 
+                                         &msg->gmm_u.immediate.gmim_hdr,
+                                         rx);
                 }
 
-                gmnal_post_rx(gmni, rx);
+                if (rc < 0)                     /* parse failure */
+                        gmnal_post_rx(gmni, rx);
 
                 down(&gmni->gmni_rx_mutex);
 	}

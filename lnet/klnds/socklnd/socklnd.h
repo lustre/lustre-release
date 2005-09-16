@@ -64,11 +64,6 @@
 #define SOCKNAL_SMALL_FWD_NMSGS	128             /* # small messages I can be forwarding at any time */
 #define SOCKNAL_LARGE_FWD_NMSGS 64              /* # large messages I can be forwarding at any time */
 
-#define SOCKNAL_SMALL_FWD_PAGES	1               /* # pages in a small message fwd buffer */
-
-#define SOCKNAL_LARGE_FWD_PAGES (PAGE_ALIGN(PTL_MTU) >> PAGE_SHIFT)
-						/* # pages in a large message fwd buffer */
-
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
 #define SOCKNAL_ENOMEM_RETRY    CFS_MIN_DELAY   /* jiffies between retries */
 
@@ -86,18 +81,8 @@
 #endif
 
 /* minimum socket buffer required for connection handshake */
-#define SOCKNAL_MIN_BUFFER   (2*(sizeof(ptl_hdr_t) +                    \
-                                 PTL_MAX_INTERFACES * sizeof(__u32)))
-
-typedef struct                                  /* pool of forwarding buffers */
-{
-        spinlock_t        fmp_lock;             /* serialise */
-        struct list_head  fmp_idle_fmbs;        /* free buffers */
-        struct list_head  fmp_blocked_conns;    /* connections waiting for a buffer */
-        int               fmp_nactive_fmbs;     /* # buffers in use */
-        int               fmp_buff_pages;       /* # pages per buffer */
-} ksock_fmb_pool_t;
-
+#define SOCKNAL_MIN_BUFFER   (2*(sizeof(lnet_hdr_t) +                   \
+                                 LNET_MAX_INTERFACES * sizeof(__u32)))
 
 typedef struct                                  /* per scheduler state */
 {
@@ -159,7 +144,7 @@ typedef struct
         int               ksnn_npeers;          /* # peers */
         int               ksnn_shutdown;        /* shutting down? */
         int               ksnn_ninterfaces;     /* IP interfaces */
-        ksock_interface_t ksnn_interfaces[PTL_MAX_INTERFACES];
+        ksock_interface_t ksnn_interfaces[LNET_MAX_INTERFACES];
 } ksock_net_t;
 
 typedef struct
@@ -175,9 +160,6 @@ typedef struct
         int               ksnd_shuttingdown;    /* tell threads to exit */
         int               ksnd_nschedulers;     /* # schedulers */
         ksock_sched_t    *ksnd_schedulers;      /* their state */
-
-        ksock_fmb_pool_t  ksnd_small_fmp;       /* small message forwarding buffers */
-        ksock_fmb_pool_t  ksnd_large_fmp;       /* large message forwarding buffers */
 
         atomic_t          ksnd_nactive_ltxs;    /* #active ltxs */
 
@@ -221,25 +203,18 @@ struct ksock_route;                             /* forward ref */
 typedef struct                                  /* transmit packet */
 {
         struct list_head        tx_list;        /* queue on conn for transmission etc */
-        char                    tx_isfwd;       /* forwarding / sourced here */
         int                     tx_nob;         /* # packet bytes */
         int                     tx_resid;       /* residual bytes */
         int                     tx_niov;        /* # packet iovec frags */
         struct iovec           *tx_iov;         /* packet iovec frags */
         int                     tx_nkiov;       /* # packet page frags */
-        lnet_kiov_t             *tx_kiov;        /* packet page frags */
+        lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
-        ptl_hdr_t              *tx_hdr;         /* packet header (for debug only) */
+        lnet_hdr_t              *tx_hdr;         /* packet header (for debug only) */
 #if SOCKNAL_ZC        
         zccd_t                  tx_zccd;        /* zero copy callback descriptor */
 #endif
 } ksock_tx_t;
-
-typedef struct                                  /* forwarded packet */
-{
-        ksock_tx_t             ftx_tx;          /* send info */
-        struct iovec           ftx_iov;         /* hdr iovec */
-} ksock_ftx_t;
 
 #define KSOCK_ZCCD_2_TX(ptr)	list_entry (ptr, ksock_tx_t, tx_zccd)
 /* network zero copy callback descriptor embedded in ksock_tx_t */
@@ -249,30 +224,17 @@ typedef struct                                  /* locally transmitted packet */
         ksock_tx_t              ltx_tx;         /* send info */
         void                   *ltx_private;    /* lnet_finalize() callback arg */
         void                   *ltx_cookie;     /* lnet_finalize() callback arg */
-        ptl_hdr_t               ltx_hdr;        /* buffer for packet header */
+        lnet_hdr_t               ltx_hdr;        /* buffer for packet header */
         int                     ltx_desc_size;  /* bytes allocated for this desc */
         struct iovec            ltx_iov[1];     /* iov for hdr + payload */
-        lnet_kiov_t              ltx_kiov[0];    /* kiov for payload */
+        lnet_kiov_t             ltx_kiov[0];    /* kiov for payload */
 } ksock_ltx_t;
-
-#define KSOCK_TX_2_KPR_FWD_DESC(ptr)    list_entry ((kprfd_scratch_t *)ptr, kpr_fwd_desc_t, kprfd_scratch)
-/* forwarded packets (router->socknal) embedded in kpr_fwd_desc_t::kprfd_scratch */
 
 #define KSOCK_TX_2_KSOCK_LTX(ptr)       list_entry (ptr, ksock_ltx_t, ltx_tx)
 /* local packets (lib->socknal) embedded in ksock_ltx_t::ltx_tx */
 
 /* NB list_entry() is used here as convenient macro for calculating a
  * pointer to a struct from the address of a member. */
-
-typedef struct                                  /* Kernel portals Socket Forwarding message buffer */
-{                                               /* (socknal->router) */
-        struct list_head        fmb_list;       /* queue idle */
-        kpr_fwd_desc_t          fmb_fwd;        /* router's descriptor */
-        ksock_fmb_pool_t       *fmb_pool;       /* owning pool */
-        struct ksock_peer      *fmb_peer;       /* peer received from */
-        ptl_hdr_t               fmb_hdr;        /* message header */
-        lnet_kiov_t              fmb_kiov[0];    /* payload frags */
-} ksock_fmb_t;
 
 /* space for the rx frag descriptors; we either read a single contiguous
  * header, or up to PTL_MD_MAX_IOV frags of payload of either type. */
@@ -282,11 +244,10 @@ typedef union {
 } ksock_rxiovspace_t;
 
 #define SOCKNAL_RX_HEADER       1               /* reading header */
-#define SOCKNAL_RX_BODY         2               /* reading body (to deliver here) */
-#define SOCKNAL_RX_BODY_FWD     3               /* reading body (to forward) */
-#define SOCKNAL_RX_SLOP         4               /* skipping body */
-#define SOCKNAL_RX_GET_FMB      5               /* scheduled for forwarding */
-#define SOCKNAL_RX_FMB_SLEEP    6               /* blocked waiting for a fwd desc */
+#define SOCKNAL_RX_PARSE        2               /* Calling lnet_parse() */
+#define SOCKNAL_RX_PARSE_WAIT   3               /* waiting to be told to read the body */
+#define SOCKNAL_RX_BODY         4               /* reading body (to deliver here) */
+#define SOCKNAL_RX_SLOP         5               /* skipping body */
 
 typedef struct ksock_conn
 { 
@@ -318,10 +279,10 @@ typedef struct ksock_conn
         int                 ksnc_rx_niov;       /* # iovec frags */
         struct iovec       *ksnc_rx_iov;        /* the iovec frags */
         int                 ksnc_rx_nkiov;      /* # page frags */
-        lnet_kiov_t         *ksnc_rx_kiov;       /* the page frags */
+        lnet_kiov_t        *ksnc_rx_kiov;       /* the page frags */
         ksock_rxiovspace_t  ksnc_rx_iov_space;  /* space for frag descriptors */
         void               *ksnc_cookie;        /* rx lnet_finalize passthru arg */
-        ptl_hdr_t           ksnc_hdr;           /* where I read headers into */
+        lnet_hdr_t           ksnc_hdr;           /* where I read headers into */
 
         /* WRITER */
         struct list_head    ksnc_tx_list;       /* where I enq waiting for output space */
@@ -340,9 +301,9 @@ typedef struct ksock_conn
 #endif
 } ksock_conn_t;
 
-#define KSNR_TYPED_ROUTES   ((1 << SOCKNAL_CONN_CONTROL) |      \
-                             (1 << SOCKNAL_CONN_BULK_IN) |      \
-                             (1 << SOCKNAL_CONN_BULK_OUT))
+#define KSNR_TYPED_ROUTES   ((1 << SOCKLND_CONN_CONTROL) |      \
+                             (1 << SOCKLND_CONN_BULK_IN) |      \
+                             (1 << SOCKLND_CONN_BULK_OUT))
 
 typedef struct ksock_route
 {
@@ -374,15 +335,15 @@ typedef struct ksock_peer
         struct list_head    ksnp_routes;        /* routes */
         struct list_head    ksnp_tx_queue;      /* waiting packets */
         cfs_time_t          ksnp_last_alive;    /* when (in jiffies) I was last alive */
-        ptl_ni_t           *ksnp_ni;            /* which network */
+        lnet_ni_t          *ksnp_ni;            /* which network */
         int                 ksnp_n_passive_ips; /* # of... */
-        __u32               ksnp_passive_ips[PTL_MAX_INTERFACES]; /* preferred local interfaces */
+        __u32               ksnp_passive_ips[LNET_MAX_INTERFACES]; /* preferred local interfaces */
 } ksock_peer_t;
 
 typedef struct ksock_connreq
 {
         struct list_head    ksncr_list;         /* stash on ksnd_connd_connreqs */
-        ptl_ni_t           *ksncr_ni;           /* chosen NI */
+        lnet_ni_t           *ksncr_ni;           /* chosen NI */
         struct socket      *ksncr_sock;         /* accepted socket */
 } ksock_connreq_t;
 
@@ -476,24 +437,20 @@ ksocknal_peer_decref (ksock_peer_t *peer)
 }
 
 
-int ksocknal_startup (ptl_ni_t *ni);
-void ksocknal_shutdown (ptl_ni_t *ni);
-int ksocknal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int ksocknal_send (ptl_ni_t *ni, void *private,
-                   ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                   int type, lnet_process_id_t tgt, 
-                   int tgt_is_router, int routing,
-                   unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                   unsigned int offset, unsigned int nob);
-int ksocknal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-                  unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+int ksocknal_startup (lnet_ni_t *ni);
+void ksocknal_shutdown (lnet_ni_t *ni);
+int ksocknal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int ksocknal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int ksocknal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
+                  int delayed, unsigned int niov, 
+                  struct iovec *iov, lnet_kiov_t *kiov,
                   unsigned int offset, unsigned int mlen, unsigned int rlen);
-int ksocknal_accept(ptl_ni_t *ni, struct socket *sock);
+int ksocknal_accept(lnet_ni_t *ni, struct socket *sock);
 
-extern int ksocknal_add_peer(ptl_ni_t *ni, lnet_process_id_t id, __u32 ip, int port);
-extern ksock_peer_t *ksocknal_find_peer_locked (ptl_ni_t *ni, lnet_process_id_t id);
-extern ksock_peer_t *ksocknal_find_peer (ptl_ni_t *ni, lnet_process_id_t id);
-extern int ksocknal_create_conn (ptl_ni_t *ni, ksock_route_t *route,
+extern int ksocknal_add_peer(lnet_ni_t *ni, lnet_process_id_t id, __u32 ip, int port);
+extern ksock_peer_t *ksocknal_find_peer_locked (lnet_ni_t *ni, lnet_process_id_t id);
+extern ksock_peer_t *ksocknal_find_peer (lnet_ni_t *ni, lnet_process_id_t id);
+extern int ksocknal_create_conn (lnet_ni_t *ni, ksock_route_t *route,
                                  struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
@@ -504,19 +461,17 @@ extern int ksocknal_close_matching_conns (lnet_process_id_t id, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch);
-extern void ksocknal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
-extern void ksocknal_fmb_callback (ptl_ni_t *ni, void *arg, int error);
-extern void ksocknal_notify (ptl_ni_t *ni, lnet_nid_t gw_nid, int alive);
+extern void ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive);
 extern int ksocknal_thread_start (int (*fn)(void *arg), void *arg);
 extern void ksocknal_thread_fini (void);
 extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern int ksocknal_send_hello (ptl_ni_t *ni, ksock_conn_t *conn,
+extern int ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn,
                                 lnet_nid_t peer_nid, 
                                 __u32 *ipaddrs, int nipaddrs);
-extern int ksocknal_recv_hello (ptl_ni_t *ni, ksock_conn_t *conn, 
+extern int ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn, 
                                 lnet_process_id_t *id, 
                                 __u64 *incarnation, __u32 *ipaddrs);
 

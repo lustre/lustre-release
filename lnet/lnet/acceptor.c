@@ -40,7 +40,7 @@ static int accept_timeout = 5;
 CFS_MODULE_PARM(accept_timeout, "i", int, 0644,
 		"Acceptor's timeout (seconds)");
 
-static int accept_proto_version = PTL_PROTO_ACCEPTOR_VERSION;
+static int accept_proto_version = LNET_PROTO_ACCEPTOR_VERSION;
 CFS_MODULE_PARM(accept_proto_version, "i", int, 0444,
                 "Acceptor protocol version (outgoing connection requests)");
 
@@ -135,8 +135,8 @@ lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
 
         CLASSERT (sizeof(cr) <= 16);            /* not too big to be on the stack */
 
-        for (port = PTL_ACCEPTOR_MAX_RESERVED_PORT; 
-             port >= PTL_ACCEPTOR_MIN_RESERVED_PORT; 
+        for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT; 
+             port >= LNET_ACCEPTOR_MIN_RESERVED_PORT; 
              --port) {
                 /* Iterate through reserved ports. */
 
@@ -157,14 +157,14 @@ lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
                         goto failed_sock;
                 }
 
-                CLASSERT (PTL_PROTO_ACCEPTOR_VERSION == 1);
+                CLASSERT (LNET_PROTO_ACCEPTOR_VERSION == 1);
 
-                if (accept_proto_version == PTL_PROTO_ACCEPTOR_VERSION) {
+                if (accept_proto_version == LNET_PROTO_ACCEPTOR_VERSION) {
 
-                        LASSERT (lnet_apini.apini_ptlcompat < 2); /* no portals peers */
+                        LASSERT (the_lnet.ln_ptlcompat < 2); /* no portals peers */
                                 
-                        cr.acr_magic   = PTL_PROTO_ACCEPTOR_MAGIC;
-                        cr.acr_version = PTL_PROTO_ACCEPTOR_VERSION;
+                        cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
+                        cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
                         cr.acr_nid     = peer_nid;
 
                         rc = libcfs_sock_write(sock, &cr, sizeof(cr), 0);
@@ -195,14 +195,14 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 }
 
 int
-lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
+lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic)
 {
         lnet_acceptor_connreq_t  cr;
         __u32                   peer_ip;
         int                     peer_port;
         int                     rc;
         int                     flip;
-        ptl_ni_t               *ni;
+        lnet_ni_t              *ni;
         char                   *str;
 
         /* CAVEAT EMPTOR: I may be called by a NAL in any thread's context if I
@@ -214,13 +214,13 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         LASSERT (rc == 0);                      /* we succeeded before */
 
-        if (!lnet_accept_magic(magic, PTL_PROTO_ACCEPTOR_MAGIC)) {
+        if (!lnet_accept_magic(magic, LNET_PROTO_ACCEPTOR_MAGIC)) {
 
-                if (magic == le32_to_cpu(PTL_PROTO_TCP_MAGIC))
+                if (magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC))
                         str = "'old' socknal/tcpnal";
-                else if (lnet_accept_magic(magic, PTL_PROTO_RA_MAGIC))
+                else if (lnet_accept_magic(magic, LNET_PROTO_RA_MAGIC))
                         str = "'old' ranal";
-                else if (lnet_accept_magic(magic, PTL_PROTO_OPENIB_MAGIC))
+                else if (lnet_accept_magic(magic, LNET_PROTO_OPENIB_MAGIC))
                         str = "'old' openibnal";
                 else
                         str = "unrecognised";
@@ -231,7 +231,7 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 return -EPROTO;
         }
 
-        flip = magic != PTL_PROTO_ACCEPTOR_MAGIC;
+        flip = magic != LNET_PROTO_ACCEPTOR_MAGIC;
 
         /* FTTB, we only have 1 acceptor protocol version.  When this changes,
          * we'll have to read the version number first before we know how much
@@ -251,7 +251,7 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 __swab64s(&cr.acr_nid);
         }
         
-        if (cr.acr_version != PTL_PROTO_ACCEPTOR_VERSION) {
+        if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u: "
                                " unrecognised protocol version %d\n",
                                HIPQUAD(peer_ip), cr.acr_version);
@@ -262,15 +262,15 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
         if (ni == NULL ||             /* no matching net */
             ni->ni_nid != cr.acr_nid) /* right NET, but wrong NID! */ {
                 if (ni != NULL)
-                        ptl_ni_decref(ni);
+                        lnet_ni_decref(ni);
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
                                " No matching NI\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
                 return -EPERM;
         }
 
-        if (ni->ni_nal->nal_accept == NULL) {
-                ptl_ni_decref(ni);
+        if (ni->ni_lnd->lnd_accept == NULL) {
+                lnet_ni_decref(ni);
                 LCONSOLE_ERROR("Refusing connection from %u.%u.%u.%u for %s: "
                                " NI doesn not accept IP connections\n",
                                HIPQUAD(peer_ip), libcfs_nid2str(cr.acr_nid));
@@ -282,7 +282,7 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                blind_ni == NULL ? "" : " (blind)");
 
         if (blind_ni == NULL) {
-                rc = ni->ni_nal->nal_accept(ni, sock);
+                rc = ni->ni_lnd->lnd_accept(ni, sock);
                 if (rc != 0)
                         CERROR("NI %s refused connection from %u.%u.%u.%u\n",
                                libcfs_nid2str(ni->ni_nid), HIPQUAD(peer_ip));
@@ -296,7 +296,7 @@ lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 rc = 0;
         }
 
-        ptl_ni_decref(ni);
+        lnet_ni_decref(ni);
         return rc;
 }
 EXPORT_SYMBOL(lnet_accept);
@@ -311,7 +311,7 @@ lnet_acceptor(void *arg)
 	__u32          magic;
 	__u32          peer_ip;
 	int            peer_port;
-        ptl_ni_t      *blind_ni;
+        lnet_ni_t     *blind_ni;
         int            secure = (int)((unsigned long)arg);
 
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
@@ -320,10 +320,10 @@ lnet_acceptor(void *arg)
          * connections "blind".  Otherwise I'll have to read the bytestream to
          * see which NI the connection is for.  NB I don't get to run at all if
          * there are 0 acceptor_nis... */
-        n_acceptor_nis = ptl_count_acceptor_nis(&blind_ni);
+        n_acceptor_nis = lnet_count_acceptor_nis(&blind_ni);
         LASSERT (n_acceptor_nis > 0);
         if (n_acceptor_nis > 1) {
-                ptl_ni_decref(blind_ni);
+                lnet_ni_decref(blind_ni);
                 blind_ni = NULL;
         }
 
@@ -374,7 +374,7 @@ lnet_acceptor(void *arg)
 			goto failed;
 		}
 
-                if (secure && peer_port > PTL_ACCEPTOR_MAX_RESERVED_PORT) {
+                if (secure && peer_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {
                         CERROR("Refusing connection from %u.%u.%u.%u: "
                                "insecure port %d\n",
                                HIPQUAD(peer_ip), peer_port);
@@ -392,7 +392,7 @@ lnet_acceptor(void *arg)
                 }
 
                 if (blind_ni != NULL) {
-                        rc = blind_ni->ni_nal->nal_accept(blind_ni, newsock);
+                        rc = blind_ni->ni_lnd->lnd_accept(blind_ni, newsock);
                         if (rc != 0) {
                                 CERROR("NI %s refused 'blind' connection from "
                                        "%u.%u.%u.%u\n", 
@@ -425,7 +425,7 @@ lnet_acceptor(void *arg)
         lnet_acceptor_state.pta_sock = NULL;
 
         if (blind_ni != NULL)
-                ptl_ni_decref(blind_ni);
+                lnet_ni_decref(blind_ni);
 
         LCONSOLE(0,"Acceptor stopping\n");
 	
@@ -442,7 +442,7 @@ lnet_acceptor_start(void)
 
         /* If we're talking to any portals (pre-LNET) nodes we force the old
          * acceptor protocol on outgoing connections */
-        if (lnet_apini.apini_ptlcompat > 1)
+        if (the_lnet.ln_ptlcompat > 1)
                 accept_proto_version = 0;
         
 	LASSERT (lnet_acceptor_state.pta_sock == NULL);
@@ -460,7 +460,7 @@ lnet_acceptor_start(void)
                 return -EINVAL;
         }
 	
-	if (ptl_count_acceptor_nis(NULL) == 0)  /* not required */
+	if (lnet_count_acceptor_nis(NULL) == 0)  /* not required */
 		return 0;
 	
 	pid = cfs_kernel_thread(lnet_acceptor, (void *)secure, 0);

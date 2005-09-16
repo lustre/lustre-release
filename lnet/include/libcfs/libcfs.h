@@ -281,8 +281,8 @@ int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 /* libcfs tcpip */
-#define PTL_ACCEPTOR_MIN_RESERVED_PORT    512
-#define PTL_ACCEPTOR_MAX_RESERVED_PORT    1023
+#define LNET_ACCEPTOR_MIN_RESERVED_PORT    512
+#define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
 int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask);
 int libcfs_ipif_enumerate(char ***names);

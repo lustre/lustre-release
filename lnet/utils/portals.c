@@ -246,7 +246,7 @@ int g_net_is_compatible (char *cmd, ...)
 
         do {
                 nal = va_arg (ap, int);
-                if (nal == PTL_NETNAL(g_net)) {
+                if (nal == PTL_NETTYP(g_net)) {
                         va_end (ap);
                         return 1;
                 }
@@ -258,7 +258,7 @@ int g_net_is_compatible (char *cmd, ...)
                 fprintf (stderr, 
                          "Command %s not compatible with %s NAL\n",
                          cmd, 
-                         libcfs_nal2str(PTL_NETNAL(g_net)));
+                         libcfs_lnd2str(PTL_NETTYP(g_net)));
         return 0;
 }
 
@@ -355,7 +355,7 @@ jt_ptl_print_interfaces (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -403,7 +403,7 @@ jt_ptl_add_interface (int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible(argv[0], SOCKNAL, 0))
+        if (!g_net_is_compatible(argv[0], SOCKLND, 0))
                 return -1;
 
         if (lnet_parse_ipaddr(&ipaddr, argv[1]) != 0) {
@@ -450,7 +450,7 @@ jt_ptl_del_interface (int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible(argv[0], SOCKNAL, 0))
+        if (!g_net_is_compatible(argv[0], SOCKLND, 0))
                 return -1;
 
         if (argc == 2 &&
@@ -482,8 +482,8 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, RANAL, 
-                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+                                  OPENIBLND, IIBLND, VIBLND, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -495,7 +495,7 @@ jt_ptl_print_peers (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                if (g_net_is_compatible(NULL, SOCKNAL, 0)) {
+                if (g_net_is_compatible(NULL, SOCKLND, 0)) {
                         id.nid = data.ioc_nid;
                         id.pid = data.ioc_u32[4];
                         printf ("%-20s [%d]%s->%s:%d #%d\n",
@@ -505,7 +505,7 @@ jt_ptl_print_peers (int argc, char **argv)
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
                                 data.ioc_u32[1], /* peer port */
                                 data.ioc_u32[3]); /* conn_count */
-                } else if (g_net_is_compatible(NULL, RANAL, OPENIBNAL, VIBNAL, 0)) {
+                } else if (g_net_is_compatible(NULL, RALND, OPENIBLND, VIBLND, 0)) {
                         printf ("%-20s [%d]@%s:%d\n",
                                 libcfs_nid2str(data.ioc_nid), 
                                 data.ioc_count,
@@ -538,17 +538,17 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, RANAL, 
-                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+                                  OPENIBLND, IIBLND, VIBLND, 0))
                 return -1;
 
-        if (g_net_is_compatible(NULL, SOCKNAL, OPENIBNAL, RANAL, 0)) {
+        if (g_net_is_compatible(NULL, SOCKLND, OPENIBLND, RALND, 0)) {
                 if (argc != 4) {
                         fprintf (stderr, "usage(tcp,openib,ra): %s nid ipaddr port\n", 
                                  argv[0]);
                         return 0;
                 }
-        } else if (g_net_is_compatible(NULL, VIBNAL, 0)) {
+        } else if (g_net_is_compatible(NULL, VIBLND, 0)) {
                 if (argc != 3) {
                         fprintf (stderr, "usage(vib): %s nid ipaddr\n", 
                                  argv[0]);
@@ -565,13 +565,13 @@ jt_ptl_add_peer (int argc, char **argv)
                 return -1;
         }
 
-        if (g_net_is_compatible (NULL, SOCKNAL, OPENIBNAL, VIBNAL, RANAL, 0) &&
+        if (g_net_is_compatible (NULL, SOCKLND, OPENIBLND, VIBLND, RALND, 0) &&
             lnet_parse_ipaddr (&ip, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
                 return -1;
         }
 
-        if (g_net_is_compatible (NULL, SOCKNAL, OPENIBNAL, RANAL, 0) &&
+        if (g_net_is_compatible (NULL, SOCKLND, OPENIBLND, RALND, 0) &&
             lnet_parse_port (&port, argv[3]) != 0) {
                 fprintf (stderr, "Can't parse port: %s\n", argv[3]);
                 return -1;
@@ -601,11 +601,11 @@ jt_ptl_del_peer (int argc, char **argv)
         __u32                    ip = 0;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, RANAL, 
-                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+                                  OPENIBLND, IIBLND, VIBLND, 0))
                 return -1;
 
-        if (g_net_is_compatible(NULL, SOCKNAL, 0)) {
+        if (g_net_is_compatible(NULL, SOCKLND, 0)) {
                 if (argc > 3) {
                         fprintf (stderr, "usage: %s [nid] [ipaddr]\n",
                                  argv[0]);
@@ -622,7 +622,7 @@ jt_ptl_del_peer (int argc, char **argv)
                 return -1;
         }
 
-        if (g_net_is_compatible(NULL, SOCKNAL, 0)) {
+        if (g_net_is_compatible(NULL, SOCKLND, 0)) {
                 if (argc > 2 &&
                     lnet_parse_ipaddr (&ip, argv[2]) != 0) {
                         fprintf (stderr, "Can't parse ip addr: %s\n",
@@ -655,8 +655,8 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, RANAL, 
-                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 
+                                  OPENIBLND, IIBLND, VIBLND, 0))
                 return -1;
 
         for (index = 0; ; index++) {
@@ -668,15 +668,15 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                if (g_net_is_compatible (NULL, SOCKNAL, 0)) {
+                if (g_net_is_compatible (NULL, SOCKLND, 0)) {
                         id.nid = data.ioc_nid;
                         id.pid = data.ioc_u32[6];
                         printf ("%-20s %s[%d]%s->%s:%d %d/%d %s\n",
                                 libcfs_id2str(id),
-                                (data.ioc_u32[3] == SOCKNAL_CONN_ANY) ? "A" :
-                                (data.ioc_u32[3] == SOCKNAL_CONN_CONTROL) ? "C" :
-                                (data.ioc_u32[3] == SOCKNAL_CONN_BULK_IN) ? "I" :
-                                (data.ioc_u32[3] == SOCKNAL_CONN_BULK_OUT) ? "O" : "?",
+                                (data.ioc_u32[3] == SOCKLND_CONN_ANY) ? "A" :
+                                (data.ioc_u32[3] == SOCKLND_CONN_CONTROL) ? "C" :
+                                (data.ioc_u32[3] == SOCKLND_CONN_BULK_IN) ? "I" :
+                                (data.ioc_u32[3] == SOCKLND_CONN_BULK_OUT) ? "O" : "?",
                                 data.ioc_u32[4], /* scheduler */
                                 ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* local IP addr */
                                 ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* remote IP addr */
@@ -684,7 +684,7 @@ jt_ptl_print_connections (int argc, char **argv)
                                 data.ioc_count, /* tx buffer size */
                                 data.ioc_u32[5], /* rx buffer size */
                                 data.ioc_flags ? "nagle" : "nonagle");
-                } else if (g_net_is_compatible (NULL, RANAL, 0)) {
+                } else if (g_net_is_compatible (NULL, RALND, 0)) {
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid),
                                 data.ioc_u32[0] /* device id */);
@@ -717,8 +717,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible (NULL, SOCKNAL, RANAL, 
-                                  OPENIBNAL, IIBNAL, VIBNAL, 0))
+        if (!g_net_is_compatible (NULL, SOCKLND, RALND, 
+                                  OPENIBLND, IIBLND, VIBLND, 0))
                 return 0;
 
         if (argc >= 2 &&
@@ -727,7 +727,7 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return -1;
         }
 
-        if (g_net_is_compatible (NULL, SOCKNAL, 0) &&
+        if (g_net_is_compatible (NULL, SOCKLND, 0) &&
             argc >= 3 &&
             lnet_parse_ipaddr (&ipaddr, argv[2]) != 0) {
                 fprintf (stderr, "Can't parse ip addr %s\n", argv[2]);
@@ -760,7 +760,7 @@ int jt_ptl_push_connection (int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible (argv[0], SOCKNAL, 0))
+        if (!g_net_is_compatible (argv[0], SOCKLND, 0))
                 return -1;
         
         if (argc > 1 &&
@@ -790,7 +790,7 @@ jt_ptl_print_active_txs (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], QSWNAL, 0))
+        if (!g_net_is_compatible (argv[0], QSWLND, 0))
                 return -1;
 
         for (index = 0;;index++) {

@@ -217,8 +217,8 @@ kpr_seq_routes_show (struct seq_file *s, void *iter)
         hops = sri->sri_net->kpne_hops;
         nid = sri->sri_route->kpre_gateway->kpge_nid;
         alive = sri->sri_route->kpre_gateway->kpge_alive;
-        ignored = ptl_islocalnet(sri->sri_net->kpne_net, NULL) ||
-                  !ptl_islocalnet(sri->sri_route->kpre_gateway->kpge_nid, NULL);
+        ignored = lnet_islocalnet(sri->sri_net->kpne_net, NULL) ||
+                  !lnet_islocalnet(sri->sri_route->kpre_gateway->kpge_nid, NULL);
 
         read_unlock_irqrestore(&kpr_state.kpr_rwlock, flags);
 

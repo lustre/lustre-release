@@ -71,7 +71,8 @@ kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 }
 
 int
-kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, int niov, lnet_kiov_t *kiov)
+kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, 
+                     unsigned int niov, lnet_kiov_t *kiov)
 {
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
@@ -193,7 +194,7 @@ kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, int niov, lnet_kiov
 
 int
 kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob, 
-                    int niov, struct iovec *iov)
+                    unsigned int niov, struct iovec *iov)
 {
         int       nfrags    = ktx->ktx_nfrag;
         int       nmapped   = ktx->ktx_nmappedpages;
@@ -309,7 +310,6 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
 void
 kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 {
-        kpr_fwd_desc_t   *fwd = NULL;
         unsigned long     flags;
 
         kqswnal_unmap_tx (ktx);                 /* release temporary mappings */
@@ -328,35 +328,13 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 
         list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 
-        /* anything blocking for a tx descriptor? */
-        if (!kqswnal_data.kqn_shuttingdown &&
-            !list_empty(&kqswnal_data.kqn_idletxd_fwdq)) /* forwarded packet? */
-        {
-                CDEBUG(D_NET,"wakeup fwd\n");
-
-                fwd = list_entry (kqswnal_data.kqn_idletxd_fwdq.next,
-                                  kpr_fwd_desc_t, kprfd_list);
-                list_del (&fwd->kprfd_list);
-        }
-
         wake_up (&kqswnal_data.kqn_idletxd_waitq);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
-
-        if (fwd == NULL)
-                return;
-
-        /* schedule packet for forwarding again */
-        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
-
-        list_add_tail (&fwd->kprfd_list, &kqswnal_data.kqn_delayedfwds);
-        wake_up (&kqswnal_data.kqn_sched_waitq);
-
-        spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 }
 
 kqswnal_tx_t *
-kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
+kqswnal_get_idle_tx (int may_block)
 {
         unsigned long  flags;
         kqswnal_tx_t  *ktx = NULL;
@@ -374,10 +352,6 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                         break;
                 }
 
-                if (fwd != NULL)                /* forwarded packet? */
-                        break;
-
-                /* doing a local transmit */
                 if (!may_block) {
                         if (list_empty (&kqswnal_data.kqn_nblk_idletxds)) {
                                 CERROR ("intr tx desc pool exhausted\n");
@@ -404,12 +378,7 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                 list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
                 ktx->ktx_launcher = current->pid;
                 atomic_inc(&kqswnal_data.kqn_pending_txs);
-        } else if (fwd != NULL) {
-                /* queue forwarded packet until idle txd available */
-                CDEBUG (D_NET, "blocked fwd [%p]\n", fwd);
-                list_add_tail (&fwd->kprfd_list,
-                               &kqswnal_data.kqn_idletxd_fwdq);
-        }
+        } 
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
@@ -423,16 +392,11 @@ void
 kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
 {
         switch (ktx->ktx_state) {
-        case KTX_FORWARDING:       /* router asked me to forward this packet */
-                lnet_fwd_done (kqswnal_data.kqn_ni,
-                              (kpr_fwd_desc_t *)ktx->ktx_args[0], error);
-                break;
-
         case KTX_RDMAING:          /* optimized GET/PUT handled */
         case KTX_PUTTING:          /* optimized PUT sent */
         case KTX_SENDING:          /* normal send */
                 lnet_finalize (kqswnal_data.kqn_ni, NULL,
-                              (ptl_msg_t *)ktx->ktx_args[1],
+                              (lnet_msg_t *)ktx->ktx_args[1],
                               (error == 0) ? 0 : -EIO);
                 break;
 
@@ -441,9 +405,9 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
                  * delivering a REPLY event; we committed to it when we
                  * launched the GET */
                 lnet_finalize (kqswnal_data.kqn_ni, NULL, 
-                              (ptl_msg_t *)ktx->ktx_args[1], 0);
+                              (lnet_msg_t *)ktx->ktx_args[1], 0);
                 lnet_finalize (kqswnal_data.kqn_ni, NULL,
-                              (ptl_msg_t *)ktx->ktx_args[2],
+                              (lnet_msg_t *)ktx->ktx_args[2],
                               (error == 0) ? 0 : -EIO);
                 break;
 
@@ -485,7 +449,6 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
 #endif
                 break;
                 
-        case KTX_FORWARDING:
         case KTX_SENDING:
                 status = 0;
                 break;
@@ -530,7 +493,6 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                                      NULL, ktx->ktx_frags, 1);
                 break;
 
-        case KTX_FORWARDING:
         case KTX_SENDING:
 #if MULTIRAIL_EKC
                 rc = ep_transmit_message(kqswnal_data.kqn_eptx, dest,
@@ -573,16 +535,16 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 
 #if 0
 static char *
-hdr_type_string (ptl_hdr_t *hdr)
+hdr_type_string (lnet_hdr_t *hdr)
 {
         switch (hdr->type) {
-        case PTL_MSG_ACK:
+        case LNET_MSG_ACK:
                 return ("ACK");
-        case PTL_MSG_PUT:
+        case LNET_MSG_PUT:
                 return ("PUT");
-        case PTL_MSG_GET:
+        case LNET_MSG_GET:
                 return ("GET");
-        case PTL_MSG_REPLY:
+        case LNET_MSG_REPLY:
                 return ("REPLY");
         default:
                 return ("<UNKNOWN>");
@@ -590,7 +552,7 @@ hdr_type_string (ptl_hdr_t *hdr)
 }
 
 static void
-kqswnal_cerror_hdr(ptl_hdr_t * hdr)
+kqswnal_cerror_hdr(lnet_hdr_t * hdr)
 {
         char *type_str = hdr_type_string (hdr);
 
@@ -602,7 +564,7 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
                le32_to_cpu(hdr->dest_pid));
 
         switch (le32_to_cpu(hdr->type)) {
-        case PTL_MSG_PUT:
+        case LNET_MSG_PUT:
                 CERROR("    Ptl index %d, ack md "LPX64"."LPX64", "
                        "match bits "LPX64"\n",
                        le32_to_cpu(hdr->msg.put.ptl_index),
@@ -614,7 +576,7 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
                        hdr->msg.put.hdr_data);
                 break;
 
-        case PTL_MSG_GET:
+        case LNET_MSG_GET:
                 CERROR("    Ptl index %d, return md "LPX64"."LPX64", "
                        "match bits "LPX64"\n",
                        le32_to_cpu(hdr->msg.get.ptl_index),
@@ -626,14 +588,14 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
                        le32_to_cpu(hdr->msg.get.src_offset));
                 break;
 
-        case PTL_MSG_ACK:
+        case LNET_MSG_ACK:
                 CERROR("    dst md "LPX64"."LPX64", manipulated length %d\n",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie,
                        le32_to_cpu(hdr->msg.ack.mlength));
                 break;
 
-        case PTL_MSG_REPLY:
+        case LNET_MSG_REPLY:
                 CERROR("    dst md "LPX64"."LPX64"\n",
                        hdr->msg.reply.dst_wmd.wh_interface_cookie,
                        hdr->msg.reply.dst_wmd.wh_object_cookie);
@@ -731,7 +693,7 @@ kqswnal_remotemd_t *
 kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
 {
         char               *buffer = (char *)page_address(krx->krx_kiov[0].kiov_page);
-        ptl_hdr_t          *hdr = (ptl_hdr_t *)buffer;
+        lnet_hdr_t         *hdr = (lnet_hdr_t *)buffer;
         kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(buffer + KQSW_HDR_SIZE);
         lnet_nid_t          nid = kqswnal_rx_nid(krx);
 
@@ -791,7 +753,7 @@ kqswnal_rdma_store_complete (EP_RXD *rxd)
         krx->krx_rpc_reply_needed = 0;
         kqswnal_rx_decref (krx);
 
-        /* free ktx & finalize() its ptl_msg_t */
+        /* free ktx & finalize() its lnet_msg_t */
         kqswnal_tx_done(ktx, (status == EP_SUCCESS) ? 0 : -ECONNABORTED);
 }
 
@@ -821,7 +783,7 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
                 status = -ECONNABORTED;
         }
 
-        /* free ktx & finalize() its ptl_msg_t */
+        /* free ktx & finalize() its lnet_msg_t */
         kqswnal_tx_done(ktx, status);
 
         if (!in_interrupt()) {
@@ -843,8 +805,8 @@ kqswnal_rdma_fetch_complete (EP_RXD *rxd)
 }
 
 int
-kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
-              int niov, struct iovec *iov, lnet_kiov_t *kiov,
+kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg, int type,
+              unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
               unsigned int offset, unsigned int len)
 {
         kqswnal_remotemd_t *rmd;
@@ -856,22 +818,22 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         int                 ndatav;
 #endif
 
-        LASSERT (type == PTL_MSG_GET || 
-                 type == PTL_MSG_PUT ||
-                 type == PTL_MSG_REPLY);
+        LASSERT (type == LNET_MSG_GET || 
+                 type == LNET_MSG_PUT ||
+                 type == LNET_MSG_REPLY);
         /* Not both mapped and paged payload */
         LASSERT (iov == NULL || kiov == NULL);
         /* RPC completes with failure by default */
         LASSERT (krx->krx_rpc_reply_needed);
         LASSERT (krx->krx_rpc_reply_status != 0);
 
-        rmd = kqswnal_parse_rmd(krx, type, ptlmsg->msg_ev.initiator.nid);
+        rmd = kqswnal_parse_rmd(krx, type, lntmsg->msg_ev.initiator.nid);
         if (rmd == NULL)
                 return (-EPROTO);
 
         if (len == 0) {
                 /* data got truncated to nothing. */
-                lnet_finalize(kqswnal_data.kqn_ni, krx, ptlmsg, 0);
+                lnet_finalize(kqswnal_data.kqn_ni, krx, lntmsg, 0);
                 /* Let kqswnal_rx_done() complete the RPC with success */
                 krx->krx_rpc_reply_status = 0;
                 return (0);
@@ -879,17 +841,21 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         
         /* NB I'm using 'ktx' just to map the local RDMA buffers; I'm not
            actually sending a portals message with it */
-        ktx = kqswnal_get_idle_tx(NULL, 0);
+        ktx = kqswnal_get_idle_tx(0);
         if (ktx == NULL) {
                 CERROR ("Can't get txd for RDMA with %s\n",
-                        libcfs_nid2str(ptlmsg->msg_ev.initiator.nid));
+                        libcfs_nid2str(lntmsg->msg_ev.initiator.nid));
                 return (-ENOMEM);
         }
 
         ktx->ktx_state   = KTX_RDMAING;
-        ktx->ktx_nid     = ptlmsg->msg_ev.initiator.nid;
+        ktx->ktx_nid     = lntmsg->msg_ev.initiator.nid;
         ktx->ktx_args[0] = krx;
-        ktx->ktx_args[1] = ptlmsg;
+        ktx->ktx_args[1] = lntmsg;
+
+        LASSERT (atomic_read(&krx->krx_refcount) > 0);
+        /* Take an extra ref for the completion callback */
+        atomic_inc(&krx->krx_refcount);
 
 #if MULTIRAIL_EKC
         /* Map on the rail the RPC prefers */
@@ -922,14 +888,14 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         default:
                 LBUG();
 
-        case PTL_MSG_GET:
+        case LNET_MSG_GET:
                 ndatav = kqswnal_eiovs2datav(EP_MAXFRAG, datav,
                                              ktx->ktx_nfrag, ktx->ktx_frags,
                                              rmd->kqrmd_nfrag, rmd->kqrmd_frag);
                 break;
 
-        case PTL_MSG_PUT:
-        case PTL_MSG_REPLY:
+        case LNET_MSG_PUT:
+        case LNET_MSG_REPLY:
                 ndatav = kqswnal_eiovs2datav(EP_MAXFRAG, datav,
                                              rmd->kqrmd_nfrag, rmd->kqrmd_frag,
                                              ktx->ktx_nfrag, ktx->ktx_frags);
@@ -943,15 +909,11 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
         }
 #endif
 
-        LASSERT (atomic_read(&krx->krx_refcount) > 0);
-        /* Take an extra ref for the completion callback */
-        atomic_inc(&krx->krx_refcount);
-
         switch (type) {
         default:
                 LBUG();
 
-        case PTL_MSG_GET:
+        case LNET_MSG_GET:
 #if MULTIRAIL_EKC
                 eprc = ep_complete_rpc(krx->krx_rxd, 
                                        kqswnal_rdma_store_complete, ktx, 
@@ -973,8 +935,8 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
                 }
                 break;
                 
-        case PTL_MSG_PUT:
-        case PTL_MSG_REPLY:
+        case LNET_MSG_PUT:
+        case LNET_MSG_REPLY:
 #if MULTIRAIL_EKC
                 eprc = ep_rpc_get (krx->krx_rxd, 
                                    kqswnal_rdma_fetch_complete, ktx,
@@ -1005,28 +967,20 @@ kqswnal_rdma (kqswnal_rx_t *krx, ptl_msg_t *ptlmsg, int type,
 }
 
 int
-kqswnal_send (ptl_ni_t         *ni,
-              void             *private,
-              ptl_msg_t        *ptlmsg,
-              ptl_hdr_t        *hdr,
-              int               type,
-              lnet_process_id_t target,
-              int               target_is_router,
-              int               routing,
-              unsigned int      payload_niov,
-              struct iovec     *payload_iov,
-              lnet_kiov_t      *payload_kiov,
-              unsigned int      payload_offset,
-              unsigned int      payload_nob)
+kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
-        kqswnal_tx_t      *ktx;
-        int                rc;
-#if KQSW_CHECKSUM
-        int                i;
-        kqsw_csum_t        csum;
-        int                sumoff;
-        int                sumnob;
-#endif
+        lnet_hdr_t       *hdr = &lntmsg->msg_hdr;
+        int               type = lntmsg->msg_type;
+        lnet_process_id_t target = lntmsg->msg_target;
+        int               target_is_router = lntmsg->msg_target_is_router;
+        int               routing = lntmsg->msg_routing;
+        unsigned int      payload_niov = lntmsg->msg_niov;
+        struct iovec     *payload_iov = lntmsg->msg_iov;
+        lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
+        unsigned int      payload_offset = lntmsg->msg_offset;
+        unsigned int      payload_nob = lntmsg->msg_len;
+        kqswnal_tx_t     *ktx;
+        int               rc;
         /* NB 1. hdr is in network byte order */
         /*    2. 'private' depends on the message type */
         
@@ -1041,24 +995,17 @@ kqswnal_send (ptl_ni_t         *ni,
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
 
-        if (payload_nob > KQSW_MAXPAYLOAD) {
-                CERROR ("request exceeds MTU size %u (max %u).\n",
-                        payload_nob, KQSW_MAXPAYLOAD);
-                return (-EIO);
-        }
-
-        if (type == PTL_MSG_REPLY) {
+        if (type == LNET_MSG_REPLY) {
                 kqswnal_rx_t *rx = (kqswnal_rx_t *)private;
                 
                 LASSERT (routing || rx != NULL);
                 
                 if (!routing && rx->krx_rpc_reply_needed) { /* is it an RPC */
                         /* Must be a REPLY for an optimized GET */
-                        rc = kqswnal_rdma (
-                                rx, ptlmsg, PTL_MSG_GET,
+                        return kqswnal_rdma (
+                                rx, lntmsg, LNET_MSG_GET,
                                 payload_niov, payload_iov, payload_kiov, 
                                 payload_offset, payload_nob);
-                        return ((rc == 0) ? 0 : -EIO);
                 }
         }
 
@@ -1069,10 +1016,10 @@ kqswnal_send (ptl_ni_t         *ni,
 
         /* I may not block for a transmit descriptor if I might block the
          * router, receiver, or an interrupt handler. */
-        ktx = kqswnal_get_idle_tx(NULL, !(routing ||
-                                          type == PTL_MSG_ACK ||
-                                          type == PTL_MSG_REPLY ||
-                                          in_interrupt()));
+        ktx = kqswnal_get_idle_tx(!(routing ||
+                                    type == LNET_MSG_ACK ||
+                                    type == LNET_MSG_REPLY ||
+                                    in_interrupt()));
         if (ktx == NULL) {
                 CERROR ("Can't get txd for msg type %d for %s\n",
                         type, libcfs_nid2str(target.nid));
@@ -1082,48 +1029,10 @@ kqswnal_send (ptl_ni_t         *ni,
         ktx->ktx_state   = KTX_SENDING;
         ktx->ktx_nid     = target.nid;
         ktx->ktx_args[0] = private;
-        ktx->ktx_args[1] = ptlmsg;
+        ktx->ktx_args[1] = lntmsg;
         ktx->ktx_args[2] = NULL;    /* set when a GET commits to REPLY */
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
-
-#if KQSW_CHECKSUM
-        csum = kqsw_csum (0, (char *)hdr, sizeof (*hdr));
-        memcpy (ktx->ktx_buffer + sizeof (*hdr), &csum, sizeof (csum));
-        for (csum = 0, i = 0, sumoff = payload_offset, sumnob = payload_nob; sumnob > 0; i++) {
-                LASSERT(i < niov);
-                if (payload_kiov != NULL) {
-                        lnet_kiov_t *kiov = &payload_kiov[i];
-
-                        if (sumoff >= kiov->kiov_len) {
-                                sumoff -= kiov->kiov_len;
-                        } else {
-                                char *addr = ((char *)kmap (kiov->kiov_page)) +
-                                             kiov->kiov_offset + sumoff;
-                                int   fragnob = kiov->kiov_len - sumoff;
-
-                                csum = kqsw_csum(csum, addr, MIN(sumnob, fragnob));
-                                sumnob -= fragnob;
-                                sumoff = 0;
-                                kunmap(kiov->kiov_page);
-                        }
-                } else {
-                        struct iovec *iov = &payload_iov[i];
-
-                        if (sumoff > iov->iov_len) {
-                                sumoff -= iov->iov_len;
-                        } else {
-                                char *addr = iov->iov_base + sumoff;
-                                int   fragnob = iov->iov_len - sumoff;
-                                
-                                csum = kqsw_csum(csum, addr, MIN(sumnob, fragnob));
-                                sumnob -= fragnob;
-                                sumoff = 0;
-                        }
-                }
-        }
-        memcpy(ktx->ktx_buffer + sizeof(*hdr) + sizeof(csum), &csum, sizeof(csum));
-#endif
 
         /* The first frag will be the pre-mapped buffer for (at least) the
          * portals header. */
@@ -1131,15 +1040,15 @@ kqswnal_send (ptl_ni_t         *ni,
 
         if ((!target_is_router &&               /* target.nid is final dest */
              !routing &&                        /* I'm the source */
-             type == PTL_MSG_GET &&             /* optimize GET? */
+             type == LNET_MSG_GET &&             /* optimize GET? */
              *kqswnal_tunables.kqn_optimized_gets != 0 &&
-             ptlmsg->msg_md->md_length >= 
+             lntmsg->msg_md->md_length >= 
              *kqswnal_tunables.kqn_optimized_gets) ||
-            ((type == PTL_MSG_PUT ||            /* optimize PUT? */
-              type == PTL_MSG_REPLY) &&         /* optimize REPLY? */
+            ((type == LNET_MSG_PUT ||            /* optimize PUT? */
+              type == LNET_MSG_REPLY) &&         /* optimize REPLY? */
              *kqswnal_tunables.kqn_optimized_puts != 0 &&
              payload_nob >= *kqswnal_tunables.kqn_optimized_puts)) {
-                ptl_libmd_t        *md = ptlmsg->msg_md;
+                lnet_libmd_t       *md = lntmsg->msg_md;
                 kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(ktx->ktx_buffer + KQSW_HDR_SIZE);
                 
                 /* Optimised path: I send over the Elan vaddrs of the local
@@ -1152,9 +1061,9 @@ kqswnal_send (ptl_ni_t         *ni,
                  * immediately after the header, and send that as my
                  * message. */
 
-                ktx->ktx_state = (type == PTL_MSG_GET) ? KTX_GETTING : KTX_PUTTING;
+                ktx->ktx_state = (type == LNET_MSG_GET) ? KTX_GETTING : KTX_PUTTING;
 
-                if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) != 0) 
+                if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) != 0) 
                         rc = kqswnal_map_tx_kiov (ktx, 0, md->md_length,
                                                   md->md_niov, md->md_iov.kiov);
                 else
@@ -1182,10 +1091,10 @@ kqswnal_send (ptl_ni_t         *ni,
                 ktx->ktx_frags[0].Base = ktx->ktx_ebuffer;
                 ktx->ktx_frags[0].Len = KQSW_HDR_SIZE + payload_nob;
 #endif
-                if (type == PTL_MSG_GET) {
+                if (type == LNET_MSG_GET) {
                         /* Allocate reply message now while I'm in thread context */
                         ktx->ktx_args[2] = lnet_create_reply_msg (
-                                kqswnal_data.kqn_ni, target.nid, ptlmsg);
+                                kqswnal_data.kqn_ni, lntmsg);
                         if (ktx->ktx_args[2] == NULL)
                                 goto out;
 
@@ -1204,16 +1113,16 @@ kqswnal_send (ptl_ni_t         *ni,
                 ktx->ktx_frags[0].Base = ktx->ktx_ebuffer;
                 ktx->ktx_frags[0].Len = KQSW_HDR_SIZE + payload_nob;
 #endif
-                if (payload_nob > 0) {
-                        if (payload_kiov != NULL)
-                                lnet_copy_kiov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
-                                                   payload_niov, payload_kiov, 
-                                                   payload_offset, payload_nob);
-                        else
-                                lnet_copy_iov2buf (ktx->ktx_buffer + KQSW_HDR_SIZE,
-                                                  payload_niov, payload_iov, 
-                                                  payload_offset, payload_nob);
-                }
+                if (payload_kiov != NULL)
+                        lnet_copy_kiov2flat(KQSW_TX_BUFFER_SIZE, ktx->ktx_buffer, 
+                                            KQSW_HDR_SIZE,
+                                            payload_niov, payload_kiov, 
+                                            payload_offset, payload_nob);
+                else
+                        lnet_copy_iov2flat(KQSW_TX_BUFFER_SIZE, ktx->ktx_buffer,
+                                           KQSW_HDR_SIZE,
+                                           payload_niov, payload_iov, 
+                                           payload_offset, payload_nob);
         } else {
 
                 /* large message: multiple frags: first is hdr in pre-mapped buffer */
@@ -1256,9 +1165,9 @@ kqswnal_send (ptl_ni_t         *ni,
                          * pretend the GET succeeded but the REPLY
                          * failed. */
                         rc = 0;
-                        lnet_finalize (kqswnal_data.kqn_ni, private, ptlmsg, 0);
+                        lnet_finalize (kqswnal_data.kqn_ni, private, lntmsg, 0);
                         lnet_finalize (kqswnal_data.kqn_ni, private,
-                                      (ptl_msg_t *)ktx->ktx_args[2], -EIO);
+                                       (lnet_msg_t *)ktx->ktx_args[2], -EIO);
                 }
                 
                 kqswnal_put_idle_tx (ktx);
@@ -1266,107 +1175,6 @@ kqswnal_send (ptl_ni_t         *ni,
         
         atomic_dec(&kqswnal_data.kqn_pending_txs);
         return (rc == 0 ? 0 : -EIO);
-}
-
-void
-kqswnal_fwd_packet (ptl_ni_t *ni, kpr_fwd_desc_t *fwd)
-{
-        int             rc;
-        kqswnal_tx_t   *ktx;
-        lnet_kiov_t     *kiov = fwd->kprfd_kiov;
-        int             niov = fwd->kprfd_niov;
-        int             nob = fwd->kprfd_nob;
-        lnet_nid_t       nid = fwd->kprfd_gateway_nid;
-
-#if KQSW_CHECKSUM
-        CERROR ("checksums for forwarded packets not implemented\n");
-        LBUG ();
-#endif
-        /* The router wants this NAL to forward a packet */
-        CDEBUG (D_NET, "forwarding [%p] to %s, payload: %d frags %d bytes\n",
-                fwd, libcfs_nid2str(nid), niov, nob);
-
-        ktx = kqswnal_get_idle_tx (fwd, 0);
-        if (ktx == NULL)        /* can't get txd right now */
-                return;         /* fwd will be scheduled when tx desc freed */
-
-        /* copy hdr into pre-mapped buffer */
-        memcpy(ktx->ktx_buffer, fwd->kprfd_hdr, sizeof(ptl_hdr_t));
-
-        ktx->ktx_port    = (nob <= KQSW_SMALLPAYLOAD) ?
-                           EP_MSG_SVC_PORTALS_SMALL : EP_MSG_SVC_PORTALS_LARGE;
-        ktx->ktx_nid     = nid;
-        ktx->ktx_state   = KTX_FORWARDING;
-        ktx->ktx_args[0] = fwd;
-        ktx->ktx_nfrag   = ktx->ktx_firsttmpfrag = 1;
-
-        if (kqswnal_nid2elanid (nid) < 0) {
-                CERROR("Can't forward [%p] to %s: not a peer\n", 
-                       fwd, libcfs_nid2str(nid));
-                rc = -EHOSTUNREACH;
-                goto out;
-        }
-
-        if (nob <= *kqswnal_tunables.kqn_tx_maxcontig) 
-        {
-                /* send payload from ktx's pre-mapped contiguous buffer */
-#if MULTIRAIL_EKC
-                ep_nmd_subset(&ktx->ktx_frags[0], &ktx->ktx_ebuffer,
-                              0, KQSW_HDR_SIZE + nob);
-#else
-                ktx->ktx_frags[0].Base = ktx->ktx_ebuffer;
-                ktx->ktx_frags[0].Len = KQSW_HDR_SIZE + nob;
-#endif
-                if (nob > 0)
-                        lnet_copy_kiov2buf(ktx->ktx_buffer + KQSW_HDR_SIZE,
-                                          niov, kiov, 0, nob);
-        }
-        else
-        {
-                /* zero copy payload */
-#if MULTIRAIL_EKC
-                ep_nmd_subset(&ktx->ktx_frags[0], &ktx->ktx_ebuffer,
-                              0, KQSW_HDR_SIZE);
-#else
-                ktx->ktx_frags[0].Base = ktx->ktx_ebuffer;
-                ktx->ktx_frags[0].Len = KQSW_HDR_SIZE;
-#endif
-                rc = kqswnal_map_tx_kiov (ktx, 0, nob, niov, kiov);
-                if (rc != 0)
-                        goto out;
-        }
-
-        rc = kqswnal_launch (ktx);
- out:
-        if (rc != 0) {
-                CERROR ("Failed to forward [%p] to %s: %d\n", 
-                        fwd, libcfs_nid2str(nid), rc);
-
-                /* complete now (with failure) */
-                kqswnal_tx_done (ktx, rc);
-        }
-
-        atomic_dec(&kqswnal_data.kqn_pending_txs);
-}
-
-void
-kqswnal_fwd_callback (ptl_ni_t *ni, void *arg, int error)
-{
-        kqswnal_rx_t *krx = (kqswnal_rx_t *)arg;
-
-        /* The router has finished forwarding this packet */
-
-        if (error != 0)
-        {
-                ptl_hdr_t *hdr = (ptl_hdr_t *)page_address (krx->krx_kiov[0].kiov_page);
-
-                CERROR("Failed to route packet from %s to %s: %d\n",
-                       libcfs_nid2str(le64_to_cpu(hdr->src_nid)), 
-                       libcfs_nid2str(le64_to_cpu(hdr->dest_nid)), error);
-        }
-
-        LASSERT (atomic_read(&krx->krx_refcount) == 1);
-        kqswnal_rx_decref (krx);
 }
 
 void
@@ -1466,60 +1274,16 @@ kqswnal_rx_done (kqswnal_rx_t *krx)
 void
 kqswnal_parse (kqswnal_rx_t *krx)
 {
-        ptl_hdr_t      *hdr = (ptl_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
-        lnet_nid_t      dest_nid;
-        lnet_nid_t      src_nid;
-        lnet_nid_t      sender_nid;
-        int             payload_nob;
-        int             nob;
-        int             niov;
+        lnet_hdr_t     *hdr = (lnet_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
         int             rc;
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
         rc = lnet_parse (kqswnal_data.kqn_ni, hdr, krx);
-        
-        if (rc != 1) {
-                /* It's for me or there's been some error.
-                 * However I ignore parse errors since I'm not consuming a byte
-                 * stream */
-
-                /* Drop my ref; any RDMA activity takes an additional ref */
+        if (rc < 0) {
                 kqswnal_rx_decref(krx);
                 return;
         }
-
-        LASSERT (lnet_apini.apini_ptlcompat == 0);
-
-        dest_nid   = le64_to_cpu(hdr->dest_nid); /* final dest */
-        src_nid    = le64_to_cpu(hdr->src_nid); /* original source */
-        sender_nid = kqswnal_elanid2nid(ep_rxd_node(krx->krx_rxd)); /* who sent it to me */
-#if KQSW_CHECKSUM
-        LASSERTF (0, "checksums for forwarded packets not implemented\n");
-#endif
-        nob = payload_nob = krx->krx_nob - KQSW_HDR_SIZE;
-        niov = 0;
-        if (nob > 0) {
-                krx->krx_kiov[0].kiov_offset = KQSW_HDR_SIZE;
-                krx->krx_kiov[0].kiov_len = MIN(PAGE_SIZE - KQSW_HDR_SIZE, nob);
-                niov = 1;
-                nob -= PAGE_SIZE - KQSW_HDR_SIZE;
-                
-                while (nob > 0) {
-                        LASSERT (niov < krx->krx_npages);
-                        
-                        krx->krx_kiov[niov].kiov_offset = 0;
-                        krx->krx_kiov[niov].kiov_len = MIN(PAGE_SIZE, nob);
-                        niov++;
-                        nob -= PAGE_SIZE;
-                }
-        }
-
-        kpr_fwd_init (&krx->krx_fwd, dest_nid, sender_nid, src_nid,
-                      hdr, payload_nob, niov, krx->krx_kiov,
-                      kqswnal_fwd_callback, krx);
-
-        lnet_fwd_start (kqswnal_data.kqn_ni, &krx->krx_fwd);
 }
 
 /* Receive Interrupt Handler: posts to schedulers */
@@ -1551,7 +1315,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
         atomic_set (&krx->krx_refcount, 1);
 
         /* must receive a whole header to be able to parse */
-        if (status != EP_SUCCESS || nob < sizeof (ptl_hdr_t))
+        if (status != EP_SUCCESS || nob < sizeof (lnet_hdr_t))
         {
                 /* receives complete with failure when receiver is removed */
 #if MULTIRAIL_EKC
@@ -1582,58 +1346,11 @@ kqswnal_rxhandler(EP_RXD *rxd)
         spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
 }
 
-#if KQSW_CHECKSUM
-void
-kqswnal_csum_error (kqswnal_rx_t *krx, int ishdr)
-{
-        ptl_hdr_t *hdr = (ptl_hdr_t *)page_address (krx->krx_kiov[0].kiov_page);
-
-        CERROR ("%s checksum mismatch %p: dnid %s, snid %s, "
-                "dpid %d, spid %d, type %d\n",
-                ishdr ? "Header" : "Payload", krx,
-                libcfs_nid2str(le64_to_cpu(hdr->dest_nid)), 
-                libcfs_nid2str(le64_to_cpu(hdr->src_nid)),
-                le32_to_cpu(hdr->dest_pid), le32_to_cpu(hdr->src_pid),
-                le32_to_cpu(hdr->type));
-
-        switch (le32_to_cpu(hdr->type))
-        {
-        case PTL_MSG_ACK:
-                CERROR("ACK: mlen %d dmd "LPX64"."LPX64" match "LPX64
-                       " len %u\n",
-                       le32_to_cpu(hdr->msg.ack.mlength),
-                       hdr->msg.ack.dst_wmd.handle_cookie,
-                       hdr->msg.ack.dst_wmd.handle_idx,
-                       le64_to_cpu(hdr->msg.ack.match_bits),
-                       le32_to_cpu(hdr->msg.ack.length));
-                break;
-        case PTL_MSG_PUT:
-                CERROR("PUT: ptl %d amd "LPX64"."LPX64" match "LPX64
-                       " len %u off %u data "LPX64"\n",
-                       le32_to_cpu(hdr->msg.put.ptl_index),
-                       hdr->msg.put.ack_wmd.handle_cookie,
-                       hdr->msg.put.ack_wmd.handle_idx,
-                       le64_to_cpu(hdr->msg.put.match_bits),
-                       le32_to_cpu(hdr->msg.put.length),
-                       le32_to_cpu(hdr->msg.put.offset),
-                       hdr->msg.put.hdr_data);
-                break;
-        case PTL_MSG_GET:
-                CERROR ("GET: <>\n");
-                break;
-        case PTL_MSG_REPLY:
-                CERROR ("REPLY: <>\n");
-                break;
-        default:
-                CERROR ("TYPE?: <>\n");
-        }
-}
-#endif
-
 int
-kqswnal_recv (ptl_ni_t      *ni,
+kqswnal_recv (lnet_ni_t      *ni,
               void          *private,
-              ptl_msg_t     *ptlmsg,
+              lnet_msg_t    *lntmsg,
+              int            delayed,
               unsigned int   niov,
               struct iovec  *iov,
               lnet_kiov_t   *kiov,
@@ -1643,160 +1360,46 @@ kqswnal_recv (ptl_ni_t      *ni,
 {
         kqswnal_rx_t *krx = (kqswnal_rx_t *)private;
         char         *buffer = page_address(krx->krx_kiov[0].kiov_page);
-        ptl_hdr_t    *hdr = (ptl_hdr_t *)buffer;
-        int           page;
-        char         *page_ptr;
-        int           page_nob;
-        char         *iov_ptr;
-        int           iov_nob;
-        int           frag;
+        lnet_hdr_t   *hdr = (lnet_hdr_t *)buffer;
         int           rc;
-#if KQSW_CHECKSUM
-        kqsw_csum_t   senders_csum;
-        kqsw_csum_t   payload_csum = 0;
-        kqsw_csum_t   hdr_csum = kqsw_csum(0, hdr, sizeof(*hdr));
-        unsigned int  csum_len = mlen;
-        int           csum_frags = 0;
-        int           csum_nob = 0;
-        static atomic_t csum_counter;
-        int           csum_verbose = (atomic_read(&csum_counter)%1000001) == 0;
 
-        atomic_inc (&csum_counter);
-
-        memcpy (&senders_csum, buffer + sizeof (ptl_hdr_t), sizeof (kqsw_csum_t));
-        if (senders_csum != hdr_csum)
-                kqswnal_csum_error (krx, 1);
-#endif
         /* NB lnet_parse() has already flipped *hdr */
 
-        CDEBUG(D_NET,"kqswnal_recv, mlen=%u, rlen=%u\n", mlen, rlen);
-
-        if (ptlmsg == NULL) {                   /* portals is discarding. */
-                LASSERT (mlen == 0);
-                return 0;                  /* ignored by caller! */
+        if (krx->krx_rpc_reply_needed &&
+            (hdr->type == LNET_MSG_PUT ||
+             hdr->type == LNET_MSG_REPLY)) {
+                /* This is an optimized PUT/REPLY */
+                rc = kqswnal_rdma(krx, lntmsg, hdr->type,
+                                  niov, iov, kiov, offset, mlen);
+                kqswnal_rx_decref(krx);
+                return rc;
         }
         
-        if (krx->krx_rpc_reply_needed &&
-            (hdr->type == PTL_MSG_PUT ||
-             hdr->type == PTL_MSG_REPLY)) {
-                /* This must be an optimized PUT/REPLY */
-                rc = kqswnal_rdma (krx, ptlmsg, hdr->type,
-                                   niov, iov, kiov, offset, mlen);
-                return (rc == 0 ? 0 : -EIO);
-        }
-
-        /* What was actually received must be >= payload. */
-        LASSERT (mlen <= rlen);
-        if (krx->krx_nob < KQSW_HDR_SIZE + mlen) {
+        if (krx->krx_nob < KQSW_HDR_SIZE + rlen) {
                 CERROR("Bad message size: have %d, need %d + %d\n",
-                       krx->krx_nob, (int)KQSW_HDR_SIZE, (int)mlen);
-                return (-EIO);
+                       krx->krx_nob, (int)KQSW_HDR_SIZE, rlen);
+                kqswnal_rx_decref(krx);
+                return -EPROTO;
         }
+        /* NB lnet_parse() has already flipped *hdr */
 
         /* It must be OK to kmap() if required */
         LASSERT (kiov == NULL || !in_interrupt ());
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
 
-        if (mlen != 0) {
-                page     = 0;
-                page_ptr = buffer + KQSW_HDR_SIZE;
-                page_nob = PAGE_SIZE - KQSW_HDR_SIZE;
+        if (kiov != NULL)
+                lnet_copy_kiov2kiov(niov, kiov, offset,
+                                    krx->krx_npages, krx->krx_kiov, 
+                                    KQSW_HDR_SIZE, mlen);
+        else
+                lnet_copy_kiov2iov(niov, iov, offset,
+                                   krx->krx_npages, krx->krx_kiov, 
+                                   KQSW_HDR_SIZE, mlen);
 
-                LASSERT (niov > 0);
-
-                if (kiov != NULL) {
-                        /* skip complete frags */
-                        while (offset >= kiov->kiov_len) {
-                                offset -= kiov->kiov_len;
-                                kiov++;
-                                niov--;
-                                LASSERT (niov > 0);
-                        }
-                        iov_ptr = ((char *)kmap (kiov->kiov_page)) +
-                                kiov->kiov_offset + offset;
-                        iov_nob = kiov->kiov_len - offset;
-                } else {
-                        /* skip complete frags */
-                        while (offset >= iov->iov_len) {
-                                offset -= iov->iov_len;
-                                iov++;
-                                niov--;
-                                LASSERT (niov > 0);
-                        }
-                        iov_ptr = iov->iov_base + offset;
-                        iov_nob = iov->iov_len - offset;
-                }
-                
-                for (;;)
-                {
-                        frag = mlen;
-                        if (frag > page_nob)
-                                frag = page_nob;
-                        if (frag > iov_nob)
-                                frag = iov_nob;
-
-                        memcpy (iov_ptr, page_ptr, frag);
-#if KQSW_CHECKSUM
-                        payload_csum = kqsw_csum (payload_csum, iov_ptr, frag);
-                        csum_nob += frag;
-                        csum_frags++;
-#endif
-                        mlen -= frag;
-                        if (mlen == 0)
-                                break;
-
-                        page_nob -= frag;
-                        if (page_nob != 0)
-                                page_ptr += frag;
-                        else
-                        {
-                                page++;
-                                LASSERT (page < krx->krx_npages);
-                                page_ptr = page_address(krx->krx_kiov[page].kiov_page);
-                                page_nob = PAGE_SIZE;
-                        }
-
-                        iov_nob -= frag;
-                        if (iov_nob != 0)
-                                iov_ptr += frag;
-                        else if (kiov != NULL) {
-                                kunmap (kiov->kiov_page);
-                                kiov++;
-                                niov--;
-                                LASSERT (niov > 0);
-                                iov_ptr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset;
-                                iov_nob = kiov->kiov_len;
-                        } else {
-                                iov++;
-                                niov--;
-                                LASSERT (niov > 0);
-                                iov_ptr = iov->iov_base;
-                                iov_nob = iov->iov_len;
-                        }
-                }
-
-                if (kiov != NULL)
-                        kunmap (kiov->kiov_page);
-        }
-
-#if KQSW_CHECKSUM
-        memcpy (&senders_csum, buffer + sizeof(ptl_hdr_t) + sizeof(kqsw_csum_t), 
-                sizeof(kqsw_csum_t));
-
-        if (csum_len != rlen)
-                CERROR("Unable to checksum data in user's buffer\n");
-        else if (senders_csum != payload_csum)
-                kqswnal_csum_error (krx, 0);
-
-        if (csum_verbose)
-                CERROR("hdr csum %lx, payload_csum %lx, csum_frags %d, "
-                       "csum_nob %d\n",
-                        hdr_csum, payload_csum, csum_frags, csum_nob);
-#endif
-        lnet_finalize(ni, private, ptlmsg, 0);
-
-        return (0);
+        lnet_finalize(ni, private, lntmsg, 0);
+        kqswnal_rx_decref(krx);
+        return 0;
 }
 
 int
@@ -1822,7 +1425,6 @@ kqswnal_scheduler (void *arg)
 {
         kqswnal_rx_t    *krx;
         kqswnal_tx_t    *ktx;
-        kpr_fwd_desc_t  *fwd;
         unsigned long    flags;
         int              rc;
         int              counter = 0;
@@ -1880,19 +1482,6 @@ kqswnal_scheduler (void *arg)
                         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
                 }
 
-                if (!list_empty (&kqswnal_data.kqn_delayedfwds))
-                {
-                        fwd = list_entry (kqswnal_data.kqn_delayedfwds.next, kpr_fwd_desc_t, kprfd_list);
-                        list_del (&fwd->kprfd_list);
-                        spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
-
-                        /* If we're shutting down, this will just requeue fwd on kqn_idletxd_fwdq */
-                        kqswnal_fwd_packet (kqswnal_data.kqn_ni, fwd);
-
-                        did_something = 1;
-                        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
-                }
-
                 /* nothing to do or hogging CPU */
                 if (!did_something || counter++ == KQSW_RESCHED) {
                         spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
@@ -1909,8 +1498,7 @@ kqswnal_scheduler (void *arg)
                                 rc = wait_event_interruptible (kqswnal_data.kqn_sched_waitq,
                                                                kqswnal_data.kqn_shuttingdown == 2 ||
                                                                !list_empty(&kqswnal_data.kqn_readyrxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_delayedtxds) ||
-                                                               !list_empty(&kqswnal_data.kqn_delayedfwds));
+                                                               !list_empty(&kqswnal_data.kqn_delayedtxds));
                                 LASSERT (rc == 0);
                         } else if (need_resched())
                                 schedule ();

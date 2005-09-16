@@ -40,19 +40,18 @@
 #include <syscall.h>
 #endif
 
-int tcpnal_send(ptl_ni_t         *ni,
-                void             *private,
-                ptl_msg_t        *cookie,
-                ptl_hdr_t        *hdr,
-                int               type,
-                lnet_process_id_t target,
-                int               routing,
-                unsigned int      niov,
-                struct iovec     *iov,
-                lnet_kiov_t      *kiov,
-                unsigned int      offset,
-                unsigned int      len)
+/*
+ * sends a packet to the peer, after insuring that a connection exists
+ */
+int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
+    lnet_hdr_t        *hdr = &lntmsg->msg_hdr;
+    lnet_process_id_t  target = lntmsg->msg_target;
+    unsigned int       niov = lntmsg->msg_niov;
+    struct iovec      *iov = lntmsg->msg_iov;
+    unsigned int       offset = lntmsg->msg_offset;
+    unsigned int       len = lntmsg->msg_len;
+
     connection c;
     bridge b=(bridge)ni->ni_data;
     struct iovec tiov[257];
@@ -63,11 +62,6 @@ int tcpnal_send(ptl_ni_t         *ni,
     int   ntiov;
     int i;
 
-    if (routing) {
-            CERROR("Can't route\n");
-            return -EIO;
-    }
-    
     if (!(c=force_tcp_connection((manager)b->lower, target.nid,
                                  b->local)))
         return(-EIO);
@@ -83,7 +77,7 @@ int tcpnal_send(ptl_ni_t         *ni,
     LASSERT (len == 0 || iov != NULL);          /* I don't understand kiovs */
 
     tiov[0].iov_base = hdr;
-    tiov[0].iov_len = sizeof(ptl_hdr_t);
+    tiov[0].iov_len = sizeof(lnet_hdr_t);
     ntiov = 1 + lnet_extract_iov(256, &tiov[1], niov, iov, offset, len);
 
     pthread_mutex_lock(&send_lock);
@@ -112,11 +106,11 @@ int tcpnal_send(ptl_ni_t         *ni,
 #endif
 #if 0
     fprintf (stderr, "sent %s total %d in %d frags\n", 
-             hdr->type == PTL_MSG_ACK ? "ACK" :
-             hdr->type == PTL_MSG_PUT ? "PUT" :
-             hdr->type == PTL_MSG_GET ? "GET" :
-             hdr->type == PTL_MSG_REPLY ? "REPLY" :
-             hdr->type == PTL_MSG_HELLO ? "HELLO" : "UNKNOWN",
+             hdr->type == LNET_MSG_ACK ? "ACK" :
+             hdr->type == LNET_MSG_PUT ? "PUT" :
+             hdr->type == LNET_MSG_GET ? "GET" :
+             hdr->type == LNET_MSG_REPLY ? "REPLY" :
+             hdr->type == LNET_MSG_HELLO ? "HELLO" : "UNKNOWN",
              total, niov + 1);
 #endif
     pthread_mutex_unlock(&send_lock);
@@ -124,16 +118,17 @@ int tcpnal_send(ptl_ni_t         *ni,
     if (rc == 0) {
             /* NB the NAL only calls lnet_finalize() if it returns 0
              * from cb_send() */
-            lnet_finalize(ni, private, cookie, 0);
+            lnet_finalize(ni, private, lntmsg, 0);
     }
 
     return(rc);
 }
 
 
-int tcpnal_recv(ptl_ni_t     *ni,
+int tcpnal_recv(lnet_ni_t     *ni,
                 void         *private,
-                ptl_msg_t    *cookie,
+                lnet_msg_t   *cookie,
+                int           delayed,
                 unsigned int  niov,
                 struct iovec *iov,
                 lnet_kiov_t  *kiov,
@@ -148,9 +143,6 @@ int tcpnal_recv(ptl_ni_t     *ni,
     if (mlen == 0)
             goto finalize;
 
-    LASSERT(mlen);
-    LASSERT(rlen);
-    LASSERT(rlen >= mlen);
     LASSERT(iov != NULL);                       /* I don't understand kiovs */
 
     ntiov = lnet_extract_iov(256, tiov, niov, iov, offset, mlen);
@@ -166,6 +158,8 @@ int tcpnal_recv(ptl_ni_t     *ni,
 finalize:
     /* FIXME; we always assume success here... */
     lnet_finalize(ni, private, cookie, 0);
+
+    LASSERT(rlen >= mlen);
 
     if (mlen!=rlen){
         char *trash=malloc(rlen-mlen);
@@ -192,16 +186,16 @@ static int from_connection(void *a, void *d)
 {
     connection c = d;
     bridge     b = a;
-    ptl_hdr_t  hdr;
+    lnet_hdr_t hdr;
     int  rc;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
             /* replace dest_nid,pid (socknal sets its own) */
             hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
-            hdr.dest_pid = cpu_to_le32(lnet_getpid());
+            hdr.dest_pid = cpu_to_le32(the_lnet.ln_pid);
             
             rc = lnet_parse(b->b_ni, &hdr, c);
-            if (rc != 0) {
+            if (rc < 0) {
                     CERROR("Error %d from lnet_parse\n", rc);
                     return 0;
             }

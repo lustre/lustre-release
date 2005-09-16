@@ -171,7 +171,7 @@ typedef struct
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
-        ptl_ni_t         *kib_ni;               /* _the_ nal instance */
+        lnet_ni_t        *kib_ni;               /* _the_ nal instance */
 
         __u64             kib_service_id;       /* service number I listen on */
         __u64             kib_port_guid;        /* my GUID (lo 64 of GID)*/
@@ -254,7 +254,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibim_hdr;             /* portals header */
+        lnet_hdr_t        ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
@@ -264,7 +264,7 @@ typedef struct
  * the different roles result in split local/remote meaning of desc->rd_key */
 typedef struct
 {
-        ptl_hdr_t         ibrm_hdr;             /* portals header */
+        lnet_hdr_t        ibrm_hdr;             /* portals header */
         __u64             ibrm_cookie;          /* opaque completion cookie */
         __u32             ibrm_num_descs;       /* how many descs */
         __u32             rd_key;               /* remote key */
@@ -314,7 +314,7 @@ typedef struct kib_rx                           /* receive message */
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
         int                       rx_rdma;      /* RDMA completion posted? */
-        int                       rx_posted;    /* posted? */
+        int                       rx_nob;       /* # bytes received (-1 while posted) */
         __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
         IB_WORK_REQ               rx_wrq;
@@ -333,7 +333,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_passive_rdma; /* peer sucks/blows */
         int                       tx_passive_rdma_wait; /* waiting for peer to complete */
         __u64                     tx_passive_rdma_cookie; /* completion cookie */
-        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* lnet msgs to finalize on completion */
         kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
         __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *tx_msg;       /* pre-mapped buffer (host vaddr) */
@@ -860,17 +860,13 @@ kibnal_whole_mem(void)
         return kibnal_data.kib_md.md_handle != NULL;
 }
 
-extern int kibnal_startup (ptl_ni_t *ni);
-extern void kibnal_shutdown (ptl_ni_t *ni);
-extern int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int kibnal_send (ptl_ni_t *ni, void *private,
-                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                 int type, lnet_process_id_t tgt, 
-                 int tgt_is_router, int routing,
-                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                 unsigned int offset, unsigned int nob);
-extern int kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                        unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+extern int kibnal_startup (lnet_ni_t *ni);
+extern void kibnal_shutdown (lnet_ni_t *ni);
+extern int kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int kibnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+extern int kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg,
+                        int delayed, unsigned int niov, 
+                        struct iovec *iov, lnet_kiov_t *kiov,
                         unsigned int offset, unsigned int mlen, unsigned int rlen);
 
 extern kib_peer_t *kibnal_create_peer (lnet_nid_t nid);
@@ -897,7 +893,7 @@ extern int  kibnal_connd (void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern void kibnal_close_conn (kib_conn_t *conn, int why);
 extern void kibnal_start_active_rdma (int type, int status,
-                                      kib_rx_t *rx, ptl_msg_t *ptlmsg,
+                                      kib_rx_t *rx, lnet_msg_t *lntmsg,
                                       unsigned int niov,
                                       struct iovec *iov, lnet_kiov_t *kiov,
                                       unsigned int offset, unsigned int nob);

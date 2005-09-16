@@ -23,7 +23,7 @@
 
 #include "ptllnd.h"
 
-ptl_handle_ni_t nih;
+lnet_handle_ni_t nih;
 
 
 void __exit
@@ -38,7 +38,7 @@ int __init
 kptllnd_module_init (void)
 {
         int    rc = 0;
-        ptl_process_id_t portals_id;
+        lnet_process_id_t portals_id;
         PJK_UT_MSG(">>> %s %s\n",__DATE__,__TIME__);
         
         PJK_UT_MSG("PtlNIInit\n");

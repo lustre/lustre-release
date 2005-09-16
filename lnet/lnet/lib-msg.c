@@ -27,7 +27,7 @@
 #include <lnet/lib-lnet.h>
 
 void
-ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
+lnet_enq_event_locked (void *private, lnet_eq_t *eq, lnet_event_t *ev)
 {
         lnet_event_t  *eq_slot;
 
@@ -43,7 +43,7 @@ ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
         eq_slot = eq->eq_events + (ev->sequence & (eq->eq_size - 1));
 
         /* There is no race since both event consumers and event producers
-         * take the PTL_LOCK, so we don't screw around with memory
+         * take the LNET_LOCK, so we don't screw around with memory
          * barriers, setting the sequence number last or wierd structure
          * layout assertions. */
         *eq_slot = *ev;
@@ -54,80 +54,90 @@ ptl_enq_event_locked (void *private, ptl_eq_t *eq, lnet_event_t *ev)
 
         /* Wake anyone sleeping for an event (see lib-eq.c) */
 #ifdef __KERNEL__
-        if (cfs_waitq_active(&lnet_apini.apini_waitq))
-                cfs_waitq_broadcast(&lnet_apini.apini_waitq);
+        if (cfs_waitq_active(&the_lnet.ln_waitq))
+                cfs_waitq_broadcast(&the_lnet.ln_waitq);
 #else
-        pthread_cond_broadcast(&lnet_apini.apini_cond);
+        pthread_cond_broadcast(&the_lnet.ln_cond);
 #endif
 }
 
 void
-lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int status)
+lnet_finalize (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int status)
 {
-        ptl_libmd_t  *md;
+        lnet_libmd_t *md;
         int           unlink;
         unsigned long flags;
         int           rc;
-        ptl_hdr_t     ack;
+        int           send_ack;
 
         if (msg == NULL)
                 return;
 
-        /* Only send an ACK if the PUT completed successfully */
-        if (status == 0 &&
-            !ptl_is_wire_handle_none(&msg->msg_ack_wmd)) {
-
-                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
-
-                memset (&ack, 0, sizeof (ack));
-                ack.msg.ack.dst_wmd = msg->msg_ack_wmd;
-                ack.msg.ack.match_bits = msg->msg_ev.match_bits;
-                ack.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
-
-                rc = ptl_send (ni, private, NULL, &ack, PTL_MSG_ACK,
-                               msg->msg_ev.initiator, NULL, 0, 0);
-                if (rc != 0) {
-                        /* send failed: there's nothing else to clean up. */
-                        CERROR("Error %d sending ACK to %s\n",
-                               rc, libcfs_id2str(msg->msg_ev.initiator));
-                }
-        }
+        LNET_LOCK(flags);
 
         md = msg->msg_md;
+        if (md != NULL) {
+                /* Now it's safe to drop my caller's ref */
+                md->md_pending--;
+                LASSERT (md->md_pending >= 0);
 
-        PTL_LOCK(flags);
+                /* Should I unlink this MD? */
+                if (md->md_pending != 0)        /* other refs */
+                        unlink = 0;
+                else if ((md->md_flags & LNET_MD_FLAG_ZOMBIE) != 0)
+                        unlink = 1;
+                else if ((md->md_flags & LNET_MD_FLAG_AUTO_UNLINK) == 0)
+                        unlink = 0;
+                else
+                        unlink = lnet_md_exhausted(md);
+                
+                msg->msg_ev.status = status;
+                msg->msg_ev.unlinked = unlink;
+                
+                if (md->md_eq != NULL)
+                        lnet_enq_event_locked(private, md->md_eq, &msg->msg_ev);
+                
+                if (unlink)
+                        lnet_md_unlink(md);
 
-        /* Now it's safe to drop my caller's ref */
-        md->md_pending--;
-        LASSERT (md->md_pending >= 0);
+                msg->msg_md = NULL;
+        }
+        
+        /* Only send an ACK if the PUT completed successfully */
+        send_ack = (status == 0 &&
+                    !lnet_is_wire_handle_none(&msg->msg_ack_wmd));
 
-        /* Should I unlink this MD? */
-        if (md->md_pending != 0)                   /* other refs */
-                unlink = 0;
-        else if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) != 0)
-                unlink = 1;
-        else if ((md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) == 0)
-                unlink = 0;
-        else
-                unlink = ptl_md_exhausted(md);
+        if (!send_ack) {
+                list_del (&msg->msg_activelist);
+                the_lnet.ln_counters.msgs_alloc--;
+                lnet_msg_free(msg);
 
-        msg->msg_ev.status = status;
-        msg->msg_ev.unlinked = unlink;
+                LNET_UNLOCK(flags);
+                return;
+        }
+                
+        LNET_UNLOCK(flags);
 
-        if (md->md_eq != NULL)
-                ptl_enq_event_locked(private, md->md_eq, &msg->msg_ev);
+        LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
 
-        if (unlink)
-                ptl_md_unlink(md);
+        memset (&msg->msg_hdr, 0, sizeof(msg->msg_hdr));
+        msg->msg_hdr.msg.ack.dst_wmd = msg->msg_ack_wmd;
+        msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
+        msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
-        list_del (&msg->msg_list);
-        lnet_apini.apini_counters.msgs_alloc--;
-        ptl_msg_free(msg);
+        msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
 
-        PTL_UNLOCK(flags);
-}
+        rc = lnet_send(ni, private, msg, LNET_MSG_ACK,
+                       msg->msg_ev.initiator, NULL, 0, 0);
+        if (rc != 0) {
+                /* send failed: there's nothing else to clean up. */
+                CERROR("Error %d sending ACK to %s\n",
+                       rc, libcfs_id2str(msg->msg_ev.initiator));
 
-lnet_pid_t  lnet_getpid(void) 
-{
-        return lnet_apini.apini_pid;
+                LNET_LOCK(flags);
+                list_del (&msg->msg_activelist);
+                the_lnet.ln_counters.msgs_alloc--;
+                lnet_msg_free(msg);
+                LNET_UNLOCK(flags);
+        }
 }

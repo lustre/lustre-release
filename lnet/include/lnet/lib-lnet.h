@@ -22,15 +22,15 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 
-extern lnet_apini_t  lnet_apini;                /* THE network interface (at the API) */
+extern lnet_t  the_lnet;                        /* THE network */
 
-static inline int ptl_is_wire_handle_none (ptl_handle_wire_t *wh)
+static inline int lnet_is_wire_handle_none (lnet_handle_wire_t *wh)
 {
-        return (wh->wh_interface_cookie == PTL_WIRE_HANDLE_NONE.wh_interface_cookie &&
-                wh->wh_object_cookie == PTL_WIRE_HANDLE_NONE.wh_object_cookie);
+        return (wh->wh_interface_cookie == LNET_WIRE_HANDLE_NONE.wh_interface_cookie &&
+                wh->wh_object_cookie == LNET_WIRE_HANDLE_NONE.wh_object_cookie);
 }
 
-static inline int ptl_md_exhausted (ptl_libmd_t *md) 
+static inline int lnet_md_exhausted (lnet_libmd_t *md) 
 {
         return (md->md_threshold == 0 ||
                 ((md->md_options & LNET_MD_MAX_SIZE) != 0 &&
@@ -38,24 +38,24 @@ static inline int ptl_md_exhausted (ptl_libmd_t *md)
 }
 
 #ifdef __KERNEL__
-#define PTL_LOCK(flags)                                                 \
-        spin_lock_irqsave(&lnet_apini.apini_lock, flags)                 
-#define PTL_UNLOCK(flags)                                               \
-        spin_unlock_irqrestore(&lnet_apini.apini_lock, flags)               
-#define PTL_MUTEX_DOWN(m) mutex_down(m)
-#define PTL_MUTEX_UP(m)   mutex_up(m)
+#define LNET_LOCK(flags)                                                \
+        spin_lock_irqsave(&the_lnet.ln_lock, flags)                 
+#define LNET_UNLOCK(flags)                                              \
+        spin_unlock_irqrestore(&the_lnet.ln_lock, flags)               
+#define LNET_MUTEX_DOWN(m) mutex_down(m)
+#define LNET_MUTEX_UP(m)   mutex_up(m)
 #else                                                                   
-#define PTL_LOCK(flags)                                                 \
-        (pthread_mutex_lock(&lnet_apini.apini_mutex), (flags) = 0)       
-#define PTL_UNLOCK(flags)                                               \
-        pthread_mutex_unlock(&lnet_apini.apini_mutex)
-#define PTL_MUTEX_DOWN(m) pthread_mutex_lock(m)
-#define PTL_MUTEX_UP(m)   pthread_mutex_unlock(m)
+#define LNET_LOCK(flags)                                                \
+        (pthread_mutex_lock(&the_lnet.ln_mutex), (flags) = 0)       
+#define LNET_UNLOCK(flags)                                              \
+        pthread_mutex_unlock(&the_lnet.ln_mutex)
+#define LNET_MUTEX_DOWN(m) pthread_mutex_lock(m)
+#define LNET_MUTEX_UP(m)   pthread_mutex_unlock(m)
 #endif
 
 #define MAX_PORTALS     64
 
-#ifdef PTL_USE_LIB_FREELIST
+#ifdef LNET_USE_LIB_FREELIST
 
 #define MAX_MES         2048
 #define MAX_MDS         2048
@@ -63,152 +63,152 @@ static inline int ptl_md_exhausted (ptl_libmd_t *md)
 #define MAX_EQS         512
 
 static inline void *
-ptl_freelist_alloc (ptl_freelist_t *fl)
+lnet_freelist_alloc (lnet_freelist_t *fl)
 {
         /* ALWAYS called with liblock held */
-        ptl_freeobj_t *o;
+        lnet_freeobj_t *o;
 
         if (list_empty (&fl->fl_list))
                 return (NULL);
         
-        o = list_entry (fl->fl_list.next, ptl_freeobj_t, fo_list);
+        o = list_entry (fl->fl_list.next, lnet_freeobj_t, fo_list);
         list_del (&o->fo_list);
         return ((void *)&o->fo_contents);
 }
 
 static inline void
-ptl_freelist_free (ptl_freelist_t *fl, void *obj)
+lnet_freelist_free (lnet_freelist_t *fl, void *obj)
 {
         /* ALWAYS called with liblock held */
-        ptl_freeobj_t *o = list_entry (obj, ptl_freeobj_t, fo_contents);
+        lnet_freeobj_t *o = list_entry (obj, lnet_freeobj_t, fo_contents);
         
         list_add (&o->fo_list, &fl->fl_list);
 }
 
 
-static inline ptl_eq_t *
-ptl_eq_alloc (void)
+static inline lnet_eq_t *
+lnet_eq_alloc (void)
 {
         /* NEVER called with liblock held */
         unsigned long  flags;
-        ptl_eq_t      *eq;
+        lnet_eq_t     *eq;
         
-        PTL_LOCK(flags);
-        eq = (ptl_eq_t *)ptl_freelist_alloc(&lnet_apini.apini_free_eqs);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        eq = (lnet_eq_t *)lnet_freelist_alloc(&the_lnet.ln_free_eqs);
+        LNET_UNLOCK(flags);
 
         return (eq);
 }
 
 static inline void
-ptl_eq_free (ptl_eq_t *eq)
+lnet_eq_free (lnet_eq_t *eq)
 {
         /* ALWAYS called with liblock held */
-        ptl_freelist_free(&lnet_apini.apini_free_eqs, eq);
+        lnet_freelist_free(&the_lnet.ln_free_eqs, eq);
 }
 
-static inline ptl_libmd_t *
-ptl_md_alloc (lnet_md_t *umd)
+static inline lnet_libmd_t *
+lnet_md_alloc (lnet_md_t *umd)
 {
         /* NEVER called with liblock held */
         unsigned long  flags;
-        ptl_libmd_t   *md;
+        lnet_libmd_t  *md;
         
-        PTL_LOCK(flags);
-        md = (ptl_libmd_t *)ptl_freelist_alloc(&lnet_apini.apini_free_mds);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        md = (lnet_libmd_t *)lnet_freelist_alloc(&the_lnet.ln_free_mds);
+        LNET_UNLOCK(flags);
 
         return (md);
 }
 
 static inline void
-ptl_md_free (ptl_libmd_t *md)
+lnet_md_free (lnet_libmd_t *md)
 {
         /* ALWAYS called with liblock held */
-        ptl_freelist_free (&lnet_apini.apini_free_mds, md);
+        lnet_freelist_free (&the_lnet.ln_free_mds, md);
 }
 
-static inline ptl_me_t *
-ptl_me_alloc (void)
+static inline lnet_me_t *
+lnet_me_alloc (void)
 {
         /* NEVER called with liblock held */
         unsigned long  flags;
-        ptl_me_t      *me;
+        lnet_me_t     *me;
         
-        PTL_LOCK(flags);
-        me = (ptl_me_t *)ptl_freelist_alloc(&lnet_apini.apini_free_mes);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        me = (lnet_me_t *)lnet_freelist_alloc(&the_lnet.ln_free_mes);
+        LNET_UNLOCK(flags);
         
         return (me);
 }
 
 static inline void
-ptl_me_free (ptl_me_t *me)
+lnet_me_free (lnet_me_t *me)
 {
         /* ALWAYS called with liblock held */
-        ptl_freelist_free (&lnet_apini.apini_free_mes, me);
+        lnet_freelist_free (&the_lnet.ln_free_mes, me);
 }
 
-static inline ptl_msg_t *
-ptl_msg_alloc (void)
+static inline lnet_msg_t *
+lnet_msg_alloc (void)
 {
         /* NEVER called with liblock held */
         unsigned long  flags;
-        ptl_msg_t     *msg;
+        lnet_msg_t    *msg;
         
-        PTL_LOCK(flags);
-        msg = (ptl_msg_t *)ptl_freelist_alloc(&lnet_apini.apini_free_msgs);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        msg = (lnet_msg_t *)lnet_freelist_alloc(&the_lnet.ln_free_msgs);
+        LNET_UNLOCK(flags);
 
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
-                msg->msg_ack_wmd = PTL_WIRE_HANDLE_NONE;
+                msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
         }
         return(msg);
 }
 
 static inline void
-ptl_msg_free (ptl_msg_t *msg)
+lnet_msg_free (lnet_msg_t *msg)
 {
         /* ALWAYS called with liblock held */
-        ptl_freelist_free(&lnet_apini.apini_free_msgs, msg);
+        lnet_freelist_free(&the_lnet.ln_free_msgs, msg);
 }
 
 #else
 
-static inline ptl_eq_t *
-ptl_eq_alloc (void)
+static inline lnet_eq_t *
+lnet_eq_alloc (void)
 {
         /* NEVER called with liblock held */
-        ptl_eq_t *eq;
+        lnet_eq_t *eq;
 
         PORTAL_ALLOC(eq, sizeof(*eq));
         return (eq);
 }
 
 static inline void
-ptl_eq_free (ptl_eq_t *eq)
+lnet_eq_free (lnet_eq_t *eq)
 {
         /* ALWAYS called with liblock held */
         PORTAL_FREE(eq, sizeof(*eq));
 }
 
-static inline ptl_libmd_t *
-ptl_md_alloc (lnet_md_t *umd)
+static inline lnet_libmd_t *
+lnet_md_alloc (lnet_md_t *umd)
 {
         /* NEVER called with liblock held */
-        ptl_libmd_t *md;
-        int          size;
-        int          niov;
+        lnet_libmd_t *md;
+        int           size;
+        unsigned int  niov;
 
         if ((umd->options & LNET_MD_KIOV) != 0) {
                 niov = umd->length;
-                size = offsetof(ptl_libmd_t, md_iov.kiov[niov]);
+                size = offsetof(lnet_libmd_t, md_iov.kiov[niov]);
         } else {
                 niov = ((umd->options & LNET_MD_IOVEC) != 0) ?
                        umd->length : 1;
-                size = offsetof(ptl_libmd_t, md_iov.iov[niov]);
+                size = offsetof(lnet_libmd_t, md_iov.iov[niov]);
         }
 
         PORTAL_ALLOC(md, size);
@@ -223,41 +223,41 @@ ptl_md_alloc (lnet_md_t *umd)
 }
 
 static inline void 
-ptl_md_free (ptl_libmd_t *md)
+lnet_md_free (lnet_libmd_t *md)
 {
         /* ALWAYS called with liblock held */
         int       size;
 
         if ((md->md_options & LNET_MD_KIOV) != 0)
-                size = offsetof(ptl_libmd_t, md_iov.kiov[md->md_niov]);
+                size = offsetof(lnet_libmd_t, md_iov.kiov[md->md_niov]);
         else
-                size = offsetof(ptl_libmd_t, md_iov.iov[md->md_niov]);
+                size = offsetof(lnet_libmd_t, md_iov.iov[md->md_niov]);
 
         PORTAL_FREE(md, size);
 }
 
-static inline ptl_me_t *
-ptl_me_alloc (void)
+static inline lnet_me_t *
+lnet_me_alloc (void)
 {
         /* NEVER called with liblock held */
-        ptl_me_t *me;
+        lnet_me_t *me;
 
         PORTAL_ALLOC(me, sizeof(*me));
         return (me);
 }
 
 static inline void 
-ptl_me_free(ptl_me_t *me)
+lnet_me_free(lnet_me_t *me)
 {
         /* ALWAYS called with liblock held */
         PORTAL_FREE(me, sizeof(*me));
 }
 
-static inline ptl_msg_t *
-ptl_msg_alloc(void)
+static inline lnet_msg_t *
+lnet_msg_alloc(void)
 {
         /* NEVER called with liblock held; may be in interrupt... */
-        ptl_msg_t *msg;
+        lnet_msg_t *msg;
 
         if (in_interrupt())
                 PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
@@ -267,25 +267,25 @@ ptl_msg_alloc(void)
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
-                msg->msg_ack_wmd = PTL_WIRE_HANDLE_NONE;
+                msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
         }
         return (msg);
 }
 
 static inline void 
-ptl_msg_free(ptl_msg_t *msg)
+lnet_msg_free(lnet_msg_t *msg)
 {
         /* ALWAYS called with liblock held */
         PORTAL_FREE(msg, sizeof(*msg));
 }
 #endif
 
-extern ptl_libhandle_t *ptl_lookup_cookie (__u64 cookie, int type);
-extern void ptl_initialise_handle (ptl_libhandle_t *lh, int type);
-extern void ptl_invalidate_handle (ptl_libhandle_t *lh);
+extern lnet_libhandle_t *lnet_lookup_cookie (__u64 cookie, int type);
+extern void lnet_initialise_handle (lnet_libhandle_t *lh, int type);
+extern void lnet_invalidate_handle (lnet_libhandle_t *lh);
 
 static inline void
-ptl_eq2handle (lnet_handle_eq_t *handle, ptl_eq_t *eq)
+lnet_eq2handle (lnet_handle_eq_t *handle, lnet_eq_t *eq)
 {
         if (eq == NULL) {
                 *handle = LNET_EQ_NONE;
@@ -295,69 +295,69 @@ ptl_eq2handle (lnet_handle_eq_t *handle, ptl_eq_t *eq)
         handle->cookie = eq->eq_lh.lh_cookie;
 }
 
-static inline ptl_eq_t *
-ptl_handle2eq (lnet_handle_eq_t *handle)
+static inline lnet_eq_t *
+lnet_handle2eq (lnet_handle_eq_t *handle)
 {
         /* ALWAYS called with liblock held */
-        ptl_libhandle_t *lh = ptl_lookup_cookie (handle->cookie, 
-                                                 PTL_COOKIE_TYPE_EQ);
+        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie, 
+                                                  LNET_COOKIE_TYPE_EQ);
         if (lh == NULL)
                 return (NULL);
 
-        return (lh_entry (lh, ptl_eq_t, eq_lh));
+        return (lh_entry (lh, lnet_eq_t, eq_lh));
 }
 
 static inline void
-ptl_md2handle (lnet_handle_md_t *handle, ptl_libmd_t *md)
+lnet_md2handle (lnet_handle_md_t *handle, lnet_libmd_t *md)
 {
         handle->cookie = md->md_lh.lh_cookie;
 }
 
-static inline ptl_libmd_t *
-ptl_handle2md (lnet_handle_md_t *handle)
+static inline lnet_libmd_t *
+lnet_handle2md (lnet_handle_md_t *handle)
 {
         /* ALWAYS called with liblock held */
-        ptl_libhandle_t *lh = ptl_lookup_cookie (handle->cookie,
-                                                 PTL_COOKIE_TYPE_MD);
+        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie,
+                                                  LNET_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
-        return (lh_entry (lh, ptl_libmd_t, md_lh));
+        return (lh_entry (lh, lnet_libmd_t, md_lh));
 }
 
-static inline ptl_libmd_t *
-ptl_wire_handle2md (ptl_handle_wire_t *wh)
+static inline lnet_libmd_t *
+lnet_wire_handle2md (lnet_handle_wire_t *wh)
 {
         /* ALWAYS called with liblock held */
-        ptl_libhandle_t *lh;
+        lnet_libhandle_t *lh;
         
-        if (wh->wh_interface_cookie != lnet_apini.apini_interface_cookie)
+        if (wh->wh_interface_cookie != the_lnet.ln_interface_cookie)
                 return (NULL);
         
-        lh = ptl_lookup_cookie (wh->wh_object_cookie,
-                                PTL_COOKIE_TYPE_MD);
+        lh = lnet_lookup_cookie(wh->wh_object_cookie,
+                                LNET_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
-        return (lh_entry (lh, ptl_libmd_t, md_lh));
+        return (lh_entry (lh, lnet_libmd_t, md_lh));
 }
 
 static inline void
-ptl_me2handle (lnet_handle_me_t *handle, ptl_me_t *me)
+lnet_me2handle (lnet_handle_me_t *handle, lnet_me_t *me)
 {
         handle->cookie = me->me_lh.lh_cookie;
 }
 
-static inline ptl_me_t *
-ptl_handle2me (lnet_handle_me_t *handle)
+static inline lnet_me_t *
+lnet_handle2me (lnet_handle_me_t *handle)
 {
         /* ALWAYS called with liblock held */
-        ptl_libhandle_t *lh = ptl_lookup_cookie (handle->cookie,
-                                                 PTL_COOKIE_TYPE_ME);
+        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie,
+                                                  LNET_COOKIE_TYPE_ME);
         if (lh == NULL)
                 return (NULL);
 
-        return (lh_entry (lh, ptl_me_t, me_lh));
+        return (lh_entry (lh, lnet_me_t, me_lh));
 }
 
 /******************************************************************************/
@@ -365,10 +365,8 @@ ptl_handle2me (lnet_handle_me_t *handle)
 
 /* NI APIs */
 int       lnet_forwarding(void);
-lnet_nid_t lnet_lookup(ptl_ni_t **ni, lnet_nid_t nid, int nob);
-void      lnet_fwd_start(ptl_ni_t *ni, kpr_fwd_desc_t *fwd);
-void      lnet_fwd_done(ptl_ni_t *ni, kpr_fwd_desc_t *fwd, int error);
-int       lnet_notify(ptl_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
+lnet_nid_t lnet_lookup(lnet_ni_t **ni, lnet_nid_t nid, int nob);
+int       lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
 
 /* internal APIs */
 int       kpr_distance(lnet_nid_t nid, int *order);
@@ -377,67 +375,49 @@ int       kpr_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
 int       kpr_initialise(void);
 void      kpr_finalise(void);
 
-static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, lnet_nid_t target_nid,
-              lnet_nid_t sender_nid, lnet_nid_t source_nid, 
-              ptl_hdr_t *hdr, int nob, int niov, lnet_kiov_t *kiov,
-              kpr_fwd_callback_t callback, void *callback_arg)
-{
-        fwd->kprfd_target_nid   = target_nid;
-        fwd->kprfd_gateway_nid  = target_nid;
-        fwd->kprfd_sender_nid   = sender_nid;
-        fwd->kprfd_source_nid   = source_nid;
-        fwd->kprfd_hdr          = hdr;
-        fwd->kprfd_nob          = nob;
-        fwd->kprfd_niov         = niov;
-        fwd->kprfd_kiov         = kiov;
-        fwd->kprfd_callback     = callback;
-        fwd->kprfd_callback_arg = callback_arg;
-}
-
 /******************************************************************************/
 
 static inline void
-ptl_ni_addref_locked(ptl_ni_t *ni) 
+lnet_ni_addref_locked(lnet_ni_t *ni) 
 {
         LASSERT (ni->ni_refcount > 0);
         ni->ni_refcount++;
 }
 
 static inline void
-ptl_ni_addref(ptl_ni_t *ni) 
+lnet_ni_addref(lnet_ni_t *ni) 
 {
         unsigned long flags;
         
-        PTL_LOCK(flags);
-        ptl_ni_addref_locked(ni);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        lnet_ni_addref_locked(ni);
+        LNET_UNLOCK(flags);
 }
 
 static inline void
-ptl_ni_decref_locked(ptl_ni_t *ni)
+lnet_ni_decref_locked(lnet_ni_t *ni)
 {
         LASSERT (ni->ni_refcount > 0);
         ni->ni_refcount--;
         if (ni->ni_refcount == 0)
-                list_add_tail(&ni->ni_list, &lnet_apini.apini_zombie_nis);
+                list_add_tail(&ni->ni_list, &the_lnet.ln_zombie_nis);
 }
 
 static inline void
-ptl_ni_decref(ptl_ni_t *ni)
+lnet_ni_decref(lnet_ni_t *ni)
 {
         unsigned long flags;
         
-        PTL_LOCK(flags);
-        ptl_ni_decref_locked(ni);
-        PTL_UNLOCK(flags);
+        LNET_LOCK(flags);
+        lnet_ni_decref_locked(ni);
+        LNET_UNLOCK(flags);
 }
 
 static inline lnet_nid_t
 lnet_ptlcompat_srcnid(lnet_nid_t src, lnet_nid_t dst)
 {
         /* Give myself a portals srcnid if I'm sending to portals */
-        if (lnet_apini.apini_ptlcompat > 0 &&   
+        if (the_lnet.ln_ptlcompat > 0 &&   
             PTL_NIDNET(dst) == 0)
                 return PTL_MKNID(0, PTL_NIDADDR(src));
         
@@ -448,60 +428,102 @@ static inline int
 lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid) 
 {
         return ((ptl_nid == lnet_nid) ||
-                (lnet_apini.apini_ptlcompat > 0 &&
+                (the_lnet.ln_ptlcompat > 0 &&
                  PTL_NIDNET(ptl_nid) == 0 &&
                  PTL_NIDADDR(ptl_nid) == PTL_NIDADDR(lnet_nid)));
 }
 
-extern ptl_nal_t ptl_lonal;
-extern ptl_ni_t *ptl_loni;
+extern lnd_t      the_lolnd;
+extern lnet_ni_t *lnet_loni;
 
-extern ptl_ni_t *lnet_net2ni (__u32 net);
-extern int ptl_islocalnid (lnet_nid_t nid);
-extern int ptl_islocalnet (__u32 net, int *orderp);
-extern void ptl_enq_event_locked (void *private,
-                                  ptl_eq_t *eq, lnet_event_t *ev);
-extern void lnet_finalize (ptl_ni_t *ni, void *private, ptl_msg_t *msg, int rc);
-extern int lnet_parse (ptl_ni_t *ni, ptl_hdr_t *hdr, void *private);
-extern ptl_msg_t *lnet_create_reply_msg (ptl_ni_t *ni, lnet_nid_t peer_nid, 
-                                        ptl_msg_t *get_msg);
-extern void ptl_print_hdr (ptl_hdr_t * hdr);
-extern int ptl_fail_nid(lnet_nid_t nid, unsigned int threshold);
+extern lnet_ni_t *lnet_net2ni (__u32 net);
+extern int lnet_islocalnid (lnet_nid_t nid);
+extern int lnet_islocalnet (__u32 net, int *orderp);
+extern void lnet_enq_event_locked (void *private,
+                                   lnet_eq_t *eq, lnet_event_t *ev);
+extern void lnet_finalize (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int rc);
+extern int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr, void *private);
+extern lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
+extern void lnet_print_hdr (lnet_hdr_t * hdr);
+extern int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
 
-extern unsigned int lnet_iov_nob (int niov, struct iovec *iov);
-extern void lnet_copy_iov2buf (char *dest, int niov, struct iovec *iov, 
-                              unsigned int offset, unsigned int len);
-extern void lnet_copy_buf2iov (int niov, struct iovec *iov, unsigned int offset, 
-                              char *src, unsigned int len);
+extern unsigned int lnet_iov_nob (unsigned int niov, struct iovec *iov);
 extern int lnet_extract_iov (int dst_niov, struct iovec *dst,
                             int src_niov, struct iovec *src,
                             unsigned int offset, unsigned int len);
 
-extern unsigned int lnet_kiov_nob (int niov, lnet_kiov_t *iov);
-extern void lnet_copy_kiov2buf (char *dest, int niov, lnet_kiov_t *kiov, 
-                               unsigned int offset, unsigned int len);
-extern void lnet_copy_buf2kiov (int niov, lnet_kiov_t *kiov, unsigned int offset,
-                               char *src, unsigned int len);
+extern unsigned int lnet_kiov_nob (unsigned int niov, lnet_kiov_t *iov);
 extern int lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst, 
                              int src_niov, lnet_kiov_t *src,
                              unsigned int offset, unsigned int len);
 
-extern lnet_pid_t lnet_getpid(void);
+extern void lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, 
+                               unsigned int doffset, 
+                               unsigned int nsiov, struct iovec *siov, 
+                               unsigned int soffset, unsigned int nob);
+extern void lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, 
+                                unsigned int iovoffset,
+                                unsigned int nkiov, lnet_kiov_t *kiov, 
+                                unsigned int kiovoffset, unsigned int nob);
+extern void lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, 
+                                unsigned int kiovoffset,
+                                unsigned int niov, struct iovec *iov, 
+                                unsigned int iovoffset, unsigned int nob);
+extern void lnet_copy_kiov2kiov (unsigned int ndkiov, lnet_kiov_t *dkiov, 
+                                 unsigned int doffset, 
+                                 unsigned int nskiov, lnet_kiov_t *skiov, 
+                                 unsigned int soffset, unsigned int nob);
 
-extern int ptl_recv (ptl_ni_t *ni, void *private, ptl_msg_t *msg, ptl_libmd_t *md,
-                           unsigned int offset, unsigned int mlen, unsigned int rlen);
-extern int ptl_send (ptl_ni_t *ni, void *private, ptl_msg_t *msg,
-                           ptl_hdr_t *hdr, int type, lnet_process_id_t target,
-                           ptl_libmd_t *md, unsigned int offset, unsigned int len);
+static inline void
+lnet_copy_iov2flat(int dlen, void *dest, unsigned int doffset,
+                   unsigned int nsiov, struct iovec *siov,
+                   unsigned int soffset, unsigned int nob)
+{
+        struct iovec diov = {.iov_base = dest, .iov_len = dlen};
+        lnet_copy_iov2iov(1, &diov, doffset,
+                          nsiov, siov, soffset, nob);
+}
 
-extern void ptl_me_unlink(ptl_me_t *me);
+static inline void
+lnet_copy_kiov2flat(int dlen, void *dest, unsigned int doffset,
+                    unsigned int nsiov, lnet_kiov_t *skiov,
+                    unsigned int soffset, unsigned int nob)
+{
+        struct iovec diov = {.iov_base = dest, .iov_len = dlen};
+        lnet_copy_kiov2iov(1, &diov, doffset,
+                           nsiov, skiov, soffset, nob);
+}
 
-extern void ptl_md_unlink(ptl_libmd_t *md);
-extern void ptl_md_deconstruct(ptl_libmd_t *lmd, lnet_md_t *umd);
+static inline void
+lnet_copy_flat2iov(unsigned int ndiov, struct iovec *diov, unsigned int doffset,
+                   int slen, void *src, unsigned int soffset, unsigned int nob)
+{
+        struct iovec siov = {.iov_base = src, .iov_len = slen};
+        lnet_copy_iov2iov(ndiov, diov, doffset,
+                          1, &siov, soffset, nob);
+}
 
-extern void lnet_register_nal(ptl_nal_t *nal);
-extern void lnet_unregister_nal(ptl_nal_t *nal);
-extern int lnet_set_ip_niaddr (ptl_ni_t *ni);
+static inline void
+lnet_copy_flat2kiov(unsigned int ndiov, lnet_kiov_t *dkiov, unsigned int doffset,
+                    int slen, void *src, unsigned int soffset, unsigned int nob)
+{
+        struct iovec siov = {.iov_base = src, .iov_len = slen};
+        lnet_copy_iov2kiov(ndiov, dkiov, doffset,
+                           1, &siov, soffset, nob);
+}
+
+extern int lnet_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
+                     int type, lnet_process_id_t target,
+                     lnet_libmd_t *md, unsigned int offset, unsigned int len);
+
+extern void lnet_me_unlink(lnet_me_t *me);
+
+extern void lnet_md_unlink(lnet_libmd_t *md);
+extern void lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd);
+
+extern void lnet_register_lnd(lnd_t *lnd);
+extern void lnet_unregister_lnd(lnd_t *lnd);
+extern int lnet_set_ip_niaddr (lnet_ni_t *ni);
 
 #ifdef __KERNEL__
 extern int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
@@ -509,14 +531,14 @@ extern int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
 extern void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
                                       __u32 peer_ip, int port);
 
-extern int ptl_count_acceptor_nis(ptl_ni_t **first_ni);
+extern int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
 
-extern int lnet_accept(ptl_ni_t *blind_ni, struct socket *sock, __u32 magic);
-extern int       lnet_acceptor_timeout(void);
-extern int       lnet_acceptor_port(void);
+extern int lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic);
+extern int lnet_acceptor_timeout(void);
+extern int lnet_acceptor_port(void);
 #endif
 extern int lnet_acceptor_start(void);
-extern void      lnet_acceptor_stop(void);
+extern void lnet_acceptor_stop(void);
 
 extern int lnet_parse_routes (char *route_str);
 extern int lnet_parse_networks (struct list_head *nilist, char *networks);

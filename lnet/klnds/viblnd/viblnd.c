@@ -24,13 +24,13 @@
 
 #include "viblnd.h"
 
-ptl_nal_t               kibnal_nal = {
-        .nal_type       = VIBNAL,
-        .nal_startup    = kibnal_startup,
-        .nal_shutdown   = kibnal_shutdown,
-        .nal_ctl        = kibnal_ctl,
-        .nal_send       = kibnal_send,
-        .nal_recv       = kibnal_recv,
+lnd_t the_kiblnd = {
+        .lnd_type       = VIBLND,
+        .lnd_startup    = kibnal_startup,
+        .lnd_shutdown   = kibnal_shutdown,
+        .lnd_ctl        = kibnal_ctl,
+        .lnd_send       = kibnal_send,
+        .lnd_recv       = kibnal_recv,
 };
 
 kib_data_t              kibnal_data;
@@ -405,7 +405,7 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
 }
 
 int
-kibnal_start_listener (ptl_ni_t *ni)
+kibnal_start_listener (lnet_ni_t *ni)
 {
         static cm_listen_data_t info;
 
@@ -442,7 +442,7 @@ kibnal_start_listener (ptl_ni_t *ni)
 }
 
 void
-kibnal_stop_listener(ptl_ni_t *ni)
+kibnal_stop_listener(lnet_ni_t *ni)
 {
         cm_return_t      cmrc;
 
@@ -1135,7 +1135,7 @@ kibnal_close_matching_conns (lnet_nid_t nid)
 }
 
 int
-kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
+kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
         int                       rc = -EINVAL;
@@ -1430,7 +1430,7 @@ kibnal_setup_tx_descs (void)
 }
 
 void
-kibnal_shutdown (ptl_ni_t *ni)
+kibnal_shutdown (lnet_ni_t *ni)
 {
         int           i;
         vv_return_t   vvrc;
@@ -1546,7 +1546,7 @@ kibnal_shutdown (ptl_ni_t *ni)
 }
 
 int
-kibnal_startup (ptl_ni_t *ni)
+kibnal_startup (lnet_ni_t *ni)
 {
         char                      scratch[32];
         char                      ipif_name[32];
@@ -1562,7 +1562,7 @@ kibnal_startup (ptl_ni_t *ni)
         vv_request_event_record_t req_er;
         vv_return_t               vvrc;
 
-        LASSERT (ni->ni_nal == &kibnal_nal);
+        LASSERT (ni->ni_lnd == &the_kiblnd);
 
         /* Only 1 instance supported */
         if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
@@ -1570,7 +1570,7 @@ kibnal_startup (ptl_ni_t *ni)
                 return -EPERM;
         }
 
-        CLASSERT (PTL_MAX_INTERFACES > 1);
+        CLASSERT (LNET_MAX_INTERFACES > 1);
         
         if (ni->ni_interfaces[0] != NULL) {
                 /* Use the HCA specified in 'networks=' */
@@ -1865,7 +1865,7 @@ kibnal_startup (ptl_ni_t *ni)
 void __exit
 kibnal_module_fini (void)
 {
-        lnet_unregister_nal(&kibnal_nal);
+        lnet_unregister_lnd(&the_kiblnd);
         kibnal_tunables_fini();
 }
 
@@ -1891,7 +1891,7 @@ kibnal_module_init (void)
         if (rc != 0)
                 return rc;
 
-        lnet_register_nal(&kibnal_nal);
+        lnet_register_lnd(&the_kiblnd);
 
         return 0;
 }

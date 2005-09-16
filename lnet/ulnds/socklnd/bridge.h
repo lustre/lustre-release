@@ -13,7 +13,7 @@
 
 typedef struct bridge {
     int alive;
-    ptl_ni_t *b_ni;
+    lnet_ni_t *b_ni;
     void *lower;
     void *local;
     /* this doesn't really belong here */

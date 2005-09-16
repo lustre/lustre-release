@@ -43,7 +43,6 @@ kibnal_schedule_tx_done (kib_tx_t *tx)
 void
 kibnal_tx_done (kib_tx_t *tx)
 {
-        int        ptlrc = (tx->tx_status == 0) ? 0 : -EIO;
         unsigned long    flags;
         int              i;
         int              rc;
@@ -89,11 +88,12 @@ kibnal_tx_done (kib_tx_t *tx)
 
         for (i = 0; i < 2; i++) {
                 /* tx may have up to 2 ptlmsgs to finalise */
-                if (tx->tx_ptlmsg[i] == NULL)
+                if (tx->tx_lntmsg[i] == NULL)
                         continue;
 
-                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_ptlmsg[i], ptlrc);
-                tx->tx_ptlmsg[i] = NULL;
+                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_lntmsg[i], 
+                               tx->tx_status);
+                tx->tx_lntmsg[i] = NULL;
         }
         
         if (tx->tx_conn != NULL) {
@@ -168,8 +168,8 @@ kibnal_get_idle_tx (int may_block)
                 LASSERT (tx->tx_conn == NULL);
                 LASSERT (!tx->tx_passive_rdma);
                 LASSERT (!tx->tx_passive_rdma_wait);
-                LASSERT (tx->tx_ptlmsg[0] == NULL);
-                LASSERT (tx->tx_ptlmsg[1] == NULL);
+                LASSERT (tx->tx_lntmsg[0] == NULL);
+                LASSERT (tx->tx_lntmsg[1] == NULL);
         }
 
         spin_unlock_irqrestore (&kibnal_data.kib_tx_lock, flags);
@@ -245,8 +245,8 @@ kibnal_post_rx (kib_rx_t *rx, int do_credits)
         };
 
         LASSERT (conn->ibc_state >= IBNAL_CONN_ESTABLISHED);
-        LASSERT (!rx->rx_posted);
-        rx->rx_posted = 1;
+        LASSERT (rx->rx_nob >= 0);              /* not posted */
+        rx->rx_nob = -1;                        /* is now */
         mb();
 
         if (conn->ibc_state != IBNAL_CONN_ESTABLISHED)
@@ -289,8 +289,8 @@ kibnal_rx_callback (struct ib_cq_entry *e)
         int           rc;
 
         CDEBUG (D_NET, "rx %p conn %p\n", rx, conn);
-        LASSERT (rx->rx_posted);
-        rx->rx_posted = 0;
+        LASSERT (rx->rx_nob < 0);               /* was posted */
+        rx->rx_nob = 0;                         /* isn't now */
         mb();
 
         /* receives complete with error in any case after we've started
@@ -307,7 +307,11 @@ kibnal_rx_callback (struct ib_cq_entry *e)
                 goto failed;
         }
 
-        rc = kibnal_unpack_msg(msg, e->bytes_transferred);
+        LASSERT (e->bytes_transferred >= 0);
+        rx->rx_nob = e->bytes_transferred;
+        mb();
+
+        rc = kibnal_unpack_msg(msg, rx->rx_nob);
         if (rc != 0) {
                 CERROR ("Error %d unpacking rx from %s\n",
                         rc, libcfs_nid2str(conn->ibc_peer->ibp_nid));
@@ -389,6 +393,7 @@ kibnal_rx_callback (struct ib_cq_entry *e)
 void
 kibnal_rx (kib_rx_t *rx)
 {
+        int          rc = 0;
         kib_msg_t   *msg = rx->rx_msg;
 
         /* Clear flag so I can detect if I've sent an RDMA completion */
@@ -396,45 +401,26 @@ kibnal_rx (kib_rx_t *rx)
 
         switch (msg->ibm_type) {
         case IBNAL_MSG_GET_RDMA:
-                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
-                /* If the incoming get was matched, I'll have initiated the
-                 * RDMA and the completion message... */
-                if (rx->rx_rdma)
-                        break;
-
-                /* Otherwise, I'll send a failed completion now to prevent
-                 * the peer's GET blocking for the full timeout. */
-                CERROR ("Completing unmatched RDMA GET from %s\n",
-                        libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
-                kibnal_start_active_rdma (IBNAL_MSG_GET_DONE, -EIO,
-                                          rx, NULL, 0, NULL, NULL, 0, 0);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
                 break;
                 
         case IBNAL_MSG_PUT_RDMA:
-                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
-                if (rx->rx_rdma)
-                        break;
-                /* This is most unusual, since even if lnet_parse() didn't
-                 * match anything, it should have asked us to read (and
-                 * discard) the payload.  The portals header must be
-                 * inconsistent with this message type, so it's the
-                 * sender's fault for sending garbage and she can time
-                 * herself out... */
-                CERROR ("Uncompleted RMDA PUT from %s\n",
-                        libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
-                lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
-                LASSERT (!rx->rx_rdma);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
                 break;
-                
+
         default:
                 LBUG();
                 break;
         }
 
-        kibnal_post_rx (rx, 1);
+        if (rc < 0) {
+                kibnal_close_conn(rx->rx_conn, rc);
+                kibnal_post_rx (rx, 1);
+        }
 }
 
 #if 0
@@ -466,7 +452,7 @@ kibnal_kvaddr_to_phys (unsigned long vaddr, __u64 *physp)
 
 int
 kibnal_map_iov (kib_tx_t *tx, enum ib_memory_access access,
-                 int niov, struct iovec *iov, int offset, int nob)
+                unsigned int niov, struct iovec *iov, int offset, int nob)
                  
 {
         void   *vaddr;
@@ -1015,10 +1001,10 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
 }
 
 int
-kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
-                           ptl_msg_t *ptlmsg, ptl_hdr_t *hdr)
+kibnal_start_passive_rdma (int type, int may_block, lnet_msg_t *lntmsg)
 {
-        int         nob = ptlmsg->msg_md->md_length;
+        lnet_nid_t  nid = lntmsg->msg_target.nid;
+        int         nob = lntmsg->msg_md->md_length;
         kib_tx_t   *tx;
         kib_msg_t  *ibmsg;
         int         rc;
@@ -1044,15 +1030,15 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
                 return -ENOMEM;
         }
 
-        if ((ptlmsg->msg_md->md_options & LNET_MD_KIOV) == 0) 
+        if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) == 0) 
                 rc = kibnal_map_iov (tx, access,
-                                     ptlmsg->msg_md->md_niov,
-                                     ptlmsg->msg_md->md_iov.iov,
+                                     lntmsg->msg_md->md_niov,
+                                     lntmsg->msg_md->md_iov.iov,
                                      0, nob);
         else
                 rc = kibnal_map_kiov (tx, access,
-                                      ptlmsg->msg_md->md_niov, 
-                                      ptlmsg->msg_md->md_iov.kiov,
+                                      lntmsg->msg_md->md_niov, 
+                                      lntmsg->msg_md->md_iov.kiov,
                                       0, nob);
 
         if (rc != 0) {
@@ -1063,9 +1049,9 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
         
         if (type == IBNAL_MSG_GET_RDMA) {
                 /* reply gets finalized when tx completes */
-                tx->tx_ptlmsg[1] = lnet_create_reply_msg(kibnal_data.kib_ni, 
-                                                        nid, ptlmsg);
-                if (tx->tx_ptlmsg[1] == NULL) {
+                tx->tx_lntmsg[1] = lnet_create_reply_msg(kibnal_data.kib_ni, 
+                                                         lntmsg);
+                if (tx->tx_lntmsg[1] == NULL) {
                         CERROR ("Can't create reply for GET -> %s\n",
                                 libcfs_nid2str(nid));
                         rc = -ENOMEM;
@@ -1077,7 +1063,7 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
 
         ibmsg = tx->tx_msg;
 
-        ibmsg->ibm_u.rdma.ibrm_hdr = *hdr;
+        ibmsg->ibm_u.rdma.ibrm_hdr = lntmsg->msg_hdr;
         ibmsg->ibm_u.rdma.ibrm_cookie = tx->tx_passive_rdma_cookie;
         ibmsg->ibm_u.rdma.ibrm_desc.rd_key = tx->tx_md.md_rkey;
         ibmsg->ibm_u.rdma.ibrm_desc.rd_addr = tx->tx_md.md_addr;
@@ -1090,8 +1076,8 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
                tx, tx->tx_passive_rdma_cookie, tx->tx_md.md_rkey,
                tx->tx_md.md_addr, nob);
         
-        /* ptlmsg gets finalized when tx completes. */
-        tx->tx_ptlmsg[0] = ptlmsg;
+        /* lntmsg gets finalized when tx completes. */
+        tx->tx_lntmsg[0] = lntmsg;
 
         kibnal_launch_tx(tx, nid);
         return (0);
@@ -1104,10 +1090,10 @@ kibnal_start_passive_rdma (int type, lnet_nid_t nid, int may_block,
 
 void
 kibnal_start_active_rdma (int type, int status,
-                           kib_rx_t *rx, ptl_msg_t *ptlmsg, 
-                           unsigned int niov,
-                           struct iovec *iov, lnet_kiov_t *kiov,
-                           int offset, int nob)
+                          kib_rx_t *rx, lnet_msg_t *lntmsg, 
+                          unsigned int niov,
+                          struct iovec *iov, lnet_kiov_t *kiov,
+                          int offset, int nob)
 {
         kib_msg_t    *rxmsg = rx->rx_msg;
         kib_msg_t    *txmsg;
@@ -1152,7 +1138,7 @@ kibnal_start_active_rdma (int type, int status,
                 CERROR ("tx descs exhausted on RDMA from %s"
                         " completing locally with failure\n",
                         libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
-                lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg, -ENOMEM);
+                lnet_finalize (kibnal_data.kib_ni, NULL, lntmsg, -ENOMEM);
                 return;
         }
         LASSERT (tx->tx_nsp == 0);
@@ -1211,15 +1197,15 @@ kibnal_start_active_rdma (int type, int status,
 
         if (status == 0 && nob != 0) {
                 LASSERT (tx->tx_nsp > 1);
-                /* RDMA: ptlmsg gets finalized when the tx completes.  This
+                /* RDMA: lntmsg gets finalized when the tx completes.  This
                  * is after the completion message has been sent, which in
                  * turn is after the RDMA has finished. */
-                tx->tx_ptlmsg[0] = ptlmsg;
+                tx->tx_lntmsg[0] = lntmsg;
         } else {
                 LASSERT (tx->tx_nsp == 1);
                 /* No RDMA: local completion happens now! */
                 CDEBUG(D_NET, "No data: immediate completion\n");
-                lnet_finalize (kibnal_data.kib_ni, NULL, ptlmsg,
+                lnet_finalize (kibnal_data.kib_ni, NULL, lntmsg,
                               status == 0 ? 0 : -EIO);
         }
 
@@ -1234,23 +1220,21 @@ kibnal_start_active_rdma (int type, int status,
 }
 
 int
-kibnal_send(ptl_ni_t         *ni, 
-            void             *private,
-            ptl_msg_t        *ptlmsg,
-            ptl_hdr_t        *hdr, 
-            int               type, 
-            lnet_process_id_t target,
-            int               target_is_router,
-            int               routing,
-            unsigned int      payload_niov, 
-            struct iovec     *payload_iov, 
-            lnet_kiov_t      *payload_kiov,
-            unsigned int      payload_offset,
-            unsigned int      payload_nob)
+kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
-        kib_msg_t  *ibmsg;
-        kib_tx_t   *tx;
-        int         nob;
+        lnet_hdr_t       *hdr = &lntmsg->msg_hdr; 
+        int               type = lntmsg->msg_type; 
+        lnet_process_id_t target = lntmsg->msg_target;
+        int               target_is_router = lntmsg->msg_target_is_router;
+        int               routing = lntmsg->msg_routing;
+        unsigned int      payload_niov = lntmsg->msg_niov; 
+        struct iovec     *payload_iov = lntmsg->msg_iov; 
+        lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
+        unsigned int      payload_offset = lntmsg->msg_offset;
+        unsigned int      payload_nob = lntmsg->msg_len;
+        kib_msg_t        *ibmsg;
+        kib_tx_t         *tx;
+        int               nob;
 
         /* NB 'private' is different depending on what we're sending.... */
 
@@ -1270,23 +1254,22 @@ kibnal_send(ptl_ni_t         *ni,
                 LBUG();
                 return (-EIO);
                 
-        case PTL_MSG_ACK:
+        case LNET_MSG_ACK:
                 LASSERT (payload_nob == 0);
                 break;
 
-        case PTL_MSG_GET:
+        case LNET_MSG_GET:
                 if (routing || target_is_router)
-                        break;                  /* send IMMEDIATE */ 
-                
+                        break;                  /* send IMMEDIATE */
+
                 /* is the REPLY message too small for RDMA? */
-                nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[ptlmsg->msg_md->md_length]);
+                nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[lntmsg->msg_md->md_length]);
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
-                
-                return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, 1,
-                                                 target.nid, ptlmsg, hdr);
 
-        case PTL_MSG_REPLY: {
+                return kibnal_start_passive_rdma(IBNAL_MSG_GET_RDMA, 1, lntmsg);
+
+        case LNET_MSG_REPLY: {
                 /* reply's 'private' is the incoming receive */
                 kib_rx_t *rx = private;
 
@@ -1294,7 +1277,7 @@ kibnal_send(ptl_ni_t         *ni,
 
                 /* RDMA reply expected? */
                 if (!routing && rx->rx_msg->ibm_type != IBNAL_MSG_IMMEDIATE) {
-                        /* Incoming message consistent with RDMA? */
+                        /* Incoming message consistent with RDMA */
                         if (rx->rx_msg->ibm_type != IBNAL_MSG_GET_RDMA) {
                                 CERROR ("REPLY to %s bad ibm type %d!!!\n",
                                         libcfs_nid2str(target.nid), 
@@ -1303,7 +1286,7 @@ kibnal_send(ptl_ni_t         *ni,
                         }
 
                         kibnal_start_active_rdma(IBNAL_MSG_GET_DONE, 0,
-                                                 rx, ptlmsg, payload_niov, 
+                                                 rx, lntmsg, payload_niov, 
                                                  payload_iov, payload_kiov,
                                                  payload_offset, payload_nob);
                         return (0);
@@ -1311,22 +1294,22 @@ kibnal_send(ptl_ni_t         *ni,
                 /* Fall through to handle like PUT */
         }
 
-        case PTL_MSG_PUT:
+        case LNET_MSG_PUT:
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob]);
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
                 
                 return kibnal_start_passive_rdma(IBNAL_MSG_PUT_RDMA,
-                                                 !(routing || type == PTL_MSG_REPLY),
-                                                 target.nid, ptlmsg, hdr);
+                                                 !(routing || type == LNET_MSG_REPLY),
+                                                 lntmsg);
         }
 
         /* Send IMMEDIATE */
 
         tx = kibnal_get_idle_tx(!(routing ||
-                                  type == PTL_MSG_ACK ||
-                                  type == PTL_MSG_REPLY ||
+                                  type == LNET_MSG_ACK ||
+                                  type == LNET_MSG_REPLY ||
                                   in_interrupt()));
         if (tx == NULL) {
                 CERROR ("Can't send %d to %s: tx descs exhausted%s\n", 
@@ -1338,35 +1321,38 @@ kibnal_send(ptl_ni_t         *ni,
         ibmsg = tx->tx_msg;
         ibmsg->ibm_u.immediate.ibim_hdr = *hdr;
 
-        if (payload_nob > 0) {
-                if (payload_kiov != NULL)
-                        lnet_copy_kiov2buf(ibmsg->ibm_u.immediate.ibim_payload,
-                                          payload_niov, payload_kiov,
-                                          payload_offset, payload_nob);
-                else
-                        lnet_copy_iov2buf(ibmsg->ibm_u.immediate.ibim_payload,
-                                         payload_niov, payload_iov,
-                                         payload_offset, payload_nob);
-        }
+        if (payload_kiov != NULL)
+                lnet_copy_kiov2flat(IBNAL_MSG_SIZE, ibmsg,
+                                    offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
+                                    payload_niov, payload_kiov, 
+                                    payload_offset, payload_nob);
+        else
+                lnet_copy_iov2flat(IBNAL_MSG_SIZE, ibmsg,
+                                   offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
+                                   payload_niov, payload_iov, 
+                                   payload_offset, payload_nob);
 
         kibnal_init_tx_msg (tx, IBNAL_MSG_IMMEDIATE,
                             offsetof(kib_immediate_msg_t, 
                                      ibim_payload[payload_nob]));
 
-        /* ptlmsg gets finalized when tx completes */
-        tx->tx_ptlmsg[0] = ptlmsg;
+        /* lntmsg gets finalized when tx completes */
+        tx->tx_lntmsg[0] = lntmsg;
 
         kibnal_launch_tx(tx, target.nid);
         return (0);
 }
+
 int
-kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-             unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+             int delayed, unsigned int niov,
+             struct iovec *iov, lnet_kiov_t *kiov,
              unsigned int offset, unsigned int mlen, unsigned int rlen)
 {
         kib_rx_t    *rx = private;
         kib_msg_t   *rxmsg = rx->rx_msg;
         int          msg_nob;
+        int          rc = 0;
         
         LASSERT (mlen <= rlen);
         LASSERT (!in_interrupt ());
@@ -1376,42 +1362,50 @@ kibnal_recv (ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
         switch (rxmsg->ibm_type) {
         default:
                 LBUG();
-                return (-EIO);
-                
+
         case IBNAL_MSG_IMMEDIATE:
                 msg_nob = offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[rlen]);
-                if (msg_nob > IBNAL_MSG_SIZE) {
-                        CERROR ("Immediate message from %s too big: %d\n",
+                if (msg_nob > rx->rx_nob) {
+                        CERROR ("Immediate message from %s too big: %d(%d)\n",
                                 libcfs_nid2str(rxmsg->ibm_u.immediate.ibim_hdr.src_nid),
-                                rlen);
-                        return (-EIO);
+                                rlen, rx->rx_nob);
+                        rc = -EPROTO;
+                        break;
                 }
 
                 if (kiov != NULL)
-                        lnet_copy_buf2kiov(niov, kiov, offset,
-                                          rxmsg->ibm_u.immediate.ibim_payload,
-                                          mlen);
+                        lnet_copy_flat2kiov(
+                                niov, kiov, offset, 
+                                IBNAL_MSG_SIZE, rxmsg,
+                                offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
+                                mlen);
                 else
-                        lnet_copy_buf2iov(niov, iov, offset,
-                                         rxmsg->ibm_u.immediate.ibim_payload,
-                                         mlen);
+                        lnet_copy_flat2iov(
+                                niov, iov, offset,
+                                IBNAL_MSG_SIZE, rxmsg,
+                                offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
+                                mlen);
 
-                lnet_finalize (ni, NULL, ptlmsg, 0);
-                return (0);
+                lnet_finalize (ni, NULL, lntmsg, 0);
+                break;
 
         case IBNAL_MSG_GET_RDMA:
-                /* We get called here just to discard any junk after the
-                 * GET hdr. */
-                LASSERT (ptlmsg == NULL);
-                lnet_finalize (ni, NULL, ptlmsg, 0);
-                return (0);
+                LASSERT (lntmsg == NULL);       /* no need to finalise */
+                if (!rx->rx_rdma) {
+                        /* GET didn't match anything */
+                        kibnal_start_active_rdma (IBNAL_MSG_GET_DONE, -ENODATA,
+                                                  rx, NULL, 0, NULL, NULL, 0, 0);
+                }
+                break;
 
         case IBNAL_MSG_PUT_RDMA:
-                kibnal_start_active_rdma (IBNAL_MSG_PUT_DONE, 0,
-                                          rx, ptlmsg, 
+                kibnal_start_active_rdma (IBNAL_MSG_PUT_DONE, 0, rx, lntmsg,
                                           niov, iov, kiov, offset, mlen);
-                return (0);
+                break;
         }
+
+        kibnal_post_rx(rx, 1);
+        return rc;
 }
 
 int

@@ -23,13 +23,13 @@
 
 #include "iiblnd.h"
 
-ptl_nal_t kibnal_nal = {
-        .nal_type          = IIBNAL,
-        .nal_startup       = kibnal_startup,
-        .nal_shutdown      = kibnal_shutdown,
-        .nal_ctl           = kibnal_ctl,
-        .nal_send          = kibnal_send,
-        .nal_recv          = kibnal_recv,
+lnd_t the_kiblnd = {
+        .lnd_type          = IIBLND,
+        .lnd_startup       = kibnal_startup,
+        .lnd_shutdown      = kibnal_shutdown,
+        .lnd_ctl           = kibnal_ctl,
+        .lnd_send          = kibnal_send,
+        .lnd_recv          = kibnal_recv,
 };
 
 kib_tunables_t          kibnal_tunables;
@@ -924,7 +924,7 @@ kibnal_close_matching_conns (lnet_nid_t nid)
 }
 
 int
-kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
+kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
         struct portal_ioctl_data *data = arg;
         int                       rc = -EINVAL;
@@ -1148,7 +1148,7 @@ kibnal_setup_tx_descs (void)
 }
 
 void
-kibnal_shutdown (ptl_ni_t *ni)
+kibnal_shutdown (lnet_ni_t *ni)
 {
         int   i;
         int   rc;
@@ -1303,7 +1303,7 @@ static __u64 max_phys_mem(IB_CA_ATTRIBUTES *ca_attr)
 #undef roundup_power
 
 int
-kibnal_startup (ptl_ni_t *ni)
+kibnal_startup (lnet_ni_t *ni)
 {
         IB_PORT_ATTRIBUTES *pattr;
         FSTATUS             frc;
@@ -1311,7 +1311,7 @@ kibnal_startup (ptl_ni_t *ni)
         int                 n;
         int                 i;
 
-        LASSERT (ni->ni_nal == &kibnal_nal);
+        LASSERT (ni->ni_lnd == &the_kiblnd);
 
         /* Only 1 instance supported */
         if (kibnal_data.kib_init != IBNAL_INIT_NOTHING) {
@@ -1628,7 +1628,7 @@ kibnal_module_fini (void)
         if (kibnal_tunables.kib_sysctl != NULL)
                 unregister_sysctl_table (kibnal_tunables.kib_sysctl);
 #endif
-        lnet_unregister_nal(&kibnal_nal);
+        lnet_unregister_lnd(&the_kiblnd);
 }
 
 int __init
@@ -1636,7 +1636,7 @@ kibnal_module_init (void)
 {
         int    rc;
 
-        if (lnet_apini.apini_ptlcompat != 0) {
+        if (the_lnet.ln_ptlcompat != 0) {
                 LCONSOLE_ERROR("IIB does not support portals compatibility mode\n");
                 return -ENODEV;
         }
@@ -1655,7 +1655,7 @@ kibnal_module_init (void)
         /* Initialise dynamic tunables to defaults once only */
         kibnal_tunables.kib_io_timeout = IBNAL_IO_TIMEOUT;
 
-        lnet_register_nal(&kibnal_nal);
+        lnet_register_lnd(&the_kiblnd);
         
 #ifdef CONFIG_SYSCTL
         /* Press on regardless even if registering sysctl doesn't work */

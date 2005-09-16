@@ -25,20 +25,20 @@
 
 #include "gmlnd.h"
 
-ptl_nal_t gmnal_nal =
+lnd_t the_gmlnd =
 {
-        .nal_type            = GMNAL,
-        .nal_startup         = gmnal_startup,
-        .nal_shutdown        = gmnal_shutdown,
-        .nal_ctl             = gmnal_ctl,
-        .nal_send            = gmnal_send,
-        .nal_recv            = gmnal_recv,
+        .lnd_type            = GMLND,
+        .lnd_startup         = gmnal_startup,
+        .lnd_shutdown        = gmnal_shutdown,
+        .lnd_ctl             = gmnal_ctl,
+        .lnd_send            = gmnal_send,
+        .lnd_recv            = gmnal_recv,
 };
 
 gmnal_ni_t *the_gmni = NULL;
 
 int
-gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
+gmnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
 	struct portal_ioctl_data *data = arg;
 
@@ -62,7 +62,7 @@ gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg)
 int
 gmnal_set_local_nid (gmnal_ni_t *gmni)
 {
-        ptl_ni_t        *ni = gmni->gmni_ni;
+        lnet_ni_t       *ni = gmni->gmni_ni;
 	__u32   	 local_gmid;
         __u32            global_gmid;
         gm_status_t      gm_status;
@@ -87,7 +87,7 @@ gmnal_set_local_nid (gmnal_ni_t *gmni)
 }
 
 void
-gmnal_shutdown(ptl_ni_t *ni)
+gmnal_shutdown(lnet_ni_t *ni)
 {
 	gmnal_ni_t	*gmni = ni->ni_data;
 
@@ -114,14 +114,14 @@ gmnal_shutdown(ptl_ni_t *ni)
 }
 
 int
-gmnal_startup(ptl_ni_t *ni)
+gmnal_startup(lnet_ni_t *ni)
 {
 	gmnal_ni_t	*gmni = NULL;
 	gmnal_rx_t	*rx = NULL;
 	gm_status_t 	 gm_status;
         int              rc;
 
-        LASSERT (ni->ni_nal == &gmnal_nal);
+        LASSERT (ni->ni_lnd == &the_gmlnd);
         
         if (the_gmni != NULL) {
                 CERROR("Only 1 instance supported\n");
@@ -248,7 +248,7 @@ gmnal_startup(ptl_ni_t *ni)
  */
 int gmnal_init(void)
 {
-        lnet_register_nal(&gmnal_nal);
+        lnet_register_lnd(&the_gmlnd);
         return 0;
 }
 
@@ -257,5 +257,5 @@ int gmnal_init(void)
  */
 void gmnal_fini()
 {
-        lnet_unregister_nal(&gmnal_nal);
+        lnet_unregister_lnd(&the_gmlnd);
 }

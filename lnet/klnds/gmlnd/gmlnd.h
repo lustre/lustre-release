@@ -96,7 +96,7 @@
 
 /* Wire protocol */
 typedef struct {
-        ptl_hdr_t       gmim_hdr;               /* portals header */
+        lnet_hdr_t      gmim_hdr;               /* portals header */
         char            gmim_payload[0];        /* payload */
 } gmnal_immediate_msg_t;
 
@@ -119,10 +119,10 @@ typedef struct {
 
 typedef struct netbuf {
         __u64                    nb_netaddr;    /* network VM address */
-        struct page             *nb_pages[1];   /* the pages (at least 1) */
+        lnet_kiov_t              nb_kiov[1];    /* the pages (at least 1) */
 } gmnal_netbuf_t;
 
-#define GMNAL_NETBUF_MSG(nb)            ((gmnal_msg_t *)page_address((nb)->nb_pages[0]))
+#define GMNAL_NETBUF_MSG(nb)            ((gmnal_msg_t *)page_address((nb)->nb_kiov[0].kiov_page))
 #define GMNAL_NETBUF_LOCAL_NETADDR(nb)  ((void *)((unsigned long)(nb)->nb_netaddr))
 
 typedef struct gmnal_txbuf {
@@ -139,7 +139,7 @@ typedef struct gmnal_tx {
         struct gmnal_ni         *tx_gmni;       /* owning NI */
         lnet_nid_t               tx_nid;        /* destination NID */
         int                      tx_gmlid;      /* destination GM local ID */
-        ptl_msg_t               *tx_ptlmsg;     /* ptlmsg to finalize on completion */
+        lnet_msg_t              *tx_lntmsg;     /* lntmsg to finalize on completion */
 
         gmnal_netbuf_t           tx_buf;        /* small tx buffer */
         gmnal_txbuf_t           *tx_ltxb;       /* large buffer (to free on completion) */
@@ -167,7 +167,7 @@ typedef struct gmnal_rx {
 } gmnal_rx_t;
 
 typedef struct gmnal_ni {
-        ptl_ni_t         *gmni_ni;              /* generic NI */
+        lnet_ni_t        *gmni_ni;              /* generic NI */
         struct gm_port   *gmni_port;            /* GM port */
         spinlock_t        gmni_gm_lock;         /* serialise GM calls */
         int               gmni_large_pages;     /* # pages in a large message buffer */
@@ -216,19 +216,16 @@ typedef struct {
 /* gmnal_api.c */
 int gmnal_init(void);
 void gmnal_fini(void);
-int gmnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int gmnal_startup(ptl_ni_t *ni);
-void gmnal_shutdown(ptl_ni_t *ni);
+int gmnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int gmnal_startup(lnet_ni_t *ni);
+void gmnal_shutdown(lnet_ni_t *ni);
 
 /* gmnal_cb.c */
-int gmnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg,
-               unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+int gmnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+               int delayed, unsigned int niov, 
+               struct iovec *iov, lnet_kiov_t *kiov,
                unsigned int offset, unsigned int mlen, unsigned int rlen);
-int gmnal_send(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-               ptl_hdr_t *hdr, int type, lnet_process_id_t tgt, 
-               int target_is_router, int routing,
-               unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-               unsigned int offset, unsigned int len);
+int gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
 
 /* gmnal_util.c */
 void gmnal_free_ltxbufs(gmnal_ni_t *gmni);
@@ -240,27 +237,6 @@ int gmnal_alloc_rxs(gmnal_ni_t *gmni);
 char *gmnal_gmstatus2str(gm_status_t status);
 char *gmnal_rxevent2str(gm_recv_event_t *ev);
 void gmnal_yield(int delay);
-
-void gmnal_copy_tofrom_netbuf(int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
-                              int nb_pages, gmnal_netbuf_t *nb, int nb_offset,
-                              int nob, int from_nb);
-
-static inline void
-gmnal_copy_from_netbuf(int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
-                       int nb_pages, gmnal_netbuf_t *nb, int nb_offset, int nob)
-{
-        gmnal_copy_tofrom_netbuf(niov, iov, kiov, offset,
-                                 nb_pages, nb, nb_offset, nob, 1);
-}
-
-static inline void
-gmnal_copy_to_netbuf(int nb_pages, gmnal_netbuf_t *nb, int nb_offset,
-                     int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
-                     int nob)
-{
-        gmnal_copy_tofrom_netbuf(niov, iov, kiov, offset,
-                                 nb_pages, nb, nb_offset, nob, 0);
-}
 
 /* gmnal_comm.c */
 void gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx);

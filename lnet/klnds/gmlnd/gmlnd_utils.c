@@ -27,7 +27,7 @@ gmnal_free_netbuf_pages (gmnal_netbuf_t *nb, int npages)
         int     i;
         
         for (i = 0; i < npages; i++)
-                __free_page(nb->nb_pages[i]);
+                __free_page(nb->nb_kiov[i].kiov_page);
 }
 
 int
@@ -40,23 +40,26 @@ gmnal_alloc_netbuf_pages (gmnal_ni_t *gmni, gmnal_netbuf_t *nb, int npages)
 
         for (i = 0; i < npages; i++) {
                 
-                nb->nb_pages[i] = alloc_page(GFP_KERNEL);
+                nb->nb_kiov[i].kiov_page = alloc_page(GFP_KERNEL);
+                nb->nb_kiov[i].kiov_offset = 0;
+                nb->nb_kiov[i].kiov_len = PAGE_SIZE;
 
-                if (nb->nb_pages[i] == NULL) {
+                if (nb->nb_kiov[i].kiov_page == NULL) {
                         CERROR("Can't allocate page\n");
                         gmnal_free_netbuf_pages(nb, i);
                         return -ENOMEM;
                 }
 
                 CDEBUG(D_NET,"[%3d] page %p, phys "LPX64", @ "LPX64"\n",
-                       i, nb->nb_pages[i], (__u64)page_to_phys(nb->nb_pages[i]),
+                       i, nb->nb_kiov[i].kiov_page, 
+                       (__u64)page_to_phys(nb->nb_kiov[i].kiov_page),
                        gmni->gmni_netaddr_base);
 
                 gmrc = gm_register_memory_ex_phys(gmni->gmni_port,
-                                                  page_to_phys(nb->nb_pages[i]),
+                                                  page_to_phys(nb->nb_kiov[i].kiov_page),
                                                   PAGE_SIZE,
                                                   gmni->gmni_netaddr_base);
-                CDEBUG(D_NET,"[%3d] page %p: %d\n", i, nb->nb_pages[i], gmrc);
+                CDEBUG(D_NET,"[%3d] page %p: %d\n", i, nb->nb_kiov[i].kiov_page, gmrc);
 
                 if (gmrc != GM_SUCCESS) {
                         CERROR("Can't map page: %d(%s)\n", gmrc,
@@ -83,14 +86,14 @@ gmnal_free_ltxbuf (gmnal_ni_t *gmni, gmnal_txbuf_t *txb)
         /* No unmapping; the port has been closed */
 
         gmnal_free_netbuf_pages(&txb->txb_buf, gmni->gmni_large_pages);
-        PORTAL_FREE(txb, offsetof(gmnal_txbuf_t, txb_buf.nb_pages[npages]));
+        PORTAL_FREE(txb, offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]));
 }
 
 int
 gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
 {
         int            npages = gmni->gmni_large_pages;
-        int            sz = offsetof(gmnal_txbuf_t, txb_buf.nb_pages[npages]);
+        int            sz = offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]);
         gmnal_txbuf_t *txb;
         int            rc;
         
@@ -165,14 +168,14 @@ gmnal_free_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx)
         LASSERT (gmni->gmni_port == NULL);
 
         gmnal_free_netbuf_pages(&rx->rx_buf, npages);
-        PORTAL_FREE(rx, offsetof(gmnal_rx_t, rx_buf.nb_pages[npages]));
+        PORTAL_FREE(rx, offsetof(gmnal_rx_t, rx_buf.nb_kiov[npages]));
 }
 
 int
 gmnal_alloc_rx (gmnal_ni_t *gmni, int islarge)
 {
         int         npages = islarge ? gmni->gmni_large_pages : 1;
-        int         sz = offsetof(gmnal_rx_t, rx_buf.nb_pages[npages]);
+        int         sz = offsetof(gmnal_rx_t, rx_buf.nb_kiov[npages]);
         int         rc;
         gmnal_rx_t *rx;
         gm_status_t gmrc;
@@ -203,104 +206,6 @@ gmnal_alloc_rx (gmnal_ni_t *gmni, int islarge)
         }
         
         return 0;
-}
-
-void
-gmnal_copy_tofrom_netbuf(int niov, struct iovec *iov, lnet_kiov_t *kiov, int offset, 
-                         int nb_pages, gmnal_netbuf_t *nb, int nb_offset,
-                         int nob, int from_nb)
-{
-        int        nb_page;
-        int        nb_nob;
-        char      *nb_ptr;
-        int        iov_nob;
-        char      *iov_ptr;
-
-        if (nob == 0)
-                return;
-
-        LASSERT (nob > 0);
-        LASSERT (niov > 0);
-        LASSERT ((iov == NULL) != (kiov == NULL));
-
-        /* skip 'offset' bytes */
-        if (kiov != NULL) {
-                while (offset >= kiov->kiov_len) {
-                        offset -= kiov->kiov_len;
-                        kiov++;
-                        niov--;
-                        LASSERT (niov > 0);
-                }
-                iov_ptr = ((char *)kmap(kiov->kiov_page)) +
-                          kiov->kiov_offset + offset;
-                iov_nob = kiov->kiov_len - offset;
-        } else {
-                while (offset >= iov->iov_len) {
-                        offset -= iov->iov_len;
-                        iov++;
-                        niov--;
-                        LASSERT (niov > 0);
-                }
-                iov_ptr = iov->iov_base + offset;
-                iov_nob = iov->iov_len - offset;
-        }
-                
-        LASSERT (nb_pages > 0);
-        LASSERT (nb_offset < PAGE_SIZE);
-
-        nb_page = 0;
-        nb_ptr = page_address(nb->nb_pages[0]) + nb_offset;
-        nb_nob = PAGE_SIZE - nb_offset;
-        
-        for (;;) {
-                int this_nob = nob;
-                        
-                if (this_nob > nb_nob)
-                        this_nob = nb_nob;
-                if (this_nob > iov_nob)
-                        this_nob = iov_nob;
-
-                if (from_nb)
-                        memcpy(iov_ptr, nb_ptr, this_nob);
-                else
-                        memcpy(nb_ptr, iov_ptr, this_nob);
-
-                nob -= this_nob;
-                if (nob == 0)
-                        break;
-                        
-                nb_nob -= this_nob;
-                if (nb_nob != 0) {
-                        nb_ptr += this_nob;
-                } else {
-                        nb_page++;
-                        LASSERT (nb_page < nb_pages);
-                        nb_ptr = page_address(nb->nb_pages[nb_page]);
-                        nb_nob = PAGE_SIZE;
-                }
-                        
-                iov_nob -= this_nob;
-                if (iov_nob != 0) {
-                        iov_ptr += this_nob;
-                } else if (kiov != NULL) {
-                        kunmap(kiov->kiov_page);
-                        kiov++;
-                        niov--;
-                        LASSERT (niov > 0);
-                        iov_ptr = ((char *)kmap(kiov->kiov_page)) +
-                                  kiov->kiov_offset;
-                        iov_nob = kiov->kiov_len;
-                } else {
-                        iov++;
-                        niov--;
-                        LASSERT (niov > 0);
-                        iov_ptr = iov->iov_base;
-                        iov_nob = iov->iov_len;
-                }
-        }
-                
-        if (kiov != NULL)
-                kunmap(kiov->kiov_page);
 }
 
 void

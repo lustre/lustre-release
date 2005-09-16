@@ -29,18 +29,18 @@ static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
-static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
+static int lnet_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
 {
         int                initrc;
         int                rc;
 
         if (cmd == IOC_PORTAL_UNCONFIGURE) {
                 /* ghastly hack to prevent repeated net config */
-                PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
-                initrc = lnet_apini.apini_niinit_self;
-                lnet_apini.apini_niinit_self = 0;
-                rc = lnet_apini.apini_refcount;
-                PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
+                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+                initrc = the_lnet.ln_niinit_self;
+                the_lnet.ln_niinit_self = 0;
+                rc = the_lnet.ln_refcount;
+                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
 
                 if (initrc) {
                         rc--;
@@ -57,10 +57,10 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
         rc = LNetCtl(cmd, data);
 
         if (initrc == 0) {
-                PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
+                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
                 /* I instantiated the network */
-                lnet_apini.apini_niinit_self = 1;
-                PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
+                the_lnet.ln_niinit_self = 1;
+                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
         } else {
                 LNetNIFini();
         }
@@ -68,9 +68,9 @@ static int kportal_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
         return rc;
 }
 
-DECLARE_IOCTL_HANDLER(kportal_ioctl_handler, kportal_ioctl);
+DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
-static int init_kportals_module(void)
+static int init_lnet(void)
 {
         int rc;
         ENTRY;
@@ -82,37 +82,37 @@ static int init_kportals_module(void)
         }
 
         if (config_on_load) {
-                PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
-                lnet_apini.apini_niinit_self = 1;
-                PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
+                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+                the_lnet.ln_niinit_self = 1;
+                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
 
                 rc = LNetNIInit(LUSTRE_SRV_PTL_PID);
                 if (rc != 0) {
                         /* Can't LNetFini or fail now if I loaded NALs */
-                        PTL_MUTEX_DOWN(&lnet_apini.apini_api_mutex);
-                        lnet_apini.apini_niinit_self = 0;
-                        PTL_MUTEX_UP(&lnet_apini.apini_api_mutex);
+                        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+                        the_lnet.ln_niinit_self = 0;
+                        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
                 }
         }
         
-        rc = libcfs_register_ioctl(&kportal_ioctl_handler);
+        rc = libcfs_register_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
         RETURN(rc);
 }
 
-static void exit_kportals_module(void)
+static void fini_lnet(void)
 {
         int rc;
 
-        rc = libcfs_deregister_ioctl(&kportal_ioctl_handler);
+        rc = libcfs_deregister_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
         LNetFini();
 }
 
-EXPORT_SYMBOL(lnet_register_nal);
-EXPORT_SYMBOL(lnet_unregister_nal);
+EXPORT_SYMBOL(lnet_register_lnd);
+EXPORT_SYMBOL(lnet_unregister_lnd);
 
 EXPORT_SYMBOL(LNetMEAttach);
 EXPORT_SYMBOL(LNetMEInsert);
@@ -134,23 +134,22 @@ EXPORT_SYMBOL(LNetGetId);
 EXPORT_SYMBOL(LNetMDBind);
 EXPORT_SYMBOL(LNetDist);
 EXPORT_SYMBOL(LNetCtl);
-EXPORT_SYMBOL(lnet_apini);
+EXPORT_SYMBOL(the_lnet);
 EXPORT_SYMBOL(lnet_iov_nob);
-EXPORT_SYMBOL(lnet_copy_iov2buf);
-EXPORT_SYMBOL(lnet_copy_buf2iov);
 EXPORT_SYMBOL(lnet_extract_iov);
 EXPORT_SYMBOL(lnet_kiov_nob);
-EXPORT_SYMBOL(lnet_copy_kiov2buf);
-EXPORT_SYMBOL(lnet_copy_buf2kiov);
 EXPORT_SYMBOL(lnet_extract_kiov);
+EXPORT_SYMBOL(lnet_copy_iov2iov);
+EXPORT_SYMBOL(lnet_copy_iov2kiov);
+EXPORT_SYMBOL(lnet_copy_kiov2iov);
+EXPORT_SYMBOL(lnet_copy_kiov2kiov);
 EXPORT_SYMBOL(lnet_finalize);
 EXPORT_SYMBOL(lnet_parse);
 EXPORT_SYMBOL(lnet_create_reply_msg);
 EXPORT_SYMBOL(lnet_net2ni);
-EXPORT_SYMBOL(lnet_getpid);
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
-cfs_module(portals, "1.0.0", init_kportals_module, exit_kportals_module);
+cfs_module(portals, "1.0.0", init_lnet, fini_lnet);

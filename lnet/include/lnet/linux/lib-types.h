@@ -13,7 +13,7 @@
 # include <linux/smp_lock.h>
 # include <linux/types.h>
 #else
-# define PTL_USE_LIB_FREELIST
+# define LNET_USE_LIB_FREELIST
 # include <sys/types.h>
 #endif
 

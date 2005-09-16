@@ -128,7 +128,7 @@ typedef struct
         int               kra_init;             /* initialisation state */
         int               kra_shutdown;         /* shut down? */
         atomic_t          kra_nthreads;         /* # live threads */
-        ptl_ni_t         *kra_ni;               /* _the_ nal instance */
+        lnet_ni_t        *kra_ni;               /* _the_ nal instance */
         
         kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq etc */
         int               kra_ndevs;            /* # devices */
@@ -200,13 +200,13 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         raim_hdr;             /* portals header */
+        lnet_hdr_t        raim_hdr;             /* portals header */
         /* Portals payload is in FMA "Message Data" */
 } kra_immediate_msg_t;
 
 typedef struct
 {
-        ptl_hdr_t         raprm_hdr;            /* portals header */
+        lnet_hdr_t        raprm_hdr;            /* portals header */
         __u64             raprm_cookie;         /* opaque completion cookie */
 } kra_putreq_msg_t;
 
@@ -219,7 +219,7 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ragm_hdr;             /* portals header */
+        lnet_hdr_t        ragm_hdr;             /* portals header */
         __u64             ragm_cookie;          /* opaque completion cookie */
         kra_rdma_desc_t   ragm_desc;            /* sender's sink buffer */
 } kra_get_msg_t;
@@ -246,7 +246,7 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
         __u32             ram_seq;              /* incrementing sequence number */
 } kra_msg_t;
 
-#define RANAL_MSG_MAGIC      PTL_PROTO_RA_MAGIC /* unique magic */
+#define RANAL_MSG_MAGIC     LNET_PROTO_RA_MAGIC /* unique magic */
 #define RANAL_MSG_VERSION              1        /* current protocol version */
 
 #define RANAL_MSG_FENCE             0x80        /* fence RDMA */
@@ -269,7 +269,7 @@ typedef struct kra_tx                           /* message descriptor */
 {
         struct list_head          tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
         struct kra_conn          *tx_conn;      /* owning conn */
-        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
         unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
         int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         int                       tx_nob;       /* # bytes of payload */
@@ -450,19 +450,15 @@ kranal_page2phys (struct page *p)
         return page_to_phys(p);
 }
 
-int kranal_startup (ptl_ni_t *ni);
-void kranal_shutdown (ptl_ni_t *ni);
-int kranal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int kranal_send (ptl_ni_t *ni, void *private,
-                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                 int type, lnet_process_id_t tgt,
-                 int tgt_is_router, int routing,
-                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                 unsigned int offset, unsigned int nob);
-int kranal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+int kranal_startup (lnet_ni_t *ni);
+void kranal_shutdown (lnet_ni_t *ni);
+int kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int kranal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
+                int delayed, unsigned int niov, 
+                struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
-int kranal_accept(ptl_ni_t *ni, struct socket *sock);
+int kranal_accept(lnet_ni_t *ni, struct socket *sock);
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
 extern int kranal_listener_procint (ctl_table *table,
@@ -483,6 +479,7 @@ extern int kranal_connd (void *arg);
 extern int kranal_reaper (void *arg);
 extern int kranal_scheduler (void *arg);
 extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
+extern void kranal_close_conn (kra_conn_t *conn, int error);
 extern void kranal_terminate_conn_locked (kra_conn_t *conn);
 extern void kranal_connect (kra_peer_t *peer);
 extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);

@@ -147,7 +147,7 @@ typedef struct
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
-        ptl_ni_t         *kib_ni;               /* _the_ openib interface */
+        lnet_ni_t        *kib_ni;               /* _the_ openib interface */
 
         __u64             kib_svc_id;           /* service number I listen on */
         tTS_IB_GID        kib_svc_gid;          /* device/port GID */
@@ -253,13 +253,13 @@ typedef struct
 
 typedef struct
 {
-        ptl_hdr_t         ibim_hdr;             /* portals header */
+        lnet_hdr_t        ibim_hdr;             /* portals header */
         char              ibim_payload[0];      /* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
 typedef struct
 {
-        ptl_hdr_t         ibrm_hdr;             /* portals header */
+        lnet_hdr_t        ibrm_hdr;             /* portals header */
         __u64             ibrm_cookie;          /* opaque completion cookie */
         kib_rdma_desc_t   ibrm_desc;            /* where to suck/blow */
 } WIRE_ATTR kib_rdma_msg_t;
@@ -293,7 +293,7 @@ typedef struct
         } WIRE_ATTR       ibm_u;
 } WIRE_ATTR kib_msg_t;
 
-#define IBNAL_MSG_MAGIC  PTL_PROTO_OPENIB_MAGIC /* unique magic */
+#define IBNAL_MSG_MAGIC LNET_PROTO_OPENIB_MAGIC /* unique magic */
 #define IBNAL_MSG_VERSION              2        /* current protocol version */
 
 #define IBNAL_MSG_SVCQRY            0xb0        /* service query */
@@ -314,7 +314,7 @@ typedef struct kib_rx                           /* receive message */
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
         int                       rx_rdma;      /* RDMA completion posted? */
-        int                       rx_posted;    /* posted? */
+        int                       rx_nob;       /* # bytes received (-1 while posted) */
         __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
         struct ib_receive_param   rx_sp;        /* receive work item */
@@ -333,7 +333,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_passive_rdma; /* peer sucks/blows */
         int                       tx_passive_rdma_wait; /* waiting for peer to complete */
         __u64                     tx_passive_rdma_cookie; /* completion cookie */
-        ptl_msg_t                *tx_ptlmsg[2]; /* ptl msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
         kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
         __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         kib_msg_t                *tx_msg;       /* pre-mapped buffer (host vaddr) */
@@ -503,19 +503,15 @@ kibnal_wreqid_is_rx (__u64 wreqid)
 # define sk_sleep       sleep
 #endif
 
-int kibnal_startup (ptl_ni_t *ni);
-void kibnal_shutdown (ptl_ni_t *ni);
-int kibnal_ctl(ptl_ni_t *ni, unsigned int cmd, void *arg);
-int kibnal_send (ptl_ni_t *ni, void *private,
-                 ptl_msg_t *ptlmsg, ptl_hdr_t *hdr,
-                 int type, lnet_process_id_t tgt, 
-                 int tgt_is_router, int routing,
-                 unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
-                 unsigned int offset, unsigned int nob);
-int kibnal_recv(ptl_ni_t *ni, void *private, ptl_msg_t *ptlmsg, 
-                unsigned int niov, struct iovec *iov, lnet_kiov_t *kiov,
+int kibnal_startup (lnet_ni_t *ni);
+void kibnal_shutdown (lnet_ni_t *ni);
+int kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg);
+int kibnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
+int kibnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, 
+                int delayed, unsigned int niov, 
+                struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
-int kibnal_accept(ptl_ni_t *ni, struct socket *sock);
+int kibnal_accept(lnet_ni_t *ni, struct socket *sock);
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
 extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 
@@ -560,7 +556,7 @@ extern void kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern int  kibnal_close_conn (kib_conn_t *conn, int why);
 extern void kibnal_start_active_rdma (int type, int status,
-                                      kib_rx_t *rx, ptl_msg_t *ptlmsg,
+                                      kib_rx_t *rx, lnet_msg_t *lntmsg,
                                       unsigned int niov,
                                       struct iovec *iov, lnet_kiov_t *kiov,
                                       int offset, int nob);
