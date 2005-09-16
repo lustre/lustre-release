@@ -1211,6 +1211,8 @@ void ll_clear_inode(struct inode *inode)
         list_for_each_entry_safe(ocapa, tmp, &lli->lli_capas, u.client.lli_list)
                 capa_put(ocapa);
 
+        LASSERT(!mapping_has_pages(inode->i_mapping));
+
         lli->lli_inode_magic = LLI_INODE_DEAD;
         EXIT;
 }
