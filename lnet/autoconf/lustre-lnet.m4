@@ -93,12 +93,10 @@ if test ! "x$PORTALS" = "x" -o ! "x$LUSTRE_PORTALS" = "x" ; then
 	else
         	PTLLNDCPPFLAGS="-I$LUSTRE_PORTALS/include"
 	fi
-	AC_MSG_RESULT([$LUSTRE_PORTALS])
 else
 	AC_MSG_RESULT([no])
 	PTLLND=""
 	PTLLNDCPPFLAGS=""
-	AC_MSG_RESULT([no portals is configured])
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)
