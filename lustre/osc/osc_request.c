@@ -2708,6 +2708,7 @@ no_match:
                 CDEBUG(D_INODE, "received kms == "LPU64", blocks == "LPU64"\n",
                        lvb.lvb_size, lvb.lvb_blocks);
                 lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+                lsm->lsm_oinfo->loi_mtime = lvb.lvb_mtime;
                 lsm->lsm_oinfo->loi_blocks = lvb.lvb_blocks;
         }
 
