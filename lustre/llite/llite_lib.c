@@ -466,10 +466,10 @@ void lustre_common_put_super(struct super_block *sb)
         ll_gns_del_timer(sbi);
         ll_close_thread_stop(sbi->ll_lcq);
 
-        lustre_destroy_crypto(sb);
-
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_dt_exp, 0);
+        
+        lustre_destroy_crypto(sb);
 
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
@@ -1189,7 +1189,10 @@ void ll_clear_inode(struct inode *inode)
                                (struct lov_stripe_md **) &lli->lli_mea);
                 lli->lli_mea = NULL;
         }
+
+        LASSERT(sbi->ll_crypto_info != NULL);
         ll_crypto_destroy_inode_key(inode);
+
         if (lli->lli_symlink_name) {
                 OBD_FREE(lli->lli_symlink_name,
                          strlen(lli->lli_symlink_name) + 1);
@@ -1212,8 +1215,8 @@ void ll_clear_inode(struct inode *inode)
                 capa_put(ocapa);
 
         LASSERT(!mapping_has_pages(inode->i_mapping));
-
         lli->lli_inode_magic = LLI_INODE_DEAD;
+        
         EXIT;
 }
 

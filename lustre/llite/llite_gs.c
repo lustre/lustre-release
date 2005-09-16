@@ -749,7 +749,9 @@ int lustre_destroy_crypto(struct super_block *sb)
                 obd_disconnect(llci->ll_gt_exp, 0);
  
         ll_unregister_cops(llci);
-        OBD_FREE(llci, sizeof(*llci)); 
+        OBD_FREE(llci, sizeof(*llci));
+        ll_s2sbi(sb)->ll_crypto_info = NULL;
+
         RETURN(0);
 }
 
