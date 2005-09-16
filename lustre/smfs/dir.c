@@ -227,19 +227,22 @@ static int smfs_do_lookup (struct inode * dir,
                                                 I2SMI(dir), 0); 
                         if (!(*inode))
                                 rc = -ENOENT;
-                        else {
-                                if (!tmp->d_inode->i_nlink) {
-                                        struct inode * ind = tmp->d_inode;
-                                
-                                        CWARN("inode #%lu (%*s) nlink is %i/%i\n",
-                                              ind->i_ino, tmp->d_name.len,
-                                              tmp->d_name.name, ind->i_nlink,
-                                              (*inode)->i_nlink);
-                                        CWARN("parent #%lu (%*s) nlink is %i\n",
-                                              dir->i_ino, tmp->d_parent->d_name.len,
-                                              tmp->d_parent->d_name.name,
-                                              cache_dir->i_nlink);
-                                }
+                        else if (!tmp->d_inode->i_nlink) {
+                                struct inode * ind = tmp->d_inode;
+
+                                CDEBUG(D_ERROR, "inode #%lu (%*s) nlink is %i/%i\n",
+                                                ind->i_ino, tmp->d_name.len,
+                                                tmp->d_name.name, ind->i_nlink,
+                                                (*inode)->i_nlink);
+                                CDEBUG(D_ERROR, "parent #%lu (%*s) nlink is %i\n",
+                                                dir->i_ino, tmp->d_parent->d_name.len,
+                                                tmp->d_parent->d_name.name,
+                                                cache_dir->i_nlink);
+                                CDEBUG(D_ERROR, "rc = %d\n", rc);
+
+                                if (is_bad_inode(ind))
+                                        CDEBUG(D_ERROR, "bad inode returned %lu/%u\n",
+                                               ind->i_ino, ind->i_generation);
                         }
                 }
         }
