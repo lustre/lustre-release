@@ -1060,7 +1060,7 @@ ksocknal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 {
         ksock_conn_t  *conn = (ksock_conn_t *)private;
         ksock_sched_t *sched = conn->ksnc_scheduler;
-        unsigned int   flags;
+        unsigned long  flags;
 
         LASSERT (mlen <= rlen);
         LASSERT (niov <= PTL_MD_MAX_IOV);
