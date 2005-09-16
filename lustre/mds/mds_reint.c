@@ -2476,13 +2476,9 @@ cleanup:
 
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0);
-        if (!rc) {
+        if (!rc)
                 (void)obd_set_info(mds->mds_dt_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
-	} else {
-		CERROR("error while unlinking object "DLID4", err %d\n",
-		       OLID4(rec->ur_id1), rc);
-	}
         
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
