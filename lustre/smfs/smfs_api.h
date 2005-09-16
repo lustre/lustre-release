@@ -98,8 +98,10 @@ struct audit_priv {
         void * audit_get_record;
         void * au_id2name;
         int result;
+        int audit_null; //to prevent output to syslog. just for testing overhead
         __u64 a_mask;
 };
+
 typedef int (*audit_get_op)(struct inode *, void *, struct audit_priv *,
                             char *, __u32*);
 

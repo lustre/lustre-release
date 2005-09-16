@@ -165,7 +165,7 @@ extern void smfs_cleanup_psdev(void);
 /*smfs_cow.c */
 
 /* audit_transfer.c */
-int audit_notify(struct llog_handle *llh, void*);
+int audit_notify(struct llog_handle *llh, void*, int);
 int audit_start_transferd(void);
 int audit_stop_transferd(void);
 

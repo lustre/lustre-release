@@ -54,7 +54,8 @@ int ll_set_audit(struct inode * inode, __u64 arg)
                 sbi->ll_audit_mask = arg;
                 exp = ll_i2dtexp(inode);
                 rc = obd_set_info(exp, 5, "audit", sizeof(msg), &msg);
-        } else if (IS_AUDIT_OP(arg, AUDIT_SYNC)) {
+        } else if (IS_AUDIT_OP(arg, AUDIT_SYNC) ||
+                   IS_AUDIT_OP(arg, AUDIT_NULL)) {
                 exp = ll_i2dtexp(inode);
                 rc = obd_set_info(exp, 5, "audit", sizeof(msg), &msg);
         } else {

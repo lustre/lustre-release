@@ -280,6 +280,9 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
         struct fsfilt_operations * fsfilt = S2SMI(sb)->sm_fsfilt;
         struct smfs_inode_info *smi = NULL;
         int rc = 0;
+        struct audit_priv *priv;
+        
+        priv = smfs_get_plg_priv(S2SMI(sb), SMFS_PLG_AUDIT);
         
         ENTRY;
         
@@ -288,10 +291,17 @@ int smfs_set_audit(struct super_block * sb, struct inode * inode,
                 
                 priv = smfs_get_plg_priv(S2SMI(sb), SMFS_PLG_AUDIT);
                 if (priv)
-                        audit_notify(priv->audit_ctxt->loc_handle, NULL);
+                        audit_notify(priv->audit_ctxt->loc_handle, NULL, 1);
                 //to wait for flush
-                return audit_notify(NULL, NULL);
-        }        
+                return audit_notify(NULL, NULL, 1);
+        }
+        
+        if (IS_AUDIT_OP((*mask), AUDIT_NULL)) {
+                if (priv)
+                        priv->audit_null ^= 1;
+                return 0;
+        }
+
         if (IS_AUDIT_OP((*mask), AUDIT_FS))
                 return smfs_set_fs_audit(sb, mask);
 
@@ -369,7 +379,8 @@ static int smfs_audit_post_op(hook_op code, struct inode * inode, void * msg,
                 rc= -EINVAL;
         /* delay notify for create op */
         } else if (!(code == HOOK_CREATE && ret == 0)) { 
-                audit_notify(priv->audit_ctxt->loc_handle, priv->au_id2name);
+                audit_notify(priv->audit_ctxt->loc_handle, priv->au_id2name,
+                             priv->audit_null);
         }
         
         OBD_FREE(buffer, PAGE_SIZE);
@@ -427,6 +438,7 @@ static int smfs_start_audit(struct super_block *sb, void *arg,
         }
         //read fs audit settings if any
 	audit_p->a_mask = AUDIT_OFF;
+        audit_p->audit_null = 0;
 
         f = filp_open(AUDIT_ATTR_FILE, O_RDONLY, 0644);
         if (!IS_ERR(f)) {
@@ -622,7 +634,7 @@ int audit_client_log(struct super_block * sb, struct audit_msg * msg)
                 CERROR("Error adding audit client record: %d\n", rc);
                 rc= -EINVAL;
         } else {
-                audit_notify(ll_handle, priv->au_id2name);
+                audit_notify(ll_handle, priv->au_id2name, priv->audit_null);
         }
         
         OBD_FREE(buffer, PAGE_SIZE);

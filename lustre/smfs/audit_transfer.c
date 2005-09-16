@@ -38,10 +38,15 @@
 #include <linux/lustre_log.h>
 #include "smfs_internal.h"
 
+struct tr_priv {
+        void *id2name;
+        int null;
+};
+
 struct transfer_item {
         struct llog_handle      *ti_llh;
         struct list_head        ti_link;
-        void * id2name;
+        struct tr_priv          priv;
 };
 
 #define TRANSFERD_STOP          0
@@ -75,7 +80,7 @@ static int transferd_check(struct transferd_ctl *tc)
         RETURN(rc);
 }
 
-int audit_notify(struct llog_handle *llh, void * arg)
+int audit_notify(struct llog_handle *llh, void * arg, int null)
 {
         struct transfer_item *ti;
         ENTRY;
@@ -98,7 +103,8 @@ int audit_notify(struct llog_handle *llh, void * arg)
         
         INIT_LIST_HEAD(&ti->ti_link);
         ti->ti_llh = llh;
-        ti->id2name = arg;
+        ti->priv.id2name = arg;
+        ti->priv.null = null;
 
         spin_lock(&transferd_tc.tc_lock);
         list_add_tail(&ti->ti_link, &transferd_tc.tc_list);
@@ -152,9 +158,10 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
         struct audit_id_record *id_rec = 
                 (struct audit_id_record *)(rec + 1);
         struct audit_name_record *name_rec = NULL;
-        int (*audit_id2name)(struct obd_device *obd, char **name, 
-                     int *namelen, struct lustre_id *id) = data;
-
+        struct tr_priv * trp = data;
+        int (*audit_id2name)(struct obd_device *obd, char **name, int *namelen,
+                        struct lustre_id *id) = trp->id2name;
+        
         int n, rc = 0;
         ENTRY;
 
@@ -214,7 +221,8 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
         
         CDEBUG(D_INFO, "%s\n", buf);
 
-        printk("%s\n", buf);
+        if (!trp->null)
+                printk("%s\n", buf);
 
         RETURN(0);
 }
@@ -261,7 +269,7 @@ static int audit_transfer(struct transfer_item *ti)
         if (!llh)
                 RETURN(0);
 
-        rc = llog_cat_process(llh, (llog_cb_t)&transfer_cb, ti->id2name);
+        rc = llog_cat_process(llh, (llog_cb_t)&transfer_cb, &ti->priv);
         if (rc)
                 CERROR("process catalog log failed: rc(%d)\n", rc);
 
