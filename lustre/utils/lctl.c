@@ -224,6 +224,30 @@ static int jt_flush_audit(int argc, char **argv)
         return rc;
 }
 
+static int jt_null_audit(int argc, char **argv)
+{
+        __u64 mask = 0;
+        int rc, fd;
+
+        if (argc != 2)
+                return CMD_HELP;
+        
+        //open file/dir
+        fd = open(argv[1], O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "can't open: %s: %s\n", argv[1],
+                        strerror(rc = errno));
+                return -1;
+        }
+        
+        SET_AUDIT_OP(mask, AUDIT_NULL);
+
+        rc = ioctl(fd, LL_IOC_AUDIT, mask);
+        close(fd);
+        return rc;
+}
+
+
 /*
  * XXX Should not belong to here
  */
@@ -512,6 +536,8 @@ command_t cmdlist[] = {
          "usage: fs_audit type operations mountpoint\n"},
         {"flush_audit", jt_flush_audit, 0,
          "usage: flush_audit mountpoin\n"},
+        {"null_audit", jt_null_audit, 0,
+         "usage: null_audit mountpoin\n"},
         {"lsync", jt_obd_reint_sync, 0,
          "usage: lsync\n"},  
         {"cache_on", jt_obd_cache_on, 0,
