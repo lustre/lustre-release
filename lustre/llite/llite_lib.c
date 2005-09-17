@@ -409,12 +409,13 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov,
         if (err)
                 GOTO(out_lmv, err);
 
+        /*connect GSS*/
         err = lustre_init_crypto(sb, gkc, data, async);
         if (err) {
                 CERROR("Could not connect to GSS err %d\n", err);
                 err = 0;
         }
-        /*connect GSS*/
+        
         err = lustre_init_root_inode(sb);
         if (err)
                 GOTO(out_gks, err);
@@ -876,6 +877,7 @@ static int lustre_process_profile(struct super_block *sb,
         cfg.cfg_instance = sbi->ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
         cfg.cfg_local_nid = lmd->lmd_local_nid;
+        cfg.cfg_flags |= CFG_MODIFY_UUID_FL;
         err = lustre_process_log(lmd, lmd->lmd_profile, &cfg, 0);
         if (err < 0) {
                 CERROR("Unable to process log: %s\n", lmd->lmd_profile);
@@ -942,6 +944,7 @@ static int lustre_clean_profile(struct ll_sb_info *sbi, int force_umount)
                 
         }
         if (sbi->ll_instance != NULL) {
+                cfg.cfg_flags |= CFG_MODIFY_UUID_FL;
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
 

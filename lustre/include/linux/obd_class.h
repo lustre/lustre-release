@@ -84,10 +84,12 @@ int oig_wait(struct obd_io_group *oig);
 int class_process_config(struct lustre_cfg *lcfg);
 
 /* Passed as data param to class_config_parse_handler() */
+#define CFG_MODIFY_UUID_FL 0x00001
 struct config_llog_instance {
         char *cfg_instance;
         struct obd_uuid cfg_uuid;
         ptl_nid_t cfg_local_nid;
+        int  cfg_flags;
 };
 
 int class_config_process_llog(struct llog_ctxt *ctxt, char *name,

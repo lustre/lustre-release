@@ -647,8 +647,16 @@ static int class_config_parse_handler(struct llog_handle * handle,
                                                            cfg->cfg_instance); 
                         }
                 }
-                if (cfg && (lcfg->lcfg_command == LCFG_ATTACH)) {
-                        lustre_cfg_bufs_set_string(&bufs, 2,
+
+                if (cfg && (lcfg->lcfg_command == LCFG_ATTACH)){
+                        /*Very Dirty Hack fix here, for mds add, 
+                         *the mdc in mds should not 
+                         *change uuid FIXME: Wangdi
+                         */
+                         if (memcmp(lustre_cfg_string(lcfg, 1), OBD_MDC_DEVICENAME, 
+                                    strlen(OBD_MDC_DEVICENAME)) || 
+                             (cfg->cfg_flags & CFG_MODIFY_UUID_FL))
+                                lustre_cfg_bufs_set_string(&bufs, 2,
                                                    (char *)cfg->cfg_uuid.uuid);
                 }
                 lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
