@@ -221,7 +221,7 @@ transfer_record(struct obd_device *obd, struct audit_record *rec, int type, void
         
         CDEBUG(D_INFO, "%s\n", buf);
 
-        if (!trp->null)
+        //if (!trp->null)
                 printk("%s\n", buf);
 
         RETURN(0);
