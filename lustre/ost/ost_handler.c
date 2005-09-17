@@ -514,7 +514,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 if (rc == 0) {
                         struct timeval tstart, now;
                         do_gettimeofday(&tstart);
-                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
+                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 3,
                                           ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           !ptlrpc_bulk_active(desc), &lwi);
@@ -724,7 +724,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 struct timeval tstart, now;
                 do_gettimeofday(&tstart);
-                lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
+                lwi = LWI_TIMEOUT(obd_timeout * HZ / 3,
                                   ost_bulk_timeout, desc);
                 rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), 
                                   &lwi);
