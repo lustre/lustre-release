@@ -656,7 +656,9 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
                         CWARN("Directory #%lu under rmdir has %i nlinks\n",
                                 inode->i_ino, inode->i_nlink);
                 inode->i_nlink = 0;
+                lock_kernel();
                 dir->i_nlink--;
+                unlock_kernel();
                 post_smfs_inode(dir, cache_dir);
                 post_smfs_inode(inode, cache_inode);
                 //like vfs_rmdir is doing with inode
