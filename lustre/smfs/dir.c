@@ -586,7 +586,9 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry, int mode)
                 inode = smfs_get_inode(dir->i_sb, cache_dentry->d_inode,
                                        I2SMI(dir), 0);
                 if (inode) {
+                        lock_kernel();
                         dir->i_nlink++;
+                        unlock_kernel();
                         d_instantiate(dentry, inode);
                 }
                 else
