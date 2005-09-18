@@ -1065,7 +1065,7 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
         cfg.cfg_instance = sbi->ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
         cfg.cfg_local_nid = lmd->lmd_local_nid;
-
+        cfg.cfg_flags |= CFG_MODIFY_UUID_FL; 
         namelen = strlen(profile) + 20; /* -clean-######### */
         OBD_ALLOC(name, namelen);
         if (name == NULL)
