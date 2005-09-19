@@ -224,8 +224,10 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
                 RETURN(0);
 
         ENTRY;
-        if (capa == NULL)
+        if (capa == NULL) {
+                CDEBUG(D_ERROR, "no capa has been passed\n");
                 RETURN(-EACCES);
+        }
 
         if (blacklist_check(capa->lc_uid)) {
                 DEBUG_CAPA(D_ERROR, capa, "found in blacklist\n");
