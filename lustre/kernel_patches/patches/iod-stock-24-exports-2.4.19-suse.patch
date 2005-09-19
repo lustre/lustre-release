@@ -1,0 +1,52 @@
+ fs/Makefile     |    2 +-
+ fs/inode.c      |    4 +++-
+ mm/page_alloc.c |    1 +
+ 3 files changed, 5 insertions(+), 2 deletions(-)
+
+Index: linux-2.4.19.SuSE/fs/inode.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/inode.c	Sat Nov 15 18:02:13 2003
++++ linux-2.4.19.SuSE/fs/inode.c	Sat Nov 15 18:03:04 2003
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+@@ -67,7 +68,8 @@
+  * NOTE! You also have to own the lock if you change
+  * the i_state of an inode while it is in use..
+  */
+-static spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++EXPORT_SYMBOL(inode_lock);
+ 
+ /*
+  * Statistics gathering..
+Index: linux-2.4.19.SuSE/fs/Makefile
+===================================================================
+--- linux-2.4.19.SuSE.orig/fs/Makefile	Mon Jan 27 05:08:56 2003
++++ linux-2.4.19.SuSE/fs/Makefile	Sat Nov 15 18:03:54 2003
+@@ -7,7 +7,7 @@
+ 
+ O_TARGET := fs.o
+ 
+-export-objs :=	filesystems.o open.o dcache.o buffer.o
++export-objs :=	filesystems.o open.o dcache.o buffer.o inode.o
+ mod-subdirs :=	nls
+ 
+ obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
+Index: linux-2.4.19.SuSE/mm/page_alloc.c
+===================================================================
+--- linux-2.4.19.SuSE.orig/mm/page_alloc.c	Mon Jan 27 05:08:55 2003
++++ linux-2.4.19.SuSE/mm/page_alloc.c	Sat Nov 15 18:03:04 2003
+@@ -32,6 +32,7 @@
+ LIST_HEAD(inactive_list);
+ LIST_HEAD(active_list);
+ pg_data_t *pgdat_list;
++EXPORT_SYMBOL(pgdat_list);
+ 
+ /* Used to look up the address of the struct zone encoded in page->zone */
+ zone_t *zone_table[MAX_NR_ZONES*MAX_NR_NODES];

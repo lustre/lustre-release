@@ -1,0 +1,6 @@
+.deps
+Makefile
+Makefile.in
+.*.cmd
+.*.flags
+.tmp_versions

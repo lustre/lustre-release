@@ -1,0 +1,86 @@
+#!/bin/sh
+
+#
+# Add next patch in series
+#
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: pushpatch [npatches]"
+	exit 1
+}
+
+opt_force=0
+
+for i in $*
+do
+	case "$i" in
+	-f)
+		opt_force=1;;
+	*)
+		if [ -n "$NR" -o -n "$STOP_AT" ]
+		then
+			usage
+		fi
+		if is_numeric $i
+		then
+			NR=$i
+		else
+			NR=1000
+			STOP_AT=$(stripit $i)
+		fi;;
+	esac
+done
+
+[ $opt_force = 1 ] && force="-f"
+
+SERIES=series
+
+if [ ! -e $SERIES ]
+then
+	echo 'File "series" not found'
+	exit 1
+fi
+
+push_one()
+{
+	top=$(toppatch)
+	if [ x"$top" == x ]
+	then
+		todo=$(head -1 $SERIES)
+	else
+		last_in_series=$(stripit $(tail -1 $SERIES))
+		if [ $last_in_series == $top ]
+		then
+			echo "Series fully applied.  Ends at $top"
+			exit 0
+		fi
+		todo=$(grep -C1 "^$top\.patch" $SERIES | tail -1)
+		if [ x$todo = x ]
+		then
+			todo=$(head -1 $SERIES)
+		fi
+	fi
+
+	apatch $force $todo
+}
+
+for i in $(seq 1 $NR)
+do
+	push_one
+	if [ x$STOP_AT != "x" ]
+	then
+		if [ $STOP_AT == $(toppatch) ]
+		then
+                        sum-series applied-patch
+			exit 0
+		fi
+	fi
+done
+sum-series applied-patch

@@ -1,0 +1,2738 @@
+? linux/.config
+? linux/include/linux/autoconf.h
+? linux/include/linux/modules
+Index: linux/Makefile
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/Makefile,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/Makefile	12 Mar 2003 19:48:52 -0000	1.3.2.1
++++ linux/Makefile	1 Apr 2003 12:17:40 -0000	1.3.2.1.2.1
+@@ -99,6 +99,10 @@
+ CFLAGS += -fomit-frame-pointer
+ endif
+ AFLAGS := -D__ASSEMBLY__ $(CPPFLAGS)
++ifeq ($(CONFIG_MCL_COREDUMP),y)
++      CFLAGS += -g
++endif
++
+ 
+ #
+ # ROOT_DEV specifies the default root-device when making the image.
+Index: linux/Documentation/Configure.help
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/Documentation/Configure.help,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/Documentation/Configure.help	12 Mar 2003 19:48:52 -0000	1.3.2.1
++++ linux/Documentation/Configure.help	1 Apr 2003 12:17:40 -0000	1.3.2.1.2.1
+@@ -21660,6 +21660,35 @@
+   This option allows you to run the kernel with data cache disabled.
+   Say Y if you experience CPM lock-ups.
+ 
++Boot kernel image support
++CONFIG_BOOTIMG
++  Add support for booting a new Linux kernel from a running Linux
++  system. You need to download the bootimg(8) utility from
++  ftp://icaftp.epfl.ch/pub/people/almesber/misc/bootimg-current.tar.gz
++  in order to use this functionality.
++
++Protect SMP configuration tables
++CONFIG_BOOTIMG_SMP
++  On SMP systems, the BIOS stores tables with configuration data in
++  memory and an SMP-enabled kernel reads these tables. However, a
++  kernel without SMP support will overwrite such tables. If a kernel
++  without SMP support used bootimg to boot an SMP-enabled kernel, the
++  latter will probably crash when trying to read the SMP tables. The
++  CONFIG_BOOTIMG_SMP option enables minimal support for scanning and
++  protecting of SMP configuration tables also for kernels without SMP
++  support.
++
++In-memory kernel core dump facility
++CONFIG_MCL_COREDUMP
++  In conjunction with bootimg, this allows you to get kernel core dumps
++  of your system at panic() time.  The panic call is modified so that it
++  calls the core dump facility and reboots the system.  On the way back 
++  up, the kernel dump image is written out to disk by the accompanying 
++  init script.  You can use the crash analysis tool to analyze the core 
++  dump.  This tool can be found at :
++
++	 http://www.missioncriticallinux.com/download
++
+ #
+ # m68k-specific kernel options
+ # Documented by Chris Lawrence <mailto:quango@themall.net> et al.
+Index: linux/arch/i386/config.in
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/config.in,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.2
+diff -u -r1.3.2.1 -r1.3.2.1.2.2
+--- linux/arch/i386/config.in	12 Mar 2003 19:49:05 -0000	1.3.2.1
++++ linux/arch/i386/config.in	1 Apr 2003 19:35:12 -0000	1.3.2.1.2.2
+@@ -502,6 +502,12 @@
+    bool '  Magic SysRq key' CONFIG_MAGIC_SYSRQ
+    bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
+    bool '  Compile the kernel with frame pointers' CONFIG_FRAME_POINTER
++   if [ "$CONFIG_FRAME_POINTER " != "n" ]; then
++      bool '  Kernel Core Dump Facility' CONFIG_MCL_COREDUMP
++      if [ "$CONFIG_MCL_COREDUMP" = "y" ]; then
++         bool '  Reboot using bootimg' CONFIG_BOOTIMG
++      fi
++   fi
+ fi
+ 
+ endmenu
+Index: linux/arch/i386/vmlinux.lds
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/vmlinux.lds,v
+retrieving revision 1.1.1.1.4.1
+retrieving revision 1.1.1.1.4.1.2.1
+diff -u -r1.1.1.1.4.1 -r1.1.1.1.4.1.2.1
+--- linux/arch/i386/vmlinux.lds	12 Mar 2003 19:49:05 -0000	1.1.1.1.4.1
++++ linux/arch/i386/vmlinux.lds	1 Apr 2003 12:17:40 -0000	1.1.1.1.4.1.2.1
+@@ -19,6 +19,13 @@
+   .rodata : { *(.rodata) *(.rodata.*) }
+   .kstrtab : { *(.kstrtab) }
+ 
++  . = ALIGN(16);		/* Relocatable bootimage code */
++  __bootimg_start = .;
++  .bootimg : {
++	*(.bootimg)
++	}
++  __bootimg_end = .;
++
+   . = ALIGN(16);		/* Exception table */
+   __start___ex_table = .;
+   __ex_table : { *(__ex_table) }
+Index: linux/arch/i386/boot/setup.S
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/boot/setup.S,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/arch/i386/boot/setup.S	12 Mar 2003 19:49:05 -0000	1.2.2.1
++++ linux/arch/i386/boot/setup.S	1 Apr 2003 12:17:40 -0000	1.2.2.1.2.1
+@@ -105,16 +105,22 @@
+ # flags, unused bits must be zero (RFU) bit within loadflags
+ loadflags:
+ LOADED_HIGH	= 1			# If set, the kernel is loaded high
++RELOADS_GDT	= 2			# if set, kernel reloads GDT, such that
++					# boot loader does not have to provide
++					# GDT in a "safe" memory location
+ CAN_USE_HEAP	= 0x80			# If set, the loader also has set
+ 					# heap_end_ptr to tell how much
+ 					# space behind setup.S can be used for
+ 					# heap purposes.
+ 					# Only the loader knows what is free
+-#ifndef __BIG_KERNEL__
+-		.byte	0
+-#else
+-		.byte	LOADED_HIGH
++_FLAGS = 0
++#ifdef __BIG_KERNEL__
++		_FLAGS = _FLAGS | LOADED_HIGH
+ #endif
++#ifdef CONFIG_BOOTIMG
++		_FLAGS = _FLAGS | RELOADS_GDT
++#endif
++		.byte _FLAGS
+ 
+ setup_move_size: .word  0x8000		# size to move, when setup is not
+ 					# loaded at 0x90000. We will move setup 
+Index: linux/arch/i386/kernel/Makefile
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/Makefile,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/arch/i386/kernel/Makefile	12 Mar 2003 19:49:05 -0000	1.2.2.1
++++ linux/arch/i386/kernel/Makefile	1 Apr 2003 12:17:40 -0000	1.2.2.1.2.1
+@@ -49,6 +49,7 @@
+ obj-$(CONFIG_X86_LONGRUN)	+= longrun.o
+ obj-$(CONFIG_ELAN_CPUFREQ)	+= elanfreq.o
+ obj-$(CONFIG_PROFILING)		+= profile.o
++obj-$(CONFIG_MCL_COREDUMP)	+= crash.o
+ 
+ 
+ include $(TOPDIR)/Rules.make
+Index: linux/arch/i386/kernel/crash.c
+===================================================================
+RCS file: linux/arch/i386/kernel/crash.c
+diff -N linux/arch/i386/kernel/crash.c
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/arch/i386/kernel/crash.c	1 Apr 2003 12:17:40 -0000	1.1.6.1
+@@ -0,0 +1,82 @@
++/*
++ *  linux/arch/i386/crash.c
++ *
++ *  Architecture dependant code for MCL in-memory core dump.
++ */
++#include <linux/sched.h>
++#include <linux/types.h>
++#include <linux/smp.h>
++#include <linux/crash.h>
++#include <linux/reboot.h>
++#include <linux/bootimg.h>
++
++inline void crash_save_regs(void) {
++	static unsigned long regs[8];
++
++	__asm__ __volatile__("movl %%ebx,%0" : "=m"(regs[0]));
++	__asm__ __volatile__("movl %%ecx,%0" : "=m"(regs[1]));
++	__asm__ __volatile__("movl %%edx,%0" : "=m"(regs[2]));
++	__asm__ __volatile__("movl %%esi,%0" : "=m"(regs[3]));
++	__asm__ __volatile__("movl %%edi,%0" : "=m"(regs[4]));
++	__asm__ __volatile__("movl %%ebp,%0" : "=m"(regs[5]));
++	__asm__ __volatile__("movl %%eax,%0" : "=m"(regs[6]));
++	__asm__ __volatile__("movl %%esp,%0" : "=m"(regs[7]));
++
++	panic_regs = regs;
++}
++
++/*
++ *  Save the current stack pointer and EIP.
++ */
++void crash_save_current_state(struct task_struct *tp)
++{
++	/*
++	 *  Here we save ebp instead of esp just in case the compiler
++	 *  decides to put an extra push in before we execute this
++	 *  instruction (thus invalidating our frame pointer).
++	 */
++	asm volatile("movl %%ebp,%0":"=m" (*(u_long *)&tp->thread.esp));
++	tp->thread.eip = (u_long)crash_save_current_state;
++	panic_ksp[smp_processor_id()] = tp->thread.esp;
++	mb();
++
++	save_core();
++
++	crash_halt_or_reboot(1);
++}
++
++/*
++ *  If we are not the panicking thread, we simply halt.  Otherwise,
++ *  we take care of calling the reboot code.
++ */
++void crash_halt_or_reboot(int boot_cpu)
++{
++#ifdef CONFIG_SMP
++	if (!boot_cpu) {
++		stop_this_cpu(NULL);
++		/* NOTREACHED */
++	}
++#endif
++	machine_restart(NULL);
++}
++
++void crash_cleanup_smp_state(void)
++{
++	/*
++	 *  Here we duplicate smp_send_stop.  Crash_halt_or_reboot() calls
++	 *  stop_this_cpu.  We now know that we are the only one running, 
++	 *  so we finish off the smp_send_stop function.
++	 */
++	__cli();
++#ifdef CONFIG_SMP
++	disable_local_APIC();
++#endif
++}
++
++/*
++ *  Core dump IPI
++ */
++void smp_crash_funnel_cpu(void)
++{
++	crash_save_current_state(current);
++}
+Index: linux/arch/i386/kernel/nmi.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/nmi.c,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/arch/i386/kernel/nmi.c	12 Mar 2003 19:49:06 -0000	1.2.2.1
++++ linux/arch/i386/kernel/nmi.c	1 Apr 2003 12:17:40 -0000	1.2.2.1.2.1
+@@ -374,11 +374,18 @@
+ 			bust_spinlocks(1);
+ 			printk("NMI Watchdog detected LOCKUP on CPU%d, eip %08lx, registers:\n", cpu, regs->eip);
+ 			show_registers(regs);
++#ifdef CONFIG_MCL_COREDUMP
++			spin_unlock(&nmi_print_lock);
++			bust_spinlocks(0);
++			panic("die");
++			/* NOTREACHED */
++#else
+ 			printk("console shuts up ...\n");
+ 			console_silent();
+ 			spin_unlock(&nmi_print_lock);
+ 			bust_spinlocks(0);
+ 			do_exit(SIGSEGV);
++#endif
+ 		}
+ 	} else {
+ 		last_irq_sums[cpu] = sum;
+Index: linux/arch/i386/kernel/process.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/process.c,v
+retrieving revision 1.2.2.2
+retrieving revision 1.2.2.2.2.1
+diff -u -r1.2.2.2 -r1.2.2.2.2.1
+--- linux/arch/i386/kernel/process.c	1 Apr 2003 02:11:17 -0000	1.2.2.2
++++ linux/arch/i386/kernel/process.c	1 Apr 2003 12:17:40 -0000	1.2.2.2.2.1
+@@ -50,6 +50,9 @@
+ #ifdef CONFIG_MATH_EMULATION
+ #include <asm/math_emu.h>
+ #endif
++#ifdef CONFIG_BOOTIMG
++#include <linux/bootimg.h>
++#endif
+ 
+ #include <linux/irq.h>
+ 
+@@ -377,7 +380,21 @@
+ 
+ void machine_restart(char * __unused)
+ {
++#ifdef CONFIG_MCL_COREDUMP
++	extern char *panicmsg;
++	/*
++	 *  Only call bootimg if we have a valid descriptor and
++	 *  we are in a panic() context.
++	 */
++	if (panicmsg)
++#endif
++#ifdef CONFIG_BOOTIMG
++		if (bootimg_dsc.page_dir)
++			boot_image();
++#endif
++
+ #if CONFIG_SMP
++{
+ 	int cpuid;
+ 	
+ 	cpuid = GET_APIC_ID(apic_read(APIC_ID));
+@@ -413,6 +430,7 @@
+ 	if (!netdump_func)
+ 		smp_send_stop();
+ 	disable_IO_APIC();
++}
+ #endif
+ 
+ 	if(!reboot_thru_bios) {
+Index: linux/arch/i386/kernel/setup.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/setup.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.2
+diff -u -r1.3.2.1 -r1.3.2.1.2.2
+--- linux/arch/i386/kernel/setup.c	12 Mar 2003 19:49:06 -0000	1.3.2.1
++++ linux/arch/i386/kernel/setup.c	1 Apr 2003 17:55:35 -0000	1.3.2.1.2.2
+@@ -116,6 +116,9 @@
+ #include <asm/mpspec.h>
+ #include <asm/mmu_context.h>
+ #include <asm/edd.h>
++#ifdef CONFIG_MCL_COREDUMP
++#include <linux/crash.h>
++#endif
+ /*
+  * Machine setup..
+  */
+@@ -973,6 +976,7 @@
+ static unsigned long __init setup_memory(void)
+ {
+ 	unsigned long bootmap_size, start_pfn, max_low_pfn;
++	unsigned long bootmap_pages = 0UL, crash_pages = 0UL;
+ 
+ 	/*
+ 	 * partially used pages are not usable - thus
+@@ -992,6 +996,21 @@
+ 	printk(KERN_NOTICE "%ldMB HIGHMEM available.\n",
+ 		pages_to_mb(highend_pfn - highstart_pfn));
+ #endif
++
++#ifdef CONFIG_MCL_COREDUMP
++	bootmap_pages = bootmem_bootmap_pages(max_low_pfn);
++	crash_pages = crash_pages_needed();
++
++	printk("start_pfn: %d, bootmap_pages: %d\n", start_pfn, bootmap_pages);
++
++	crash_init((u_long)phys_to_virt(PFN_PHYS(start_pfn)),
++		   (u_long)phys_to_virt(PFN_PHYS(LOW_OFFSET + start_pfn)),
++		   (u_long)phys_to_virt(PFN_PHYS(LOW_OFFSET + start_pfn +
++						 crash_pages)));
++
++	printk("new start_pfn: %08lx\n", PFN_PHYS(start_pfn));
++	printk("crash map starts at %lx\n",(start_pfn+bootmap_pages)*PAGE_SIZE);
++#endif
+ 	printk(KERN_NOTICE "%ldMB LOWMEM available.\n",
+ 			pages_to_mb(max_low_pfn));
+ 	/*
+@@ -1007,8 +1026,8 @@
+ 	 * the (very unlikely) case of us accidentally initializing the
+ 	 * bootmem allocator with an invalid RAM area.
+ 	 */
+-	reserve_bootmem(HIGH_MEMORY, (PFN_PHYS(start_pfn) +
+-			 bootmap_size + PAGE_SIZE-1) - (HIGH_MEMORY));
++	reserve_bootmem(HIGH_MEMORY, (PFN_PHYS(start_pfn) + bootmap_size + 
++                    ((1+crash_pages)*PAGE_SIZE) + PAGE_SIZE-1) - (HIGH_MEMORY));
+ 
+ 	/*
+ 	 * reserve physical page 0 - it's a special BIOS page on many boxes,
+@@ -1016,6 +1035,16 @@
+ 	 */
+ 	reserve_bootmem(0, PAGE_SIZE);
+ 
++#ifdef CONFIG_BOOTIMG
++	/*
++	 * bootimg(8) reads the old parameter block. Note that the copy in
++	 * empty_zero_page will vanish when mem_init runs. (Should we
++	 * memcpy(phys_to_virt(0x90000), PARAM, PAGE_SIZE);
++	 * now ?)
++	 */
++	reserve_bootmem(0x90000, PAGE_SIZE);
++#endif
++
+ #ifdef CONFIG_SMP
+ 	/*
+ 	 * But first pinch a few for the stack/trampoline stuff
+@@ -1032,6 +1061,7 @@
+ 	find_smp_config();
+ #endif
+ #ifdef CONFIG_BLK_DEV_INITRD
++	printk("caution: initrd may overwrite dump\n"); /* phro */
+ 	if (LOADER_TYPE && INITRD_START) {
+ 		if (INITRD_START + INITRD_SIZE <= (max_low_pfn << PAGE_SHIFT)) {
+ 			reserve_bootmem(INITRD_START, INITRD_SIZE);
+@@ -1172,6 +1202,12 @@
+ 	smp_alloc_memory(); /* AP processor realmode stacks in low memory*/
+ #endif
+ 	paging_init();
++#ifdef CONFIG_MCL_COREDUMP
++	/*
++	 * Reserve crash pages
++	 */
++	crash_mark_dump_reserved();
++#endif
+ #ifdef CONFIG_X86_LOCAL_APIC
+ 	/*
+ 	 * get boot-time SMP configuration:
+Index: linux/arch/i386/kernel/smp.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/smp.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/arch/i386/kernel/smp.c	12 Mar 2003 19:49:06 -0000	1.3.2.1
++++ linux/arch/i386/kernel/smp.c	1 Apr 2003 12:17:40 -0000	1.3.2.1.2.1
+@@ -23,6 +23,9 @@
+ #include <asm/pgalloc.h>
+ #include <asm/smpboot.h>
+ 
++#ifdef CONFIG_MCL_COREDUMP
++#include <asm/crash.h>
++#endif
+ /*
+  *	Some notes on x86 processor bugs affecting SMP operation:
+  *
+@@ -579,7 +582,7 @@
+ 	return 0;
+ }
+ 
+-static void stop_this_cpu (void * dummy)
++void stop_this_cpu (void * dummy)
+ {
+ 	/*
+ 	 * Remove this CPU:
+Index: linux/arch/i386/kernel/traps.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/traps.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/arch/i386/kernel/traps.c	12 Mar 2003 19:49:06 -0000	1.3.2.1
++++ linux/arch/i386/kernel/traps.c	1 Apr 2003 12:17:40 -0000	1.3.2.1.2.1
+@@ -52,6 +52,10 @@
+ #include <linux/irq.h>
+ #include <linux/module.h>
+ 
++#ifdef CONFIG_MCL_COREDUMP
++#include <linux/crash.h>
++#endif
++
+ asmlinkage int system_call(void);
+ asmlinkage void lcall7(void);
+ asmlinkage void lcall27(void);
+@@ -309,7 +313,11 @@
+ 		netdump_func(regs);
+ 	bust_spinlocks(0);
+ 	spin_unlock_irq(&die_lock);
+-	do_exit(SIGSEGV);
++#ifdef CONFIG_MCL_COREDUMP 
++	if(panic_on_oops)
++		panic("die");
++#endif
++	do_exit(SIGSEGV);/* NOTREACHED */
+ }
+ 
+ static inline void die_if_kernel(const char * str, struct pt_regs * regs, long err)
+Index: linux/drivers/char/misc.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/drivers/char/misc.c,v
+retrieving revision 1.2
+retrieving revision 1.2.4.1
+diff -u -r1.2 -r1.2.4.1
+--- linux/drivers/char/misc.c	25 Sep 2002 17:11:05 -0000	1.2
++++ linux/drivers/char/misc.c	1 Apr 2003 12:17:41 -0000	1.2.4.1
+@@ -78,6 +78,8 @@
+ extern int i8k_init(void);
+ extern int lcd_init(void);
+ 
++extern int crash_init_chrdev(void);
++
+ static int misc_read_proc(char *buf, char **start, off_t offset,
+ 			  int len, int *eof, void *private)
+ {
+@@ -255,6 +257,9 @@
+ int __init misc_init(void)
+ {
+ 	create_proc_read_entry("misc", 0, 0, misc_read_proc, NULL);
++#ifdef CONFIG_MCL_COREDUMP
++	crash_init_chrdev();
++#endif
+ #ifdef CONFIG_MVME16x
+ 	rtc_MK48T08_init();
+ #endif
+Index: linux/drivers/char/sysrq.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/drivers/char/sysrq.c,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.2
+diff -u -r1.2.2.1 -r1.2.2.1.2.2
+--- linux/drivers/char/sysrq.c	12 Mar 2003 19:49:47 -0000	1.2.2.1
++++ linux/drivers/char/sysrq.c	1 Apr 2003 17:55:35 -0000	1.2.2.1.2.2
+@@ -97,7 +97,18 @@
+ 	action_msg:	"Resetting",
+ };
+ 
+-
++#ifdef CONFIG_MCL_COREDUMP
++/* kernel core dump sysrq */
++static void sysrq_handle_coredump(int key, struct pt_regs *pt_regs,
++		struct kbd_struct *kbd, struct tty_struct *ttty) {
++	panic("sysrq");
++}
++static struct sysrq_key_op sysrq_coredump_op = {
++	handler:        sysrq_handle_coredump,
++	help_msg:       "Crash",
++	action_msg:     "Dumping core",
++};
++#endif
+ 
+ /* SYNC SYSRQ HANDLERS BLOCK */
+ 
+@@ -334,7 +345,11 @@
+ 		 it is handled specially on the spark
+ 		 and will never arive */
+ /* b */	&sysrq_reboot_op,
++#ifdef CONFIG_MCL_COREDUMP
++/* c */	&sysrq_coredump_op,
++#else
+ /* c */	NULL,
++#endif
+ /* d */	NULL,
+ /* e */	&sysrq_term_op,
+ /* f */	NULL,
+Index: linux/include/asm-i386/bootimg.h
+===================================================================
+RCS file: linux/include/asm-i386/bootimg.h
+diff -N linux/include/asm-i386/bootimg.h
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/include/asm-i386/bootimg.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,141 @@
++/* asm-i386/bootimg.h - Boot image, i386-specific code */
++
++/* Written 2000 by Werner Almesberger */
++
++/*
++ * When porting bootimg(2) to a new architcture, you need to adapt the
++ * functions and definitions in this file.
++ */
++
++
++#ifndef _ASM_I386_BOOTIMG_H
++#define _ASM_I386_BOOTIMG_H
++
++#include <linux/config.h>
++#include <asm/system.h>
++
++#ifdef CONFIG_SMP
++#include <linux/smp.h>
++#include <linux/irq.h>
++#endif
++
++
++/*
++ * The memory page with the code currently executing has been copied from
++ * old_page to new_page. Jump there.
++ *
++ * Note: flush_icache_range has already been called on the new page.
++ */
++
++static inline void jump_relocated(unsigned long old_page,unsigned long new_page)
++{
++	int tmp;
++
++	__asm__ __volatile__(
++	"stc\n\t"
++	"call 1f\n"
++	"1:\tjnc 2f\n\t"
++	"popl %0\n\t"
++	"addl %1,%0\n\t"
++	"addl %1,%%esp\n\t"
++	"clc\n\t"
++	"jmp *%0\n"
++	"2:"
++	: "=&r" (tmp) : "r" (new_page-old_page));
++}
++
++
++/*
++ * Stop paging, such that
++ *  - page tables can be overwritten
++ *  - all physical memory can be accessed
++ *  - all physical memory is identity-mapped
++ *
++ * (Other rules are possible, but need to be encoded in bootimg(8).)
++ */
++
++static inline void stop_paging(void)
++{
++	unsigned long msw;
++
++	__asm__ __volatile__(
++	"movl %%cr0,%0\n\t"
++	"andl $0x7fffffff,%0\n\t"
++	"movl %0,%%cr0\n\t"
++	"jmp 1f\n\t"	/* i486 and such */
++	"1:"
++
++/* Clear the PAE bit in register %cr4 if we were in PAE mode.  The initial
++ * page table set up by the new kernel's bootstrap code is non-PAE regardless
++ * of whether the new kernel is a PAE kernel.  By clearing the PAE bit here,
++ * we make sure the bootstrap code doesn't accidentally enable PAE mode when
++ * it turns on address translation.
++ */
++#ifdef CONFIG_X86_PAE
++	"movl %%cr4,%0\n\t"
++	"andl $0xffffffdf,%0\n\t"
++	"movl %0,%%cr4\n\t"
++#endif
++
++	: "=&r" (msw) : : "memory");
++}
++
++
++/*
++ * Stop any remaining concurrency in the system. If become_only_thread fails
++ * but the system is still usable, become_only_thread should return an error
++ * code. If no recovery is possible, it may as well panic.
++ */
++
++static inline int become_only_thread(void)
++{
++#ifdef CONFIG_SMP
++	smp_send_stop();
++	disable_IO_APIC();
++#endif
++	cli();
++	return 0;
++}
++
++
++/*
++ * A conservative estimate of the number of bytes relocate_and_jump allocated
++ * on the stack. This is only used for sanity checking before running code,
++ * because we can't recover from failure in relocate_and_jump.
++ */
++
++#define RESERVE_MIN_RELOC_STACK	256
++
++
++/*
++ * Change the stack pointer such that stack is at the end of the specified
++ * page. No data on the old stack will be accessed anymore, so no copying is
++ * required.
++ */
++
++static inline void stack_on_page(void *page)
++{
++	__asm__ __volatile__(
++	"push %%ds\n\t"
++	"pop %%ss\n\t"
++	"movl %0,%%esp\n\t"
++	"addl $0x1000,%%esp\n\t"
++	: : "r" (page));
++}
++
++/*
++ * Set up things such that the kernel will be comfortable (e.g. some
++ * architectures expect the boot loader to set registers in certain ways),
++ * and then jump to the kernel's entry address.
++ */
++
++static inline void jump_to_kernel(void (*kernel_entry)(void))
++{
++	__asm__ __volatile__(
++	"mov $0x90000,%%esi\n\t"
++	: : );
++
++	kernel_entry();
++}
++
++#endif
+Index: linux/include/asm-i386/crash.h
+===================================================================
+RCS file: linux/include/asm-i386/crash.h
+diff -N linux/include/asm-i386/crash.h
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/include/asm-i386/crash.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,15 @@
++#ifndef __ASM_CRASH_H
++#define __ASM_CRASH_H
++
++#define UPPER_MEM_BACKUP 0
++#define LOWER_MEM_FORWARD 0
++#define LOW_OFFSET 100
++
++/*
++ *  These two functions are inlined on alpha.  That's why they appear
++ *  in the arch dependent include file.
++ */
++void crash_save_current_state(struct task_struct *);
++void crash_halt_or_reboot(int);
++
++#endif
+Index: linux/include/linux/bootimg.h
+===================================================================
+RCS file: linux/include/linux/bootimg.h
+diff -N linux/include/linux/bootimg.h
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/include/linux/bootimg.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,84 @@
++/* linux/bootimg.h - Boot image, general definitions */
++
++/* Written 2000 by Werner Almesberger */
++
++
++#ifndef _LINUX_BOOTIMG_H
++#define _LINUX_BOOTIMG_H
++
++
++/*
++ * Constraints on image_map:
++ *  - each image_map[n] is the virtual address of a page-sized memory region
++ *    readable by the user
++ *  - currently, image_map[n] is not required to be page-aligned, but this may
++ *    change in the future if we want to map pages directly to lower memory
++ *    pressure (NB: mapping works for ELF and plain binary images, but usually
++ *    not for (b)zImages, because the prepended boot and setup sectors
++ *    mis-align them)
++ *
++ * Constraints on load_map:
++ *  - each load_map[] is the physical address of a page in RAM
++ */
++
++struct boot_image {
++	void **image_map;	/* pointers to image pages in user memory */
++	int pages;		/* length in pages */
++	unsigned long *load_map;/* list of destination pages (physical addr) */
++	unsigned long start;	/* jump to this physical address */
++	int flags;		/* for future use, must be zero for now */
++};
++
++
++#ifdef __KERNEL__
++
++#define __bootimg __attribute__ ((__section__ (".bootimg")))
++
++
++struct bootimg_dsc {
++	unsigned long self;		/* code page		ALL ADDRESSES */
++	unsigned long scratch;		/* scratch page		ARE PHYSICAL !*/
++	unsigned long **page_dir;	/* src & dst page tables              */
++	void (*jump_to)(void);		/* start address		      */
++	int pages;			/* number of pages */
++    unsigned long csum; /* Kernel Image checksum */
++};
++
++/*
++ * page_dir contains pointers to pages containing pointers to pages. We call
++ * page_dir a "directory" and the page page_dir[n] points to a "table". The
++ * first PAGES_PER_TABLE/2 entries of page_dir are for source pages, and other
++ * half are for destination pages.
++ */
++
++/*
++ * Note that the definitions used here do not necessarily correspond to the
++ * architecture-specific PTRS_PER_PTE, __pte_offset, etc.
++ */
++ 
++#define PAGES_PER_TABLE	(PAGE_SIZE/sizeof(void *))
++#define FROM_TABLE(i)	((i)/PAGES_PER_TABLE)
++#define TO_TABLE(i)	((i)/PAGES_PER_TABLE+PAGES_PER_TABLE/2)
++#define PAGE_NR(i)	((i) % PAGES_PER_TABLE)
++
++
++extern char __bootimg_start,__bootimg_end;	/* linker segment boundaries */
++extern unsigned long *unity_page; /* unity-mapped page for i386 */
++
++/*
++ * relocate_and_jump runs in its own page with its own stack. This makes it
++ * difficult to pass parameters. The solution chosen here is to use the global
++ * variable bootimg_dsc, which is copied into an "auto" variable by
++ * relocate_and_jump before any copying or relocation takes place.
++ */
++
++extern struct bootimg_dsc bootimg_dsc;
++
++typedef void (*relocate_and_jump_t)(void);
++
++void relocate_and_jump(void);
++int  boot_image(void);
++
++#endif /* __KERNEL__ */
++
++#endif
+Index: linux/include/linux/crash.h
+===================================================================
+RCS file: linux/include/linux/crash.h
+diff -N linux/include/linux/crash.h
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/include/linux/crash.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,119 @@
++#ifndef __LINUX_CRASH_H
++#define __LINUX_CRASH_H
++
++/* defines for interfacing with user-space (ioctls, etc) */
++struct ioctl_getdump {
++	unsigned long kva;
++	unsigned long buf;
++};
++
++#define CRASH_IOC_MAGIC 'C'
++
++#define CRASH_IOCFREEDUMP _IO(CRASH_IOC_MAGIC, 0)
++#define CRASH_IOCGETDUMP _IOWR(CRASH_IOC_MAGIC, 1, struct ioctl_getdump)
++#define CRASH_IOCBOOTIMG _IOWR(CRASH_IOC_MAGIC, 2, struct boot_image)
++#define CRASH_IOCVERSION _IO(CRASH_IOC_MAGIC, 3)
++
++/* kernel-only part of crash.h */
++#ifdef __KERNEL__
++#include <asm/crash.h>
++
++#define CRASH_K_MINOR (1)
++#define CRASH_K_MAJOR (0)
++
++/*
++ * Crash prototypes.
++ */
++void save_core(void);
++void crash_mark_dump_reserved(void);
++void crash_init(u_long bootmap_va, u_long crash_va, u_long end_alloc_va);
++u_long crash_pages_needed(void);
++void smp_crash_funnel_cpu(void);
++void crash_cleanup_smp_state(void);
++
++/*
++ *  Arch dependant crash.c funcs
++ */
++void crash_save_current_state(struct task_struct *);
++void crash_halt_or_reboot(int);
++inline void crash_save_regs(void);
++
++/*
++ * Crash globals
++ */
++extern u_long crash_dump_header;
++extern volatile u_long panic_ksp[];
++extern volatile int crash_release;
++extern int panic_on_oops;
++extern char *panicmsg;
++extern int panic_processor;
++extern int crash_perform_sync;
++extern unsigned long *panic_regs;
++
++/*
++ * symbols not exported by linux header files
++ */
++extern void stop_this_cpu(void *);
++
++/*  struct crash_map_hdr located at byte offset 0 */
++/* on-disk formats */
++
++#define trunc_page(x)   ((void *)(((unsigned long)(x)) & ~((unsigned long)(PAGE_SIZE - 1))))
++#define round_page(x)   trunc_page(((unsigned long)(x)) + ((unsigned long)(PAGE_SIZE - 1)))
++
++#define CRASH_MAGIC 0x9a8bccdd
++#define CRASH_SOURCE_PAGES 128
++#define CRASH_SUB_MAP_BYTES ((u_long)round_page((CRASH_SOURCE_PAGES+1)*sizeof(u_long)))
++#define CRASH_SUB_MAP_PAGES (CRASH_SUB_MAP_BYTES / PAGE_SIZE)
++#define CRASH_UNCOMPR_BUF_PAGES (CRASH_SOURCE_PAGES + CRASH_SUB_MAP_PAGES)
++#define CRASH_COMPR_BUF_PAGES (CRASH_UNCOMPR_BUF_PAGES + (CRASH_UNCOMPR_BUF_PAGES/4))
++#define CRASH_COMPESS_PRIME_PAGES (2*CRASH_COMPR_BUF_PAGES)
++#define CRASH_ZALLOC_PAGES 16*5*2	/* 2 to handle crash in crash */
++#define CRASH_LOW_WATER_PAGES 100
++
++#define CRASH_CPU_TIMEOUT 5000	/* 5 sec wait for other cpus to stop */
++
++#define CRASH_MARK_RESERVED(addr) (set_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
++#define CRASH_CLEAR_RESERVED(addr) (clear_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
++#define CRASH_MARK_BOOT_RESERVED(addr) reserve_bootmem(virt_to_phys((void *)addr), PAGE_SIZE);
++
++typedef int boolean_t;
++
++#define TRUE 1
++#define FALSE 0
++
++/* mem structure */
++struct mem_crash_map_hdr {
++	long magic[4];		/* identify crash dump */
++	u_long map;		/* location of map */
++	u_long map_pages;
++	u_long data_pages;
++	u_long compr_units;
++	u_long boot_reserved_start;
++	u_long boot_reserved_end;
++};
++struct mem_crash_map_entry {
++	u_long src_va;		/* source start of larger non-contig 
++				 * block.  a src_va of -1 means that 
++				 * the dest_page_va is the location of 
++				 * the next map page */
++	u_long dest_page_va;	/* dest of this sub block */
++	u_long check_sum;	/* check_sum for dest data */
++};
++
++/* file structure */
++struct crash_map_hdr {
++	long magic[4];		/* identify crash dump */
++	int blk_size;		/* block size for this device */
++	int map_block;		/* location of map */
++	int map_blocks;		/* number of blocks for map */
++};
++struct crash_map_entry {
++	u_long start_va;	/* virtual address */
++	char *exp_data;		/* expanded data in memory */
++	int start_blk;		/* device location */
++	int num_blks;
++};
++
++#endif /* __KERNEL__ */
++#endif /* __LINUX_CRASH_H */
+Index: linux/include/linux/mm.h
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/include/linux/mm.h,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.2
+diff -u -r1.2.2.1 -r1.2.2.1.2.2
+--- linux/include/linux/mm.h	12 Mar 2003 19:51:27 -0000	1.2.2.1
++++ linux/include/linux/mm.h	1 Apr 2003 17:55:35 -0000	1.2.2.1.2.2
+@@ -331,6 +331,11 @@
+ #define PG_lru			18
+ #define PG_active_cache		19
+ #define PG_fs_1			20	/* Filesystem specific */
++#ifdef CONFIG_MCL_COREDUMP
++#define PG_free			21
++#define PG_shm			22
++#define PG_anon			23
++#endif
+ 
+ /* Make it prettier to test the above... */
+ #define UnlockPage(page)	unlock_page(page)
+@@ -452,6 +457,11 @@
+ #define PageSetSlab(page)	set_bit(PG_slab, &(page)->flags)
+ #define PageClearSlab(page)	clear_bit(PG_slab, &(page)->flags)
+ #define PageReserved(page)	test_bit(PG_reserved, &(page)->flags)
++#ifdef CONFIG_MCL_COREDUMP
++#define PageFree(page)          (test_bit(PG_free, &(page)->flags))
++#define PageAnon(page)          (test_bit(PG_anon, &(page)->flags))
++#define PageShm(page)           (test_bit(PG_shm, &(page)->flags))
++#endif
+ 
+ #define PageActiveAnon(page)		test_bit(PG_active_anon, &(page)->flags)
+ #define SetPageActiveAnon(page)	set_bit(PG_active_anon, &(page)->flags)
+Index: linux/include/linux/reboot.h
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/include/linux/reboot.h,v
+retrieving revision 1.1.1.1
+retrieving revision 1.1.1.1.10.2
+diff -u -r1.1.1.1 -r1.1.1.1.10.2
+--- linux/include/linux/reboot.h	7 May 2002 21:53:47 -0000	1.1.1.1
++++ linux/include/linux/reboot.h	1 Apr 2003 17:55:35 -0000	1.1.1.1.10.2
+@@ -20,6 +20,7 @@
+  * CAD_OFF     Ctrl-Alt-Del sequence sends SIGINT to init task.
+  * POWER_OFF   Stop OS and remove all power from system, if possible.
+  * RESTART2    Restart system using given command string.
++ * COREDUMP    We're taking a core dump, secondary cpus already stopped.
+  */
+ 
+ #define	LINUX_REBOOT_CMD_RESTART	0x01234567
+@@ -28,7 +29,9 @@
+ #define	LINUX_REBOOT_CMD_CAD_OFF	0x00000000
+ #define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+ #define	LINUX_REBOOT_CMD_RESTART2	0xA1B2C3D4
+-
++#ifdef CONFIG_MCL_COREDUMP
++#define LINUX_REBOOT_CMD_COREDUMP	0x9A8BCCDD
++#endif
+ 
+ #ifdef __KERNEL__
+ 
+Index: linux/include/linux/sysctl.h
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/include/linux/sysctl.h,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/include/linux/sysctl.h	12 Mar 2003 19:51:30 -0000	1.3.2.1
++++ linux/include/linux/sysctl.h	1 Apr 2003 12:17:41 -0000	1.3.2.1.2.1
+@@ -126,6 +126,7 @@
+ 	KERN_CADPID=54,		/* int: PID of the process to notify on CAD */
+  	KERN_CORE_PATTERN=56,	/* string: pattern for core-files */
+ 	KERN_PID_MAX=55,	/* int: max PID value of processes */
++	KERN_PANIC_ON_OOPS	/* int: panic on oops enabled */
+ };
+ 
+ 
+Index: linux/init/main.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/init/main.c,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/init/main.c	12 Mar 2003 19:51:35 -0000	1.2.2.1
++++ linux/init/main.c	1 Apr 2003 12:17:41 -0000	1.2.2.1.2.1
+@@ -70,6 +70,10 @@
+ #include <asm/smp.h>
+ #endif
+ 
++#ifdef CONFIG_BOOTIMG
++#include <linux/bootimg.h>
++#endif
++
+ /*
+  * Versions of gcc older than that listed below may actually compile
+  * and link okay, but the end product can have subtle run time bugs.
+@@ -352,10 +356,14 @@
+ {
+ 	char * command_line;
+ 	extern char saved_command_line[];
++#if defined(CONFIG_BOOTIMG) && defined(CONFIG_X86_LOCAL_APIC)
++	unsigned long value;
++#endif
+ /*
+  * Interrupts are still disabled. Do necessary setups, then
+  * enable them
+  */
++	printk("start_kernel\n");
+ 	lock_kernel();
+ 	printk(linux_banner);
+ 	setup_arch(&command_line);
+@@ -373,12 +381,26 @@
+ 	 * this. But we do want output early, in case something goes wrong.
+ 	 */
+ 	console_init();
++
++#ifdef CONFIG_BOOTIMG
++	unity_page = alloc_bootmem_pages(PAGE_SIZE);
++	printk("unity_page addr: %p\n",unity_page);
++#endif
+ #ifdef CONFIG_MODULES
+ 	init_modules();
+ #endif
+ 	profile_init();
+ 	kmem_cache_init();
+ 	sti();
++#if defined(CONFIG_BOOTIMG) && defined(CONFIG_X86_LOCAL_APIC)
++	/* If we don't make sure the APIC is enabled, AND the LVT0
++	 * register is programmed properly, we won't get timer interrupts
++	 */
++	setup_local_APIC();
++	
++	value = apic_read(APIC_LVT0);
++	apic_write_around(APIC_LVT0, value & ~APIC_LVT_MASKED);
++#endif
+ 	calibrate_delay();
+ #ifdef CONFIG_BLK_DEV_INITRD
+ 	if (initrd_start && !initrd_below_start_ok &&
+Index: linux/kernel/Makefile
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/Makefile,v
+retrieving revision 1.1.1.1.4.1
+retrieving revision 1.1.1.1.4.1.2.1
+diff -u -r1.1.1.1.4.1 -r1.1.1.1.4.1.2.1
+--- linux/kernel/Makefile	12 Mar 2003 19:51:36 -0000	1.1.1.1.4.1
++++ linux/kernel/Makefile	1 Apr 2003 12:17:41 -0000	1.1.1.1.4.1.2.1
+@@ -22,7 +22,8 @@
+ obj-$(CONFIG_PM) += pm.o
+ obj-$(CONFIG_KALLSYMS) += kallsyms.o
+ obj-$(CONFIG_CPU_FREQ) += cpufreq.o
+-
++obj-$(CONFIG_BOOTIMG) += bootimg.o bootimg_pic.o
++obj-$(CONFIG_MCL_COREDUMP) += crash.o
+ 
+ ifneq ($(CONFIG_IA64),y)
+ # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
+Index: linux/kernel/bootimg.c
+===================================================================
+RCS file: linux/kernel/bootimg.c
+diff -N linux/kernel/bootimg.c
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/kernel/bootimg.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,301 @@
++/* bootimg.c - Boot another (kernel) image */
++
++/* Written 2000 by Werner Almesberger */
++
++
++#include <linux/config.h>
++#include <linux/kernel.h>
++#include <linux/errno.h>
++#include <linux/mm.h>
++#include <linux/capability.h>
++#include <linux/bootimg.h>
++#include <asm/bootimg.h>
++#include <asm/uaccess.h>
++#include <asm/io.h>
++#include <asm/pgtable.h>
++#include <linux/delay.h>
++
++#if 0
++#define DPRINTK_CONT(format,args...) printk(format,##args)
++#else
++#define DPRINTK_CONT(format,args...)
++#endif
++#define DPRINTK(format,args...) DPRINTK_CONT(KERN_DEBUG format,##args)
++
++unsigned long **bootimg_page_dir;
++
++struct bootimg_dsc bootimg_dsc; /* communication with PIC */
++unsigned long *unity_page; /* unity-mapped page for i386 */
++
++static unsigned long bootimg_checksum(unsigned long **page_dir, int num_pages)
++{
++	unsigned long checksum, *page;
++	int i, j;
++
++	checksum = 0;
++
++	for (i = 0; i < num_pages; i++) {
++		page = __va((unsigned long *)
++			    page_dir[FROM_TABLE(i)][PAGE_NR(i)]);
++
++		for (j = 0; j < PAGES_PER_TABLE; j++)
++			checksum ^= page[j];
++
++		checksum ^= page_dir[TO_TABLE(i)][PAGE_NR(i)];
++	}
++
++        return checksum;
++}
++
++#ifdef CONFIG_X86_PAE
++
++static unsigned long get_identity_mapped_page(void)
++{
++	pgd_t *pgd;
++	pmd_t *pmd;
++	unsigned long phys_addr, page_base;
++
++	/* Set up a 2 Mb identity-mapped page. */
++
++	phys_addr = virt_to_phys(unity_page);
++	pgd = pgd_offset(current->active_mm, phys_addr);
++	pmd = pmd_offset(pgd, phys_addr);
++
++	/* We hardcode this rather than using PMD_MASK just in case the PAE
++      	 * mode setup ever changes so that 2 Mb pages are no longer used.
++      	 */
++	page_base = phys_addr & ~((1 << 21) - 1);
++
++	set_pmd(pmd, __pmd(page_base | _PAGE_PSE | _KERNPG_TABLE));
++	__flush_tlb_one(phys_addr);
++
++	return (unsigned long) unity_page;
++}
++
++#else
++
++static unsigned long get_identity_mapped_page(void)
++{
++	set_pgd(pgd_offset(current->active_mm,virt_to_phys(unity_page)),
++		__pgd((_KERNPG_TABLE + _PAGE_PSE + (virt_to_phys(unity_page)&PGDIR_MASK))));
++	__flush_tlb_one(virt_to_phys(unity_page));
++	return (unsigned long)unity_page;
++}
++
++#endif
++
++#if 0 /* Perhaps we'll need this in the future? */
++static void unmap_identity_mapped_page(void)
++{
++	set_pgd(pgd_offset(current->active_mm,virt_to_phys(unity_page)),__pgd(0));
++	__flush_tlb();
++}
++#endif
++
++static int fill_page_dir(unsigned long **page_dir,struct boot_image *image)
++{
++	int i, count=0;
++
++	memset(page_dir,0,PAGE_SIZE);
++	for (i = 0; i < image->pages; i += PAGES_PER_TABLE) {
++		unsigned long **table;
++		int bytes_left;
++
++		table = page_dir+FROM_TABLE(i);
++		*table = (unsigned long *) get_free_page(GFP_KERNEL);
++		if (!*table) return -ENOMEM;
++
++		memset(*table,0,PAGE_SIZE);
++		DPRINTK("page %d: from table %p @ %p\n",i,*table,table);
++		table = page_dir+TO_TABLE(i);
++		*table = (unsigned long *) get_free_page(GFP_KERNEL);
++		if (!*table) return -ENOMEM;
++
++		bytes_left = (image->pages-i)*sizeof(unsigned long);
++		if (copy_from_user(*table,image->load_map+i,
++		    bytes_left > PAGE_SIZE ? PAGE_SIZE : bytes_left))
++			return -EFAULT;
++		DPRINTK("page %d: to table %p @ %p\n",i,*table,table);
++		count+=2; /* 2 pages per loop */
++	}
++
++	for (i = 0; i < image->pages; i++) {
++		unsigned long page = get_free_page(GFP_KERNEL);
++		void *src;
++
++		if (!page) return -ENOMEM;
++		count++;
++
++		page_dir[FROM_TABLE(i)][PAGE_NR(i)] =
++		    virt_to_phys((void *) page);
++		if (get_user(src,image->image_map+i) ||
++		    copy_from_user((void *) page,src,PAGE_SIZE))
++			return -EFAULT;
++
++		DPRINTK("page %d: %p->%p->%p @ %p\n",i,src,(void *) page,
++		    (void *) page_dir[FROM_TABLE(i)][PAGE_NR(i)],
++		    &page_dir[FROM_TABLE(i)][PAGE_NR(i)]);
++	}
++
++	DPRINTK("fill_page_dir: %d pages allocated\n", count);
++
++	return 0;
++}
++
++
++static void free_page_dir(unsigned long **page_dir)
++{
++	int i,j,count=0;
++
++	for (i = 0; i < PAGES_PER_TABLE/2; i++)
++		if (page_dir[i])
++			for (j = 0; j < PAGES_PER_TABLE; j++)
++				if (page_dir[i][j]) {
++					free_page((unsigned long)
++					    phys_to_virt(page_dir[i][j]));
++					count++;
++				}
++	for (i = 0; i < PAGES_PER_TABLE; i++)
++		if (page_dir[i]) {
++			free_page((unsigned long) *page_dir[i]);
++			count++;
++		}
++	DPRINTK("free_page_dir: %d pages freed\n", count);
++}
++
++
++static void convert_table_refs_to_phys(unsigned long **page_dir)
++{
++	int i;
++
++	DPRINTK("PAGES_PER_TABLE: %d\n",PAGES_PER_TABLE);
++	for (i = 0; i < PAGES_PER_TABLE; i++)
++		if (page_dir[i]) {
++			DPRINTK("table %i: mapped %p -> ",i,page_dir[i]);
++			page_dir[i] = (unsigned long *)
++			    virt_to_phys(page_dir[i]);
++			DPRINTK_CONT("%p\n",page_dir[i]);
++		}
++}
++
++
++
++static int fill_bootimg_dsc(struct boot_image *image)
++{
++    	unsigned long scratch;
++	int error = -ENOMEM;
++
++	if(bootimg_page_dir) {
++		/* free previously allocated memory */
++		free_page_dir(bootimg_page_dir);
++		free_page((unsigned long) bootimg_page_dir);
++		DPRINTK("free_page (bootimg_page_dir)\n");
++	}
++
++	bootimg_page_dir = (unsigned long **) get_free_page(GFP_KERNEL);
++	if (!bootimg_page_dir) goto out0;
++	DPRINTK("get_free_page (bootimg_page_dir)\n");
++
++	error = fill_page_dir(bootimg_page_dir,image);
++	if (error) goto out1;
++
++	if(!bootimg_dsc.scratch) {
++		scratch = get_free_page(GFP_KERNEL);
++		DPRINTK("get_free_page (scratch)\n");
++	} else
++		scratch = 1; /* already allocated */
++
++	if (!scratch) goto out1;
++	/*
++	 * Not all architectures need the code to be identity-mapped, but it
++	 * can't hurt ...
++	 */
++	DPRINTK("bootimg_page_dir: mapped %p -> ",bootimg_page_dir);
++	bootimg_dsc.page_dir = (unsigned long **) virt_to_phys(bootimg_page_dir);
++	DPRINTK_CONT("%p\n",bootimg_dsc.page_dir);
++	if(!bootimg_dsc.scratch)
++		bootimg_dsc.scratch = virt_to_phys((void *) scratch);
++	bootimg_dsc.jump_to = (void (*)(void)) image->start;
++	bootimg_dsc.pages = image->pages;
++	bootimg_dsc.csum = bootimg_checksum(bootimg_page_dir, image->pages);
++
++	return 0;
++
++out1:
++	free_page_dir(bootimg_page_dir);
++	free_page((unsigned long) bootimg_page_dir);
++	DPRINTK("free_page (bootimg_page_dir)\n");
++	bootimg_page_dir = 0;
++out0:
++	return error;
++}
++
++extern char *panicmsg;
++int boot_image()
++{
++	relocate_and_jump_t code;
++	unsigned long code_page;
++	int error = -ENOMEM;
++
++	if (bootimg_checksum(__va(bootimg_dsc.page_dir),bootimg_dsc.pages) 
++		!= bootimg_dsc.csum)
++		printk("Checksum of kernel image failed.  Rebooting via BIOS\n");
++
++	code_page = get_identity_mapped_page();
++	if (!code_page) goto out3;
++	code = (relocate_and_jump_t) virt_to_phys((void *) code_page);
++	memcpy(code,&__bootimg_start,&__bootimg_end-&__bootimg_start);
++	flush_icache_range(&__bootimg_start, &__bootimg_end-&__bootimg_start);
++
++	bootimg_dsc.self = (unsigned long) code;
++	printk(KERN_INFO "Running boot code at 0x%p\n",code);
++	
++	/*
++	 * The point of no return. Not even printk may work after a successful
++	 * return from become_only_thread.
++	 */
++
++	if (!panicmsg) {
++			error = become_only_thread();
++			if (error) goto out3;
++	} else {
++#ifdef CONFIG_SMP
++			disable_IO_APIC();
++#endif
++			__cli();
++	}
++
++	convert_table_refs_to_phys((unsigned long **)__va(bootimg_dsc.page_dir));
++	stack_on_page(code);
++
++	code();
++
++	panic("PIC code exec failed");
++out3:
++	printk("boot_image() failed!\n");
++	for(;;); 
++}
++
++/* changed from asmlinkage because we're called via an IOCTL on /dev/crash now */
++int sys_bootimg(struct boot_image *user_dsc)
++{
++	struct boot_image dsc;
++
++	if (!capable(CAP_SYS_ADMIN) || !capable(CAP_SYS_MODULE)) return -EPERM;
++	if (&__bootimg_end-&__bootimg_start > PAGE_SIZE-RESERVE_MIN_RELOC_STACK)
++	   {
++		printk(KERN_ERR "boot_image: PIC too large (%d bytes)\n",
++		    &__bootimg_end-&__bootimg_start);
++		return -EIO;
++	}
++	if ((void *) relocate_and_jump != (void *) &__bootimg_start) {
++		printk(KERN_ERR "boot_image: relocate_and_jump is mis-placed"
++		    "(0x%p != 0x%p)\n",relocate_and_jump,&__bootimg_start);
++		return -EIO;
++	}
++	
++	if (copy_from_user(&dsc,user_dsc,sizeof(dsc))) return -EFAULT;
++	if (dsc.pages >= PAGES_PER_TABLE*PAGES_PER_TABLE/2) return -EFBIG;
++	if (dsc.flags) return -EINVAL; /* for future use */
++	return fill_bootimg_dsc(&dsc);
++}
+Index: linux/kernel/bootimg_pic.c
+===================================================================
+RCS file: linux/kernel/bootimg_pic.c
+diff -N linux/kernel/bootimg_pic.c
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/kernel/bootimg_pic.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,91 @@
++/* bootimg_pic.c - Boot image, position-independent code */
++
++/* Written 2000 by Werner Almesberger */
++
++/*
++ * Strongly inspired by FiPaBoL designed mainly by Otfried Cheong and Roger
++ * Gammans, and written by the latter.
++ */
++
++/*
++ * This code is position-independent and must fit in a single page !
++ * Furthermore, everything (text+data+stack) has to go into the
++ * .bootimg segment.
++ */
++
++
++#include <linux/config.h>
++#include <linux/kernel.h>
++#include <linux/errno.h>
++#include <linux/mm.h>
++#include <linux/bootimg.h>
++#include <asm/bootimg.h>
++
++#include <asm/io.h>
++
++#define copy_and_swap(from,to) \
++    ( { my_copy_page(from,to); \
++    tmp = from; \
++    from = to; \
++    to = tmp; } )
++
++
++static inline void my_copy_page(unsigned long from,unsigned long to)
++{
++	unsigned long end = from+PAGE_SIZE;
++
++	do *((unsigned long *) to)++ = *((unsigned long *) from)++;
++	while (from != end);
++}
++
++
++void __bootimg relocate_and_jump(void)
++{
++	struct bootimg_dsc dsc = bootimg_dsc;
++	int i;
++
++	stop_paging();
++	for (i = 0; i < dsc.pages; i++) {
++		unsigned long from,to,tmp;
++
++		from = dsc.page_dir[FROM_TABLE(i)][PAGE_NR(i)];
++		to = dsc.page_dir[TO_TABLE(i)][PAGE_NR(i)];
++		if (from == to) continue;
++		if (to == dsc.self) {
++			copy_and_swap(dsc.self,dsc.scratch);
++			/* WARNING: flush_icache_range MUST BE INLINED !!! */
++			flush_icache_range(dsc.self,dsc.self+PAGE_SIZE-1);
++			jump_relocated(dsc.scratch,dsc.self);
++		}
++		else if (to == (unsigned long) dsc.page_dir)
++			copy_and_swap((unsigned long) dsc.page_dir,dsc.scratch);
++		else {
++			/*
++			 * O((n^2-n)/2), sigh ...
++			 */
++			unsigned long **table;
++			int j;
++
++			for (j = i+1; j < dsc.pages; j++) {
++				table = dsc.page_dir+FROM_TABLE(j);
++				if (((unsigned long) *table) == to) {
++					copy_and_swap(*table,dsc.scratch);
++					break;
++				}
++				if ((*table)[PAGE_NR(j)] == to) {
++					copy_and_swap((*table)[PAGE_NR(j)],
++					    dsc.scratch);
++					break;
++				}
++				table = dsc.page_dir+TO_TABLE(j);
++				if (((unsigned long) *table) == to) {
++					copy_and_swap(*table,dsc.scratch);
++					break;
++				}
++			}
++		}
++		my_copy_page(from,to);
++		dsc.scratch = from;
++	}
++	jump_to_kernel(dsc.jump_to);
++}
+Index: linux/kernel/crash.c
+===================================================================
+RCS file: linux/kernel/crash.c
+diff -N linux/kernel/crash.c
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ linux/kernel/crash.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
+@@ -0,0 +1,886 @@
++#include <linux/locks.h>
++#include <linux/slab.h>
++#include <linux/crash.h>
++#include <linux/vmalloc.h>
++#include <linux/mm.h>
++#include <linux/fs.h>
++#include <linux/ext2_fs.h>
++#include <asm/param.h>
++#include <asm/uaccess.h>
++#include <linux/zlib.h>
++#include <linux/reboot.h>
++#include <linux/delay.h>
++#include <asm/io.h>
++#include <linux/miscdevice.h>
++#include <linux/bootmem.h>
++
++#ifdef CONFIG_BOOTIMG
++#include <linux/bootimg.h>
++#endif
++
++static void crash_print_data_around(u_long p);
++static void crash_free_page(u_long addr);
++static int crash_chksum_page(u_long pg_addr, u_long * sum_addr);
++static void *czalloc(void *arg, unsigned int items, unsigned int size);
++static void czfree(void *arg, void *ptr);
++static u_long crash_alloc_dest_page(void);
++static void crash_free_dest_page(u_long dest);
++static void init_dest_page_alloc(void);
++static int crash_audit_maps(void);
++static u_long crash_get_source_page(void);
++static u_long crash_update_map(u_long map, u_long src_base, u_long dest, u_long * pages);
++static int crash_reset_stream(z_stream * stream);
++static boolean_t crash_is_kseg(u_long addr);
++static u_long *crash_link(u_long p);
++static int crash_chksum(u_long limit, u_long * sum_addr);
++static int crash_audit_map_page(u_long map);
++static void crash_wait_cpus(void);
++static int crash_is_dir_page(struct page *page);
++
++/* for the /dev/crash interface */
++int crash_init_chrdev(void);
++static int crashdev_ioctl(struct inode *, struct file *, unsigned int, unsigned long);
++
++#define CRASH_DEBUG 1
++
++#ifdef CONFIG_BOOTIMG
++extern int sys_bootimg(struct boot_image *);
++#endif
++
++static u_long crash_compr_buf;
++static u_long crash_uncompr_buf;
++static u_long crash_dump_header = 0;
++static u_long crash_dest_free_list = 0;
++static u_long crash_debug = 0;
++
++static u_long crash_cur_pfn;
++
++static u_long src_pages_skipped = 0;
++static u_long src_pages_saved = 0;
++static u_long dest_pages_free = 0;
++
++/* this information is saved from within panic() */
++char *panicmsg = (char *)0;
++int panic_processor = 0;
++int crash_perform_sync = 0;
++
++u_int console_crash = 0;	/* should be moved to alpha branch */
++
++// typedef struct task_struct *task_t;
++
++/*
++ *  Threads active at time of panic:
++ */
++volatile task_t *panic_threads[NR_CPUS];
++volatile unsigned long panic_ksp[NR_CPUS];
++unsigned long *panic_regs = NULL;
++
++int panic_on_oops;		/* for /proc/sys/kernel/panic_on_oops */
++
++extern unsigned long max_low_pfn;
++
++u_long crash_zalloc_start; // , crash_zalloc_end, crash_zalloc_cur;
++
++/* 
++ * Crash Kernel API functions below
++ * crash_pages_needed, computes pages needed for header and compression temp
++ * crash_init, partitions out the allocated pages, sets defaults and 
++ *             initializes the character device.
++ * crash_mark_dump_reserved, marks pages reserved from a previous dump.
++ * save_core, called at panic time to save a dump to memory.
++ */
++u_long crash_pages_needed(void)
++{
++	/* one for the header */
++	return (1 + CRASH_ZALLOC_PAGES + CRASH_UNCOMPR_BUF_PAGES + CRASH_COMPR_BUF_PAGES);
++}
++
++void crash_init(u_long bootmap_va, u_long crash_va, u_long end_alloc_va)
++{
++	struct mem_crash_map_hdr *header;
++	int i;
++
++	/* the default behavior is not NOT panic on a kernel OOPS */
++	panic_on_oops = 0;
++
++	printk("crash_init (crash_va: %08lx)\n", crash_va);
++	for (i = 0; i < NR_CPUS; i++)
++		panic_threads[i] = 0;
++	crash_dump_header = crash_va;
++	crash_va += PAGE_SIZE;
++	crash_zalloc_start = crash_va;
++	crash_va += CRASH_ZALLOC_PAGES * PAGE_SIZE;
++	crash_uncompr_buf = crash_va;
++	crash_va += CRASH_UNCOMPR_BUF_PAGES * PAGE_SIZE;
++	crash_compr_buf = crash_va;
++	crash_va += CRASH_COMPR_BUF_PAGES * PAGE_SIZE;
++#if 0
++	if (crash_va != end_alloc_va)
++		panic("crash_init inconsistency-1\n");
++#endif
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++#ifdef CRASH_DEBUG
++	printk("crash_dump_header %p {\n", header);
++	printk("    magic[0]            = %lx\n", header->magic[0]);
++	printk("    map                 = %lx\n", header->map);
++	printk("    map_pages           = %lx\n", header->map_pages);
++	printk("    data_pages          = %lx\n", header->data_pages);
++	printk("    compr_units         = %lx\n", header->compr_units);
++	printk("    boot_reserved_start = %lx\n", header->boot_reserved_start);
++	printk("    boot_reserved_end   = %lx\n", header->boot_reserved_end);
++#endif
++
++	if (header->magic[0] == CRASH_MAGIC) {
++		printk("crash found\n");
++		if ((header->boot_reserved_start != bootmap_va) ||
++		    (header->boot_reserved_end != end_alloc_va)) {
++			/* crash audit will catch the corruption */
++			printk("crash_init inconsistency, dump may be corrupted\n");
++		}
++	} else {
++printk("memset...");
++		memset(header, 0, sizeof(*header));
++printk("done\n");
++	}
++
++	header->boot_reserved_start = bootmap_va;
++	header->boot_reserved_end = end_alloc_va;
++
++}
++
++void crash_mark_dump_reserved(void)
++{
++	struct mem_crash_map_hdr *header;
++	struct mem_crash_map_entry *m;
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	if (header->magic[0] != CRASH_MAGIC)
++		return;
++	m = (struct mem_crash_map_entry *)header->map;
++#ifdef CRASH_DEBUG
++	printk("\n\n\ncrash_mark_dump_reserved\n\n");
++	printk("crash_dump_header %p {\n", header);
++	printk("    magic[0]            = %lx\n", header->magic[0]);
++	printk("    map                 = %lx\n", header->map);
++	printk("    map_pages           = %lx\n", header->map_pages);
++	printk("    data_pages          = %lx\n", header->data_pages);
++	printk("    compr_units         = %lx\n", header->compr_units);
++	printk("    boot_reserved_start = %lx\n", header->boot_reserved_start);
++	printk("    boot_reserved_end   = %lx\n", header->boot_reserved_end);
++	printk("mem_crash_map_entry %p {\n", m);
++	printk("    src_va              = %lx\n", m->src_va);
++	printk("    dest_page_va        = %lx\n", m->dest_page_va);
++	printk("    check_sum           = %lx\n", m->check_sum);
++#endif
++
++	if (crash_audit_maps()) {
++		header->magic[0] = 0;
++		return;
++	}
++
++	m = (struct mem_crash_map_entry *)header->map;
++ again:
++	CRASH_MARK_BOOT_RESERVED(m);
++	for (; m->src_va; m++) {
++		if (m->src_va == -1) {
++			m = (struct mem_crash_map_entry *)m->dest_page_va;
++			goto again;
++		}
++		CRASH_MARK_BOOT_RESERVED(m->dest_page_va);
++	}
++	return;
++}
++
++void save_core(void)
++{
++	int i, j, k;
++	z_stream stream;
++	int err;
++	struct task_struct *tp;
++	struct mem_crash_map_hdr *header;
++	u_long *sub_map;
++	u_long map;
++	u_long src, dest, unc, cp, src_base, comp_pages;
++
++	k = 0;
++	dest = 0;
++	__cli();
++	tp = current;
++	mb();
++	if (smp_processor_id() != 0) {	/* boot_cpu_id is always 0, i think */
++		panic_threads[smp_processor_id()] = tp;
++		crash_halt_or_reboot(0);
++	} else {
++		if (console_crash)
++			panic_threads[smp_processor_id()] = &init_task_union.task;
++		else
++			panic_threads[smp_processor_id()] = tp;
++
++		crash_wait_cpus();
++	}
++
++	printk("save_core: started on CPU%d\n", smp_processor_id());
++	if (!crash_dump_header) {
++		printk("save_core: not initialized\n");
++		return;
++	}
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	header->magic[0] = 0;
++	header->map_pages = 0;
++	header->data_pages = 0;
++	header->compr_units = 0;
++	header->map = 0;
++
++	stream.workspace=(void*)crash_zalloc_start;
++	//	stream.zalloc = czalloc;
++	//	stream.zfree = czfree;
++	//	stream.opaque = (voidpf) 0;
++	stream.next_out = (Bytef *) crash_compr_buf;
++	stream.avail_out = (uInt) (CRASH_COMPR_BUF_PAGES * PAGE_SIZE);
++	stream.next_in = (Bytef *) crash_uncompr_buf;
++	stream.avail_in = (uInt) (CRASH_UNCOMPR_BUF_PAGES * PAGE_SIZE);
++	err = zlib_deflateInit(&stream, Z_BEST_SPEED);
++	if (err != Z_OK) {
++		printk("save_core: bad return %d from deflateInit\n", err);
++		return;
++	}
++
++	init_dest_page_alloc();
++	header->map = map = crash_update_map(0, 0, 0, &header->map_pages);
++	if (!map) {
++		printk("save_core: no dest pages\n");
++		return;
++	}
++	crash_cur_pfn = 0;
++	src_base = 0;
++	src = 0;
++	for (;;) {
++		sub_map = (u_long *) crash_uncompr_buf;
++		unc = crash_uncompr_buf + CRASH_SUB_MAP_PAGES * PAGE_SIZE;
++		for (i = 0; i < CRASH_SOURCE_PAGES; i++) {
++			src = crash_get_source_page();
++			if (!src)
++				break;
++			if (!i)
++				src_base = src;
++			if (!crash_is_kseg(unc) || !crash_is_kseg(src)) {
++				printk("unc = 0x%lx, src = 0x%lx, i = %d\n", unc, src, i);
++				i = src = 0;
++				break;
++			}
++			memcpy((void *)unc, (void *)src, PAGE_SIZE);
++			unc += PAGE_SIZE;
++			*sub_map++ = src;
++		}
++		*sub_map = 0;
++		if (!i && !src)
++			break;
++		err = zlib_deflate(&stream, Z_FINISH);
++		if (!(err == Z_STREAM_END)) {
++			zlib_deflateEnd(&stream);
++			printk("save_core: bad return %d from deflate, src_base = 0x%lx\n", err,
++			       src_base);
++			return;
++		}
++		comp_pages = (u_long) round_page(stream.total_out) / PAGE_SIZE;
++		if (crash_debug)
++			printk("src_base = 0x%lx compressed data in 0x%lx pages\n", src_base,
++			       comp_pages);
++
++		cp = crash_compr_buf;
++		j = 0;
++		if (crash_debug)
++			printk("\nsrc = %lx\n", src_base);
++		else {
++			printk(".");
++			if (!(k++ % 64))
++				printk("\n");
++		}
++		for (i = 0; i < comp_pages; i++) {
++			dest = crash_alloc_dest_page();
++			if (crash_debug) {
++				printk("%lx ", dest);
++				if (!(j++ % 8))
++					printk("\n");
++			}
++			header->data_pages++;
++			if (!dest) {
++				printk("save_core: no dest pages\n");
++				return;
++			}
++			if (!crash_is_kseg(dest) || !crash_is_kseg(cp)) {
++				printk("dest = 0x%lx, cp = 0x%lx, i = %d, comp_pages = 0x%lx\n",
++				       dest, cp, i, comp_pages);
++				src = 0;
++				break;
++			}
++			memcpy((void *)dest, (void *)cp, PAGE_SIZE);
++			cp += PAGE_SIZE;
++			map = crash_update_map(map, src_base, dest, &header->map_pages); /* links a new map page, if necessary */
++			if (!map) {
++				printk("save_core: no map\n");
++				return;
++			}
++		}
++		header->compr_units++;
++		if (!src)
++			break;
++		if (crash_reset_stream(&stream))
++			return;
++	}
++
++	map = crash_update_map(map, 0, 0, &header->map_pages);
++	header->magic[0] = CRASH_MAGIC;
++
++	if (crash_audit_maps()) {
++		header->magic[0] = 0;
++		return;
++	}
++
++	printk("\nsave_core: src pages skipped = 0x%lx src pages saved = 0x%lx\n",
++	       src_pages_skipped, src_pages_saved);
++	printk("save_core: data_pages = 0x%lx map_pages = 0x%lx\n", header->data_pages,
++	       header->map_pages);
++	printk("save_core: completed, crash_dump_header = 0x%lx\n", crash_dump_header);
++}
++
++/* helper functions private to this file */
++static int crash_reset_stream(z_stream * stream)
++{
++	int err;
++
++	stream->workspace=(void*)crash_zalloc_start;
++	// stream->zalloc = czalloc;
++	// stream->zfree = czfree;
++	// stream->opaque = (voidpf) 0;
++	stream->next_out = (Bytef *) crash_compr_buf;
++	stream->avail_out = (uInt) (CRASH_COMPR_BUF_PAGES * PAGE_SIZE);
++	stream->next_in = (Bytef *) crash_uncompr_buf;
++	stream->avail_in = (uInt) (CRASH_UNCOMPR_BUF_PAGES * PAGE_SIZE);
++	err = zlib_deflateReset(stream);
++	if (err != Z_OK) {
++		printk("crash_reset_stream: bad return %d from deflateReset\n", err);
++		return 1;
++	}
++	return 0;
++}
++
++static u_long crash_alloc_dest_page(void)
++{
++	u_long addr;
++
++	addr = crash_dest_free_list;
++	if (addr) {
++		crash_dest_free_list = *(u_long *) addr;
++		dest_pages_free--;
++	} else
++		printk("crash_alloc_dest_page: free list empty\n");
++	return addr;
++}
++
++static void crash_free_dest_page(u_long dest)
++{
++	if (!dest) {
++		printk("crash_free_dest_page: freeing addr 0\n");
++		return;
++	}
++	dest_pages_free++;
++	dest = (u_long) trunc_page(dest);
++	*(u_long *) dest = crash_dest_free_list;
++	crash_dest_free_list = dest;
++}
++
++/*
++ *  Stolen from setup.c
++ */
++#define PFN_PHYS(x)	((x) << PAGE_SHIFT)
++
++static void init_dest_page_alloc(void)
++{
++	u_long va;
++	long i;
++	struct page *page;
++	struct mem_crash_map_hdr *header;
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	for (i = ((1 << 24) >> PAGE_SHIFT) + LOWER_MEM_FORWARD;
++	     i < (max_low_pfn - UPPER_MEM_BACKUP); i++) {
++		va = (u_long) phys_to_virt(PFN_PHYS(i));
++		if ((va >= header->boot_reserved_start) && (va < header->boot_reserved_end))
++			continue;
++		page = mem_map + i;
++		if (PageLocked(page) || PageReserved(page))
++			continue;
++		if (PageFree(page) || PageAnon(page) || PageShm(page) || page->buffers)
++			crash_free_dest_page(va);
++	}
++	if (crash_debug)
++		printk("init_dest_page_alloc: dest_pages_free = 0x%lx\n", dest_pages_free);
++}
++
++static int crash_is_dir_page(struct page *page) {
++	struct inode *tmp_inode;
++
++	if(page->mapping && page->mapping->host) {
++		tmp_inode = (struct inode *)page->mapping->host;
++		if((tmp_inode->i_sb->s_magic == EXT2_SUPER_MAGIC) &&
++		   (S_ISDIR(tmp_inode->i_mode)))
++			return 1;
++	}
++
++	return 0;
++}
++
++static u_long crash_get_source_page(void)
++{
++	struct page *page;
++	u_long va;
++
++	while (crash_cur_pfn < max_low_pfn) {
++		page = mem_map + crash_cur_pfn;
++		if (!(PageFree(page) || PageAnon(page) || PageShm(page) || page->buffers))
++			break;
++		src_pages_skipped++;
++		crash_cur_pfn++;
++	}
++	if (crash_cur_pfn == max_low_pfn)
++		return 0;
++
++	va = (u_long) phys_to_virt(PFN_PHYS(crash_cur_pfn));
++	src_pages_saved++;
++	crash_cur_pfn++;
++	return va;
++}
++
++static u_long crash_update_map(u_long map, u_long src_base, u_long dest, u_long * pages)
++{
++	struct mem_crash_map_entry *m;
++
++
++	if (!map) {
++		(*pages)++;
++		return crash_alloc_dest_page();
++	}
++	m = (struct mem_crash_map_entry *)map;
++	m->src_va = src_base;
++	m->dest_page_va = dest;
++	if (dest)
++		if (crash_chksum_page(dest, &m->check_sum))
++			return 0;
++
++	map += sizeof(struct mem_crash_map_entry);
++
++	m = (struct mem_crash_map_entry *)map;
++	if (!src_base) {	/* end of list */
++		if (crash_chksum((u_long) m, &m->src_va))
++			return 0;
++	} else if ((map + 3 * sizeof(struct mem_crash_map_entry)) > (u_long) round_page(map)) {
++		m->src_va = -1;
++		map = m->dest_page_va = crash_alloc_dest_page();
++		if (crash_debug)
++			printk("\nm = 0x%lx m->src_va = 0x%lx m->dest_page_va = 0x%lx\n",
++			       (u_long) trunc_page(m), m->src_va, m->dest_page_va);
++		m++;
++		if (crash_chksum((u_long) m, &m->src_va))
++			return 0;
++		if (crash_debug)
++			printk("m = 0x%lx chksum =  m->src_va = 0x%lx\n", (u_long) trunc_page(m),
++			       m->src_va);
++		if (crash_audit_map_page((u_long) m))
++			return 0;
++		(*pages)++;
++	}
++	return map;
++}
++
++static int crash_chksum(u_long limit, u_long * sum_addr)
++{
++	u_long sum;
++	u_long *addr;
++
++	if (!crash_is_kseg(limit)) {
++		printk("bad addr = 0x%lx to crash_chksum\n", limit);
++		return 1;
++	}
++	sum = 0;
++	addr = (u_long *) trunc_page(limit);
++	for (; (u_long) addr < limit; addr++)
++		sum += *addr;
++	*sum_addr = sum;
++	return 0;
++}
++
++static int crash_chksum_page(u_long pg_addr, u_long * sum_addr)
++{
++	u_long sum, limit;
++	u_long *addr;
++
++	if (!crash_is_kseg(pg_addr)) {
++		printk("bad addr = 0x%lx to crash_chksum_page\n", pg_addr);
++		return 1;
++	}
++
++	sum = 0;
++	addr = (u_long *) trunc_page(pg_addr);
++	limit = (u_long) addr + PAGE_SIZE;
++	for (; (u_long) addr < limit; addr++)
++		sum += *addr;
++	*sum_addr = sum;
++	return 0;
++}
++
++static int crash_audit_maps(void)
++{
++	u_long m, count;
++	u_long *link_addr;
++	struct mem_crash_map_hdr *header;
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	if (header->magic[0] != CRASH_MAGIC)
++		return 1;
++
++	link_addr = &header->map;
++	m = header->map;
++
++	count = 0;
++	for (;;) {
++		if (!crash_is_kseg(m)) {
++			printk("crash_audit_maps: bad link 0x%lx at 0x%lx\n", m,
++			       (u_long) link_addr);
++			return 1;
++		}
++		if (crash_audit_map_page(m)) {
++			printk("audit failed while on map page %ld\n", count);
++			return 1;
++		}
++		if (!crash_link(m))
++			break;
++		link_addr = crash_link(m);
++		m = *link_addr;
++
++		count++;
++	}
++	return 0;
++}
++
++static int crash_audit_map_page(u_long map)
++{
++	struct mem_crash_map_entry *m;
++	u_long sum;
++
++	if (!map || !crash_is_kseg(map)) {
++		printk("crash_audit_map_page: bad map = 0x%lx\n", map);
++		return 1;
++	}
++	map = (u_long) trunc_page((u_long) map);
++	m = (struct mem_crash_map_entry *)map;
++	for (;;) {
++		if ((m->src_va == -1) || (m->src_va == 0)) {
++			m++;
++			if (crash_chksum((u_long) m, &sum))
++				return 1;
++			if (m->src_va != sum) {
++				printk("crash_audit_map_page: checksum failure1\n");
++				printk("m = 0x%lx, sum = 0x%lx, m->src_va = 0x%lx\n",
++				       (u_long) m, (u_long) sum, (u_long) m->src_va);
++				crash_print_data_around((u_long) & m->src_va);
++				return 1;
++			} else {
++				return 0;
++			}
++		} else {
++			if (crash_chksum_page((u_long) m->dest_page_va, &sum)
++			    || (m->check_sum != sum)) {
++				printk("crash_audit_map_page: checksum failure2\n");
++				printk
++					("dest_page_va = 0x%lx, &dest_page_va = 0x%lx, sum = 0x%lx, m->check_sum = 0x%lx\n",
++					 (u_long) m->dest_page_va, (u_long) (&m->check_sum),
++					 (u_long) sum, (u_long) m->check_sum);
++				crash_print_data_around((u_long) & m->check_sum);
++				return 1;
++			}
++		}
++		m++;
++	}
++}
++
++static void crash_print_data_around(u_long p)
++{
++	u_long *a;
++	int i;
++
++	if (!crash_is_kseg(p)) {
++		printk("crash_print_data_around: p = 0x%lx not kseg\n", p);
++		return;
++	}
++	a = (u_long *) p;
++	a -= 20;
++	for (i = 0; i < 40; i++)
++		printk("%lx\n", *a++);
++}
++
++#ifdef CRASH_DEBUG
++static void crash_print_map_page(u_long map)
++{
++	struct mem_crash_map_entry *m;
++	int j = 0;
++	u_long sum;
++
++	map = (u_long) trunc_page((u_long) map);
++	m = (struct mem_crash_map_entry *)map;
++	for (;;) {
++		printk("%lx %lx %lx ", m->src_va, m->dest_page_va, m->check_sum);
++		if (!(j++ % 4))
++			printk("\n");
++		if ((m->src_va == -1) || (m->src_va == 0)) {
++			m++;
++			printk("%lx %lx ", m->src_va, m->dest_page_va);
++			if (crash_chksum((u_long) m, &sum));
++			else
++				printk("\nchksum = 0x%lx\n", sum);
++			return;
++		}
++		m++;
++	}
++}
++#endif /* CRASH_DEBUG */
++
++static void crash_wait_cpus(void)
++{
++	int i;
++	int msecs = 0;
++
++	for (i = 0; i < smp_num_cpus; i++) {
++		if (i != smp_processor_id()) {
++			while (!panic_threads[i]) {
++				msecs++;
++				mdelay(1);
++				if (msecs > CRASH_CPU_TIMEOUT) {
++					/* if other cpus are still running
++					 * we have to halt, otherwise we could
++					 * risk using buffer cache pages which
++					 * could subsequently get flushed to disk.
++					 */
++					printk("Unable to halt other CPUs, halting system.\n");
++					crash_halt_or_reboot(0);
++				}
++			}
++		}
++	}
++
++	crash_cleanup_smp_state();
++}
++
++
++#if 0
++static void *czalloc(void *arg, unsigned int items, unsigned int size)
++{
++	u_long nbytes;
++	u_long addr;
++
++	nbytes = (u_long) (items * size);
++	nbytes = (u_long) round_page(nbytes);
++	if ((crash_zalloc_cur + nbytes) > crash_zalloc_end)
++		return 0;
++	addr = crash_zalloc_cur;
++	crash_zalloc_cur += nbytes;
++	return ((void *)addr);
++}
++
++static void czfree(void *arg, void *ptr)
++{
++	printk("zfree: ptr = 0x%lx\n", (u_long) ptr);
++}
++#endif
++
++static boolean_t crash_is_kseg(u_long addr)
++{
++	u_long phys;
++
++	phys = virt_to_phys((void *)addr);
++	if (phys < PFN_PHYS(max_low_pfn))
++		return TRUE;
++	else
++		return FALSE;
++}
++
++static u_long *crash_link(u_long p)
++{
++	struct mem_crash_map_entry *m;
++
++	p = (u_long) trunc_page(p);
++	m = (struct mem_crash_map_entry *)p;
++	for (; m->src_va; m++)
++		if (m->src_va == -1)
++			return &m->dest_page_va;
++
++	return 0;
++}
++
++/* Call this after data written to disk. */
++static int crash_free_crashmem(void)
++{
++	struct mem_crash_map_hdr *header;
++	struct mem_crash_map_entry *m, *last_m;
++
++	if (crash_debug)
++		printk("crash_free_crashmem: \n");
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	if (crash_audit_maps()) {
++		header->magic[0] = 0;
++		return 1;
++	}
++	m = (struct mem_crash_map_entry *)header->map;
++ again:
++	for (; m->src_va; m++) {
++		if (m->src_va == -1) {
++			last_m = m;
++			m = (struct mem_crash_map_entry *)m->dest_page_va;
++			crash_free_page((unsigned long)last_m);
++			goto again;
++		}
++		crash_free_page(m->dest_page_va);
++	}
++	if (crash_debug)
++		printk("crash_free_crashmem: 0x%lx freed\n",
++		       (header->data_pages + header->map_pages) * PAGE_SIZE);
++	header->magic[0] = 0;
++	return 0;
++}
++
++static void crash_free_page(u_long addr)
++{
++	struct page *page;
++
++	page = virt_to_page(addr);
++	ClearPageReserved(page);
++	set_page_count(page, 1);
++	__free_page(page);
++}
++
++static int get_dump_helper(u_long kva, u_long buf)
++{
++	struct page *page;
++	struct mem_crash_map_hdr *header;
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	if (header->magic[0] != CRASH_MAGIC)
++		return 1;
++
++	if (!kva) {
++		if (crash_audit_maps()) {
++			printk("get_dump_helper: audit failure\n");
++			header->magic[0] = 0;
++			return 1;
++		}
++		page = virt_to_page((u_long) crash_dump_header);
++		if (!PageReserved(page)) {
++			printk("not reserved: crash_dump_header = 0x%lx\n", crash_dump_header);
++			return 1;
++		}
++		if (copy_to_user((char *)buf, (char *)crash_dump_header,
++				 sizeof(struct mem_crash_map_hdr))) {
++			printk("get_dump_helper: copy_to_user failed1\n");
++			return 1;
++		}
++	} else {
++		page = virt_to_page(kva);
++		if (!PageReserved(page)) {
++			printk("not reserved: kva = 0x%lx\n", kva);
++			return 1;
++		}
++		if (copy_to_user((char *)buf, (char *)trunc_page(kva), PAGE_SIZE)) {
++			printk("get_dump_helper: copy_to_user failed2\n");
++			return 1;
++		}
++	}
++	return 0;
++}
++
++static void free_dump_helper(void)
++{
++	struct mem_crash_map_hdr *header;
++
++	header = (struct mem_crash_map_hdr *)crash_dump_header;
++	if (header->magic[0] != CRASH_MAGIC)
++		return;
++	if (crash_debug)
++		printk("free_dump_helper\n");
++	crash_free_crashmem();
++}
++
++static int crashdev_open(struct inode *inode, struct file *file)
++{
++	/* always return success -- nothing to do here */
++	return 0;
++}
++
++/* character device implementation */
++static struct file_operations crashdev_fops = {
++	ioctl:crashdev_ioctl,
++	open:crashdev_open,
++};
++
++static struct miscdevice crash_miscdev = {
++	190, "crash", &crashdev_fops
++};
++
++int crash_init_chrdev(void)
++{
++	int result;
++
++	result = misc_register(&crash_miscdev);
++
++	if (result < 0)
++		printk(KERN_WARNING "crash: can't register crash device (c 10 190)\n");
++
++	return result;
++}
++
++/* call the original syscalls, just to get things going */
++static int crashdev_ioctl(struct inode *inode, struct file *file,
++			  unsigned int cmd, unsigned long arg)
++{
++	int retval = 0;
++
++	switch (cmd) {
++	case CRASH_IOCFREEDUMP:
++		free_dump_helper();
++		break;
++
++	case CRASH_IOCGETDUMP:
++		if (crash_debug) {
++			printk("crashdev_ioctl: get dump\n");
++			printk("vals: %08lx %08lx\n",
++			       ((struct ioctl_getdump *)arg)->kva,
++			       ((struct ioctl_getdump *)arg)->buf);
++		}
++
++		retval = get_dump_helper((u_long) ((struct ioctl_getdump *)arg)->kva,
++					 (u_long) ((struct ioctl_getdump *)arg)->buf);
++		break;
++
++#ifdef CONFIG_BOOTIMG
++	case CRASH_IOCBOOTIMG:
++		if (crash_debug)
++			printk("crashdev_ioctl: bootimg\n");
++
++		retval = sys_bootimg((struct boot_image *)arg);
++		break;
++#endif
++
++	case CRASH_IOCVERSION:
++		if (crash_debug)
++			printk("crashdev_ioctl: version\n");
++		retval = CRASH_K_MINOR | (CRASH_K_MAJOR << 16);
++		break;
++
++	default:
++		return -EINVAL;
++	}
++
++	return retval;
++}
+Index: linux/kernel/module.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/module.c,v
+retrieving revision 1.1.1.1.4.1
+retrieving revision 1.1.1.1.4.1.2.1
+diff -u -r1.1.1.1.4.1 -r1.1.1.1.4.1.2.1
+--- linux/kernel/module.c	12 Mar 2003 19:51:36 -0000	1.1.1.1.4.1
++++ linux/kernel/module.c	1 Apr 2003 12:17:41 -0000	1.1.1.1.4.1.2.1
+@@ -311,7 +311,14 @@
+ 		error = -EEXIST;
+ 		goto err1;
+ 	}
++#if defined(CONFIG_MCL_COREDUMP)
++	/* Call vmalloc_32 instead of module_map (vmalloc for i386)
++	 * to avoid being mapped in highmem where mcore can't see us.
++	 */
++	if ((mod = (struct module *)vmalloc_32(size)) == NULL) {
++#else
+ 	if ((mod = (struct module *)module_map(size)) == NULL) {
++#endif
+ 		error = -ENOMEM;
+ 		goto err1;
+ 	}
+Index: linux/kernel/panic.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/panic.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/kernel/panic.c	12 Mar 2003 19:51:36 -0000	1.3.2.1
++++ linux/kernel/panic.c	1 Apr 2003 12:17:41 -0000	1.3.2.1.2.1
+@@ -19,6 +19,10 @@
+ #include <linux/vt_kern.h>
+ #include <linux/pc_keyb.h>
+ 
++#ifdef CONFIG_MCL_COREDUMP
++#include <linux/crash.h>
++#endif
++
+ asmlinkage void sys_sync(void);	/* it's really int */
+ 
+ int panic_timeout;
+@@ -197,20 +201,43 @@
+         unsigned long caller = (unsigned long) __builtin_return_address(0);
+ #endif
+ 
++#ifdef CONFIG_MCL_COREDUMP
++	crash_save_regs();
++#endif
++
+ 	bust_spinlocks(1);
+ 	va_start(args, fmt);
+ 	vsprintf(buf, fmt, args);
+ 	va_end(args);
+ 	printk(KERN_EMERG "Kernel panic: %s\n",buf);
++
++#ifdef CONFIG_MCL_COREDUMP
++	if (!panicmsg) {
++		panicmsg = buf;
++		panic_processor = smp_processor_id();
++		mb();
++	}
++#endif
++
+ 	if (netdump_func)
+ 		BUG();
+ 	if (in_interrupt())
+ 		printk(KERN_EMERG "In interrupt handler - not syncing\n");
+ 	else if (!current->pid)
+ 		printk(KERN_EMERG "In idle task - not syncing\n");
++#ifdef CONFIG_MCL_COREDUMP
++	else if (crash_perform_sync)
++#else
+ 	else
++#endif
+ 		sys_sync();
++
+ 	bust_spinlocks(0);
++
++#ifdef CONFIG_MCL_COREDUMP
++	smp_call_function((void *)smp_crash_funnel_cpu,0,0,0);
++	crash_save_current_state(current);
++#endif
+ 
+ #ifdef CONFIG_SMP
+ 	smp_send_stop();
+Index: linux/kernel/sysctl.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/sysctl.c,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/kernel/sysctl.c	12 Mar 2003 19:51:36 -0000	1.2.2.1
++++ linux/kernel/sysctl.c	1 Apr 2003 12:17:41 -0000	1.2.2.1.2.1
+@@ -37,6 +37,10 @@
+ #include <linux/nfs_fs.h>
+ #endif
+ 
++#ifdef CONFIG_MCL_COREDUMP
++#include <linux/crash.h>
++#endif
++
+ #if defined(CONFIG_SYSCTL)
+ 
+ /* External variables not in a header file. */
+@@ -247,6 +251,10 @@
+ 	{KERN_SYSRQ, "sysrq", &sysrq_enabled, sizeof (int),
+ 	 0644, NULL, &proc_dointvec},
+ #endif	 
++#ifdef CONFIG_MCL_COREDUMP
++	{KERN_PANIC_ON_OOPS, "panic_on_oops", &panic_on_oops, sizeof(int),
++	 0644, NULL, &proc_dointvec},
++#endif
+ 	{KERN_CADPID, "cad_pid", &cad_pid, sizeof (int),
+ 	 0600, NULL, &proc_dointvec},
+ 	{KERN_MAX_THREADS, "threads-max", &max_threads, sizeof(int),
+Index: linux/lib/Config.in
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/lib/Config.in,v
+retrieving revision 1.2
+retrieving revision 1.2.4.1
+diff -u -r1.2 -r1.2.4.1
+--- linux/lib/Config.in	14 Feb 2003 22:59:23 -0000	1.2
++++ linux/lib/Config.in	1 Apr 2003 12:17:41 -0000	1.2.4.1
+@@ -23,12 +23,14 @@
+   fi
+ fi
+ 
+-if [ "$CONFIG_PPP_DEFLATE" = "y" -o \
++if [ "$CONFIG_MCL_COREDUMP" = "y" -o \
++     "$CONFIG_PPP_DEFLATE" = "y" -o \
+      "$CONFIG_JFFS2_FS" = "y" ]; then
+    define_tristate CONFIG_ZLIB_DEFLATE y
+ else
+   if [ "$CONFIG_PPP_DEFLATE" = "m" -o \
+-       "$CONFIG_JFFS2_FS" = "m" ]; then
++       "$CONFIG_JFFS2_FS" = "m" -o \
++       "$CONFIG_MCL_COREDUMP" = "m" ]; then
+      define_tristate CONFIG_ZLIB_DEFLATE m
+   else
+      tristate 'zlib compression support' CONFIG_ZLIB_DEFLATE
+Index: linux/mm/memory.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/mm/memory.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/mm/memory.c	12 Mar 2003 19:51:37 -0000	1.3.2.1
++++ linux/mm/memory.c	1 Apr 2003 12:17:41 -0000	1.3.2.1.2.1
+@@ -1381,6 +1381,10 @@
+ 	}
+ 	lock_page(page);
+ 
++#ifdef CONFIG_MCL_COREDUMP
++	set_bit(PG_anon, &page->flags);
++#endif
++
+ 	/*
+ 	 * Back out if somebody else faulted in this pte while we
+ 	 * released the page table lock.
+@@ -1470,6 +1474,9 @@
+ 		mm->rss++;
+ 		flush_page_to_ram(page);
+ 		entry = pte_mkwrite(pte_mkdirty(mk_pte(page, vma->vm_page_prot)));
++#ifdef CONFIG_MCL_COREDUMP
++		set_bit(PG_anon, &page->flags);
++#endif
+ 		lru_cache_add(page);
+ 	}
+ 
+Index: linux/mm/page_alloc.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/mm/page_alloc.c,v
+retrieving revision 1.3.2.1
+retrieving revision 1.3.2.1.2.1
+diff -u -r1.3.2.1 -r1.3.2.1.2.1
+--- linux/mm/page_alloc.c	12 Mar 2003 19:51:37 -0000	1.3.2.1
++++ linux/mm/page_alloc.c	1 Apr 2003 12:17:41 -0000	1.3.2.1.2.1
+@@ -95,6 +95,10 @@
+ 	struct page *base;
+ 	per_cpu_t *per_cpu;
+ 	zone_t *zone;
++#ifdef CONFIG_MCL_COREDUMP
++	struct page *pagemap;
++	int count = 1<<order;
++#endif
+ 
+ 	/*
+ 	 * Yes, think what happens when other parts of the kernel take 
+@@ -163,6 +167,15 @@
+ 
+ 	spin_lock(&zone->lock);
+ 
++#ifdef CONFIG_MCL_COREDUMP
++	pagemap = page;
++	do {
++		pagemap->flags |= (1<<PG_free);
++		pagemap->flags &= ~((1<<PG_anon)|(1<<PG_shm));
++		pagemap++;
++	} while(--count);
++#endif
++
+ 	zone->free_pages -= mask;
+ 
+ 	while (mask + (1 << (MAX_ORDER-1))) {
+@@ -268,6 +281,16 @@
+ 			zone->free_pages -= 1UL << order;
+ 
+ 			page = expand(zone, page, index, order, curr_order, area);
++#ifdef CONFIG_MCL_COREDUMP
++			{
++				struct page *pagemap = page;
++				int		count = 1<<order;
++				do {
++					pagemap->flags &= ~(1<<PG_free);
++					pagemap++;
++				} while (--count);
++			}
++#endif
+ 			spin_unlock_irqrestore(&zone->lock, flags);
+ 
+ 			set_page_count(page, 1);
+Index: linux/arch/i386//boot/compressed/head.S
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/boot/compressed/head.S,v
+retrieving revision 1.1.1.1
+retrieving revision 1.1.1.1.12.6
+diff -u -r1.1.1.1 -r1.1.1.1.12.6
+--- linux/arch/i386//boot/compressed/head.S	7 May 2002 21:53:54 -0000	1.1.1.1
++++ linux/arch/i386//boot/compressed/head.S	5 Apr 2003 05:51:27 -0000	1.1.1.1.12.6
+@@ -23,6 +23,7 @@
+  */
+ .text
+ 
++#include <linux/config.h>
+ #include <linux/linkage.h>
+ #include <asm/segment.h>
+ 
+@@ -31,6 +32,55 @@
+ startup_32:
+ 	cld
+ 	cli
++
++#ifdef CONFIG_BOOTIMG
++/*
++ * GDT is invalid if we're booted by bootimg, so reload it now
++ */
++	lgdt	%cs:gdt_descr
++	ljmp	$(__KERNEL_CS),$1f
++
++gdt_table_limit = gdt_table_end - gdt_table - 1
++gdt_descr:
++	.word	gdt_table_limit
++	.long	gdt_table
++
++gdt_table: /* stolen from arch/i386/kernel/head.S */
++	.quad 0x0000000000000000        /* NULL descriptor */
++	.quad 0x0000000000000000        /* 0x0b reserved */
++	.quad 0x0000000000000000        /* 0x13 reserved */
++	.quad 0x0000000000000000        /* 0x1b reserved */
++	.quad 0x00cffa000000ffff        /* 0x23 user 4GB code at 0x00000000 */
++	.quad 0x00cff2000000ffff        /* 0x2b user 4GB data at 0x00000000 */
++	.quad 0x0000000000000000        /* 0x33 TLS entry 1 */
++	.quad 0x0000000000000000        /* 0x3b TLS entry 2 */
++	.quad 0x0000000000000000        /* 0x43 TLS entry 3 */
++	.quad 0x0000000000000000        /* 0x4b reserved */
++	.quad 0x0000000000000000        /* 0x53 reserved */
++	.quad 0x0000000000000000        /* 0x5b reserved */
++
++	.quad 0x00cf9a000000ffff        /* 0x60 kernel 4GB code at 0x00000000 */
++	.quad 0x00cf92000000ffff        /* 0x68 kernel 4GB data at 0x00000000 */
++	.quad 0x0000000000000000        /* 0x70 TSS descriptor */
++	.quad 0x0000000000000000        /* 0x78 LDT descriptor */
++
++	/* Segments used for calling PnP BIOS */
++	.quad 0x00c09a0000000000        /* 0x80 32-bit code */
++	.quad 0x00809a0000000000        /* 0x88 16-bit code */
++	.quad 0x0080920000000000        /* 0x90 16-bit data */
++	.quad 0x0080920000000000        /* 0x98 16-bit data */
++	.quad 0x0080920000000000        /* 0xa0 16-bit data */
++	/*
++	 * The APM segments have byte granularity and their bases
++	 * and limits are set at run time.
++	 */
++	.quad 0x00409a0000000000        /* 0xa8 APM CS    code */
++	.quad 0x00009a0000000000        /* 0xb0 APM CS 16 code (16 bit) */
++	.quad 0x0040920000000000        /* 0xb8 APM DS    data */
++gdt_table_end:
++
++1:
++#endif
+ 	movl $(__KERNEL_DS),%eax
+ 	movl %eax,%ds
+ 	movl %eax,%es
+@@ -92,7 +142,6 @@
+ 	cld
+ 	rep
+ 	movsl
+-
+ 	popl %esi	# discard the address
+ 	popl %ebx	# real mode pointer
+ 	popl %esi	# low_buffer_start
+@@ -124,5 +173,10 @@
+ 	movsl
+ 	movl %ebx,%esi	# Restore setup pointer
+ 	xorl %ebx,%ebx
++#ifdef CONFIG_BOOTIMG
++        movl $0x100000,%eax
++        jmpl *%eax
++#else
+ 	ljmp $(__KERNEL_CS), $0x100000
++#endif
+ move_routine_end:
+Index: linux/arch/i386//kernel/head.S
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/head.S,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.5
+diff -u -r1.2.2.1 -r1.2.2.1.2.5
+--- linux/arch/i386//kernel/head.S	12 Mar 2003 19:49:06 -0000	1.2.2.1
++++ linux/arch/i386//kernel/head.S	5 Apr 2003 05:51:27 -0000	1.2.2.1.2.5
+@@ -42,6 +42,21 @@
+  * On entry, %esi points to the real-mode code as a 32-bit pointer.
+  */
+ startup_32:
++#ifdef CONFIG_BOOTIMG
++/*
++ * GDT is invalid if we're booted by bootimg, so reload it now
++ */
++	lgdt %cs:_gdt_descr-__PAGE_OFFSET
++	ljmp $(__KERNEL_CS),$1f-__PAGE_OFFSET
++
++gdt_limit = SYMBOL_NAME(cpu_gdt_table_end) - SYMBOL_NAME(cpu_gdt_table) - 1
++
++_gdt_descr:
++	.word gdt_limit
++	.long SYMBOL_NAME(cpu_gdt_table)-__PAGE_OFFSET
++
++1:
++#endif
+ /*
+  * Set segments to known values
+  */
+@@ -452,6 +467,7 @@
+ 	.quad 0x00409a0000000000	/* 0xa8 APM CS    code */
+ 	.quad 0x00009a0000000000	/* 0xb0 APM CS 16 code (16 bit) */
+ 	.quad 0x0040920000000000	/* 0xb8 APM DS    data */
++ENTRY(cpu_gdt_table_end)
+ 
+ #if CONFIG_SMP
+ 	.fill (NR_CPUS-1)*GDT_ENTRIES,8,0 /* other CPU's GDT */

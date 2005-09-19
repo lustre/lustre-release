@@ -1,0 +1,78 @@
+#!/bin/sh
+
+doit()
+{
+	echo $*
+	$*
+}
+
+usage()
+{
+	echo "Usage: cvs-take-patch patch_file_name"
+	exit 1
+}
+
+#
+# Find the highest level directory in $1 which does not
+# contain the directory $2.  Return it in $MISSING
+#
+highest_missing()
+{
+	START_DIR="$1"
+	NAME="$2"
+	MISSING=""
+	WHERE=$(dirname "$START_DIR")
+	PREV_WHERE=$START_DIR
+	while [ x"$WHERE" != x"$PREV_WHERE" ]
+	do
+		WHERE="$PREV_WHERE"
+		if [ ! -d "$WHERE"/"$NAME" ]
+		then
+			MISSING="$WHERE"
+		fi
+		PREV_WHERE=$(dirname "$WHERE")
+	done
+	echo highest_missing returns $MISSING
+}
+
+#
+# Add all new directries to CVS, top-down
+# $1: name of a directory
+# $2: name of the CVS directory
+#
+add_cvs_dirs()
+{
+	MISSING=foo
+	while [ "$MISSING" != "" ]
+	do
+		highest_missing $1 $2
+		if [ x"$MISSING" != "x" ]
+		then
+			if [ ! -d "$MISSING"/"$2" ]
+			then
+				doit cvs add $MISSING
+			fi
+		fi
+	done
+}
+
+PATCHFILE=$1
+
+REMOVEDFILES=$(removed-by-patch $PATCHFILE)
+if [ "$REMOVEDFILES" != "" ]
+then
+	doit cvs remove $REMOVEDFILES
+fi
+
+NEWFILES=$(added-by-patch $PATCHFILE)
+for i in $NEWFILES
+do
+	DIRNAME=$(dirname $i)
+	echo "Looking at $DIRNAME"
+	add_cvs_dirs $DIRNAME CVS
+done
+
+if [ "$NEWFILES" != "" ]
+then
+	doit cvs add $NEWFILES
+fi

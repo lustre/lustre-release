@@ -1,0 +1,152 @@
+#!/bin/sh
+#
+# lustre   This shell script takes care of starting and stopping Lustre
+#
+# chkconfig: - 99 1
+# description: Lustre Lite network File System.
+#              This starts both Lustre client and server functions.
+# processname: lconf
+# config: /etc/lustre/config.xml
+# pidfile: /var/run/lustre.pid
+### BEGIN INIT INFO
+# Provides: lustre
+# Required-Start:
+# Required-Stop: 
+# Should-Start: scance
+# Should-Stop: scance
+# Default-Start: 
+# Default-Stop: 0 1 2 6
+# Short-Description: Lustre Lite network File System.
+# Description: This starts both Lustre client and server functions.
+### END INIT INFO
+
+
+SERVICE=lustre
+LOCK=/var/lock/subsys/$SERVICE
+
+: ${LUSTRE_CFG:=/etc/lustre/lustre.cfg}
+[ -f ${LUSTRE_CFG} ] && . ${LUSTRE_CFG}
+
+: ${LUSTRE_CONFIG_XML:=/etc/lustre/config.xml}
+: ${LCONF:=/usr/sbin/lconf}
+: ${LCONF_START_ARGS:="${LUSTRE_CONFIG_XML}"}
+: ${LCONF_STOP_ARGS:="--force --cleanup ${LUSTRE_CONFIG_XML}"}
+: ${LCTL:=/usr/sbin/lctl}
+
+# Source function library.
+if [ -f /etc/init.d/functions ] ; then
+   . /etc/init.d/functions
+fi
+
+# Source networking configuration.
+if [ -f /etc/sysconfig/network ] ; then
+   . /etc/sysconfig/network
+fi
+
+check_start_stop() {
+	# Check that networking is up.
+	[ "${NETWORKING}" = "no" ] && exit 0
+
+	[ -x ${LCONF} -a -x ${LCTL} ] || exit 0
+
+	[ -f ${LUSTRE_CONFIG_XML} ] || ( echo "unconfigured" && exit 0 )
+
+	# Create /var/lustre directory 
+	# This is used by snmp agent for checking lustre services
+	#    status online/offline/online pending/offline pending.
+
+	[ -d ${STATUS_DIR:=/var/lustre} ] || mkdir -p $STATUS_DIR
+}
+STATUS=${STATUS_DIR}/sysStatus
+
+start() {
+	check_start_stop
+	echo -n "Starting $SERVICE: "
+	if [ $UID -ne 0 ]; then
+		echo "Lustre should be started as root"
+		RETVAL=1
+		return
+	fi
+	${LCONF} ${LCONF_START_ARGS}
+	RETVAL=$?
+	echo $SERVICE
+	if [ $RETVAL -eq 0 ]; then
+		touch $LOCK
+		echo "online" >$STATUS
+	else
+		echo "online pending" >$STATUS
+	fi
+}
+
+stop() {
+	check_start_stop
+	echo -n "Shutting down $SERVICE: "
+	if [ $UID -ne 0 ]; then
+		echo "Lustre should be stopped as root"
+		RETVAL=1
+		return
+	fi
+	${LCONF} ${LCONF_STOP_ARGS}
+	RETVAL=$?
+	echo $SERVICE
+	rm -f $LOCK 
+	if [ $RETVAL -eq 0 ]; then
+		echo "offline" >$STATUS
+	else
+		echo "offline pending" >$STATUS
+	fi
+}
+
+restart() {
+	stop
+	start
+}
+
+status() {
+	STATE="stopped"
+	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
+
+	# check for any routes - on a portals router this is the only thing
+	[ "`cat /proc/sys/portals/routes 2> /dev/null`" ] && STATE="running"
+	
+	# check for any configured devices (may indicate partial startup)
+	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial"
+
+	# check for either a server or a client filesystem
+	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
+	OST="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
+	LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
+	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running"
+
+	# check for server disconnections 
+	DISCON="`grep -v FULL /proc/fs/lustre/*c/*/*server_uuid 2> /dev/null`"
+	[ "$DISCON" ] && STATE="disconnected"
+
+	# check for servers in recovery
+	[ "$MDS$OST" ] && grep -q RECOV $MDS $OST && STATE="recovery"
+
+	[ "`dmesg | grep LBUG`" ] && STATE="LBUG"
+
+	echo $STATE
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  restart)
+	restart
+	;;
+  status)
+	status $SERVICE
+	;;
+  *)
+	echo "Usage: $SERVICE {start|stop|restart|status}"
+	exit 1
+esac
+
+exit $RETVAL

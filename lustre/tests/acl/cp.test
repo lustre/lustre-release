@@ -1,0 +1,46 @@
+The cp utility should only copy ACLs if `-p' is given.
+ 
+	$ umask 022
+	$ mkdir d
+	$ cd d
+	$ touch f
+	$ setfacl -m u:bin:rw f
+	$ ls -l f | awk -- '{ print $1 }'
+	> -rw-rw-r--+
+	
+	$ cp f g
+	$ ls -l g | awk -- '{ print $1 }'
+	> -rw-r--r--
+	
+	$ rm g
+	$ cp -p f g
+	$ ls -l f | awk -- '{ print $1 }'
+	> -rw-rw-r--+
+	
+	$ mkdir h
+	$ echo blubb > h/x
+	$ cp -rp h i
+	$ cat i/x
+	> blubb
+
+	$ rm -r i
+	$ setfacl -R -m u:bin:rwX h
+	$ getfacl --omit-header h/x
+	> user::rw-
+	> user:bin:rwx
+	> group::r--
+	> mask::rwx
+	> other::r--
+	>
+
+	$ cp -rp h i
+	$ getfacl --omit-header i/x
+	> user::rw-
+	> user:bin:rwx
+	> group::r--
+	> mask::rwx
+	> other::r--
+	>
+
+	$ cd ..
+	$ rm -r d

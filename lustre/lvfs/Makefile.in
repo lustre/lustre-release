@@ -1,0 +1,18 @@
+MODULES := lvfs #quotactl_test quotacheck_test
+@SERVER_TRUE@MODULES += fsfilt_@BACKINGFS@
+
+lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o
+#quotactl-objs := quotactl_test.o
+#quotaccheck-objs := quotacheck_test.o
+
+ifeq ($(PATCHLEVEL),6)
+fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
+
+$(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
+	ln -s $< $@
+endif
+
+# for <ext3/xattr.h> on 2.6
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
+
+@INCLUDE_RULES@

@@ -1,0 +1,4 @@
+MODULES := mgs
+mgs-objs := mgs_handler.o mgs_fs.o
+
+@INCLUDE_RULES@
