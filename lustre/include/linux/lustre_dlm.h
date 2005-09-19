@@ -76,7 +76,6 @@ typedef enum {
 #define LDLM_FL_DEADLOCK_CHK   0x20000000 /* check for deadlock */
 #define LDLM_FL_DEADLOCK_DEL   0x40000000 /* lock no longer blocked */
 
-#define LDLM_FL_CONFIG_CHANGE  0x80000000 /* see ldlm_cli_cancel_unused */
 
 /* These are flags that are mapped into the flags and ASTs of blocking locks */
 #define LDLM_AST_DISCARD_DATA  0x80000000 /* Add FL_DISCARD to blocking ASTs */
@@ -113,6 +112,8 @@ typedef enum {
 
 /* while this flag is set, the lock can't change resource */
 #define LDLM_FL_LOCK_PROTECT   0x4000000
+
+#define LDLM_FL_CONFIG_CHANGE  0x8000000 /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_LOCK_PROTECT_BIT  26
 
 /* The blocking callback is overloaded to perform two functions.  These flags
