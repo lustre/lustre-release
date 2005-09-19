@@ -669,7 +669,7 @@ static struct mod_paths {
          * The following 3 are for testing ptllnd 
          * and are no longer part of a shipping product
          */        
-        {"libptl", "portals/libptl"},
+        {"libptl", "portals/libcfs"},
         {"portals", "portals/portals"},
         {"ksocknal", "portals/knals/socknal"},
         
