@@ -227,19 +227,25 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
         if (capa == NULL)
                 RETURN(-EACCES);
 
-        if (blacklist_check(capa->lc_uid))
+        if (blacklist_check(capa->lc_uid)) {
+                DEBUG_CAPA(D_ERROR, capa, "found in blacklist\n");
                 RETURN(-EACCES);
+        }
 
-        if (cmd == OBD_BRW_WRITE && !(capa->lc_op & (CAPA_WRITE | CAPA_TRUNC)))
+        if (cmd == OBD_BRW_WRITE && !(capa->lc_op & (CAPA_WRITE | CAPA_TRUNC))) {
+                DEBUG_CAPA(D_ERROR, capa, "have no write access\n");
                 RETURN(-EACCES);
-        if (cmd == OBD_BRW_READ && !(capa->lc_op & (CAPA_WRITE | CAPA_READ)))
+        }
+        if (cmd == OBD_BRW_READ && !(capa->lc_op & (CAPA_WRITE | CAPA_READ))) {
+                DEBUG_CAPA(D_ERROR, capa, "have no read access\n");
                 RETURN(-EACCES);
+        }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_FILTER_VERIFY_CAPA))
                 RETURN(-EACCES);
 
         if (capa_expired(capa)) {
-                DEBUG_CAPA(D_INFO, capa, "expired");
+                DEBUG_CAPA(D_INFO | D_ERROR, capa, "expired");
                 RETURN(-ESTALE);
         }
 
