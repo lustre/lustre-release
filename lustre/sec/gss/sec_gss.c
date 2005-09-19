@@ -578,7 +578,7 @@ void gss_cred_set_ctx(struct ptlrpc_cred *cred, struct gss_cl_ctx *ctx)
                 CERROR("unable to get expire time\n");
                 ctx_expiry = 1; /* make it expired now */
         }
-        cred->pc_expire = (unsigned long) ctx_expiry;
+        cred->pc_expire = gss_roundup_expire_time(ctx_expiry);
 
         write_lock(&gss_ctx_lock);
         old = gcred->gc_ctx;

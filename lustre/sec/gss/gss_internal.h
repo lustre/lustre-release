@@ -212,6 +212,20 @@ struct gss_cred {
 /* This is too coarse. We'll let mech determine it */
 #define GSS_MAX_AUTH_PAYLOAD    (128)
 
+/* FIXME we'd better make it expire sooner than it really is, since
+ * there's chance it might get expire between the last check and
+ * encrypt rpc. but the time between check & encrypt is not so certain.
+ */
+static inline
+unsigned long gss_roundup_expire_time(__u64 expiry)
+{
+        unsigned long cur = get_seconds();
+
+        if (expiry >= cur + obd_timeout)
+                return (unsigned long) expiry - obd_timeout;
+        return (unsigned long) expiry;
+}
+
 /* gss_mech_switch.c */
 int init_kerberos_module(void);
 void cleanup_kerberos_module(void);

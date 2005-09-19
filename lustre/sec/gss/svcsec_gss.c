@@ -591,7 +591,7 @@ static int rsc_parse(struct cache_detail *cd,
                         kgss_mech_put(gm);
                         goto out;
                 }
-                expiry = (time_t) ((__u32) ctx_expiry);
+                expiry = (time_t) gss_roundup_expire_time(ctx_expiry);
 
                 kgss_mech_put(gm);
         }
