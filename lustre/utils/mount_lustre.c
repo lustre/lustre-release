@@ -276,7 +276,8 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                         val = atoi(opteq + 1);
                         *opteq = '\0';
                         if (0) {
-                                /* All the network options have gone :)) */
+                                /* NO special lustre options, just standard
+                                   mount options */
                         } else {
                                 fprintf(stderr, "%s: unknown option '%s'\n",
                                         progname, opt);
@@ -303,6 +304,8 @@ build_data(char *source, char *target, char *options,
         char *devname = NULL;
         char *s;
         int   rc;
+
+        init_options(lmd);
 
         if (lmd_bad_magic(lmd))
                 return 4;
@@ -449,7 +452,6 @@ int main(int argc, char *const argv[])
         if (!force && check_mtab_entry(source, target, "lustre"))
                 exit(32);
 
-        init_options(&lmd);
         rc = build_data(source, target, options, &lmd, &flags);
         if (rc) {
                 exit(1);
