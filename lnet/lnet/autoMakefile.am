@@ -39,7 +39,7 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 
-EXTRA_DIST := Info.plist router.h
+EXTRA_DIST := Info.plist
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c lnet
 DIST_SOURCES = $(lnet-objs:%.o=%.c)
