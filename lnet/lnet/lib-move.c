@@ -719,7 +719,7 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
         
         rc = (ni->ni_lnd->lnd_recv)(ni, private, msg, delayed,
                                     niov, iov, kiov, offset, mlen, rlen);
-        if (rc != 0)
+        if (rc < 0)
                 lnet_finalize(ni, msg, rc);
 }
 
@@ -806,7 +806,7 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
                  (msg->msg_txcredit && msg->msg_peertxcredit));
 
         rc = (ni->ni_lnd->lnd_send)(ni, priv, msg);
-        if (rc != 0)
+        if (rc < 0)
                 lnet_finalize(ni, msg, rc);
         
         if (recv)
@@ -1453,7 +1453,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
         msg->msg_recvaftersend = 1;
         
         rc = lnet_send(ni, msg);
-        if (rc != 0) {
+        if (rc < 0) {
                 /* didn't get as far as lnet_ni_send() */
                 CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
                        libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
@@ -1875,7 +1875,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
 
  drop:
         lnet_drop_message(ni, private, payload_length);
-        return ENOENT;
+        return 0;
 }
 
 int
@@ -2110,7 +2110,7 @@ LNetGet(lnet_handle_md_t mdh,
         LNET_UNLOCK();
 
         rc = lnet_send(NULL, msg);
-        if (rc != 0) {
+        if (rc < 0) {
                 CERROR("error sending GET to %s: %d\n",
                        libcfs_id2str(target), rc);
                 lnet_finalize (NULL, msg, rc);

@@ -1374,7 +1374,6 @@ kqswnal_recv (lnet_ni_t      *ni,
                 kqswnal_rx_decref(krx);
                 return -EPROTO;
         }
-        /* NB lnet_parse() has already flipped *hdr */
 
         /* It must be OK to kmap() if required */
         LASSERT (kiov == NULL || !in_interrupt ());
