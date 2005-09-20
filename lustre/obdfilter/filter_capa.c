@@ -255,7 +255,10 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
                          capa->lc_ino, capa->lc_igen, FILTER_CAPA);
 verify:
         if (ocapa) {
+                struct timeval tv;
+
                 /* fo_capa_lock protects capa too */
+                do_gettimeofday(&tv);
                 spin_lock(&filter->fo_capa_lock);
                 if (capa->lc_keyid == ocapa->c_capa.lc_keyid) {
                         rc = memcmp(capa, &ocapa->c_capa, sizeof(*capa));
@@ -269,7 +272,7 @@ verify:
                         goto new_capa;
                 }
 
-                if (rc && __capa_is_to_expire(ocapa)) {
+                if (rc && __capa_is_to_expire(ocapa, &tv)) {
                         /* client should use new expiry now */
                         ocapa->c_bvalid = 0;
                         goto new_capa;

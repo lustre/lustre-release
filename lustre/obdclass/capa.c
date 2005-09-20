@@ -247,6 +247,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
                 hlist_add_head(&ocapa->c_hash, head);
                 if (type == CLIENT_CAPA)
                         INIT_LIST_HEAD(&ocapa->c_lli_list);
+                __capa_get(ocapa);
 
                 capa_count[type]++;
 
@@ -372,24 +373,24 @@ int capa_expired(struct lustre_capa *capa)
         return ((unsigned long )capa->lc_expiry <= tv.tv_sec) ? 1 : 0;
 }
 
-int __capa_is_to_expire(struct obd_capa *ocapa)
+int __capa_is_to_expire(struct obd_capa *ocapa, struct timeval *tv)
 {
-        struct timeval tv;
         int pre_expiry = capa_pre_expiry(&ocapa->c_capa);
 
-        do_gettimeofday(&tv);
-        /* XXX: in case the lock is inaccurate, minus one more
+        /* XXX: in case the clock is inaccurate, minus one more
          * pre_expiry to make sure the expiry won't miss */
         return ((unsigned long)ocapa->c_capa.lc_expiry -
-                2 * pre_expiry <= tv.tv_sec)? 1 : 0;
+                2 * pre_expiry <= tv->tv_sec)? 1 : 0;
 }
 
 int capa_is_to_expire(struct obd_capa *ocapa)
 {
+        struct timeval tv;
         int rc;
 
+        do_gettimeofday(&tv);
         spin_lock(&capa_lock);
-        rc = __capa_is_to_expire(ocapa);
+        rc = __capa_is_to_expire(ocapa, &tv);
         spin_unlock(&capa_lock);
 
         return rc;

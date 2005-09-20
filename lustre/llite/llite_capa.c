@@ -46,12 +46,15 @@ static inline int have_expired_capa(void)
         struct lustre_capa *capa;
         int expired = 0;
         unsigned long expiry;
+        struct timeval tv;
+
         ENTRY;
 
+        do_gettimeofday(&tv);
         spin_lock(&capa_lock);
         if (!list_empty(ll_capa_list)) {
                 ocapa = list_entry(ll_capa_list->next, struct obd_capa, c_list);
-                expired = __capa_is_to_expire(ocapa);
+                expired = __capa_is_to_expire(ocapa, &tv);
                 if (!expired) {
                         capa = &ocapa->c_capa;
                         expiry = expiry_to_jiffies(capa->lc_expiry -
@@ -123,6 +126,7 @@ static int ll_capa_thread(void *arg)
                 struct obd_capa *ocapa, tcapa, *tmp, *next = NULL;
                 unsigned long expiry, sleep = CAPA_PRE_EXPIRY;
                 struct inode *inode;
+                struct timeval tv;
 
                 l_wait_event(capa_thread.t_ctl_waitq,
                              (have_expired_capa() || ll_capa_check_stop()),
@@ -131,6 +135,7 @@ static int ll_capa_thread(void *arg)
                 if (ll_capa_check_stop())
                         break;
 
+                do_gettimeofday(&tv);
                 spin_lock(&capa_lock);
                 list_for_each_entry_safe(ocapa, tmp, ll_capa_list, c_list) {
                         if (ocapa->c_capa.lc_flags & CAPA_FL_SHORT)
@@ -139,7 +144,7 @@ static int ll_capa_thread(void *arg)
                         if (ocapa->c_capa.lc_op == CAPA_TRUNC)
                                 continue;
 
-                        if (__capa_is_to_expire(ocapa)) {
+                        if (__capa_is_to_expire(ocapa, &tv)) {
                                 inode = igrab(ocapa->c_inode);
                                 if (inode == NULL)
                                         continue;
@@ -273,6 +278,8 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
         if (list_empty(&ocapa->c_lli_list))
                 list_add(&ocapa->c_lli_list, &lli->lli_capas);
         spin_unlock(&lli->lli_lock);
+
+        capa_put(ocapa);
 
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
 

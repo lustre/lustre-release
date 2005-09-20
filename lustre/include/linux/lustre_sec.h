@@ -613,7 +613,7 @@ void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);
 void capa_dup(void *dst, struct obd_capa *ocapa);
 void capa_dup2(void *dst, struct lustre_capa *capa);
 int capa_expired(struct lustre_capa *capa);
-int __capa_is_to_expire(struct obd_capa *ocapa);
+int __capa_is_to_expire(struct obd_capa *ocapa, struct timeval *tv);
 int capa_is_to_expire(struct obd_capa *ocapa);
 
 #define CAPA_EXPIRY_SHIFT 10 /* 1024 sec */

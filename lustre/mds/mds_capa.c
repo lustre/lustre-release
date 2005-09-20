@@ -560,6 +560,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
         ocapa = capa_renew(capa, MDS_CAPA);
         if (!ocapa)
                 rc = -ENOMEM;
+        capa_put(ocapa);
 out:
         if (rc == 0)
                 body->valid |= OBD_MD_CAPA;
