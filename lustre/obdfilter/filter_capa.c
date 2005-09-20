@@ -208,6 +208,14 @@ int filter_verify_fid(struct obd_export *exp, struct inode *inode,
         RETURN(0);
 }
 
+static void dump_capa_hmac(char *buf, char *key)
+{
+        int i, n = 0;
+
+        for (i = 0; i < CAPA_DIGEST_SIZE; i++)
+                n += sprintf(buf + n, "%02x", (unsigned char) key[i]);
+}
+
 int
 filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
 {
@@ -279,8 +287,20 @@ verify:
                 spin_unlock(&filter->fo_capa_lock);
 
                 if (rc) {
-                        DEBUG_CAPA(D_ERROR, capa, "access denied");
-                        DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "access denied");
+                        char *key1 = NULL, *key2 = NULL;
+                        OBD_ALLOC(key1, CAPA_DIGEST_SIZE * 2 + 1);
+                        OBD_ALLOC(key2, CAPA_DIGEST_SIZE * 2 + 1);
+                        if (key1 && key2) {
+                                dump_capa_hmac(key1, capa->lc_hmac);
+                                dump_capa_hmac(key2, ocapa->c_capa.lc_hmac);
+                                DEBUG_CAPA(D_ERROR, capa,
+                                           "access denied for (%s != %s)",
+                                           key1, key2);
+                        }
+                        if (key1)
+                                OBD_FREE(key1, CAPA_DIGEST_SIZE * 2 + 1);
+                        if (key2)
+                                OBD_FREE(key2, CAPA_DIGEST_SIZE * 2 + 1);
                 }
                 capa_put(ocapa);
                 RETURN(rc ? -EACCES : 0);

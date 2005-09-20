@@ -575,11 +575,11 @@ enum lustre_capa_type {
 
 #define DEBUG_CAPA(level, capa, fmt, args...)                                  \
 do {                                                                           \
-CDEBUG(level, fmt " capa@%p uid %u ruid %u op %u ino "LPU64" igen %u mdsid %d "\
-       "keyid %d expiry "LPU64" flags %u, hmac %.*s\n",                        \
+CDEBUG(level, fmt " capa@%p uid %u/%u op %u ino "LPU64"/%u mdsid %d "          \
+       "keyid %d expiry "LPU64" flags %u\n",                                   \
        ##args, capa, (capa)->lc_uid, (capa)->lc_ruid, (capa)->lc_op,           \
        (capa)->lc_ino, (capa)->lc_igen, (capa)->lc_mdsid, (capa)->lc_keyid,    \
-       (capa)->lc_expiry, (capa)->lc_flags, CAPA_DIGEST_SIZE, (capa)->lc_hmac);\
+       (capa)->lc_expiry, (capa)->lc_flags);                                   \
 } while (0)
 
 #define DEBUG_CAPA_KEY(level, key, fmt, args...)                               \

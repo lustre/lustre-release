@@ -112,7 +112,7 @@ mdc_interpret_getattr(struct ptlrpc_request *req, void *unused, int rc)
         ENTRY;
 
         if (rc) {
-                DEBUG_REQ(D_INFO, req,
+                DEBUG_REQ(rc == -ENOENT ? D_INFO : D_ERROR , req,
                           "async getattr failed: rc = %d", rc);
                 RETURN(rc);
         }
