@@ -1,9 +1,9 @@
 lnxmaj="2.6.5"
-lnxrel="7.141"
+lnxrel="7.191"
 
 KERNEL=linux-$lnxmaj-$lnxrel.tar.bz2
 # they include our patches
-SERIES=2.6-suse-lnxi.series
+SERIES=2.6-suse-newer.series
 VERSION=$lnxmaj
 EXTRA_VERSION="${lnxrel}_lustre.@VERSION@"
 LUSTRE_VERSION=@VERSION@

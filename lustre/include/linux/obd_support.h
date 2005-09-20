@@ -40,6 +40,7 @@ extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 extern unsigned int ldlm_timeout;
+extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 extern wait_queue_head_t obd_race_waitq;
@@ -293,7 +294,7 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
 # endif
 #endif  /* __KERNEL__ */
 
-extern atomic_t portal_kmemory;
+extern atomic_t libcfs_kmemory;
 
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
@@ -316,7 +317,7 @@ do {                                                                          \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -334,6 +335,8 @@ do {                                                                          \
 
 #define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_GFP_MASK)
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, GFP_KERNEL)
+#define OBD_ALLOC_PTR(ptr) OBD_ALLOC(ptr, sizeof *(ptr))
+#define OBD_ALLOC_PTR_WAIT(ptr) OBD_ALLOC_WAIT(ptr, sizeof *(ptr))
 
 #ifdef __arch_um__
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
@@ -345,7 +348,7 @@ do {                                                                          \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -411,7 +414,7 @@ do {                                                                          \
                 CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
                        (int)(size), __FILE__, __LINE__);                      \
                 CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
-                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
+                       atomic_read(&obd_memory), atomic_read(&libcfs_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -421,6 +424,8 @@ do {                                                                          \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
 } while (0)
+
+#define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
 do {                                                                          \

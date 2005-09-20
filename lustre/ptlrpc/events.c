@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -31,33 +34,26 @@
 #include <linux/lustre_net.h>
 #include "ptlrpc_internal.h"
 
-#if !defined(__KERNEL__) && CRAY_PORTALS
-/* forward ref in events.c */
-static void cray_portals_callback(ptl_event_t *ev);
-#endif
-
-ptl_handle_ni_t   ptlrpc_ni_h;
-ptl_handle_eq_t   ptlrpc_eq_h;
+lnet_handle_eq_t   ptlrpc_eq_h;
 
 /*  
  *  Client's outgoing request callback
  */
-void request_out_callback(ptl_event_t *ev)
+void request_out_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
         unsigned long          flags;
         ENTRY;
 
-        LASSERT (ev->type == PTL_EVENT_SEND_END ||
-                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->type == LNET_EVENT_SEND ||
+                 ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        DEBUG_REQ((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR, req,
-                  "type %d, status %d", ev->type, ev->ni_fail_type);
+        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
 
-        if (ev->type == PTL_EVENT_UNLINK ||
-            ev->ni_fail_type != PTL_NI_OK) {
+        if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
 
                 /* Failed send: make it seem like the reply timed out, just
                  * like failing sends in client.c does currently...  */
@@ -77,30 +73,29 @@ void request_out_callback(ptl_event_t *ev)
 /*
  * Client's incoming reply callback
  */
-void reply_in_callback(ptl_event_t *ev)
+void reply_in_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
         unsigned long flags;
         ENTRY;
 
-        LASSERT (ev->type == PTL_EVENT_PUT_END ||
-                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->type == LNET_EVENT_PUT ||
+                 ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
         LASSERT (ev->md.start == req->rq_repmsg);
         LASSERT (ev->offset == 0);
         LASSERT (ev->mlength <= req->rq_replen);
         
-        DEBUG_REQ((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR, req,
-                  "type %d, status %d", ev->type, ev->ni_fail_type);
+        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
 
         spin_lock_irqsave (&req->rq_lock, flags);
 
         LASSERT (req->rq_receiving_reply);
         req->rq_receiving_reply = 0;
 
-        if (ev->type == PTL_EVENT_PUT_END &&
-            ev->ni_fail_type == PTL_NI_OK) {
+        if (ev->type == LNET_EVENT_PUT && ev->status == 0) {
                 req->rq_replied = 1;
                 req->rq_nob_received = ev->mlength;
         }
@@ -116,7 +111,7 @@ void reply_in_callback(ptl_event_t *ev)
 /* 
  * Client's bulk has been written/read
  */
-void client_bulk_callback (ptl_event_t *ev)
+void client_bulk_callback (lnet_event_t *ev)
 {
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
@@ -124,23 +119,22 @@ void client_bulk_callback (ptl_event_t *ev)
         ENTRY;
 
         LASSERT ((desc->bd_type == BULK_PUT_SINK && 
-                  ev->type == PTL_EVENT_PUT_END) ||
+                  ev->type == LNET_EVENT_PUT) ||
                  (desc->bd_type == BULK_GET_SOURCE &&
-                  ev->type == PTL_EVENT_GET_END) ||
-                 ev->type == PTL_EVENT_UNLINK);
+                  ev->type == LNET_EVENT_GET) ||
+                 ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        CDEBUG((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n", 
-               ev->type, ev->ni_fail_type, desc);
+               ev->type, ev->status, desc);
 
         spin_lock_irqsave (&desc->bd_lock, flags);
 
         LASSERT(desc->bd_network_rw);
         desc->bd_network_rw = 0;
 
-        if (ev->type != PTL_EVENT_UNLINK &&
-            ev->ni_fail_type == PTL_NI_OK) {
+        if (ev->type != LNET_EVENT_UNLINK && ev->status == 0) {
                 desc->bd_success = 1;
                 desc->bd_nob_transferred = ev->mlength;
         }
@@ -156,7 +150,7 @@ void client_bulk_callback (ptl_event_t *ev)
 /* 
  * Server's incoming request callback
  */
-void request_in_callback(ptl_event_t *ev)
+void request_in_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id               *cbid = ev->md.user_ptr;
         struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
@@ -165,15 +159,15 @@ void request_in_callback(ptl_event_t *ev)
         unsigned long                     flags;
         ENTRY;
 
-        LASSERT (ev->type == PTL_EVENT_PUT_END ||
-                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->type == LNET_EVENT_PUT ||
+                 ev->type == LNET_EVENT_UNLINK);
         LASSERT ((char *)ev->md.start >= rqbd->rqbd_buffer);
         LASSERT ((char *)ev->md.start + ev->offset + ev->mlength <=
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
-        CDEBUG((ev->ni_fail_type == PTL_OK) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, service %s\n", 
-               ev->type, ev->ni_fail_type, service->srv_name);
+               ev->type, ev->status, service->srv_name);
 
         if (ev->unlinked) {
                 /* If this is the last request message to fit in the
@@ -184,8 +178,8 @@ void request_in_callback(ptl_event_t *ev)
                 req = &rqbd->rqbd_req;
                 memset(req, 0, sizeof (*req));
         } else {
-                LASSERT (ev->type == PTL_EVENT_PUT_END);
-                if (ev->ni_fail_type != PTL_NI_OK) {
+                LASSERT (ev->type == LNET_EVENT_PUT);
+                if (ev->status != 0) {
                         /* We moaned above already... */
                         return;
                 }
@@ -204,17 +198,16 @@ void request_in_callback(ptl_event_t *ev)
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
         req->rq_reqmsg = ev->md.start + ev->offset;
-        if (ev->type == PTL_EVENT_PUT_END &&
-            ev->ni_fail_type == PTL_NI_OK)
+        if (ev->type == LNET_EVENT_PUT && ev->status == 0)
                 req->rq_reqlen = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer = ev->initiator;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
-#if CRAY_PORTALS
+#if CRAY_XT3
         req->rq_uid = ev->uid;
 #endif
-        
+
         spin_lock_irqsave (&service->srv_lock, flags);
 
         req->rq_history_seq = service->srv_request_seq++;
@@ -222,14 +215,14 @@ void request_in_callback(ptl_event_t *ev)
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                if (ev->type != PTL_EVENT_UNLINK &&
+                if (ev->type != LNET_EVENT_UNLINK &&
                     service->srv_nrqbd_receiving == 0) {
                         /* This service is off-air because all its request
                          * buffers are busy.  Portals will start dropping
                          * incoming requests until more buffers get posted.  
                          * NB don't moan if it's because we're tearing down the
                          * service. */
-                        CWARN("All %s request buffers busy\n",
+                        CERROR("All %s request buffers busy\n",
                               service->srv_name);
                 }
                 /* req takes over the network's ref on rqbd */
@@ -249,10 +242,10 @@ void request_in_callback(ptl_event_t *ev)
         EXIT;
 }
 
-/*  
+/*
  *  Server's outgoing reply callback
  */
-void reply_out_callback(ptl_event_t *ev)
+void reply_out_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id       *cbid = ev->md.user_ptr;
         struct ptlrpc_reply_state *rs = cbid->cbid_arg;
@@ -260,9 +253,9 @@ void reply_out_callback(ptl_event_t *ev)
         unsigned long              flags;
         ENTRY;
 
-        LASSERT (ev->type == PTL_EVENT_SEND_END ||
-                 ev->type == PTL_EVENT_ACK ||
-                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->type == LNET_EVENT_SEND ||
+                 ev->type == LNET_EVENT_ACK ||
+                 ev->type == LNET_EVENT_UNLINK);
 
         if (!rs->rs_difficult) {
                 /* 'Easy' replies have no further processing so I drop the
@@ -291,29 +284,29 @@ void reply_out_callback(ptl_event_t *ev)
 /*
  * Server's bulk completion callback
  */
-void server_bulk_callback (ptl_event_t *ev)
+void server_bulk_callback (lnet_event_t *ev)
 {
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         unsigned long            flags;
         ENTRY;
 
-        LASSERT (ev->type == PTL_EVENT_SEND_END ||
-                 ev->type == PTL_EVENT_UNLINK ||
+        LASSERT (ev->type == LNET_EVENT_SEND ||
+                 ev->type == LNET_EVENT_UNLINK ||
                  (desc->bd_type == BULK_PUT_SOURCE &&
-                  ev->type == PTL_EVENT_ACK) ||
+                  ev->type == LNET_EVENT_ACK) ||
                  (desc->bd_type == BULK_GET_SINK &&
-                  ev->type == PTL_EVENT_REPLY_END));
+                  ev->type == LNET_EVENT_REPLY));
 
-        CDEBUG((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n", 
-               ev->type, ev->ni_fail_type, desc);
+               ev->type, ev->status, desc);
 
         spin_lock_irqsave (&desc->bd_lock, flags);
         
-        if ((ev->type == PTL_EVENT_ACK ||
-             ev->type == PTL_EVENT_REPLY_END) &&
-            ev->ni_fail_type == PTL_NI_OK) {
+        if ((ev->type == LNET_EVENT_ACK ||
+             ev->type == LNET_EVENT_REPLY) &&
+            ev->status == 0) {
                 /* We heard back from the peer, so even if we get this
                  * before the SENT event (oh yes we can), we know we
                  * read/wrote the peer buffer and how much... */
@@ -331,10 +324,10 @@ void server_bulk_callback (ptl_event_t *ev)
         EXIT;
 }
 
-static void ptlrpc_master_callback(ptl_event_t *ev)
+static void ptlrpc_master_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id *cbid = ev->md.user_ptr;
-        void (*callback)(ptl_event_t *ev) = cbid->cbid_fn;
+        void (*callback)(lnet_event_t *ev) = cbid->cbid_fn;
 
         /* Honestly, it's best to find out early. */
         LASSERT (cbid->cbid_arg != LP_POISON);
@@ -348,10 +341,52 @@ static void ptlrpc_master_callback(ptl_event_t *ev)
         callback (ev);
 }
 
-int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, ptl_process_id_t *peer)
+int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, lnet_process_id_t *peer)
 {
+        int               best_dist = 0;
+        int               best_order = 0;
+        int               count = 0;
+        int               rc = -ENOENT;
+        int               portals_compatibility;
+        int               dist;
+        int               order;
+        lnet_nid_t        nid;
+
+        portals_compatibility = LNetCtl(IOC_PORTAL_PORTALS_COMPATIBILITY, NULL);
+        
+        /* Choose the matching UUID that's closest */
         peer->pid = LUSTRE_SRV_PTL_PID;
-        return lustre_uuid_to_peer (uuid->uuid, &peer->nid);
+
+        while (lustre_uuid_to_peer(uuid->uuid, &nid, count++) == 0) {
+                dist = LNetDist(nid, &order);
+                if (dist < 0)
+                        continue;
+                
+                LASSERT (order >= 0);
+                if (rc < 0 ||
+                    dist < best_dist ||
+                    (dist == best_dist && order < best_order)) {
+                        best_dist = dist;
+                        best_order = order;
+
+                        if (portals_compatibility > 1) {
+                                /* Strong portals compatibility: Zero the nid's
+                                 * NET, so if I'm reading new config logs, or
+                                 * getting configured by (new) lconf I can
+                                 * still talk to old servers. */
+                                nid = PTL_MKNID(0, PTL_NIDADDR(nid));
+                        }
+                        peer->nid = nid;
+                        rc = 0;
+                }
+        }
+
+        CDEBUG(D_WARNING,"%s->%s\n", uuid->uuid, libcfs_id2str(*peer));
+        if (rc != 0) 
+                LCONSOLE_ERROR("I couldn't find a NID for %s. Are the networks "
+                               "alive? Is routing set up?\n", uuid->uuid);
+
+        return rc;
 }
 
 void ptlrpc_ni_fini(void)
@@ -367,16 +402,16 @@ void ptlrpc_ni_fini(void)
          * replies */
 
         for (retries = 0;; retries++) {
-                rc = PtlEQFree(ptlrpc_eq_h);
+                rc = LNetEQFree(ptlrpc_eq_h);
                 switch (rc) {
                 default:
                         LBUG();
 
-                case PTL_OK:
-                        PtlNIFini(ptlrpc_ni_h);
+                case 0:
+                        LNetNIFini();
                         return;
                         
-                case PTL_EQ_IN_USE:
+                case -EBUSY:
                         if (retries != 0)
                                 CWARN("Event queue still busy\n");
                         
@@ -390,18 +425,12 @@ void ptlrpc_ni_fini(void)
         /* notreached */
 }
 
-ptl_pid_t ptl_get_pid(void)
+lnet_pid_t ptl_get_pid(void)
 {
-        ptl_pid_t        pid;
+        lnet_pid_t        pid;
 
 #ifndef  __KERNEL__
         pid = getpid();
-# if CRAY_PORTALS
-	/* hack to keep pid in range accepted by ernal */
-	pid &= 0xFF;
-	if (pid == LUSTRE_SRV_PTL_PID)
-		pid++;
-# endif
 #else
         pid = LUSTRE_SRV_PTL_PID;
 #endif
@@ -411,22 +440,17 @@ ptl_pid_t ptl_get_pid(void)
 int ptlrpc_ni_init(void)
 {
         int              rc;
-        char             str[20];
-        ptl_pid_t        pid;
+        lnet_pid_t       pid;
 
         pid = ptl_get_pid();
+        CDEBUG(D_NET, "My pid is: %x\n", pid);
 
         /* We're not passing any limits yet... */
-        rc = PtlNIInit(PTL_IFACE_DEFAULT, pid, NULL, NULL, &ptlrpc_ni_h);
-        if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
+        rc = LNetNIInit(pid);
+        if (rc < 0) {
                 CDEBUG (D_NET, "Can't init network interface: %d\n", rc);
                 return (-ENOENT);
         }
-
-        CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
-        
-        PtlSnprintHandle(str, sizeof(str), ptlrpc_ni_h);
-        CDEBUG (D_NET, "ptlrpc_ni_h: %s\n", str);
 
         /* CAVEAT EMPTOR: how we process portals events is _radically_
          * different depending on... */
@@ -434,33 +458,18 @@ int ptlrpc_ni_init(void)
         /* kernel portals calls our master callback when events are added to
          * the event queue.  In fact lustre never pulls events off this queue,
          * so it's only sized for some debug history. */
-# if CRAY_PORTALS
-        rc = PtlNIDebug(pni->pni_ni_h, 0xffffffff);
-        if (rc != PTL_OK)
-                CDEBUG(D_ERROR, "Can't enable Cray Portals Debug: rc %d\n", rc);
-# endif
-        rc = PtlEQAlloc(ptlrpc_ni_h, 1024, ptlrpc_master_callback,
-                        &ptlrpc_eq_h);
+        rc = LNetEQAlloc(1024, ptlrpc_master_callback, &ptlrpc_eq_h);
 #else
         /* liblustre calls the master callback when it removes events from the
          * event queue.  The event queue has to be big enough not to drop
          * anything */
-# if CRAY_PORTALS
-        /* cray portals implements a non-standard callback to notify us there
-         * are buffered events even when the app is not doing a filesystem
-         * call. */
-        rc = PtlEQAlloc(ptlrpc_ni_h, 10240, cray_portals_callback,
-                        &ptlrpc_eq_h);
-# else
-        rc = PtlEQAlloc(ptlrpc_ni_h, 10240, PTL_EQ_HANDLER_NONE,
-                        &ptlrpc_eq_h);
-# endif
+        rc = LNetEQAlloc(10240, LNET_EQ_HANDLER_NONE, &ptlrpc_eq_h);
 #endif
-        if (rc == PTL_OK)
+        if (rc == 0)
                 return 0;
         
         CERROR ("Failed to allocate event queue: %d\n", rc);
-        PtlNIFini(ptlrpc_ni_h);
+        LNetNIFini();
 
         return (-ENOMEM);
 }
@@ -496,20 +505,20 @@ liblustre_deregister_wait_callback (void *opaque)
 int
 liblustre_check_events (int timeout)
 {
-        ptl_event_t ev;
+        lnet_event_t ev;
         int         rc;
         int         i;
         ENTRY;
 
-        rc = PtlEQPoll(&ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
-        if (rc == PTL_EQ_EMPTY)
+        rc = LNetEQPoll(&ptlrpc_eq_h, 1, timeout * 1000, &ev, &i);
+        if (rc == 0)
                 RETURN(0);
         
-        LASSERT (rc == PTL_EQ_DROPPED || rc == PTL_OK);
+        LASSERT (rc == -EOVERFLOW || rc == 0);
         
         /* liblustre: no asynch callback so we can't affort to miss any
          * events... */
-        if (rc == PTL_EQ_DROPPED) {
+        if (rc == -EOVERFLOW) {
                 CERROR ("Dropped an event!!!\n");
                 abort();
         }
@@ -558,23 +567,6 @@ liblustre_wait_event (int timeout)
         return found_something;
 }
 
-#if CRAY_PORTALS
-static void cray_portals_callback(ptl_event_t *ev)
-{
-        /* We get a callback from the client Cray portals implementation
-         * whenever anyone calls PtlEQPoll(), and an event queue with a
-         * callback handler has outstanding events.
-         *
-         * If it's not liblustre calling PtlEQPoll(), this lets us know we
-         * have outstanding events which we handle with
-         * liblustre_wait_event().
-         *
-         * Otherwise, we're already eagerly consuming events and we'd
-         * handle events out of order if we recursed. */
-        if (!liblustre_waiting)
-                liblustre_wait_event(0);
-}
-#endif
 #endif /* __KERNEL__ */
 
 int ptlrpc_init_portals(void)

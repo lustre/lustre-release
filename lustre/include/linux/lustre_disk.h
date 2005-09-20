@@ -28,7 +28,7 @@
 #define _LUSTRE_DISK_H
 
 #include <linux/types.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 
 
 /****************** persistent mount data *********************/
@@ -66,8 +66,8 @@ static inline char *mt_str(enum ldd_mount_type mt)
 }
 
 struct host_desc {
-        ptl_nid_t primary; 
-        ptl_nid_t backup;
+        lnet_nid_t primary; 
+        lnet_nid_t backup;
 };
 
 struct lustre_disk_data {
@@ -76,8 +76,10 @@ struct lustre_disk_data {
         char      ldd_fsname[64];            /* filesystem this server is part of */
         char      ldd_svname[64];            /* this server's name (lustre-mdt0001) */
         char      ldd_mount_opts[128];       /* target fs mount opts */
+        //fixme just make this a string
         struct host_desc    ldd_mgmtnid;     /* mgmt nid; lmd can override */
         enum ldd_mount_type ldd_mount_type;  /* target fs type LDD_MT_* */
+        //server failover list - must pass to mgs when we first register
 };
         
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
@@ -123,9 +125,7 @@ struct mkfs_opts {
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         long  mo_device_sz;
         int   mo_flags; 
-        /* Below here is required for mdt,ost,or client logs */
-        struct host_desc mo_hostnid;    /* server nid + failover - need to know
-                                           for client log */
+        /* Below here is required for writing mdt,ost,or client logs */
         int   mo_stripe_sz;
         int   mo_stripe_count;
         int   mo_stripe_pattern;

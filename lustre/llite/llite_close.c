@@ -200,7 +200,7 @@ static int ll_close_thread(void *arg)
                 char name[sizeof(current->comm)];
                 unsigned long flags;
                 snprintf(name, sizeof(name) - 1, "ll_close");
-                kportal_daemonize(name);
+                libcfs_daemonize(name);
                 SIGNAL_MASK_LOCK(current, flags);
                 sigfillset(&current->blocked);
                 RECALC_SIGPENDING;

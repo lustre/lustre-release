@@ -5,20 +5,23 @@
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Peter Braam <braam@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -140,7 +143,8 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
         unsigned long tmp;
 
         dummy[MAX_STRING_SIZE] = '\0';
-        copy_from_user(dummy, buffer, MAX_STRING_SIZE);
+        if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
+                return -EFAULT;
 
         if (count == 6 && memcmp(dummy, "clear", 5) == 0) {
                 CDEBUG(D_DLMTRACE,
@@ -561,7 +565,7 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
         LASSERT(res != NULL);
         LASSERT(res != LP_POISON);
         atomic_inc(&res->lr_refcount);
-        CDEBUG(D_DLMTRACE, "getref res: %p count: %d\n", res,
+        CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
         return res;
 }
@@ -572,7 +576,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "putref res: %p count: %d\n", res,
+        CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
         LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);

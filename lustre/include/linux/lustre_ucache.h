@@ -27,53 +27,42 @@
 #define UC_CACHE_CLEAR_INVALID(i)   (i)->ue_flags &= ~UC_CACHE_INVALID
 #define UC_CACHE_CLEAR_EXPIRED(i)   (i)->ue_flags &= ~UC_CACHE_EXPIRED
 
-struct upcall_cache;
-
 struct upcall_cache_entry {
         struct list_head        ue_hash;
-        atomic_t                ue_refcount;
         __u64                   ue_key;
-        struct upcall_cache    *ue_cache;
+        __u64                   ue_primary;
+        struct group_info      *ue_group_info;
+        atomic_t                ue_refcount;
         int                     ue_flags;
         wait_queue_head_t       ue_waitq;
         unsigned long           ue_acquire_expire;
         unsigned long           ue_expire;
 };
 
-#define UC_CACHE_UPCALL_MAXPATH (1024)
+#define UC_CACHE_HASH_SIZE        (128)
+#define UC_CACHE_HASH_INDEX(id)   ((id) & (UC_CACHE_HASH_SIZE - 1))
+#define UC_CACHE_UPCALL_MAXPATH   (1024UL)
 
 struct upcall_cache {
-        struct list_head       *uc_hashtable;
-        int                     uc_hashsize;
-        rwlock_t                uc_hashlock;
+        struct list_head        uc_hashtable[UC_CACHE_HASH_SIZE];
+        spinlock_t              uc_lock;
 
-        char                   *uc_name;
+        char                    uc_name[40];            /* for upcall */
         char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-        unsigned long           uc_acquire_expire;   /* max acquire time */
-        unsigned long           uc_entry_expire;     /* max entry life time */
-        unsigned long           uc_err_entry_expire; /* err entry life time */
-
-        /* functions */
-        unsigned int                (*hash)(struct upcall_cache *, __u64);
-        struct upcall_cache_entry*  (*alloc_entry)(struct upcall_cache *, __u64);
-        void                        (*free_entry)(struct upcall_cache *,
-                                                  struct upcall_cache_entry *);
-        int                         (*make_upcall)(struct upcall_cache *,
-                                                   struct upcall_cache_entry *);
-        int                         (*parse_downcall)(struct upcall_cache *,
-                                                      struct upcall_cache_entry *,
-                                                      void *args);
+        unsigned long           uc_acquire_expire;      /* jiffies */
+        unsigned long           uc_entry_expire;        /* jiffies */
 };
 
-void upcall_cache_init_entry(struct upcall_cache *cache,
-                             struct upcall_cache_entry *entry,
-                             __u64 key);
-struct upcall_cache_entry *
-upcall_cache_get_entry(struct upcall_cache *cache, __u64 key);
-void upcall_cache_put_entry(struct upcall_cache_entry *entry);
-int upcall_cache_downcall(struct upcall_cache *cache, __u64 key, void *args);
-void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key);
+struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *hash,
+                                                  __u64 key, __u32 primary,
+                                                  __u32 ngroups, __u32 *groups);
+void upcall_cache_put_entry(struct upcall_cache *hash,
+                            struct upcall_cache_entry *entry);
+int upcall_cache_downcall(struct upcall_cache *hash, __u32 err, __u64 key,
+                          __u32 primary, __u32 ngroups, __u32 *groups);
 void upcall_cache_flush_idle(struct upcall_cache *cache);
 void upcall_cache_flush_all(struct upcall_cache *cache);
+struct upcall_cache *upcall_cache_init(const char *name);
+void upcall_cache_cleanup(struct upcall_cache *hash);
 
 #endif /* _UPCALL_CACHE_H */

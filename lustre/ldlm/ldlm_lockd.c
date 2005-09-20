@@ -5,20 +5,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -111,7 +114,7 @@ static int expired_lock_main(void *arg)
 
         ENTRY;
         lock_kernel();
-        kportal_daemonize("ldlm_elt");
+        libcfs_daemonize("ldlm_elt");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -134,8 +137,8 @@ static int expired_lock_main(void *arg)
                         spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* from waiting_locks_callback, but not in timer */
-                        portals_debug_dumplog();
-                        portals_run_lbug_upcall(__FILE__,
+                        libcfs_debug_dumplog();
+                        libcfs_run_lbug_upcall(__FILE__,
                                                 "waiting_locks_callback",
                                                 expired_lock_thread.elt_dump);
 
@@ -188,7 +191,7 @@ static void waiting_locks_callback(unsigned long unused)
         struct ldlm_lock *lock, *last = NULL;
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         spin_lock_bh(&waiting_locks_spinlock);
         while (!list_empty(&waiting_locks_list)) {
@@ -219,9 +222,9 @@ static void waiting_locks_callback(unsigned long unused)
 
                         /* LBUG(); */
                         CEMERG("would be an LBUG, but isn't (bug 5653)\n");
-                        portals_debug_dumpstack(NULL);
-                        /*blocks* portals_debug_dumplog(); */
-                        /*blocks* portals_run_lbug_upcall(file, func, line); */
+                        libcfs_debug_dumpstack(NULL);
+                        /*blocks* libcfs_debug_dumplog(); */
+                        /*blocks* libcfs_run_lbug_upcall(file, func, line); */
                         break;
                 }
                 last = lock;
@@ -268,7 +271,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                 LDLM_ERROR(lock, "not waiting on destroyed lock (bug 5653)");
                 if (time_after(jiffies, next)) {
                         next = jiffies + 14400 * HZ;
-                        portals_debug_dumpstack(NULL);
+                        libcfs_debug_dumpstack(NULL);
                 }
                 return 0;
         }
@@ -364,12 +367,13 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
         LCONSOLE_ERROR("A client on nid %s was evicted from service %s.\n",
                        str, lock->l_export->exp_obd->obd_name);
 
-        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
+        LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID %s"
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, conn->c_peer.nid, str);
+                   conn->c_remote_uuid.uuid, libcfs_nid2str(conn->c_peer.nid), 
+                   str);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
         class_fail_export(lock->l_export);
 }
 
@@ -377,7 +381,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                  struct ptlrpc_request *req, int rc,
                                  const char *ast_type)
 {
-        ptl_process_id_t peer = req->rq_import->imp_connection->c_peer;
+        lnet_process_id_t peer = req->rq_import->imp_connection->c_peer;
 
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
                 LASSERT(lock->l_export);
@@ -1332,7 +1336,7 @@ static int ldlm_bl_thread_main(void *arg)
                 char name[sizeof(current->comm)];
                 snprintf(name, sizeof(name) - 1, "ldlm_bl_%02d",
                          bltd->bltd_num);
-                kportal_daemonize(name);
+                libcfs_daemonize(name);
         }
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -1423,9 +1427,10 @@ static int ldlm_setup(void)
 
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                                1500, ldlm_callback_handler, "ldlm_cbd",
-                                ldlm_svc_proc_dir, NULL);
+                                LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
+                                LDLM_CB_REPLY_PORTAL, 1500,
+                                ldlm_callback_handler, "ldlm_cbd",
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
         if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
@@ -1434,10 +1439,10 @@ static int ldlm_setup(void)
 
         ldlm_state->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_CANCEL_REQUEST_PORTAL,
+                                LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL, 30000,
                                 ldlm_cancel_handler, "ldlm_canceld",
-                                ldlm_svc_proc_dir, NULL);
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");
@@ -1470,13 +1475,13 @@ static int ldlm_setup(void)
                 wait_for_completion(&blp->blp_comp);
         }
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cancel_service,
-                                    LDLM_NUM_THREADS, "ldlm_cn");
+        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cancel_service,
+                                  "ldlm_cn");
         if (rc)
                 GOTO(out_thread, rc);
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cb_service,
-                                    LDLM_NUM_THREADS, "ldlm_cb");
+        rc = ptlrpc_start_threads(NULL, ldlm_state->ldlm_cb_service,
+                                  "ldlm_cb");
         if (rc)
                 GOTO(out_thread, rc);
 

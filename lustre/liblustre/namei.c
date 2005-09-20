@@ -104,13 +104,14 @@ void unhook_stale_inode(struct pnode *pno)
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
+        struct inode *inode;
         LASSERT(it);
         LASSERT(pnode);
 
-        if (it && pnode->p_base->pb_ino != NULL) {
-                struct inode *inode = pnode->p_base->pb_ino;
+        inode = pnode->p_base->pb_ino;
+        if (it->d.lustre.it_lock_mode && inode != NULL) {
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%llu/%lu)\n",
-                       inode, llu_i2stat(inode)->st_ino,
+                       inode, (long long)llu_i2stat(inode)->st_ino,
                        llu_i2info(inode)->lli_st_generation);
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
@@ -159,13 +160,13 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                 clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != st->st_ino ||
-                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
+                    lock->l_resource->lr_name.name[1] !=lli->lli_st_generation){
                         LDLM_ERROR(lock, "data mismatch with ino %llu/%lu",
-                                   st->st_ino, lli->lli_st_generation);
+                                  (long long)st->st_ino,lli->lli_st_generation);
                 }
                 if (S_ISDIR(st->st_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %llu\n",
-                               st->st_ino);
+                               (long long)st->st_ino);
 
                         llu_invalidate_inode_pages(inode);
                 }
@@ -215,9 +216,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
-        struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -244,7 +244,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 if (lli->lli_it) {
                         CDEBUG(D_INODE, "inode %llu still have intent "
                                         "%p(opc 0x%x), release it\n",
-                                        st->st_ino, lli->lli_it,
+                                        (long long) st->st_ino, lli->lli_it,
                                         lli->lli_it->it_op);
                         ll_intent_release(lli->lli_it);
                         OBD_FREE(lli->lli_it, sizeof(*lli->lli_it));
@@ -253,8 +253,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         }
 
         exp = llu_i2mdcexp(pb->pb_ino);
-        ll_inode2fid(&pfid, pnode->p_parent->p_base->pb_ino);
-        ll_inode2fid(&cfid, pb->pb_ino);
         icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
         icbd.icbd_child = pnode;
 
@@ -263,12 +261,11 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 it->it_op_release = ll_intent_release;
         }
 
-        ll_i2uctxt(&ctxt, pnode->p_parent->p_base->pb_ino, pb->pb_ino);
+        llu_prepare_mdc_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
+                                pb->pb_ino, pb->pb_name.name,pb->pb_name.len,0);
 
-        rc = mdc_intent_lock(exp, &ctxt, &pfid,
-                             pb->pb_name.name, pb->pb_name.len,
-                             NULL, 0, &cfid, it, flags, &req,
-                             llu_mdc_blocking_ast);
+        rc = mdc_intent_lock(exp, &op_data, NULL, 0, it, flags,
+                             &req, llu_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -411,8 +408,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
-        struct ll_fid pfid;
-        struct ll_uctxt ctxt;
+        struct mdc_op_data op_data;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -429,18 +425,16 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
 
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
-        icbd.icbd_child = pnode;
-        ll_inode2fid(&pfid, parent);
-        ll_i2uctxt(&ctxt, parent, NULL);
 
-        rc = mdc_intent_lock(llu_i2mdcexp(parent), &ctxt, &pfid,
-                             pnode->p_base->pb_name.name,
-                             pnode->p_base->pb_name.len,
-                             NULL, 0, NULL, it, flags, &req,
-                             llu_mdc_blocking_ast);
+        llu_prepare_mdc_op_data(&op_data, parent, NULL,
+                                pnode->p_base->pb_name.name,
+                                pnode->p_base->pb_name.len, flags);
+
+        rc = mdc_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
+                             flags, &req, llu_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, rc);
-        
+
         rc = lookup_it_finish(req, 1, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
@@ -508,6 +502,12 @@ translate_lookup_intent(struct intent *intent, const char *path)
         if (it->it_flags & O_CREAT) {
                 it->it_op |= IT_CREAT;
                 it->it_create_mode = *((int*)intent->int_arg1);
+                /* bug 7278: libsysio hack. For O_EXCL, libsysio depends on
+                   this lookup to return negative result, but then there is no
+                   way to find out original intent in ll_iop_open(). So we just
+                   clear O_EXCL from libsysio flags here to avoid checking
+                   for negative result. O_EXCL will be enforced by MDS. */
+                *((int*)intent->int_arg2) &= ~O_EXCL;
         }
 
         if (intent->int_opmask & INT_GETATTR)

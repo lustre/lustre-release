@@ -10,28 +10,39 @@
 # pidfile: /var/run/lustre.pid
 ### BEGIN INIT INFO
 # Provides: lustre
-# Required-Start:
-# Required-Stop: 
-# Should-Start: scance
-# Should-Stop: scance
+# Required-Start: $network +sshd
+# Required-Stop: $network
+# Should-Start:
+# Should-Stop:
 # Default-Start: 
-# Default-Stop: 0 1 2 6
+# Default-Stop: 0 1 2 3 4 5 6
 # Short-Description: Lustre Lite network File System.
 # Description: This starts both Lustre client and server functions.
 ### END INIT INFO
 
 
-SERVICE=lustre
-LOCK=/var/lock/subsys/$SERVICE
+SERVICE=${0##*/}
 
 : ${LUSTRE_CFG:=/etc/lustre/lustre.cfg}
 [ -f ${LUSTRE_CFG} ] && . ${LUSTRE_CFG}
+[ -f /etc/sysconfig/lustre ] && . /etc/sysconfig/lustre
 
 : ${LUSTRE_CONFIG_XML:=/etc/lustre/config.xml}
 : ${LCONF:=/usr/sbin/lconf}
-: ${LCONF_START_ARGS:="${LUSTRE_CONFIG_XML}"}
-: ${LCONF_STOP_ARGS:="--force --cleanup ${LUSTRE_CONFIG_XML}"}
 : ${LCTL:=/usr/sbin/lctl}
+
+case "$SERVICE" in
+    [SK][[:digit:]][[:digit:]]lustre | lustre)
+        SERVICE="lustre"
+	: ${LCONF_START_ARGS:="${LUSTRE_CONFIG_XML}"}
+	: ${LCONF_STOP_ARGS:="--force --cleanup ${LUSTRE_CONFIG_XML}"}
+	;;
+    *)
+	: ${LCONF_START_ARGS:="--group ${SERVICE} --select ${SERVICE}=${HOSTNAME} ${LUSTRE_CONFIG_XML}"}
+	: ${LCONF_STOP_ARGS:="--group ${SERVICE} --select ${SERVICE}=${HOSTNAME} --failover --cleanup ${LUSTRE_CONFIG_XML}"}
+	;;
+esac
+LOCK=/var/lock/subsys/$SERVICE
 
 # Source function library.
 if [ -f /etc/init.d/functions ] ; then
@@ -49,17 +60,37 @@ check_start_stop() {
 
 	[ -x ${LCONF} -a -x ${LCTL} ] || exit 0
 
-	[ -f ${LUSTRE_CONFIG_XML} ] || ( echo "unconfigured" && exit 0 )
+	if [ ${LUSTRE_CONFIG_XML:0:1} = "/" ] ; then
+	         if [ ! -f ${LUSTRE_CONFIG_XML} ] ; then
+		     echo "${0##*/}: Configuration file ${LUSTRE_CONFIG_XML} not found; skipping."
+		     exit 0
+		 fi
+	fi
 
 	# Create /var/lustre directory 
 	# This is used by snmp agent for checking lustre services
 	#    status online/offline/online pending/offline pending.
 
 	[ -d ${STATUS_DIR:=/var/lustre} ] || mkdir -p $STATUS_DIR
+	STATUS=${STATUS_DIR}/sysStatus
 }
-STATUS=${STATUS_DIR}/sysStatus
 
 start() {
+	if [ -x "/usr/sbin/clustat" -a "${SERVICE}" = "lustre" ] ; then
+	    if [ ! -f "/etc/lustre/start-despite-clumanager" ] ; then
+		cat >&2 <<EOF
+This script was run directly, which can be dangerous if you are using
+clumanager to manage Lustre services.
+
+If you are not using clumanager for Lustre services, run the following
+command to have this script start Lustre instead:
+
+touch /etc/lustre/start-despite-clumanager
+EOF
+		RETVAL=1
+		return
+	    fi
+	fi
 	check_start_stop
 	echo -n "Starting $SERVICE: "
 	if [ $UID -ne 0 ]; then
@@ -107,14 +138,14 @@ status() {
 	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
 
 	# check for any routes - on a portals router this is the only thing
-	[ "`cat /proc/sys/portals/routes 2> /dev/null`" ] && STATE="running"
+	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running"
 	
 	# check for any configured devices (may indicate partial startup)
 	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial"
 
 	# check for either a server or a client filesystem
 	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
-	OST="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
+	OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status 2> /dev/null`"
 	LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
 	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running"
 
@@ -125,7 +156,12 @@ status() {
 	# check for servers in recovery
 	[ "$MDS$OST" ] && grep -q RECOV $MDS $OST && STATE="recovery"
 
-	[ "`dmesg | grep LBUG`" ] && STATE="LBUG"
+        # check for error in health_check
+        HEALTH="/proc/fs/lustre/health_check"
+        [ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy"
+
+        # check for LBUG
+        [ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG"
 
 	echo $STATE
 }

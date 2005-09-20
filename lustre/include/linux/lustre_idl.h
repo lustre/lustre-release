@@ -33,15 +33,19 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#ifdef HAVE_ASM_TYPES_H
+#include <asm/types.h>
+#else
+#include <lustre/types.h>
+#endif
+
 #ifdef __KERNEL__
-# include <asm/types.h>
 # include <linux/types.h>
-# include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
+# include <linux/fs.h>    /* to check for FMODE_EXEC, dev_t, lest we redefine */
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
 #else
-# include <asm/types.h>
 # include <stdint.h>
 #endif
 #endif
@@ -421,6 +425,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_FROM_GRANT      0x20 /* the osc manages this under llite */
 #define OBD_BRW_GRANTED         0x40 /* the ost manages this */
 #define OBD_BRW_DROP            0x80 /* drop the page after IO */
+#define OBD_BRW_NOQUOTA        0x100
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -446,8 +451,6 @@ struct niobuf_remote {
 extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
 
 /* request structure for OST's */
-
-#define OST_REQ_HAS_OA1  0x1
 
 struct ost_body {
         struct  obdo oa;
@@ -822,9 +825,9 @@ struct ldlm_extent {
 struct ldlm_flock {
         __u64 start;
         __u64 end;
-        __u64 blocking_export;
-        pid_t blocking_pid;
-        pid_t pid;
+        __u64 blocking_export;  /* not actually used over the wire */
+        __u32 blocking_pid;     /* not actually used over the wire */
+        __u32 pid;
 };
 
 /* it's important that the fields of the ldlm_extent structure match

@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
@@ -476,7 +479,7 @@ struct obd_export *class_conn2export(struct lustre_handle *conn)
                 RETURN(NULL);
         }
 
-        CDEBUG(D_IOCTL, "looking for export cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_INFO, "looking for export cookie "LPX64"\n", conn->cookie);
         export = class_handle2object(conn->cookie);
         RETURN(export);
 }
@@ -609,7 +612,7 @@ struct obd_import *class_import_get(struct obd_import *import)
         LASSERT(atomic_read(&import->imp_refcount) >= 0);
         LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
         atomic_inc(&import->imp_refcount);
-        CDEBUG(D_IOCTL, "import %p refcount=%d\n", import,
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
                atomic_read(&import->imp_refcount));
         return import;
 }
@@ -619,7 +622,7 @@ void class_import_put(struct obd_import *import)
 {
         ENTRY;
 
-        CDEBUG(D_IOCTL, "import %p refcount=%d\n", import,
+        CDEBUG(D_INFO, "import %p refcount=%d\n", import,
                atomic_read(&import->imp_refcount) - 1);
 
         LASSERT(atomic_read(&import->imp_refcount) > 0);
@@ -889,8 +892,7 @@ void oig_release(struct obd_io_group *oig)
 }
 EXPORT_SYMBOL(oig_release);
 
-void oig_add_one(struct obd_io_group *oig,
-                  struct oig_callback_context *occ)
+void oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
 {
         unsigned long flags;
         CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
@@ -1014,7 +1016,7 @@ void class_fail_export(struct obd_export *exp)
                exp, exp->exp_client_uuid.uuid);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         /* Most callers into obd_disconnect are removing their own reference
          * (request, for example) in addition to the one from the hash table.
@@ -1029,9 +1031,16 @@ void class_fail_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(class_fail_export);
 
-/* Ping evictor thread */
-#define D_PET D_HA
+char *obd_export_nid2str(struct obd_export *exp)
+{
+        if (exp->exp_connection != NULL)
+                return libcfs_nid2str(exp->exp_connection->c_peer.nid);
+        
+        return "(no nid)";
+}
+EXPORT_SYMBOL(obd_export_nid2str);
 
+/* Ping evictor thread */
 #ifdef __KERNEL__
 #define PET_READY     1
 #define PET_TERMINATE 2
@@ -1073,14 +1082,14 @@ static int ping_evictor_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        kportal_daemonize("ping_evictor");
+        libcfs_daemonize("ping_evictor");
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
         unlock_kernel();
 
-        CDEBUG(D_PET, "Starting Ping Evictor\n");
+        CDEBUG(D_HA, "Starting Ping Evictor\n");
         pet_exp = NULL;
         pet_state = PET_READY;
         while (1) {
@@ -1092,7 +1101,7 @@ static int ping_evictor_main(void *arg)
                 obd = pet_exp->exp_obd;
                 expire_time = CURRENT_SECONDS - (3 * obd_timeout / 2);
 
-                CDEBUG(D_PET, "evicting all exports of obd %s older than %ld\n",
+                CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
                        obd->obd_name, expire_time);
 
                 /* Exports can't be deleted out of the list, which means we
@@ -1132,7 +1141,7 @@ static int ping_evictor_main(void *arg)
                 class_export_put(pet_exp);
                 pet_exp = NULL;
         }
-        CDEBUG(D_PET, "Exiting Ping Evictor\n");
+        CDEBUG(D_HA, "Exiting Ping Evictor\n");
 
         RETURN(0);
 }
@@ -1187,7 +1196,7 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
         exp->exp_last_request_time = max(exp->exp_last_request_time,
                                          (time_t)CURRENT_SECONDS + extra_delay);
 
-        CDEBUG(D_PET, "updating export %s at %ld\n",
+        CDEBUG(D_INFO, "updating export %s at %ld\n",
                exp->exp_client_uuid.uuid,
                exp->exp_last_request_time);
 
@@ -1228,8 +1237,8 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
                            ptlrpc_pinger_main), we better wait for 3. */
                         exp->exp_obd->obd_eviction_timer = CURRENT_SECONDS +
                                 3 * PING_INTERVAL;
-                        CDEBUG(D_PET,
-                               "Thinking about evicting old export from %ld\n",
+                        CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
+                               exp->exp_obd->obd_name, obd_export_nid2str(exp),
                                oldest_time);
                 }
         } else {
@@ -1247,10 +1256,73 @@ void class_update_export_timer(struct obd_export *exp, time_t extra_delay)
 }
 EXPORT_SYMBOL(class_update_export_timer);
 
-char *obd_export_nid2str(struct obd_export *exp)
+int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
 {
-        if (exp->exp_connection != NULL)
-                return libcfs_nid2str(exp->exp_connection->c_peer.nid);
-        
-        return "(no nid)";
+        struct obd_export *doomed_exp = NULL;
+        struct list_head *p;
+        int exports_evicted = 0;
+
+search_again:
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
+                if (strcmp(obd_export_nid2str(doomed_exp), nid) == 0) {
+                        class_export_get(doomed_exp);
+                        break;
+                }
+                doomed_exp = NULL;
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        if (doomed_exp == NULL) {
+                goto out;
+        } else {
+                CERROR("evicting nid %s (%s) at adminstrative request\n",
+                       nid, doomed_exp->exp_client_uuid.uuid);
+                class_fail_export(doomed_exp);
+                class_export_put(doomed_exp);
+                exports_evicted++;
+                goto search_again;
+        }
+
+out:
+        if (!exports_evicted)
+                CERROR("can't disconnect %s: no exports found\n", nid);
+        return exports_evicted;
 }
+EXPORT_SYMBOL(obd_export_evict_by_nid);
+
+int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid)
+{
+        struct obd_export *doomed_exp = NULL;
+        struct list_head *p;
+        struct obd_uuid doomed;
+        int exports_evicted = 0;
+
+        obd_str2uuid(&doomed, uuid);
+
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
+
+                if (obd_uuid_equals(&doomed, &doomed_exp->exp_client_uuid)) {
+                        class_export_get(doomed_exp);
+                        break;
+                }
+                doomed_exp = NULL;
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        if (doomed_exp == NULL) {
+                CERROR("can't disconnect %s: no exports found\n", uuid);
+        } else {
+                CERROR("evicting %s at adminstrative request\n",
+                       doomed_exp->exp_client_uuid.uuid);
+                class_fail_export(doomed_exp);
+                class_export_put(doomed_exp);
+                exports_evicted++;
+        }
+
+        return exports_evicted;
+}
+EXPORT_SYMBOL(obd_export_evict_by_uuid);

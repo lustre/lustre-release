@@ -52,14 +52,14 @@
  * of 'LIST_HEAD'. undef it to suppress warnings
  */
 #undef LIST_HEAD
-#include <portals/ptlctl.h>     /* needed for parse_dump */
+#include <lnet/lnetctl.h>     /* needed for parse_dump */
 
 #include "lutil.h"
 #include "llite_lib.h"
 
 static int lllib_init(void)
 {
-        if (liblustre_init_current("dummy") ||
+        if (liblustre_init_current("liblustre") ||
             init_obdclass() ||
             init_lib_portals() ||
             ptlrpc_init() ||
@@ -85,7 +85,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         class_uuid_t uuid;
         struct obd_uuid mdc_uuid;
         struct llog_ctxt *ctxt;
-        ptl_nid_t nid = 0;
+        lnet_nid_t nid = 0;
         int err, rc = 0;
         ENTRY;
 
@@ -93,7 +93,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         class_uuid_unparse(uuid, &mdc_uuid);
 
         nid = libcfs_str2nid(mdsnid);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", mdsnid);
                 RETURN(-EINVAL);
         }
@@ -102,43 +102,42 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_ADD_UUID, &bufs);
         lcfg->lcfg_nid = nid;
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (rc < 0)
+                GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);
         lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_del_uuid, err);
+        if (rc < 0)
+                GOTO(out_del_uuid, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, mdsname);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
-        err = class_process_config(lcfg);
+        rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out_detach, err);
+        if (rc < 0)
+                GOTO(out_detach, rc);
 
         obd = class_name2obd(name);
         if (obd == NULL)
-                GOTO(out_cleanup, err = -EINVAL);
+                GOTO(out_cleanup, rc = -EINVAL);
 
         /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export,
-                           strlen("initial_recov"), "initial_recov",
-                           sizeof(allow_recov), &allow_recov);
+        rc = obd_set_info(obd->obd_self_export,
+                          strlen("initial_recov"), "initial_recov",
+                          sizeof(allow_recov), &allow_recov);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /*connect_flags*/);
-        if (err) {
-                CERROR("cannot connect to %s: rc = %d\n",
-                        mdsname, err);
-                GOTO(out_cleanup, err);
+        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, NULL /*connect_flags*/);
+        if (rc) {
+                CERROR("cannot connect to %s: rc = %d\n", mdsname, rc);
+                GOTO(out_cleanup, rc);
         }
 
         exp = class_conn2export(&mdc_conn);
@@ -149,33 +148,37 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
 
+        /* We don't so much care about errors in cleaning up the config llog
+         * connection, as we have already read the config by this point. */
         err = obd_disconnect(exp);
+        if (err)
+                CERROR("obd_disconnect failed: rc = %d\n", err);
 
 out_cleanup:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_cleanup failed: rc = %d\n", err);
 
 out_detach:
         lustre_cfg_bufs_reset(&bufs, name);
         lcfg = lustre_cfg_new(LCFG_DETACH, &bufs);
         err = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
-        if (err < 0)
-                GOTO(out, err);
+        if (err)
+                CERROR("mdc_detach failed: rc = %d\n", err);
 
 out_del_uuid:
         lustre_cfg_bufs_reset(&bufs, name);
         lustre_cfg_bufs_set_string(&bufs, 1, peer);
         lcfg = lustre_cfg_new(LCFG_DEL_UUID, &bufs);
         err = class_process_config(lcfg);
+        if (err)
+                CERROR("del MDC UUID failed: rc = %d\n", err);
         lustre_cfg_free(lcfg);
 out:
-        if (rc == 0)
-                rc = err;
 
         RETURN(rc);
 }
@@ -243,8 +246,8 @@ int _sysio_lustre_init(void)
 #endif
 
 #if 0
-        portal_debug = -1;
-        portal_subsystem_debug = -1;
+        libcfs_debug = -1;
+        libcfs_subsystem_debug = -1;
 #endif
 
         liblustre_init_random();
@@ -264,11 +267,11 @@ int _sysio_lustre_init(void)
         /* debug masks */
         debug_mask = getenv(ENV_LUSTRE_DEBUG_MASK);
         if (debug_mask)
-                portal_debug = (unsigned int) strtol(debug_mask, NULL, 0);
+                libcfs_debug = (unsigned int) strtol(debug_mask, NULL, 0);
 
         debug_subsys = getenv(ENV_LUSTRE_DEBUG_SUBSYS);
         if (debug_subsys)
-                portal_subsystem_debug =
+                libcfs_subsystem_debug =
                                 (unsigned int) strtol(debug_subsys, NULL, 0);
 
 #ifndef INIT_SYSIO
@@ -354,14 +357,12 @@ void __liblustre_cleanup_(void)
         /* we can't call umount here, because libsysio will not cleanup
          * opening files for us. _sysio_shutdown() will cleanup fds at
          * first but which will also close the sockets we need for umount
-         * liblutre. this delima lead to another hack in
+         * liblutre. this dilema lead to another hack in
          * libsysio/src/file_hack.c FIXME
          */
+        _sysio_shutdown();
 #ifdef INIT_SYSIO
-        _sysio_shutdown();
         cleanup_lib_portals();
-        PtlFini();
-#else
-        _sysio_shutdown();
+        LNetFini();
 #endif
 }

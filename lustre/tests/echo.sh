@@ -13,8 +13,9 @@ config=${config:-$(basename $0 .sh).xml}
 LMC=${LMC:-../utils/lmc -m $config}
 TMP=${TMP:-/tmp}
 
-SERVER=${SERVER:-localhost}
-CLIENT=${CLIENT:-localhost}
+HOSTNAME=`hostname`
+SERVER=${SERVER:-$HOSTNAME}
+CLIENT=${CLIENT:-$HOSTNAME}
 NET=${NET:-tcp}
 
 h2tcp () {
@@ -37,6 +38,15 @@ h2iib () {
         client) echo '\*' ;;
         *) echo $1 | sed "s/[^0-9]*//" ;;
         esac
+}
+
+#
+# PJK: I believe this is correct
+# PTL NID's are of the form
+# num@ptl
+#
+h2ptl () { 
+        echo $1 | sed 's/[^0-9]*//g' 
 }
         
 # FIXME: make LMC not require MDS for obdecho LOV

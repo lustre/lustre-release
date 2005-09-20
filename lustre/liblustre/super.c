@@ -140,7 +140,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 } else {
                         if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
                                 CERROR("lsm mismatch for inode %lld\n",
-                                       st->st_ino);
+                                       (long long)st->st_ino);
                                 LBUG();
                         }
                 }
@@ -441,7 +441,8 @@ static int llu_inode_revalidate(struct inode *inode)
                 ll_inode2fid(&fid, inode);
                 rc = mdc_getattr(sbi->ll_mdc_exp, &fid, valid, ealen, &req);
                 if (rc) {
-                        CERROR("failure %d inode %llu\n", rc, llu_i2stat(inode)->st_ino);
+                        CERROR("failure %d inode %llu\n", rc,
+                               (long long)llu_i2stat(inode)->st_ino);
                         RETURN(-abs(rc));
                 }
                 rc = mdc_req2lustre_md(req, 0, sbi->ll_osc_exp, &md);
@@ -534,7 +535,8 @@ void llu_clear_inode(struct inode *inode)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p)\n",
-               llu_i2stat(inode)->st_ino, lli->lli_st_generation, inode);
+               (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation,
+               inode);
 
         ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(lli->lli_flags));
@@ -626,12 +628,13 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", st->st_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", (long long)st->st_ino);
 
         if (ia_valid & ATTR_SIZE) {
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
                         CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
-                               attr->ia_size, ll_file_maxbytes(inode));
+                               (long long)attr->ia_size,
+                               ll_file_maxbytes(inode));
                         RETURN(-EFBIG);
                 }
 
@@ -682,17 +685,16 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                /* We call inode_setattr to adjust timestamps, but we first
-                 * clear ATTR_SIZE to avoid invoking vmtruncate.
-                 *
-                 * NB: ATTR_SIZE will only be set at this point if the size
-                 * resides on the MDS, ie, this file has no objects. */
-                attr->ia_valid &= ~ATTR_SIZE;
+                /* We call inode_setattr to adjust timestamps.
+                 * If there is at least some data in file, we cleared ATTR_SIZE
+                 * above to avoid invoking vmtruncate, otherwise it is important
+                 * to call vmtruncate in inode_setattr to update inode->i_size
+                 * (bug 6196) */
                 inode_setattr(inode, attr);
                 llu_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
-                if (!md.lsm || !S_ISREG(st->st_mode)) {
+                if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         RETURN(0);
                 }
@@ -752,7 +754,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %llu to %lu\n",
-                       st->st_ino, LTIME_S(attr->ia_mtime));
+                       (long long)st->st_ino, LTIME_S(attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
                 obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
@@ -833,7 +835,8 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(sbi->ll_mdc_exp, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -862,7 +865,7 @@ static int llu_readlink_internal(struct inode *inode,
         rc = mdc_getattr(sbi->ll_mdc_exp, &fid,
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
-                CERROR("inode %llu: rc = %d\n", st->st_ino, rc);
+                CERROR("inode %llu: rc = %d\n", (long long)st->st_ino, rc);
                 RETURN(rc);
         }
 
@@ -874,21 +877,21 @@ static int llu_readlink_internal(struct inode *inode,
                 CERROR ("OBD_MD_LINKNAME not set on reply\n");
                 GOTO (failed, rc = -EPROTO);
         }
-        
-        LASSERT (symlen != 0);
+
+        LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
-                CERROR ("inode %llu: symlink length %d not expected %d\n",
-                        st->st_ino, body->eadatasize - 1, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                CERROR("inode %llu: symlink length %d not expected %d\n",
+                       (long long)st->st_ino, body->eadatasize - 1, symlen - 1);
+                GOTO(failed, rc = -EPROTO);
         }
 
         *symname = lustre_msg_buf ((*request)->rq_repmsg, 1, symlen);
         if (*symname == NULL ||
-            strnlen (*symname, symlen) != symlen - 1) {
+            strnlen(*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
-                CERROR ("inode %llu: symlink not NULL terminated string"
-                        "of length %d\n", st->st_ino, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                CERROR("inode %llu: symlink not NULL terminated string"
+                       "of length %d\n", (long long)st->st_ino, symlen - 1);
+                GOTO(failed, rc = -EPROTO);
         }
 
         OBD_ALLOC(lli->lli_symlink_name, symlen);
@@ -937,7 +940,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
 
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu\n",
                (int)pno->p_base->pb_name.len, pno->p_base->pb_name.name,
-               llu_i2stat(dir)->st_ino);
+               (long long)llu_i2stat(dir)->st_ino);
 
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
@@ -955,7 +958,8 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                                         pno->p_base->pb_name.len,
                                         0);
                 err = mdc_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
-                                 current->fsuid, current->fsgid, dev, &request);
+                                 current->fsuid, current->fsgid,
+                                 current->cap_effective, dev, &request);
                 ptlrpc_req_finished(request);
                 break;
         case S_IFDIR:
@@ -1170,15 +1174,17 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu/%lu(%p)\n",
-               len, name, st->st_ino, llu_i2info(dir)->lli_st_generation, dir);
+
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu/%lu(%p)\n", len, name,
+               (long long)st->st_ino, llu_i2info(dir)->lli_st_generation, dir);
 
         if (st->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(llu_i2sbi(dir)->ll_mdc_exp, &op_data, NULL, 0, mode,
-                         current->fsuid, current->fsgid, 0, &request);
+                         current->fsuid, current->fsgid, current->cap_effective,
+                         0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -1194,7 +1200,8 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%llu/%lu(%p)\n", len, name,
-               llu_i2stat(dir)->st_ino, llu_i2info(dir)->lli_st_generation,dir);
+               (long long)llu_i2stat(dir)->st_ino,
+               llu_i2info(dir)->lli_st_generation, dir);
 
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
         rc = mdc_unlink(llu_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
@@ -1509,11 +1516,11 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
+        unsigned long arg;
 
         liblustre_wait_event(0);
 
         switch (request) {
-        unsigned long arg;
         case LL_IOC_GROUP_LOCK:
                 arg = va_arg(ap, unsigned long);
                 return llu_get_grouplock(ino, arg);

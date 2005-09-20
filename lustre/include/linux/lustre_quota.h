@@ -94,4 +94,4 @@ struct quotacheck_info {
 #define LL_DQUOT_OFF(sb) do {} while(0)
 
 #endif /*!HAVE_QUOTA_SUPPORT */
-#endif                          /* _LUSTRE_QUOTA_H */
+#endif /* _LUSTRE_QUOTA_H */

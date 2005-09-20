@@ -7,20 +7,23 @@
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -332,6 +335,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (*ids == NULL)
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
+        oti.oti_thread = req->rq_svc_thread;
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
@@ -365,7 +369,6 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         CERROR("open replay failed to set md:%d\n", rc);
                 RETURN(0);
         }
-
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                 GOTO(out_ids, rc = -ENOMEM);
@@ -960,11 +963,11 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LTIME_S(iattr.ia_ctime) = rec->ur_time;
                 LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
-                iattr.ia_uid = rec->ur_fsuid;
+                iattr.ia_uid = current->fsuid;  /* set by push_ctxt already */
                 if (dparent->d_inode->i_mode & S_ISGID)
                         iattr.ia_gid = dparent->d_inode->i_gid;
                 else
-                        iattr.ia_gid = rec->ur_fsgid;
+                        iattr.ia_gid = current->fsgid;
 
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
@@ -988,8 +991,9 @@ int mds_open(struct mds_update_record *rec, int offset,
 
 
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
-                 "dchild %.*s (%p) inode %p\n", dchild->d_name.len,
-                 dchild->d_name.name, dchild, dchild->d_inode);
+                 "dchild %.*s (%p) inode %p/%lu/%u\n", dchild->d_name.len,
+                 dchild->d_name.name, dchild, dchild->d_inode,
+                 dchild->d_inode->i_ino, dchild->d_inode->i_generation);
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);
@@ -1297,6 +1301,7 @@ int mds_close(struct ptlrpc_request *req)
         if (rc) {
                 CERROR("lustre_pack_reply: rc = %d\n", rc);
                 req->rq_status = rc;
+                /* Continue on to drop local open count even if we can't send the reply */
         } else {
                 MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         }

@@ -40,7 +40,7 @@ cleanup() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0
+    sysctl -w lnet.debug=0
     FORCE=--force cleanup
     exit
 fi

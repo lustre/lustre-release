@@ -155,8 +155,7 @@ static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
         return fsfilt_start_log(obd, inode, op, oti, 0);
 }
 
-static inline void *fsfilt_brw_start_log(struct obd_device *obd,
-                                         int objcount,
+static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                                          struct fsfilt_objinfo *fso,
                                          int niocount, struct niobuf_local *nb,
                                          struct obd_trans_info *oti, int logs)
@@ -351,11 +350,8 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                                   created, create, sem);
 }
 
-static inline int fs_prep_san_write(struct obd_device *obd,
-                                    struct inode *inode,
-                                    long *blocks,
-                                    int nblocks,
-                                    loff_t newsize)
+static inline int fs_prep_san_write(struct obd_device *obd, struct inode *inode,
+                                    long *blocks, int nblocks, loff_t newsize)
 {
         return obd->obd_fsops->fs_prep_san_write(inode, blocks,
                                                  nblocks, newsize);

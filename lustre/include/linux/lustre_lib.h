@@ -51,32 +51,6 @@
 #endif
 #endif
 
-#ifndef LPU64
-/* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-#if defined(__x86_64__) && defined(__KERNEL__)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPSZ  "%u"
-# define LPSSZ "%d"
-#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
-# define LPU64 "%lu"
-# define LPD64 "%ld"
-# define LPX64 "%#lx"
-# define LPSZ  "%lu"
-# define LPSSZ "%ld"
-#endif
-#ifndef LPU64
-# error "No word size defined"
-#endif
-#endif
-
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;
@@ -261,8 +235,8 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 CERROR("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
-        if (obd_ioctl_packlen(data) != data->ioc_len) {
-                CERROR("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+        if (obd_ioctl_packlen(data) > data->ioc_len) {
+                CERROR("OBD ioctl: packlen exceeds ioc_len (%d > %d)\n",
                        obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }
@@ -492,7 +466,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * portals/include/libcfs/kp30.h for debug, don't use it
+ * lnet/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,

@@ -3,20 +3,23 @@
  *
  * Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.sf.net/projects/lustre/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -51,26 +54,6 @@ void it_set_disposition(struct lookup_intent *it, int flag)
 }
 EXPORT_SYMBOL(it_set_disposition);
 
-static void mdc_fid2mdc_op_data(struct mdc_op_data *data, struct ll_uctxt *ctxt,
-                                struct ll_fid *f1, struct ll_fid *f2,
-                                const char *name, int namelen, int mode)
-{
-        LASSERT(data);
-        LASSERT(ctxt);
-        LASSERT(f1);
-
-        data->ctxt = *ctxt;
-        data->fid1 = *f1;
-        if (f2)
-                data->fid2 = *f2;
-        else
-                memset(&data->fid2, 0, sizeof(data->fid2));
-        data->name = name;
-        data->namelen = namelen;
-        data->create_mode = mode;
-        data->mod_time = CURRENT_SECONDS;
-}
-
 static int it_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
@@ -86,28 +69,28 @@ static int it_to_lock_mode(struct lookup_intent *it)
 int it_open_error(int phase, struct lookup_intent *it)
 {
         if (it_disposition(it, DISP_OPEN_OPEN)) {
-                if (phase == DISP_OPEN_OPEN)
+                if (phase >= DISP_OPEN_OPEN)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_OPEN_CREATE)) {
-                if (phase == DISP_OPEN_CREATE)
+                if (phase >= DISP_OPEN_CREATE)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_LOOKUP_EXECD)) {
-                if (phase == DISP_LOOKUP_EXECD)
+                if (phase >= DISP_LOOKUP_EXECD)
                         return it->d.lustre.it_status;
                 else
                         return 0;
         }
 
         if (it_disposition(it, DISP_IT_EXECD)) {
-                if (phase == DISP_IT_EXECD)
+                if (phase >= DISP_IT_EXECD)
                         return it->d.lustre.it_status;
                 else
                         return 0;
@@ -486,10 +469,8 @@ EXPORT_SYMBOL(mdc_enqueue);
  * Else, if DISP_LOOKUP_EXECD then d.lustre.it_status is the rc of the
  * child lookup.
  */
-int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
-                    struct ll_fid *pfid, const char *name, int len,
-                    void *lmm, int lmmsize,
-                    struct ll_fid *cfid, struct lookup_intent *it,
+int mdc_intent_lock(struct obd_export *exp, struct mdc_op_data *op_data,
+                    void *lmm, int lmmsize, struct lookup_intent *it,
                     int lookup_flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
 {
@@ -503,14 +484,16 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         LASSERT(it);
 
         CDEBUG(D_DLMTRACE,"name: %.*s in inode "LPU64", intent: %s flags %#o\n",
-               len, name, pfid->id, ldlm_it2str(it->it_op), it->it_flags);
+               op_data->namelen, op_data->name, op_data->fid1.id,
+               ldlm_it2str(it->it_op), it->it_flags);
 
-        if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
+        if (op_data->fid2.id &&
+            (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id = { .name = { cfid->id,
-                                                        cfid->generation}};
+                struct ldlm_res_id res_id = {.name ={op_data->fid2.id,
+                                                     op_data->fid2.generation}};
                 struct lustre_handle lockh;
                 int mode = LCK_PR;
 
@@ -540,11 +523,9 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
          * this and use the request from revalidate.  In this case, revalidate
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
-                struct mdc_op_data op_data;
-                mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
                 rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
-                                 &op_data, &lockh, lmm, lmmsize,
+                                 op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
@@ -581,10 +562,10 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (cfid != NULL) {
+        if (op_data->fid2.id) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (memcmp(cfid, &mds_body->fid1, sizeof(*cfid)))
+                if (memcmp(&op_data->fid2, &mds_body->fid1, sizeof(op_data->fid2)))
                         RETURN(-ESTALE);
         }
 
@@ -630,8 +611,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 }
         }
         CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
-               len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
-               it->d.lustre.it_disposition, rc);
+               op_data->namelen, op_data->name, ldlm_it2str(it->it_op),
+               it->d.lustre.it_status, it->d.lustre.it_disposition, rc);
 
         RETURN(rc);
 }

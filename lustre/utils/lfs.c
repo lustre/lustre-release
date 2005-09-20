@@ -33,8 +33,8 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include <portals/api-support.h>
-#include <portals/ptlctl.h>
+#include <lnet/api-support.h>
+#include <lnet/lnetctl.h>
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
@@ -53,7 +53,13 @@
 #define LUSTRE_Q_GETQUOTA 0x800007     /* get user quota structure */
 #define LUSTRE_Q_SETQUOTA 0x800008     /* set user quota structure */
 
-unsigned int portal_subsystem_debug = 0;
+/* Where is this stupid thing supposed to be defined? */
+#ifndef USRQUOTA
+# define USRQUOTA 0
+# define GRPQUOTA 1
+#endif
+
+unsigned int libcfs_subsystem_debug = 0;
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -138,30 +144,30 @@ static int lfs_setstripe(int argc, char **argv)
         if (argc == 3) {
                 if (strcmp(argv[1], "-d") != 0)
                         return CMD_HELP;
-                
+
                 fname = argv[2];
-                st_size = -1;
+                st_size = 0;
+                st_offset = -1;
                 st_count = 0;
-                st_offset = 0;
         } else {
                 fname = argv[1];
 
-                // get the stripe size
+                /* get the stripe size */
                 st_size = strtoul(argv[2], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
                         return CMD_HELP;
                 }
-                
-                // get the stripe offset
+
+                /* get the stripe offset */
                 st_offset = strtoul(argv[3], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
                         return CMD_HELP;
                 }
-                // get the stripe count
+                /* get the stripe count */
                 st_count = strtoul(argv[4], &end, 0);
                 if (*end != '\0') {
                         fprintf(stderr, "error: %s: bad stripe count '%s'\n",

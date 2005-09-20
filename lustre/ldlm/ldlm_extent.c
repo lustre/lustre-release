@@ -5,20 +5,23 @@
  *   Author: Peter Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -148,6 +151,7 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 /* Determine if the lock is compatible with all locks on the queue.
  * We stop walking the queue if we hit ourselves so we don't take
  * conflicting locks enqueued after us into accound, or we'd wait forever.
+ *
  * 0 if the lock is not compatible
  * 1 if the lock is compatible
  * 2 if this group lock is compatible and requires no further checking
@@ -202,11 +206,11 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 /* locks are compatible, overlap doesn't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
-                       /* non-group locks are compatible, overlap doesn't
-                          matter */
+                        /* non-group locks are compatible, overlap doesn't
+                           matter */
                         if (likely(req_mode != LCK_GROUP))
                                 continue;
-                                
+
                         /* If we are trying to get a GROUP lock and there is
                            another one of this kind, we need to compare gid */
                         if (req->l_policy_data.l_extent.gid ==
@@ -317,6 +321,12 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         *err = ELDLM_OK;
 
         if (!first_enq) {
+                /* Careful observers will note that we don't handle -EWOULDBLOCK
+                 * here, but it's ok for a non-obvious reason -- compat_queue
+                 * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT).
+                 * flags should always be zero here, and if that ever stops
+                 * being true, we want to find out. */
+                LASSERT(*flags == 0);
                 LASSERT(res->lr_tmp != NULL);
                 rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0, flags,
                                               err);

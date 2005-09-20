@@ -1,4 +1,4 @@
-.TH lmc 1 "2003 Oct 8" Lustre "configuration utilities"
+.TH lmc 1 "2004 Sep 16" Lustre "configuration utilities"
 .SH NAME
 lmc \- Lustre configuration maker
 .SH SYNOPSIS
@@ -50,6 +50,15 @@ Specify the location of the Portals upcall scripts used by the client for recove
 .TP
 --upcall <path> 
 Specify the location of both (Lustre and Portals) upcall scripts used by the client for recovery.
+.TP
+--group_upcall <path> 
+Specify the location of the group upcall scripts used by the MDS for determiningsupplementary group membership.
+.TP
+--ptldebug <debug_level>
+Set the portals debug level.
+.TP
+--subsystem <subsystem_name>
+Specify which Lustre subsystems have debug output recorded in the log.
 .PP
 .B --add net 
 Adds a network device descriptor for the given node, with parameters as indicated.
@@ -64,7 +73,11 @@ This can be tcp, elan, or gm.
 --nid nid 
 The network id, e.g. ElanID or IP address as used by Portals. If nid is '*', then the local address of the interface with specified nettype is will be substituted when the node is configured with lconf. An nid of '*' should be used only for the generic client configuration.
 .TP
+--cluster_id id
+Specify the cluster ID.
+.TP
 --hostaddr addr
+Specify the host address, which will be transfered to the real host address by lconf.
 .TP
 --router 
 Optional flag to mark this node as a router.
@@ -96,17 +109,39 @@ Specify MDS uuid.
 --dev <pathname> 
 Path of device on local system. If the is a file, then a loop device is created and used as the block device.
 .TP
+--backdev <pathname>
+Path of the device for backing storage on local system.
+.TP
 --size <size> 
 Optional argument indicating the size (in KB) of the device to be created (used typically for loop devices).
 .TP
 --node <nodename> 
 Adds an MDS to the specified node. This requires a --node argument, and it must not be a profile node.
 .TP
---fstype extN|ext3 
+--fstype ldiskfs|ext3 
 Optional argument used to specify the file system type. Default is ext3.
+For 2.6 kernels the ldiskfs filesystem must be used.
+.TP
+--inode_size <size> 
+Specify new inode size for underlying ext3 file system.  Must be a power of 2
+between 128 and 4096.  The default inode size is selected based on the default
+number of stripes specified for the filesystem.
+.TP
+--group_upcall <pathname> 
+The group upcall program to call for resolving a user's secondary groups.
+The default value is NONE, which means that the MDS will use whatever
+supplementary group is passed from the client.  The supplied upcall is
+/usr/sbin/l_getgroups, which gets groups from the MDS's /etc/group file
+based on the client-supplied UID.
+.TP
+--mkfsoptions <options> 
+Optional argument to mkfs.
+.TP
+--mountfsoptions <options> 
+Optional argument to mount fs. Mount options will be passed by this argument. For example, extents are to be enabled by adding ",extents" to the --mountfsoptions option. "errors=remount-ro" and "asyncdel" can also be added to it.
 .TP
 --journal_size <size> 
-Optional arguement to specify the journal size for the ext2/ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext2/ext3 filesystem will be configured with the default journal size.
+Optional arguement to specify the journal size for the ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext3 filesystem will be configured with the default journal size.
 .PP
 .B --add lov 
 Creates an LOV with the specified parameters. The mds_name must already exist in the descriptor.
@@ -118,10 +153,10 @@ Common name for the LOV
 Common name for the MDS
 .TP
 --stripe_sz <size>
-Stripe size
+Specify the stripe size in bytes.  This much data is written to each stripe before starting to write in the next stripe.  Default is 1048576.
 .TP
 --stripe_cnt <count> 
-A value of 0 for this means to stripe on all available OSTs. Default is 0.
+A value of 0 for this means to use the currently optimal number of stripes.  Default is 1 stripe per file.
 .TP
 --stripe_pattern <pattern> 
 Only Pattern 0 (RAID 0) is supported currently.
@@ -134,6 +169,9 @@ Assign a name to the OST device.
 .TP
 --node <nodename> 
 Node on which the OST service is run, can not be a profile node.
+.TP
+--failout
+Disable failover support on OST.
 .TP
 --failover
 Enable failover support on OST.
@@ -156,8 +194,17 @@ Specify the UUID of the OST device.
 --fstype 
 extN|ext3 Optional arguement used to specify the file system type. Default is ext3.
 .TP
+--inode_size <size> 
+Specify new inode size for underlying ext3 file system.
+.TP
+--mkfsoptions <options> 
+Optional argument to mkfs.
+.TP
+--mountfsoptions <options> 
+Optional argument to mount fs. Mount options will be passed by this argument. For example, extents are to be enabled by adding ",extents" to the --mountfsoptions option. "errors=remount-ro" and "asyncdel" can also be added to it.
+.TP
 --journal_size <size> 
-Optional arguement to specify the journal size for the ext2/ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext2/ext3 filesystem will be configured with the default journal size.
+Optional arguement to specify the journal size for the ext3 file system. The size should be in the units expected by mkfs, so for ext3 it should be in MB. If this is option is not used, the ext3 filesystem will be configured with a journal size dependent upon how large the filesystem is.
 .PP
 .B --add mtpt 
 Creates a mount-point on the specified node. Either an LOV or OSC name can be used.
@@ -180,14 +227,17 @@ Creates a static route through a gateway to a specific nid or a range of nid's.
 --node node 
 Node to add the route to.
 .TP
---router
+--router 
 Optional flag to mark a node as router.
 .TP
 --gw nid 
 The nid of the gateway (must be a local interface or a peer).
 .TP
---tgt nid 
-For a specific route, this is the target nid.
+--gateway_cluster_id id 
+Specify the id of the cluster, to which the gateway belongs.
+.TP
+--target_cluster_id id 
+Specify the id of the cluster, to which the target of the route belongs.
 .TP
 --lo nid 
 For a range route, this is the lo value nid.
@@ -210,7 +260,23 @@ Send output to the file. If the file exists, it will be overwritten.
 .TP
 --merge filename 
 Add the new element to an existing file. 
+.TP
+--reference 
+Print short reference for commands.
+.TP
+--verbose 
+Print system commands as they are run.
+.TP
+--batch filename 
+Used to execute lmc commands in batch mode.
 .SH EXAMPLES
-Real life examples are given in the Lustre-conf manual page.
+.TP
+.B lmc --node adev3 --add net --nid adev3 --cluster_id 0x1000 --nettype tcp --hostaddr adev3-eth0 --port 988
+.TP
+.B lmc --node adev3 --add net --nid adev3 --cluster_id 0x2000 --nettype tcp --hostaddr adev3-eth1 --port 989
+Used to add a Lustre node to a specified Lustre cluster through a network interface. In this example, Lustre node adev3 has been added to 2 Lustre clusters whose cluster_id are 0x1000 and 0x2000 separately through 2 network interface cards: adev3-eth0 and adev3-eth1. adev3 would listen in some specified port(s) to prepare for possible connection requests from nodes in these two clusters.
+.TP
+.B lmc --node adev3 --add route --nettype tcp --gw 5 --gateway_cluster_id 0x1000 --target_cluster_id 0x1000 --lo 4 --hi 7
+Used to add a route entry for a Lustre node. Here Lustre node adev3 is told it has a new route entry that now it could send packets to Lustre nodes whose nids is from 4 to 7 with the help of Lustre gateway node whose nid is 5. Besides, Lustre gateway node is in cluster whose id is 0x1000 and target of the route belongs to cluster whose id is also 0x1000. The network in this route path is a tcp network.
 .SH BUGS
 None are known.

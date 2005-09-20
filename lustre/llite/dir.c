@@ -309,8 +309,6 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
                 RETURN(0);
 
-        types = ext2_filetype_table;
-
         for ( ; n < npages; n++, offset = 0) {
                 char *kaddr, *limit;
                 ext2_dirent *de;

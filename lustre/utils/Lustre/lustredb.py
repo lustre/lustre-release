@@ -196,11 +196,11 @@ class LustreDB:
             ret = []
             devs = self.lookup_class('mds')
             for tgt in devs:
-                if tgt.get_val('group', tgt.get_value('name')) == group:
+                if tgt.get_val('group', tgt.get_val('name')) == group:
                     ret.append(tgt.getUUID())
             devs = self.lookup_class('ost')
             for tgt in devs:
-                if tgt.get_val('group', tgt.get_value('name')) == group:
+                if tgt.get_val('group', tgt.get_val('name')) == group:
                     ret.append(tgt.getUUID())
             if self.caching_enabled:
                 self.lookup_group_cache[group] = ret

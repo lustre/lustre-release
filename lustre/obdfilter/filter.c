@@ -303,7 +303,7 @@ static int filter_free_server_data(struct filter_obd *filter)
 {
         OBD_FREE(filter->fo_fsd, sizeof(*filter->fo_fsd));
         filter->fo_fsd = NULL;
-        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
+        OBD_FREE(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
         filter->fo_last_rcvd_slots = NULL;
         return 0;
 }
@@ -376,7 +376,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 RETURN(-ENOMEM);
         filter->fo_fsd = fsd;
 
-        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS/8);
+        OBD_ALLOC(filter->fo_last_rcvd_slots, FILTER_LR_MAX_CLIENTS / 8);
         if (filter->fo_last_rcvd_slots == NULL) {
                 OBD_FREE(fsd, sizeof(*fsd));
                 RETURN(-ENOMEM);
@@ -1090,6 +1090,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         struct list_head *tmp;
         ldlm_error_t err;
         int tmpflags = 0, rc, repsize[2] = {sizeof(*rep), sizeof(*reply_lvb)};
+        int only_liblustre = 0;
         ENTRY;
 
         policy = ldlm_get_processing_policy(res);
@@ -1157,6 +1158,15 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tmplock->l_policy_data.l_extent.end <= reply_lvb->lvb_size)
                         continue;
 
+                /* Don't send glimpse ASTs to liblustre clients.  They aren't
+                 * listening for them, and they do entirely synchronous I/O
+                 * anyways. */
+                if (tmplock->l_export == NULL ||
+                    tmplock->l_export->exp_libclient == 1) {
+                        only_liblustre = 1;
+                        continue;
+                }
+
                 if (l == NULL) {
                         l = LDLM_LOCK_GET(tmplock);
                         continue;
@@ -1172,8 +1182,26 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         l_unlock(&res->lr_namespace->ns_lock);
 
         /* There were no PW locks beyond the size in the LVB; finished. */
-        if (l == NULL)
+        if (l == NULL) {
+                if (only_liblustre) {
+                        /* If we discovered a liblustre client with a PW lock,
+                         * however, the LVB may be out of date!  The LVB is
+                         * updated only on glimpse (which we don't do for
+                         * liblustre clients) and cancel (which the client
+                         * obviously has not yet done).  So if it has written
+                         * data but kept the lock, the LVB is stale and needs
+                         * to be updated from disk.
+                         *
+                         * Of course, this will all disappear when we switch to
+                         * taking liblustre locks on the OST. */
+                        if (res->lr_namespace->ns_lvbo &&
+                            res->lr_namespace->ns_lvbo->lvbo_update) {
+                                res->lr_namespace->ns_lvbo->lvbo_update
+                                                             (res, NULL, 0, 1);
+                        }
+                }
                 RETURN(ELDLM_LOCK_ABORTED);
+        }
 
         if (l->l_glimpse_ast == NULL) {
                 /* We are racing with unlink(); just return -ENOENT */
@@ -1183,6 +1211,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
 
         LASSERTF(l->l_glimpse_ast != NULL, "l == %p", l);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+        /* Update the LVB from disk if the AST failed (this is a legal race) */
         if (rc != 0 && res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
                 res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
@@ -1198,7 +1227,110 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         RETURN(ELDLM_LOCK_ABORTED);
 }
 
-/* mount the file system (secretly) */
+/*
+ * per-obd_device iobuf pool.
+ *
+ * To avoid memory deadlocks in low-memory setups, amount of dynamic
+ * allocations in write-path has to be minimized (see bug 5137).
+ *
+ * Pages, niobuf_local's and niobuf_remote's are pre-allocated and attached to
+ * OST threads (see ost_thread_{init,done}()).
+ *
+ * "iobuf's" used by filter cannot be attached to OST thread, however, because
+ * at the OST layer there are only (potentially) multiple obd_device of type
+ * unknown at the time of OST thread creation.
+ *
+ * Instead array of iobuf's is attached to struct filter_obd (->fo_iobuf_pool
+ * field). This array has size OST_NUM_THREADS, so that each OST thread uses
+ * it's very own iobuf.
+ *
+ * Functions below
+ *
+ *     filter_kiobuf_pool_init()
+ *
+ *     filter_kiobuf_pool_done()
+ *
+ *     filter_iobuf_get()
+ *
+ * operate on this array. They are "generic" in a sense that they don't depend
+ * on actual type of iobuf's (the latter depending on Linux kernel version).
+ */
+
+/*
+ * destroy pool created by filter_iobuf_pool_init
+ */
+static void filter_iobuf_pool_done(struct filter_obd *filter)
+{
+        void **pool;
+        int i;
+
+        ENTRY;
+
+        pool = filter->fo_iobuf_pool;
+        if (pool != NULL) {
+                for (i = 0; i < OST_NUM_THREADS; ++ i) {
+                        if (pool[i] != NULL)
+                                filter_free_iobuf(pool[i]);
+                }
+                OBD_FREE(pool, OST_NUM_THREADS * sizeof pool[0]);
+                filter->fo_iobuf_pool = NULL;
+        }
+        EXIT;
+}
+
+/*
+ * pre-allocate pool of iobuf's to be used by filter_{prep,commit}rw_write().
+ */
+static int filter_iobuf_pool_init(struct filter_obd *filter, int count)
+{
+        void **pool;
+        int i;
+        int result = 0;
+
+        ENTRY;
+
+        LASSERT(count <= OST_NUM_THREADS);
+
+        OBD_ALLOC_GFP(pool, OST_NUM_THREADS * sizeof pool[0], GFP_KERNEL);
+        if (pool == NULL)
+                RETURN(-ENOMEM);
+
+        filter->fo_iobuf_pool = pool;
+        filter->fo_iobuf_count = count;
+        for (i = 0; i < count; ++ i) {
+                /*
+                 * allocate kiobuf to be used by i-th OST thread.
+                 */
+                result = filter_alloc_iobuf(filter, OBD_BRW_WRITE,
+                                            PTLRPC_MAX_BRW_PAGES,
+                                            &pool[i]);
+                if (result != 0) {
+                        filter_iobuf_pool_done(filter);
+                        break;
+                }
+        }
+        RETURN(result);
+}
+
+/*
+ * return iobuf preallocated by filter_iobuf_pool_init() for @thread.
+ */
+void *filter_iobuf_get(struct ptlrpc_thread *thread, struct filter_obd *filter)
+{
+        void *kio;
+
+        LASSERT(thread->t_id < filter->fo_iobuf_count);
+        kio = filter->fo_iobuf_pool[thread->t_id];
+        LASSERT(kio != NULL);
+        return kio;
+}
+
+/* mount the file system (secretly).  lustre_cfg parameters are:
+ * 1 = device
+ * 2 = fstype
+ * 3 = flags: failover=f, failout=n
+ * 4 = mount options
+ */
 int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                         void *option)
 {
@@ -1208,7 +1340,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct lustre_mount_info *lmi;
         char *str;
         char ns_name[48];
-        int rc = 0;
+        int rc;
         ENTRY;
 
         if (lcfg->lcfg_bufcount < 3 ||
@@ -1219,35 +1351,41 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         obd->obd_fsops = fsfilt_get_ops(lustre_cfg_string(lcfg, 2));
         if (IS_ERR(obd->obd_fsops))
                 RETURN(PTR_ERR(obd->obd_fsops));
-        
+
+        rc = filter_iobuf_pool_init(filter, OST_NUM_THREADS);
+        if (rc != 0)
+                GOTO(err_ops, rc);
+
         lmi = lustre_get_mount(obd->obd_name);
         if (lmi) {
                 /* We already mounted in lustre_fill_super */
+                /* FIXME did we mount with the flags below?*/
                 mnt = lmi->lmi_mnt;
         } else {
                 mnt = do_kern_mount(lustre_cfg_string(lcfg, 2),
                                     MS_NOATIME|MS_NODIRATIME,
                                     lustre_cfg_string(lcfg, 1), option);       
         }
-        rc = PTR_ERR(mnt);
-        if (IS_ERR(mnt))
+
+        if (IS_ERR(mnt)) {
+                rc = PTR_ERR(mnt);
+                LCONSOLE_ERROR("Can't mount disk %s (%d)\n",
+                               lustre_cfg_string(lcfg, 1), rc);
                 GOTO(err_ops, rc);
+        }
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
+        /* failover is the default */
+        obd->obd_replayable = 1;
+        obd_sync_filter = 1;
+
         if (lcfg->lcfg_bufcount > 3 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 str = lustre_cfg_string(lcfg, 3);
-                if (*str == 'f') {
-                        obd->obd_replayable = 1;
-                        obd_sync_filter = 1;
-                        CWARN("%s: recovery enabled\n", obd->obd_name);
-                } else {
-                        if (*str != 'n') {
-                                CERROR("unrecognised flag '%c'\n",
-                                       *str);
-                        }
-                        // XXX Robert? Why do we get errors here
-                        // GOTO(err_mntput, rc = -EINVAL);
+                if (strchr(str, 'n')) {
+                        CWARN("%s: recovery disabled\n", obd->obd_name);
+                        obd->obd_replayable = 0;
+                        obd_sync_filter = 0;
                 }
         }
 
@@ -1348,6 +1486,7 @@ err_mntput:
         filter->fo_sb = 0;
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
+        filter_iobuf_pool_done(filter);
         return rc;
 }
 
@@ -1521,6 +1660,8 @@ static int filter_cleanup(struct obd_device *obd)
                 lock_kernel();
 
         fsfilt_put_ops(obd->obd_fsops);
+
+        filter_iobuf_pool_done(filter);
 
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
 
@@ -1781,8 +1922,7 @@ static int filter_getattr(struct obd_export *exp, struct obdo *oa,
 
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
+                CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -1840,7 +1980,7 @@ int filter_setattr(struct obd_export *exp, struct obdo *oa,
         if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
                 orig_uid = dentry->d_inode->i_uid;
                 orig_gid = dentry->d_inode->i_gid;
-                handle = fsfilt_start_log(exp->exp_obd, dentry->d_inode, 
+                handle = fsfilt_start_log(exp->exp_obd, dentry->d_inode,
                                           FSFILT_OP_SETATTR, oti, 1);
         } else {
                 handle = fsfilt_start(exp->exp_obd, dentry->d_inode,
@@ -2079,7 +2219,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 
         osfs->os_bavail -= min(osfs->os_bavail,
                                (filter->fo_tot_dirty + filter->fo_tot_pending +
-                                osfs->os_bsize -1) >> blockbits);
+                                osfs->os_bsize - 1) >> blockbits);
 
         RETURN(rc);
 }
@@ -2112,12 +2252,12 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 recreate_obj = 1;
         } else {
                 OBD_ALLOC(osfs, sizeof(*osfs));
-                if(osfs == NULL)
+                if (osfs == NULL)
                         RETURN(-ENOMEM);
-                rc = filter_statfs(obd, osfs, jiffies-HZ);
-                if(rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
-                        CDEBUG(D_HA, "This OST has not enough space! avail "LPU64"\n",
-                                osfs->os_bavail << filter->fo_sb->s_blocksize_bits);
+                rc = filter_statfs(obd, osfs, jiffies - HZ);
+                if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
+                        CDEBUG(D_HA, "OST out of space! avail "LPU64"\n",
+                              osfs->os_bavail<<filter->fo_sb->s_blocksize_bits);
                         *num=0;
                         rc = -ENOSPC;
                 }
@@ -2501,8 +2641,7 @@ static int filter_get_info(struct obd_export *exp, __u32 keylen,
 
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       exp->exp_handle.h_cookie);
+                CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -2536,17 +2675,13 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
                            void *key, __u32 vallen, void *val)
 {
         struct obd_device *obd;
-        struct lustre_handle conn;
         struct llog_ctxt *ctxt;
         int rc = 0;
         ENTRY;
 
-        conn.cookie = exp->exp_handle.h_cookie;
-
         obd = exp->exp_obd;
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "invalid exp %p cookie "LPX64"\n",
-                       exp, conn.cookie);
+                CDEBUG(D_IOCTL, "invalid export %p\n", exp);
                 RETURN(-EINVAL);
         }
 
@@ -2554,14 +2689,14 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
             memcmp(key, "mds_conn", keylen) != 0)
                 RETURN(-EINVAL);
 
-        CWARN("%s: received MDS connection ("LPX64")\n",
-              obd->obd_name, conn.cookie);
-        memcpy(&obd->u.filter.fo_mdc_conn, &conn, sizeof(conn));
+        CWARN("%s: received MDS connection from %s\n", obd->obd_name,
+              obd_export_nid2str(exp));
+        obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-        
+
         filter_quota_set_info(exp, obd);
 
         RETURN(rc);
@@ -2635,6 +2770,21 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(0);
 }
 
+static int filter_health_check(struct obd_device *obd)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        int rc = 0;
+       
+        /*
+         * health_check to return 0 on healthy
+         * and 1 on unhealthy.
+         */
+        if(filter->fo_sb->s_flags & MS_RDONLY)
+                rc = 1;
+
+        return rc;
+}
+
 static struct dentry *filter_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
                                              void *data)
 {
@@ -2671,6 +2821,7 @@ static struct obd_ops filter_obd_ops = {
         .o_iocontrol      = filter_iocontrol,
         .o_quotacheck     = filter_quotacheck,
         .o_quotactl       = filter_quotactl,
+        .o_health_check   = filter_health_check,
 };
 
 static struct obd_ops filter_sanobd_ops = {
@@ -2717,10 +2868,8 @@ static int __init obdfilter_init(void)
 
         rc = class_register_type(&filter_obd_ops, lvars.module_vars,
                                  OBD_FILTER_DEVICENAME);
-        if (rc) {
+        if (rc)
                 GOTO(out, rc);
-                return rc;
-        }
 
         rc = class_register_type(&filter_sanobd_ops, lvars.module_vars,
                                  OBD_FILTER_SAN_DEVICENAME);

@@ -94,8 +94,6 @@ void lustre_assert_wire_constants(void)
                  (long long)OST_LAST_OPC);
         LASSERTF(OBD_OBJECT_EOF == 0xffffffffffffffffULL," found %lld\n",
                  (long long)OBD_OBJECT_EOF);
-        LASSERTF(OST_REQ_HAS_OA1 == 1, " found %lld\n",
-                 (long long)OST_REQ_HAS_OA1);
         LASSERTF(MDS_GETATTR == 33, " found %lld\n",
                  (long long)MDS_GETATTR);
         LASSERTF(MDS_GETATTR_NAME == 34, " found %lld\n",
@@ -1118,6 +1116,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_extent, end));
         LASSERTF((int)sizeof(((struct ldlm_extent *)0)->end) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_extent *)0)->end));
+        LASSERTF((int)offsetof(struct ldlm_extent, gid) == 16, " found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_extent, gid));
+        LASSERTF((int)sizeof(((struct ldlm_extent *)0)->gid) == 8, " found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_extent *)0)->gid));
 
         /* Checks for struct ldlm_flock */
         LASSERTF((int)sizeof(struct ldlm_flock) == 32, " found %lld\n",

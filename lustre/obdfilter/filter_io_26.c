@@ -8,20 +8,23 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #include <linux/config.h>
@@ -37,8 +40,6 @@
 #include <linux/lustre_quota.h>
 #include "filter_internal.h"
 
-#warning "implement writeback mode -bzzz"
-
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct dio_request {
@@ -48,7 +49,6 @@ struct dio_request {
         int               dr_max_pages;
         int               dr_npages;
         int               dr_error;
-        unsigned long     dr_flag;     /* indicating if there is client cache page in this rpc */
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
         spinlock_t        dr_lock;
@@ -171,11 +171,11 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         OBD_ALLOC(dreq, sizeof(*dreq));
         if (dreq == NULL)
                 goto failed_0;
-        
+
         OBD_ALLOC(dreq->dr_pages, num_pages * sizeof(*dreq->dr_pages));
         if (dreq->dr_pages == NULL)
                 goto failed_1;
-        
+
         OBD_ALLOC(dreq->dr_blocks,
                   MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
         if (dreq->dr_blocks == NULL)
@@ -201,10 +201,9 @@ int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
         RETURN(-ENOMEM);
 }
 
-void filter_free_iobuf(void *iobuf)
+void filter_iobuf_put(void *iobuf)
 {
         struct dio_request *dreq = iobuf;
-        int                 num_pages = dreq->dr_max_pages;
 
         /* free all bios */
         while (dreq->dr_bios) {
@@ -212,12 +211,22 @@ void filter_free_iobuf(void *iobuf)
                 dreq->dr_bios = bio->bi_private;
                 bio_put(bio);
         }
+        dreq->dr_npages = 0;
+        atomic_set(&dreq->dr_numreqs, 0);
+}
+
+void filter_free_iobuf(void *iobuf)
+{
+        struct dio_request *dreq = iobuf;
+        int                 num_pages = dreq->dr_max_pages;
+
+        filter_iobuf_put(dreq);
 
         OBD_FREE(dreq->dr_blocks,
                  MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*dreq->dr_blocks));
         OBD_FREE(dreq->dr_pages,
                  num_pages * sizeof(*dreq->dr_pages));
-        OBD_FREE(dreq, sizeof(*dreq));
+        OBD_FREE_PTR(dreq);
 }
 
 int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
@@ -412,31 +421,29 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-        int rc, rc2;
+        int rc, rc2, create;
+        struct semaphore *sem;
         ENTRY;
 
-        LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
         LASSERTF(dreq->dr_npages <= dreq->dr_max_pages, "%d,%d\n",
                  dreq->dr_npages, dreq->dr_max_pages);
         LASSERT(dreq->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
-        LASSERT(dreq->dr_npages > 0 || rw != OBD_BRW_WRITE);
 
-        if (dreq->dr_npages == 0)
-                RETURN(0);
-
-        /* If there is any page in this write rpc that comes from client
-         * cache, we write the whole rpc without quota limit */
-        if (dreq->dr_flag & OBD_BRW_FROM_GRANT) {
-                cap_raise(current->cap_effective, CAP_SYS_RESOURCE);
-                dreq->dr_flag &= ~OBD_BRW_FROM_GRANT;
+        if (rw == OBD_BRW_READ) {
+                if (dreq->dr_npages == 0)
+                        RETURN(0);
+                create = 0;
+                sem = NULL;
+        } else {
+                LASSERTF(rw == OBD_BRW_WRITE, "%x\n", rw);
+                LASSERT(dreq->dr_npages > 0);
+                create = 1;
+                sem = &obd->u.filter.fo_alloc_lock;
         }
-
 remap:
-        rc = fsfilt_map_inode_pages(obd, inode,
-                                    dreq->dr_pages, dreq->dr_npages,
-                                    dreq->dr_blocks,
-                                    obdfilter_created_scratchpad,
-                                    rw == OBD_BRW_WRITE, NULL);
+        rc = fsfilt_map_inode_pages(obd, inode, dreq->dr_pages,
+                                    dreq->dr_npages, dreq->dr_blocks,
+                                    obdfilter_created_scratchpad, create, sem);
 
         if (rc == -EDQUOT) {
                 LASSERT(rw == OBD_BRW_WRITE &&
@@ -466,9 +473,13 @@ remap:
                 up(&inode->i_sem);
 
                 rc2 = filter_finish_transno(exp, oti, 0);
-                if (rc2 != 0)
-                        CERROR("can't close transaction: %d\n", rc);
+                if (rc2 != 0) {
+                        CERROR("can't close transaction: %d\n", rc2);
+                        if (rc == 0)
+                                rc = rc2;
+                }
 
+                rc2 =fsfilt_commit_async(obd,inode,oti->oti_handle,wait_handle);
                 if (rc == 0)
                         rc = rc2;
                 if (rc != 0)
@@ -519,6 +530,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct lvfs_ucred *uc = NULL;
+        void *wait_handle;
         int   total_size = 0;
         ENTRY;
 
@@ -528,11 +540,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         if (rc != 0)
                 GOTO(cleanup, rc);
-        
-        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE, obj->ioo_bufcnt,
-                                (void **)&dreq);
-        if (rc)
-                GOTO(cleanup, rc);
+
+        dreq = filter_iobuf_get(oti->oti_thread, &exp->exp_obd->u.filter);
         cleanup_phase = 1;
 
         fso.fso_dentry = res->dentry;
@@ -562,10 +571,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 this_size = lnb->offset + lnb->len;
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
-                /* if one page is a write-back page from client cache,
-                 * then mark that the whole io request can be over quota */
-                if (lnb->flags & OBD_BRW_FROM_GRANT)
-                        dreq->dr_flag |= OBD_BRW_FROM_GRANT;
         }
 
         /* The client store the user credit information fsuid and fsgid
@@ -579,6 +584,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         down(&inode->i_sem);
+        fsfilt_check_slow(now, obd_timeout, "i_sem");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -596,18 +602,18 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, dreq, exp, &iattr,
-                              oti, NULL);
+                              oti, &wait_handle);
         if (rc == 0)
-                obdo_from_inode(oa, inode, 
-                                FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
-        else 
+                obdo_from_inode(oa, inode,
+                                FILTER_VALID_FLAGS |OBD_MD_FLUID |OBD_MD_FLGID);
+        else
                 obdo_from_inode(oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
 
         filter_get_quota_flag(obd, oa);
 
         fsfilt_check_slow(now, obd_timeout, "direct_io");
 
-        err = fsfilt_commit(obd, inode, oti->oti_handle, obd_sync_filter);
+        err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err)
                 rc = err;
 
@@ -628,9 +634,12 @@ cleanup:
                         OBD_FREE(uc, sizeof(*uc));
                 LASSERT(current->journal_info == NULL);
         case 1:
-                filter_free_iobuf(dreq);
+                filter_iobuf_put(dreq);
         case 0:
-                filter_free_dio_pages(objcount, obj, niocount, res);
+                /*
+                 * lnb->page automatically returns back into per-thread page
+                 * pool (bug 5137)
+                 */
                 f_dput(res->dentry);
         }
 

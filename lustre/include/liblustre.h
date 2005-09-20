@@ -62,7 +62,7 @@
 #include <fcntl.h>
 
 #include <libcfs/list.h>
-#include <portals/p30.h>
+#include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 
 /* definitions for liblustre */
@@ -88,6 +88,9 @@ typedef unsigned short umode_t;
  */
 #ifndef smp_processor_id
 #define smp_processor_id() 0
+#endif
+#ifndef smp_num_cpus
+#define smp_num_cpus 1
 #endif
 
 /* always adopt 2.5 definitions */
@@ -723,7 +726,7 @@ int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }
 static inline int llog_cleanup_commit_master(int force) { return 0; }
-static inline void portals_run_lbug_upcall(char *file, const char *fn,
+static inline void libcfs_run_lbug_upcall(char *file, const char *fn,
                                            const int l){}
 
 /* completion */

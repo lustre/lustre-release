@@ -182,8 +182,8 @@ replay_barrier() {
     df $MOUNT
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 replay_barrier_nodf() {
@@ -191,8 +191,8 @@ replay_barrier_nodf() {
     do_facet $facet sync
     do_facet $facet $LCTL --device %${facet}_svc readonly
     do_facet $facet $LCTL --device %${facet}_svc notransno
-    do_facet $facet $LCTL mark "REPLAY BARRIER"
-    $LCTL mark "REPLAY BARRIER"
+    do_facet $facet $LCTL mark "$facet REPLAY BARRIER"
+    $LCTL mark "local REPLAY BARRIER"
 }
 
 mds_evict_client() {
@@ -518,9 +518,10 @@ pgcache_empty() {
 ##################################
 # Test interface 
 error() {
-    echo "${TESTSUITE}: **** FAIL:" $@
-    log "FAIL: $@"
-    exit 1
+	sysctl -w lustre.fail_loc=0
+	echo "${TESTSUITE}: **** FAIL:" $@
+	log "FAIL: $@"
+	exit 1
 }
 
 build_test_filter() {
@@ -529,7 +530,7 @@ build_test_filter() {
             eval ONLY_${O}=true
         done
         [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
-		log "skipping `echo $EXCEPT $ALWAYS_EXCEPT`"
+		log "skipping test `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

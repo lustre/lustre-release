@@ -113,11 +113,11 @@ static inline int llu_is_root_inode(struct inode *inode)
 do {                                                                           \
         struct lookup_intent *temp;                                            \
         LASSERT(llu_i2info(inode)->lli_it == NULL);                            \
-       	OBD_ALLOC(temp, sizeof(*temp));					       \
+        OBD_ALLOC(temp, sizeof(*temp));                                        \
         memcpy(temp, it, sizeof(*temp));                                       \
         llu_i2info(inode)->lli_it = temp;                                      \
         CDEBUG(D_DENTRY, "alloc intent %p to inode %p(ino %llu)\n",            \
-                        temp, inode, llu_i2stat(inode)->st_ino);               \
+                        temp, inode, (long long)llu_i2stat(inode)->st_ino);    \
 } while(0)
 
 
@@ -128,7 +128,7 @@ do {                                                                           \
         LASSERT(it);                                                           \
         llu_i2info(inode)->lli_it = NULL;                                      \
         CDEBUG(D_DENTRY, "dettach intent %p from inode %p(ino %llu)\n",        \
-                        it, inode, llu_i2stat(inode)->st_ino);                 \
+                        it, inode, (long long)llu_i2stat(inode)->st_ino);      \
 } while(0)
 
 /* interpet return codes from intent lookup */
@@ -146,29 +146,7 @@ struct it_cb_data {
         obd_id hash;
 };
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        struct intnl_stat *st = llu_i2stat(i1);
-
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(st->st_gid))
-                ctxt->gid1 = st->st_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                st = llu_i2stat(i2);
-                if (in_group_p(st->st_gid))
-                        ctxt->gid2 = st->st_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else 
-                ctxt->gid2 = 0;
-}
-
+void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
                                 struct inode *parent, struct pnode *pnode, 

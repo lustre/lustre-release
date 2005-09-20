@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -46,7 +49,7 @@ void ptlrpc_init_client(int req_portal, int rep_portal, char *name,
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 {
         struct ptlrpc_connection *c;
-        ptl_process_id_t          peer;
+        lnet_process_id_t          peer;
         int                       err;
 
         err = ptlrpc_uuid_to_peer(uuid, &peer);
@@ -69,7 +72,7 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid)
 void ptlrpc_readdress_connection(struct ptlrpc_connection *conn,
                                  struct obd_uuid *uuid)
 {
-        ptl_process_id_t peer;
+        lnet_process_id_t peer;
         int              err;
 
         err = ptlrpc_uuid_to_peer(uuid, &peer);
@@ -94,7 +97,7 @@ static inline struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal
         init_waitqueue_head(&desc->bd_waitq);
         desc->bd_max_iov = npages;
         desc->bd_iov_count = 0;
-        desc->bd_md_h = PTL_INVALID_HANDLE;
+        desc->bd_md_h = LNET_INVALID_HANDLE;
         desc->bd_portal = portal;
         desc->bd_type = type;
 
@@ -181,10 +184,126 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         EXIT;
 }
 
-struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
-                                       int count, int *lengths, char **bufs)
+void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool)
+{
+        struct list_head *l, *tmp;
+        struct ptlrpc_request *req;
+
+        if (!pool)
+                return;
+
+        list_for_each_safe(l, tmp, &pool->prp_req_list) {
+                req = list_entry(l, struct ptlrpc_request, rq_list);
+                list_del(&req->rq_list);
+                LASSERT (req->rq_reqmsg);
+                OBD_FREE(req->rq_reqmsg, pool->prp_rq_size);
+                OBD_FREE(req, sizeof(*req));
+        }
+        OBD_FREE(pool, sizeof(*pool));
+}
+
+void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq)
+{
+        int i;
+        int size = 1;
+
+        while (size < pool->prp_rq_size)
+                size <<= 1;
+
+        LASSERTF(list_empty(&pool->prp_req_list) || size == pool->prp_rq_size,
+                 "Trying to change pool size with nonempty pool "
+                 "from %d to %d bytes\n", pool->prp_rq_size, size);
+
+        spin_lock(&pool->prp_lock);
+        pool->prp_rq_size = size;
+        for (i = 0; i < num_rq; i++) {
+                struct ptlrpc_request *req;
+                struct lustre_msg *msg;
+                OBD_ALLOC(req, sizeof(struct ptlrpc_request));
+                if (!req)
+                        goto out;
+                OBD_ALLOC_GFP(msg, size, GFP_KERNEL);
+                if (!msg) {
+                        OBD_FREE(req, sizeof(struct ptlrpc_request));
+                        goto out;
+                }
+                req->rq_reqmsg = msg;
+                req->rq_pool = pool;
+                list_add_tail(&req->rq_list, &pool->prp_req_list);
+        }
+out:
+        spin_unlock(&pool->prp_lock);
+        return;
+}
+
+struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int num_rq, int msgsize,
+                                                void (*populate_pool)(struct ptlrpc_request_pool *, int))
+{
+        struct ptlrpc_request_pool *pool;
+
+        OBD_ALLOC(pool, sizeof (struct ptlrpc_request_pool));
+        if (!pool)
+                return NULL;
+
+        /* Request next power of two for the allocation, because internally
+           kernel would do exactly this */
+
+        spin_lock_init(&pool->prp_lock);
+        INIT_LIST_HEAD(&pool->prp_req_list);
+        pool->prp_rq_size = msgsize;
+        pool->prp_populate = populate_pool;
+
+        populate_pool(pool, num_rq);
+
+        if (list_empty(&pool->prp_req_list)) {
+                /* have not allocated a single request for the pool */
+                OBD_FREE(pool, sizeof (struct ptlrpc_request_pool));
+                pool = NULL;
+        }
+        return pool;
+}
+
+static struct ptlrpc_request *ptlrpc_prep_req_from_pool(struct ptlrpc_request_pool *pool)
 {
         struct ptlrpc_request *request;
+        struct lustre_msg *reqmsg;
+
+        if (!pool)
+                return NULL;
+
+        spin_lock(&pool->prp_lock);
+
+        /* See if we have anything in a pool, and bail out if nothing,
+         * in writeout path, where this matters, this is safe to do, because
+         * nothing is lost in this case, and when some in-flight requests
+         * complete, this code will be called again. */
+        if (unlikely(list_empty(&pool->prp_req_list))) {
+                spin_unlock(&pool->prp_lock);
+                return NULL;
+        }
+
+        request = list_entry(pool->prp_req_list.next, struct ptlrpc_request,
+                             rq_list);
+        list_del(&request->rq_list);
+        spin_unlock(&pool->prp_lock);
+
+        LASSERT(request->rq_reqmsg);
+        LASSERT(request->rq_pool);
+
+        reqmsg = request->rq_reqmsg;
+        memset(request, 0, sizeof(*request));
+        request->rq_reqmsg = reqmsg;
+        request->rq_pool = pool;
+        request->rq_reqlen = pool->prp_rq_size;
+        return request;
+}
+
+struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, int opcode,
+                                            int count, int *lengths,
+                                            char **bufs,
+                                            struct ptlrpc_request_pool *pool)
+{
+        struct ptlrpc_request *request = NULL;
         int rc;
         ENTRY;
 
@@ -193,7 +312,12 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         LASSERT((unsigned long)imp->imp_client > 0x1000);
         LASSERT(imp->imp_client != LP_POISON);
 
-        OBD_ALLOC(request, sizeof(*request));
+        if (pool)
+                request = ptlrpc_prep_req_from_pool(pool);
+
+        if (!request)
+                OBD_ALLOC(request, sizeof(*request));
+
         if (!request) {
                 CERROR("request allocation out of memory\n");
                 RETURN(NULL);
@@ -201,7 +325,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
 
         rc = lustre_pack_request(request, count, lengths, bufs);
         if (rc) {
-                CERROR("cannot pack request %d\n", rc);
+                LASSERT(!request->rq_pool);
                 OBD_FREE(request, sizeof(*request));
                 RETURN(NULL);
         }
@@ -240,6 +364,13 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
 
         RETURN(request);
 }
+
+struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
+                                       int count, int *lengths, char **bufs)
+{
+        return ptlrpc_prep_req_pool(imp, opcode, count, lengths, bufs, NULL);
+}
+
 
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
@@ -501,8 +632,11 @@ static int after_reply(struct ptlrpc_request *req)
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 if (req->rq_transno != 0)
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL)
+                else if (req->rq_commit_cb != NULL) {
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
+                        spin_lock_irqsave(&imp->imp_lock, flags);
+		}
 
                 if (req->rq_transno > imp->imp_max_transno)
                         imp->imp_max_transno = req->rq_transno;
@@ -813,7 +947,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         ptlrpc_unregister_reply (req);
 
         if (obd_dump_on_timeout)
-                portals_debug_dumplog();
+                libcfs_debug_dumplog();
 
         if (req->rq_bulk != NULL)
                 ptlrpc_unregister_bulk (req);
@@ -994,6 +1128,15 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
         RETURN(rc);
 }
 
+static void __ptlrpc_free_req_to_pool(struct ptlrpc_request *request)
+{
+        struct ptlrpc_request_pool *pool = request->rq_pool;
+
+        spin_lock(&pool->prp_lock);
+        list_add_tail(&request->rq_list, &pool->prp_req_list);
+        spin_unlock(&pool->prp_lock);
+}
+
 static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
 {
         ENTRY;
@@ -1030,10 +1173,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
                 request->rq_repmsg = NULL;
         }
-        if (request->rq_reqmsg != NULL) {
-                OBD_FREE(request->rq_reqmsg, request->rq_reqlen);
-                request->rq_reqmsg = NULL;
-        }
         if (request->rq_export != NULL) {
                 class_export_put(request->rq_export);
                 request->rq_export = NULL;
@@ -1045,7 +1184,15 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         if (request->rq_bulk != NULL)
                 ptlrpc_free_bulk(request->rq_bulk);
 
-        OBD_FREE(request, sizeof(*request));
+        if (request->rq_pool) {
+                __ptlrpc_free_req_to_pool(request);
+        } else {
+                if (request->rq_reqmsg != NULL) {
+                        OBD_FREE(request->rq_reqmsg, request->rq_reqlen);
+                        request->rq_reqmsg = NULL;
+                }
+                OBD_FREE(request, sizeof(*request));
+        }
         EXIT;
 }
 
@@ -1112,7 +1259,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         if (!ptlrpc_client_receiving_reply(request))
                 return;
 
-        PtlMDUnlink (request->rq_reply_md_h);
+        LNetMDUnlink (request->rq_reply_md_h);
 
         /* We have to l_wait_event() whatever the result, to give liblustre
          * a chance to run reply_in_callback() */

@@ -47,6 +47,30 @@
 
 #include "llite_lib.h"
 
+/* Pack the required supplementary groups into the supplied groups array.
+ * If we don't need to use the groups from the target inode(s) then we
+ * instead pack one or more groups from the user's supplementary group
+ * array in case it might be useful.  Not needed if doing an MDS-side upcall. */
+void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
+{
+        LASSERT(i1 != NULL);
+        LASSERT(suppgids != NULL);
+
+        if (in_group_p(i1->i_stbuf.st_gid))
+                suppgids[0] = i1->i_stbuf.st_gid;
+        else
+                suppgids[0] = -1;
+
+        if (i2) {
+                if (in_group_p(i2->i_stbuf.st_gid))
+                        suppgids[1] = i2->i_stbuf.st_gid;
+                else
+                        suppgids[1] = -1;
+        } else {
+                suppgids[1] = -1;
+        }
+}
+
 void llu_prepare_mdc_op_data(struct mdc_op_data *data,
                              struct inode *i1,
                              struct inode *i2,
@@ -55,13 +79,14 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
                              int mode)
 {
         LASSERT(i1);
-        
-        ll_i2uctxt(&data->ctxt, i1, i2);
+
+        ll_i2gids(data->suppgids, i1, i2);
         ll_inode2fid(&data->fid1, i1);
 
-        if (i2) {
+        if (i2)
                 ll_inode2fid(&data->fid2, i2);
-        }
+        else
+                memset(&data->fid2, 0, sizeof(data->fid2));
 
         data->name = name;
         data->namelen = namelen;
@@ -147,7 +172,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         if (llu_is_root_inode(inode))
                 RETURN(0);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", st->st_ino);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu\n", (long long)st->st_ino);
         LL_GET_INTENT(inode, it);
 
         if (!it->d.lustre.it_disposition) {
@@ -214,6 +239,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         int rc;
         ENTRY;
 
+        oti.oti_thread = request->rq_svc_thread;
         /* req is swabbed so this is safe */
         body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
 
@@ -313,12 +339,13 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 //ll_queue_done_writing(inode);
                 rc = 0;
         } else if (rc) {
-                CERROR("inode %llu close failed: rc %d\n", st->st_ino, rc);
+                CERROR("inode %llu close failed: rc %d\n",
+                       (long long)st->st_ino, rc);
         } else {
                 rc = llu_objects_destroy(req, inode);
                 if (rc)
                         CERROR("inode %llu ll_objects destroy: rc = %d\n",
-                                st->st_ino, rc);
+                               (long long)st->st_ino, rc);
         }
 
         mdc_clear_open_replay_data(och);
@@ -338,8 +365,8 @@ int llu_file_release(struct inode *inode)
         int rc = 0, rc2;
 
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu\n", llu_i2stat(inode)->st_ino,
-               lli->lli_st_generation);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu\n",
+               (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation);
 
         if (llu_is_root_inode(inode))
                 RETURN(0);
@@ -400,12 +427,13 @@ static void llu_truncate(struct inode *inode)
         struct obdo oa = {0};
         int rc;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n", st->st_ino,
-               lli->lli_st_generation, inode, st->st_size);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p) to %llu\n",
+               (long long)st->st_ino, lli->lli_st_generation, inode,
+               (long long)st->st_size);
 
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %llu with no objects\n",
-                       st->st_ino);
+                       (long long)st->st_ino);
                 EXIT;
                 return;
         }
@@ -418,13 +446,14 @@ static void llu_truncate(struct inode *inode)
         obd_adjust_kms(llu_i2obdexp(inode), lsm, st->st_size, 1);
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after %Lu)\n",
-               oa.o_id, st->st_size);
+               oa.o_id, (long long)st->st_size);
 
         /* truncate == punch from new size to absolute end of file */
         rc = obd_punch(llu_i2obdexp(inode), &oa, lsm, st->st_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
-                CERROR("obd_truncate fails (%d) ino %llu\n", rc, st->st_ino);
+                CERROR("obd_truncate fails (%d) ino %llu\n",
+                       rc, (long long)st->st_ino);
         else
                 obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                           OBD_MD_FLATIME | OBD_MD_FLMTIME |

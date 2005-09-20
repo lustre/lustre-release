@@ -415,13 +415,13 @@
  /*
   * Look up one component of a pathname.
   * N.B. After this call _both_ fhp and resfh need an fh_put
-@@ -300,7 +422,10 @@ nfsd_setattr(struct svc_rqst *rqstp, str
+@@ -300,7 +422,12 @@ nfsd_setattr(struct svc_rqst *rqstp, str
  	}
  	err = nfserr_notsync;
  	if (!check_guard || guardtime == inode->i_ctime) {
 -		err = notify_change(dentry, iap);
 +		if (dentry->d_inode->i_op &&dentry->d_inode->i_op->setattr_raw){
-+			if (acc_mode & MAY_OWNER_OVERRIDE)
++			if (accmode & MAY_OWNER_OVERRIDE)
 +				iap->ia_valid & O_OWNER_OVERRIDE;
 +			err = setattr_raw(dentry->d_inode, iap);
 +		} else

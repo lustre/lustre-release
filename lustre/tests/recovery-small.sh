@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  2986 5494
-ALWAYS_EXCEPT="20b  24"
+#         bug  2986 5494 7288
+ALWAYS_EXCEPT="20b  24   27"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -65,7 +65,7 @@ if [ ! -z "$EVAL" ]; then
 fi
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
+    sysctl -w lnet.debug=0 || true
     FORCE=--force cleanup
     exit
 fi
@@ -252,8 +252,8 @@ test_17() {
     sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
     # expect cmp to fail
-    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
-    do_facet client "rm $DIR/$tfile" || return 2
+    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 3
+    do_facet client "rm $DIR/$tfile" || return 4
     return 0
 }
 run_test 17 "timeout bulk get, evict client (2732)"

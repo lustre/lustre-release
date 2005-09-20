@@ -53,7 +53,7 @@
 #endif
 
 #include <linux/obd_class.h>
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "parser.h"
 #include <stdio.h>
 #include <sys/ipc.h>

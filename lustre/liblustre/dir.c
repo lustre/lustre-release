@@ -180,7 +180,7 @@ static int filldir(char *buf, int buflen,
                 return 1;
 
         dirent->d_ino = ino;
-        dirent->d_off = offset,
+        dirent->d_off = offset;
         dirent->d_reclen = reclen;
         dirent->d_type = (unsigned short) d_type;
         memcpy(dirent->d_name, name, namelen);
@@ -241,7 +241,7 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
 
                                 offset = (char*) de - addr;
                                 over =  filldir(buf, nbytes, de->name, de->name_len,
-                                                (pgidx << PAGE_SHIFT) | offset,
+                                                ((pgidx << PAGE_SHIFT) | offset) + le16_to_cpu(de->rec_len),
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
                                         free_page(page);

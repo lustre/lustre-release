@@ -31,6 +31,29 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
+#define NGROUPS_SMALL           NGROUPS
+#define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))
+
+struct group_info {
+        int        ngroups;
+        atomic_t   usage;
+        gid_t      small_block[NGROUPS_SMALL];
+        int        nblocks;
+        gid_t     *blocks[0];
+};
+#define current_ngroups current->ngroups
+#define current_groups current->groups
+
+struct group_info *groups_alloc(int gidsetsize);
+void groups_free(struct group_info *ginfo);
+#else /* >= 2.6.4 */
+
+#define current_ngroups current->group_info->ngroups
+#define current_groups current->group_info->small_block
+
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
 /*
@@ -88,11 +111,10 @@ static inline int cleanup_group_info(void)
 {
         struct group_info *ginfo;
 
-        ginfo = groups_alloc(2);
+        ginfo = groups_alloc(0);
         if (!ginfo)
                 return -ENOMEM;
 
-        ginfo->ngroups = 0;
         set_current_groups(ginfo);
         put_group_info(ginfo);
 
@@ -142,7 +164,6 @@ static inline int cleanup_group_info(void)
 #endif
 #define KDEVT_INIT(val)                 (val)
 #define ext3_xattr_set_handle           ext3_xattr_set
-#define extN_xattr_set_handle           extN_xattr_set
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)

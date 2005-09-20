@@ -21,7 +21,7 @@
 """
 lmc - lustre configuration data manager
 
-  See Lustre book (http://www.lustre.org/docs/lustre.pdf) for documentation on lmc.
+  See the man page, or the Lustre Operations Manual, for documentation on lmc.
 
 """
 
@@ -66,6 +66,7 @@ Object creation command summary:
   --timeout num
   --upcall path
   --lustre_upcall path
+  --group_upcall path
   --portals_upcall path
   --ptldebug debug_level
   --subsystem subsystem_name
@@ -74,7 +75,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id 
-  --nettype tcp|elan|gm|openib|iib|vib|ra
+  --nettype tcp|elan|gm|openib|iib|vib|ra|ptl
   --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
@@ -85,9 +86,10 @@ Object creation command summary:
   --node node_name
   --mds mds_name
   --dev path
-  --fstype extN|ext3
+  --fstype ldiskfs|ext3
   --size size
   --nspath
+  --group_upcall upcall
   --journal_size size
   --inode_size size
   --mdsuuid uuid
@@ -104,10 +106,12 @@ Object creation command summary:
 --add ost
   --node node_name
   --ost ost_name 
+  --failout
+  --failover
   --lov lov_name 
   --dev path
   --size size
-  --fstype extN|ext3
+  --fstype ldiskfs|ext3
   --journal_size size
   --inode_size size
   --osdtype obdecho|obdfilter
@@ -158,12 +162,13 @@ lmc_options = [
     ('timeout', "Set timeout to initiate recovery.", PARAM),
     ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
     ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
+    ('group_upcall', "Set location of extended group upcall script.", PARAM),
     ('portals_upcall', "Set location of portals upcall script.", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib/vib/ra/ptl.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
     ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
@@ -182,10 +187,12 @@ lmc_options = [
     ('mds', "Specify MDS name.", PARAM),
     ('ost', "Specify the OST name.", PARAM,""),
     ('osdtype', "This could obdfilter or obdecho.", PARAM, "obdfilter"),
-    ('failover', "Enable failover support on OSTs or MDS?"),
+    ('failout', "Disable failover support on OST"),
+    ('failover', "Enable failover support on OST"),
     ('group', "", PARAM),
     ('dev', "Path of the device on local system.", PARAM,""),
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
+    ('group_upcall', "Set location of supplementary group upcall.", PARAM,""),
     ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
     ('inode_size', "Specify new inode size for underlying ext3 file system.", PARAM,"0"),
     ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
@@ -204,13 +211,13 @@ lmc_options = [
 
     # lov
     ('lov', "Specify LOV name.", PARAM,""),
-    ('stripe_sz', "Specify the stripe size in bytes.", PARAM),
-    ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, 0),
+    ('stripe_sz', "Specify the stripe size in bytes.", PARAM, DEFAULT_STRIPE_SZ),
+    ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, DEFAULT_STRIPE_CNT),
     ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
 
     # cobd
-    ('real_obd', "", PARAM),
-    ('cache_obd', "", PARAM),
+    ('real_obd', "Specify the real device for the cache obd system.", PARAM),
+    ('cache_obd', "Specify the cache device for the cache obd system.", PARAM),
 
     ('mgmt', "Specify management/monitoring service name.", PARAM, ""),
     ]
@@ -224,10 +231,13 @@ def panic(cmd, msg):
     print msg
     sys.exit(1)
 
-    
 def warning(*args):
     msg = string.join(map(str,args))
-    print "Warning: ", msg
+    sys.stderr.write("WARNING: %s\n" % (msg))
+
+def info(*args):
+    msg = string.join(map(str,args))
+    sys.stderr.write("INFO: %s\n" % (msg))
     
 #
 # manage names and uuids
@@ -371,15 +381,15 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
+    def osd(self, name, uuid, fstype, osdtype, devname, format, ost_uuid,
             node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", 
             mkfsoptions="", mountfsoptions=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
         osd.appendChild(self.ref("node", node_uuid))
-        if fs:
-            self.addElement(osd, "fstype", fs)
+        if fstype:
+            self.addElement(osd, "fstype", fstype)
         if devname:
             dev = self.addElement(osd, "devpath", devname)
             self.addElement(osd, "autoformat", format)
@@ -391,7 +401,7 @@ class GenConfig:
                 self.addElement(osd, "inodesize", "%s" % (inode_size))
             if mkfsoptions:
                 self.addElement(osd, "mkfsoptions", mkfsoptions)
-	    if mountfsoptions:
+            if mountfsoptions:
                 self.addElement(osd, "mountfsoptions", mountfsoptions)
         if nspath:
             self.addElement(osd, "nspath", nspath)
@@ -434,11 +444,11 @@ class GenConfig:
             self.addElement(mds, "group", group)
         return mds
 
-    def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
+    def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
-               nspath="", mkfsoptions="", mountfsoptions=""):
+               nspath="", mkfsoptions="", mountfsoptions="", group_upcall=""):
         mdd = self.newService("mdsdev", name, uuid)
-        self.addElement(mdd, "fstype", fs)
+        self.addElement(mdd, "fstype", fstype)
         dev = self.addElement(mdd, "devpath", devname)
         self.addElement(mdd, "autoformat", format)
         if dev_size:
@@ -451,8 +461,10 @@ class GenConfig:
             self.addElement(mdd, "nspath", nspath)
         if mkfsoptions:
             self.addElement(mdd, "mkfsoptions", mkfsoptions)
-	if mountfsoptions:
+        if mountfsoptions:
             self.addElement(mdd, "mountfsoptions", mountfsoptions)
+	if group_upcall:
+            self.addElement(mdd, "group_upcall", group_upcall)
 
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
@@ -469,7 +481,7 @@ class GenConfig:
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
-	if clientoptions:
+        if clientoptions:
             self.addElement(mtpt, "clientoptions", clientoptions)
         return mtpt
 
@@ -601,6 +613,8 @@ def set_node_options(gen, node, options):
             gen.addElement(node, 'lustreUpcall', options.lustre_upcall)
         else: 
             gen.addElement(node, 'lustreUpcall', default_upcall)
+    if options.group_upcall:
+        gen.addElement(node, 'groupUpcall', options.group_upcall)
     if default_upcall or options.portals_upcall:
         if options.portals_upcall:
             gen.addElement(node, 'portalsUpcall', options.portals_upcall)
@@ -648,7 +662,7 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp','openib','ra'):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan','gm','iib','vib','lo'):
+    elif net_type in ('elan','gm','iib','vib','lo','ptl'):
         port = 0
     else:
         print "Unknown net_type: ", net_type
@@ -719,6 +733,8 @@ def add_mds(gen, lustre, options):
         mds = lookup(lustre, mds_uuid)
     if options.failover:
         mds.setAttribute('failover', "1")
+    if options.failout:
+        mds.setAttribute('failover,',"0")
 
     devname = get_option(options, 'dev')
     size = get_option(options, 'size')
@@ -728,6 +744,7 @@ def add_mds(gen, lustre, options):
     nspath = get_option(options, 'nspath')
     mkfsoptions = get_option(options, 'mkfsoptions')
     mountfsoptions = get_option(options, 'mountfsoptions')
+    group_upcall = get_option(options, 'group_upcall')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -740,7 +757,7 @@ def add_mds(gen, lustre, options):
     mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
                      get_format_flag(options), node_uuid, mds_uuid,
                      size, journal_size, inode_size, nspath, mkfsoptions,
-                     mountfsoptions)
+                     mountfsoptions, group_upcall)
     lustre.appendChild(mdd)
                    
 
@@ -776,7 +793,7 @@ def add_ost(gen, lustre, options):
         journal_size = ''
         inode_size = ''
         mkfsoptions = ''
-	mountfsoptions = ''
+        mountfsoptions = ''
     else:
         devname = get_option(options, 'dev') # can be unset for bluearcs
         size = get_option(options, 'size')
@@ -784,7 +801,7 @@ def add_ost(gen, lustre, options):
         journal_size = get_option(options, 'journal_size')
         inode_size = get_option(options, 'inode_size')
         mkfsoptions = get_option(options, 'mkfsoptions')
-	mountfsoptions = get_option(options, 'mountfsoptions')
+        mountfsoptions = get_option(options, 'mountfsoptions')
         
     nspath = get_option(options, 'nspath')
 
@@ -816,6 +833,8 @@ def add_ost(gen, lustre, options):
 
     if options.failover:
         ost.setAttribute('failover', "1")
+    if options.failout:
+        ost.setAttribute('failover', "0")
     
 
     osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
@@ -882,6 +901,9 @@ def add_lov(gen, lustre, options):
     mds_name = get_option(options, 'mds')
     stripe_sz = get_option_int(options, 'stripe_sz')
     stripe_cnt = get_option_int(options, 'stripe_cnt')
+    if stripe_cnt == 0:
+        info("default stripe count (0) - will use %d stripe(s) per file" \
+                % DEFAULT_STRIPE_CNT)
     pattern = get_option_int(options, 'stripe_pattern')
     uuid = new_uuid(name)
 

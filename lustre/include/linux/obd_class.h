@@ -92,6 +92,9 @@ void ping_evictor_stop(void);
 
 char *obd_export_nid2str(struct obd_export *exp);
 
+int obd_export_evict_by_nid(struct obd_device *obd, char *nid);
+int obd_export_evict_by_uuid(struct obd_device *obd, char *uuid);
+
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
 int class_attach(struct lustre_cfg *lcfg);
@@ -585,9 +588,12 @@ static inline int
 obd_lvfs_open_llog(struct obd_export *exp, __u64 id_ino, struct dentry *dentry)
 {
         LASSERT(exp->exp_obd);
-
+        CERROR("FIXME what's the story here?  This needs to be an obd fn?\n");
+#if 0
         return lvfs_open_llog(&exp->exp_obd->obd_lvfs_ctxt, id_ino, 
                               dentry, exp->exp_obd);
+#endif
+        return 0;
 }
 
 #ifndef time_before
@@ -1052,6 +1058,31 @@ static inline int obd_quotactl(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_health_check(struct obd_device *obd)
+{
+        /* returns: 0 on healthy
+         *         >0 on unhealthy + reason code/flag
+         *            however the only suppored reason == 1 right now
+         *            We'll need to define some better reasons
+         *            or flags in the future.
+         *         <0 on error
+         */
+        int rc;
+        ENTRY;
+
+        /* don't use EXP_CHECK_OP, because NULL method is normal here */
+        if (obd == NULL || !OBT(obd)) {
+                CERROR("cleaned up obd\n");
+                RETURN(-EOPNOTSUPP);
+        }
+        if (!obd->obd_set_up || obd->obd_stopping)
+                RETURN(0);
+        if (!OBP(obd, health_check))
+                RETURN(0);
+
+        rc = OBP(obd, health_check)(obd);
+        RETURN(rc);
+}
 
 static inline int obd_register_observer(struct obd_device *obd,
                                         struct obd_device *observer)
@@ -1112,7 +1143,7 @@ typedef __u8 class_uuid_t[16];
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 
 /* lustre_peer.c    */
-int lustre_uuid_to_peer(char *uuid, ptl_nid_t *peer_nid);
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index);
 int class_add_uuid(char *uuid, __u64 nid);
 int class_del_uuid (char *uuid);
 void class_init_uuidlist(void);

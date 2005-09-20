@@ -60,7 +60,7 @@ static int connect_echo_client(void)
 {
 	struct lustre_cfg *lcfg;
         struct lustre_cfg_bufs bufs;
-	ptl_nid_t nid;
+	lnet_nid_t nid;
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
@@ -73,7 +73,7 @@ static int connect_echo_client(void)
         class_uuid_unparse(echo_uuid, &echo_uuid_str);
 
 	nid = libcfs_str2nid(echo_server_nid);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 CERROR("Can't parse NID %s\n", echo_server_nid);
                 RETURN(-EINVAL);
         }
@@ -226,8 +226,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	portal_debug = 0;
-	portal_subsystem_debug = 0;
+	libcfs_debug = 0;
+	libcfs_subsystem_debug = 0;
 
         liblustre_init_random();
 

@@ -120,6 +120,7 @@ struct ll_ra_info {
 /* flags for sbi->ll_flags */
 #define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
 #define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
+#define LL_SBI_FLOCK            0x4
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -147,12 +148,48 @@ struct ll_sb_info {
 
         struct ll_ra_info         ll_ra_info;
         unsigned int              ll_namelen;
+        struct file_operations   *ll_fop;
 };
 
+/*
+ * per file-descriptor read-ahead data.
+ */
 struct ll_readahead_state {
         spinlock_t      ras_lock;
-        unsigned long   ras_last_readpage, ras_consecutive;
+        /*
+         * index of the last page that read(2) needed and that wasn't in the
+         * cache. Used by ras_update() to detect seeks.
+         *
+         * XXX nikita: if access seeks into cached region, Lustre doesn't see
+         * this.
+         */
+        unsigned long   ras_last_readpage;
+        /*
+         * number of pages read after last read-ahead window reset. As window
+         * is reset on each seek, this is effectively a number of consecutive
+         * accesses. Maybe ->ras_accessed_in_window is better name.
+         *
+         * XXX nikita: window is also reset (by ras_update()) when Lustre
+         * believes that memory pressure evicts read-ahead pages. In that
+         * case, it probably doesn't make sense to expand window to
+         * PTLRPC_MAX_BRW_PAGES on the third access.
+         */
+        unsigned long   ras_consecutive;
+        /*
+         * Parameters of current read-ahead window. Handled by
+         * ras_update(). On the initial access to the file or after a seek,
+         * window is reset to 0. After 3 consecutive accesses, window is
+         * expanded to PTLRPC_MAX_BRW_PAGES. Afterwards, window is enlarged by
+         * PTLRPC_MAX_BRW_PAGES chunks up to ->ra_max_pages.
+         */
         unsigned long   ras_window_start, ras_window_len;
+        /*
+         * Where next read-ahead should start at. This lies within read-ahead
+         * window. Read-ahead window is read in pieces rather than at once
+         * because: 1. lustre limits total number of pages under read-ahead by
+         * ->ra_max_pages (see ll_ra_count_get()), 2. client cannot read pages
+         * not covered by DLM lock.
+         */
         unsigned long   ras_next_readahead;
 
 };
@@ -186,31 +223,13 @@ static inline struct inode *ll_info2i(struct ll_inode_info *lli)
 #endif
 }
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(i1->i_gid))
-                ctxt->gid1 = i1->i_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-                if (in_group_p(i2->i_gid))
-                        ctxt->gid2 = i2->i_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else
-                ctxt->gid2 = 0;
-}
-
 struct it_cb_data {
         struct inode *icbd_parent;
         struct dentry **icbd_childp;
         obd_id hash;
 };
+
+void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 #define LLAP_MAGIC 98764321
 
@@ -227,8 +246,6 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
         struct list_head llap_pglist_item;
-        /* user credit information for oss enforcement quota */
-        struct lvfs_ucred llap_ouc;
         /* checksum for paranoid I/O debugging */
         __u32 llap_checksum;
 };
@@ -299,6 +316,7 @@ void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
+extern struct file_operations ll_file_operations_flock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
@@ -310,13 +328,15 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode);
-int ll_local_open(struct file *file, struct lookup_intent *it);
+int ll_local_open(struct file *file,
+                  struct lookup_intent *it, struct ll_file_data *fd);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
+struct ll_file_data *ll_file_data_get(void);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
@@ -409,7 +429,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
 int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
 struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode);
-int ll_tree_lock(struct ll_lock_tree *tree, 
+int ll_tree_lock(struct ll_lock_tree *tree,
                  struct ll_lock_tree_node *first_node,
                  const char *buf, size_t count, int ast_flags);
 int ll_tree_unlock(struct ll_lock_tree *tree);

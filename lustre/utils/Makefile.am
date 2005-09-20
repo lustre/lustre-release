@@ -4,8 +4,9 @@ SUBDIRS = Lustre
 
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
+AM_LDFLAGS := -L$(top_builddir)/portals/utils
 
-LIBPTLCTL := $(top_builddir)/portals/utils/libptlctl.a
+LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
 sbin_scripts = lconf lmc llanalyze llstat.pl llobdstat.pl lactive	\
 	load_ldap.sh lrun lwizard
@@ -13,7 +14,8 @@ bin_scripts = lfind lstripe llog_reader
 
 if UTILS
 rootsbin_SCRIPTS =
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest mount_lustre mount.lustre mkfs_lustre mkfs.lustre
+sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
+	mount_lustre mount.lustre mkfs_lustre mkfs.lustre l_getgroups 
 bin_PROGRAMS = lfs llog_reader
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)

@@ -4,20 +4,23 @@
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *   Author Peter Braam <braam@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -58,6 +61,7 @@ struct ptlrpcd_ctl {
         struct list_head          pc_req_list;
         wait_queue_head_t         pc_waitq;
         struct ptlrpc_request_set *pc_set;
+        char                      pc_name[16];
 #ifndef __KERNEL__
         int                       pc_recurred;
         void                     *pc_callback;
@@ -151,7 +155,7 @@ static int ptlrpcd(void *arg)
         unsigned long flags;
         ENTRY;
 
-        kportal_daemonize("ptlrpcd");
+        libcfs_daemonize(pc->pc_name);
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -206,7 +210,7 @@ int ptlrpcd_check_async_rpcs(void *arg)
 }
 #endif
 
-static int ptlrpcd_start(struct ptlrpcd_ctl *pc)
+static int ptlrpcd_start(char *name, struct ptlrpcd_ctl *pc)
 {
         int rc = 0;
 
@@ -217,6 +221,7 @@ static int ptlrpcd_start(struct ptlrpcd_ctl *pc)
         pc->pc_flags = 0;
         spin_lock_init(&pc->pc_lock);
         INIT_LIST_HEAD(&pc->pc_req_list);
+        snprintf (pc->pc_name, sizeof (pc->pc_name), name);
 
         pc->pc_set = ptlrpc_prep_set();
         if (pc->pc_set == NULL)
@@ -258,13 +263,13 @@ int ptlrpcd_addref(void)
         if (++ptlrpcd_users != 1)
                 GOTO(out, rc);
 
-        rc = ptlrpcd_start(&ptlrpcd_pc);
+        rc = ptlrpcd_start("ptlrpcd", &ptlrpcd_pc);
         if (rc) {
                 --ptlrpcd_users;
                 GOTO(out, rc);
         }
 
-        rc = ptlrpcd_start(&ptlrpcd_recovery_pc);
+        rc = ptlrpcd_start("ptlrpcd-recov", &ptlrpcd_recovery_pc);
         if (rc) {
                 ptlrpcd_stop(&ptlrpcd_pc);
                 --ptlrpcd_users;

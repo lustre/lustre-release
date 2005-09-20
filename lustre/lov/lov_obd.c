@@ -6,20 +6,23 @@
  *         Peter Braam <braam@clusterfs.com>
  *         Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -1354,19 +1357,11 @@ static void lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         lap->lap_caller_ops->ap_completion(lap->lap_caller_data, cmd, oa, rc);
 }
 
-static void lov_ap_get_ucred(void *data, struct lvfs_ucred *ouc)
-{
-        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
-
-        lap->lap_caller_ops->ap_get_ucred(lap->lap_caller_data, ouc);
-}
-
 static struct obd_async_page_ops lov_async_page_ops = {
         .ap_make_ready =        lov_ap_make_ready,
         .ap_refresh_count =     lov_ap_refresh_count,
         .ap_fill_obdo =         lov_ap_fill_obdo,
         .ap_completion =        lov_ap_completion,
-        .ap_get_ucred =         lov_ap_get_ucred,
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -1649,10 +1644,6 @@ static int lov_change_cbdata(struct obd_export *exp,
         lov = &exp->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        continue;
-                }
 
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
@@ -2064,6 +2055,20 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         /* hit all OSCs, even inactive ones */
                         err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
                                            vallen, ((obd_id*)val) + i);
+                        if (!rc)
+                                rc = err;
+                }
+                RETURN(rc);
+        }
+
+        if (KEY_IS("evict_by_nid")) {
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        /* OST was disconnected or is inactive */
+                        if (!lov->tgts[i].ltd_exp || !lov->tgts[i].active)
+                                continue;
+
+                        err = obd_set_info(lov->tgts[i].ltd_exp, keylen, key,
+                                           vallen, val);
                         if (!rc)
                                 rc = err;
                 }

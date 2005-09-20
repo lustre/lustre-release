@@ -27,7 +27,7 @@
 #
 # Based in part on the XML obdctl modifications done by Brian Behlendorf
 
-import sys, getopt, types
+import sys, getopt, types, errno
 import string, os, stat, popen2, socket, time, random, fcntl, select
 import re, exceptions, signal, traceback
 import xml.dom.minidom
@@ -58,7 +58,7 @@ MAXTCPBUF = 16777216
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
 MAX_LOOP_DEVICES = 256
-PORTALS_DIR = '../portals'
+PORTALS_DIR = '../lnet'
 
 # Needed to call lconf --record
 CONFIG_FILE = ""
@@ -202,133 +202,6 @@ class CommandError (exceptions.Exception):
         else:
             print self.cmd_err
 
-
-# ============================================================
-# handle daemons, like the acceptor
-class DaemonHandler:
-    """ Manage starting and stopping a daemon. Assumes daemon manages
-    it's own pid file. """
-
-    def __init__(self, cmd):
-        self.command = cmd
-        self.path =""
-
-    def start(self):
-        if self.running():
-            log(self.command, "already running.")
-        if not self.path:
-            self.path = find_prog(self.command)
-            if not self.path:
-                panic(self.command, "not found.")
-        ret, out = runcmd(self.path +' '+ self.command_line())
-        if ret:
-            # wait for up to 15 seconds checking to see if a competing daemon
-            # starts successfully
-            loop_count = 15
-            while (not self.running()) and (loop_count > 0):
-                loop_count = loop_count - 1
-                time.sleep(1)
-
-            if not self.running():
-                raise CommandError(self.path, out, ret)
-
-    def stop(self):
-        if self.running():
-            pid = self.read_pidfile()
-            if not pid:
-                return
-            try:
-                log ("killing process", pid)
-                os.kill(pid, 15)
-                #time.sleep(1) # let daemon die
-            except OSError, e:
-                log("unable to kill", self.command, e)
-
-            # wait for the dameon to die for up to 15 seconds
-            # before complaining about it
-            loop_count = 15
-            while self.running() and (self.read_pidfile == pid) and (loop_count > 0):
-                loop_count = loop_count - 1
-                time.sleep(1)
-            if self.running() and (self.read_pidfile == pid):
-                log("unable to kill", self.command, "process", pid)
-
-    def running(self):
-        pid = self.read_pidfile()
-        if pid:
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                self.clean_pidfile()
-            else:
-                return 1
-        return 0
-
-    def read_pidfile(self):
-        try:
-            fp = open(self.pidfile(), 'r')
-            pid = int(fp.read())
-            fp.close()
-            return pid
-        except ValueError:
-            print "WARNING: invalid pid in %s, removed" % self.pidfile()
-            print "WARNING: You may need to stop acceptor by yourself"
-            os.unlink(self.pidfile())
-            return 0
-        except IOError:
-            return 0
-
-    def clean_pidfile(self):
-        """ Remove a stale pidfile """
-        log("removing stale pidfile:", self.pidfile())
-        try:
-            os.unlink(self.pidfile())
-        except OSError, e:
-            log(self.pidfile(), e)
-
-class AcceptorHandler(DaemonHandler):
-    def __init__(self, port, net_type):
-        DaemonHandler.__init__(self, "acceptor")
-        self.port = port
-        self.net_type = net_type
-        self.flags = ''
-        if config.allow_unprivileged_port:
-            self.flags = '-p'
-
-    def pidfile(self):
-        return "/var/run/%s-%d.pid" % (self.command, self.port)
-
-    def command_line(self):
-        return string.join(map(str,(self.flags, self.port)))
-
-acceptors = {}
-
-# start the acceptors
-def run_acceptors():
-    if config.lctl_dump or config.record:
-        return
-    for port in acceptors.keys():
-        daemon = acceptors[port]
-        #if daemon.net_type == 'tcp' and not daemon.running():
-        #    daemon.start()
-
-def run_one_acceptor(port):
-    if config.lctl_dump or config.record:
-        return
-    if acceptors.has_key(port):
-        daemon = acceptors[port]
-        #if daemon.net_type == 'tcp' and not daemon.running():
-        #    daemon.start()
-    else:
-         panic("run_one_acceptor: No acceptor defined for port:", port)
-
-def stop_acceptor(port):
-    if acceptors.has_key(port):
-        daemon = acceptors[port]
-        #if daemon.net_type == 'tcp' and daemon.running():
-        #    daemon.stop()
-
-
 # ============================================================
 # handle lctl interface
 class LCTLInterface:
@@ -436,7 +309,7 @@ class LCTLInterface:
         return rc, out
 
     def unconfigure_network(self):
-        """get portals to unreference itself"""
+        """get lnet to unreference itself"""
         cmds = """
   network unconfigure"""
         self.run(cmds)
@@ -450,32 +323,6 @@ class LCTLInterface:
   quit """ % (dev, log)
         self.run(cmds)
 
-    def network(self, net, nid):
-        """ set mynid """
-#        cmds =  """
-#    network %s
-#    mynid %s
-#    quit """ % (net, nid)
-#        self.run(cmds)
-
-    # add an interface
-    def add_interface(self, net, ip, netmask = ""):
-        """ add an interface """
-#         cmds = """
-#   network %s
-#   add_interface %s %s
-#   quit """ % (net, ip, netmask)
-#         self.run(cmds)
-
-    # delete an interface
-    def del_interface(self, net, ip):
-        """ delete an interface """
-#         cmds = """
-#   network %s
-#   del_interface %s
-#   quit """ % (net, ip)
-#         self.run(cmds)
-
     # create a new connection
     def add_uuid(self, net_type, uuid, nid):
         if nid.find('@') < 0:
@@ -485,75 +332,16 @@ class LCTLInterface:
         cmds = "\n  add_uuid %s %s" %(uuid, nidstr)
         self.run(cmds)
 
-    def add_peer(self, net_type, nid, hostaddr, port):
-        """ noop """
-#         if net_type  in ('tcp','openib','ra','cray_kern_nal') and not config.lctl_dump:
-#             cmds =  """
-#   network %s
-#   add_peer %s %s %d
-#   quit""" % (net_type,
-#              nid, hostaddr, port )
-#             self.run(cmds)
-#         elif net_type in ('iib',) and not config.lctl_dump:
-#             cmds =  """
-#   network %s
-#   add_peer %s
-#   quit""" % (net_type,
-#              nid )
-#             self.run(cmds)
-#         elif net_type in ('vib',) and not config.lctl_dump:
-#             cmds =  """
-#   network %s
-#   add_peer %s %s
-#   quit""" % (net_type,
-#              nid, hostaddr )
-#             self.run(cmds)
-
     def connect(self, srv):
-        self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-#        if config.lctl_dump:
-#            return
-#
-#        if srv.net_type  in ('tcp',):
-#            host = socket.gethostname()
-#            node_list = []
-#            if config.node:
-#                node_list.append(config.node)
-#            else:
-#                if len(host) > 0:
-#                    node_list.append(host)
-#                node_list.append('localhost')
-#
-#            node_db = None
-#            for h in node_list: # we are quite sure we can find the node_db
-#                node_db = toplustreDB.lookup_name(h, 'node')
-#                if node_db:
-#                    break
-#
-#            hostaddr = None
-#            for netuuid in node_db.get_networks():
-#                localnet = toplustreDB.lookup(netuuid)
-#                localnet = Network(localnet)
-#                if localnet.net_type != 'tcp':
-#                    continue	# only tcp understands multiple hostaddrs
-#
-#                # always true for tcp network
-#                if localnet.hostaddr[0] and srv.hostaddr[0]:
-#                    for lnet in localnet.hostaddr:
-#                        for pnet in srv.hostaddr:
-#                            if srv.netmatch(lnet, pnet) != 0:
-#                                hostaddr = string.split(pnet, '/')[0]
-#                                #find one is enough, should break the top-most loop
-#                                break
-#                        if hostaddr: break
-#                    else:	# can't find a match
-#                        hostaddr = string.split(srv.hostaddr[0], '/')[0]
-#                    break
-#
-#            self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
-#            
-#        if srv.net_type in ('openib','iib','vib','ra'):
-#            self.add_peer(srv.net_type, srv.nid, srv.hostaddr[0], srv.port)
+        if not srv.nid_uuid:
+            panic('nid_uuid not set for ', srv.net_type, srv.nid)
+        hostaddr = srv.db.get_hostaddr()
+        if len(hostaddr) > 1:
+            panic('multiple --hostaddr for ', srv.nid_uuid, ' not supported')
+        elif len(hostaddr) == 1 and hostaddr[0] != srv.nid:
+            panic('different --hostaddr and --nid  for ', srv.nid_uuid, ' not supported')
+        else:
+            self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
 
     # Recover a device
     def recover(self, dev_name, new_conn):
@@ -562,80 +350,11 @@ class LCTLInterface:
     recover %s""" %(dev_name, new_conn)
         self.run(cmds)
 
-    # add a route to a range
-    def add_route(self, net, gw, lo, hi):
-        """ noop """
-#         cmds =  """
-#   network %s
-#   add_route %s %s %s
-#   quit  """ % (net,
-#                gw, lo, hi)
-#         try:
-#             self.run(cmds)
-#         except CommandError, e:
-#             log ("ignore: ")
-#             e.dump()
-
-    def del_route(self, net, gw, lo, hi):
-        """ noop """
-#         cmds =  """
-#   ignore_errors
-#   network %s
-#   del_route %s %s %s
-#   quit  """ % (net, gw, lo, hi)
-#         self.run(cmds)
-
-    # add a route to a host
-    def add_route_host(self, net, uuid, gw, tgt):
-        self.add_uuid(net, uuid, tgt)
-#         cmds =  """
-#   network %s
-#   add_route %s %s
-#   quit """ % (net,
-#               gw, tgt)
-#         try:
-#             self.run(cmds)
-#         except CommandError, e:
-#             log ("ignore: ")
-#             e.dump()
-
-    # add a route to a range
-    def del_route_host(self, net, uuid, gw, tgt):
-        self.del_uuid(uuid)
-#         cmds =  """
-#   ignore_errors
-#   network %s
-#   del_route %s %s
-#   quit  """ % (net, gw, tgt)
-#         self.run(cmds)
-
-
-    def del_peer(self, net_type, nid, hostaddr):
-        """ noop """
-#         if net_type  in ('tcp',) and not config.lctl_dump:
-#                 cmds =  """
-#   ignore_errors
-#   network %s
-#   del_peer %s %s single_share
-#   quit""" % (net_type,
-#              nid, hostaddr)
-#                 self.run(cmds)
-#         elif net_type  in ('openib','iib','vib','ra') and not config.lctl_dump:
-#                 cmds =  """
-#   ignore_errors
-#   network %s
-#   del_peer %s single_share
-#   quit""" % (net_type,
-#              nid)
-#                 self.run(cmds)
-
     # disconnect one connection
     def disconnect(self, srv):
+        if not srv.nid_uuid:
+            panic('nid_uuid not set for ', srv.net_type, srv.nid)
         self.del_uuid(srv.nid_uuid)
-#         if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
-#             if srv.hostaddr[0]:
-#                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
-#             self.del_peer(srv.net_type, srv.nid, hostaddr)
 
     def del_uuid(self, uuid):
         cmds =  """
@@ -643,16 +362,6 @@ class LCTLInterface:
   del_uuid %s
   quit""" % (uuid,)
         self.run(cmds)
-
-    # disconnect all
-    def disconnectAll(self, net):
-        """ noop """
-#         cmds =  """
-#   ignore_errors
-#   network %s
-#   disconnect
-#   quit""" % (net)
-#         self.run(cmds)
 
     def attach(self, type, name, uuid):
         cmds = """
@@ -673,13 +382,6 @@ class LCTLInterface:
   device $%s
   abort_recovery
   quit""" % (name)
-        self.run(cmds)
-
-    def add_conn(self, name, conn_uuid):
-        cmds = """
-  cfg_device %s
-  add_conn %s
-  quit""" % (name, conn_uuid)
         self.run(cmds)
 
     # create a new device with lctl
@@ -885,7 +587,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         # devsize is in 1k, and fs block count is in 4k
         block_cnt = devsize/4
 
-    if fstype in ('ext3', 'extN', 'ldiskfs'):
+    if fstype in ('ext3', 'ldiskfs'):
         # ext3 journal size is in megabytes
         if jsize == 0:
             if devsize == 0:
@@ -958,7 +660,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
     if ret:
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
-    if fstype in ('ext3', 'extN', 'ldiskfs'):
+    if fstype in ('ext3', 'ldiskfs'):
         htree = 'tune2fs -O dir_index'
         (ret, out) = run (htree, dev)
         if ret:
@@ -1011,7 +713,9 @@ def init_loop(file, size, fstype, journal_size, inode_size, mkfsoptions, reforma
         if os.access(dev, os.R_OK):
             (stat, out) = run('losetup', dev)
             if stat:
-                run('losetup', dev, file)
+                (stat, out) = run('losetup', dev, file)
+                if stat:
+                    panic("losetup failed: (%s) %s" % (stat, out[0].strip()))
                 return dev
         else:
             print "out of loop devices"
@@ -1086,7 +790,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     # don't need a real nid for config log - client will replace (bug5619)
     if config.record:
         local = "54321"
-    elif net_type in ('tcp','openib','iib','vib','ra','cray_kern_nal'):
+    elif net_type in ('tcp','openib','iib','vib','ra','ptl'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1121,13 +825,18 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     elif net_type == 'lo':
         fixme("automatic local address for loopback")
     elif net_type == 'gm':
-        gmnalnid = '/usr/sbin/gmnalnid'
-        if os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK):
-            (rc, local) = run(gmnalnid, "-l")
-        else:
-            panic (gmnalnid, " not found or not executable on node with GM networking")
+        found=0
+        paths = ['/usr/sbin', config.portals + "/utils"]
+        for path in paths:
+            gmlndnid = path + '/gmlndnid'
+            if (os.path.exists(gmlndnid) and os.access(gmlndnid, os.X_OK)):
+                found=1
+                break
+        if not found:
+            panic (gmlndnid, " not found or not executable on node with GM networking")
+        (rc, local) = run(gmlndnid, "-l")
         if rc:
-            panic (gmnalnid, " failed")
+            panic (gmlndnid, " failed")
         local=string.rstrip(local[0])
     else:
         fixme("automatic local address for net type %s" % net_type)
@@ -1206,21 +915,28 @@ class kmod:
 
     def load_module(self):
         """Load all the modules in the list in the order they appear."""
-        run('/sbin/modprobe portals')
         for src_dir, dev_dir, mod in self.kmodule_list:
             if mod_loaded(mod) and not config.noexec:
                 continue
             log ('loading module:', mod, 'srcdir', src_dir, 'devdir', dev_dir)
+            if mod == 'lnet':
+                #For LNET we really need modprobe to load defined LNDs
+                run('/sbin/modprobe lnet')
+                #But if that fails, try insmod anyhow
             if src_dir:
                 module = find_module(src_dir, dev_dir, mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out) = run('/sbin/insmod', module)
                 if rc and not mod_loaded(mod):
+                    if rc == 1:
+                        print("Bad module options? Check dmesg.") 
                     raise CommandError('insmod', out, rc)
             else:
                 (rc, out) = run('/sbin/modprobe', mod)
                 if rc and not mod_loaded(mod):
+                    if rc == 1:
+                        print("Bad module options? Check dmesg.") 
                     raise CommandError('modprobe', out, rc)
 
     def cleanup_module(self):
@@ -1231,28 +947,39 @@ class kmod:
         for src_dir, dev_dir, mod in rev:
             if not mod_loaded(mod) and not config.noexec:
                 continue
+            if mod == 'ksocklnd' and not config.noexec:
+                # Ignore ksocklnd in module list (lnet will remove)
+                continue
             log('unloading module:', mod)
-            (rc, out) = run('/sbin/rmmod', mod)
-            if rc:
-                log('! unable to unload module:', mod)
-                logall(out)
-            if mod == 'ptlrpc' and not config.noexec:
+            if mod == 'lnet' and not config.noexec:
                 # remove any self-ref portals created
                 lctl.unconfigure_network()
                 if config.dump:
                     # debug hack
                     lctl.dump(config.dump)
-                log('unloading the NALs + portals')
+                log('unloading the network')
                 lctl.unconfigure_network()
-                run('/sbin/rmmod ksocknal')
-                run('/sbin/rmmod kqswnal')
-                run('/sbin/rmmod kgmnal')
-                run('/sbin/rmmod kopenibnal')
-                run('/sbin/rmmod kiibnal')
-                run('/sbin/rmmod kvibnal')
-                run('/sbin/rmmod kranal')
-                run('/sbin/rmmod portals')
-        run('/sbin/rmmod libcfs')
+                if mod_loaded("ksocklnd"):
+                    run('/sbin/rmmod ksocklnd')
+                if mod_loaded("kqswlnd"):
+                    run('/sbin/rmmod kqswlnd')
+                if mod_loaded("kgmlnd"):
+                    run('/sbin/rmmod kgmlnd')
+                if mod_loaded("kopeniblnd"):
+                    run('/sbin/rmmod kopeniblnd')
+                if mod_loaded("kiiblnd"):
+                    run('/sbin/rmmod kiiblnd')
+                if mod_loaded("kviblnd"):
+                    run('/sbin/rmmod kviblnd')
+                if mod_loaded("kralnd"):
+                    run('/sbin/rmmod kralnd')
+                if mod_loaded("kptllnd"):
+                    run('/sbin/rmmod kptllnd')
+            (rc, out) = run('/sbin/rmmod', mod)
+            if rc:
+                log('! unable to unload module:', mod)
+                logall(out)
+
 
 # ============================================================
 # Classes to prepare and cleanup the various objects
@@ -1308,248 +1035,32 @@ class Module:
         return self.safe_to_clean()
 
 class Network(Module):
-    def __init__(self,db):
+    def __init__(self,db,nid_uuid=0):
         Module.__init__(self, 'NETWORK', db)
         self.net_type = self.db.get_val('nettype')
         self.nid = self.db.get_val('nid', '*')
         self.cluster_id = self.db.get_val('clusterid', "0")
         self.port = self.db.get_val_int('port', 0)
-
-        if '*' in self.nid:
-            self.nid = sys_get_local_nid(self.net_type, self.nid, self.cluster_id)
-            if not self.nid:
-                panic("unable to set nid for", self.net_type, self.nid, self.cluster_id)
-            self.generic_nid = 1
-            debug("nid:", self.nid)
-        else:
-            self.generic_nid = 0
-
-        self.nid_uuid = self.nid_to_uuid(self.nid)
-
-        self.hostaddr = self.db.get_hostaddr()
-        if len(self.hostaddr) == 0:
-            self.hostaddr.append(self.nid)
-        if '*' in self.hostaddr[0]:
-            self.hostaddr[0] = sys_get_local_nid(self.net_type, self.hostaddr[0], self.cluster_id)
-            if not self.hostaddr[0]:
-                panic("unable to set hostaddr for", self.net_type, self.hostaddr[0], self.cluster_id)
-            debug("hostaddr:", self.hostaddr[0])
-
-#        self.add_portals_module("libcfs", 'libcfs')
-#        self.add_portals_module("portals", 'portals')
-#        if node_needs_router():
-#            self.add_portals_module("router", 'kptlrouter')
-#        if self.net_type == 'tcp':
-#            self.add_portals_module("knals/socknal", 'ksocknal')
-#        if self.net_type == 'elan':
-#            self.add_portals_module("knals/qswnal", 'kqswnal')
-#        if self.net_type == 'gm':
-#            self.add_portals_module("knals/gmnal", 'kgmnal')
-#        if self.net_type == 'openib':
-#            self.add_portals_module("knals/openibnal", 'kopenibnal')
-#        if self.net_type == 'iib':
-#            self.add_portals_module("knals/iibnal", 'kiibnal')
-#        if self.net_type == 'vib':
-#            self.add_portals_module("knals/vibnal", 'kvibnal')
-#        if self.net_type == 'lo':
-#            self.add_portals_module("knals/lonal", 'klonal')
-#        if self.net_type == 'ra':
-#            self.add_portals_module("knals/ranal", 'kranal')
-
-    def nid_to_uuid(self, nid):
-        return "NID_%s_UUID" %(nid,)
+        self.nid_uuid = nid_uuid
+        self.add_portals_module('libcfs', 'libcfs')
+        self.add_portals_module('lnet', 'lnet')
+        # Add the socklnd for developers without modprobe.conf (umls)
+        self.add_portals_module('klnds/socklnd', 'ksocklnd')
 
     def prepare(self):
         if is_network_prepared():
             return
-        self.info(self.net_type, self.nid, self.port)
-        if not (config.record and self.generic_nid):
-            lctl.network(self.net_type, self.nid)
+        self.info(self.net_type, self.nid)
         if self.net_type == 'tcp':
             sys_tweak_socknal()
-            for hostaddr in self.db.get_hostaddr():
-                ip = string.split(hostaddr, '/')[0]
-                if len(string.split(hostaddr, '/')) == 2:
-                    netmask = string.split(hostaddr, '/')[1]
-                else:
-                    netmask = ""
-                lctl.add_interface(self.net_type, ip, netmask)
         if self.net_type == 'elan':
             sys_optimize_elan()
-        if self.net_type == 'openib':
-            if self.port == 0:
-                panic("no port set for", self.net_type, self.hostaddr[0])
-            sysctl('/proc/sys/openibnal/port', self.port)
-        if self.net_type == 'ra':
-            if self.port == 0:
-                panic("no port set for", self.net_type, self.hostaddr[0])
-            sysctl('/proc/sys/ranal/port', self.port)
-        if self.port and  node_is_router():
-            run_one_acceptor(self.port)
-            self.connect_peer_gateways()
-
-    def connect_peer_gateways(self):
-        for router in self.db.lookup_class('node'):
-            if router.get_val_int('router', 0):
-                for netuuid in router.get_networks():
-                    net = self.db.lookup(netuuid)
-                    gw = Network(net)
-                    if (gw.cluster_id == self.cluster_id and
-                        gw.net_type == self.net_type):
-                        if gw.nid != self.nid:
-                            lctl.connect(gw)
-
-    def disconnect_peer_gateways(self):
-        for router in self.db.lookup_class('node'):
-            if router.get_val_int('router', 0):
-                for netuuid in router.get_networks():
-                    net = self.db.lookup(netuuid)
-                    gw = Network(net)
-                    if (gw.cluster_id == self.cluster_id and
-                        gw.net_type == self.net_type):
-                        if gw.nid != self.nid:
-                            try:
-                                lctl.disconnect(gw)
-                            except CommandError, e:
-                                print "disconnect failed: ", self.name
-                                e.dump()
-                                cleanup_error(e.rc)
 
     def safe_to_clean(self):
         return not is_network_prepared()
 
     def cleanup(self):
-        self.info(self.net_type, self.nid, self.port)
-        if self.port:
-            stop_acceptor(self.port)
-        if  node_is_router():
-            self.disconnect_peer_gateways()
-        if self.net_type == 'tcp':
-            for hostaddr in self.db.get_hostaddr():
-                ip = string.split(hostaddr, '/')[0]
-                lctl.del_interface(self.net_type, ip)
-
-    def my_inet_aton(self, net):
-        split = net.split('.')
-        if len(split) != 4:
-            raise ValueError, "Invalid IPv4 address %s" % net
-
-        naddr = 0
-        i = 0
-        for n in split:
-            try:
-                naddr = naddr + int(n) * (256 ** (3-i))
-            except:
-                raise ValueError, "Invalid IPv4 address %s" % net
-            i = i + 1
-        return naddr
-
-    def tointAddr(self, net):
-        """convert a net address/mask into (numeric-address, bitmap-mask)"""
-        try:
-            addr, mask = string.split(net, '/')
-        except:
-            addr = net
-            mask = 24 #eeb told me that kernel uses this value by default
-
-        try:
-            mask = int(mask)
-            assert(mask >= 1 and mask <= 32)
-            mask = bitmap_32(mask)
-        except:
-            try:
-                mask = self.my_inet_aton(mask)
-            except:
-                raise ValueError("Invalid netmask %s" % str(mask))
-
-        try:
-            addr = socket.gethostbyname(addr)
-            naddr = self.my_inet_aton(addr)
-        except:
-            raise ValueError("Invalid host %s" % addr)
-
-        return (naddr, mask)
-
-    def netmatch(self, net1, net2):
-        # XXX this is only valid for IPv4 address
-        try:
-            addr1, mask1 = self.tointAddr(net1)
-            addr2, mask2 = self.tointAddr(net2)
-        except:
-            return 0
-
-        if addr1 & mask1 == addr2 & mask2:
-            return 1
-        return 0
-
-def bitmap_32(n):
-    """n should be in [1, 32]"""
-    if n < 0 or n > 32:
-        raise ValueError("A number between 1 and 32 is expected. (not %d)" % n)
-    return (-1) << (32-n)
-
-class RouteTable(Module):
-    def __init__(self,db):
-        Module.__init__(self, 'ROUTES', db)
-
-    def server_for_route(self, net_type, gw, gw_cluster_id, tgt_cluster_id,
-                         lo, hi):
-        # only setup connections for tcp, ib, and ra NALs
-        srvdb = None
-        if not net_type in ('tcp','openib','iib','vib','ra'):
-            return None
-
-        # connect to target if route is to single node and this node is the gw
-        if lo == hi and local_interface(net_type, gw_cluster_id, gw):
-            if not local_cluster(net_type, tgt_cluster_id):
-                panic("target", lo, " not on the local cluster")
-            srvdb = self.db.nid2server(lo, net_type, gw_cluster_id)
-        # connect to gateway if this node is not the gw
-        elif (local_cluster(net_type, gw_cluster_id)
-              and not local_interface(net_type, gw_cluster_id, gw)):
-            srvdb = self.db.nid2server(gw, net_type, gw_cluster_id)
-        else:
-            return None
-
-        if not srvdb:
-            panic("no server for nid", lo)
-            return None
-
-        return Network(srvdb)
-
-    def prepare(self):
-        if is_network_prepared():
-            return
-        self.info()
-        for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
-            lctl.add_route(net_type, gw, lo, hi)
-            srv = self.server_for_route(net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi)
-            if srv:
-                lctl.connect(srv)
-
-    def safe_to_clean(self):
-        return not is_network_prepared()
-
-    def cleanup(self):
-        if is_network_prepared():
-            # the network is still being used, don't clean it up
-            return
-        for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
-            srv = self.server_for_route(net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi)
-            if srv:
-                try:
-                    lctl.disconnect(srv)
-                except CommandError, e:
-                    print "disconnect failed: ", self.name
-                    e.dump()
-                    cleanup_error(e.rc)
-
-            try:
-                lctl.del_route(net_type, gw, lo, hi)
-            except CommandError, e:
-                print "del_route failed: ", self.name
-                e.dump()
-                cleanup_error(e.rc)
+        self.info(self.net_type, self.nid)
 
 class Management(Module):
     def __init__(self, db):
@@ -1741,7 +1252,7 @@ class MDSDEV(Module):
             else:
                 stripe_count = 1
             if stripe_count > 77:
-                self.inode_size = 4096
+                self.inode_size = 512
             elif stripe_count > 34:
                 self.inode_size = 2048
             elif stripe_count > 13:
@@ -1750,8 +1261,8 @@ class MDSDEV(Module):
             #    self.inode_size = 256
             else:
                 self.inode_size = 512
-
-        debug('stripe_count %d, inode_size %d', stripe_count, self.inode_size)
+            debug('stripe_count %d, inode_size %d',
+                  stripe_count, self.inode_size)
 
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
@@ -1780,7 +1291,6 @@ class MDSDEV(Module):
             # run write_conf automatically, if --reformat used
             self.write_conf()
         self.info(self.devpath, self.fstype, self.size, self.format)
-        run_acceptors()
         # never reformat here
         blkdev = block_dev(self.devpath, self.size, self.fstype, 0,
                            self.format, self.journal_size, self.inode_size,
@@ -1808,6 +1318,9 @@ class MDSDEV(Module):
 
             lctl.newdev("mds", self.name, self.uuid,
                         setup ="%s %s %s %s" %(blkdev, self.fstype, self.name, mountfsoptions))
+            self.group_upcall = self.db.get_val('group_upcall','')
+            sys_set_group_upcall(self.name, self.group_upcall)
+
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +
@@ -1873,7 +1386,7 @@ class MDSDEV(Module):
                         noexec_opt = ('', '-n')
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        " --record --nomod",
+                                        " -v --record --nomod",
                                         "--record_log", client_name,
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -1888,7 +1401,7 @@ class MDSDEV(Module):
                             for s in out: log("record> ", string.strip(s))
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        "--cleanup -v --record --nomod",
+                                        "--cleanup --record --nomod",
                                         "--record_log", client_name + "-clean",
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -1980,7 +1493,7 @@ class OSD(Module):
         ost = self.db.lookup(target_uuid)
         self.name = ost.getName()
         self.format = self.db.get_val('autoformat', 'yes')
-        if ost.get_val('failover', 0):
+        if ost.get_val('failover', 1):
             self.failover_ost = 'f'
         else:
             self.failover_ost = 'n'
@@ -2021,7 +1534,6 @@ class OSD(Module):
             return
         self.info(self.osdtype, self.devpath, self.size, self.fstype,
                   self.format, self.journal_size, self.inode_size)
-        run_acceptors()
         if self.osdtype == 'obdecho':
             blkdev = ''
         else:
@@ -2164,17 +1676,12 @@ class Client(Module):
         if is_prepared(self.name):
             self.cleanup()
         try:
-            srv_list = find_local_servers(self.get_servers())
+            srv_list = self.get_servers()
+            debug('dbg CLIENT __prepare__:', self.target_uuid, srv_list)
             for srv in srv_list:
                 lctl.connect(srv)
-
-            routes = find_route(self.get_servers())
-            for (srv, r) in routes:
-                lctl.add_route_host(r[0], srv.nid_uuid, r[1], r[3])
-                srv_list.append(srv)
-
             if len(srv_list) == 0:
-                panic("no local servers and no route to", self.target_uuid)
+                panic("no servers for ", self.target_uuid)
         except CommandError, e:
             if not ignore_connect_failure:
                 raise e
@@ -2197,43 +1704,25 @@ class Client(Module):
             this_nets = get_ost_net(toplustreDB, tgt_dev_uuid)
             if len(this_nets) == 0:
                 panic ("Unable to find a backup server for:", tgt_dev_uuid)
-            srv_list = find_local_servers(this_nets)
-            if srv_list:
-                for srv in srv_list:
+            else:
+                for srv in this_nets:
                     lctl.connect(srv)
                     break
-            else:
-                routes = find_route(this_nets);
-                if len(routes) == 0:
-                    panic("no route to", tgt_dev_uuid)
-                for (srv, r) in routes:
-                    lctl.add_route_host(r[0]. srv.nid_uuid, r[1], r[3])
-            if srv:
-                 lctl.add_conn(self.name, srv.nid_uuid);
 
 
     def cleanup(self):
         if is_prepared(self.name):
             Module.cleanup(self)
-            try:
-                routes = find_route(self.get_servers())
-                for (srv, r) in routes:
-                    lctl.del_route_host(r[0], srv.nid_uuid, r[1], r[3])
-            except CommandError, e:
-                log(self.module_name, "cleanup failed: ", self.name)
-                e.dump()
-                cleanup_error(e.rc)
-
+            srv_list = self.get_servers()
+            for srv in srv_list:
+                lctl.disconnect(srv)
             for tgt_dev_uuid in self.backup_targets:
-                this_net = get_ost_net(toplustreDB, tgt_dev_uuid)
-                srv_list = find_local_servers(self.get_servers())
-                if srv_list:
-                    for srv in srv_list:
-                        lctl.disconnect(srv)
-                        break
+                this_nets = get_ost_net(toplustreDB, tgt_dev_uuid)
+                if len(this_nets) == 0:
+                    panic ("Unable to find a backup server for:", tgt_dev_uuid)
                 else:
-                    for (srv, r) in find_route(this_net):
-                        lctl.del_route_host(r[0]. srv.nid_uuid, r[1], r[3])
+                    for srv in this_nets:
+                        lctl.disconnect(srv)
 
 class MDC(Client):
     def __init__(self, db, uuid, fs_name):
@@ -2310,7 +1799,6 @@ class ECHO_CLIENT(Module):
     def prepare(self):
         if is_prepared(self.name):
             return
-        run_acceptors()
         self.osc.prepare() # XXX This is so cheating. -p
         self.info(self.obd_uuid)
 
@@ -2385,7 +1873,6 @@ class Mountpoint(Module):
         if fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
-        run_acceptors()
         if self.mgmtcli:
             self.mgmtcli.prepare()
         self.vosc.prepare()
@@ -2467,7 +1954,8 @@ def get_ost_net(self, osd_uuid):
               " node_ref:", node_uuid)
     for net_uuid in node.get_networks():
         db = node.lookup(net_uuid)
-        srv_list.append(Network(db))
+        net = Network(db, node_uuid)
+        srv_list.append(net)
     return srv_list
 
 
@@ -2477,8 +1965,6 @@ def getServiceLevel(self):
     ret=0;
     if type in ('network',):
         ret = 5
-    elif type in ('routetbl',):
-        ret = 6
     elif type in ('ldlm',):
         ret = 20
     elif type in ('mgmt',):
@@ -2531,101 +2017,6 @@ def get_mdc(db, uuid, fs_name, mds_uuid):
     mdc = MDC(mds_db, uuid, fs_name)
     return mdc
 
-############################################################
-# routing ("rooting")
-
-# list of (nettype, cluster_id, nid)
-local_clusters = []
-
-def find_local_clusters(node_db):
-    global local_clusters
-    for netuuid in node_db.get_networks():
-        net = node_db.lookup(netuuid)
-        srv = Network(net)
-        debug("add_local", netuuid)
-        local_clusters.append((srv.net_type, srv.cluster_id, srv.nid))
-        if srv.port > 0:
-            if not acceptors.has_key(srv.port):
-                acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
-
-# This node is a gateway.
-is_router = 0
-def node_is_router():
-    return is_router
-
-# If there are any routers found in the config, then this will be true
-# and all nodes will load kptlrouter.
-needs_router = 0
-def node_needs_router():
-    return needs_router or is_router
-
-# list of (nettype, gw, tgt_cluster_id, lo, hi)
-# Currently, these local routes are only added to kptlrouter route
-# table if they are needed to connect to a specific server.  This
-# should be changed so all available routes are loaded, and the
-# ptlrouter can make all the decisions.
-local_routes = []
-
-def find_local_routes(lustre):
-    """ Scan the lustre config looking for routers .  Build list of
-    routes. """
-    global local_routes, needs_router
-    local_routes = []
-    list = lustre.lookup_class('node')
-    for router in list:
-        if router.get_val_int('router', 0):
-            needs_router = 1
-            for (local_type, local_cluster_id, local_nid) in local_clusters:
-                gw = None
-                for netuuid in router.get_networks():
-                    db = router.lookup(netuuid)
-                    if (local_type == db.get_val('nettype') and
-                       local_cluster_id == db.get_val('clusterid')):
-                        gw = db.get_val('nid')
-                        break
-                if gw:
-                    debug("find_local_routes: gw is", gw)
-                    for route in router.get_local_routes(local_type, gw):
-                        local_routes.append(route)
-    debug("find_local_routes:", local_routes)
-
-
-def find_local_servers(srv_list):
-    result = []
-
-    for srv in srv_list:
-#        if local_cluster(srv.net_type, srv.cluster_id):
-        result.append(srv)
-    return result
-
-def local_cluster(net_type, cluster_id):
-    for cluster in local_clusters:
-        if net_type == cluster[0] and cluster_id == cluster[1]:
-            return 1
-    return 0
-
-def local_interface(net_type, cluster_id, nid):
-    for cluster in local_clusters:
-        if (net_type == cluster[0] and cluster_id == cluster[1]
-            and nid == cluster[2]):
-            return 1
-    return 0
-
-def find_route(srv_list):
-    result = []
-#    frm_type = local_clusters[0][0]
-#    for srv in srv_list:
-#        debug("find_route: srv:", srv.nid, "type: ", srv.net_type)
-#        to_type = srv.net_type
-#        to = srv.nid
-#        cluster_id = srv.cluster_id
-#        debug ('looking for route to', to_type, to)
-#        for r in local_routes:
-#            debug("find_route: ", r)
-#            if  (r[3] <= to and to <= r[4]) and cluster_id == r[2]:
-#                result.append((srv, r))
-    return result
-
 def get_active_target(db):
     target_uuid = db.getUUID()
     target_name = db.getName()
@@ -2656,8 +2047,6 @@ def newService(db):
         n = LOV(db, "YOU_SHOULD_NEVER_SEE_THIS_UUID")
     elif type == 'network':
         n = Network(db)
-    elif type == 'routetbl':
-        n = RouteTable(db)
     elif type == 'osd':
         n = OSD(db)
     elif type == 'cobd':
@@ -2730,35 +2119,81 @@ def doUnloadModules(services):
         if n.safe_to_clean_modules():
             n.cleanup_module()
 
+def doMakeServiceScript(services):
+    if config.nosetup:
+        return
+    try:
+        os.makedirs(config.service_scripts)
+    except OSError, e:
+        if e[0] != errno.EEXIST:
+            panic("Couldn't create scripts dir " + config.service_scripts + ": " + e[1])
+    
+    for s in services:
+        if s[1].get_class() != 'osd' and s[1].get_class() != 'mdsdev':
+            continue
+
+        target_uuid = s[1].get_first_ref('target')
+        target = toplustreDB.lookup(target_uuid)
+        target_symlink = config.service_scripts + "/" + target.getName()
+        if config.force:
+            try:
+                try:
+                    os.unlink(target_symlink)
+                    if config.verbose:
+                        print "Removed " + target_symlink
+                except OSError, e:
+                    if e[0] != errno.EISDIR:
+                        raise e
+                    os.rmdir(target_symlink)
+                    if config.verbose:
+                        print "Removed " + target_symlink
+            except OSError, e:
+                if e[0] != errno.ENOENT:
+                    panic("Error removing " + target_symlink + ": " + e[1])
+                    
+        try:
+            os.symlink("/etc/init.d/lustre", target_symlink)
+            if config.verbose:
+                print "Created service link " + target_symlink + " to /etc/init.d/lustre"
+
+        except OSError, e:
+            if e[0] == errno.EEXIST:
+                extra_error = " (use --force option to remove existing files)"
+            else:
+                extra_error = ""
+            panic("Error creating " + target_symlink + ": " + e[1] + extra_error)
+
 #
 # Load profile for
 def doHost(lustreDB, hosts):
-    global is_router, local_node_name
+    global local_node_name, tgt_select
     node_db = None
     for h in hosts:
         node_db = lustreDB.lookup_name(h, 'node')
         if node_db:
+            if config.service:
+                tgt_select[config.service] = h
+                config.group = config.service
             break
     if not node_db:
         panic('No host entry found.')
 
     local_node_name = node_db.get_val('name', 0)
-    is_router = node_db.get_val_int('router', 0)
     lustre_upcall = node_db.get_val('lustreUpcall', '')
     portals_upcall = node_db.get_val('portalsUpcall', '')
     timeout = node_db.get_val_int('timeout', 0)
     ptldebug = node_db.get_val('ptldebug', '')
     subsystem = node_db.get_val('subsystem', '')
 
-    find_local_clusters(node_db)
-    if not is_router:
-        find_local_routes(lustreDB)
-
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
     prof_list = node_db.get_refs('profile')
 
-    if config.write_conf:
+    if config.make_service_scripts:
+        for_each_profile(node_db, prof_list, doMakeServiceScript)
+        return
+    
+    elif config.write_conf:
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
@@ -2772,7 +2207,7 @@ def doHost(lustreDB, hosts):
         doRecovery(lustreDB, lctl, config.tgt_uuid, config.client_uuid,
                    config.conn_uuid)
     elif config.cleanup:
-        if not mod_loaded('portals'):
+        if not mod_loaded('lnet'):
             return
 
         if config.force:
@@ -2823,6 +2258,150 @@ def doHost(lustreDB, hosts):
 
         for_each_profile(node_db, prof_list, doSetup)
         lustreDB.close()
+
+def add_clumanager_node(node_db, nodes, services):
+    new_services = []
+    node_name = node_db.getUUID()
+    nodes[node_name] = []
+    
+    for prof_uuid in node_db.get_refs('profile'):
+        prof_db = toplustreDB.lookup(prof_uuid)
+        for ref_class, ref_uuid in prof_db.get_all_refs():
+            if ref_class not in ('osd', 'mdsdev'):
+                continue
+            devdb = toplustreDB.lookup(ref_uuid)
+            tgt_uuid = devdb.get_first_ref('target')
+
+            nodes[node_name].append(ref_uuid)
+
+            if not services.has_key(tgt_uuid):
+                if config.verbose:
+                    print "New service: " + tgt_uuid + " (originally found on " + node_name + ")"
+                new_services.append(tgt_uuid)
+                services[tgt_uuid] = []
+            services[tgt_uuid].append(ref_uuid)
+
+    return new_services
+
+def add_clumanager_services(new_services, nodes, dev_list):
+    new_nodes = []
+    for devdb in dev_list:
+        tgt_uuid = devdb.get_first_ref('target')
+        if tgt_uuid in new_services:
+            node_uuid = devdb.get_first_ref('node')
+        
+            if not (nodes.has_key(node_uuid) or node_uuid in new_nodes):
+                if config.verbose:
+                    print "New node: " + node_uuid + " for service " + tgt_uuid
+                new_nodes.append(node_uuid)
+
+    return new_nodes
+
+def doClumanager(lustreDB, hosts):
+    nodes = {}
+    services = {}
+
+    dev_list = []
+    
+    for dev_uuid in toplustreDB.get_refs('osd') + toplustreDB.get_refs('mdsdev'):
+        dev_list.append(lustreDB.lookup(dev_uuid))
+
+    node_db = None
+    for h in hosts:
+        node_db = lustreDB.lookup_name(h, 'node')
+        if node_db:
+            our_host = h
+            new_services = add_clumanager_node(node_db, nodes, services)
+            break
+            
+    if not node_db:
+        panic('No host entry found.')
+
+    while 1:
+        if len(new_services) == 0:
+            break
+        
+        new_nodes = add_clumanager_services(new_services, nodes, dev_list)
+        if len(new_nodes) == 0:
+            break
+
+        if len(new_nodes) + len(nodes.keys()) > 8:
+            panic("CluManager only supports 8 nodes per failover \"cluster.\"")
+
+        new_services = []
+        for node_uuid in new_nodes:
+            node_db = lustreDB.lookup(node_uuid)
+            if not node_db:
+                panic("No node entry for " + node_uuid + " was found.")
+
+            new_services.append(add_clumanager_node(node_db, nodes, services))
+
+    nodenames = []
+    for node in nodes.keys():
+        nodedb = lustreDB.lookup(node)
+        nodenames.append(nodedb.getName())
+    nodenames.sort()
+
+    print """<?xml version="1.0"?>
+<cluconfig version="3.0">
+  <clumembd broadcast="no" interval="750000" loglevel="5" multicast="yes" multicast_ipaddress="225.0.0.11" thread="yes" tko_count="20"/>
+  <cluquorumd loglevel="5" pinginterval="2"/>
+  <clurmtabd loglevel="5" pollinterval="4"/>
+  <clusvcmgrd loglevel="5"/>
+  <clulockd loglevel="5"/>
+  <cluster config_viewnumber="1" name="%s"/>
+  <sharedstate driver="libsharedraw.so" rawprimary="%s" rawshadow="%s" type="raw"/>
+  <members> """ % (string.join(nodenames), config.rawprimary, config.rawsecondary)
+    
+
+    i = 0
+    for node in nodenames:
+        print "    <member id=\"%d\" name=\"%s\" watchdog=\"yes\"/>" % (i, node)
+        i = i + 1
+
+    print "  </members>\n  <failoverdomains>"
+
+    servicekeys = services.keys()
+    servicekeys.sort()
+
+    i = 0
+    for service in servicekeys:
+        svcdb = lustreDB.lookup(service)
+        print "    <failoverdomain id=\"%d\" name=\"%s\" ordered=\"yes\" restricted=\"yes\">" % (i, svcdb.getName())
+        i = i + 1
+
+        j = 0
+        active_uuid = get_active_target(svcdb)
+        for svc_uuid in [active_uuid] + services[service]:
+            if svc_uuid == active_uuid and j > 0:
+                continue
+            svcdb = lustreDB.lookup(svc_uuid)
+
+            svc_node_uuid = svcdb.get_first_ref('node')
+            svc_nodedb = lustreDB.lookup(svc_node_uuid)
+
+            print "      <failoverdomainnode id=\"%d\" name=\"%s\"/>" % (j, svc_nodedb.getName())
+            j = j + 1
+
+        print "    </failoverdomain>"
+
+    print "  </failoverdomains>\n  <services>"
+
+    i = 0
+    for service in servicekeys:
+        svcdb = lustreDB.lookup(service)
+        active_uuid = get_active_target(svcdb)
+        activedb = lustreDB.lookup(active_uuid)
+
+        svc_node_uuid = activedb.get_first_ref('node')
+        svc_nodedb = lustreDB.lookup(svc_node_uuid)
+
+        print "    <service checkinterval=\"30\" failoverdomain=\"%s\" id=\"%d\" name=\"%s\" userscript=\"%s/%s\">" \
+              % ( svcdb.getName(), i, svcdb.getName(), config.service_scripts, svcdb.getName())
+        print "      <service_ipaddresses/>\n    </service>"
+        i = i + 1
+
+    print "  </services>\n</cluconfig>"
 
 def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
     tgt = lustreDB.lookup(tgt_uuid)
@@ -2888,7 +2467,7 @@ def sysctl(path, val):
 
 
 def sys_set_debug_path():
-    sysctl('portals/debug_path', config.debug_path)
+    sysctl('lnet/debug_path', config.debug_path)
 
 def validate_upcall(upcall):
     import os
@@ -2901,7 +2480,7 @@ def validate_upcall(upcall):
         print "WARNING invalid upcall script specified: %s" % upcall
 
 def sys_set_lustre_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.lustre_upcall:
         upcall = config.lustre_upcall
     elif config.upcall:
@@ -2911,14 +2490,28 @@ def sys_set_lustre_upcall(upcall):
         lctl.set_lustre_upcall(upcall)
 
 def sys_set_portals_upcall(upcall):
-    # the command overrides the value in the node config
+    # the command line overrides the value in the node config
     if config.portals_upcall:
         upcall = config.portals_upcall
     elif config.upcall:
         upcall = config.upcall
     if upcall:
         validate_upcall(upcall)
-        sysctl('portals/upcall', upcall)
+        sysctl('lnet/upcall', upcall)
+
+def sys_set_group_upcall(mds, upcall):
+    if config.noexec:
+        return
+    # the command line overrides the value in the MDS config
+    if config.group_upcall:
+        upcall = config.group_upcall
+    if upcall:
+        validate_upcall(upcall)
+        debug("setting MDS", mds, "upcall to:", upcall)
+        path = "/proc/fs/lustre/mds/" + mds + "/group_upcall"
+        fp = open(path, 'w')
+        fp.write(upcall)
+        fp.close()
 
 def sys_set_timeout(timeout):
     # the command overrides the value in the node config
@@ -2946,7 +2539,7 @@ def sys_set_ptldebug(ptldebug):
         try:
             val = eval(ptldebug, ptldebug_names)
             val = "0x%x" % (val)
-            sysctl('portals/debug', val)
+            sysctl('lnet/debug', val)
         except NameError, e:
             panic(str(e))
 
@@ -2957,7 +2550,7 @@ def sys_set_subsystem(subsystem):
         try:
             val = eval(subsystem, subsystem_names)
             val = "0x%x" % (val)
-            sysctl('portals/subsystem_debug', val)
+            sysctl('lnet/subsystem_debug', val)
         except NameError, e:
             panic(str(e))
 
@@ -2975,8 +2568,8 @@ def sys_set_netmem_max(path, max):
         fp.close()
 
 def sys_make_devices():
-    if not os.access('/dev/portals', os.R_OK):
-        run('mknod /dev/portals c 10 240')
+    if not os.access('/dev/lnet', os.R_OK):
+        run('mknod /dev/lnet c 10 240')
     if not os.access('/dev/obd', os.R_OK):
         run('mknod /dev/obd c 10 241')
 
@@ -3012,6 +2605,9 @@ def sanitise_path():
 tgt_select = {}
 def init_select(args):
     # args = [service=nodeA,service2=nodeB service3=nodeC]
+    # --service <service> is analagous to:
+    #     --group <service> --select <service>=<node>
+    # this is handled in doHost()
     global tgt_select
     for arg in args:
         list = string.split(arg, ',')
@@ -3034,6 +2630,7 @@ lconf_options = [
     ('ldapurl',"LDAP server URL, eg. ldap://localhost", PARAM),
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
+    ('service', "shorthand for --group <service> --select <service>=<node>", PARAM),
     ('node',   "Load config for <nodename>", PARAM),
     ('cleanup,d', "Cleans up config. (Shutdown)"),
     ('force,f', "Forced unmounting and/or obd detach during cleanup",
@@ -3084,12 +2681,18 @@ lconf_options = [
     ('upcall',  "Set both portals and lustre upcall script", PARAM),
     ('lustre_upcall', "Set lustre upcall script", PARAM),
     ('portals_upcall', "Set portals upcall script", PARAM),
+    ('group_upcall', "Set supplementary group upcall program", PARAM),
     ('lctl_dump', "Save lctl ioctls to the dumpfile argument", PARAM),
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Set the portals debug subsystem",  PARAM),
     ('gdb_script', "Fullname of gdb debug script", PARAM, default_gdb_script()),
     ('debug_path', "Path to save debug dumps", PARAM, default_debug_path()),
     ('allow_unprivileged_port', "Allow connections from unprivileged ports"),
+    ('clumanager', "Generate CluManager config file for this node's cluster"),
+    ('rawprimary', "For clumanager, device of the primary quorum", PARAM, "/dev/raw/raw1"),
+    ('rawsecondary', "For clumanager, device of the secondary quorum", PARAM, "/dev/raw/raw2"),
+    ('service_scripts', "For clumanager, directory containing per-service scripts", PARAM, "/etc/lustre/services"),
+    ('make_service_scripts', "Create per-service symlinks for use with clumanager"),
 # Client recovery options
     ('recover', "Recover a device"),
     ('group', "The group of devices to configure or cleanup", PARAM),
@@ -3191,7 +2794,7 @@ def main():
     else:
         if len(host) > 0:
             node_list.append(host)
-        node_list.append('localhost')
+#        node_list.append('localhost')
 
     debug("configuring for host: ", node_list)
 
@@ -3210,7 +2813,10 @@ def main():
         lctl.clear_log(config.record_device, config.record_log)
         lctl.record(config.record_device, config.record_log)
 
-    doHost(lustreDB, node_list)
+    if config.clumanager:
+        doClumanager(lustreDB, node_list)
+    else:
+        doHost(lustreDB, node_list)
 
     if config.record:
         lctl.end_record()

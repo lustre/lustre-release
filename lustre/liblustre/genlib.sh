@@ -1,5 +1,6 @@
 #!/bin/bash
 #set -xv
+set -e
 
 #
 # This script is to generate lib lustre library as a whole. It will leave
@@ -17,8 +18,7 @@ RANLIB=/usr/bin/ranlib
 CWD=`pwd`
 
 SYSIO=$1
-CRAY_PORTALS_LIBS=$2
-LIBS=$3
+LIBS=$2
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -53,22 +53,6 @@ build_sysio_obj_list() {
   done
 }
 
-#
-# special treatment for libportals.a
-#
-cray_tmp=$CWD/cray_tmp_`date +%s`
-rm -rf $cray_tmp
-build_cray_portals_obj_list() {
-  _objs=`$AR -t $1`
-  mkdir -p $cray_tmp
-  cd $cray_tmp
-  $AR -x $1
-  cd ..
-  for _lib in $_objs; do
-    ALL_OBJS=$ALL_OBJS"$cray_tmp/$_lib ";
-  done
-}
-
 # lustre components libs
 build_obj_list . libllite.a
 build_obj_list ../lov liblov.a
@@ -79,16 +63,10 @@ build_obj_list ../ptlrpc libptlrpc.a
 build_obj_list ../obdclass liblustreclass.a
 build_obj_list ../lvfs liblvfs.a
 
-# portals components libs
-build_obj_list ../../portals/utils libuptlctl.a
-
-if [ "x$CRAY_PORTALS_LIBS" = "x" ]; then
-  build_obj_list ../../portals/unals libtcpnal.a
-  build_obj_list ../../portals/portals libportals.a
-# if libportals is already in our LIBS we don't need to link against it here
-elif $(echo "$LIBS" | grep -v -- "-lportals" >/dev/null) ; then
-  build_cray_portals_obj_list $CRAY_PORTALS_LIBS/libportals.a
-fi
+# lnet components libs
+build_obj_list ../../lnet/utils libuptlctl.a
+build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
+build_obj_list ../../lnet/lnet liblnet.a
 
 # create static lib lsupport
 rm -f $CWD/liblsupport.a
@@ -111,4 +89,3 @@ $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_clea
 	$ALL_OBJS -lcap -lpthread
 
 rm -rf $sysio_tmp
-rm -rf $cray_tmp

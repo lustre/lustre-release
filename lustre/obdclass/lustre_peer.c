@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 
@@ -39,7 +42,7 @@
 
 struct uuid_nid_data {
         struct list_head un_list;
-        ptl_nid_t        un_nid;
+        lnet_nid_t        un_nid;
         char            *un_uuid;
 };
 
@@ -59,7 +62,7 @@ void class_exit_uuidlist(void)
         class_del_uuid(NULL);
 }
 
-int lustre_uuid_to_peer(char *uuid, ptl_nid_t *peer_nid)
+int lustre_uuid_to_peer(char *uuid, lnet_nid_t *peer_nid, int index)
 {
         struct list_head *tmp;
 
@@ -69,7 +72,8 @@ int lustre_uuid_to_peer(char *uuid, ptl_nid_t *peer_nid)
                 struct uuid_nid_data *data =
                         list_entry(tmp, struct uuid_nid_data, un_list);
 
-                if (strcmp(data->un_uuid, uuid) == 0) {
+                if (!strcmp(data->un_uuid, uuid) &&
+                    index-- == 0) {
                         *peer_nid = data->un_nid;
 
                         spin_unlock (&g_uuid_lock);
@@ -78,7 +82,7 @@ int lustre_uuid_to_peer(char *uuid, ptl_nid_t *peer_nid)
         }
 
         spin_unlock (&g_uuid_lock);
-        return -1;
+        return -ENOENT;
 }
 
 int class_add_uuid(char *uuid, __u64 nid)
@@ -103,7 +107,7 @@ int class_add_uuid(char *uuid, __u64 nid)
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s "LPX64"\n", uuid, nid);
+        CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
         memcpy(data->un_uuid, uuid, nob);
         data->un_nid = nid;
 

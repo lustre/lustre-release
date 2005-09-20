@@ -7,20 +7,23 @@
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef EXPORT_SYMTAB
@@ -46,7 +49,8 @@
 
 #include "mds_internal.h"
 
-/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
+/* This limit is arbitrary (32k clients on x86), but it is convenient to use
+ * 2^n * PAGE_SIZE * 8 for the number of bits that fit an order-n allocation. */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
 
 #define LAST_RCVD "last_rcvd"
@@ -185,8 +189,14 @@ int mds_client_free(struct obd_export *exp)
                 LBUG();
         }
 
+
+        /* Make sure the server's last_transno is up to date. Do this
+         * after the client is freed so we know all the client's
+         * transactions have been committed. */
+        mds_update_server_data(exp->exp_obd, 0);
+
         EXIT;
-free:
+ free:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
         med->med_mcd = NULL;
 
@@ -606,14 +616,13 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         char fidname[LL_FID_NAMELEN];
         void *handle;
-        struct lvfs_ucred ucred;
+        struct lvfs_ucred ucred = { 0 };
         int rc = 0, err, namelen;
         ENTRY;
 
         /* the owner of object file should always be root */
-        memset(&ucred, 0, sizeof(ucred));
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
-        
+
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);
@@ -689,14 +698,13 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
-        struct lvfs_ucred ucred;
+        struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
         ENTRY;
-        
-        memset(&ucred, 0, sizeof(ucred));
+
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
 
@@ -724,7 +732,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-        
+
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",

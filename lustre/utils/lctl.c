@@ -27,7 +27,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "obdctl.h"
 #include "parser.h"
 

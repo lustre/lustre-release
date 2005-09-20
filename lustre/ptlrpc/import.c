@@ -4,20 +4,23 @@
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
@@ -136,6 +139,9 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                imp->imp_replayable 
                                ? "wait for recovery to complete"
                                : "fail");
+
+                if (obd_dump_on_timeout)
+                        libcfs_debug_dumplog();
 
                 CWARN("%s: connection lost to %s@%s\n",
                       imp->imp_obd->obd_name,
@@ -263,9 +269,9 @@ static int import_select_connection(struct obd_import *imp)
         }
 
         if (imp->imp_conn_current && 
-            !(imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
+            imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
                 imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
-                                  struct obd_import_conn, oic_item);
+                                      struct obd_import_conn, oic_item);
         } else {
                 imp_conn = list_entry(imp->imp_conn_list.next,
                                       struct obd_import_conn, oic_item);
@@ -359,7 +365,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 #endif
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
-        size[0] = sizeof(struct obd_connect_data);
+        /* Allow a slightly larger reply for future growth compatibility */
+        size[0] = sizeof(struct obd_connect_data) + 16 * sizeof(__u64);
         request->rq_replen = lustre_msg_size(1, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
@@ -531,10 +538,21 @@ finish:
                         RETURN(0);
                 }
         } else {
-                list_del(&imp->imp_conn_current->oic_item);
-                list_add(&imp->imp_conn_current->oic_item,
-                         &imp->imp_conn_list);
-                imp->imp_conn_current = NULL;
+                spin_lock_irqsave(&imp->imp_lock, flags);
+                if (imp->imp_conn_current != NULL) {
+                        list_del(&imp->imp_conn_current->oic_item);
+                        list_add(&imp->imp_conn_current->oic_item,
+                                 &imp->imp_conn_list);
+                        imp->imp_conn_current = NULL;
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                } else {
+                        static int bug7269_dump = 0;
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        CERROR("this is bug 7269 - please attach log there\n");
+                        if (bug7269_dump == 0)
+                                libcfs_debug_dumplog();
+                        bug7269_dump = 1;
+                }
         }
 
  out:
@@ -545,7 +563,7 @@ finish:
                 }
 
                 ptlrpc_maybe_ping_import_soon(imp);
-                
+
                 CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
@@ -757,20 +775,19 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         }
 
         spin_lock_irqsave(&imp->imp_lock, flags);
-        if (imp->imp_state != LUSTRE_IMP_FULL) {
+        if (imp->imp_state != LUSTRE_IMP_FULL)
                 GOTO(out, 0);
-        }
+
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
         if (request) {
-                /* For non-replayable connections, don't attempt
-                   reconnect if this fails */
-                if (!imp->imp_replayable) {
-                        request->rq_no_resend = 1;
-                        IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
-                        request->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                }
+                /* We are disconnecting, do not retry a failed DISCONNECT rpc if
+                 * it fails.  We can get through the above with a down server
+                 * if the client doesn't know the server is gone yet. */
+                request->rq_no_resend = 1;
+                IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
+                request->rq_send_state =  LUSTRE_IMP_CONNECTING;
                 request->rq_replen = lustre_msg_size(0, NULL);
                 rc = ptlrpc_queue_wait(request);
                 ptlrpc_req_finished(request);

@@ -182,8 +182,12 @@ int run_one_child(char *file, int thread, int seconds)
                 }
                 if (unlink(filename) < 0) {
                         print_err("unlink", filename, &cur, errno);
-                        rc = errno;
-                        break;
+                        if (errno == ENOENT) {
+                                printf("Ignoring known bug 6082\n");
+                        } else {
+                                rc = errno;
+                                break;
+                        }
                 }
         }
 

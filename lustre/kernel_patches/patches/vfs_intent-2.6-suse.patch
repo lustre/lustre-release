@@ -126,13 +126,16 @@ Index: linux-2.6.5-12.1/fs/namei.c
  /*
   * Name resolution.
   *
-@@ -664,7 +708,9 @@
+@@ -664,8 +708,12 @@
+ 			goto out_dput;
  
  		if (inode->i_op->follow_link) {
++			int save_flags = nd->flags;
  			mntget(next.mnt);
 +			nd->flags |= LOOKUP_LINK_NOTLAST;
  			err = do_follow_link(next.dentry, nd);
-+			nd->flags &= ~LOOKUP_LINK_NOTLAST;
++			if (!(save_flags & LOOKUP_LINK_NOTLAST))
++				nd->flags &= ~LOOKUP_LINK_NOTLAST;
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)

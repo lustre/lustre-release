@@ -3,20 +3,23 @@
  *
  *  Copyright (c) 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #define DEBUG_SUBSYSTEM S_MDC
@@ -68,23 +71,24 @@ void mdc_pack_req_body(struct ptlrpc_request *req)
 
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
-                     const void *data, int datalen)
+                     struct mdc_op_data *op_data, const void *data, int datalen,
+                     __u32 mode, __u32 uid, __u32 gid, __u32 cap_effective,
+                     __u64 rdev)
 {
         struct mds_rec_create *rec;
         char *tmp;
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         rec->cr_opcode = REINT_CREATE;
-        rec->cr_fsuid = current->fsuid;
-        rec->cr_fsgid = current->fsgid;
-        rec->cr_cap = current->cap_effective;
+        rec->cr_fsuid = uid;
+        rec->cr_fsgid = gid;
+        rec->cr_cap = cap_effective;
         rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->ctxt.gid1;
+        rec->cr_suppgid = op_data->suppgids[0];
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
@@ -131,7 +135,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->ctxt.gid1;
+        rec->cr_suppgid = op_data->suppgids[0];
 
         if (op_data->name) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
@@ -157,6 +161,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
         rec->sa_fid = data->fid1;
+        rec->sa_suppgid = -1;
 
         if (iattr) {
                 rec->sa_valid = iattr->ia_valid;
@@ -170,12 +175,8 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
                 rec->sa_attr_flags = iattr->ia_attr_flags;
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
-                else if ((iattr->ia_valid & ATTR_MODE) &&
-                         in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = data->ctxt.gid1;
-                else if ((iattr->ia_valid & (ATTR_MTIME|ATTR_CTIME)) &&
-                         data->ctxt.gid1 != -1)
-                        rec->sa_suppgid = data->ctxt.gid1;
+                else
+                        rec->sa_suppgid = data->suppgids[0];
         }
 
         if (ealen == 0)
@@ -203,7 +204,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fsgid = current->fsgid;
         rec->ul_cap = current->cap_effective;
         rec->ul_mode = data->create_mode;
-        rec->ul_suppgid = data->ctxt.gid1;
+        rec->ul_suppgid = data->suppgids[0];
         rec->ul_fid1 = data->fid1;
         rec->ul_fid2 = data->fid2;
         rec->ul_time = data->mod_time;
@@ -225,8 +226,8 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fsuid = current->fsuid;
         rec->lk_fsgid = current->fsgid;
         rec->lk_cap = current->cap_effective;
-        rec->lk_suppgid1 = data->ctxt.gid1;
-        rec->lk_suppgid2 = data->ctxt.gid2;
+        rec->lk_suppgid1 = data->suppgids[0];
+        rec->lk_suppgid2 = data->suppgids[1];
         rec->lk_fid1 = data->fid1;
         rec->lk_fid2 = data->fid2;
         rec->lk_time = data->mod_time;
@@ -249,8 +250,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        rec->rn_suppgid1 = data->ctxt.gid1;
-        rec->rn_suppgid2 = data->ctxt.gid2;
+        rec->rn_suppgid1 = data->suppgids[0];
+        rec->rn_suppgid2 = data->suppgids[1];
         rec->rn_fid1 = data->fid1;
         rec->rn_fid2 = data->fid2;
         rec->rn_time = data->mod_time;
@@ -275,7 +276,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags;
-        b->suppgid = data->ctxt.gid1;
+        b->suppgid = data->suppgids[0];
 
         b->fid1 = data->fid1;
         if (data->name) {

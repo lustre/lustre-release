@@ -56,8 +56,20 @@ This program configures a node following directives in the <XML-config-file>.
  on an LDAP server that can be reached from all the cluster nodes.
 \layout Description
 
+--client_uuid\SpecialChar ~
+<uuid> The failed client (required for recovery).
+\layout Description
+
+--clientoptions\SpecialChar ~
+<options> Additional options for Lustre.
+\layout Description
+
 --config\SpecialChar ~
 <arg> Cluster configuration name used for LDAP query
+\layout Description
+
+--conn_uuid\SpecialChar ~
+<uuid> The failed connection (required for recovery).
 \layout Description
 
 --d|--cleanup Unconfigure a node.
@@ -68,6 +80,10 @@ This program configures a node following directives in the <XML-config-file>.
  argument used for configuration needs to be used for cleanup as well.
  This will attempt to undo all of the configuration steps done by lconf,
  including unloading the kernel modules.
+\layout Description
+
+--debug_path\SpecialChar ~
+<path> Path to save debug dumps.
 \layout Description
 
 --dump\SpecialChar ~
@@ -104,6 +120,12 @@ This program configures a node following directives in the <XML-config-file>.
 
 --group\SpecialChar ~
 <arg> The group of devices to cleanup/configure.
+\layout Description
+
+--group_upcall\SpecialChar ~
+<arg> Pathname to the MDS upcall to resolve secondary group membership.
+ Defaults to NONE, meaning that the MDS will use whatever group the client
+ supplies, but this is limited to a single supplementary group.
 \layout Description
 
 -h,--help Print help.
@@ -160,6 +182,43 @@ When used in conjunction with cleanup, services are torn down up to a certain
  Default is 0.
 \layout Description
 
+--mkfsoptions\SpecialChar ~
+<options> Specify additional options for the mk*fs command
+ line.
+\layout Description
+
+--mountfsoptions\SpecialChar ~
+<options> Specify additional options for mount fs command
+ line.
+ Mount options will be passed by this argument.
+ For example, extents are to be enabled by adding 
+\begin_inset Quotes eld
+\end_inset 
+
+,extents
+\begin_inset Quotes erd
+\end_inset 
+
+ to the --mountfsoptions option.
+ 
+\begin_inset Quotes eld
+\end_inset 
+
+errors=remount-ro
+\begin_inset Quotes erd
+\end_inset 
+
+ and 
+\begin_inset Quotes eld
+\end_inset 
+
+asyncdel
+\begin_inset Quotes erd
+\end_inset 
+
+ can also be added to it.
+\layout Description
+
 --node\SpecialChar ~
 node_name Specify a specific node to configure.
  By default, lconf will search for nodes with the local hostname and 'localhost'.
@@ -190,6 +249,11 @@ node_name
 --nosetup Only load modules, do not configure devices or services.
 \layout Description
 
+--portals\SpecialChar ~
+<path> Specify portals source directory.
+ If this is a relative path, then it is assumed to be relative to lustre.
+\layout Description
+
 --portals_upcall\SpecialChar ~
 <path> Specify the location of the Portals upcall scripts
  used by the client for recovery
@@ -199,6 +263,18 @@ node_name
 debug\SpecialChar ~
 level This options can be used to set the required debug
  level.
+\layout Description
+
+--record Write config information on mds.
+\layout Description
+
+--record_log\SpecialChar ~
+<arg> Specify the name of config record log.
+\layout Description
+
+--record_device\SpecialChar ~
+<arg> Specify MDS device name that will record the config
+ commands.
 \layout Description
 
 --recover\SpecialChar ~
@@ -213,8 +289,15 @@ level This options can be used to set the required debug
 <arg> Select a particular node for a service 
 \layout Description
 
+--single_socket Specify socknal option: only use one socket instead of bundle.
+\layout Description
+
 --subsystem\SpecialChar ~
 <arg> Set the portals debug subsystem.
+\layout Description
+
+--tgt_uuid\SpecialChar ~
+<uuid> Specify the failed target (required for recovery).
 \layout Description
 
 --timeout\SpecialChar ~

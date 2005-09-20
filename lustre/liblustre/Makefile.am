@@ -16,14 +16,9 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
 
-if !CRAY_PORTALS
-PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
-              $(top_builddir)/portals/unals/libtcpnal.a \
-              $(top_builddir)/portals/portals/libportals.a
-else
-PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
-              $(CRAY_PORTALS_LIBS)/libportals.a
-endif
+PTL_LIBS =    $(top_builddir)/lnet/utils/libuptlctl.a \
+              $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a \
+              $(top_builddir)/lnet/lnet/liblnet.a
 
 SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 
@@ -53,7 +48,7 @@ liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c \
 		     llite_lib.h
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(CRAY_PORTALS_LIBS)" "$(LIBS)"
+	sh $(srcdir)/genlib.sh "$(SYSIO)" "$(LIBS)"
 
 EXTRA_DIST = genlib.sh
 

@@ -924,7 +924,7 @@ void set_defaults(struct mkfs_opts *mop)
         mop->mo_index = -1;
 
         gethostname(hostname, sizeof(hostname));
-        mop->mo_hostnid.primary = libcfs_str2nid(hostname);
+        //mop->mo_hostnid.primary = libcfs_str2nid(hostname);
 }
 
 static inline void badopt(char opt, char *type)
@@ -1006,7 +1006,9 @@ int main(int argc , char *const argv[])
                                 sizeof(mop.mo_mkfsopts) - 1);
                         break;
                 case 'f':
-                        mop.mo_hostnid.backup = libcfs_str2nid(optarg);
+                        /* we must pass this info on when we register with
+                           the mgs */
+                        //mop.mo_hostnid.backup = libcfs_str2nid(optarg);
                         break;
                 case 'G':
                         mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;

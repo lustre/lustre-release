@@ -27,7 +27,7 @@ Index: linux-2.4.18-p4smp/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.18-p4smp.orig/fs/ext3/inode.c	Thu Nov 27 22:18:40 2003
 +++ linux-2.4.18-p4smp/fs/ext3/inode.c	Thu Nov 27 22:20:36 2003
-@@ -3004,3 +3004,75 @@
+@@ -3004,3 +3004,80 @@
  		ret = ret2;
  	return ret;
  }
@@ -35,15 +35,15 @@ Index: linux-2.4.18-p4smp/fs/ext3/inode.c
 +/* copied from fs/buffer.c */
 +static void unmap_underlying_metadata(struct buffer_head * bh)
 +{
-+        struct buffer_head *old_bh;
++	struct buffer_head *old_bh;
 +
-+        old_bh = get_hash_table(bh->b_dev, bh->b_blocknr, bh->b_size);
-+        if (old_bh) {
-+                mark_buffer_clean(old_bh);
-+                wait_on_buffer(old_bh);
-+                clear_bit(BH_Req, &old_bh->b_state);
-+                __brelse(old_bh);
-+        }
++	old_bh = get_hash_table(bh->b_dev, bh->b_blocknr, bh->b_size);
++	if (old_bh) {
++		mark_buffer_clean(old_bh);
++		wait_on_buffer(old_bh);
++		clear_bit(BH_Req, &old_bh->b_state);
++		__brelse(old_bh);
++	}
 +}
 +
 +int ext3_map_inode_page(struct inode *inode, struct page *page,
@@ -62,8 +62,9 @@ Index: linux-2.4.18-p4smp/fs/ext3/inode.c
 +                blocks[i] = ext3_bmap(inode->i_mapping, iblock);
 +                if (blocks[i] == 0) {
 +                        failed++;
-+                        created[i] = -1;
-+                } else {
++			if (created)
++				created[i] = -1;
++		} else if (created) {
 +                        created[i] = 0;
 +                }
 +        }
@@ -91,10 +92,14 @@ Index: linux-2.4.18-p4smp/fs/ext3/inode.c
 +                               "allocating block %ld\n", rc, iblock);
 +                        goto out;
 +                }
++		/* Unmap any metadata buffers from the block mapping, to avoid
++		 * data corruption due to direct-write from Lustre being
++		 * clobbered by a later flush of the blockdev metadata buffer.*/
 +                if (buffer_new(&bh))
 +                        unmap_underlying_metadata(&bh);
 +                blocks[i] = bh.b_blocknr;
-+                created[i] = 1;
++		if (created)
++			created[i] = 1;
 +        }
 +
 + out:

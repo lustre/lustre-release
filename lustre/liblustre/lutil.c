@@ -44,12 +44,9 @@
 
 #include "lutil.h"
 
-#if CRAY_PORTALS
-void portals_debug_dumplog(void){};
-#endif
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
-unsigned int portal_debug = 0;
+unsigned int libcfs_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+unsigned int libcfs_debug = 0;
 
 struct task_struct     *current;
 
@@ -86,7 +83,7 @@ static int get_ipv4_addr()
         if (hptr == NULL ||
             hptr->h_addrtype != AF_INET ||
             *hptr->h_addr_list == NULL) {
-                printf("LibLustre: Warning: fail to get local IPv4 address\n");
+                CWARN("Warning: fail to get local IPv4 address\n");
                 return 0;
         }
 
@@ -152,8 +149,8 @@ static void init_capability(int *res)
 
         syscap = cap_get_proc();
         if (!syscap) {
-                printf("Liblustre: Warning: failed to get system capability, "
-                       "set to minimal\n");
+                CWARN("Warning: failed to get system capability, "
+                      "set to minimal\n");
                 return;
         }
 
@@ -231,13 +228,12 @@ void generate_random_uuid(unsigned char uuid_out[16])
 
 int init_lib_portals()
 {
-        int max_interfaces;
         int rc;
         ENTRY;
 
-        rc = PtlInit(&max_interfaces);
-        if (rc != PTL_OK) {
-                CERROR("PtlInit failed: %d\n", rc);
+        rc = LNetInit();
+        if (rc != 0) {
+                CERROR("LNetInit failed: %d\n", rc);
                 RETURN (-ENXIO);
         }
         RETURN(0);

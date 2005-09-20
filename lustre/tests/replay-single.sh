@@ -14,8 +14,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-# bug number: 2766
-ALWAYS_EXCEPT="0b"
+# bug number: 2766 4176
+ALWAYS_EXCEPT="0b  39"
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -47,7 +47,7 @@ cleanup() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
+    sysctl -w lnet.debug=0 || true
     FORCE=--force cleanup
     exit
 fi
@@ -756,7 +756,7 @@ test_38() {
 }
 run_test 38 "test recovery from unlink llog (test llog_gen_rec) "
 
-test_39() {
+test_39() { # bug 4176
     createmany -o $DIR/$tfile-%d 800
     replay_barrier mds
     unlinkmany $DIR/$tfile-%d 0 400
@@ -837,24 +837,23 @@ test_42() {
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
-    DEBUG42=`sysctl portals.debug | tr -d ' '`
-    sysctl -w portals.debug=-1
+    DEBUG42=`sysctl -n lnet.debug`
+    sysctl -w lnet.debug=-1
     facet_failover ost
     
-    # osc is evicted, fs is smaller
-    blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
-    [ $blocks_after -lt $blocks ] || return 1
+    # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
+    #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
+    #[ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
-    sysctl -w $DEBUG42
+    sysctl -w lnet.debug=$DEBUG42
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
 run_test 42 "recovery after ost failure"
 
-# b=2530
 # timeout in MDS/OST recovery RPC will LBUG MDS
-test_43() {
+test_43() { # bug 2530
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
@@ -913,9 +912,7 @@ test_46() {
 }
 run_test 46 "Don't leak file handle after open resend (3325)"
 
-# b=2824
-test_47() {
-
+test_47() { # bug 2824
     # create some files to make sure precreate has been done on all 
     # OSTs. (just in case this test is run independently)
     createmany -o $DIR/$tfile 20  || return 1
@@ -939,7 +936,6 @@ test_47() {
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
-
     replay_barrier mds
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216

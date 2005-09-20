@@ -5,20 +5,23 @@
  *
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * These are the only exported functions, they provide some generic
  * infrastructure for managing object devices
@@ -72,7 +75,7 @@
 
 #ifndef __KERNEL__
 /* liblustre workaround */
-atomic_t portal_kmemory = {0};
+atomic_t libcfs_kmemory = {0};
 #endif
 
 struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -90,6 +93,7 @@ unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100; /* seconds */
 unsigned int ldlm_timeout = 20; /* seconds */
+unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
@@ -187,8 +191,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         /* only for debugging */
         if (cmd == PTL_IOC_DEBUG_MASK) {
                 debug_data = (struct portals_debug_ioctl_data*)arg;
-                portal_subsystem_debug = debug_data->subs;
-                portal_debug = debug_data->debug;
+                libcfs_subsystem_debug = debug_data->subs;
+                libcfs_debug = debug_data->debug;
                 return 0;
         }
 
@@ -215,7 +219,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 OBD_ALLOC(lcfg, data->ioc_plen1);
                 err = copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1);
-
                 if (!err)
                         err = class_process_config(lcfg);
                 OBD_FREE(lcfg, data->ioc_plen1);
@@ -295,10 +298,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
 
         case OBD_IOC_CLOSE_UUID: {
-                ptl_nid_t       peer_nid;
-                CDEBUG(D_IOCTL, "closing all connections to uuid %s\n",
+                CDEBUG(D_IOCTL, "closing all connections to uuid %s (NOOP)\n",
                        data->ioc_inlbuf1);
-                lustre_uuid_to_peer(data->ioc_inlbuf1, &peer_nid);
                 GOTO(out, err = 0);
         }
 
@@ -381,6 +382,7 @@ EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
+EXPORT_SYMBOL(obd_health_check_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
@@ -458,13 +460,12 @@ int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
 static int obd_proc_read_health(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        int rc = 0; //, i;
+        int rc = 0, i;
         *eof = 1;
 
-        if (portals_catastrophe)
+        if (libcfs_catastrophe)
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
-#if 0
         spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd;
@@ -485,7 +486,6 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 spin_lock(&obd_dev_lock);
         }
         spin_unlock(&obd_dev_lock);
-#endif
 
         if (rc == 0)
                 return snprintf(page, count, "healthy\n");
@@ -494,12 +494,35 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         return rc;
 }
 
+static int obd_proc_rd_health_timeout(char *page, char **start, off_t off,
+                                      int count, int *eof, void *data)
+{
+        *eof = 1;
+        return snprintf(page, count, "%d\n", obd_health_check_timeout);
+}
+
+static int obd_proc_wr_health_timeout(struct file *file, const char *buffer,
+                                      unsigned long count, void *data)
+{
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        obd_health_check_timeout = val;
+
+        return count;
+}
+
 /* Root for /proc/fs/lustre */
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
         { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { "health_check", obd_proc_read_health, NULL, NULL },
+        { "health_check_timeout", obd_proc_rd_health_timeout,
+          obd_proc_wr_health_timeout, NULL },        
         { 0 }
 };
 #else
@@ -667,8 +690,13 @@ int init_obdclass(void)
         int err;
         int i;
 
+#ifdef __KERNEL__
         printk(KERN_INFO "Lustre: OBD class driver Build Version: "
                BUILD_VERSION", info@clusterfs.com\n");
+#else
+        CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
+               BUILD_VERSION", info@clusterfs.com\n");
+#endif
 
         err = obd_init_checks();
         if (err == -EOVERFLOW)
@@ -708,8 +736,7 @@ int init_obdclass(void)
         proc_version = lprocfs_add_vars(proc_lustre_root, lprocfs_base, NULL);
         entry = create_proc_entry("devices", 0444, proc_lustre_root);
         if (entry == NULL) {
-                printk(KERN_ERR "LustreError: error registering "
-                       "/proc/fs/lustre/devices\n");
+                CERROR("error registering /proc/fs/lustre/devices\n");
                 lprocfs_remove(proc_lustre_root);
                 RETURN(-ENOMEM);
         }
@@ -764,8 +791,8 @@ static void cleanup_obdclass(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
-#define LUSTRE_MIN_VERSION 32
-#define LUSTRE_MAX_VERSION 46
+#define LUSTRE_MIN_VERSION 37
+#define LUSTRE_MAX_VERSION 47
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)

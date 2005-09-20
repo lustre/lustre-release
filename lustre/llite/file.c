@@ -32,6 +32,21 @@
 #endif
 #include "llite_internal.h"
 
+/* also used by llite/special.c:ll_special_open() */
+struct ll_file_data *ll_file_data_get(void)
+{
+        struct ll_file_data *fd;
+
+        OBD_SLAB_ALLOC(fd, ll_file_data_slab, SLAB_KERNEL, sizeof *fd);
+        return fd;
+}
+
+static void ll_file_data_put(struct ll_file_data *fd)
+{
+        if (fd != NULL)
+                OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
+}
+
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                         struct file *file)
 {
@@ -81,7 +96,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = NULL;
-        OBD_SLAB_FREE(fd, ll_file_data_slab, sizeof *fd);
+        ll_file_data_put(fd);
 
         RETURN(rc);
 }
@@ -145,11 +160,11 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         RETURN(rc);
 }
 
-int ll_local_open(struct file *file, struct lookup_intent *it)
+int ll_local_open(struct file *file, struct lookup_intent *it,
+                  struct ll_file_data *fd)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
-        struct ll_file_data *fd;
         struct mds_body *body;
         ENTRY;
 
@@ -159,9 +174,6 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 
         LASSERT(!LUSTRE_FPRIVATE(file));
 
-        OBD_SLAB_ALLOC(fd, ll_file_data_slab, SLAB_KERNEL, sizeof *fd);
-        /* We can't handle this well without reorganizing ll_file_open and
-         * ll_mdc_close, so don't even try right now. */
         LASSERT(fd != NULL);
 
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
@@ -198,6 +210,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                                           .it_flags = file->f_flags };
         struct lov_stripe_md *lsm;
         struct ptlrpc_request *req;
+        struct ll_file_data *fd;
         int rc = 0;
         ENTRY;
 
@@ -210,21 +223,29 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         it = file->f_it;
 
+        fd = ll_file_data_get();
+        if (fd == NULL)
+                RETURN(-ENOMEM);
+
         if (!it || !it->d.lustre.it_disposition) {
                 it = &oit;
                 rc = ll_intent_file_open(file, NULL, 0, it);
-                if (rc)
+                if (rc) {
+                        ll_file_data_put(fd);
                         GOTO(out, rc);
+        }
         }
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         rc = it_open_error(DISP_OPEN_OPEN, it);
         /* mdc_intent_lock() didn't get a request ref if there was an open
          * error, so don't do cleanup on the request here (bug 3430) */
-        if (rc)
+        if (rc) {
+                ll_file_data_put(fd);
                 RETURN(rc);
+        }
 
-        rc = ll_local_open(file, it);
+        rc = ll_local_open(file, it, fd);
         LASSERTF(rc == 0, "rc = %d\n", rc);
 
         if (!S_ISREG(inode->i_mode))
@@ -974,11 +995,12 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                                     int lum_size)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct file *f;
+        struct file *f = NULL;
         struct obd_export *exp = ll_i2obdexp(inode);
         struct lov_stripe_md *lsm;
         struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
         struct ptlrpc_request *req = NULL;
+        struct ll_file_data *fd;
         int rc = 0;
         struct lustre_md md;
         ENTRY;
@@ -991,6 +1013,10 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                        inode->i_ino);
                 RETURN(-EEXIST);
         }
+
+        fd = ll_file_data_get();
+        if (fd == NULL)
+                GOTO(out, -ENOMEM);
 
         f = get_empty_filp();
         if (!f)
@@ -1015,9 +1041,10 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                 GOTO(out, rc);
         ll_update_inode(f->f_dentry->d_inode, md.body, md.lsm);
 
-        rc = ll_local_open(f, &oit);
+        rc = ll_local_open(f, &oit, fd);
         if (rc)
                 GOTO(out, rc);
+        fd = NULL;
         ll_intent_release(&oit);
 
         rc = ll_file_release(f->f_dentry->d_inode, f);
@@ -1025,6 +1052,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
  out:
         if (f)
                 put_filp(f);
+        ll_file_data_put(fd);
         up(&lli->lli_open_sem);
         if (req != NULL)
                 ptlrpc_req_finished(req);
@@ -1098,7 +1126,7 @@ static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
 static int ll_get_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         ldlm_policy_data_t policy = { .l_extent = { .start = 0,
                                                     .end = OBD_OBJECT_EOF}};
         struct lustre_handle lockh = { 0 };
@@ -1129,7 +1157,7 @@ static int ll_get_grouplock(struct inode *inode, struct file *file,
 static int ll_put_grouplock(struct inode *inode, struct file *file,
                          unsigned long arg)
 {
-        struct ll_file_data *fd = file->private_data;
+        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc;
@@ -1142,7 +1170,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
 
         if (fd->fd_gid != arg) /* Ugh? Unlocking with different gid? */
                 RETURN(-EINVAL);
-        
+
         fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
 
         rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
@@ -1153,7 +1181,7 @@ static int ll_put_grouplock(struct inode *inode, struct file *file,
         memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
 
         RETURN(0);
-}       
+}
 
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
@@ -1549,6 +1577,22 @@ struct file_operations ll_file_operations = {
         .fsync          = ll_fsync,
         /* .lock           = ll_file_flock */
 };
+
+struct file_operations ll_file_operations_flock = {
+        .read           = ll_file_read,
+        .write          = ll_file_write,
+        .ioctl          = ll_file_ioctl,
+        .open           = ll_file_open,
+        .release        = ll_file_release,
+        .mmap           = ll_file_mmap,
+        .llseek         = ll_file_seek,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        .sendfile       = generic_file_sendfile,
+#endif
+        .fsync          = ll_fsync,
+        .lock           = ll_file_flock
+};
+
 
 struct inode_operations ll_file_inode_operations = {
         .setattr_raw    = ll_setattr_raw,

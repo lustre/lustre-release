@@ -49,7 +49,7 @@
 
 
 #include "obdctl.h"
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "parser.h"
 #include <stdio.h>
 
@@ -253,7 +253,7 @@ int jt_obd_cleanup(int argc, char **argv)
 }
 
 static 
-int do_add_uuid(char * func, char *uuid, ptl_nid_t nid) 
+int do_add_uuid(char * func, char *uuid, lnet_nid_t nid) 
 {
         int rc;
         struct lustre_cfg_bufs bufs;
@@ -284,14 +284,14 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid)
 
 int jt_lcfg_add_uuid(int argc, char **argv)
 {
-        ptl_nid_t nid;
+        lnet_nid_t nid;
         
         if (argc != 3) {                
                 return CMD_HELP;
         }
 
         nid = libcfs_str2nid(argv[2]);
-        if (nid == PTL_NID_ANY) {
+        if (nid == LNET_NID_ANY) {
                 fprintf (stderr, "Can't parse NID %s\n", argv[2]);
                 return (-1);
         }
@@ -299,7 +299,7 @@ int jt_lcfg_add_uuid(int argc, char **argv)
         return do_add_uuid(argv[0], argv[1], nid);
 }
 
-int obd_add_uuid(char *uuid, ptl_nid_t nid)
+int obd_add_uuid(char *uuid, lnet_nid_t nid)
 {
         return do_add_uuid("obd_add_uuid", uuid, nid);
 }

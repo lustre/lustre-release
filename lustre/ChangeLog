@@ -1,73 +1,267 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.4.4
+       * version 1.4.6
        * bug fixes
 
-Severity   : minor
-Frequency  : Clusters with multiple interfaces not on the same subnet
-Bugzilla   : 5541
-Description: Nodes will repeatedly try to reconnect to an interface which it
-             cannot reach and report an error to the log.
-Details    : Extra peer list entries will be created by lconf with some peers
-             unreachable.  lconf now validates the peer before adding it.
-
 Severity   : major
-Frequency  : Only if a default stripe is set on the filesystem root.
-Bugzilla   : 6367
-Description: Setting a default stripe on the filesystem root prevented the
-             filesystem from being remounted.
-Details    : The client was sending extra request flags in the root getattr
-             request and did not allocate a reply buffer for the dir EA.
-
-Severity   : major
-Frequency  : occasional, higher if lots of files are accessed by one client
-Bugzilla   : 6159, 6097
-Description: Client trips assertion regarding lsm mismatch/magic
-Details    : While revalidating inodes the VFS looks up inodes with ifind()
-             and in rare cases can find an inode that is being freed.
-             The ll_test_inode() code will free the lsm during ifind()
-             when it finds an existing inode and then the VFS later attaches
-             this free lsm to a new inode.
-
-Severity   : minor
-Frequency  : occasional
-Description: While starting a server, the fsfilt_ext3 module could not be 
-             loaded.
-Details    : CFS's improved ext3 filesystem is named ldiskfs for 2.6
-             kernels.  Previously, lconf would still use the ext3 name
-             when trying to load modules.  Now, it will correctly use
-             ext3 on 2.4 and ldiskfs on 2.6.
+Frequency  : rare
+Bugzilla   : 7407
+Description: Running on many-way SMP OSTs can trigger oops in llcd_send()
+Details    : A race between allocating a new llcd and re-getting the llcd_lock
+	     allowed another thread to grab newly-allocated llcd.
 
 Severity   : enhancement
-Description: The default stripe count has been changed to 1
-Details    : The interpretation of the default stripe count (0, to lfs
-             or lmc) has been changed to mean striping across a single
-             OST, rather than all available.  For general usage we have
-             found a stripe count of 1 or 2 works best.
-
-Severity   : major
-Frequency  : occasional
-Bugzilla   : 6409, 6834
-Description: Creating files with an explicit stripe count may lead to
-             a failed assertion on the MDS
-Details    : If some OSTs are full or unavailable, creating files may
-             trigger a failed assertion on the MDS.  Now, Lustre will
-             try to use other servers or return an error to the
-             client.
+Bugzilla   : 7116
+Description: 2.6 OST async journal commit and locking fix to improve performance
+Details    : The filter_direct_io()+filter_commitrw_write() journal commits for
+	     2.6 kernels are now async as they already were in 2.4 kernels so
+	     that they can commit concurrently with the network bulk transfer.
+	     For block-allocated files the filter allocation semaphore is held
+	     to avoid filesystem fragmentation during allocation.  BKL lock
+	     removed for 2.6 xattr operations where it is no longer needed.
 
 Severity   : minor
-Frequency  : occasional
-Bugzilla   : 6469
-Description: Multiple concurrent overlapping read+write on multiple SMP nodes
-             caused lock timeout during readahead (since 1.4.2).
-Details    : Processes doing readahead might match a lock that hasn't been
-             granted yet if there are overlapping and conflicting lock
-             requests.  The readahead process waits on ungranted lock
-	     (original lock is CBPENDING), while OST waits for that process
-	     to cancel CBPENDING read lock and eventually evicts client.
+Frequency  : rare
+Bugzilla   : 8320
+Description: lconf incorrectly determined whether two IP networks could talk
+Details    : In some more complicated routing and multiple-network
+	     configurations, lconf will avoid trying to make a network
+	     connection to a disjoint part of the IP space.  It was doing the
+	     math incorrectly for one set of cases.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7359
+Description: Fix for potential infinite loop processing records in an llog.
+Details    : If an llog record is corrupted/zeroed, it is possible to loop
+	     forever in llog_process().  Validate the llog record length
+	     and skip the remainder of the block on error.
+
+Severity   : minor
+Frequency  : occasional (liblustre only)
+Bugzilla   : 6363
+Description: liblustre could not open files whose last component is a symlink
+Details    : sysio_path_walk() would incorrectly pass the open intent to
+	     intermediate path components.
+
+Severity   : minor
+Frequency  : rare (liblustre only with non-standard tuning)
+Bugzilla   : 7201 (7350)
+Description: Tuning the MDC DLM LRU size to zero triggers client LASSERT
+Details    : llu_lookup_finish_locks() tries to set lock data on a lock
+	     after it has been released, only do this for referenced locks
+
+Severity   : enhancement
+Bugzilla   : 7328
+Description: specifying an (invalid) directory default stripe_size of -1
+	     would reset the directory default striping
+Details    : stripe_size -1 was used internally to signal directory stripe
+	     removal, now use "all default" to signal dir stripe removal
+	     as a directory striping of "all default" is not useful
+
+Severity   : minor
+Frequency  : common for large clusters running liblustre clients
+Bugzilla   : 7198
+Description: doing an ls when liblustre clients are running is slow
+Details    : sending a glimpse AST to a liblustre client waits for every AST
+	     to time out, as liblustre clients will not respond.  Since they
+	     cannot cache data we refresh the OST lock LVB from disk instead.
 
 ------------------------------------------------------------------------------
 
-2005-06-20  Cluster File Systems, Inc. <info@clusterfs.com>
+08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.5
+       * bug fixes
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 7264
+Description: Mounting an ldiskfs file system with mballoc may crash OST node.
+Details    : ldiskfs mballoc code may reference an uninitialized buddy struct
+	     at startup during orphan unlinking.  Instead, skip buddy update
+	     before setup, as it will be regenerated after recovery is complete.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 7039
+Description: If an OST is inactive, its locks might reference stale inodes.
+Details    : lov_change_cbdata() must iterate over all namespaces, even if
+	     they are inactive to clear inode references from the lock.
+
+Severity   : enhancement
+Frequency  : occasional, if non-standard max_dirty_mb used
+Bugzilla   : 7138
+Description: Client will block write RPCs if not enough grant
+Details    : If a client has max_dirty_mb smaller than max_rpcs_in_flight,
+	     then the client will block writes while waiting for another RPC
+	     to complete instead of consuming its dirty limit.  With change
+	     we get improved performance when max_dirty_mb is small.
+
+Severity   : enhancement
+Bugzilla   : 3389, 6253
+Description: Add support for supplementary groups on the MDS.
+Details    : The MDS has an upcall /proc/fs/lustre/mds/{mds}/group_upcall
+	     (set to /usr/sbin/l_getgroups if enabled) which will do MDS-side
+	     lookups for user supplementary groups into a cache.
+
+Severity   : minor
+Bugzilla   : 7278
+Description: O_CREAT|O_EXCL open flags in liblustre always return -EEXIST
+Details    : Make libsysio to not enforce O_EXCL by clearing the flag,
+             for liblustre O_EXCL is enforced by MDS.
+
+Severity   : minor
+Bugzilla   : 6455
+Description: readdir never returns NULL in liblustre.
+Details    : Corrected llu_iop_getdirentries logic, to return offset of next
+             dentry in struct dirent.
+
+Severity   : minor
+Bugzilla   : 7137
+Frequency  : liblustre only, depends on application IO pattern
+Description: liblustre clients evicted if not contacting servers
+Details    : Don't put liblustre clients into the ping_evictor list, so
+             they will not be evicted by the pinger ever.
+
+Severity   : enhancement
+Bugzilla   : 6902
+Description: Add ability to evict clients by NID from MDS.
+Details    : By echoing "nid:$NID" string into
+             /proc/fs/lustre/mds/.../evict_client client with nid that equals to
+             $NID would be instantly evicted from this MDS and from all active
+             OSTs connected to it.
+
+Severity   : minor
+Bugzilla   : 7198
+Description: Do not query file size twice, somewhat slowing stat(2) calls.
+Details    : lookup_it_finish() used to query file size from OSTs that was not
+             needed.
+
+Severity   : minor
+Bugzilla   : 6237
+Description: service threads change working directory to that of init
+Details    : Starting lustre service threads may pin the working directory
+             of the parent thread, making that filesystem busy.  Threads
+             now change to the working directory of init to avoid this.
+
+Severity   : minor
+Bugzilla   : 6827
+Frequency  : during shutdown only
+Description: shutdown with a failed MDS or OST can cause unmount to hang
+Details    : Don't resend DISCONNECT messages in ptlrpc_disconnect_import()
+             if server is down.
+
+Severity   : minor
+Bugzilla   : 7331
+Frequency  : 2.6 only
+Description: chmod/chown may include an extra supplementary group
+Details    : ll{,u}_mdc_pack_op_data() does not properly initialize the
+             supplementary group and if none is specified this is used.
+
+Severity   : minor
+Bugzilla   : 5479 (6816)
+Frequency  : rare
+Description: Racing open + rm can assert client in mdc_set_open_replay_data()
+Details    : If lookup is in progress on a file that is unlinked we might try
+             to revalidate the inode and fail in revalidate after lookup is
+             complete and ll_file_open() enqueues the open again but
+             it_open_error() was not checking DISP_OPEN_OPEN errors correctly.
+
+------------------------------------------------------------------------------
+
+2005-08-08  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.4
+       * bug fixes
+
+Severity   : major
+Frequency  : rare (only unsupported configurations with a node running as an 
+             OST and a client)
+Bugzilla   : 6514, 5137
+Description: Mounting a Lustre file system on a node running as an OST could
+             lead to deadlocks
+Details    : OSTs now allocate memory needed to write out data at
+             startup, instead of when needed, to avoid having to
+             allocate memory in possibly low memory situations.
+             Specifically, if the file system is mounted on on OST,
+             memory pressure could force it to try to write out data,
+             which it needed to allocate memory to do.  Due to the low
+             memory, it would be unable to do so and the node would
+             become unresponsive.
+
+Severity   : enhancement
+Bugzilla   : 7015
+Description: Addition of lconf --service command line option
+Details    : lconf now accepts a '--service <arg>' option, which is
+             shorthand for 'lconf --group <arg> --select <arg>=<hostname>'
+
+Severity   : enhancement
+Bugzilla   : 6101
+Description: Failover mode is now the default for OSTs.
+Details    : By default, OSTs will now run in failover mode.  To return to
+             the old behaviour, add '--failout' to the lmc line for OSTs.
+
+Severity   : enhancement
+Bugzilla   : 1693
+Description: Health checks are now provided for MDS and OSTs
+Details    : Additional detailed health check information on MSD and OSTs   
+             is now provided through the procfs health_check value.
+
+Severity   : minor
+Frequency  : occasional, depends on IO load
+Bugzilla   : 4466
+Description: Disk fragmentation on the OSTs could eventually cause slowdowns
+             after numerous create/delete cycles
+Details    : The ext3 inode allocation policy would not allocate new inodes
+             very well on the OSTs because there are no new directories
+             being created.  Instead we look for groups with free space if
+             the parent directories are nearly full.
+
+Severity   : major
+Bugzilla   : 6302
+Frequency  : rare
+Description: Network or server problems during mount may cause partially
+             mounted clients instead of returning an error.
+Details    : The config llog parsing code may overwrite the error return
+             code during mount error handling, returning success instead
+             of an error.
+
+Severity   : minor
+Bugzilla   : 6266
+Frequency  : rare (liblustre)
+Description: fsx running with liblustre complained that using truncate() to
+             extend the file doesn't work.  This patch corrects that issue.
+Details    : This is the liblustre equivalent of the fix for bug 6196.  Fixes
+             ATTR_SIZE and lsm use in llu_setattr_raw.
+
+Severity   : critical
+Bugzilla   : 6866
+Frequency  : rare, only 2.6 kernels
+Description: Unusual file access patterns on the MDS may result in inode
+             data being lost in very rare circumstances.
+Details    : Bad interaction between the ea-in-inode patch and the "no-read"
+             code in the 2.6 kernel caused the inode and/or EA data not to
+             be read from disk, causing single-file corruption.
+
+Severity   : critical
+Bugzilla   : 6998
+Frequency  : rare, only 2.6 filesystems using extents
+Description: Heavy concurrent write and delete load may cause data corruption.
+Details    : It was possible under high-load situations to have an extent
+             metadata block in the block device cache from a just-unlinked
+             file overwrite a newly-allocated data block.  We now unmap any
+             metadata buffers that alias just-allocated data blocks.
+
+Severity   : minor
+Bugzilla   : 7241
+Frequency  : filesystems with default stripe_count larger than 77 
+Description: lconf+mke2fs fail when formatting filesystem with > 77 stripes
+Details    : lconf specifies an inode size of 4096 bytes when the default
+             stripe_count is larger than 77.  This conflicts with the default
+             inode density of 1 per 4096 bytes.  Allocate smaller inodes in
+             this case to avoid pinning too much memory for large EAs.
+
+------------------------------------------------------------------------------
+
+2005-07-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.3
        * bug fixes
 
@@ -164,7 +358,108 @@ Description: NFSD failed occasionally when looking up a path component
 Details    : NFSD is looking up ".." which was broken in ext3 directories
              that had grown large enough to become hashed.
 
-------------------------------------------------------------------------------
+Severity   : minor
+Frequency  : Clusters with multiple interfaces not on the same subnet
+Bugzilla   : 5541
+Description: Nodes will repeatedly try to reconnect to an interface which it
+             cannot reach and report an error to the log.
+Details    : Extra peer list entries will be created by lconf with some peers
+             unreachable.  lconf now validates the peer before adding it.
+
+Severity   : major
+Frequency  : Only if a default stripe is set on the filesystem root.
+Bugzilla   : 6367
+Description: Setting a default stripe on the filesystem root prevented the
+             filesystem from being remounted.
+Details    : The client was sending extra request flags in the root getattr
+             request and did not allocate a reply buffer for the dir EA.
+
+Severity   : major
+Frequency  : occasional, higher if lots of files are accessed by one client
+Bugzilla   : 6159, 6097
+Description: Client trips assertion regarding lsm mismatch/magic
+Details    : While revalidating inodes the VFS looks up inodes with ifind()
+             and in rare cases can find an inode that is being freed.
+             The ll_test_inode() code will free the lsm during ifind()
+             when it finds an existing inode and then the VFS later attaches
+             this free lsm to a new inode.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 6422, 7030
+Description: MDS deadlock between mkdir and client eviction
+Details    : Creating a new file via mkdir or mknod (starting a transaction
+             and getting the ns lock) can deadlock with client eviction
+             (gets ns lock and trying to finish a synchronous transaction).
+
+Severity   : minor
+Frequency  : occasional
+Description: While starting a server, the fsfilt_ext3 module could not be 
+             loaded.
+Details    : CFS's improved ext3 filesystem is named ldiskfs for 2.6
+             kernels.  Previously, lconf would still use the ext3 name
+             when trying to load modules.  Now, it will correctly use
+             ext3 on 2.4 and ldiskfs on 2.6.
+
+Severity   : enhancement
+Description: The default stripe count has been changed to 1
+Details    : The interpretation of the default stripe count (0, to lfs
+             or lmc) has been changed to mean striping across a single
+             OST, rather than all available.  For general usage we have
+             found a stripe count of 1 or 2 works best.
+
+Severity   : enhancement
+Description: Add support for compiling against Cray portals.
+Details    : Conditional compiling for some areas that are different
+             on Cray Portals.
+
+Severity   : major
+Frequency  : occasional
+Bugzilla   : 6409, 6834
+Description: Creating files with an explicit stripe count may lead to
+             a failed assertion on the MDS
+Details    : If some OSTs are full or unavailable, creating files may
+             trigger a failed assertion on the MDS.  Now, Lustre will
+             try to use other servers or return an error to the
+             client.
+
+Severity   : minor
+Frequency  : occasional
+Bugzilla   : 6469
+Description: Multiple concurrent overlapping read+write on multiple SMP nodes
+             caused lock timeout during readahead (since 1.4.2).
+Details    : Processes doing readahead might match a lock that hasn't been
+             granted yet if there are overlapping and conflicting lock
+             requests.  The readahead process waits on ungranted lock
+             (original lock is CBPENDING), while OST waits for that process
+             to cancel CBPENDING read lock and eventually evicts client.
+
+Severity   : enhancement
+Bugzilla   : 6931
+Description: Initial enabling of flock support for clients
+Details    : Implements fcntl advisory locking and file status functions.
+	     This feature is provided as an optional mount flag (default
+	     off), and is NOT CURRENTLY SUPPORTED.  Not all types of record
+	     locking are implemented yet, and those that are are not guaranteed
+	     to be completely correct in production environments.
+	     mount -t lustre -o [flock|noflock] ...
+
+Severity   : major
+Frequency  : occasional
+Bugzilla   : 6198
+Description: OSTs running 2.4 kernels but with extents enabled might trip an
+             assertion in the ext3 JBD (journaling) layer.
+Details    : The b_committed_data struct is protected by the big kernel lock
+             in 2.4 kernels, serializing journal_commit_transaction() and
+             ext3_get_block_handle->ext3_new_block->find_next_usable_block()
+             access to this struct.  In 2.6 kernels there is finer grained
+             locking to improve SMP performance of the JBD layer.
+
+Severity   : minor
+Bugzilla   : 6147
+Description: Changes the "SCSI I/O Stats" kernel patch to default to "enabled"
+
+-----------------------------------------------------------------------------
 
 2005-05-05  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.2

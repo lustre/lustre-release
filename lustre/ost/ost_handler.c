@@ -5,20 +5,23 @@
  *   Author: Peter J. Braam <braam@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  *  Storage Target Handling functions
  *  Lustre Object Server Module (OST)
@@ -56,6 +59,7 @@ void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)
 
         if (req->rq_repmsg && req->rq_reqmsg != 0)
                 oti->oti_transno = req->rq_repmsg->transno;
+        oti->oti_thread = req->rq_svc_thread;
 }
 
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
@@ -254,6 +258,12 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
         int   rnbidx = 0;
         int   npages = 0;
 
+        /*
+         * array of sufficient size already preallocated by caller
+         */
+        LASSERT(pp_rnbp != NULL);
+        LASSERT(*pp_rnbp != NULL);
+
         /* first count and check the number of pages required */
         for (i = 0; i < nioo; i++)
                 for (j = 0; j < ioo->ioo_bufcnt; j++, rnbidx++) {
@@ -287,9 +297,7 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
                 return npages;
         }
 
-        OBD_ALLOC(pp_rnb, sizeof(*pp_rnb) * npages);
-        if (pp_rnb == NULL)
-                return -ENOMEM;
+        pp_rnb = *pp_rnbp;
 
         /* now do the actual split */
         page = rnbidx = 0;
@@ -328,17 +336,7 @@ static int get_per_page_niobufs(struct obd_ioobj *ioo, int nioo,
         }
         LASSERT(page == npages);
 
-        *pp_rnbp = pp_rnb;
         return npages;
-}
-
-static void free_per_page_niobufs (int npages, struct niobuf_remote *pp_rnb,
-                                   struct niobuf_remote *rnb)
-{
-        if (pp_rnb == rnb)                      /* didn't allocate above */
-                return;
-
-        OBD_FREE(pp_rnb, sizeof(*pp_rnb) * npages);
 }
 
 static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
@@ -347,31 +345,70 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc)
         int i;
 
         for (i = 0; i < desc->bd_iov_count; i++) {
-#ifdef CRAY_PORTALS
-                char *ptr = desc->bd_iov[i].iov_base;
-                int len = desc->bd_iov[i].iov_len;
-#else
                 struct page *page = desc->bd_iov[i].kiov_page;
                 int off = desc->bd_iov[i].kiov_offset & ~PAGE_MASK;
                 char *ptr = kmap(page) + off;
                 int len = desc->bd_iov[i].kiov_len;
-#endif
 
                 cksum = crc32_le(cksum, ptr, len);
-#ifndef CRAY_PORTALS
-                kunmap(page);
-                LL_CDEBUG_PAGE(D_PAGE, page, "off %d checksum %x\n", off,cksum);
-#endif
         }
 
         return cksum;
+}
+
+/*
+ * populate @nio by @nrpages pages from per-thread page pool
+ */
+static void ost_nio_pages_get(struct ptlrpc_request *req,
+                              struct niobuf_local *nio, int nrpages)
+{
+        int i;
+        struct ost_thread_local_cache *tls;
+
+        ENTRY;
+
+        LASSERT(nrpages <= OST_THREAD_POOL_SIZE);
+        LASSERT(req != NULL);
+        LASSERT(req->rq_svc_thread != NULL);
+
+        tls = ost_tls(req);
+        LASSERT(tls != NULL);
+
+        memset(nio, 0, nrpages * sizeof *nio);
+        for (i = 0; i < nrpages; ++ i) {
+                struct page *page;
+
+                page = tls->page[i];
+                LASSERT(page != NULL);
+                POISON_PAGE(page, 0xf1);
+                nio[i].page = page;
+                LL_CDEBUG_PAGE(D_INFO, page, "%d\n", i);
+        }
+        EXIT;
+}
+
+/*
+ * Dual for ost_nio_pages_get(). Poison pages in pool for debugging
+ */
+static void ost_nio_pages_put(struct ptlrpc_request *req,
+                              struct niobuf_local *nio, int nrpages)
+{
+        int i;
+
+        ENTRY;
+
+        LASSERT(nrpages <= OST_THREAD_POOL_SIZE);
+
+        for (i = 0; i < nrpages; ++ i)
+                POISON_PAGE(nio[i].page, 0xf2);
+        EXIT;
 }
 
 static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc;
         struct niobuf_remote    *remote_nb;
-        struct niobuf_remote    *pp_rnb;
+        struct niobuf_remote    *pp_rnb = NULL;
         struct niobuf_local     *local_nb;
         struct obd_ioobj        *ioo;
         struct ost_body         *body, *repbody;
@@ -425,20 +462,27 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc)
                 GOTO(out, rc);
 
+        /*
+         * Per-thread array of struct niobuf_{local,remote}'s was allocated by
+         * ost_thread_init().
+         */
+        local_nb = ost_tls(req)->local;
+        pp_rnb   = ost_tls(req)->remote;
+
         /* FIXME all niobuf splitting should be done in obdfilter if needed */
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
         npages = get_per_page_niobufs(ioo, 1, remote_nb, niocount, &pp_rnb);
         if (npages < 0)
                 GOTO(out, rc = npages);
 
-        OBD_ALLOC(local_nb, sizeof(*local_nb) * npages);
-        if (local_nb == NULL)
-                GOTO(out_pp_rnb, rc = -ENOMEM);
+        LASSERT(npages <= OST_THREAD_POOL_SIZE);
+
+        ost_nio_pages_get(req, local_nb, npages);
 
         desc = ptlrpc_prep_bulk_exp (req, npages, 
                                      BULK_PUT_SOURCE, OST_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(out_local, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         rc = obd_preprw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
                         ioo, npages, pp_rnb, local_nb, oti);
@@ -458,7 +502,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         break;
                 }
 
-                LASSERT(page_rc <= pp_rnb[i].len);
+                LASSERTF(page_rc <= pp_rnb[i].len, "page_rc (%d) > "
+                         "pp_rnb[%d].len (%d)\n", page_rc, i, pp_rnb[i].len);
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
@@ -506,6 +551,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = obd_commitrw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
                           ioo, npages, local_nb, oti, rc);
 
+        ost_nio_pages_put(req, local_nb, npages);
+
         if (rc == 0) {
                 repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
                 memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
@@ -520,10 +567,6 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
  out_bulk:
         ptlrpc_free_bulk(desc);
- out_local:
-        OBD_FREE(local_nb, sizeof(*local_nb) * npages);
- out_pp_rnb:
-        free_per_page_niobufs(npages, pp_rnb, remote_nb);
  out:
         LASSERT(rc <= 0);
         if (rc == 0) {
@@ -636,20 +679,27 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc);
         rcs = lustre_msg_buf(req->rq_repmsg, 1, niocount * sizeof(*rcs));
 
+        /*
+         * Per-thread array of struct niobuf_{local,remote}'s was allocated by
+         * ost_thread_init().
+         */
+        local_nb = ost_tls(req)->local;
+        pp_rnb   = ost_tls(req)->remote;
+
         /* FIXME all niobuf splitting should be done in obdfilter if needed */
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
         npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
         if (npages < 0)
                 GOTO(out, rc = npages);
 
-        OBD_ALLOC(local_nb, sizeof(*local_nb) * npages);
-        if (local_nb == NULL)
-                GOTO(out_pp_rnb, rc = -ENOMEM);
+        LASSERT(npages <= OST_THREAD_POOL_SIZE);
+
+        ost_nio_pages_get(req, local_nb, npages);
 
         desc = ptlrpc_prep_bulk_exp (req, npages, 
                                      BULK_GET_SINK, OST_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(out_local, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         /* obd_preprw clobbers oa->valid, so save what we need */
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
@@ -723,6 +773,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         rc = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
                            objcount, ioo, npages, local_nb, oti, rc);
 
+        ost_nio_pages_put(req, local_nb, npages);
+
         if (rc == 0) {
                 /* set per-requested niobuf return codes */
                 for (i = j = 0; i < niocount; i++) {
@@ -743,10 +795,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
  out_bulk:
         ptlrpc_free_bulk(desc);
- out_local:
-        OBD_FREE(local_nb, sizeof(*local_nb) * npages);
- out_pp_rnb:
-        free_per_page_niobufs(npages, pp_rnb, remote_nb);
  out:
         if (rc == 0) {
                 oti_to_request(oti, req);
@@ -783,7 +831,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
 static int ost_san_brw(struct ptlrpc_request *req, int cmd)
 {
-        struct niobuf_remote *remote_nb, *res_nb, *pp_rnb;
+        struct niobuf_remote *remote_nb, *res_nb, *pp_rnb = NULL;
         struct obd_ioobj *ioo;
         struct ost_body *body, *repbody;
         int rc, i, objcount, niocount, size[2] = {sizeof(*body)}, npages;
@@ -823,6 +871,12 @@ static int ost_san_brw(struct ptlrpc_request *req, int cmd)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
 
+        /*
+         * Per-thread array of struct niobuf_remote's was allocated by
+         * ost_thread_init().
+         */
+        pp_rnb = ost_tls(req)->remote;
+
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
         npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
         if (npages < 0)
@@ -831,13 +885,13 @@ static int ost_san_brw(struct ptlrpc_request *req, int cmd)
         size[1] = npages * sizeof(*pp_rnb);
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
-                GOTO(out_pp_rnb, rc);
+                GOTO(out, rc);
 
         req->rq_status = obd_san_preprw(cmd, req->rq_export, &body->oa,
                                         objcount, ioo, npages, pp_rnb);
 
         if (req->rq_status)
-                GOTO(out_pp_rnb, rc = 0);
+                GOTO(out, rc = 0);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
@@ -845,8 +899,6 @@ static int ost_san_brw(struct ptlrpc_request *req, int cmd)
         res_nb = lustre_msg_buf(req->rq_repmsg, 1, size[1]);
         memcpy(res_nb, remote_nb, size[1]);
         rc = 0;
-out_pp_rnb:
-        free_per_page_niobufs(npages, pp_rnb, remote_nb);
 out:
         target_committed_to_req(req);
         if (rc) {
@@ -862,8 +914,8 @@ out:
 
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
-        char *key;
-        int keylen, rc = 0;
+        char *key, *val = NULL;
+        int keylen, vallen, rc = 0;
         ENTRY;
 
         key = lustre_msg_buf(req->rq_reqmsg, 0, 1);
@@ -871,13 +923,25 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
                 DEBUG_REQ(D_HA, req, "no set_info key");
                 RETURN(-EFAULT);
         }
-        keylen = req->rq_reqmsg->buflens[0];
+        keylen = lustre_msg_buflen(req->rq_reqmsg,0);
 
         rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
-        rc = obd_set_info(exp, keylen, key, 0, NULL);
+        vallen = lustre_msg_buflen(req->rq_reqmsg, 1);
+        if (vallen)
+                val = lustre_msg_buf(req->rq_reqmsg, 1, 0);
+
+        if (KEY_IS("evict_by_nid")) {
+                if (val && vallen)
+                        obd_export_evict_by_nid(exp->exp_obd, val);
+
+                GOTO(out, rc = 0);
+        }
+
+        rc = obd_set_info(exp, keylen, key, vallen, val);
+out:
         req->rq_repmsg->status = 0;
         RETURN(rc);
 }
@@ -1159,6 +1223,71 @@ out:
         return 0;
 }
 
+/*
+ * free per-thread pool created by ost_thread_init().
+ */
+static void ost_thread_done(struct ptlrpc_thread *thread)
+{
+        int i;
+        struct ost_thread_local_cache *tls; /* TLS stands for Thread-Local
+                                             * Storage */
+
+        ENTRY;
+
+        LASSERT(thread != NULL);
+        LASSERT(thread->t_data != NULL);
+
+        /*
+         * be prepared to handle partially-initialized pools (because this is
+         * called from ost_thread_init() for cleanup.
+         */
+        tls = thread->t_data;
+        if (tls != NULL) {
+                for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
+                        if (tls->page[i] != NULL)
+                                __free_page(tls->page[i]);
+                }
+                OBD_FREE_PTR(tls);
+                thread->t_data = NULL;
+        }
+        EXIT;
+}
+
+/*
+ * initialize per-thread page pool (bug 5137).
+ */
+static int ost_thread_init(struct ptlrpc_thread *thread)
+{
+        int result;
+        int i;
+        struct ost_thread_local_cache *tls;
+
+        ENTRY;
+
+        LASSERT(thread != NULL);
+        LASSERT(thread->t_data == NULL);
+        LASSERT(thread->t_id < OST_NUM_THREADS);
+
+        OBD_ALLOC_PTR(tls);
+        if (tls != NULL) {
+                result = 0;
+                thread->t_data = tls;
+                /*
+                 * populate pool
+                 */
+                for (i = 0; i < OST_THREAD_POOL_SIZE; ++ i) {
+                        tls->page[i] = alloc_page(OST_THREAD_POOL_GFP);
+                        if (tls->page[i] == NULL) {
+                                ost_thread_done(thread);
+                                result = -ENOMEM;
+                                break;
+                        }
+                }
+        } else
+                result = -ENOMEM;
+        RETURN(result);
+}
+
 static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct ost_obd *ost = &obd->u.ost;
@@ -1177,33 +1306,39 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         lprocfs_init_vars(ost, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
+        sema_init(&ost->ost_health_sem, 1);
+
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                OST_MAXREPSIZE, OST_REQUEST_PORTAL,
+                                OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost",
-                                obd->obd_proc_entry, ost_print_req);
+                                obd->obd_proc_entry, ost_print_req,
+                                OST_NUM_THREADS);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, ost->ost_service, OST_NUM_THREADS,
-                                    "ll_ost");
+        ost->ost_service->srv_init = ost_thread_init;
+        ost->ost_service->srv_done = ost_thread_done;
+        rc = ptlrpc_start_threads(obd, ost->ost_service, "ll_ost");
         if (rc)
                 GOTO(out_service, rc = -EINVAL);
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_CREATE_PORTAL, OSC_REPLY_PORTAL,
+                                OST_MAXREPSIZE, OST_CREATE_PORTAL,
+                                OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_create",
-                                obd->obd_proc_entry, ost_print_req);
+                                obd->obd_proc_entry, ost_print_req, 1);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
-                                    "ll_ost_creat");
+        rc = ptlrpc_start_threads(obd, ost->ost_create_service,
+                                  "ll_ost_creat");
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
@@ -1211,8 +1346,10 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
+        ost->ost_create_service = NULL;
 out_service:
         ptlrpc_unregister_service(ost->ost_service);
+        ost->ost_service = NULL;
 out_lprocfs:
         lprocfs_obd_cleanup(obd);
         RETURN(rc);
@@ -1231,12 +1368,41 @@ static int ost_cleanup(struct obd_device *obd)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        down(&ost->ost_health_sem);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
+        ost->ost_service = NULL;
+        ost->ost_create_service = NULL;
+        up(&ost->ost_health_sem);
 
         lprocfs_obd_cleanup(obd);
 
         RETURN(err);
+}
+
+static int ost_health_check(struct obd_device *obd)
+{
+        struct ost_obd *ost = &obd->u.ost;
+        int rc = 0;
+
+        down(&ost->ost_health_sem);
+        rc |= ptlrpc_service_health_check(ost->ost_service);
+        rc |= ptlrpc_service_health_check(ost->ost_create_service);
+        up(&ost->ost_health_sem);
+
+        /*
+         * health_check to return 0 on healthy
+         * and 1 on unhealthy.
+         */
+        if( rc != 0)
+                rc = 1;
+
+        return rc;
+}
+
+struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r)
+{
+        return (struct ost_thread_local_cache *)(r->rq_svc_thread->t_data);
 }
 
 /* use obd ops to offer management infrastructure */
@@ -1244,6 +1410,7 @@ static struct obd_ops ost_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_setup        = ost_setup,
         .o_cleanup      = ost_cleanup,
+        .o_health_check = ost_health_check,
 };
 
 static int __init ost_init(void)

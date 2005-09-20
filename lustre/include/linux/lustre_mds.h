@@ -40,19 +40,14 @@ struct lustre_md {
         struct lov_stripe_md *lsm;
 };
 
-struct ll_uctxt {
-        __u32 gid1;
-        __u32 gid2;
-};
-
 struct mdc_op_data {
-        struct ll_fid fid1;
-        struct ll_fid fid2;
-        struct ll_uctxt ctxt;
-        __u64 mod_time;
-        const char *name;
-        int namelen;
-        __u32 create_mode;
+        struct ll_fid    fid1;
+        struct ll_fid    fid2;
+        __u64            mod_time;
+        const char      *name;
+        int              namelen;
+        __u32            create_mode;
+        __u32            suppgids[2];
 };
 
 struct mds_update_record {
@@ -73,14 +68,8 @@ struct mds_update_record {
         __u64 ur_time;
         __u32 ur_mode;
         __u32 ur_flags;
+        struct lvfs_grp_hash_entry *ur_grp_entry;
 };
-
-#define ur_fsuid    ur_uc.luc_fsuid
-#define ur_fsgid    ur_uc.luc_fsgid
-#define ur_cap      ur_uc.luc_cap
-#define ur_suppgid1 ur_uc.luc_suppgid1
-#define ur_suppgid2 ur_uc.luc_suppgid2
-#define ur_umask    ur_uc.luc_umask
 
 #define MDS_LR_SERVER_SIZE    512
 
@@ -161,11 +150,10 @@ int it_open_error(int phase, struct lookup_intent *it);
 void mdc_set_lock_data(__u64 *lockh, void *data);
 int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
                       ldlm_iterator_t it, void *data);
-int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *, 
-                    struct ll_fid *parent, 
-                    const char *name, int len, void *lmm, int lmmsize,
-                    struct ll_fid *child,
-                    struct lookup_intent *, int, 
+int mdc_intent_lock(struct obd_export *exp,
+                    struct mdc_op_data *,
+                    void *lmm, int lmmsize,
+                    struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking);
 int mdc_enqueue(struct obd_export *exp,
@@ -207,7 +195,7 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
                  struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u64 rdev, struct ptlrpc_request **request);
+               __u32 cap_effective, __u64 rdev,struct ptlrpc_request **request);
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct mdc_op_data *data,

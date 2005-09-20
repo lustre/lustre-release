@@ -18,6 +18,9 @@ lfs
 mkfs_lustre
 mount_lustre
 llog_reader
+llmount
+l_getgroups
+mount.lustre
 wiretest
 .*.cmd
 .*.d

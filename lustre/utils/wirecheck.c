@@ -270,6 +270,7 @@ check_niobuf_remote(void)
         CHECK_VALUE(OBD_BRW_WRITE);
         CHECK_VALUE(OBD_BRW_SYNC);
         CHECK_VALUE(OBD_BRW_FROM_GRANT);
+        CHECK_VALUE(OBD_BRW_NOQUOTA);
 }
 
 void
@@ -458,6 +459,7 @@ check_ldlm_extent(void)
         CHECK_STRUCT(ldlm_extent);
         CHECK_MEMBER(ldlm_extent, start);
         CHECK_MEMBER(ldlm_extent, end);
+        CHECK_MEMBER(ldlm_extent, gid);
 }
 
 void
@@ -467,7 +469,6 @@ check_ldlm_flock(void)
         CHECK_STRUCT(ldlm_flock);
         CHECK_MEMBER(ldlm_flock, start);
         CHECK_MEMBER(ldlm_flock, end);
-        CHECK_MEMBER(ldlm_flock, blocking_export);
         CHECK_MEMBER(ldlm_flock, blocking_pid);
         CHECK_MEMBER(ldlm_flock, pid);
 }
@@ -865,8 +866,6 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_LAST_OPC);
 
         CHECK_DEFINE(OBD_OBJECT_EOF);
-
-        CHECK_VALUE(OST_REQ_HAS_OA1);
 
         CHECK_VALUE(MDS_GETATTR);
         CHECK_VALUE(MDS_GETATTR_NAME);

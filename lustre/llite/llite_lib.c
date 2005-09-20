@@ -156,6 +156,12 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
 
+        if (sbi->ll_flags & LL_SBI_FLOCK) {
+                sbi->ll_fop = &ll_file_operations_flock;
+        } else {
+                sbi->ll_fop = &ll_file_operations;
+        }
+
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDT (mdc %s) is performing recovery, of which this"
@@ -400,6 +406,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
 
 void ll_options(char *options, char **ost, char **mdc, int *flags)
 {
+        int tmp;
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         char *opt_ptr = options;
@@ -424,11 +431,21 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         continue;
                 if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
                         continue;
-                if (!(*flags & LL_SBI_NOLCK) &&
-                    ((*flags) = (*flags) |
-                                ll_set_opt("nolock", this_char,
-                                           LL_SBI_NOLCK)))
+                tmp = ll_set_opt("nolock", this_char, LL_SBI_NOLCK);
+                if (tmp) {
+                        *flags |= tmp;
                         continue;
+                }
+                tmp = ll_set_opt("flock", this_char, LL_SBI_FLOCK);
+                if (tmp) {
+                        *flags |= tmp;
+                        continue;
+                }
+                tmp = ll_set_opt("noflock", this_char, LL_SBI_FLOCK);
+                if (tmp) {
+                        *flags &= ~tmp;
+                        continue;
+                }
         }
         EXIT;
 }
@@ -517,8 +534,9 @@ out_free:
                 lsi->lsi_llsbi = NULL;
         }
         RETURN(err);
-}
-                                                                                       
+} /* ll_fill_super */
+
+
 void ll_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
@@ -930,6 +948,12 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
+                        if (lsm->lsm_magic != LOV_MAGIC) {
+                                dump_lsm(D_ERROR, lsm);
+                                LBUG();
+                        }
+                        CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
+                               lsm, inode->i_ino, inode->i_generation, inode);
                         lli->lli_smd = lsm;
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
@@ -1030,8 +1054,9 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         /* OIDEBUG(inode); */
 
         if (S_ISREG(inode->i_mode)) {
+                struct ll_sb_info *sbi = ll_i2sbi(inode);
                 inode->i_op = &ll_file_inode_operations;
-                inode->i_fop = &ll_file_operations;
+                inode->i_fop = sbi->ll_fop;
                 inode->i_mapping->a_ops = &ll_aops;
                 EXIT;
         } else if (S_ISDIR(inode->i_mode)) {

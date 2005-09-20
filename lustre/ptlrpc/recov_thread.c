@@ -4,20 +4,23 @@
  *  Copyright (C) 2003 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  * OST<->MDS recovery logging thread.
  *
@@ -45,28 +48,31 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
-#include <portals/types.h>
+#include <lnet/types.h>
 #include <libcfs/list.h>
 #include <linux/lustre_log.h>
 #include "ptlrpc_internal.h"
-
-#define LLCD_SIZE 4096
 
 #ifdef __KERNEL__
 
 static struct llog_commit_master lustre_lcm;
 static struct llog_commit_master *lcm = &lustre_lcm;
 
-/* Allocate new commit structs in case we do not have enough */
+/* Allocate new commit structs in case we do not have enough.
+ * Make the llcd size small enough that it fits into a single page when we
+ * are sending/receiving it. */
 static int llcd_alloc(void)
 {
         struct llog_canceld_ctxt *llcd;
-        int offset = offsetof(struct llog_canceld_ctxt, llcd_cookies);
+        int llcd_size = 0;
 
-        OBD_ALLOC(llcd, LLCD_SIZE + offset);
+        llcd_size = 4096 - lustre_msg_size(1, &llcd_size);
+        OBD_ALLOC(llcd,
+                  llcd_size + offsetof(struct llog_canceld_ctxt, llcd_cookies));
         if (llcd == NULL)
                 return -ENOMEM;
 
+        llcd->llcd_size = llcd_size;
         llcd->llcd_lcm = lcm;
 
         spin_lock(&lcm->lcm_llcd_lock);
@@ -82,6 +88,7 @@ struct llog_canceld_ctxt *llcd_grab(void)
 {
         struct llog_canceld_ctxt *llcd;
 
+repeat:
         spin_lock(&lcm->lcm_llcd_lock);
         if (list_empty(&lcm->lcm_llcd_free)) {
                 spin_unlock(&lcm->lcm_llcd_lock);
@@ -89,7 +96,8 @@ struct llog_canceld_ctxt *llcd_grab(void)
                         CERROR("unable to allocate log commit data!\n");
                         return NULL;
                 }
-                spin_lock(&lcm->lcm_llcd_lock);
+                /* check new llcd wasn't grabbed while lock dropped, b=7407 */
+                goto repeat;
         }
 
         llcd = list_entry(lcm->lcm_llcd_free.next, typeof(*llcd), llcd_list);
@@ -97,7 +105,6 @@ struct llog_canceld_ctxt *llcd_grab(void)
         atomic_dec(&lcm->lcm_llcd_numfree);
         spin_unlock(&lcm->lcm_llcd_lock);
 
-        llcd->llcd_tries = 0;
         llcd->llcd_cookiebytes = 0;
 
         return llcd;
@@ -106,10 +113,10 @@ EXPORT_SYMBOL(llcd_grab);
 
 static void llcd_put(struct llog_canceld_ctxt *llcd)
 {
-        int offset = offsetof(struct llog_canceld_ctxt, llcd_cookies);
-
         if (atomic_read(&lcm->lcm_llcd_numfree) >= lcm->lcm_llcd_maxfree) {
-                OBD_FREE(llcd, LLCD_SIZE + offset);
+                int llcd_size = llcd->llcd_size +
+                         offsetof(struct llog_canceld_ctxt, llcd_cookies);
+                OBD_FREE(llcd, llcd_size);
         } else {
                 spin_lock(&lcm->lcm_llcd_lock);
                 list_add(&llcd->llcd_list, &lcm->lcm_llcd_free);
@@ -174,8 +181,8 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
                         GOTO(out, rc);
         }
 
-        if ((LLCD_SIZE - llcd->llcd_cookiebytes < sizeof(*cookies) ||
-             flags & OBD_LLOG_FL_SENDNOW)) {
+        if ((llcd->llcd_size - llcd->llcd_cookiebytes) < sizeof(*cookies) ||
+            (flags & OBD_LLOG_FL_SENDNOW)) {
                 CDEBUG(D_HA, "send llcd %p:%p\n", llcd, llcd->llcd_ctxt);
                 ctxt->loc_llcd = NULL;
                 llcd_send(llcd);
@@ -388,28 +395,11 @@ static int log_commit_thread(void *arg)
                                 continue;
                         }
 
-#if 0                   /* FIXME just put llcd, not put it on resend list */
-                        spin_lock(&lcm->lcm_llcd_lock);
-                        list_splice(&lcd->lcd_llcd_list, &lcm->lcm_llcd_resend);
-                        if (++llcd->llcd_tries < 5) {
-                                CERROR("commit %p failed on attempt %d: rc %d\n",
-                                       llcd, llcd->llcd_tries, rc);
-
-                                list_add_tail(&llcd->llcd_list,
-                                              &lcm->lcm_llcd_resend);
-                                spin_unlock(&lcm->lcm_llcd_lock);
-                        } else {
-                                spin_unlock(&lcm->lcm_llcd_lock);
-#endif
-                                CERROR("commit %p:%p drop %d cookies: rc %d\n",
-                                       llcd, llcd->llcd_ctxt,
-                                       (int)(llcd->llcd_cookiebytes /
-                                             sizeof(*llcd->llcd_cookies)), rc);
-                                llcd_put(llcd);
-#if 0
-                        }
-                        break;
-#endif
+                        CERROR("commit %p:%p drop %d cookies: rc %d\n",
+                               llcd, llcd->llcd_ctxt,
+                               (int)(llcd->llcd_cookiebytes /
+                                     sizeof(*llcd->llcd_cookies)), rc);
+                        llcd_put(llcd);
                 }
 
                 if (rc == 0) {

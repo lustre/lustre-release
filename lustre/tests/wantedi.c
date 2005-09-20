@@ -21,7 +21,7 @@ static int usage(char *prog, FILE *out)
         exit(out == stderr);
 }
 
-#define EXTN_IOC_CREATE_INUM            _IOW('f', 5, long)
+#define LDISKFS_IOC_CREATE_INUM            _IOW('f', 5, long)
 
 int main(int argc, char ** argv)
 {
@@ -39,9 +39,9 @@ int main(int argc, char ** argv)
 	wantedi = atoi(argv[2]);
 	printf("Creating %s/%d with ino %d\n", argv[1], wantedi, wantedi);
 
-	rc = ioctl(dirfd, EXTN_IOC_CREATE_INUM, wantedi);
+	rc = ioctl(dirfd, LDISKFS_IOC_CREATE_INUM, wantedi);
 	if (rc < 0) {
-	       perror("ioctl(EXTN_IOC_CREATE_INUM)");
+	       perror("ioctl(LDISKFS_IOC_CREATE_INUM)");
 	       exit(2);
 	}
 

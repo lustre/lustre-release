@@ -130,7 +130,6 @@ struct obd_async_page_ops {
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
         void (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
-        void (*ap_get_ucred)(void *data, struct lvfs_ucred *ouc);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee
@@ -211,6 +210,24 @@ struct filter_obd {
         spinlock_t fo_stats_lock;
         int fo_r_in_flight; /* protected by fo_stats_lock */
         int fo_w_in_flight; /* protected by fo_stats_lock */
+
+        /*
+         * per-filter pool of kiobuf's allocated by filter_common_setup() and
+         * torn down by filter_cleanup(). Contains OST_NUM_THREADS elements of
+         * which ->fo_iobuf_count were allocated.
+         *
+         * This pool contains kiobuf used by
+         * filter_{prep,commit}rw_{read,write}() and is shared by all OST
+         * threads.
+         *
+         * Locking: none, each OST thread uses only one element, determined by
+         * its "ordinal number", ->t_id.
+         *
+         * This is (void *) array, because 2.4 and 2.6 use different iobuf
+         * structures.
+         */
+        void                   **fo_iobuf_pool;
+        int                      fo_iobuf_count;
 
         struct obd_histogram     fo_r_pages;
         struct obd_histogram     fo_w_pages;
@@ -300,6 +317,7 @@ struct client_obd {
         /* used by quotacheck */
         spinlock_t               cl_qchk_lock;
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
+        struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
 
 /*a light client obd for mount-conf */
@@ -359,9 +377,11 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
+        struct upcall_cache             *mds_group_hash;
         struct lustre_quota_info         mds_quota_info;
         struct lustre_quota_ctxt         mds_quota_ctxt;
         atomic_t                         mds_quotachecking;
+        struct semaphore                 mds_health_sem;
 };
 
 struct echo_obd {
@@ -403,6 +423,7 @@ struct recovd_obd {
 struct ost_obd {
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
+        struct semaphore       ost_health_sem;
 };
 
 struct echo_client_obd {
@@ -460,6 +481,9 @@ struct obd_trans_info {
         struct llog_cookie       oti_onecookie;
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
+
+        /* initial thread handling transaction */
+        struct ptlrpc_thread    *oti_thread; 
 };
 
 static inline void oti_alloc_cookies(struct obd_trans_info *oti,int num_cookies)
@@ -520,7 +544,7 @@ struct obd_device {
         int                     obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-                obd_no_recov:1, obd_stopping:1, obd_starting:1, 
+                obd_no_recov:1, obd_stopping:1, obd_starting:1,
                 obd_force:1, obd_fail:1;
         atomic_t                obd_refcount;
         wait_queue_head_t       obd_refcount_waitq;
@@ -730,6 +754,8 @@ struct obd_ops {
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active);
 
+        int (*o_health_check)(struct obd_device *);
+
         /* quota methods */
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
@@ -738,6 +764,10 @@ struct obd_ops {
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
          * Also, add a wrapper function in include/linux/obd_class.h.
+         *
+         * Also note that if you add it to the END, you also have to change
+         * the num_stats calculation.
+         *
          */
 };
 

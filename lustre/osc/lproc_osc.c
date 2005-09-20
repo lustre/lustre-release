@@ -3,20 +3,23 @@
  *
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -92,6 +95,10 @@ static int osc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
         if (val < 1 || val > OSC_MAX_RIF_MAX)
                 return -ERANGE;
 
+        if (cli->cl_rq_pool && val > cli->cl_max_rpcs_in_flight)
+                cli->cl_rq_pool->prp_populate(cli->cl_rq_pool,
+                                              val - cli->cl_max_rpcs_in_flight);
+
         spin_lock(&cli->cl_loi_list_lock);
         cli->cl_max_rpcs_in_flight = val;
         spin_unlock(&cli->cl_loi_list_lock);
@@ -124,7 +131,8 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX || val > num_physpages / 4)
+        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX ||
+            val > num_physpages >> (20 - PAGE_SHIFT - 2)) /* 1/4 of RAM */
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);
