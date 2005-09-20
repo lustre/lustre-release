@@ -279,8 +279,6 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
                 list_add(&ocapa->c_lli_list, &lli->lli_capas);
         spin_unlock(&lli->lli_lock);
 
-        capa_put(ocapa);
-
         expiry = expiry_to_jiffies(capa->lc_expiry - capa_pre_expiry(capa));
 
         spin_lock(&capa_lock);
