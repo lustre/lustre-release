@@ -342,7 +342,7 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
 
 void capa_hmac(struct crypto_tfm *_tfm, __u8 *key, struct lustre_capa *capa)
 {
-        struct crypto_tfm *_tfm;
+        struct crypto_tfm *tfm;
         int keylen = CAPA_KEY_LEN;
         struct scatterlist sl = {
                 .page   = virt_to_page(capa),
