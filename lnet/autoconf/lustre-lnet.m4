@@ -83,9 +83,9 @@ fi
 # configure support for Portals
 #
 AC_DEFUN([LN_CONFIG_PTLLND],
-[AC_MSG_CHECKING([for ptllnd])
+[AC_MSG_CHECKING([for Portals API headers])
 
-if test ! "x$PORTALS" = "x" -o ! "x$LUSTRE_PORTALS" = "x" ; then
+if test $PORTALS -o test $LUSTRE_PORTALS ; then
 	AC_MSG_RESULT([yes])
 	PTLLND="ptllnd"
 	if test $PORTALS ; then
@@ -93,10 +93,12 @@ if test ! "x$PORTALS" = "x" -o ! "x$LUSTRE_PORTALS" = "x" ; then
 	else
         	PTLLNDCPPFLAGS="-I$LUSTRE_PORTALS/include"
 	fi
+	AC_MSG_RESULT([$LUSTRE_PORTALS])
 else
 	AC_MSG_RESULT([no])
 	PTLLND=""
 	PTLLNDCPPFLAGS=""
+	AC_MSG_RESULT([no])
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)

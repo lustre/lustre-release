@@ -28,11 +28,11 @@ CFS_MODULE_PARM(port, "i", int, 0444,
 
 static int ntx = GMNAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-                "# 'normal' tx descriptors");
+                "# tx descriptors");
 
-static int ntx_nblk = GMNAL_NTX_NBLK;
-CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
-                "# 'reserved' tx descriptors");
+static int ntx_peer = GMNAL_NTX_PEER;
+CFS_MODULE_PARM(ntx_peer, "i", int, 0444,
+                "# concurrent sends per peer");
 
 static int nlarge_tx_bufs = GMNAL_NLARGE_TX_BUFS;
 CFS_MODULE_PARM(nlarge_tx_bufs, "i", int, 0444,
@@ -49,7 +49,7 @@ CFS_MODULE_PARM(nrx_large, "i", int, 0444,
 gmnal_tunables_t gmnal_tunables = {
         .gm_port            = &port,
         .gm_ntx             = &ntx,
-        .gm_ntx_nblk        = &ntx_nblk,
+        .gm_ntx_peer        = &ntx_peer,
         .gm_nlarge_tx_bufs  = &nlarge_tx_bufs,
         .gm_nrx_small       = &nrx_small,
         .gm_nrx_large       = &nrx_large,
@@ -61,7 +61,7 @@ static ctl_table gmnal_ctl_table[] = {
 	 sizeof (int), 0444, NULL, &proc_dointvec},
 	{2, "ntx", &ntx, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{3, "ntx_nblk", &ntx_nblk, 
+	{3, "ntx_peer", &ntx_peer, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
 	{4, "nlarge_tx_bufs", &nlarge_tx_bufs, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},

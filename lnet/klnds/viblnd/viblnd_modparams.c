@@ -49,11 +49,15 @@ CFS_MODULE_PARM(timeout, "i", int, 0644,
 
 static int ntx = IBNAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of 'normal' message descriptors");
+		"# of message descriptors");
 
-static int ntx_nblk = IBNAL_NTX_NBLK;
-CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
-		"# of 'reserved' message descriptors");
+static int credits = IBNAL_CREDITS;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+		"# concurrent sends");
+
+static int peer_credits = IBNAL_PEERCREDITS;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+		"# concurrent sends to 1 peer");
 
 static int arp_retries = IBNAL_ARP_RETRIES;
 CFS_MODULE_PARM(arp_retries, "i", int, 0644,
@@ -97,7 +101,8 @@ kib_tunables_t kibnal_tunables = {
         .kib_cksum                  = &cksum,
         .kib_timeout                = &timeout,
         .kib_ntx                    = &ntx,
-        .kib_ntx_nblk               = &ntx_nblk,
+        .kib_credits                = &credits,
+        .kib_peercredits            = &peer_credits,
         .kib_arp_retries            = &arp_retries,
         .kib_hca_basename           = &hca_basename,
         .kib_ipif_basename          = &ipif_basename,
@@ -130,24 +135,26 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{7, "ntx", &ntx, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "ntx_nblk", &ntx_nblk, 
+	{8, "credits", &credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "arp_retries", &arp_retries, 
+	{9, "peer_credits", &peer_credits, 
+	 sizeof(int), 0444, NULL, &proc_dointvec},
+	{10, "arp_retries", &arp_retries, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{10, "hca_basename", hca_basename_space, 
+	{11, "hca_basename", hca_basename_space, 
 	 sizeof(hca_basename_space), 0444, NULL, &proc_dostring},
-	{11, "ipif_basename", ipif_basename_space, 
+	{12, "ipif_basename", ipif_basename_space, 
 	 sizeof(ipif_basename_space), 0444, NULL, &proc_dostring},
-	{12, "local_ack_timeout", &local_ack_timeout, 
+	{13, "local_ack_timeout", &local_ack_timeout, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{13, "retry_cnt", &retry_cnt, 
+	{14, "retry_cnt", &retry_cnt, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{14, "rnr_cnt", &rnr_cnt, 
+	{15, "rnr_cnt", &rnr_cnt, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{15, "rnr_nak_timer", &rnr_nak_timer, 
+	{16, "rnr_nak_timer", &rnr_nak_timer, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 #if IBNAL_USE_FMR
-	{16, "fmr_remaps", &fmr_remaps, 
+	{17, "fmr_remaps", &fmr_remaps, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 #endif        
 	{0}

@@ -284,7 +284,7 @@ int jt_ptl_network(int argc, char **argv)
                 rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
                 
                 if (rc == 0) {
-                        printf ("portals ready to unload\n");
+                        printf ("lnet ready to unload\n");
                         return 0;
                 }
                 
@@ -1097,7 +1097,6 @@ jt_ptl_print_routes (int argc, char **argv)
         lnet_nid_t		  nid;
         unsigned int              hops;
         int                       alive;
-        int                       ignored;
 
         for (index = 0;;index++)
         {
@@ -1111,14 +1110,11 @@ jt_ptl_print_routes (int argc, char **argv)
                 net     = data.ioc_net;
                 hops    = data.ioc_count;
                 nid     = data.ioc_nid;
-                alive   = data.ioc_flags & 1;
-                ignored = data.ioc_flags & 2;
+                alive   = data.ioc_flags;
 
                 printf ("net %18s hops %u gw %32s %s\n", 
                         libcfs_net2str(net), hops,
-                        libcfs_nid2str(nid),
-                        ignored ? "<ignored>" :
-                        alive ? "up" : "down");
+                        libcfs_nid2str(nid), alive ? "up" : "down");
         }
 
         if (errno != ENOENT)

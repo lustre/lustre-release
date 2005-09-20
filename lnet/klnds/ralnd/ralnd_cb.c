@@ -71,55 +71,32 @@ kranal_schedule_conn(kra_conn_t *conn)
 }
 
 kra_tx_t *
-kranal_get_idle_tx (int may_block)
+kranal_get_idle_tx (void)
 {
         unsigned long  flags;
-        kra_tx_t      *tx = NULL;
+        kra_tx_t      *tx;
 
-        for (;;) {
-                spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
+        spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
 
-                /* "normal" descriptor is free */
-                if (!list_empty(&kranal_data.kra_idle_txs)) {
-                        tx = list_entry(kranal_data.kra_idle_txs.next,
-                                        kra_tx_t, tx_list);
-                        break;
-                }
-
-                if (!may_block) {
-                        /* may dip into reserve pool */
-                        if (list_empty(&kranal_data.kra_idle_nblk_txs)) {
-                                CERROR("reserved tx desc pool exhausted\n");
-                                break;
-                        }
-
-                        tx = list_entry(kranal_data.kra_idle_nblk_txs.next,
-                                        kra_tx_t, tx_list);
-                        break;
-                }
-
-                /* block for idle tx */
+        if (list_empty(&kranal_data.kra_idle_txs)) {
                 spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
-
-                wait_event(kranal_data.kra_idle_tx_waitq,
-                           !list_empty(&kranal_data.kra_idle_txs));
+                return NULL;
         }
 
-        if (tx != NULL) {
-                list_del(&tx->tx_list);
+        tx = list_entry(kranal_data.kra_idle_txs.next, kra_tx_t, tx_list);
+        list_del(&tx->tx_list);
 
-                /* Allocate a new completion cookie.  It might not be
-                 * needed, but we've got a lock right now... */
-                tx->tx_cookie = kranal_data.kra_next_tx_cookie++;
-
-                LASSERT (tx->tx_buftype == RANAL_BUF_NONE);
-                LASSERT (tx->tx_msg.ram_type == RANAL_MSG_NONE);
-                LASSERT (tx->tx_conn == NULL);
-                LASSERT (tx->tx_lntmsg[0] == NULL);
-                LASSERT (tx->tx_lntmsg[1] == NULL);
-        }
+        /* Allocate a new completion cookie.  It might not be needed, but we've
+         * got a lock right now... */
+        tx->tx_cookie = kranal_data.kra_next_tx_cookie++;
 
         spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
+
+        LASSERT (tx->tx_buftype == RANAL_BUF_NONE);
+        LASSERT (tx->tx_msg.ram_type == RANAL_MSG_NONE);
+        LASSERT (tx->tx_conn == NULL);
+        LASSERT (tx->tx_lntmsg[0] == NULL);
+        LASSERT (tx->tx_lntmsg[1] == NULL);
 
         return tx;
 }
@@ -135,14 +112,13 @@ kranal_init_msg(kra_msg_t *msg, int type)
 }
 
 kra_tx_t *
-kranal_new_tx_msg (int may_block, int type)
+kranal_new_tx_msg (int type)
 {
-        kra_tx_t *tx = kranal_get_idle_tx(may_block);
+        kra_tx_t *tx = kranal_get_idle_tx();
 
-        if (tx == NULL)
-                return NULL;
+        if (tx != NULL)
+                kranal_init_msg(&tx->tx_msg, type);
 
-        kranal_init_msg(&tx->tx_msg, type);
         return tx;
 }
 
@@ -404,7 +380,7 @@ kranal_tx_done (kra_tx_t *tx, int completion)
                 if (tx->tx_lntmsg[i] == NULL)
                         continue;
 
-                lnet_finalize(kranal_data.kra_ni, NULL, tx->tx_lntmsg[i], 
+                lnet_finalize(kranal_data.kra_ni, tx->tx_lntmsg[i], 
                               completion);
                 tx->tx_lntmsg[i] = NULL;
         }
@@ -415,12 +391,7 @@ kranal_tx_done (kra_tx_t *tx, int completion)
 
         spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
 
-        if (tx->tx_isnblk) {
-                list_add_tail(&tx->tx_list, &kranal_data.kra_idle_nblk_txs);
-        } else {
-                list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
-                wake_up(&kranal_data.kra_idle_tx_waitq);
-        }
+        list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
 
         spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
 }
@@ -674,7 +645,7 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                     lntmsg->msg_md->md_length <= *kranal_tunables.kra_max_immediate)
                         break;                  /* send IMMEDIATE */
 
-                tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_GET_REQ);
+                tx = kranal_new_tx_msg(RANAL_MSG_GET_REQ);
                 if (tx == NULL)
                         return -ENOMEM;
 
@@ -722,7 +693,7 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                 return -EIO;
                         }
 
-                        tx = kranal_get_idle_tx(0);
+                        tx = kranal_get_idle_tx();
                         if (tx == NULL)
                                 return -EIO;
 
@@ -759,10 +730,7 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                     nob <= *kranal_tunables.kra_max_immediate)
                         break;                  /* send IMMEDIATE */
 
-                tx = kranal_new_tx_msg(!(routing ||
-                                         type == LNET_MSG_REPLY ||
-                                         in_interrupt()), 
-                                       RANAL_MSG_PUT_REQ);
+                tx = kranal_new_tx_msg(RANAL_MSG_PUT_REQ);
                 if (tx == NULL)
                         return -ENOMEM;
 
@@ -784,11 +752,7 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (kiov == NULL);
         LASSERT (nob <= RANAL_FMA_MAX_DATA);
 
-        tx = kranal_new_tx_msg(!(routing ||
-                                 type == LNET_MSG_ACK ||
-                                 type == LNET_MSG_REPLY ||
-                                 in_interrupt()),
-                               RANAL_MSG_IMMEDIATE);
+        tx = kranal_new_tx_msg(RANAL_MSG_IMMEDIATE);
         if (tx == NULL)
                 return -ENOMEM;
 
@@ -855,11 +819,11 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                         buffer = ((char *)iov->iov_base) + offset;
                 }
                 rc = kranal_consume_rxmsg(conn, buffer, mlen);
-                lnet_finalize(ni, NULL, lntmsg, (rc == 0) ? 0 : -EIO);
+                lnet_finalize(ni, lntmsg, (rc == 0) ? 0 : -EIO);
                 return 0;
 
         case RANAL_MSG_PUT_REQ:
-                tx = kranal_new_tx_msg(0, RANAL_MSG_PUT_ACK);
+                tx = kranal_new_tx_msg(RANAL_MSG_PUT_ACK);
                 if (tx == NULL) {
                         kranal_consume_rxmsg(conn, NULL, 0);
                         return -ENOMEM;
@@ -896,7 +860,7 @@ kranal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
         case RANAL_MSG_GET_REQ:
                 /* This one didn't match anything */
-                tx = kranal_new_tx_msg(0, RANAL_MSG_GET_NAK);
+                tx = kranal_new_tx_msg(RANAL_MSG_GET_NAK);
                 if (tx != NULL) {
                         tx->tx_msg.ram_u.completion.racm_cookie = 
                                 rxmsg->ram_u.get.ragm_cookie;
@@ -1775,14 +1739,14 @@ kranal_check_fma_rx (kra_conn_t *conn)
         case RANAL_MSG_IMMEDIATE:
                 CDEBUG(D_NET, "RX IMMEDIATE on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.immediate.raim_hdr, 
-                                conn);
+                                msg->ram_srcnid, conn);
                 repost = rc < 0;
                 break;
 
         case RANAL_MSG_PUT_REQ:
                 CDEBUG(D_NET, "RX PUT_REQ on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.putreq.raprm_hdr, 
-                                conn);
+                                msg->ram_srcnid, conn);
                 repost = rc < 0;
                 break;
 
@@ -1826,7 +1790,7 @@ kranal_check_fma_rx (kra_conn_t *conn)
         case RANAL_MSG_GET_REQ:
                 CDEBUG(D_NET, "RX GET_REQ on %p\n", conn);
                 rc = lnet_parse(kranal_data.kra_ni, &msg->ram_u.get.ragm_hdr, 
-                                conn);
+                                msg->ram_srcnid, conn);
                 repost = rc < 0;
                 break;
 

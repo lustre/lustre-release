@@ -60,7 +60,7 @@ gmnal_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                                    npages, rx->rx_buf.nb_kiov, payload_offset,
                                    mlen);
 
-        lnet_finalize(ni, private, lntmsg, 0);
+        lnet_finalize(ni, lntmsg, 0);
         gmnal_post_rx(gmni, rx);
 	return 0;
 }
@@ -85,10 +85,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (iov == NULL || kiov == NULL);
 
         /* I may not block for a tx if I'm responding to an incoming message */
-        tx = gmnal_get_tx(gmni, 
-                          !(routing ||
-                            type == LNET_MSG_ACK || 
-                            type == LNET_MSG_REPLY));
+        tx = gmnal_get_tx(gmni);
         if (tx == NULL) {
                 if (!gmni->gmni_shutdown)
                         CERROR ("Can't get tx for msg type %d for %s\n",
@@ -129,7 +126,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /* We've copied everything... */
                 LASSERT(tx->tx_lntmsg == NULL);
-                lnet_finalize(ni, NULL, lntmsg, 0);
+                lnet_finalize(ni, lntmsg, 0);
         } else {
                 /* stash payload pts to copy later */
                 tx->tx_large_nob = len;

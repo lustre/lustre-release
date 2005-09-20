@@ -94,7 +94,8 @@
 #define IBNAL_NTX             64                /* # tx descs */
 /* this had to be dropped down so that we only register < 255 pages per
  * region.  this will change if we register all memory. */
-#define IBNAL_NTX_NBLK        128               /* # reserved tx descs */
+#define IBNAL_CREDITS         32
+#define IBNAL_PEERCREDITS     8
 
 #define IBNAL_PEER_HASH_SIZE  101               /* # peer lists */
 
@@ -109,7 +110,7 @@
 /* derived constants... */
 
 /* TX messages (shared by all connections) */
-#define IBNAL_TX_MSGS       (IBNAL_NTX + IBNAL_NTX_NBLK)
+#define IBNAL_TX_MSGS       IBNAL_NTX
 #define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
@@ -202,8 +203,6 @@ typedef struct
         kib_pages_t      *kib_tx_pages;         /* premapped tx msg pages */
 
         struct list_head  kib_idle_txs;         /* idle tx descriptors */
-        struct list_head  kib_idle_nblk_txs;    /* idle reserved tx descriptors */
-        wait_queue_head_t kib_idle_tx_waitq;    /* block here for tx descriptor */
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
 
@@ -324,7 +323,6 @@ typedef struct kib_rx                           /* receive message */
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
-        int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         struct kib_conn          *tx_conn;      /* owning conn */
         int                       tx_mapped;    /* mapped for RDMA? */
         int                       tx_sending;   /* # tx callbacks outstanding */
@@ -420,7 +418,7 @@ typedef struct kib_peer
 {
         struct list_head    ibp_list;           /* stash on global peer list */
         struct list_head    ibp_connd_list;     /* schedule on kib_connd_peers */
-        lnet_nid_t           ibp_nid;            /* who's on the other end(s) */
+        lnet_nid_t          ibp_nid;            /* who's on the other end(s) */
         atomic_t            ibp_refcount;       /* # users */
         int                 ibp_persistence;    /* "known" peer refs */
         struct list_head    ibp_conns;          /* all active connections */

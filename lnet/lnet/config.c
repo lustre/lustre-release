@@ -143,6 +143,7 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
 
         /* NAL will fill in the address part of the NID */
         ni->ni_nid = PTL_MKNID(net, 0);
+        CFS_INIT_LIST_HEAD(&ni->ni_txq);
 
         list_add_tail(&ni->ni_list, nilist);
         return ni;
@@ -649,7 +650,7 @@ lnet_parse_route (char *str)
 			nid = libcfs_str2nid(ptb->ptb_text);
 			LASSERT (nid != LNET_NID_ANY);
 
-                        rc = kpr_add_route (net, hops, nid);
+                        rc = lnet_add_route (net, hops, nid);
                         if (rc != 0) {
                                 CERROR("Can't create route "
                                        "to %s via %s\n",

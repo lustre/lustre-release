@@ -118,7 +118,7 @@ int tcpnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
     if (rc == 0) {
             /* NB the NAL only calls lnet_finalize() if it returns 0
              * from cb_send() */
-            lnet_finalize(ni, private, lntmsg, 0);
+            lnet_finalize(ni, lntmsg, 0);
     }
 
     return(rc);
@@ -157,7 +157,7 @@ int tcpnal_recv(lnet_ni_t     *ni,
 
 finalize:
     /* FIXME; we always assume success here... */
-    lnet_finalize(ni, private, cookie, 0);
+    lnet_finalize(ni, cookie, 0);
 
     LASSERT(rlen >= mlen);
 
@@ -194,7 +194,7 @@ static int from_connection(void *a, void *d)
             hdr.dest_nid = cpu_to_le64(b->b_ni->ni_nid);
             hdr.dest_pid = cpu_to_le32(the_lnet.ln_pid);
             
-            rc = lnet_parse(b->b_ni, &hdr, c);
+            rc = lnet_parse(b->b_ni, &hdr, c->peer_nid, c);
             if (rc < 0) {
                     CERROR("Error %d from lnet_parse\n", rc);
                     return 0;

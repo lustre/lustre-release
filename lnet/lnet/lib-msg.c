@@ -27,7 +27,7 @@
 #include <lnet/lib-lnet.h>
 
 void
-lnet_enq_event_locked (void *private, lnet_eq_t *eq, lnet_event_t *ev)
+lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
 {
         lnet_event_t  *eq_slot;
 
@@ -62,18 +62,37 @@ lnet_enq_event_locked (void *private, lnet_eq_t *eq, lnet_event_t *ev)
 }
 
 void
-lnet_finalize (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int status)
+lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 {
-        lnet_libmd_t *md;
-        int           unlink;
-        unsigned long flags;
-        int           rc;
-        int           send_ack;
+        lnet_handle_wire_t ack_wmd;
+        lnet_libmd_t      *md;
+        int                unlink;
+        int                rc;
 
         if (msg == NULL)
                 return;
 
-        LNET_LOCK(flags);
+#if 0
+        CDEBUG(D_WARNING, "%s msg->%s Flags:%s%s%s%s%s%s%s%s%s%s%s%s txp %s rxp %s\n",
+               lnet_msgtyp2str(msg->msg_type), libcfs_id2str(msg->msg_target),
+               msg->msg_target_is_router ? "t" : "",
+               msg->msg_routing ? "X" : "",
+               msg->msg_ack ? "A" : "",
+               msg->msg_sending ? "S" : "",
+               msg->msg_receiving ? "R" : "",
+               msg->msg_recvaftersend ? "g" : "",
+               msg->msg_delayed ? "d" : "",
+               msg->msg_txcredit ? "C" : "",
+               msg->msg_peertxcredit ? "c" : "",
+               msg->msg_rtrcredit ? "F" : "",
+               msg->msg_peerrtrcredit ? "f" : "",
+               msg->msg_onactivelist ? "!" : "",
+               msg->msg_txpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_txpeer->lp_nid),
+               msg->msg_rxpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_rxpeer->lp_nid));
+#endif
+        LNET_LOCK();
+
+        LASSERT (msg->msg_onactivelist);
 
         md = msg->msg_md;
         if (md != NULL) {
@@ -95,49 +114,61 @@ lnet_finalize (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int status)
                 msg->msg_ev.unlinked = unlink;
                 
                 if (md->md_eq != NULL)
-                        lnet_enq_event_locked(private, md->md_eq, &msg->msg_ev);
+                        lnet_enq_event_locked(md->md_eq, &msg->msg_ev);
                 
                 if (unlink)
                         lnet_md_unlink(md);
 
                 msg->msg_md = NULL;
         }
+
+        if (status == 0 && msg->msg_ack) {
+                /* Only send an ACK if the PUT completed successfully */
+
+                lnet_return_credits_locked(msg);
+
+                msg->msg_ack = 0;
+                LNET_UNLOCK();
         
-        /* Only send an ACK if the PUT completed successfully */
-        send_ack = (status == 0 &&
-                    !lnet_is_wire_handle_none(&msg->msg_ack_wmd));
+                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
+                LASSERT(!msg->msg_routing);
 
-        if (!send_ack) {
-                list_del (&msg->msg_activelist);
-                the_lnet.ln_counters.msgs_alloc--;
-                lnet_msg_free(msg);
-
-                LNET_UNLOCK(flags);
-                return;
-        }
+                ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
                 
-        LNET_UNLOCK(flags);
+                lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
 
-        LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
+                msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
+                msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
+                msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
+                
+                rc = lnet_send(ni, msg);
+                if (rc == 0)
+                        return;
 
-        memset (&msg->msg_hdr, 0, sizeof(msg->msg_hdr));
-        msg->msg_hdr.msg.ack.dst_wmd = msg->msg_ack_wmd;
-        msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
-        msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
+                LNET_LOCK();
 
-        msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
+        } else if (status == 0 &&               /* OK so far */
+                   (msg->msg_routing && !msg->msg_sending)) { /* not forwarded */
+                
+                LASSERT (!msg->msg_receiving);  /* called back recv already */
+        
+                LNET_UNLOCK();
+                
+                rc = lnet_send(NULL, msg);
+                if (rc == 0)
+                        return;
 
-        rc = lnet_send(ni, private, msg, LNET_MSG_ACK,
-                       msg->msg_ev.initiator, NULL, 0, 0);
-        if (rc != 0) {
-                /* send failed: there's nothing else to clean up. */
-                CERROR("Error %d sending ACK to %s\n",
-                       rc, libcfs_id2str(msg->msg_ev.initiator));
-
-                LNET_LOCK(flags);
-                list_del (&msg->msg_activelist);
-                the_lnet.ln_counters.msgs_alloc--;
-                lnet_msg_free(msg);
-                LNET_UNLOCK(flags);
+                LNET_LOCK();
         }
+
+        lnet_return_credits_locked(msg);
+
+        LASSERT (msg->msg_onactivelist);
+        msg->msg_onactivelist = 0;
+        list_del (&msg->msg_activelist);
+        the_lnet.ln_counters.msgs_alloc--;
+        lnet_msg_free(msg);
+        
+        LNET_UNLOCK();
 }
+

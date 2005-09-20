@@ -58,8 +58,7 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 		data->ioc_u64[0] = ktx->ktx_nid;
 		data->ioc_u32[0] = le32_to_cpu(hdr->type);
 		data->ioc_u32[1] = ktx->ktx_launcher;
-		data->ioc_flags  = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
-				   (!ktx->ktx_isnblk                    ? 0 : 2) |
+		data->ioc_flags  = (list_empty (&ktx->ktx_schedlist) ? 0 : 1) |
 				   (ktx->ktx_state << 2);
 		rc = 0;
 		break;
@@ -122,8 +121,6 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 	kqswnal_data.kqn_shuttingdown = 1;
 	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
-
-	wake_up_all(&kqswnal_data.kqn_idletxd_waitq);
 
 	/**********************************************************************/
 	/* wait for sends that have allocated a tx desc to launch or give up */
@@ -190,6 +187,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 #if MULTIRAIL_EKC
 	LASSERT (list_empty (&kqswnal_data.kqn_readyrxds));
+	LASSERT (list_empty (&kqswnal_data.kqn_donetxds));
 	LASSERT (list_empty (&kqswnal_data.kqn_delayedtxds));
 #endif
 
@@ -247,8 +245,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 	{
 		elan3_dvma_unload(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle, 0,
-				  KQSW_NTXMSGPAGES * (*kqswnal_tunables.kqn_ntxmsgs +
-						      *kqswnal_tunables.kqn_nnblk_txmsgs));
+				  KQSW_NTXMSGPAGES * (*kqswnal_tunables.kqn_ntxmsgs));
 
 		elan3_dma_release(kqswnal_data.kqn_ep->DmaState,
 				  kqswnal_data.kqn_eptxdmahandle);
@@ -311,6 +308,14 @@ kqswnal_startup (lnet_ni_t *ni)
                 CERROR("Explicit interface config not supported\n");
                 return -EPERM;
         }
+
+	if (*kqswnal_tunables.kqn_credits >=
+	    *kqswnal_tunables.kqn_ntxmsgs) {
+		LCONSOLE_ERROR("Configuration error: please set "
+			       "ntxmsgs(%d) > credits(%d)\n",
+			       *kqswnal_tunables.kqn_ntxmsgs,
+			       *kqswnal_tunables.kqn_credits);
+	}
         
 	CDEBUG (D_MALLOC, "start kmem %d\n", atomic_read(&libcfs_kmemory));
 	
@@ -319,14 +324,15 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	kqswnal_data.kqn_ni = ni;
 	ni->ni_data = &kqswnal_data;
+	ni->ni_peertxcredits = *kqswnal_tunables.kqn_peercredits;
+	ni->ni_maxtxcredits = *kqswnal_tunables.kqn_credits;
 
 	INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
-	INIT_LIST_HEAD (&kqswnal_data.kqn_nblk_idletxds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
 	spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
-	init_waitqueue_head (&kqswnal_data.kqn_idletxd_waitq);
 
 	INIT_LIST_HEAD (&kqswnal_data.kqn_delayedtxds);
+	INIT_LIST_HEAD (&kqswnal_data.kqn_donetxds);
 	INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
 
 	spin_lock_init (&kqswnal_data.kqn_sched_lock);
@@ -417,8 +423,7 @@ kqswnal_startup (lnet_ni_t *ni)
 #if MULTIRAIL_EKC
 	kqswnal_data.kqn_ep_tx_nmh = 
 		ep_dvma_reserve(kqswnal_data.kqn_ep,
-				KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs+
-						  *kqswnal_tunables.kqn_nnblk_txmsgs),
+				KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs),
 				EP_PERM_WRITE);
 	if (kqswnal_data.kqn_ep_tx_nmh == NULL) {
 		CERROR("Can't reserve tx dma space\n");
@@ -432,8 +437,7 @@ kqswnal_startup (lnet_ni_t *ni)
         dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
 	rc = elan3_dma_reserve(kqswnal_data.kqn_ep->DmaState,
-			      KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs+
-						*kqswnal_tunables.kqn_nnblk_txmsgs),
+			      KQSW_NTXMSGPAGES*(*kqswnal_tunables.kqn_ntxmsgs),
 			      &dmareq, &kqswnal_data.kqn_eptxdmahandle);
 	if (rc != DDI_SUCCESS)
 	{
@@ -480,7 +484,7 @@ kqswnal_startup (lnet_ni_t *ni)
 	/* Allocate/Initialise transmit descriptors */
 
 	kqswnal_data.kqn_txds = NULL;
-	for (i = 0; i < (*kqswnal_tunables.kqn_ntxmsgs + *kqswnal_tunables.kqn_nnblk_txmsgs); i++)
+	for (i = 0; i < (*kqswnal_tunables.kqn_ntxmsgs); i++)
 	{
 		int           premapped_pages;
 		int           basepage = i * KQSW_NTXMSGPAGES;
@@ -519,16 +523,13 @@ kqswnal_startup (lnet_ni_t *ni)
 		ktx->ktx_basepage = basepage + premapped_pages; /* message mapping starts here */
 		ktx->ktx_npages = KQSW_NTXMSGPAGES - premapped_pages; /* for this many pages */
 
-		INIT_LIST_HEAD (&ktx->ktx_delayed_list);
+		INIT_LIST_HEAD (&ktx->ktx_schedlist);
 
 		ktx->ktx_state = KTX_IDLE;
 #if MULTIRAIL_EKC
 		ktx->ktx_rail = -1;		/* unset rail */
 #endif
-		ktx->ktx_isnblk = (i >= *kqswnal_tunables.kqn_ntxmsgs);
-		list_add_tail (&ktx->ktx_list, 
-			       ktx->ktx_isnblk ? &kqswnal_data.kqn_nblk_idletxds :
-			                         &kqswnal_data.kqn_idletxds);
+		list_add_tail (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 	}
 
 	/**********************************************************************/

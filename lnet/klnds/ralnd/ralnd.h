@@ -65,8 +65,9 @@
 #define RANAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry... */
 #define RANAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
 
-#define RANAL_NTX                 64            /* # tx descs */
-#define RANAL_NTX_NBLK            256           /* # reserved tx descs */
+#define RANAL_NTX                 256           /* # tx descs */
+#define RANAL_CREDITS             128           /* # concurrent sends */
+#define RANAL_PEERCREDITS         32            /* # concurrent sends to 1 peer */
 
 #define RANAL_FMA_CQ_SIZE         8192          /* # entries in receive CQ
                                                  * (overflow is a performance hit) */
@@ -94,7 +95,8 @@ typedef struct
         int              *kra_min_reconnect_interval; /* first failed connection retry... */
         int              *kra_max_reconnect_interval; /* ...exponentially increasing to this */
         int              *kra_ntx;              /* # tx descs */
-        int              *kra_ntx_nblk;         /* # reserved tx descs */
+        int              *kra_credits;          /* # concurrent sends */
+        int              *kra_peercredits;      /* # concurrent sends to 1 peer */
         int              *kra_fma_cq_size;      /* # entries in receive CQ */
         int              *kra_timeout;          /* comms timeout (seconds) */
         int              *kra_max_immediate;    /* immediate payload breakpoint */
@@ -157,9 +159,7 @@ typedef struct
         spinlock_t        kra_connd_lock;       /* serialise */
 
         struct list_head  kra_idle_txs;         /* idle tx descriptors */
-        struct list_head  kra_idle_nblk_txs;    /* idle reserved tx descriptors */
         __u64             kra_next_tx_cookie;   /* RDMA completion cookie */
-        wait_queue_head_t kra_idle_tx_waitq;    /* block here for tx descriptor */
         spinlock_t        kra_tx_lock;          /* serialise */
 } kra_data_t;
 
@@ -271,7 +271,6 @@ typedef struct kra_tx                           /* message descriptor */
         struct kra_conn          *tx_conn;      /* owning conn */
         lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
         unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
-        int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         int                       tx_nob;       /* # bytes of payload */
         int                       tx_buftype;   /* payload buffer type */
         void                     *tx_buffer;    /* source/sink buffer */

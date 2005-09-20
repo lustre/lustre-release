@@ -1325,8 +1325,9 @@ ksocknal_terminate_conn (ksock_conn_t *conn)
          * zero-copy transmits will therefore complete in finite time. */
         ksocknal_connsock_decref(conn);
 
-        if (notify)
-                lnet_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0, then);
+        /* no auto-down for now */
+        //        if (notify)
+        //                lnet_notify (peer->ksnp_ni, peer->ksnp_id.nid, 0, then);
 }
 
 void
@@ -1365,8 +1366,8 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                        ", ip %d.%d.%d.%d:%d, with error\n",
                        libcfs_id2str(conn->ksnc_peer->ksnp_id),
                        HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
-                lnet_finalize (conn->ksnc_peer->ksnp_ni, NULL, 
-                              conn->ksnc_cookie, -EIO);
+                lnet_finalize (conn->ksnc_peer->ksnp_ni, 
+                               conn->ksnc_cookie, -EIO);
                 break;
         case SOCKNAL_RX_HEADER:
         case SOCKNAL_RX_SLOP:
@@ -2206,7 +2207,9 @@ ksocknal_startup (lnet_ni_t *ni)
         spin_lock_init(&net->ksnn_lock);
         net->ksnn_incarnation = ksocknal_new_incarnation();
         ni->ni_data = net;
-
+        ni->ni_maxtxcredits = *ksocknal_tunables.ksnd_credits;
+        ni->ni_peertxcredits = *ksocknal_tunables.ksnd_peercredits;
+        
         if (ni->ni_interfaces[0] == NULL) {
                 rc = ksocknal_enumerate_interfaces(net);
                 if (rc <= 0)

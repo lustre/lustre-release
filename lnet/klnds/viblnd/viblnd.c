@@ -1404,17 +1404,10 @@ kibnal_setup_tx_descs (void)
                                             &rkey);
                 LASSERT (vvrc == vv_return_ok);
 
-                tx->tx_isnblk = (i >= *kibnal_tunables.kib_ntx);
-
                 CDEBUG(D_NET, "Tx[%d] %p->%p[%x]\n", i, tx, 
                        tx->tx_msg, tx->tx_lkey);
 
-                if (tx->tx_isnblk)
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_nblk_txs);
-                else
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
                 page_offset += IBNAL_MSG_SIZE;
                 LASSERT (page_offset <= PAGE_SIZE);
@@ -1570,6 +1563,16 @@ kibnal_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
 
+        if (*kibnal_tunables.kib_credits > *kibnal_tunables.kib_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kibnal_tunables.kib_credits,
+                        *kibnal_tunables.kib_ntx);
+                return -EINVAL;
+        }
+
+        ni->ni_maxtxcredits = *kibnal_tunables.kib_credits;
+        ni->ni_peertxcredits = *kibnal_tunables.kib_peercredits;
+
         CLASSERT (LNET_MAX_INTERFACES > 1);
         
         if (ni->ni_interfaces[0] != NULL) {
@@ -1658,8 +1661,6 @@ kibnal_startup (lnet_ni_t *ni)
 
         spin_lock_init (&kibnal_data.kib_tx_lock);
         INIT_LIST_HEAD (&kibnal_data.kib_idle_txs);
-        INIT_LIST_HEAD (&kibnal_data.kib_idle_nblk_txs);
-        init_waitqueue_head(&kibnal_data.kib_idle_tx_waitq);
 
         rc = kibnal_alloc_tx_descs();
         if (rc != 0) {

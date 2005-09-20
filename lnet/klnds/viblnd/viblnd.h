@@ -96,8 +96,9 @@
 #define IBNAL_CONCURRENT_PEERS       1152       /* # nodes all talking at once to me */
 #define IBNAL_CKSUM                  0          /* checksum kib_msg_t? */
 #define IBNAL_TIMEOUT                50         /* default comms timeout (seconds) */
-#define IBNAL_NTX                    32         /* # tx descs */
-#define IBNAL_NTX_NBLK               256        /* # reserved tx descs */
+#define IBNAL_NTX                    256        /* # tx descs */
+#define IBNAL_CREDITS                128        /* # concurrent sends */
+#define IBNAL_PEERCREDITS            8          /* # concurrent sends to 1 peer */
 #define IBNAL_ARP_RETRIES            3          /* # times to retry ARP */
 #define IBNAL_HCA_BASENAME           "InfiniHost" /* HCA basename */
 #define IBNAL_IPIF_BASENAME          "ipoib"    /* IPoIB interface basename */
@@ -146,8 +147,7 @@
 /* derived constants... */
 
 /* TX messages (shared by all connections) */
-#define IBNAL_TX_MSGS()       (*kibnal_tunables.kib_ntx +       \
-                               *kibnal_tunables.kib_ntx_nblk)
+#define IBNAL_TX_MSGS()       (*kibnal_tunables.kib_ntx)
 #define IBNAL_TX_MSG_BYTES()  (IBNAL_TX_MSGS() * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES()  ((IBNAL_TX_MSG_BYTES() + PAGE_SIZE - 1)/PAGE_SIZE)
 
@@ -174,7 +174,8 @@ typedef struct
         int              *kib_cksum;            /* checksum kib_msg_t? */
         int              *kib_timeout;          /* comms timeout (seconds) */
         int              *kib_ntx;              /* # tx descs */
-        int              *kib_ntx_nblk;         /* # reserved tx descs */
+        int              *kib_credits;          /* # concurrent sends */
+        int              *kib_peercredits;      /* # concurrent sends to 1 peer */
         int              *kib_arp_retries;      /* # times to retry ARP */
         char            **kib_hca_basename;     /* HCA base name */
         char            **kib_ipif_basename;    /* IPoIB interface base name */
@@ -248,8 +249,6 @@ typedef struct
         kib_pages_t      *kib_tx_pages;         /* premapped tx msg pages */
 
         struct list_head  kib_idle_txs;         /* idle tx descriptors */
-        struct list_head  kib_idle_nblk_txs;    /* idle reserved tx descriptors */
-        wait_queue_head_t kib_idle_tx_waitq;    /* block here for tx descriptor */
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
 
@@ -292,7 +291,6 @@ typedef struct kib_rx                           /* receive message */
 typedef struct kib_tx                           /* transmit message */
 {
         struct list_head          tx_list;      /* queue on idle_txs ibc_tx_queue etc. */
-        int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         struct kib_conn          *tx_conn;      /* owning conn */
         int                       tx_sending;   /* # tx callbacks outstanding */
         int                       tx_queued;    /* queued for sending */

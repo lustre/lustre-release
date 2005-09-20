@@ -37,11 +37,15 @@ CFS_MODULE_PARM(max_reconnect_interval, "i", int, 0644,
 
 static int ntx = RANAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of 'normal' transmit descriptors");
+		"# of transmit descriptors");
 
-static int ntx_nblk = RANAL_NTX_NBLK;
-CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
-		"# of 'reserved' transmit descriptors");
+static int credits = RANAL_NTX;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+		"# concurrent sends");
+
+static int peer_credits = RANAL_NTX;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+		"# concurrent sends to 1 peer");
 
 static int fma_cq_size = RANAL_FMA_CQ_SIZE;
 CFS_MODULE_PARM(fma_cq_size, "i", int, 0444,
@@ -60,7 +64,8 @@ kra_tunables_t kranal_tunables = {
 	.kra_min_reconnect_interval = &min_reconnect_interval,
 	.kra_max_reconnect_interval = &max_reconnect_interval,
 	.kra_ntx                    = &ntx,
-	.kra_ntx_nblk               = &ntx_nblk,
+	.kra_credits                = &credits,
+	.kra_peercredits            = &peer_credits,
 	.kra_fma_cq_size            = &fma_cq_size,
 	.kra_timeout                = &timeout,
 	.kra_max_immediate          = &max_immediate,
@@ -76,13 +81,15 @@ static ctl_table kranal_ctl_table[] = {
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{4, "ntx", &ntx, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{5, "ntx_nblk", &ntx_nblk, 
+	{5, "credits", &credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{6, "fma_cq_size", &fma_cq_size, 
+	{6, "peer_credits", &peer_credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{7, "timeout", &timeout, 
+	{7, "fma_cq_size", &fma_cq_size, 
+	 sizeof(int), 0444, NULL, &proc_dointvec},
+	{8, "timeout", &timeout, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{8, "max_immediate", &max_immediate, 
+	{9, "max_immediate", &max_immediate, 
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{0}
 };

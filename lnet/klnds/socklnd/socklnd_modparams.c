@@ -24,6 +24,14 @@ static int timeout = SOCKNAL_TIMEOUT;
 CFS_MODULE_PARM(timeout, "i", int, 0644,
                 "dead socket timeout (seconds)");
 
+static int credits = SOCKNAL_CREDITS;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+                "# concurrent sends");
+
+static int peer_credits = SOCKNAL_PEERCREDITS;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+                "# concurrent sends to 1 peer");
+
 static int nconnds = SOCKNAL_NCONND;
 CFS_MODULE_PARM(nconnds, "i", int, 0444,
                 "# connection daemons");
@@ -82,6 +90,8 @@ CFS_MODULE_PARM(zc_min_frag, "i", int, 0644,
 
 ksock_tunables_t ksocknal_tunables = {
         .ksnd_timeout         = &timeout,
+	.ksnd_credits         = &credits,
+	.ksnd_peercredits     = &peer_credits,
 	.ksnd_nconnds         = &nconnds,
 	.ksnd_min_reconnectms = &min_reconnectms,
 	.ksnd_max_reconnectms = &max_reconnectms,

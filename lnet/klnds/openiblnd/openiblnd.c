@@ -1273,18 +1273,12 @@ kibnal_setup_tx_descs (void)
                 
                 tx->tx_msg = (kib_msg_t *)(((char *)page_address(page)) + page_offset);
                 tx->tx_vaddr = vaddr;
-                tx->tx_isnblk = (i >= *kibnal_tunables.kib_ntx);
                 tx->tx_mapped = KIB_TX_UNMAPPED;
 
                 CDEBUG(D_NET, "Tx[%d] %p->%p - "LPX64"\n", 
                        i, tx, tx->tx_msg, tx->tx_vaddr);
 
-                if (tx->tx_isnblk)
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_nblk_txs);
-                else
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
                 vaddr += IBNAL_MSG_SIZE;
                 LASSERT (vaddr <= vaddr_base + IBNAL_TX_MSG_BYTES());
@@ -1450,6 +1444,16 @@ kibnal_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
         
+        if (*kibnal_tunables.kib_credits > *kibnal_tunables.kib_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kibnal_tunables.kib_credits,
+                        *kibnal_tunables.kib_ntx);
+                return -EINVAL;
+        }
+        
+        ni->ni_maxtxcredits = *kibnal_tunables.kib_credits;
+        ni->ni_peertxcredits = *kibnal_tunables.kib_peercredits;
+
         PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
 
@@ -1486,8 +1490,6 @@ kibnal_startup (lnet_ni_t *ni)
 
         spin_lock_init (&kibnal_data.kib_tx_lock);
         INIT_LIST_HEAD (&kibnal_data.kib_idle_txs);
-        INIT_LIST_HEAD (&kibnal_data.kib_idle_nblk_txs);
-        init_waitqueue_head(&kibnal_data.kib_idle_tx_waitq);
 
         PORTAL_ALLOC (kibnal_data.kib_tx_descs,
                       IBNAL_TX_MSGS() * sizeof(kib_tx_t));
@@ -1569,8 +1571,7 @@ kibnal_startup (lnet_ni_t *ni)
         /*****************************************************/
 #if IBNAL_FMR
         {
-                const int pool_size = *kibnal_tunables.kib_ntx + 
-                                      *kibnal_tunables.kib_ntx_nblk;
+                const int pool_size = *kibnal_tunables.kib_ntx;
                 struct ib_fmr_pool_param params = {
                         .max_pages_per_fmr = PTL_MTU/PAGE_SIZE,
                         .access            = (IB_ACCESS_LOCAL_WRITE |

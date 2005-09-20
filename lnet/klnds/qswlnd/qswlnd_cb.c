@@ -32,7 +32,8 @@ kqswnal_notify_peer_down(kqswnal_tx_t *ktx)
         do_gettimeofday (&now);
         then = now.tv_sec - (jiffies - ktx->ktx_launchtime)/HZ;
 
-        lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
+        /* no auto-down for now */
+        //        lnet_notify(kqswnal_data.kqn_ni, ktx->ktx_nid, 0, then);
 }
 
 void
@@ -318,97 +319,66 @@ kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
         spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
         list_del (&ktx->ktx_list);              /* take off active list */
-
-        if (ktx->ktx_isnblk) {
-                /* reserved for non-blocking tx */
-                list_add (&ktx->ktx_list, &kqswnal_data.kqn_nblk_idletxds);
-                spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
-                return;
-        }
-
         list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
-
-        wake_up (&kqswnal_data.kqn_idletxd_waitq);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 }
 
 kqswnal_tx_t *
-kqswnal_get_idle_tx (int may_block)
+kqswnal_get_idle_tx (void)
 {
         unsigned long  flags;
-        kqswnal_tx_t  *ktx = NULL;
+        kqswnal_tx_t  *ktx;
 
-        for (;;) {
-                spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+        spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
-                if (kqswnal_data.kqn_shuttingdown)
-                        break;
-
-                /* "normal" descriptor is free */
-                if (!list_empty (&kqswnal_data.kqn_idletxds)) {
-                        ktx = list_entry (kqswnal_data.kqn_idletxds.next,
-                                          kqswnal_tx_t, ktx_list);
-                        break;
-                }
-
-                if (!may_block) {
-                        if (list_empty (&kqswnal_data.kqn_nblk_idletxds)) {
-                                CERROR ("intr tx desc pool exhausted\n");
-                                break;
-                        }
-
-                        ktx = list_entry (kqswnal_data.kqn_nblk_idletxds.next,
-                                          kqswnal_tx_t, ktx_list);
-                        break;
-                }
-
-                /* block for idle tx */
-
+        if (kqswnal_data.kqn_shuttingdown ||
+            list_empty (&kqswnal_data.kqn_idletxds)) {
                 spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
-                CDEBUG (D_NET, "blocking for tx desc\n");
-                wait_event (kqswnal_data.kqn_idletxd_waitq,
-                            !list_empty (&kqswnal_data.kqn_idletxds) ||
-                            kqswnal_data.kqn_shuttingdown);
+                return NULL;
         }
 
-        if (ktx != NULL) {
-                list_del (&ktx->ktx_list);
-                list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
-                ktx->ktx_launcher = current->pid;
-                atomic_inc(&kqswnal_data.kqn_pending_txs);
-        } 
+        ktx = list_entry (kqswnal_data.kqn_idletxds.next, kqswnal_tx_t, ktx_list);
+        list_del (&ktx->ktx_list);
+
+        list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
+        ktx->ktx_launcher = current->pid;
+        atomic_inc(&kqswnal_data.kqn_pending_txs);
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
         /* Idle descs can't have any mapped (as opposed to pre-mapped) pages */
-        LASSERT (ktx == NULL || ktx->ktx_nmappedpages == 0);
-
+        LASSERT (ktx->ktx_nmappedpages == 0);
         return (ktx);
 }
 
 void
-kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
+kqswnal_tx_done_in_thread_context (kqswnal_tx_t *ktx)
 {
+        LASSERT (!in_interrupt());
+        
+        if (ktx->ktx_status == -EHOSTDOWN)
+                kqswnal_notify_peer_down(ktx);
+
         switch (ktx->ktx_state) {
         case KTX_RDMAING:          /* optimized GET/PUT handled */
         case KTX_PUTTING:          /* optimized PUT sent */
         case KTX_SENDING:          /* normal send */
-                lnet_finalize (kqswnal_data.kqn_ni, NULL,
-                              (lnet_msg_t *)ktx->ktx_args[1],
-                              (error == 0) ? 0 : -EIO);
+                lnet_finalize (kqswnal_data.kqn_ni,
+                               (lnet_msg_t *)ktx->ktx_args[1],
+                               ktx->ktx_status);
                 break;
 
         case KTX_GETTING:          /* optimized GET sent & REPLY received */
                 /* Complete the GET with success since we can't avoid
                  * delivering a REPLY event; we committed to it when we
                  * launched the GET */
-                lnet_finalize (kqswnal_data.kqn_ni, NULL, 
-                              (lnet_msg_t *)ktx->ktx_args[1], 0);
-                lnet_finalize (kqswnal_data.kqn_ni, NULL,
-                              (lnet_msg_t *)ktx->ktx_args[2],
-                              (error == 0) ? 0 : -EIO);
+                lnet_finalize (kqswnal_data.kqn_ni, 
+                               (lnet_msg_t *)ktx->ktx_args[1], 0);
+                lnet_finalize (kqswnal_data.kqn_ni,
+                               (lnet_msg_t *)ktx->ktx_args[2],
+                               ktx->ktx_status);
                 break;
 
         default:
@@ -416,6 +386,28 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
         }
 
         kqswnal_put_idle_tx (ktx);
+}
+
+void
+kqswnal_tx_done (kqswnal_tx_t *ktx, int status)
+{
+        unsigned long      flags;
+
+        ktx->ktx_status = status;
+
+        if (!in_interrupt()) {
+                kqswnal_tx_done_in_thread_context(ktx);
+                return;
+        }
+
+        /* Complete the send in thread context */
+        spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
+        
+        list_add_tail(&ktx->ktx_schedlist, 
+                      &kqswnal_data.kqn_donetxds);
+        wake_up(&kqswnal_data.kqn_sched_waitq);
+        
+        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
 
 static void
@@ -433,7 +425,6 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
                 CERROR ("Tx completion to %s failed: %d\n", 
                         libcfs_nid2str(ktx->ktx_nid), status);
 
-                kqswnal_notify_peer_down(ktx);
                 status = -EHOSTDOWN;
 
         } else switch (ktx->ktx_state) {
@@ -458,7 +449,7 @@ kqswnal_txhandler(EP_TXD *txd, void *arg, int status)
                 break;
         }
 
-        kqswnal_tx_done (ktx, status);
+        kqswnal_tx_done(ktx, status);
 }
 
 int
@@ -520,7 +511,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         case EP_ENOMEM: /* can't allocate ep txd => queue for later */
                 spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
-                list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
+                list_add_tail (&ktx->ktx_schedlist, &kqswnal_data.kqn_delayedtxds);
                 wake_up (&kqswnal_data.kqn_sched_waitq);
 
                 spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
@@ -690,34 +681,25 @@ kqswnal_check_rdma (int nlfrag, EP_NMD *lfrag,
 #endif
 
 kqswnal_remotemd_t *
-kqswnal_parse_rmd (kqswnal_rx_t *krx, int type, lnet_nid_t expected_nid)
+kqswnal_parse_rmd (kqswnal_rx_t *krx, int type)
 {
         char               *buffer = (char *)page_address(krx->krx_kiov[0].kiov_page);
         lnet_hdr_t         *hdr = (lnet_hdr_t *)buffer;
         kqswnal_remotemd_t *rmd = (kqswnal_remotemd_t *)(buffer + KQSW_HDR_SIZE);
-        lnet_nid_t          nid = kqswnal_rx_nid(krx);
 
-        /* Note (1) lnet_parse has already flipped hdr.
-         *      (2) RDMA addresses are sent in native endian-ness.  When
+        /* Note RDMA addresses are sent in native endian-ness.  When
          *      EKC copes with different endian nodes, I'll fix this (and
          *      eat my hat :) */
 
         LASSERT (krx->krx_nob >= sizeof(*hdr));
 
-        if (hdr->type != type) {
+        if (le32_to_cpu(hdr->type) != type) {
                 CERROR ("Unexpected optimized get/put type %d (%d expected)"
-                        "from %s\n", hdr->type, type, libcfs_nid2str(nid));
+                        "from %s\n", le32_to_cpu(hdr->type), type, 
+                        libcfs_nid2str(kqswnal_rx_nid(krx)));
                 return (NULL);
         }
         
-        if (!lnet_ptlcompat_matchnid(nid, hdr->src_nid)) {
-                CERROR ("Unexpected optimized get/put source NID %s from %s\n",
-                        libcfs_nid2str(hdr->src_nid), libcfs_nid2str(nid));
-                return (NULL);
-        }
-
-        LASSERT (hdr->src_nid == expected_nid);
-
         if (buffer + krx->krx_nob < (char *)(rmd + 1)) {
                 /* msg too small to discover rmd size */
                 CERROR ("Incoming message [%d] too small for RMD (%d needed)\n",
@@ -827,13 +809,13 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg, int type,
         LASSERT (krx->krx_rpc_reply_needed);
         LASSERT (krx->krx_rpc_reply_status != 0);
 
-        rmd = kqswnal_parse_rmd(krx, type, lntmsg->msg_ev.initiator.nid);
+        rmd = kqswnal_parse_rmd(krx, type);
         if (rmd == NULL)
                 return (-EPROTO);
 
         if (len == 0) {
                 /* data got truncated to nothing. */
-                lnet_finalize(kqswnal_data.kqn_ni, krx, lntmsg, 0);
+                lnet_finalize(kqswnal_data.kqn_ni, lntmsg, 0);
                 /* Let kqswnal_rx_done() complete the RPC with success */
                 krx->krx_rpc_reply_status = 0;
                 return (0);
@@ -841,7 +823,7 @@ kqswnal_rdma (kqswnal_rx_t *krx, lnet_msg_t *lntmsg, int type,
         
         /* NB I'm using 'ktx' just to map the local RDMA buffers; I'm not
            actually sending a portals message with it */
-        ktx = kqswnal_get_idle_tx(0);
+        ktx = kqswnal_get_idle_tx();
         if (ktx == NULL) {
                 CERROR ("Can't get txd for RDMA with %s\n",
                         libcfs_nid2str(lntmsg->msg_ev.initiator.nid));
@@ -1016,10 +998,7 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         /* I may not block for a transmit descriptor if I might block the
          * router, receiver, or an interrupt handler. */
-        ktx = kqswnal_get_idle_tx(!(routing ||
-                                    type == LNET_MSG_ACK ||
-                                    type == LNET_MSG_REPLY ||
-                                    in_interrupt()));
+        ktx = kqswnal_get_idle_tx();
         if (ktx == NULL) {
                 CERROR ("Can't get txd for msg type %d for %s\n",
                         type, libcfs_nid2str(target.nid));
@@ -1061,14 +1040,24 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  * immediately after the header, and send that as my
                  * message. */
 
-                ktx->ktx_state = (type == LNET_MSG_GET) ? KTX_GETTING : KTX_PUTTING;
+                if (type == LNET_MSG_GET) {
+                        if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) != 0) 
+                                rc = kqswnal_map_tx_kiov (ktx, 0, md->md_length,
+                                                          md->md_niov, md->md_iov.kiov);
+                        else
+                                rc = kqswnal_map_tx_iov (ktx, 0, md->md_length,
+                                                         md->md_niov, md->md_iov.iov);
+                        ktx->ktx_state = KTX_GETTING;
+                } else {
+                        if (payload_kiov != NULL)
+                                rc = kqswnal_map_tx_kiov(ktx, 0, payload_nob,
+                                                         payload_niov, payload_kiov);
+                        else
+                                rc = kqswnal_map_tx_iov(ktx, 0, payload_nob,
+                                                        payload_niov, payload_iov);
+                        ktx->ktx_state = KTX_PUTTING;
+                }
 
-                if ((lntmsg->msg_md->md_options & LNET_MD_KIOV) != 0) 
-                        rc = kqswnal_map_tx_kiov (ktx, 0, md->md_length,
-                                                  md->md_niov, md->md_iov.kiov);
-                else
-                        rc = kqswnal_map_tx_iov (ktx, 0, md->md_length,
-                                                 md->md_niov, md->md_iov.iov);
                 if (rc != 0)
                         goto out;
 
@@ -1165,8 +1154,8 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                          * pretend the GET succeeded but the REPLY
                          * failed. */
                         rc = 0;
-                        lnet_finalize (kqswnal_data.kqn_ni, private, lntmsg, 0);
-                        lnet_finalize (kqswnal_data.kqn_ni, private,
+                        lnet_finalize (kqswnal_data.kqn_ni, lntmsg, 0);
+                        lnet_finalize (kqswnal_data.kqn_ni,
                                        (lnet_msg_t *)ktx->ktx_args[2], -EIO);
                 }
                 
@@ -1274,12 +1263,16 @@ kqswnal_rx_done (kqswnal_rx_t *krx)
 void
 kqswnal_parse (kqswnal_rx_t *krx)
 {
+        lnet_ni_t      *ni = kqswnal_data.kqn_ni;
         lnet_hdr_t     *hdr = (lnet_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
+        lnet_nid_t      fromnid;
         int             rc;
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        rc = lnet_parse (kqswnal_data.kqn_ni, hdr, krx);
+        fromnid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), ep_rxd_node(krx->krx_rxd));
+        
+        rc = lnet_parse(ni, hdr, kqswnal_rx_nid(krx), krx);
         if (rc < 0) {
                 kqswnal_rx_decref(krx);
                 return;
@@ -1294,7 +1287,6 @@ kqswnal_rxhandler(EP_RXD *rxd)
         int           nob    = ep_rxd_len (rxd);
         int           status = ep_rxd_status (rxd);
         kqswnal_rx_t *krx    = (kqswnal_rx_t *)ep_rxd_arg (rxd);
-
         CDEBUG(D_NET, "kqswnal_rxhandler: rxd %p, krx %p, nob %d, status %d\n",
                rxd, krx, nob, status);
 
@@ -1361,15 +1353,16 @@ kqswnal_recv (lnet_ni_t      *ni,
         kqswnal_rx_t *krx = (kqswnal_rx_t *)private;
         char         *buffer = page_address(krx->krx_kiov[0].kiov_page);
         lnet_hdr_t   *hdr = (lnet_hdr_t *)buffer;
+        int           hdrtype = le32_to_cpu(hdr->type);
         int           rc;
 
-        /* NB lnet_parse() has already flipped *hdr */
+        /* NB hdr still in network byte order */
 
         if (krx->krx_rpc_reply_needed &&
-            (hdr->type == LNET_MSG_PUT ||
-             hdr->type == LNET_MSG_REPLY)) {
+            (hdrtype == LNET_MSG_PUT ||
+             hdrtype == LNET_MSG_REPLY)) {
                 /* This is an optimized PUT/REPLY */
-                rc = kqswnal_rdma(krx, lntmsg, hdr->type,
+                rc = kqswnal_rdma(krx, lntmsg, hdrtype,
                                   niov, iov, kiov, offset, mlen);
                 kqswnal_rx_decref(krx);
                 return rc;
@@ -1397,7 +1390,7 @@ kqswnal_recv (lnet_ni_t      *ni,
                                    krx->krx_npages, krx->krx_kiov, 
                                    KQSW_HDR_SIZE, mlen);
 
-        lnet_finalize(ni, private, lntmsg, 0);
+        lnet_finalize(ni, lntmsg, 0);
         kqswnal_rx_decref(krx);
         return 0;
 }
@@ -1462,11 +1455,25 @@ kqswnal_scheduler (void *arg)
                         spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
                 }
 
+                if (!list_empty (&kqswnal_data.kqn_donetxds))
+                {
+                        ktx = list_entry(kqswnal_data.kqn_donetxds.next,
+                                         kqswnal_tx_t, ktx_schedlist);
+                        list_del_init (&ktx->ktx_schedlist);
+                        spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+                                               flags);
+
+                        kqswnal_tx_done_in_thread_context(ktx);
+
+                        did_something = 1;
+                        spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+                }
+
                 if (!list_empty (&kqswnal_data.kqn_delayedtxds))
                 {
                         ktx = list_entry(kqswnal_data.kqn_delayedtxds.next,
-                                         kqswnal_tx_t, ktx_delayed_list);
-                        list_del_init (&ktx->ktx_delayed_list);
+                                         kqswnal_tx_t, ktx_schedlist);
+                        list_del_init (&ktx->ktx_schedlist);
                         spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                flags);
 
@@ -1498,6 +1505,7 @@ kqswnal_scheduler (void *arg)
                                 rc = wait_event_interruptible (kqswnal_data.kqn_sched_waitq,
                                                                kqswnal_data.kqn_shuttingdown == 2 ||
                                                                !list_empty(&kqswnal_data.kqn_readyrxds) ||
+                                                               !list_empty(&kqswnal_data.kqn_donetxds) ||
                                                                !list_empty(&kqswnal_data.kqn_delayedtxds));
                                 LASSERT (rc == 0);
                         } else if (need_resched())

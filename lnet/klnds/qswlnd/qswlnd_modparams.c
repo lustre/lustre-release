@@ -29,9 +29,13 @@ static int ntxmsgs = KQSW_NTXMSGS;
 CFS_MODULE_PARM(ntxmsgs, "i", int, 0444,
 		"# 'normal' tx msg buffers");
 
-static int nnblk_txmsgs = KQSW_NNBLK_TXMSGS;
-CFS_MODULE_PARM(nnblk_txmsgs, "i", int, 0444,
-		"# 'reserved' tx msg buffers");
+static int credits = KQSW_CREDITS;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+		"# concurrent sends");
+
+static int peer_credits = KQSW_PEERCREDITS;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+		"# per-peer concurrent sends");
 
 static int nrxmsgs_large = KQSW_NRXMSGS_LARGE;
 CFS_MODULE_PARM(nrxmsgs_large, "i", int, 0444,
@@ -60,7 +64,8 @@ CFS_MODULE_PARM(optimized_gets, "i", int, 0644,
 kqswnal_tunables_t kqswnal_tunables = {
 	.kqn_tx_maxcontig       = &tx_maxcontig,
 	.kqn_ntxmsgs            = &ntxmsgs,
-	.kqn_nnblk_txmsgs       = &nnblk_txmsgs,
+	.kqn_credits            = &credits,
+	.kqn_peercredits        = &peer_credits,
 	.kqn_nrxmsgs_large      = &nrxmsgs_large,
 	.kqn_ep_envelopes_large = &ep_envelopes_large,
 	.kqn_nrxmsgs_small      = &nrxmsgs_small,
@@ -75,19 +80,21 @@ static ctl_table kqswnal_ctl_table[] = {
 	 sizeof (int), 0444, NULL, &proc_dointvec},
 	{2, "ntxmsgs", &ntxmsgs, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{3, "nnblk_txmsgs", &nnblk_txmsgs, 
+	{3, "credits", &credits, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{4, "nrxmsgs_large", &nrxmsgs_large, 
+	{4, "peer_credits", &peer_credits, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{5, "ep_envelopes_large", &ep_envelopes_large, 
+	{5, "nrxmsgs_large", &nrxmsgs_large, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{6, "nrxmsgs_small", &nrxmsgs_small, 
+	{6, "ep_envelopes_large", &ep_envelopes_large, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{7, "ep_envelopes_small", &ep_envelopes_small, 
+	{7, "nrxmsgs_small", &nrxmsgs_small, 
 	 sizeof (int), 0444, NULL, &proc_dointvec},
-	{8, "optimized_puts", &optimized_puts, 
+	{8, "ep_envelopes_small", &ep_envelopes_small, 
+	 sizeof (int), 0444, NULL, &proc_dointvec},
+	{9, "optimized_puts", &optimized_puts, 
 	 sizeof (int), 0644, NULL, &proc_dointvec},
-	{9, "optimized_gets", &optimized_gets, 
+	{10, "optimized_gets", &optimized_gets, 
 	 sizeof (int), 0644, NULL, &proc_dointvec},
 	{0}
 };

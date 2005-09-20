@@ -34,7 +34,6 @@ LNetMEAttach(unsigned int portal,
              lnet_handle_me_t *handle)
 {
         lnet_me_t     *me;
-        unsigned long  flags;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -46,7 +45,7 @@ LNetMEAttach(unsigned int portal,
         if (me == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         me->me_match_id = match_id;
         me->me_match_bits = match_bits;
@@ -63,7 +62,7 @@ LNetMEAttach(unsigned int portal,
 
         lnet_me2handle(handle, me);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         return 0;
 }
@@ -77,7 +76,6 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 {
         lnet_me_t     *current_me;
         lnet_me_t     *new_me;
-        unsigned long flags;
 
         LASSERT (the_lnet.ln_init);        
         LASSERT (the_lnet.ln_refcount > 0);
@@ -86,13 +84,13 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         if (new_me == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         current_me = lnet_handle2me(&current_meh);
         if (current_me == NULL) {
                 lnet_me_free (new_me);
 
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
                 return -ENOENT;
         }
 
@@ -111,7 +109,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
         lnet_me2handle(handle, new_me);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         return 0;
 }
@@ -119,14 +117,13 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 int
 LNetMEUnlink(lnet_handle_me_t meh)
 {
-        unsigned long flags;
         lnet_me_t     *me;
         int           rc;
 
         LASSERT (the_lnet.ln_init);        
         LASSERT (the_lnet.ln_refcount > 0);
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         me = lnet_handle2me(&meh);
         if (me == NULL) {
@@ -136,7 +133,7 @@ LNetMEUnlink(lnet_handle_me_t meh)
                 rc = 0;
         }
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         return (rc);
 }

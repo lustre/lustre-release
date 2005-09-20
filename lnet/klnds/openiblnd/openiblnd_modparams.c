@@ -49,11 +49,15 @@ CFS_MODULE_PARM(timeout, "i", int, 0644,
 
 static int ntx = IBNAL_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of 'normal' message descriptors");
+		"# of message descriptors");
 
-static int ntx_nblk = IBNAL_NTX_NBLK;
-CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
-		"# of 'reserved' message descriptors");
+static int credits = IBNAL_CREDITS;
+CFS_MODULE_PARM(credits, "i", int, 0444,
+		"# concurrent sends");
+
+static int peer_credits = IBNAL_PEERCREDITS;
+CFS_MODULE_PARM(peer_credits, "i", int, 0444,
+		"# concurrent sends to 1 peer");
 
 kib_tunables_t kibnal_tunables = {
 	.kib_n_connd                = &n_connd,
@@ -63,7 +67,8 @@ kib_tunables_t kibnal_tunables = {
 	.kib_cksum                  = &cksum,
         .kib_timeout                = &timeout,
         .kib_ntx                    = &ntx,
-        .kib_ntx_nblk               = &ntx_nblk,
+        .kib_credits                = &credits,
+        .kib_peercredits            = &peer_credits,
 };
 
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
@@ -83,7 +88,9 @@ static ctl_table kibnal_ctl_table[] = {
 	 sizeof(int), 0644, NULL, &proc_dointvec},
 	{7, "ntx", &ntx, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "ntx_nblk", &ntx_nblk, 
+	{8, "credits", &credits, 
+	 sizeof(int), 0444, NULL, &proc_dointvec},
+	{9, "peer_credits", &peer_credits, 
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{0}
 };

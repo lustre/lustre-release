@@ -30,7 +30,6 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
             lnet_handle_eq_t *handle)
 {
         lnet_eq_t     *eq;
-        unsigned long  flags;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -56,9 +55,9 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 
         PORTAL_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
         if (eq->eq_events == NULL) {
-                LNET_LOCK(flags);
+                LNET_LOCK();
                 lnet_eq_free (eq);
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
         }
 
         /* NB this resets all event sequence numbers to 0, to be earlier
@@ -71,12 +70,12 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
         eq->eq_refcount = 0;
         eq->eq_callback = callback;
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         lnet_initialise_handle (&eq->eq_lh, LNET_COOKIE_TYPE_EQ);
         list_add (&eq->eq_list, &the_lnet.ln_active_eqs);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         lnet_eq2handle(handle, eq);
         return (0);
@@ -88,21 +87,20 @@ LNetEQFree(lnet_handle_eq_t eqh)
         lnet_eq_t     *eq;
         int            size;
         lnet_event_t  *events;
-        unsigned long  flags;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         eq = lnet_handle2eq(&eqh);
         if (eq == NULL) {
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
                 return (-ENOENT);
         }
 
         if (eq->eq_refcount != 0) {
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
                 return (-EBUSY);
         }
 
@@ -114,7 +112,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
         list_del (&eq->eq_list);
         lnet_eq_free (eq);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         PORTAL_FREE(events, size * sizeof (lnet_event_t));
 
@@ -175,7 +173,6 @@ int
 LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
             lnet_event_t *event, int *which)
 {
-        unsigned long    flags;
         int              i;
         int              rc;
 #ifdef __KERNEL__
@@ -194,7 +191,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         if (neq < 1)
                 RETURN(-ENOENT);
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         for (;;) {
                 for (i = 0; i < neq; i++) {
@@ -202,14 +199,14 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 
                         rc = lib_get_event (eq, event);
                         if (rc != 0) {
-                                LNET_UNLOCK(flags);
+                                LNET_UNLOCK();
                                 *which = i;
                                 RETURN(rc);
                         }
                 }
                 
                 if (timeout_ms == 0) {
-                        LNET_UNLOCK (flags);
+                        LNET_UNLOCK ();
                         RETURN (0);
                 }
 
@@ -221,7 +218,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                 set_current_state(TASK_INTERRUPTIBLE);
                 cfs_waitq_add(&the_lnet.ln_waitq, &wl);
 
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
 
                 if (timeout_ms < 0) {
                         cfs_waitq_wait (&wl);
@@ -236,7 +233,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                                 timeout_ms = 0;
                 }
                 
-                LNET_LOCK(flags);
+                LNET_LOCK();
                 cfs_waitq_del(&the_lnet.ln_waitq, &wl);
 #else
                 if (timeout_ms < 0) {

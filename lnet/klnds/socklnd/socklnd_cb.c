@@ -376,8 +376,7 @@ ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 
         ltx = KSOCK_TX_2_KSOCK_LTX (tx);
 
-        lnet_finalize (peer->ksnp_ni, 
-                      ltx->ltx_private, ltx->ltx_cookie,
+        lnet_finalize (peer->ksnp_ni, ltx->ltx_cookie,
                       (tx->tx_resid == 0) ? 0 : -EIO);
 
         ksocknal_free_ltx (ltx);
@@ -1014,7 +1013,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 conn->ksnc_rx_state = SOCKNAL_RX_PARSE;
                 ksocknal_conn_addref(conn);     /* ++ref while parsing */
                 
-                rc = lnet_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, conn);
+                rc = lnet_parse(conn->ksnc_peer->ksnp_ni, &conn->ksnc_hdr, 
+                                conn->ksnc_peer->ksnp_id.nid, conn);
                 if (rc < 0) {
                         /* I just received garbage: give up on this conn */
                         ksocknal_new_packet(conn, 0);
@@ -1035,7 +1035,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
 
         case SOCKNAL_RX_BODY:
                 /* payload all received */
-                lnet_finalize(conn->ksnc_peer->ksnp_ni, NULL, conn->ksnc_cookie, 0);
+                lnet_finalize(conn->ksnc_peer->ksnp_ni, conn->ksnc_cookie, 0);
                 /* Fall through */
 
         case SOCKNAL_RX_SLOP:

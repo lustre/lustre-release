@@ -29,9 +29,9 @@ lolnd_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (!lntmsg->msg_routing);
         LASSERT (!lntmsg->msg_target_is_router);
 
-        rc = lnet_parse(ni, &lntmsg->msg_hdr, lntmsg);
+        rc = lnet_parse(ni, &lntmsg->msg_hdr, ni->ni_nid, lntmsg);
         if (rc >= 0)
-                lnet_finalize(ni, private, lntmsg, 0);
+                lnet_finalize(ni, lntmsg, 0);
         
         return rc;
 }
@@ -69,7 +69,7 @@ lolnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                                             sendmsg->msg_offset, mlen);
         }
 
-        lnet_finalize(ni, private, lntmsg, 0);
+        lnet_finalize(ni, lntmsg, 0);
         return 0;
 }
 

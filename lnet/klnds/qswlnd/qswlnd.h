@@ -86,8 +86,9 @@
  */
 #define KQSW_TX_MAXCONTIG               (1<<10) /* largest payload that gets made contiguous on transmit */
 
-#define KQSW_NTXMSGS                    8       /* # normal transmit messages */
-#define KQSW_NNBLK_TXMSGS               (PAGE_SIZE == 4096 ? 512 : 256)     /* # reserved transmit messages if can't block */ /* avoid qsnet crash b=5291 */
+#define KQSW_NTXMSGS                    256     /* # message descriptors */
+#define KQSW_CREDITS                    128     /* # concurrent sends */
+#define KQSW_PEERCREDITS                8       /* # concurrent sends to 1 node */
 
 #define KQSW_NRXMSGS_LARGE              64      /* # large receive buffers */
 #define KQSW_EP_ENVELOPES_LARGE         256     /* # large ep envelopes */
@@ -161,9 +162,8 @@ typedef struct kqswnal_rx
 typedef struct kqswnal_tx
 {
         struct list_head  ktx_list;             /* enqueue idle/active */
-        struct list_head  ktx_delayed_list;     /* enqueue delayedtxds */
+        struct list_head  ktx_schedlist;        /* enqueue on scheduler */
         struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
-        unsigned int      ktx_isnblk:1;         /* reserved descriptor? */
         unsigned int      ktx_state:7;          /* What I'm doing */
         unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
         uint32_t          ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
@@ -174,6 +174,7 @@ typedef struct kqswnal_tx
         void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
         unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
+        int               ktx_status;           /* completion status */
 
         /* debug/info fields */
         pid_t             ktx_launcher;         /* pid of launching process */
@@ -189,7 +190,7 @@ typedef struct kqswnal_tx
 #endif
 } kqswnal_tx_t;
 
-#define KTX_IDLE        0                       /* on kqn_(nblk_)idletxds */
+#define KTX_IDLE        0                       /* on kqn_idletxds */
 #define KTX_SENDING     1                       /* normal send */
 #define KTX_GETTING     2                       /* sending optimised get */
 #define KTX_PUTTING     3                       /* sending optimised put */
@@ -199,7 +200,8 @@ typedef struct
 {
         int               *kqn_tx_maxcontig;    /* maximum payload to defrag */
         int               *kqn_ntxmsgs;         /* # normal tx msgs */
-        int               *kqn_nnblk_txmsgs;    /* # reserved tx msgs */
+        int               *kqn_credits;         /* # concurrent sends */
+        int               *kqn_peercredits;     /* # concurrent sends to 1 peer */
         int               *kqn_nrxmsgs_large;   /* # 'large' rx msgs */
         int               *kqn_ep_envelopes_large; /* # 'large' rx ep envelopes */
         int               *kqn_nrxmsgs_small;   /* # 'small' rx msgs */
@@ -223,16 +225,15 @@ typedef struct
         kqswnal_tx_t      *kqn_txds;            /* stack of all the transmit descriptors */
 
         struct list_head   kqn_idletxds;        /* transmit descriptors free to use */
-        struct list_head   kqn_nblk_idletxds;   /* reserved free transmit descriptors */
         struct list_head   kqn_activetxds;      /* transmit descriptors being used */
         spinlock_t         kqn_idletxd_lock;    /* serialise idle txd access */
-        wait_queue_head_t  kqn_idletxd_waitq;   /* sender blocks here waiting for idle txd */
         atomic_t           kqn_pending_txs;     /* # transmits being prepped */
 
         spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
         wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
 
         struct list_head   kqn_readyrxds;       /* rxds full of data */
+        struct list_head   kqn_donetxds;        /* completed transmits */
         struct list_head   kqn_delayedtxds;     /* delayed transmits */
 
 #if MULTIRAIL_EKC

@@ -82,8 +82,8 @@
 
 /* Default Tunable Values */
 #define GMNAL_PORT                 4            /* which port to use */
-#define GMNAL_NTX                  32           /* # tx descs */
-#define GMNAL_NTX_NBLK             256          /* # reserved tx descs */
+#define GMNAL_NTX                  256          /* # tx descs */
+#define GMNAL_NTX_PEER             8            /* # concurrent sends per peer */
 #define GMNAL_NRX_SMALL            128          /* # small receives to post */
 #define GMNAL_NRX_LARGE            64           /* # large receives to post */
 #define GMNAL_NLARGE_TX_BUFS       32           /* # large tx buffers */
@@ -133,7 +133,6 @@ typedef struct gmnal_txbuf {
 
 typedef struct gmnal_tx {
         struct list_head         tx_list;       /* queue */
-        int                      tx_isnblk:1;   /* reserved for non-blocking? */
         int                      tx_credit:1;   /* consumed a credit? */
         int                      tx_large_iskiov:1; /* large is in kiovs? */
         struct gmnal_ni         *tx_gmni;       /* owning NI */
@@ -187,7 +186,6 @@ typedef struct gmnal_ni {
         int               gmni_shutdown;	/* tell all threads to exit */
 
         struct list_head  gmni_idle_txs;        /* idle tx's */
-        struct list_head  gmni_nblk_idle_txs;   /* reserved for non-blocking callers */
         wait_queue_head_t gmni_idle_tx_wait;    /* block here for idle tx */
         int               gmni_tx_credits;      /* # transmits still possible */
         struct list_head  gmni_idle_ltxbs;      /* idle large tx buffers */
@@ -202,7 +200,7 @@ typedef struct gmnal_ni {
 typedef struct {
         int              *gm_port;
         int              *gm_ntx;
-        int              *gm_ntx_nblk;
+        int              *gm_ntx_peer;
         int              *gm_nlarge_tx_bufs;
         int              *gm_nrx_small;
         int              *gm_nrx_large;
@@ -240,7 +238,7 @@ void gmnal_yield(int delay);
 
 /* gmnal_comm.c */
 void gmnal_post_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx);
-gmnal_tx_t *gmnal_get_tx(gmnal_ni_t *gmni, int may_block);
+gmnal_tx_t *gmnal_get_tx(gmnal_ni_t *gmni);
 void gmnal_tx_done(gmnal_tx_t *tx, int rc);
 void gmnal_pack_msg(gmnal_ni_t *gmni, gmnal_msg_t *msg,
                     lnet_nid_t dstnid, int type);

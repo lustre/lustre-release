@@ -199,7 +199,6 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 {
         lnet_me_t     *me;
         lnet_libmd_t  *md;
-        unsigned long  flags;
         int            rc;
 
         LASSERT (the_lnet.ln_init);
@@ -213,7 +212,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         if (md == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         me = lnet_handle2me(&meh);
         if (me == NULL) {
@@ -228,14 +227,14 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 
                         lnet_md2handle(handle, md);
 
-                        LNET_UNLOCK(flags);
+                        LNET_UNLOCK();
                         return (0);
                 }
         }
 
         lnet_md_free (md);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
         return (rc);
 }
 
@@ -243,7 +242,6 @@ int
 LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
         lnet_libmd_t  *md;
-        unsigned long  flags;
         int            rc;
 
         LASSERT (the_lnet.ln_init);
@@ -257,20 +255,20 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
         if (md == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         rc = lib_md_build(md, &umd, unlink);
 
         if (rc == 0) {
                 lnet_md2handle(handle, md);
 
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
                 return (0);
         }
 
         lnet_md_free (md);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
         return (rc);
 }
 
@@ -279,16 +277,15 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 {
         lnet_event_t     ev;
         lnet_libmd_t    *md;
-        unsigned long    flags;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
 
         md = lnet_handle2md(&mdh);
         if (md == NULL) {
-                LNET_UNLOCK(flags);
+                LNET_UNLOCK();
                 return -ENOENT;
         }
 
@@ -306,12 +303,12 @@ LNetMDUnlink (lnet_handle_md_t mdh)
                 lnet_md_deconstruct(md, &ev.md);
                 lnet_md2handle(&ev.md_handle, md);
 
-                lnet_enq_event_locked(NULL, md->md_eq, &ev);
+                lnet_enq_event_locked(md->md_eq, &ev);
         }
 
         lnet_md_unlink(md);
 
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
         return 0;
 }
 

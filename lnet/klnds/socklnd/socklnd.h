@@ -58,6 +58,8 @@
 #define SOCKNAL_KEEPALIVE_IDLE   30             /* # seconds idle before 1st probe */
 #define SOCKNAL_KEEPALIVE_COUNT  10             /* # unanswered probes to determine peer death */
 #define SOCKNAL_KEEPALIVE_INTVL  2              /* seconds between probes */
+#define SOCKNAL_CREDITS          256            /* # concurrent sends */
+#define SOCKNAL_PEERCREDITS      8              /* # concurrent sends to 1 peer */
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
@@ -126,6 +128,8 @@ typedef struct
         int              *ksnd_keepalive_idle;  /* # idle secs before 1st probe */
         int              *ksnd_keepalive_count; /* # probes */
         int              *ksnd_keepalive_intvl; /* time between probes */
+        int              *ksnd_credits;         /* # concurrent sends */
+        int              *ksnd_peercredits;     /* # concurrent sends to 1 peer */
 #if SOCKNAL_ZC
         unsigned int     *ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif

@@ -56,7 +56,7 @@ kibnal_tx_done (kib_tx_t *tx)
                 if (tx->tx_lntmsg[i] == NULL)
                         continue;
 
-                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_lntmsg[i], rc);
+                lnet_finalize (kibnal_data.kib_ni, tx->tx_lntmsg[i], rc);
                 tx->tx_lntmsg[i] = NULL;
         }
         
@@ -70,73 +70,44 @@ kibnal_tx_done (kib_tx_t *tx)
 
         spin_lock(&kibnal_data.kib_tx_lock);
 
-        if (tx->tx_isnblk) {
-                list_add (&tx->tx_list, &kibnal_data.kib_idle_nblk_txs);
-        } else {
-                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
-                wake_up (&kibnal_data.kib_idle_tx_waitq);
-        }
+        list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
         spin_unlock(&kibnal_data.kib_tx_lock);
 }
 
 kib_tx_t *
-kibnal_get_idle_tx (int may_block) 
+kibnal_get_idle_tx (void) 
 {
-        kib_tx_t      *tx = NULL;
-        ENTRY;
+        kib_tx_t      *tx;
         
-        for (;;) {
-                spin_lock(&kibnal_data.kib_tx_lock);
+        spin_lock(&kibnal_data.kib_tx_lock);
 
-                /* "normal" descriptor is free */
-                if (!list_empty (&kibnal_data.kib_idle_txs)) {
-                        tx = list_entry (kibnal_data.kib_idle_txs.next,
-                                         kib_tx_t, tx_list);
-                        break;
-                }
-
-                if (!may_block) {
-                        /* may dip into reserve pool */
-                        if (list_empty (&kibnal_data.kib_idle_nblk_txs)) {
-                                CERROR ("reserved tx desc pool exhausted\n");
-                                break;
-                        }
-
-                        tx = list_entry (kibnal_data.kib_idle_nblk_txs.next,
-                                         kib_tx_t, tx_list);
-                        break;
-                }
-
-                /* block for idle tx */
+        /* "normal" descriptor is free */
+        if (list_empty (&kibnal_data.kib_idle_txs)) {
                 spin_unlock(&kibnal_data.kib_tx_lock);
-
-                wait_event (kibnal_data.kib_idle_tx_waitq,
-                            !list_empty (&kibnal_data.kib_idle_txs) ||
-                            kibnal_data.kib_shutdown);
+                return NULL;
         }
 
-        if (tx != NULL) {
-                list_del (&tx->tx_list);
+        tx = list_entry (kibnal_data.kib_idle_txs.next, kib_tx_t, tx_list);
+        list_del (&tx->tx_list);
 
-                /* Allocate a new completion cookie.  It might not be needed,
-                 * but we've got a lock right now and we're unlikely to
-                 * wrap... */
-                tx->tx_cookie = kibnal_data.kib_next_tx_cookie++;
-
-                LASSERT (tx->tx_nwrq == 0);
-                LASSERT (!tx->tx_queued);
-                LASSERT (tx->tx_sending == 0);
-                LASSERT (!tx->tx_waiting);
-                LASSERT (tx->tx_status == 0);
-                LASSERT (tx->tx_conn == NULL);
-                LASSERT (tx->tx_lntmsg[0] == NULL);
-                LASSERT (tx->tx_lntmsg[1] == NULL);
-        }
+        /* Allocate a new completion cookie.  It might not be needed,
+         * but we've got a lock right now and we're unlikely to
+         * wrap... */
+        tx->tx_cookie = kibnal_data.kib_next_tx_cookie++;
 
         spin_unlock(&kibnal_data.kib_tx_lock);
+
+        LASSERT (tx->tx_nwrq == 0);
+        LASSERT (!tx->tx_queued);
+        LASSERT (tx->tx_sending == 0);
+        LASSERT (!tx->tx_waiting);
+        LASSERT (tx->tx_status == 0);
+        LASSERT (tx->tx_conn == NULL);
+        LASSERT (tx->tx_lntmsg[0] == NULL);
+        LASSERT (tx->tx_lntmsg[1] == NULL);
         
-        RETURN(tx);
+        return tx;
 }
 
 int
@@ -297,7 +268,7 @@ kibnal_handle_completion(kib_conn_t *conn, int txtype, int status, __u64 cookie)
 void
 kibnal_send_completion (kib_conn_t *conn, int type, int status, __u64 cookie) 
 {
-        kib_tx_t    *tx = kibnal_get_idle_tx(0);
+        kib_tx_t    *tx = kibnal_get_idle_tx();
         
         if (tx == NULL) {
                 CERROR("Can't get tx for completion %x for %s\n",
@@ -351,12 +322,14 @@ kibnal_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr,
+                                msg->ibm_srcnid, rx);
                 repost = rc < 0;                /* repost on error */
                 break;
                 
         case IBNAL_MSG_PUT_REQ:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.putreq.ibprm_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.putreq.ibprm_hdr,
+                                msg->ibm_srcnid, rx);
                 repost = rc < 0;                /* repost on error */
                 break;
 
@@ -412,7 +385,8 @@ kibnal_handle_rx (kib_rx_t *rx)
                 break;
 
         case IBNAL_MSG_GET_REQ:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.get.ibgm_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.get.ibgm_hdr,
+                                msg->ibm_srcnid, rx);
                 repost = rc < 0;                /* repost on error */
                 break;
 
@@ -878,7 +852,7 @@ kibnal_check_sends (kib_conn_t *conn)
             conn->ibc_outstanding_credits >= IBNAL_CREDIT_HIGHWATER) {
                 spin_unlock(&conn->ibc_lock);
                 
-                tx = kibnal_get_idle_tx(0);     /* don't block */
+                tx = kibnal_get_idle_tx();
                 if (tx != NULL)
                         kibnal_init_tx_msg(tx, IBNAL_MSG_NOOP, 0);
 
@@ -1424,9 +1398,13 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
 
-                tx = kibnal_get_idle_tx(1);     /* may block; caller is an app thread */
-                LASSERT (tx != NULL);
-
+                tx = kibnal_get_idle_tx();
+                if (tx == NULL) {
+                        CERROR("Can allocate txd for GET to %s: \n",
+                               libcfs_nid2str(target.nid));
+                        return -ENOMEM;
+                }
+                
                 ibmsg = tx->tx_msg;
                 ibmsg->ibm_u.get.ibgm_hdr = *hdr;
                 ibmsg->ibm_u.get.ibgm_cookie = tx->tx_cookie;
@@ -1493,7 +1471,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         /* NB handle_rx() will send GET_NAK when I return to
                          * it from here, unless I set rx_responded! */
 
-                        tx = kibnal_get_idle_tx(0);
+                        tx = kibnal_get_idle_tx();
                         if (tx == NULL) {
                                 CERROR("Can't get tx for REPLY to %s\n",
                                        libcfs_nid2str(target.nid));
@@ -1528,8 +1506,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                                        libcfs_nid2str(target.nid), rc);
                         } else if (rc == 0) {
                                 /* No RDMA: local completion may happen now! */
-                                lnet_finalize (kibnal_data.kib_ni, NULL, 
-                                               lntmsg, 0);
+                                lnet_finalize (kibnal_data.kib_ni, lntmsg, 0);
                         } else {
                                 /* RDMA: lnet_finalize(lntmsg) when it
                                  * completes */
@@ -1550,7 +1527,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         break;                  /* send IMMEDIATE */
 
                 /* may block if caller is app thread */
-                tx = kibnal_get_idle_tx(!(routing || type == LNET_MSG_REPLY));
+                tx = kibnal_get_idle_tx();
                 if (tx == NULL) {
                         CERROR("Can't allocate %s txd for %s\n",
                                type == LNET_MSG_PUT ? "PUT" : "REPLY",
@@ -1589,9 +1566,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         LASSERT (offsetof(kib_msg_t, ibm_u.immediate.ibim_payload[payload_nob])
                  <= IBNAL_MSG_SIZE);
 
-        tx = kibnal_get_idle_tx(!(routing ||
-                                  type == LNET_MSG_ACK ||
-                                  type == LNET_MSG_REPLY));
+        tx = kibnal_get_idle_tx();
         if (tx == NULL) {
                 CERROR ("Can't send %d to %s: tx descs exhausted\n",
                         type, libcfs_nid2str(target.nid));
@@ -1663,18 +1638,18 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                                            IBNAL_MSG_SIZE, rxmsg,
                                            offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
                                            mlen);
-                lnet_finalize (ni, NULL, lntmsg, 0);
+                lnet_finalize (ni, lntmsg, 0);
                 break;
 
         case IBNAL_MSG_PUT_REQ:
                 if (mlen == 0) {
-                        lnet_finalize(ni, NULL, lntmsg, 0);
+                        lnet_finalize(ni, lntmsg, 0);
                         kibnal_send_completion(rx->rx_conn, IBNAL_MSG_PUT_NAK, 0,
                                                rxmsg->ibm_u.putreq.ibprm_cookie);
                         break;
                 }
                 
-                tx = kibnal_get_idle_tx(0);
+                tx = kibnal_get_idle_tx();
                 if (tx == NULL) {
                         CERROR("Can't allocate tx for %s\n",
                                libcfs_nid2str(conn->ibc_peer->ibp_nid));

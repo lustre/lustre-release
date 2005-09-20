@@ -120,43 +120,26 @@ gmnal_unpack_msg(gmnal_ni_t *gmni, gmnal_rx_t *rx)
 }
 
 gmnal_tx_t *
-gmnal_get_tx(gmnal_ni_t *gmni, int may_block)
+gmnal_get_tx(gmnal_ni_t *gmni)
 {
 	gmnal_tx_t	 *tx = NULL;
 
         spin_lock(&gmni->gmni_tx_lock);
 
-        while (!gmni->gmni_shutdown) {
-
-                if (!list_empty(&gmni->gmni_idle_txs)) {
-                        tx = list_entry(gmni->gmni_idle_txs.next,
-                                        gmnal_tx_t, tx_list);
-                        break;
-                }
-                
-                if (!may_block) {
-                        if (!list_empty(&gmni->gmni_nblk_idle_txs))
-                                tx = list_entry(gmni->gmni_nblk_idle_txs.next,
-                                                gmnal_tx_t, tx_list);
-                        break;
-                }
-                
+        if (gmni->gmni_shutdown ||
+            list_empty(&gmni->gmni_idle_txs)) {
                 spin_unlock(&gmni->gmni_tx_lock);
-                wait_event(gmni->gmni_idle_tx_wait,
-                           gmni->gmni_shutdown ||
-                           !list_empty(&gmni->gmni_idle_txs));
-                spin_lock(&gmni->gmni_tx_lock);
+                return NULL;
         }
         
-        if (tx != NULL) {
-                LASSERT (tx->tx_lntmsg == NULL);
-                LASSERT (tx->tx_ltxb == NULL);
-                LASSERT (!tx->tx_credit);
-                
-                list_del(&tx->tx_list);
-        }
-        
+        tx = list_entry(gmni->gmni_idle_txs.next, gmnal_tx_t, tx_list);
+        list_del(&tx->tx_list);
+
         spin_unlock(&gmni->gmni_tx_lock);
+
+        LASSERT (tx->tx_lntmsg == NULL);
+        LASSERT (tx->tx_ltxb == NULL);
+        LASSERT (!tx->tx_credit);
         
         return tx;
 }
@@ -184,20 +167,12 @@ gmnal_tx_done(gmnal_tx_t *tx, int rc)
                 tx->tx_credit = 0;
         }
         
-        if (tx->tx_isnblk) {
-                list_add_tail(&tx->tx_list, &gmni->gmni_nblk_idle_txs);
-        } else {
-                list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
-                wake_idle = 1;
-        }
+        list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
 
         if (wake_sched)
                 gmnal_check_txqueues_locked(gmni);
 
         spin_unlock(&gmni->gmni_tx_lock);
-
-        if (wake_idle)
-                wake_up(&gmni->gmni_idle_tx_wait);
 }
 
 void 
@@ -315,7 +290,7 @@ gmnal_check_txqueues_locked (gmnal_ni_t *gmni)
                         tx->tx_msgnob += tx->tx_large_nob;
 
                         /* We've copied everything... */
-                        lnet_finalize(gmni->gmni_ni, NULL, tx->tx_lntmsg, 0);
+                        lnet_finalize(gmni->gmni_ni, tx->tx_lntmsg, 0);
                         tx->tx_lntmsg = NULL;
 
                         spin_lock(&gmni->gmni_tx_lock);
@@ -459,6 +434,7 @@ gmnal_rx_thread(void *arg)
                         LASSERT (msg->gmm_type == GMNAL_MSG_IMMEDIATE);
                         rc =  lnet_parse(gmni->gmni_ni, 
                                          &msg->gmm_u.immediate.gmim_hdr,
+                                         msg->gmm_srcnid,
                                          rx);
                 }
 

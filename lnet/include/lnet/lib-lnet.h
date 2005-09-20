@@ -38,16 +38,16 @@ static inline int lnet_md_exhausted (lnet_libmd_t *md)
 }
 
 #ifdef __KERNEL__
-#define LNET_LOCK(flags)                                                \
-        spin_lock_irqsave(&the_lnet.ln_lock, flags)                 
-#define LNET_UNLOCK(flags)                                              \
-        spin_unlock_irqrestore(&the_lnet.ln_lock, flags)               
+#define LNET_LOCK()                                                \
+        spin_lock(&the_lnet.ln_lock)                 
+#define LNET_UNLOCK()                                              \
+        spin_unlock(&the_lnet.ln_lock)               
 #define LNET_MUTEX_DOWN(m) mutex_down(m)
 #define LNET_MUTEX_UP(m)   mutex_up(m)
 #else                                                                   
-#define LNET_LOCK(flags)                                                \
-        (pthread_mutex_lock(&the_lnet.ln_mutex), (flags) = 0)       
-#define LNET_UNLOCK(flags)                                              \
+#define LNET_LOCK()                                                \
+        pthread_mutex_lock(&the_lnet.ln_mutex)       
+#define LNET_UNLOCK()                                              \
         pthread_mutex_unlock(&the_lnet.ln_mutex)
 #define LNET_MUTEX_DOWN(m) pthread_mutex_lock(m)
 #define LNET_MUTEX_UP(m)   pthread_mutex_unlock(m)
@@ -90,12 +90,11 @@ static inline lnet_eq_t *
 lnet_eq_alloc (void)
 {
         /* NEVER called with liblock held */
-        unsigned long  flags;
         lnet_eq_t     *eq;
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
         eq = (lnet_eq_t *)lnet_freelist_alloc(&the_lnet.ln_free_eqs);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         return (eq);
 }
@@ -111,12 +110,11 @@ static inline lnet_libmd_t *
 lnet_md_alloc (lnet_md_t *umd)
 {
         /* NEVER called with liblock held */
-        unsigned long  flags;
         lnet_libmd_t  *md;
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
         md = (lnet_libmd_t *)lnet_freelist_alloc(&the_lnet.ln_free_mds);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         return (md);
 }
@@ -132,12 +130,11 @@ static inline lnet_me_t *
 lnet_me_alloc (void)
 {
         /* NEVER called with liblock held */
-        unsigned long  flags;
         lnet_me_t     *me;
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
         me = (lnet_me_t *)lnet_freelist_alloc(&the_lnet.ln_free_mes);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
         
         return (me);
 }
@@ -153,17 +150,15 @@ static inline lnet_msg_t *
 lnet_msg_alloc (void)
 {
         /* NEVER called with liblock held */
-        unsigned long  flags;
         lnet_msg_t    *msg;
         
-        LNET_LOCK(flags);
+        LNET_LOCK();
         msg = (lnet_msg_t *)lnet_freelist_alloc(&the_lnet.ln_free_msgs);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
-                msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
         }
         return(msg);
 }
@@ -172,6 +167,7 @@ static inline void
 lnet_msg_free (lnet_msg_t *msg)
 {
         /* ALWAYS called with liblock held */
+        LASSERT (!msg->msg_onactivelist);
         lnet_freelist_free(&the_lnet.ln_free_msgs, msg);
 }
 
@@ -259,15 +255,11 @@ lnet_msg_alloc(void)
         /* NEVER called with liblock held; may be in interrupt... */
         lnet_msg_t *msg;
 
-        if (in_interrupt())
-                PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
-        else
-                PORTAL_ALLOC(msg, sizeof(*msg));
+        PORTAL_ALLOC(msg, sizeof(*msg));
 
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));
-                msg->msg_ack_wmd = LNET_WIRE_HANDLE_NONE;
         }
         return (msg);
 }
@@ -276,6 +268,7 @@ static inline void
 lnet_msg_free(lnet_msg_t *msg)
 {
         /* ALWAYS called with liblock held */
+        LASSERT (!msg->msg_onactivelist);
         PORTAL_FREE(msg, sizeof(*msg));
 }
 #endif
@@ -360,22 +353,23 @@ lnet_handle2me (lnet_handle_me_t *handle)
         return (lh_entry (lh, lnet_me_t, me_lh));
 }
 
-/******************************************************************************/
-/* Portals Router */
+static inline void
+lnet_peer_addref_locked(lnet_peer_t *lp)
+{
+        LASSERT (lp->lp_refcount > 0);
+        lp->lp_refcount++;
+}
 
-/* NI APIs */
-int       lnet_forwarding(void);
-lnet_nid_t lnet_lookup(lnet_ni_t **ni, lnet_nid_t nid, int nob);
-int       lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
+extern void lnet_destroy_peer_locked(lnet_peer_t *lp);
 
-/* internal APIs */
-int       kpr_distance(lnet_nid_t nid, int *order);
-int       kpr_ctl(unsigned int cmd, void *arg);
-int       kpr_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
-int       kpr_initialise(void);
-void      kpr_finalise(void);
-
-/******************************************************************************/
+static inline void
+lnet_peer_decref_locked(lnet_peer_t *lp)
+{
+        LASSERT (lp->lp_refcount > 0);
+        lp->lp_refcount--;
+        if (lp->lp_refcount == 0)
+                lnet_destroy_peer_locked(lp);
+}
 
 static inline void
 lnet_ni_addref_locked(lnet_ni_t *ni) 
@@ -387,11 +381,9 @@ lnet_ni_addref_locked(lnet_ni_t *ni)
 static inline void
 lnet_ni_addref(lnet_ni_t *ni) 
 {
-        unsigned long flags;
-        
-        LNET_LOCK(flags);
+        LNET_LOCK();
         lnet_ni_addref_locked(ni);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 }
 
 static inline void
@@ -406,11 +398,9 @@ lnet_ni_decref_locked(lnet_ni_t *ni)
 static inline void
 lnet_ni_decref(lnet_ni_t *ni)
 {
-        unsigned long flags;
-        
-        LNET_LOCK(flags);
+        LNET_LOCK();
         lnet_ni_decref_locked(ni);
-        LNET_UNLOCK(flags);
+        LNET_UNLOCK();
 }
 
 static inline lnet_nid_t
@@ -433,46 +423,87 @@ lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid)
                  PTL_NIDADDR(ptl_nid) == PTL_NIDADDR(lnet_nid)));
 }
 
+static inline struct list_head *
+lnet_nid2peerhash (lnet_nid_t nid)
+{
+	unsigned int idx = PTL_NIDADDR(nid) % LNET_PEER_HASHSIZE;
+
+        return &the_lnet.ln_peer_hash[idx];
+}
+
 extern lnd_t      the_lolnd;
 extern lnet_ni_t *lnet_loni;
 
-extern lnet_ni_t *lnet_net2ni (__u32 net);
-extern int lnet_islocalnid (lnet_nid_t nid);
-extern int lnet_islocalnet (__u32 net, int *orderp);
-extern void lnet_enq_event_locked (void *private,
-                                   lnet_eq_t *eq, lnet_event_t *ev);
-extern void lnet_finalize (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int rc);
-extern int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr, void *private);
-extern lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
-extern void lnet_print_hdr (lnet_hdr_t * hdr);
-extern int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
+extern lnet_ni_t *lnet_net2ni_locked (__u32 net);
+static inline lnet_ni_t *
+lnet_net2ni (__u32 net) 
+{
+        lnet_ni_t *ni;
 
-extern unsigned int lnet_iov_nob (unsigned int niov, struct iovec *iov);
-extern int lnet_extract_iov (int dst_niov, struct iovec *dst,
-                            int src_niov, struct iovec *src,
-                            unsigned int offset, unsigned int len);
+        LNET_LOCK();
+        ni = lnet_net2ni_locked(net);
+        LNET_UNLOCK();
 
-extern unsigned int lnet_kiov_nob (unsigned int niov, lnet_kiov_t *iov);
-extern int lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst, 
-                             int src_niov, lnet_kiov_t *src,
-                             unsigned int offset, unsigned int len);
+        return ni;
+}
 
-extern void lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, 
-                               unsigned int doffset, 
-                               unsigned int nsiov, struct iovec *siov, 
-                               unsigned int soffset, unsigned int nob);
-extern void lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, 
-                                unsigned int iovoffset,
-                                unsigned int nkiov, lnet_kiov_t *kiov, 
-                                unsigned int kiovoffset, unsigned int nob);
-extern void lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, 
-                                unsigned int kiovoffset,
-                                unsigned int niov, struct iovec *iov, 
-                                unsigned int iovoffset, unsigned int nob);
-extern void lnet_copy_kiov2kiov (unsigned int ndkiov, lnet_kiov_t *dkiov, 
-                                 unsigned int doffset, 
-                                 unsigned int nskiov, lnet_kiov_t *skiov, 
-                                 unsigned int soffset, unsigned int nob);
+int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
+int lnet_distance(lnet_nid_t nid, int *order);
+int lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
+int lnet_del_route (__u32 net, lnet_nid_t gw_nid);
+int lnet_get_route (int idx, __u32 *net, __u32 *hops, 
+                    lnet_nid_t *gateway, __u32 *alive);
+void lnet_proc_init(void);
+void lnet_proc_fini(void);
+int lnet_router_init(void);
+void lnet_router_fini(void);
+lnet_remotenet_t *lnet_find_net_locked (__u32 net);
+
+int lnet_islocalnid(lnet_nid_t nid);
+int lnet_islocalnet(__u32 net, int *orderp);
+
+void lnet_enq_event_locked(lnet_eq_t *eq, lnet_event_t *ev);
+void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
+                    unsigned int offset, unsigned int len);
+int lnet_send(lnet_ni_t *ni, lnet_msg_t *msg);
+void lnet_return_credits_locked (lnet_msg_t *msg);
+int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr, 
+                lnet_nid_t fromnid, void *private);
+void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
+               unsigned int offset, unsigned int mlen, unsigned int rlen);
+lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
+void lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int rc);
+
+char *lnet_msgtyp2str (int type);
+void lnet_print_hdr (lnet_hdr_t * hdr);
+int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
+
+unsigned int lnet_iov_nob (unsigned int niov, struct iovec *iov);
+int lnet_extract_iov (int dst_niov, struct iovec *dst,
+                      int src_niov, struct iovec *src,
+                      unsigned int offset, unsigned int len);
+
+unsigned int lnet_kiov_nob (unsigned int niov, lnet_kiov_t *iov);
+int lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst, 
+                      int src_niov, lnet_kiov_t *src,
+                      unsigned int offset, unsigned int len);
+
+void lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, 
+                        unsigned int doffset, 
+                        unsigned int nsiov, struct iovec *siov, 
+                        unsigned int soffset, unsigned int nob);
+void lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, 
+                         unsigned int iovoffset,
+                         unsigned int nkiov, lnet_kiov_t *kiov, 
+                         unsigned int kiovoffset, unsigned int nob);
+void lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, 
+                         unsigned int kiovoffset,
+                         unsigned int niov, struct iovec *iov, 
+                         unsigned int iovoffset, unsigned int nob);
+void lnet_copy_kiov2kiov (unsigned int ndkiov, lnet_kiov_t *dkiov, 
+                          unsigned int doffset, 
+                          unsigned int nskiov, lnet_kiov_t *skiov, 
+                          unsigned int soffset, unsigned int nob);
 
 static inline void
 lnet_copy_iov2flat(int dlen, void *dest, unsigned int doffset,
@@ -512,35 +543,35 @@ lnet_copy_flat2kiov(unsigned int ndiov, lnet_kiov_t *dkiov, unsigned int doffset
                            1, &siov, soffset, nob);
 }
 
-extern int lnet_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
-                     int type, lnet_process_id_t target,
-                     lnet_libmd_t *md, unsigned int offset, unsigned int len);
+void lnet_me_unlink(lnet_me_t *me);
 
-extern void lnet_me_unlink(lnet_me_t *me);
+void lnet_md_unlink(lnet_libmd_t *md);
+void lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd);
 
-extern void lnet_md_unlink(lnet_libmd_t *md);
-extern void lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd);
-
-extern void lnet_register_lnd(lnd_t *lnd);
-extern void lnet_unregister_lnd(lnd_t *lnd);
-extern int lnet_set_ip_niaddr (lnet_ni_t *ni);
+void lnet_register_lnd(lnd_t *lnd);
+void lnet_unregister_lnd(lnd_t *lnd);
+int lnet_set_ip_niaddr (lnet_ni_t *ni);
 
 #ifdef __KERNEL__
-extern int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
-                             __u32 local_ip, __u32 peer_ip, int peer_port);
-extern void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
-                                      __u32 peer_ip, int port);
-
-extern int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
-
-extern int lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic);
-extern int lnet_acceptor_timeout(void);
-extern int lnet_acceptor_port(void);
+int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
+                 __u32 local_ip, __u32 peer_ip, int peer_port);
+void lnet_connect_console_error(int rc, lnet_nid_t peer_nid,
+                                __u32 peer_ip, int port);
+int lnet_count_acceptor_nis(lnet_ni_t **first_ni);
+int lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic);
+int lnet_acceptor_timeout(void);
+int lnet_acceptor_port(void);
 #endif
-extern int lnet_acceptor_start(void);
-extern void lnet_acceptor_stop(void);
+int lnet_acceptor_start(void);
+void lnet_acceptor_stop(void);
 
-extern int lnet_parse_routes (char *route_str);
-extern int lnet_parse_networks (struct list_head *nilist, char *networks);
+int lnet_parse_routes (char *route_str);
+int lnet_parse_networks (struct list_head *nilist, char *networks);
+
+int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid);
+lnet_peer_t *lnet_find_peer_locked (lnet_nid_t nid);
+void lnet_clear_peer_table(void);
+void lnet_destroy_peer_table(void);
+int lnet_create_peer_table(void);
 
 #endif

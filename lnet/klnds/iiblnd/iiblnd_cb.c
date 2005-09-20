@@ -91,7 +91,7 @@ kibnal_tx_done (kib_tx_t *tx)
                 if (tx->tx_lntmsg[i] == NULL)
                         continue;
 
-                lnet_finalize (kibnal_data.kib_ni, NULL, tx->tx_lntmsg[i],
+                lnet_finalize (kibnal_data.kib_ni, tx->tx_lntmsg[i],
                                tx->tx_status);
                 tx->tx_lntmsg[i] = NULL;
         }
@@ -107,73 +107,43 @@ kibnal_tx_done (kib_tx_t *tx)
 
         spin_lock_irqsave (&kibnal_data.kib_tx_lock, flags);
 
-        if (tx->tx_isnblk) {
-                list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_nblk_txs);
-        } else {
-                list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_txs);
-                wake_up (&kibnal_data.kib_idle_tx_waitq);
-        }
+        list_add_tail (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
         spin_unlock_irqrestore (&kibnal_data.kib_tx_lock, flags);
 }
 
 static kib_tx_t *
-kibnal_get_idle_tx (int may_block) 
+kibnal_get_idle_tx (void) 
 {
         unsigned long  flags;
         kib_tx_t      *tx = NULL;
-        ENTRY;
         
-        for (;;) {
-                spin_lock_irqsave (&kibnal_data.kib_tx_lock, flags);
+        spin_lock_irqsave (&kibnal_data.kib_tx_lock, flags);
 
-                /* "normal" descriptor is free */
-                if (!list_empty (&kibnal_data.kib_idle_txs)) {
-                        tx = list_entry (kibnal_data.kib_idle_txs.next,
-                                         kib_tx_t, tx_list);
-                        break;
-                }
-
-                if (!may_block) {
-                        /* may dip into reserve pool */
-                        if (list_empty (&kibnal_data.kib_idle_nblk_txs)) {
-                                CERROR ("reserved tx desc pool exhausted\n");
-                                break;
-                        }
-
-                        tx = list_entry (kibnal_data.kib_idle_nblk_txs.next,
-                                         kib_tx_t, tx_list);
-                        break;
-                }
-
-                /* block for idle tx */
+        if (list_empty (&kibnal_data.kib_idle_txs)) {
                 spin_unlock_irqrestore (&kibnal_data.kib_tx_lock, flags);
-
-                wait_event (kibnal_data.kib_idle_tx_waitq,
-                            !list_empty (&kibnal_data.kib_idle_txs) ||
-                            kibnal_data.kib_shutdown);
+                return NULL;
         }
+        
+        tx = list_entry (kibnal_data.kib_idle_txs.next, kib_tx_t, tx_list);
+        list_del (&tx->tx_list);
 
-        if (tx != NULL) {
-                list_del (&tx->tx_list);
-
-                /* Allocate a new passive RDMA completion cookie.  It might
-                 * not be needed, but we've got a lock right now and we're
-                 * unlikely to wrap... */
-                tx->tx_passive_rdma_cookie = kibnal_data.kib_next_tx_cookie++;
-
-                LASSERT (tx->tx_mapped == KIB_TX_UNMAPPED);
-                LASSERT (tx->tx_nsp == 0);
-                LASSERT (tx->tx_sending == 0);
-                LASSERT (tx->tx_status == 0);
-                LASSERT (tx->tx_conn == NULL);
-                LASSERT (!tx->tx_passive_rdma);
-                LASSERT (!tx->tx_passive_rdma_wait);
-                LASSERT (tx->tx_lntmsg[0] == NULL);
-                LASSERT (tx->tx_lntmsg[1] == NULL);
-        }
+        /* Allocate a new passive RDMA completion cookie.  It might not be
+         * needed, but we've got a lock right now and we're unlikely to
+         * wrap... */
+        tx->tx_passive_rdma_cookie = kibnal_data.kib_next_tx_cookie++;
 
         spin_unlock_irqrestore (&kibnal_data.kib_tx_lock, flags);
+
+        LASSERT (tx->tx_mapped == KIB_TX_UNMAPPED);
+        LASSERT (tx->tx_nsp == 0);
+        LASSERT (tx->tx_sending == 0);
+        LASSERT (tx->tx_status == 0);
+        LASSERT (tx->tx_conn == NULL);
+        LASSERT (!tx->tx_passive_rdma);
+        LASSERT (!tx->tx_passive_rdma_wait);
+        LASSERT (tx->tx_lntmsg[0] == NULL);
+        LASSERT (tx->tx_lntmsg[1] == NULL);
         
         RETURN(tx);
 }
@@ -548,15 +518,18 @@ kibnal_rx (kib_rx_t *rx)
 
         switch (msg->ibm_type) {
         case IBNAL_MSG_GET_RDMA:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, 
+                                rx->rx_conn->ibc_peer->ibp_nid, rx);
                 break;
                 
         case IBNAL_MSG_PUT_RDMA:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.rdma.ibrm_hdr, 
+                                rx->rx_conn->ibc_peer->ibp_nid, rx);
                 break;
 
         case IBNAL_MSG_IMMEDIATE:
-                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, rx);
+                rc = lnet_parse(kibnal_data.kib_ni, &msg->ibm_u.immediate.ibim_hdr, 
+                                rx->rx_conn->ibc_peer->ibp_nid, rx);
                 break;
 
         default:
@@ -864,7 +837,7 @@ kibnal_check_sends (kib_conn_t *conn)
             conn->ibc_outstanding_credits >= IBNAL_CREDIT_HIGHWATER) {
                 spin_unlock_irqrestore(&conn->ibc_lock, flags);
                 
-                tx = kibnal_get_idle_tx(0);     /* don't block */
+                tx = kibnal_get_idle_tx();
                 if (tx != NULL)
                         kibnal_init_tx_msg(tx, IBNAL_MSG_NOOP, 0);
 
@@ -1253,7 +1226,7 @@ kibnal_start_passive_rdma (int type, int may_block, lnet_msg_t *lntmsg)
         access.s.RdmaRead = 1;
         access.s.RdmaWrite = 1;
 
-        tx = kibnal_get_idle_tx (may_block);
+        tx = kibnal_get_idle_tx ();
         if (tx == NULL) {
                 CERROR("Can't allocate %s txd for %s\n",
                        (type == IBNAL_MSG_PUT_RDMA) ? "PUT/REPLY" : "GET",
@@ -1369,12 +1342,12 @@ kibnal_start_active_rdma (int type, int status,
                 LASSERT (rxmsg->ibm_type == IBNAL_MSG_PUT_RDMA);
         }
 
-        tx = kibnal_get_idle_tx (0);           /* Mustn't block */
+        tx = kibnal_get_idle_tx ();
         if (tx == NULL) {
                 CERROR ("tx descs exhausted on RDMA from %s"
                         " completing locally with failure\n",
                         libcfs_nid2str(rx->rx_conn->ibc_peer->ibp_nid));
-                lnet_finalize (kibnal_data.kib_ni, NULL, lntmsg, -ENOMEM);
+                lnet_finalize (kibnal_data.kib_ni, lntmsg, -ENOMEM);
                 return;
         }
         LASSERT (tx->tx_nsp == 0);
@@ -1472,7 +1445,7 @@ init_tx:
                 LASSERT (tx->tx_nsp == 1);
                 /* No RDMA: local completion happens now! */
                 CDEBUG(D_WARNING,"No data: immediate completion\n");
-                lnet_finalize (kibnal_data.kib_ni, NULL, lntmsg,
+                lnet_finalize (kibnal_data.kib_ni, lntmsg,
                               status == 0 ? 0 : -EIO);
         }
 
@@ -1574,10 +1547,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         /* Send IMMEDIATE */
 
-        tx = kibnal_get_idle_tx(!(routing ||
-                                  type == LNET_MSG_ACK ||
-                                  type == LNET_MSG_REPLY ||
-                                  in_interrupt()));
+        tx = kibnal_get_idle_tx();
         if (tx == NULL) {
                 CERROR ("Can't send %d to %s: tx descs exhausted%s\n", 
                         type, libcfs_nid2str(target.nid), 
@@ -1651,7 +1621,7 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                                            offsetof(kib_msg_t, ibm_u.immediate.ibim_payload),
                                            mlen);
 
-                lnet_finalize (ni, NULL, lntmsg, 0);
+                lnet_finalize (ni, lntmsg, 0);
                 break;
 
         case IBNAL_MSG_GET_RDMA:

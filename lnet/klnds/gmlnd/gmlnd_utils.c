@@ -127,7 +127,7 @@ gmnal_free_tx (gmnal_tx_t *tx)
 }
 
 int
-gmnal_alloc_tx (gmnal_ni_t *gmni, int nblk) 
+gmnal_alloc_tx (gmnal_ni_t *gmni) 
 {
         gmnal_tx_t  *tx;
         int          rc;
@@ -147,12 +147,8 @@ gmnal_alloc_tx (gmnal_ni_t *gmni, int nblk)
         }
 
         tx->tx_gmni = gmni;
-        tx->tx_isnblk = nblk;
         
-        if (tx->tx_isnblk)
-                list_add_tail(&tx->tx_list, &gmni->gmni_nblk_idle_txs);
-        else
-                list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
+        list_add_tail(&tx->tx_list, &gmni->gmni_idle_txs);
 
         tx->tx_next = gmni->gmni_txs;
         gmni->gmni_txs = tx;
@@ -252,15 +248,14 @@ gmnal_alloc_txs(gmnal_ni_t *gmni)
 {
         int           ntxcred = gm_num_send_tokens(gmni->gmni_port);
         int           ntx = *gmnal_tunables.gm_ntx;
-        int           ntx_nblk = *gmnal_tunables.gm_ntx_nblk;
         int           i;
         int           rc;
 
         CWARN("ntxcred: %d\n", ntxcred);
         gmni->gmni_tx_credits = ntxcred;
 
-        for (i = 0; i < ntx_nblk + ntx; i++) {
-                rc = gmnal_alloc_tx(gmni, i < ntx_nblk);
+        for (i = 0; i < ntx; i++) {
+                rc = gmnal_alloc_tx(gmni);
                 if (rc != 0)
                         return rc;
         }

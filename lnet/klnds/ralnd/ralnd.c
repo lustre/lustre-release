@@ -1249,20 +1249,17 @@ kranal_free_txdescs(struct list_head *freelist)
 int
 kranal_alloc_txdescs(struct list_head *freelist, int n)
 {
-        int            isnblk = (freelist == &kranal_data.kra_idle_nblk_txs);
         int            i;
         kra_tx_t      *tx;
 
-        LASSERT (freelist == &kranal_data.kra_idle_txs ||
-                 freelist == &kranal_data.kra_idle_nblk_txs);
+        LASSERT (freelist == &kranal_data.kra_idle_txs);
         LASSERT (list_empty(freelist));
 
         for (i = 0; i < n; i++) {
 
                 PORTAL_ALLOC(tx, sizeof(*tx));
                 if (tx == NULL) {
-                        CERROR("Can't allocate %stx[%d]\n",
-                               isnblk ? "nblk " : "", i);
+                        CERROR("Can't allocate tx[%d]\n", i);
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
@@ -1270,15 +1267,13 @@ kranal_alloc_txdescs(struct list_head *freelist, int n)
                 PORTAL_ALLOC(tx->tx_phys,
                              PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
                 if (tx->tx_phys == NULL) {
-                        CERROR("Can't allocate %stx[%d]->tx_phys\n",
-                               isnblk ? "nblk " : "", i);
+                        CERROR("Can't allocate tx[%d]->tx_phys\n", i);
 
                         PORTAL_FREE(tx, sizeof(*tx));
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
 
-                tx->tx_isnblk = isnblk;
                 tx->tx_buftype = RANAL_BUF_NONE;
                 tx->tx_msg.ram_type = RANAL_MSG_NONE;
 
@@ -1291,8 +1286,7 @@ kranal_alloc_txdescs(struct list_head *freelist, int n)
 int
 kranal_device_init(int id, kra_device_t *dev)
 {
-        int               total_ntx = *kranal_tunables.kra_ntx + 
-                                      *kranal_tunables.kra_ntx_nblk;
+        int               total_ntx = *kranal_tunables.kra_ntx;
         RAP_RETURN        rrc;
 
         dev->rad_id = id;
@@ -1470,7 +1464,6 @@ kranal_shutdown (lnet_ni_t *ni)
                 kranal_device_fini(&kranal_data.kra_devices[i]);
 
         kranal_free_txdescs(&kranal_data.kra_idle_txs);
-        kranal_free_txdescs(&kranal_data.kra_idle_nblk_txs);
 
         CDEBUG(D_MALLOC, "after NAL cleanup: kmem %d\n",
                atomic_read(&libcfs_kmemory));
@@ -1500,8 +1493,18 @@ kranal_startup (lnet_ni_t *ni)
                 CERROR ("Can't determine my NID\n");
                 return -EPERM;
         }
+
+        if (*kranal_tunables.kra_credits > *kranal_tunables.kra_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kranal_tunables.kra_credits,
+                        *kranal_tunables.kra_ntx);
+                return -EINVAL;
+        }
         
         memset(&kranal_data, 0, sizeof(kranal_data)); /* zero pointers, flags etc */
+
+        ni->ni_maxtxcredits = *kranal_tunables.kra_credits;
+        ni->ni_peertxcredits = *kranal_tunables.kra_peercredits;
 
         ni->ni_data = &kranal_data;
         kranal_data.kra_ni = ni;
@@ -1538,8 +1541,6 @@ kranal_startup (lnet_ni_t *ni)
         spin_lock_init(&kranal_data.kra_connd_lock);
 
         INIT_LIST_HEAD(&kranal_data.kra_idle_txs);
-        INIT_LIST_HEAD(&kranal_data.kra_idle_nblk_txs);
-        init_waitqueue_head(&kranal_data.kra_idle_tx_waitq);
         spin_lock_init(&kranal_data.kra_tx_lock);
 
         /* OK to call kranal_api_shutdown() to cleanup now */
@@ -1566,11 +1567,6 @@ kranal_startup (lnet_ni_t *ni)
 
         rc = kranal_alloc_txdescs(&kranal_data.kra_idle_txs, 
                                   *kranal_tunables.kra_ntx);
-        if (rc != 0)
-                goto failed;
-
-        rc = kranal_alloc_txdescs(&kranal_data.kra_idle_nblk_txs,
-                                  *kranal_tunables.kra_ntx_nblk);
         if (rc != 0)
                 goto failed;
 

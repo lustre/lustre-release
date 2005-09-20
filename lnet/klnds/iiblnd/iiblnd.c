@@ -1118,18 +1118,12 @@ kibnal_setup_tx_descs (void)
                 else
                         tx->tx_vaddr = vaddr;
 
-                tx->tx_isnblk = (i >= IBNAL_NTX);
                 tx->tx_mapped = KIB_TX_UNMAPPED;
 
                 CDEBUG(D_NET, "Tx[%d] %p->%p - "LPX64"\n", 
                        i, tx, tx->tx_msg, tx->tx_vaddr);
 
-                if (tx->tx_isnblk)
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_nblk_txs);
-                else
-                        list_add (&tx->tx_list, 
-                                  &kibnal_data.kib_idle_txs);
+                list_add (&tx->tx_list, &kibnal_data.kib_idle_txs);
 
                 vaddr += IBNAL_MSG_SIZE;
                 LASSERT (vaddr <= vaddr_base + IBNAL_TX_MSG_BYTES);
@@ -1324,6 +1318,15 @@ kibnal_startup (lnet_ni_t *ni)
                 return -EPERM;
         }
         
+        if (IBNAL_CREDITS > IBNAL_NTX) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        IBNAL_CREDITS, IBNAL_NTX);
+                return -EINVAL;
+        }
+        
+        ni->ni_maxtxcredits = IBNAL_CREDITS;
+        ni->ni_peertxcredits = IBNAL_PEERCREDITS;
+
         ni->ni_data = &kibnal_data;
         kibnal_data.kib_ni = ni;
 
@@ -1364,8 +1367,6 @@ kibnal_startup (lnet_ni_t *ni)
 
         spin_lock_init (&kibnal_data.kib_tx_lock);
         INIT_LIST_HEAD (&kibnal_data.kib_idle_txs);
-        INIT_LIST_HEAD (&kibnal_data.kib_idle_nblk_txs);
-        init_waitqueue_head(&kibnal_data.kib_idle_tx_waitq);
 
         PORTAL_ALLOC (kibnal_data.kib_tx_descs,
                       IBNAL_TX_MSGS * sizeof(kib_tx_t));
@@ -1506,7 +1507,7 @@ kibnal_startup (lnet_ni_t *ni)
 
 #if IBNAL_FMR
         {
-                const int pool_size = IBNAL_NTX + IBNAL_NTX_NBLK;
+                const int pool_size = IBNAL_NTX;
                 struct ib_fmr_pool_param params = {
                         .max_pages_per_fmr = PTL_MTU/PAGE_SIZE,
                         .access            = (IB_ACCESS_LOCAL_WRITE |
