@@ -785,6 +785,7 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
+        struct ll_ra_read bead;
         int rc;
         ssize_t retval;
         __u64 kms;
@@ -856,7 +857,11 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
 #else
         file->f_ra.ra_pages = 0;
 #endif
+        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+        ll_ra_read_in(file, &bead);
         retval = generic_file_read(file, buf, count, ppos);
+        ll_ra_read_ex(file, &bead);
 
  out:
         ll_tree_unlock(&tree);
@@ -887,7 +892,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         /* If file was opened for LL_IOC_LOV_SETSTRIPE but the ioctl wasn't
          * called on the file, don't fail the below assertion (bug 2388). */
-        if (file->f_flags & O_LOV_DELAY_CREATE && 
+        if (file->f_flags & O_LOV_DELAY_CREATE &&
             ll_i2info(inode)->lli_smd == NULL)
                 RETURN(-EBADF);
 
@@ -896,7 +901,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (file->f_flags & O_APPEND)
                 node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
         else
-                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
+                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1,
                                           LCK_PW);
 
         if (IS_ERR(node))

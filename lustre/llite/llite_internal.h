@@ -152,6 +152,13 @@ struct ll_sb_info {
         struct file_operations   *ll_fop;
 };
 
+struct ll_ra_read {
+        pgoff_t             lrr_start;
+        pgoff_t             lrr_count;
+        struct task_struct *lrr_reader;
+        struct list_head    lrr_linkage;
+};
+
 /*
  * per file-descriptor read-ahead data.
  */
@@ -192,7 +199,12 @@ struct ll_readahead_state {
          * not covered by DLM lock.
          */
         unsigned long   ras_next_readahead;
-
+        /*
+         * list of struct ll_ra_read's one per read(2) call current in
+         * progress against this file descriptor. Used by read-ahead code,
+         * protected by ->ras_lock.
+         */
+        struct list_head ras_read_beads;
 };
 
 extern kmem_cache_t *ll_file_data_slab;
@@ -268,6 +280,10 @@ extern char *llap_origins[];
 #define ll_register_cache(cache) do {} while (0)
 #define ll_unregister_cache(cache) do {} while (0)
 #endif
+
+void ll_ra_read_in(struct file *f, struct ll_ra_read *rar);
+void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar);
+struct ll_ra_read *ll_ra_read_get(struct file *f);
 
 /* llite/lproc_llite.c */
 #ifdef LPROCFS

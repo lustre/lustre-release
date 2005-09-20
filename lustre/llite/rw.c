@@ -949,6 +949,61 @@ static int index_in_window(unsigned long index, unsigned long point,
         return start <= index && index <= end;
 }
 
+static struct ll_readahead_state *ll_ras_get(struct file *f)
+{
+        struct ll_file_data       *fd;
+
+        fd = LUSTRE_FPRIVATE(f);
+        return &fd->fd_ras;
+}
+
+void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
+{
+        struct ll_readahead_state *ras;
+
+        ras = ll_ras_get(f);
+        rar->lrr_reader = current;
+
+        spin_lock(&ras->ras_lock);
+        list_add(&rar->lrr_linkage, &ras->ras_read_beads);
+        spin_unlock(&ras->ras_lock);
+}
+
+void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar)
+{
+        struct ll_readahead_state *ras;
+
+        ras = ll_ras_get(f);
+
+        spin_lock(&ras->ras_lock);
+        list_del_init(&rar->lrr_linkage);
+        spin_unlock(&ras->ras_lock);
+}
+
+static struct ll_ra_read *ll_ra_read_get_locked(struct ll_readahead_state *ras)
+{
+        struct ll_ra_read *scan;
+
+        list_for_each_entry(scan, &ras->ras_read_beads, lrr_linkage) {
+                if (scan->lrr_reader == current)
+                        return scan;
+        }
+        return NULL;
+}
+
+struct ll_ra_read *ll_ra_read_get(struct file *f)
+{
+        struct ll_readahead_state *ras;
+        struct ll_ra_read         *bead;
+
+        ras = ll_ras_get(f);
+
+        spin_lock(&ras->ras_lock);
+        bead = ll_ra_read_get_locked(ras);
+        spin_unlock(&ras->ras_lock);
+        return bead;
+}
+
 static int ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
                          struct obd_io_group *oig, int flags)
@@ -959,6 +1014,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
         int rc, ret = 0, match_failed = 0;
         __u64 kms;
         unsigned int gfp_mask;
+        struct ll_ra_read *bead;
         ENTRY;
 
         kms = lov_merge_size(ll_i2info(mapping->host)->lli_smd, 1);
@@ -968,13 +1024,37 @@ static int ll_readahead(struct ll_readahead_state *ras,
         }
 
         spin_lock(&ras->ras_lock);
+        bead = ll_ra_read_get_locked(ras);
         /* reserve a part of the read-ahead window that we'll be issuing */
         if (ras->ras_window_len) {
                 start = ras->ras_next_readahead;
                 end = ras->ras_window_start + ras->ras_window_len - 1;
+        }
+        if (bead != NULL) {
+                pgoff_t read_end;
+
+                start = max(start, bead->lrr_start);
+                read_end = bead->lrr_start + bead->lrr_count - 1;
+                if (ras->ras_consecutive > start - bead->lrr_start + 1)
+                        /*
+                         * if current read(2) is a part of larger sequential
+                         * read, make sure read-ahead is at least to the end
+                         * of the read region.
+                         *
+                         * XXX nikita: This doesn't work when some pages in
+                         * [lrr_start, start] were cached (and, as a result,
+                         * weren't counted in ->ras_consecutive).
+                         */
+                        end = max(end, read_end);
+                else
+                        /*
+                         * otherwise, clip read-ahead at the read boundary.
+                         */
+                        end = read_end;
+        }
+        if (end != 0) {
                 end = min(end, (unsigned long)((kms - 1) >> PAGE_CACHE_SHIFT));
                 ras->ras_next_readahead = max(end, end + 1);
-
                 RAS_CDEBUG(ras);
         }
         spin_unlock(&ras->ras_lock);
@@ -1084,6 +1164,7 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
         spin_lock_init(&ras->ras_lock);
         ras_reset(ras, 0);
+        INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
 static void ras_update(struct ll_sb_info *sbi, struct ll_readahead_state *ras,
