@@ -531,8 +531,7 @@ struct lustre_capa_data {
 } __attribute__((packed));
 
 struct client_capa {
-        struct inode             *inode;      /* this should be always valid
-                                               * if c_refc > 0 */
+        struct inode             *inode;      
         struct lustre_handle      handle;     /* handle of mds_file_data */
         struct list_head          lli_list;   /* link to lli_capas */
 #if 0   /* TODO: support multi mount point */
@@ -576,11 +575,11 @@ enum lustre_capa_type {
 
 #define DEBUG_CAPA(level, capa, fmt, args...)                                  \
 do {                                                                           \
-CDEBUG(level, fmt " capa@%p uid %u op %u ino "LPU64" mdsid %d keyid %d "       \
-       "expiry "LPU64" flags %u\n",                                            \
-       ##args, capa, (capa)->lc_uid, (capa)->lc_op, (capa)->lc_ino,            \
-       (capa)->lc_mdsid, (capa)->lc_keyid, (capa)->lc_expiry,                  \
-       (capa)->lc_flags);                                                      \
+CDEBUG(level, fmt " capa@%p uid %u ruid %u op %u ino "LPU64" igen %u mdsid %d "\
+       "keyid %d expiry "LPU64" flags %u, hmac %.*s\n",                        \
+       ##args, capa, (capa)->lc_uid, (capa)->lc_ruid, (capa)->lc_op,           \
+       (capa)->lc_ino, (capa)->lc_igen, (capa)->lc_mdsid, (capa)->lc_keyid,    \
+       (capa)->lc_expiry, (capa)->lc_flags, CAPA_DIGEST_SIZE, (capa)->lc_hmac);\
 } while (0)
 
 #define DEBUG_CAPA_KEY(level, key, fmt, args...)                               \

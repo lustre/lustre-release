@@ -215,8 +215,7 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
         struct filter_obd *filter = &obd->u.filter;
         struct obd_capa *ocapa;
         struct lustre_capa tcapa;
-        struct filter_capa_key *rkey = NULL, *bkey = NULL, *tmp;
-        __u8 hmac_key[CAPA_KEY_LEN];
+        struct filter_capa_key *rkey = NULL, *bkey = NULL, *tmp, capa_keys[2];
         int rc = 0;
 
         /* capability is disabled */
@@ -311,30 +310,28 @@ new_capa:
         }
 
         LASSERT(rkey);
-
-        memcpy(&tcapa, capa, sizeof(tcapa));
-        tcapa.lc_keyid = rkey->k_key.lk_keyid;
-        memcpy(hmac_key, rkey->k_key.lk_key, sizeof(hmac_key));
+        capa_keys[0] = *rkey;
+        if (bkey)
+                capa_keys[1] = *bkey;
         spin_unlock(&filter->fo_capa_lock);
 
-        capa_hmac(filter->fo_capa_hmac, hmac_key, &tcapa);
+        tcapa = *capa;
+        tcapa.lc_keyid = capa_keys[0].k_key.lk_keyid;
+        capa_hmac(filter->fo_capa_hmac, capa_keys[0].k_key.lk_key, &tcapa);
 
         /* store in capa cache */
-        ocapa = capa_renew(capa, FILTER_CAPA);
+        ocapa = capa_renew(&tcapa, FILTER_CAPA);
         if (!ocapa)
                 GOTO(out, rc = -ENOMEM);
 
         if (bkey) {
-                spin_lock(&filter->fo_capa_lock);
-                tcapa.lc_keyid = bkey->k_key.lk_keyid;
-                memcpy(hmac_key, bkey->k_key.lk_key, sizeof(hmac_key));
-                ocapa->c_bkeyid = bkey->k_key.lk_keyid;
-                spin_unlock(&filter->fo_capa_lock);
-
-                capa_hmac(filter->fo_capa_hmac, bkey->k_key.lk_key, &tcapa);
+                tcapa.lc_keyid = capa_keys[1].k_key.lk_keyid;
+                capa_hmac(filter->fo_capa_hmac, capa_keys[1].k_key.lk_key,
+                          &tcapa);
 
                 spin_lock(&filter->fo_capa_lock);
                 memcpy(ocapa->c_bhmac, tcapa.lc_hmac, sizeof(ocapa->c_bhmac));
+                ocapa->c_bkeyid = capa_keys[1].k_key.lk_keyid;
                 ocapa->c_bvalid = 1;
                 spin_unlock(&filter->fo_capa_lock);
         }
