@@ -340,6 +340,14 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
         return ocapa;
 }
 
+static void dump_capa_key(char *buf, char *key)
+{
+        int i, n = 0;
+
+        for (i = 0; i < CAPA_KEY_LEN; i++)
+                n += sprintf(buf + n, "%02x", (unsigned char) key[i]);
+}
+
 void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
 {
         int keylen = CAPA_KEY_LEN;
@@ -351,6 +359,15 @@ void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
 
         LASSERT(tfm);
         crypto_hmac(tfm, key, &keylen, &sl, 1, capa->lc_hmac);
+        {
+        char *buf;
+
+        OBD_ALLOC(key, keylen * 2 + 1);
+        if (key) {
+                dump_capa_key(buf, key);
+                DEBUG_CAPA(D_INODE, capa, "hmac with %s", buf);
+        }
+        }
 }
 
 void capa_dup(void *dst, struct obd_capa *ocapa)
