@@ -92,6 +92,8 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
         struct obd_capa *ocapa;
         uid_t ouid;
 
+        CDEBUG(D_INODE, "find capa for (uid %lu, op %d, mdsid "LPU64", ino %lu"
+               " igen %lu, type %d", uid, capa_op, mdsid, ino, igen, type);
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
                 if (ocapa->c_capa.lc_ino != ino)
                         continue;
@@ -112,7 +114,7 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                 if (ouid != uid)
                         continue;
 
-                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "found %s",
+                DEBUG_CAPA(D_INODE, &ocapa->c_capa, "found %s",
                            capa_type_name[ocapa->c_type]);
 
                 return ocapa;
@@ -251,7 +253,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
 
                 capa_count[type]++;
 
-                DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "new %s",
+                DEBUG_CAPA(D_INODE, &ocapa->c_capa, "new %s",
                            capa_type_name[type]);
 
                 if (type != CLIENT_CAPA && capa_count[type] > CAPA_CACHE_SIZE) {
@@ -266,7 +268,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
                                 node = node->next;
                                 if (atomic_read(&tcapa->c_refc) > 0)
                                         continue;
-                                DEBUG_CAPA(D_CACHE, &tcapa->c_capa,
+                                DEBUG_CAPA(D_INODE, &tcapa->c_capa,
                                            "free unused %s",
                                            capa_type_name[type]);
                                 __capa_put(tcapa);
@@ -301,7 +303,7 @@ void capa_put(struct obd_capa *ocapa)
         if (!ocapa)
                 return;
 
-        DEBUG_CAPA(D_CACHE, &ocapa->c_capa, "put %s",
+        DEBUG_CAPA(D_INODE, &ocapa->c_capa, "put %s",
                    capa_type_name[ocapa->c_type]);
         spin_lock(&capa_lock);
         if (ocapa->c_type == CLIENT_CAPA) {

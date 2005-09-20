@@ -813,7 +813,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         /* partial write might cause read, both CAPA_READ and CAPA_WRITE
          * capability could be used here */
         capa_op = (opc == OST_WRITE) ? CAPA_WRITE : CAPA_READ | CAPA_WRITE;
-        ocapa = capa_get(oa->o_fsuid, capa_op, raw_id->li_fid.lf_group,
+        ocapa = capa_get(oa->o_fsuid, capa_op, id_group(raw_id),
                          id_ino(raw_id), id_gen(raw_id), CLIENT_CAPA);
 
         size[bufcnt++] = sizeof(*body);
