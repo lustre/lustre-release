@@ -515,7 +515,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
                 if (mfd == NULL) {
                         DEBUG_CAPA(D_INFO, req_capa, "no handle "LPX64" for",
                                    req_body->handle.cookie);
-                        RETURN(-ESTALE);
+                        RETURN(-ENOENT);
                 }
 
                 mode = accmode(mfd->mfd_mode);
