@@ -92,8 +92,8 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
         struct obd_capa *ocapa;
         uid_t ouid;
 
-        CDEBUG(D_INODE, "find capa for (uid %lu, op %d, mdsid "LPU64", ino %lu"
-               " igen %lu, type %d", uid, capa_op, mdsid, ino, igen, type);
+        CDEBUG(D_INODE, "find capa for (uid %u, op %d, mdsid "LPU64", ino %lu"
+               " igen %u, type %d\n", (unsigned) uid, capa_op, mdsid, ino, igen, type);
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
                 if (ocapa->c_capa.lc_ino != ino)
                         continue;
