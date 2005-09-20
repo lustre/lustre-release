@@ -340,8 +340,9 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
         return ocapa;
 }
 
-void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
+void capa_hmac(struct crypto_tfm *_tfm, __u8 *key, struct lustre_capa *capa)
 {
+        struct crypto_tfm *_tfm;
         int keylen = CAPA_KEY_LEN;
         struct scatterlist sl = {
                 .page   = virt_to_page(capa),
@@ -349,8 +350,10 @@ void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
                 .length = sizeof(struct lustre_capa_data),
         };
 
+        tfm = crypto_alloc_tfm(CAPA_HMAC_ALG, 0);
         LASSERT(tfm);
         crypto_hmac(tfm, key, &keylen, &sl, 1, capa->lc_hmac);
+        crypto_free_tfm(tfm);
 }
 
 void capa_dup(void *dst, struct obd_capa *ocapa)
