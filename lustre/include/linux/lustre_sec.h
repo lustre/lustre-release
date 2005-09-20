@@ -510,7 +510,7 @@ int svcsec_null_exit(void);
 #define NR_CAPAHASH 32
 #define CAPA_TIMEOUT 1800                /* sec, == 30 min */
 #define CAPA_KEY_TIMEOUT (24 * 60 * 60)  /* sec, == 1 day */
-#define CAPA_CACHE_SIZE 1000             /* for MDS & OST */
+#define CAPA_CACHE_SIZE 3000             /* for MDS & OST */
 #define CAPA_HMAC_ALG "sha1"
 
 /* capa ops */
