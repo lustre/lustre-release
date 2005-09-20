@@ -296,6 +296,7 @@ verify:
                                 DEBUG_CAPA(D_ERROR, capa,
                                            "access denied for (%s != %s)",
                                            key1, key2);
+                                DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "used capa");
                         }
                         if (key1)
                                 OBD_FREE(key1, CAPA_DIGEST_SIZE * 2 + 1);
