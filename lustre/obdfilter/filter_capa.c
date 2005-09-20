@@ -280,8 +280,8 @@ verify:
                 spin_unlock(&filter->fo_capa_lock);
 
                 if (rc) {
-                        DEBUG_CAPA(D_ERROR, capa, "access denied\n");
-                        DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "access denied\n");
+                        DEBUG_CAPA(D_ERROR, capa, "access denied");
+                        DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "access denied");
                 }
                 capa_put(ocapa);
                 RETURN(rc ? -EACCES : 0);
