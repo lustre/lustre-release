@@ -148,6 +148,10 @@ static inline int cleanup_group_info(void)
 #include <linux/mm_inline.h>
 #endif
 
+#ifndef pgoff_t
+#define pgoff_t unsigned long
+#endif
+
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
 #define ll_permission(inode,mask,nd)        permission(inode,mask)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
