@@ -360,9 +360,9 @@ void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa)
         LASSERT(tfm);
         crypto_hmac(tfm, key, &keylen, &sl, 1, capa->lc_hmac);
         {
-        char *buf;
+        char *buf = NULL;
 
-        OBD_ALLOC(key, keylen * 2 + 1);
+        OBD_ALLOC(buf, keylen * 2 + 1);
         if (key) {
                 dump_capa_key(buf, key);
                 DEBUG_CAPA(D_INODE, capa, "hmac with %s", buf);
