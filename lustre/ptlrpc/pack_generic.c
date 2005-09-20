@@ -923,7 +923,9 @@ void lustre_swab_remote_perm(struct mds_remote_perm *p)
 void lustre_swab_lustre_capa(struct lustre_capa *c)
 {
         __swab32s (&c->lc_uid);
+        __swab32s (&c->lc_ruid);
         __swab32s (&c->lc_op);
+        __swab32s (&c->lc_igen);
         __swab64s (&c->lc_ino);
         __swab32s (&c->lc_mdsid);
         __swab32s (&c->lc_keyid);

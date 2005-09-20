@@ -533,7 +533,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
         LASSERT(capa != NULL);
 
         ocapa = capa_get(req_capa->lc_uid, req_capa->lc_op, req_capa->lc_mdsid,
-                         req_capa->lc_ino, MDS_CAPA);
+                         req_capa->lc_ino, req_capa->lc_igen, MDS_CAPA);
         if (ocapa) {
                 expired = capa_is_to_expire(ocapa);
                 if (!expired) {

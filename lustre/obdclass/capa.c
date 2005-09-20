@@ -86,7 +86,7 @@ int capa_op(int flags)
 
 static struct obd_capa *
 find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
-          unsigned long ino, int type)
+          unsigned long ino, __u32 igen, int type)
 {
         struct hlist_node *pos;
         struct obd_capa *ocapa;
@@ -94,6 +94,8 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
 
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
                 if (ocapa->c_capa.lc_ino != ino)
+                        continue;
+                if (ocapa->c_capa.lc_igen != igen)
                         continue;
                 if (ocapa->c_capa.lc_mdsid != mdsid)
                         continue;
@@ -127,12 +129,12 @@ inline void __capa_get(struct obd_capa *ocapa)
 
 static struct obd_capa *
 find_capa_locked(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
-                 unsigned long ino, int type)
+                 unsigned long ino, __u32 igen, int type)
 {
         struct obd_capa *ocapa;
 
         spin_lock(&capa_lock);
-        ocapa = find_capa(head, uid, capa_op, mdsid, ino, type);
+        ocapa = find_capa(head, uid, capa_op, mdsid, ino, igen, type);
         if (ocapa)
                 __capa_get(ocapa);
         spin_unlock(&capa_lock);
@@ -237,7 +239,7 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
                 return NULL;
 
         spin_lock(&capa_lock);
-        old = find_capa(head, uid, capa_op, mdsid, ino, type);
+        old = find_capa(head, uid, capa_op, mdsid, ino, capa->lc_igen, type);
         if (!old) {
                 do_update_capa(ocapa, capa);
                 ocapa->c_type = type;
@@ -282,12 +284,13 @@ get_new_capa_locked(struct hlist_head *head, int type, struct lustre_capa *capa)
 }
 
 struct obd_capa *
-capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino, int type)
+capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
+         __u32 igen, int type)
 {
         struct hlist_head *head = capa_hash + capa_hashfn(uid, mdsid, ino);
         struct obd_capa *ocapa;
 
-        ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, type);
+        ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, igen, type);
         
         return ocapa;
 }
@@ -321,7 +324,7 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
         struct obd_capa *ocapa;
 
         spin_lock(&capa_lock);
-        ocapa = find_capa(head, uid, capa_op, mdsid, ino, type);
+        ocapa = find_capa(head, uid, capa_op, mdsid, ino, capa->lc_igen, type);
         if (ocapa) {
                 DEBUG_CAPA(D_INFO, capa, "renew %s", capa_type_name[type]);
                 do_update_capa(ocapa, capa);

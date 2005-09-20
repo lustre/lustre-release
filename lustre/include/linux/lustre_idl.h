@@ -1053,6 +1053,7 @@ struct lustre_capa {
         __u32   lc_uid;       /* uid, mapped uid */
         __u32   lc_ruid;      /* remote uid on client */
         __u32   lc_op;        /* operations allowed */
+        __u32   lc_igen;      /* inode generation */
         __u64   lc_ino;       /* inode# */
         __u32   lc_mdsid;     /* mds# */
         __u32   lc_keyid;     /* key used for the capability */

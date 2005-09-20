@@ -679,7 +679,9 @@ check_lustre_capa(void)
         BLANK_LINE();
         CHECK_STRUCT(lustre_capa);
         CHECK_MEMBER(lustre_capa, lc_uid);
+        CHECK_MEMBER(lustre_capa, lc_ruid);
         CHECK_MEMBER(lustre_capa, lc_op);
+        CHECK_MEMBER(lustre_capa, lc_igen);
         CHECK_MEMBER(lustre_capa, lc_ino);
         CHECK_MEMBER(lustre_capa, lc_mdsid);
         CHECK_MEMBER(lustre_capa, lc_keyid);

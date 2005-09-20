@@ -252,7 +252,7 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
         }
 
         ocapa = capa_get(capa->lc_uid, capa->lc_op, capa->lc_mdsid,
-                         capa->lc_ino, FILTER_CAPA);
+                         capa->lc_ino, capa->lc_igen, FILTER_CAPA);
 verify:
         if (ocapa) {
                 /* fo_capa_lock protects capa too */

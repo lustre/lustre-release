@@ -605,7 +605,7 @@ extern struct timer_list ll_capa_timer;
 int capa_op(int flags);
 void __capa_get(struct obd_capa *ocapa);
 struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
-                          unsigned long ino, int type);
+                          unsigned long ino, __u32 igen, int type);
 void capa_put(struct obd_capa *ocapa);
 struct obd_capa *capa_renew(struct lustre_capa *capa, int type);
 void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);

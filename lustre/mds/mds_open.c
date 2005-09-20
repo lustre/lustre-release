@@ -788,6 +788,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                         .lc_uid   = rec->ur_uc.luc_uid,
                         .lc_op    = capa_op(rec->ur_flags),
                         .lc_ino   = dchild->d_inode->i_ino,
+                        .lc_igen  = dchild->d_inode->i_generation,
                         .lc_mdsid = mds->mds_num,
                 };
 
