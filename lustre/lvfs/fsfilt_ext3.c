@@ -1093,7 +1093,8 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                block_count * EXT3_DATA_TRANS_BLOCKS + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
-                CERROR("can't start transaction\n");
+                CERROR("can't start transaction for %d blocks (%d bytes)\n",
+                       block_count * EXT3_DATA_TRANS_BLOCKS + 2, bufsize);
                 return PTR_ERR(handle);
         }
 
