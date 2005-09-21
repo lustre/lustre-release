@@ -88,9 +88,6 @@ static int ll_renew_capa(struct obd_capa *ocapa)
         int rc;
         ENTRY;
 
-        if (capa_expired(&ocapa->c_capa))
-                RETURN(-ESTALE);
-
         rc = md_getattr(md_exp, &lli->lli_id, valid, NULL, NULL, 0,
                         0, ocapa, &req);
         RETURN(rc);
@@ -144,19 +141,24 @@ static int ll_capa_thread(void *arg)
                         if (ocapa->c_capa.lc_op == CAPA_TRUNC)
                                 continue;
 
+                        if (capa_expired(&ocapa->c_capa)) {
+                                capa_put_nolock(ocapa);
+                                continue;
+                        }
+
                         if (__capa_is_to_expire(ocapa, &tv)) {
                                 inode = igrab(ocapa->c_inode);
-                                if (inode == NULL)
+                                if (inode == NULL) {
+                                        DEBUG_CAPA(D_ERROR, &ocapa->c_capa,
+                                                   "igrab failed for");
                                         continue;
+                                }
 
                                 tcapa = *ocapa;
                                 spin_unlock(&capa_lock);
 
                                 rc = ll_renew_capa(&tcapa);
                                 iput(inode);
-
-                                if (rc)
-                                        capa_put(ocapa);
 
                                 spin_lock(&capa_lock);
                         } else {

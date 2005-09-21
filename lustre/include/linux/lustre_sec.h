@@ -608,6 +608,7 @@ void __capa_get(struct obd_capa *ocapa);
 struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
                           unsigned long ino, __u32 igen, int type);
 struct obd_capa *filter_capa_get(struct lustre_capa *capa);
+void capa_put_nolock(struct obd_capa *ocapa);
 void capa_put(struct obd_capa *ocapa);
 struct obd_capa *capa_renew(struct lustre_capa *capa, int type);
 void capa_hmac(__u8 *key, struct lustre_capa *capa);

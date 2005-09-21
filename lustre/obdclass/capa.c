@@ -348,14 +348,11 @@ struct obd_capa * filter_capa_get(struct lustre_capa *capa)
         return ocapa;
 }
 
-void capa_put(struct obd_capa *ocapa)
+void capa_put_nolock(struct obd_capa *ocapa)
 {
-        if (!ocapa)
-                return;
-
         DEBUG_CAPA(D_INODE, &ocapa->c_capa, "put %s",
                    capa_type_name[ocapa->c_type]);
-        spin_lock(&capa_lock);
+
         if (ocapa->c_type == CLIENT_CAPA) {
                 list_del_init(&ocapa->c_lli_list);
                 __capa_put(ocapa);
@@ -363,6 +360,15 @@ void capa_put(struct obd_capa *ocapa)
         } else {
                 atomic_dec(&ocapa->c_refc);
         }
+}
+
+void capa_put(struct obd_capa *ocapa)
+{
+        if (!ocapa)
+                return;
+
+        spin_lock(&capa_lock);
+        capa_put_nolock(ocapa);
         spin_unlock(&capa_lock);
 }
 
@@ -471,10 +477,11 @@ void dump_capa_hmac(char *buf, char *key)
 
 EXPORT_SYMBOL(capa_op);
 EXPORT_SYMBOL(capa_get);
+EXPORT_SYMBOL(__capa_get);
 EXPORT_SYMBOL(filter_capa_get);
 EXPORT_SYMBOL(capa_put);
+EXPORT_SYMBOL(capa_put_nolock);
 EXPORT_SYMBOL(capa_renew);
-EXPORT_SYMBOL(__capa_get);
 EXPORT_SYMBOL(capa_hmac);
 EXPORT_SYMBOL(capa_dup);
 EXPORT_SYMBOL(capa_dup2);
