@@ -2,15 +2,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * bug fixes
 
-Severity   : enhancement
-Frequency  : rare
-Bugzilla   : 6252
-Description: Improve read-ahead algorithm to avoid excessive IO for random reads
-Details    : Existing read-ahead algorithm is tuned for the case of streamlined
-	     sequential reads and behaves badly with applications doing random
-	     reads. Improve it by 1. reading ahead at least read region, and
-	     2. avoiding excessive large RPC for small reads.
-
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -105,6 +96,14 @@ Details    : Liblustre client cannot handle ASTs in timely manner, so avoid
 	     granting such locks to it in the first place if possible.  Locks
 	     are taken by proxy on the OST during the read or write and
 	     dropped immediately afterward.
+
+Severity   : enhancement
+Bugzilla   : 6252
+Description: Improve read-ahead algorithm to avoid excessive IO for random reads
+Details    : Existing read-ahead algorithm is tuned for the case of streamlined
+	     sequential reads and behaves badly with applications doing random
+	     reads.  Improve it by reading ahead at least read region, and
+	     avoiding excessive large RPC for small reads.
 
 ------------------------------------------------------------------------------
 

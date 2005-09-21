@@ -2682,33 +2682,33 @@ function get_named_value()
 }
 
 test_101() {
-    local s
-    local discard
-    local nreads
+	local s
+	local discard
+	local nreads
 
-    for s in $LPROC/osc/OSC_*/rpc_stats ;do
-        echo 0 > $s
-    done
-    for s in $LPROC/llite/*/read_ahead_stats ;do
-        echo 0 > $s
-    done
+	for s in $LPROC/osc/OSC_*/rpc_stats ;do
+		echo 0 > $s
+	done
+	for s in $LPROC/llite/*/read_ahead_stats ;do
+		echo 0 > $s
+	done
 
-    #
-    # randomly read 10000 of 64K chunks from 200M file.
-    #
-    nreads=10000
-	$RANDOM_READS -f /mnt/lustre/room101.area -s200000000 -b65536 -C -n$nreads
+	#
+	# randomly read 10000 of 64K chunks from 200M file.
+	#
+	nreads=10000
+	$RANDOM_READS -f $DIR/f101 -s200000000 -b65536 -C -n$nreads -t 300
 
-    discard=0
-    for s in $LPROC/llite/*/read_ahead_stats ;do
-        discard=$(($discard + $(cat $s | get_named_value 'read but discarded')))
-    done
+	discard=0
+	for s in $LPROC/llite/*/read_ahead_stats ;do
+		discard=$(($discard + $(cat $s | get_named_value 'read but discarded')))
+	done
 
-    if [ $(($discard * 10)) -gt $nreads ] ;then
-        cat $LPROC/osc/OSC_*/rpc_stats
-        cat $LPROC/llite/*/read_ahead_stats
-        error "too many ($discard) discarded pages" 
-    fi
+	if [ $(($discard * 10)) -gt $nreads ] ;then
+		cat $LPROC/osc/OSC_*/rpc_stats
+		cat $LPROC/llite/*/read_ahead_stats
+		error "too many ($discard) discarded pages" 
+	fi
 }
 run_test 101 "check read-ahead for random reads ==========="
 

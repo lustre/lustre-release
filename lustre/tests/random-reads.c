@@ -40,7 +40,7 @@ static void usage(void)
 {
 	printf("random-reads: read random chunks of a file.\n");
 	printf("Usage:\n\n");
-	printf("random-reads -f <filename> -s <filesize> -b <buffersize> -a <adjacent reads> [-v] [-h] [-C] [-S <seed>] [-n <iterations>] [-w <width>]\n");
+	printf("random-reads -f <filename> -s <filesize> -b <buffersize> -a <adjacent reads> [-v] [-h] [-C] [-S <seed>] [-n <iterations>] [-w <width>] [-t <timelimit>]\n");
 }
 
 enum {
@@ -81,6 +81,7 @@ int main(int argc, char **argv)
 	int    width = 10;
 	unsigned int seed = 0;
 	unsigned long iterations = 0;
+	unsigned long timelimit = 24 * 3600;
 
 	int opt;
 	int fd;
@@ -96,7 +97,7 @@ int main(int argc, char **argv)
 	char *buf;
 
 	do {
-		opt = getopt(argc, argv, "f:s:b:va:hCS:n:w:");
+		opt = getopt(argc, argv, "f:s:b:va:hCS:n:t:w:");
 		switch (opt) {
 		case -1:
 			break;
@@ -128,6 +129,9 @@ int main(int argc, char **argv)
 			break;
 		case 'n':
 			iterations = atoll(optarg);
+			break;
+		case 't':
+			timelimit = atoll(optarg);
 			break;
 		case 'w':
 			width = atoi(optarg);
@@ -171,6 +175,7 @@ int main(int argc, char **argv)
 	if (seed != 0)
 		srand(seed);
 	gettimeofday(&start, NULL);
+	timelimit += start.tv_sec;
 	for (i = 0; !iterations || i < iterations; i ++) {
 		unsigned long block_nr;
 		int j;
@@ -188,10 +193,13 @@ int main(int argc, char **argv)
 				return RR_READ;
 			}
 		}
+		gettimeofday(&stop, NULL);
+		if (stop.tv_sec > timelimit)
+			break;
 	}
-	gettimeofday(&stop, NULL);
 	usecs = (stop.tv_sec - start.tv_sec) * 1000000. +
 		stop.tv_usec - start.tv_usec;
-	printf("\n%f\n", usecs / 1000000.);
+	printf("\n%fs, %gMB/s\n", usecs / 1000000.,
+	       (double)bsize * ad * i / usecs);
 	return RR_OK;
 }
