@@ -67,6 +67,7 @@ EXPORT_SYMBOL(capa_lock);
 EXPORT_SYMBOL(capa_hash);
 EXPORT_SYMBOL(capa_list);
 EXPORT_SYMBOL(ll_capa_timer);
+EXPORT_SYMBOL(ll_capa_stat);
 
 static inline int const
 capa_hashfn(unsigned int uid, __u64 mdsid, unsigned long ino)
