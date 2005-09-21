@@ -489,7 +489,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
 #endif
 
         if(!rxbp->rxbp_shutdown){
-                PJK_UT_MSG("RXB Callback %s(%d) rxb=%p nid="LPX64" unlink=%d\n",
+                PJK_UT_MSG("RXB Callback %s(%d) rxb=%p nid="FMT_NID" unlink=%d\n",
                         get_ev_type_string(ev->type),ev->type,
                         rxb,ev->initiator.nid,unlinked);
         }
@@ -500,7 +500,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         LASSERT( ev->match_bits == LNET_MSG_MATCHBITS);
 
         CDEBUG((ev->ni_fail_type == PTL_OK) ? D_NET : D_ERROR,
-               "event type %d, status %d from "LPX64"\n",
+               "event type %d, status %d from "FMT_NID"\n",
                ev->type, ev->ni_fail_type,ev->initiator.nid);
 
         nob = ev->mlength;
@@ -623,7 +623,7 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
 
         rc = kptllnd_msg_unpack(msg, rx->rx_nob, kptllnd_data);
         if (rc != 0) {
-                CERROR ("Error %d unpacking rx from "LPX64"\n",
+                CERROR ("Error %d unpacking rx from "FMT_NID"\n",
                         rc, rx->rx_initiator.nid);
                 goto exit;
         }
@@ -634,7 +634,7 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         PJK_UT_MSG_DATA("Returned Credits=%d\n",msg->ptlm_credits);
         PJK_UT_MSG_DATA("Seq # ="LPX64"\n",msg->ptlm_seq);
         PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator_nid);
-        PJK_UT_MSG("ptl  RX nid=" LPX64 "\n",rx->rx_initiator.nid);
+        PJK_UT_MSG("ptl  RX nid=" FMT_NID "\n",rx->rx_initiator.nid);
 
         if(type == PTLLND_MSG_TYPE_HELLO)
         {

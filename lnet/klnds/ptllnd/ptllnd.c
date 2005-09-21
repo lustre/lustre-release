@@ -348,10 +348,10 @@ kptllnd_startup (lnet_ni_t *ni)
          */
         ni->ni_nid = ptl2lnetnid(kptllnd_data,kptllnd_data->kptl_portals_id.nid);
 
-        PJK_UT_MSG("ptl  nid=" LPX64 "\n",kptllnd_data->kptl_portals_id.nid);
+        PJK_UT_MSG("ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
         PJK_UT_MSG("lnet nid=" LPX64 " (passed back)\n",ni->ni_nid);
 
-        CDEBUG(D_INFO,"ptl  nid=" LPX64 "\n",kptllnd_data->kptl_portals_id.nid);
+        CDEBUG(D_INFO,"ptl  nid=" FMT_NID "\n",kptllnd_data->kptl_portals_id.nid);
         CDEBUG(D_INFO,"lnet nid=" LPX64 "\n",ni->ni_nid);
 
         /*

@@ -33,10 +33,10 @@ kptllnd_setup_md(
         kptl_tx_t       *tx,
         unsigned int     payload_niov,
         struct iovec    *payload_iov,
-        lnet_kiov_t      *payload_kiov,
+        lnet_kiov_t     *payload_kiov,
         unsigned int     payload_offset,
         int              payload_nob,
-        tempiov_t       *tempiov)
+        struct iovec    *tempiovec)
 {
         unsigned int niov = 0;
 
@@ -89,24 +89,19 @@ kptllnd_setup_md(
                 while(payload_nob){
                         LASSERT( payload_offset < payload_iov->iov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
+                        LASSERT (niov < PTL_MD_MAX_IOV);
 
-                        tempiov->iov[niov].iov_base = payload_iov->iov_base + payload_offset;
-                        tempiov->iov[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
+                        tempiovec[niov].iov_base = payload_iov->iov_base + payload_offset;
+                        tempiovec[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
                                                 (int)payload_nob);
 
                         payload_offset = 0;
-                        payload_nob -= tempiov->iov[niov].iov_len;
+                        payload_nob -= tempiovec[niov].iov_len;
                         payload_iov++;
                         payload_niov--;
                         niov++;
                 }
-
-                md->start = tempiov->iov;
-                md->options |= PTL_MD_IOVEC;
-
         }else{
-
 
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
@@ -116,31 +111,86 @@ kptllnd_setup_md(
                 }
 
                 while(payload_nob){
+                        u8 *ptr;
+                        
                         LASSERT( payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < sizeof(tempiov->kiov)/sizeof(tempiov->kiov[0]));
-
-                        tempiov->kiov[niov].kiov_page   = payload_kiov->kiov_page;
-                        tempiov->kiov[niov].kiov_offset = payload_kiov->kiov_offset + payload_offset;
-                        tempiov->kiov[niov].kiov_len    = min((int)(payload_kiov->kiov_len - payload_offset),
+                        LASSERT (niov < PTL_MD_MAX_IOV );                        
+                        
+                        
+                        ptr = cfs_kmap(payload_kiov->kiov_page);
+                        ptr += payload_kiov->kiov_offset + payload_offset;
+                        
+                        tempiovec[niov].iov_base = ptr;
+                        tempiovec[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
 
                         payload_offset = 0;
-                        payload_nob -= tempiov->kiov[niov].kiov_len;
+                        payload_nob -= tempiovec[niov].iov_len;
                         payload_kiov++;
                         payload_niov--;
                         niov++;
                 }
-
-                md->start = tempiov->kiov;
-                md->options |= PTL_MD_KIOV;
+                
+                /* 
+                 * We've mapped the KIOVs
+                 */        
+                tx->tx_mapped_kiov = 1;
         }
+        
+        md->start = tempiovec;
+        md->options |= PTL_MD_IOVEC;
 
         /*
          * When using PTL_MD_IOVEC or PTL_MD_KIOV this is not
          * length, rather it is # iovs
          */
         md->length = niov;
+}
+
+void
+kptllnd_cleanup_kiov(
+        kptl_tx_t       *tx)
+{
+        unsigned int     payload_niov = tx->tx_payload_niov;
+        lnet_kiov_t     *payload_kiov = tx->tx_payload_kiov;
+        unsigned int     payload_offset = tx->tx_payload_offset;
+        int              payload_nob = tx->tx_payload_nob;
+
+        /*
+         * Do nothing if the KIOVs weren't mapped
+         */        
+        if(tx->tx_mapped_kiov == 0)
+                return;
+                
+        if (payload_kiov != NULL){
+                
+                LASSERT(tx->tx_payload_iov == NULL);
+                
+                while (payload_offset >= payload_kiov->kiov_len) {
+                        payload_offset -= payload_kiov->kiov_len;
+                        payload_kiov++;
+                        payload_niov--;
+                        LASSERT (payload_niov > 0);
+                }
+
+                while(payload_nob){
+                        int temp_iov_len;
+                                                
+                        LASSERT( payload_offset < payload_kiov->kiov_len);
+                        LASSERT (payload_niov > 0);
+                        
+                        
+                        cfs_kunmap(payload_kiov->kiov_page);
+                        temp_iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
+                                                        (int)payload_nob);
+
+                        payload_offset = 0;
+                        payload_nob -= temp_iov_len;
+                        payload_kiov++;
+                        payload_niov--;
+                }        
+        }                
 }
 
 int
@@ -160,7 +210,7 @@ kptllnd_start_bulk_rdma(
         ptl_err_t        ptl_rc;
         ptl_err_t        ptl_rc2;
         int              rc;
-        tempiov_t        tempiov;
+        struct iovec     tempiovec[PTL_MD_MAX_IOV];
         kptl_msg_t      *rxmsg = rx->rx_msg;
         kptl_peer_t     *peer = rx->rx_peer;
 
@@ -174,7 +224,7 @@ kptllnd_start_bulk_rdma(
                 op == PTL_MD_OP_GET ? TX_TYPE_LARGE_PUT_RESPONSE :
                                       TX_TYPE_LARGE_GET_RESPONSE);
         if(tx == NULL){
-                CERROR ("Can't start bulk rdma %d to "LPX64": tx descs exhausted\n",
+                CERROR ("Can't start bulk rdma %d to "FMT_NID": tx descs exhausted\n",
                         op, rx->rx_initiator.nid);
                 return -ENOMEM;
         }
@@ -196,7 +246,7 @@ kptllnd_start_bulk_rdma(
          */
         kptllnd_setup_md(kptllnd_data,&md,op,tx,
                 payload_niov,payload_iov,payload_kiov,
-                payload_offset,payload_nob,&tempiov);
+                payload_offset,payload_nob,tempiovec);
 
         spin_lock(&peer->peer_lock);
 
@@ -453,7 +503,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_payload_niov = lntmsg->msg_md->md_niov;
                 tx->tx_payload_nob  = lntmsg->msg_md->md_length;
 
-                if((lntmsg->msg_md->md_options & PTL_MD_KIOV) != 0){
+                if((lntmsg->msg_md->md_options & LNET_MD_KIOV) != 0){
                         tx->tx_payload_iov = 0;
                         tx->tx_payload_kiov = lntmsg->msg_md->md_iov.kiov;
                 }else{

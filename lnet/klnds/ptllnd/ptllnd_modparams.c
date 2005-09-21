@@ -110,17 +110,17 @@ static ctl_table kptllnd_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{7, "rxb_npages", &rxb_npages,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "credits", &kptl_credits,
+	{8, "credits", &credits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "peercredits", &kptl_peercredits,
+	{9, "peercredits", &peercredits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10, "max_immd_size", &kptl_max_immd_size,
+	{10, "max_immd_size", &max_immd_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{11, "peer_hash_table_size,", &kptl_peer_hash_table_size,
+	{11, "peer_hash_table_size,", &peer_hash_table_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	 
 #ifdef PJK_DEBUGGING	 
-	{12, "simulation_bitmap,", &kptl_simulation_bitmap,
+	{12, "simulation_bitmap,", &simulation_bitmap,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 #endif
 	 
