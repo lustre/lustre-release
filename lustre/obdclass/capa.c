@@ -132,9 +132,9 @@ filter_find_capa(struct hlist_head *head, struct lustre_capa *capa)
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
                 if (ocapa->c_type != FILTER_CAPA)
                         continue;
+
                 if (!memcmp(&ocapa->c_capa, capa,
                             sizeof(struct lustre_capa_data))) {
-
                         DEBUG_CAPA(D_INODE, &ocapa->c_capa, "found %s",
                                    capa_type_name[ocapa->c_type]);
                         return ocapa;

@@ -257,8 +257,16 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
         LASSERT(body != NULL);          /* reply already checked out */
         LASSERT_REPSWABBED(req, 1);     /* and swabbed down */
 
-        if (!(body->valid & OBD_MD_CAPA))
+        if (!(body->valid & OBD_MD_CAPA)) {
+                if (atomic_read(&ll_capa_stat))
+                        CDEBUG(D_ERROR, "no capa for (uid %u, op %d, mdsid "
+                               LPU64", ino %lu igen %u)\n",
+                               (unsigned)current->uid, it->it_flags,
+                               id_group(&lli->lli_id), id_ino(&lli->lli_id),
+                               id_gen(&lli->lli_id));
+
                 return 0;
+        }
 
         ENTRY;
 
