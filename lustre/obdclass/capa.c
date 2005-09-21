@@ -298,6 +298,33 @@ capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
         return ocapa;
 }
 
+struct obd_capa * filter_capa_get(struct lustre_capa *capa)
+{
+        struct hlist_head *head = capa_hash +
+                capa_hashfn(capa->lc_uid, capa->lc_mdsid, capa->lc_ino);
+        struct hlist_node *pos;
+        struct obd_capa *ocapa;
+
+        spin_lock(&capa_lock);
+
+        hlist_for_each_entry(ocapa, pos, head, c_hash) {
+                if (ocapa->c_type != FILTER_CAPA)
+                        continue;
+                if (!memcmp(&ocapa->c_capa, capa,
+                            sizeof(struct lustre_capa_data))) {
+                        __capa_get(ocapa);
+
+                        DEBUG_CAPA(D_INODE, &ocapa->c_capa, "found %s",
+                                   capa_type_name[ocapa->c_type]);
+                        spin_unlock(&capa_lock);
+                        return ocapa;
+                }
+        }
+
+        spin_unlock(&capa_lock);
+        return NULL;
+}
+
 void capa_put(struct obd_capa *ocapa)
 {
         if (!ocapa)
@@ -403,6 +430,7 @@ int capa_is_to_expire(struct obd_capa *ocapa)
 
 EXPORT_SYMBOL(capa_op);
 EXPORT_SYMBOL(capa_get);
+EXPORT_SYMBOL(filter_capa_get);
 EXPORT_SYMBOL(capa_put);
 EXPORT_SYMBOL(capa_renew);
 EXPORT_SYMBOL(__capa_get);

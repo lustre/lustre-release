@@ -258,8 +258,7 @@ filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
                 RETURN(-ESTALE);
         }
 
-        ocapa = capa_get(capa->lc_uid, capa->lc_op, capa->lc_mdsid,
-                         capa->lc_ino, capa->lc_igen, FILTER_CAPA);
+        ocapa = filter_capa_get(capa);
 verify:
         if (ocapa) {
                 struct timeval tv;
