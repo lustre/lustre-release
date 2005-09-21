@@ -105,6 +105,15 @@ Details    : Existing read-ahead algorithm is tuned for the case of streamlined
 	     reads.  Improve it by reading ahead at least read region, and
 	     avoiding excessive large RPC for small reads.
 
+Severity   : enhancement
+Bugzilla   : 8330
+Description: Creating more than 1000 files for a single job may cause a load
+	     imbalance on the OSTs if there are also a large number of OSTs.
+Details    : qos_prep_create() uses an OST index reseed value that is an
+	     even multiple of the number of available OSTs so that if the
+	     reseed happens in the middle of the object allocation it will
+	     still utilize the OSTs as uniformly as possible.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

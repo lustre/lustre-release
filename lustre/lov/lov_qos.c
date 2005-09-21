@@ -106,12 +106,14 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
         RETURN(rc);
 }
 
-#define LOV_CREATE_RESEED_INTERVAL 1000
+#define LOV_CREATE_RESEED_MULT 4
+#define LOV_CREATE_RESEED_MIN  1000
 /* FIXME use real qos data to prepare the lov create request */
 int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 {
         static int ost_start_idx, ost_start_count;
         unsigned ost_idx, ost_count = lov->desc.ld_tgt_count;
+        unsigned ost_active_count = lov->desc.ld_active_tgt_count;
         struct lov_stripe_md *lsm = set->set_md;
         struct obdo *src_oa = set->set_oa;
         int i, rc = 0;
@@ -130,9 +132,10 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
         if (newea || lsm->lsm_oinfo[0].loi_ost_idx >= ost_count) {
                 if (--ost_start_count <= 0) {
                         ost_start_idx = ll_insecure_random_int();
-                        ost_start_count = LOV_CREATE_RESEED_INTERVAL;
-                } else if (lsm->lsm_stripe_count >=
-                           lov->desc.ld_active_tgt_count) {
+                        ost_start_count =
+                          (LOV_CREATE_RESEED_MIN / max(ost_active_count, 1U) +
+                           LOV_CREATE_RESEED_MULT) * max(ost_active_count, 1U);
+                } else if (lsm->lsm_stripe_count >= ost_active_count) {
                         /* If we allocate from all of the stripes, make the
                          * next file start on the next OST. */
                         ++ost_start_idx;
