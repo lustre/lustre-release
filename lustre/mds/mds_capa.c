@@ -555,7 +555,7 @@ int mds_pack_capa(struct obd_device *obd, struct mds_export_data *med,
         memcpy(key, CUR_CAPA_KEY(mds)->lk_key, sizeof(key));
         spin_unlock(&mds_capa_lock);
 
-        capa_hmac(mds->mds_capa_hmac, key, capa);
+        capa_hmac(key, capa);
 
         ocapa = capa_renew(capa, MDS_CAPA);
         if (!ocapa)

@@ -3534,7 +3534,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         struct vfsmount *mnt;
         char ns_name[48];
         unsigned long page;
-        struct crypto_tfm *tfm = NULL;
         int rc = 0;
         ENTRY;
 
@@ -3646,11 +3645,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
 
-        tfm = crypto_alloc_tfm(CAPA_HMAC_ALG, 0);
-        if (!tfm)
-                GOTO(err_ns, rc = -ENOSYS);
-
-        mds->mds_capa_hmac = tfm;
         mds->mds_capa_timeout = CAPA_TIMEOUT;
         mds->mds_capa_key_timeout = CAPA_KEY_TIMEOUT;
         
@@ -3658,7 +3652,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc) {
                 CERROR("%s: MDS filesystem method init failed: rc = %d\n",
                        obd->obd_name, rc);
-                GOTO(err_capa, rc);
+                GOTO(err_ns, rc);
         }
 
         rc = llog_start_commit_thread();
@@ -3715,8 +3709,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd, 0);
-err_capa:
-        crypto_free_tfm(mds->mds_capa_hmac);
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
@@ -4004,8 +3996,6 @@ static int mds_cleanup(struct obd_device *obd, int flags)
 
         mds_capa_keys_cleanup(obd);
 
-        if (mds->mds_capa_hmac)
-                crypto_free_tfm(mds->mds_capa_hmac);
         RETURN(0);
 }
 

@@ -337,7 +337,7 @@ new_capa:
 
         tcapa = *capa;
         tcapa.lc_keyid = capa_keys[0].k_key.lk_keyid;
-        capa_hmac(filter->fo_capa_hmac, capa_keys[0].k_key.lk_key, &tcapa);
+        capa_hmac(capa_keys[0].k_key.lk_key, &tcapa);
 
         /* store in capa cache */
         ocapa = capa_renew(&tcapa, FILTER_CAPA);
@@ -346,8 +346,7 @@ new_capa:
 
         if (bkey) {
                 tcapa.lc_keyid = capa_keys[1].k_key.lk_keyid;
-                capa_hmac(filter->fo_capa_hmac, capa_keys[1].k_key.lk_key,
-                          &tcapa);
+                capa_hmac(capa_keys[1].k_key.lk_key, &tcapa);
 
                 spin_lock(&filter->fo_capa_lock);
                 memcpy(ocapa->c_bhmac, tcapa.lc_hmac, sizeof(ocapa->c_bhmac));

@@ -609,7 +609,7 @@ struct obd_capa *capa_get(uid_t uid, int capa_op, __u64 mdsid,
 struct obd_capa *filter_capa_get(struct lustre_capa *capa);
 void capa_put(struct obd_capa *ocapa);
 struct obd_capa *capa_renew(struct lustre_capa *capa, int type);
-void capa_hmac(struct crypto_tfm *tfm, __u8 *key, struct lustre_capa *capa);
+void capa_hmac(__u8 *key, struct lustre_capa *capa);
 void capa_dup(void *dst, struct obd_capa *ocapa);
 void capa_dup2(void *dst, struct lustre_capa *capa);
 int capa_expired(struct lustre_capa *capa);

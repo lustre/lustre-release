@@ -1428,7 +1428,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct filter_obd *filter = &obd->u.filter;
         struct lvfs_obd_ctxt *lvfs_ctxt = NULL;
         struct vfsmount *mnt;
-        struct crypto_tfm *tfm;
         char *str;
         char ns_name[48];
         int rc = 0, i;
@@ -1490,17 +1489,12 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         sema_init(&filter->fo_init_lock, 1);
         filter->fo_committed_group = 0;
 
-        tfm = crypto_alloc_tfm(CAPA_HMAC_ALG, 0);
-        if (!tfm)
-                GOTO(err_mntput, rc = -ENOSYS);
-
-        filter->fo_capa_hmac = tfm;
         INIT_LIST_HEAD(&filter->fo_capa_keys);
         spin_lock_init(&filter->fo_capa_lock);
 
         rc = filter_prep(obd);
         if (rc)
-                GOTO(err_capa, rc);
+                GOTO(err_mntput, rc);
 
         filter->fo_destroys_in_progress = 0;
         for (i = 0; i < 32; i++)
@@ -1546,8 +1540,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
 err_post:
         filter_post(obd);
-err_capa:
-        crypto_free_tfm(filter->fo_capa_hmac);
 err_mntput:
         unlock_kernel();
         lvfs_umount_fs(filter->fo_lvfs_ctxt);

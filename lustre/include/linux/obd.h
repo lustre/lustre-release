@@ -289,7 +289,6 @@ struct filter_obd {
 
         /* capability related */
         int                      fo_capa_stat;
-        struct crypto_tfm       *fo_capa_hmac;
         spinlock_t               fo_capa_lock;
 
         struct list_head         fo_capa_keys;
@@ -473,7 +472,6 @@ struct mds_obd {
 
         /* capability related */
         int                              mds_capa_stat;     /* 1: on, 0: off */
-        struct crypto_tfm               *mds_capa_hmac;
         unsigned long                    mds_capa_timeout;  /* sec */
 
         struct mds_capa_key              mds_capa_keys[2];  /* red & black key */
