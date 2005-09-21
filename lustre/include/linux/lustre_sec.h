@@ -600,6 +600,7 @@ extern spinlock_t capa_lock;
 extern struct hlist_head *capa_hash;
 extern struct list_head capa_list[];
 extern struct timer_list ll_capa_timer;
+extern atomic_t ll_capa_stat;
 
 /* obdclass/capa.c */
 int capa_op(int flags);

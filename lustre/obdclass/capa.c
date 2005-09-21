@@ -61,6 +61,7 @@ static char *capa_type_name[] = { "client", "mds", "filter" };
  * in the future it will be moved to ll_sb_info to support multi-
  * mount point */
 struct timer_list ll_capa_timer;
+atomic_t ll_capa_stat = ATOMIC_INIT(0);
 
 EXPORT_SYMBOL(capa_lock);
 EXPORT_SYMBOL(capa_hash);
@@ -92,8 +93,6 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
         struct obd_capa *ocapa;
         uid_t ouid;
 
-        CDEBUG(D_INODE, "find capa for (uid %u, op %d, mdsid "LPU64", ino %lu"
-               " igen %u, type %d\n", (unsigned) uid, capa_op, mdsid, ino, igen, type);
         hlist_for_each_entry(ocapa, pos, head, c_hash) {
                 if (ocapa->c_capa.lc_ino != ino)
                         continue;
@@ -118,6 +117,13 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                            capa_type_name[ocapa->c_type]);
 
                 return ocapa;
+        }
+
+        if (atomic_read(&ll_capa_stat)) {
+                CDEBUG(D_ERROR, "find capa for (uid %u, op %d, mdsid "LPU64","
+                       " ino %lu igen %u, type %d) failed.\n",
+                       (unsigned) uid, capa_op, mdsid, ino, igen, type);
+                atomic_set(&ll_capa_stat, 0);
         }
 
         return NULL;
@@ -385,6 +391,9 @@ struct obd_capa *capa_renew(struct lustre_capa *capa, int type)
 
         if (!ocapa)
                 ocapa = get_new_capa_locked(head, type, capa);
+
+        if (type == CLIENT_CAPA)
+                atomic_set(&ll_capa_stat, 1);
 
         return ocapa;
 }
