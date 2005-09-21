@@ -512,11 +512,6 @@ kptllnd_peer_cancel(
         kptl_peer_t *peer);
 
 void
-kptllnd_peer_queue_tx (
-        kptl_peer_t *peer,
-        kptl_tx_t *tx);
-
-void
 kptllnd_peer_queue_bulk_rdma_tx_locked(
         kptl_peer_t *peer,
         kptl_tx_t *tx);

@@ -95,6 +95,9 @@ kptllnd_setup_md(
                         tempiovec[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
                                                 (int)payload_nob);
 
+                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiovec[niov].iov_base);
+                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiovec[niov].iov_len);
+
                         payload_offset = 0;
                         payload_nob -= tempiovec[niov].iov_len;
                         payload_iov++;
@@ -102,6 +105,9 @@ kptllnd_setup_md(
                         niov++;
                 }
         }else{
+
+                PJK_UT_MSG_DATA("Mapping KIOVs tx=%p\n",tx);
+
 
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
@@ -119,11 +125,16 @@ kptllnd_setup_md(
 
 
                         ptr = cfs_kmap(payload_kiov->kiov_page);
-                        ptr += payload_kiov->kiov_offset + payload_offset;
+                        LASSERT( ptr != 0);
+                        ptr += payload_kiov->kiov_offset;
 
-                        tempiovec[niov].iov_base = ptr;
+                        tempiovec[niov].iov_base = ptr + payload_offset;
                         tempiovec[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
+
+                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiovec[niov].iov_base);
+                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiovec[niov].iov_len);
+
 
                         payload_offset = 0;
                         payload_nob -= tempiovec[niov].iov_len;
@@ -162,6 +173,8 @@ kptllnd_cleanup_kiov(
          */
         if(tx->tx_mapped_kiov == 0)
                 return;
+
+        PJK_UT_MSG("Un Mapping KIOVs tx=%p\n",tx);
 
         if (payload_kiov != NULL){
 
@@ -365,31 +378,24 @@ end:
 
 
 void
-kptlnd_do_put(
+kptllnd_do_put(
         kptl_tx_t       *tx,
         lnet_msg_t      *lntmsg,
-        lnet_hdr_t      *hdr,
-        kptl_data_t     *kptllnd_data,
-        lnet_process_id_t target,
-        unsigned int     payload_niov,
-        struct iovec    *payload_iov,
-        lnet_kiov_t     *payload_kiov,
-        unsigned int     payload_offset,
-        unsigned int     payload_nob)
+        kptl_data_t     *kptllnd_data)
 {
         LASSERT(tx != NULL);
 
-        tx->tx_payload_niov     = payload_niov;
-        tx->tx_payload_iov      = payload_iov;
-        tx->tx_payload_kiov     = payload_kiov;
-        tx->tx_payload_offset   = payload_offset;
-        tx->tx_payload_nob      = payload_nob;
+        tx->tx_payload_niov     = lntmsg->msg_niov;
+        tx->tx_payload_iov      = lntmsg->msg_iov;
+        tx->tx_payload_kiov     = lntmsg->msg_kiov;
+        tx->tx_payload_offset   = lntmsg->msg_offset;
+        tx->tx_payload_nob      = lntmsg->msg_len;
 
-        tx->tx_msg->ptlm_u.req.kptlrm_hdr = *hdr;
+        tx->tx_msg->ptlm_u.req.kptlrm_hdr = lntmsg->msg_hdr;
         kptllnd_init_msg (tx->tx_msg,
                           PLTLND_MSG_TYPE_PUT,
                           sizeof(kptl_request_msg_t));
-        kptllnd_tx_launch(tx, target.nid,lntmsg);
+        kptllnd_tx_launch(tx, lntmsg->msg_target.nid,lntmsg);
 }
 
 int
@@ -464,9 +470,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= *kptllnd_tunables.kptl_max_immd_size)
                         break;
 
-                kptlnd_do_put(tx,lntmsg,hdr,kptllnd_data,target,
-                                payload_niov,payload_iov,
-                                payload_kiov,payload_offset,payload_nob);
+                kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
                 PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
                 return 0;
@@ -544,9 +548,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         if (nob <= *kptllnd_tunables.kptl_max_immd_size)
                                 break;
 
-                        kptlnd_do_put(tx,lntmsg,hdr,kptllnd_data,target,
-                                        payload_niov,payload_iov,
-                                        payload_kiov,payload_offset,payload_nob);
+                        kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
                         PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
                         return 0;

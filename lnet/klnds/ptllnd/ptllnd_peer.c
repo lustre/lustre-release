@@ -419,19 +419,6 @@ kptllnd_peer_queue_tx_locked (
 }
 
 void
-kptllnd_peer_queue_tx (
-        kptl_peer_t *peer,
-        kptl_tx_t *tx)
-{
-        spin_lock(&peer->peer_lock);
-        kptllnd_peer_queue_tx_locked (peer, tx);
-        spin_unlock(&peer->peer_lock);
-
-        kptllnd_peer_check_sends(peer);
-}
-
-
-void
 kptllnd_peer_queue_bulk_rdma_tx_locked(
         kptl_peer_t *peer,
         kptl_tx_t *tx)
@@ -567,14 +554,20 @@ kptllnd_peer_check_sends (
                  *
                  * THEN it is safe to simply discard this NOOP
                  * and continue one.
+                 *
+                 * NOTE: We can't be holding the lock while calling
+                 * kptllnd_tx_decref because that will call lnet_finalize()
+                 * which can not be called while loding a lock.
                  */
                 if (tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_NOOP &&
                     (!list_empty(&peer->peer_pending_txs) ||
                      peer->peer_outstanding_credits < PTLLND_CREDIT_HIGHWATER)) {
+                        spin_unlock(&peer->peer_lock);
                         /* redundant NOOP */
                         kptllnd_tx_decref(tx);
                         CDEBUG(D_NET, LPX64": redundant noop\n",
                                peer->peer_nid);
+                        spin_lock(&peer->peer_lock);
                         continue;
                 }
 
@@ -1220,7 +1213,10 @@ kptllnd_tx_launch (
          * (which could send it)
          */
         if (peer != NULL) {
-                kptllnd_peer_queue_tx ( peer, tx );
+                spin_lock(&peer->peer_lock);
+                kptllnd_peer_queue_tx_locked ( peer, tx );
+                spin_unlock(&peer->peer_lock);
+                kptllnd_peer_check_sends(peer);
                 kptllnd_peer_decref(peer,"find");
                 PJK_UT_MSG("<<< FOUND\n");
                 return;
@@ -1265,7 +1261,10 @@ kptllnd_tx_launch (
 
                 CDEBUG(D_TRACE,"HELLO message race occurred (nid="LPX64")\n",target_nid);
 
-                kptllnd_peer_queue_tx ( peer, tx );
+                spin_lock(&peer->peer_lock);
+                kptllnd_peer_queue_tx_locked ( peer, tx );
+                spin_unlock(&peer->peer_lock);
+                kptllnd_peer_check_sends(peer);
                 kptllnd_peer_decref(peer,"find");
 
                 /* and we don't need the connection tx*/
@@ -1302,8 +1301,11 @@ kptllnd_tx_launch (
          * the tx will wait for a reply.
          */
         PJK_UT_MSG("TXHello=%p\n",tx_hello);
+
+        spin_lock(&peer->peer_lock);
         kptllnd_peer_queue_tx_locked(peer,tx_hello);
         kptllnd_peer_queue_tx_locked(peer,tx);
+        spin_unlock(&peer->peer_lock);
 
         write_unlock_irqrestore(g_lock,flags);
 
