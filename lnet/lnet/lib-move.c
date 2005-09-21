@@ -699,7 +699,8 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
         struct iovec *iov = NULL;
         lnet_kiov_t  *kiov = NULL;
         int           rc;
-
+        
+        LASSERT (!in_interrupt());        
         LASSERT (mlen == 0 || msg != NULL);
         
         if (msg != NULL) {
@@ -790,6 +791,8 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
         int     recv = msg->msg_recvaftersend;
         int     delayed = msg->msg_delayed;
         int     rc;
+
+        LASSERT (!in_interrupt());        
 
         /* On GET, call lnet_ni_recv() right after the send. The recv gets
          * delayed until after the send to ensure the LND still has any RDMA

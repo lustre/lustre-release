@@ -69,6 +69,8 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
         int                unlink;
         int                rc;
 
+        LASSERT (!in_interrupt());
+
         if (msg == NULL)
                 return;
 
