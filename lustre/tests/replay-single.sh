@@ -1313,6 +1313,19 @@ test_57() {
 }
 run_test 57 "open orphan in reconstruct_open()"
 
+test_58() {
+	capa=`cat /proc/fs/lustre/mds/mds*/capa`
+	if [ "$capa" == "0" ]; then
+		echo "skip testing - no capa enabled"
+		return 0
+	fi
+    	sysctl -w lustre.fail_loc=0x0000030c
+	rc=multiop $DIR/$tfile Ow
+    	sysctl -w lustre.fail_loc=0
+	return rc
+}
+run_test 58 "open+create resent should return capa"
+
 equals_msg test complete, cleaning up
 $CLEANUP
 

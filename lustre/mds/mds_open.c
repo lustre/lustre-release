@@ -622,6 +622,15 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         /* get lock (write for O_CREAT, read otherwise) */
         mds_pack_inode2body(obd, body, dchild->d_inode, 1);
         if (S_ISREG(dchild->d_inode->i_mode)) {
+                struct lustre_capa capa = {
+                        .lc_uid   = rec->ur_uc.luc_uid,
+                        .lc_op    = capa_op(rec->ur_flags),
+                        .lc_ino   = dchild->d_inode->i_ino,
+                        .lc_igen  = dchild->d_inode->i_generation,
+                        .lc_mdsid = mds->mds_num,
+                };
+                int off = 7; /* capa offset */
+
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 1, 0);
 
@@ -632,7 +641,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 if (!(body->valid & OBD_MD_FLEASIZE))
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
-                DEBUG_REQ(D_ERROR, req, "no capa for "DLID4, OLID4(&body->id1));
+                rc = mds_pack_capa(obd, med, NULL, &capa, req, &off, body);
         }
         
         /* If we have -EEXIST as the status, and we were asked to create
