@@ -1,7 +1,7 @@
 MODULES := kptllnd
 
-kptllnd-objs := ptllnd.o
+EXTRA_POST_CFLAGS := @PTLLNDCPPFLAGS@
 
-EXTRA_PRE_CFLAGS := @PTLLNDCPPFLAGS@
+kptllnd-objs := ptllnd_rx_buf.o ptllnd_tx.o ptllnd.o ptllnd_cb.o ptllnd_modparams.o ptllnd_peer.o
 
 @INCLUDE_RULES@

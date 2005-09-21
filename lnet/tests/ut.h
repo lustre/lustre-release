@@ -25,6 +25,7 @@ const char *get_ev_type_string(int evtype)
 }
 
 static volatile int seen = 0;
+static volatile int seen_unlink = 0;
 
 static inline void handler(lnet_event_t *ev)
 {
@@ -40,4 +41,5 @@ static inline void handler(lnet_event_t *ev)
         PJK_UT_MSG("md.user_ptr=%p\n",ev->md.user_ptr);
         PJK_UT_MSG("-------- EVENT END --------------\n");
         ++seen;
+        if(ev->unlinked)++seen_unlink;
 }

@@ -3,7 +3,7 @@
  */
 
 
-#define UT_MSG_MODULE_NAME "utsrv " 
+#define UT_MSG_MODULE_NAME "utsrv "
 #include "ut.h"
 
 
@@ -23,32 +23,32 @@ static int __init utsrv_init(void)
         lnet_process_id_t       anypid;
         lnet_process_id_t       mypid;
         lnet_md_t               md;
-        
+
         PJK_UT_MSG(">>>\n");
-        PJK_UT_MSG("pkt_size=%d\n",pkt_size);        
+        PJK_UT_MSG("pkt_size=%d\n",pkt_size);
         PJK_UT_MSG("auto_unlink=%d\n",auto_unlink);
-        
+
         PJK_UT_MSG("PORTAL_ALLOC\n");
         PORTAL_ALLOC (buffer, pkt_size);
         if (buffer == NULL)
         {
-                CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", pkt_size);
+                CERROR ("Unable to allocate out_buf (%d bytes)\n", pkt_size);
                 rc = -ENOMEM;
                 goto exit0;
-        }        
-  
+        }
+
         PJK_UT_MSG("LNetNiInit()\n");
         rc = LNetNIInit(0);
         if (rc < 0)
         {
                 CERROR ("LNetNIInit: error %d\n", rc);
                 goto exit1;
-        }        
-        
+        }
+
         LNetGetId(0,&mypid);
         PJK_UT_MSG("my.nid="LPX64"\n",mypid.nid);
-        PJK_UT_MSG("my.pid=0x%x\n",mypid.pid);        
-        
+        PJK_UT_MSG("my.pid=0x%x\n",mypid.pid);
+
         PJK_UT_MSG("LNetEQAlloc\n");
         rc = LNetEQAlloc(
                 64,      /* max number of envents why 64? */
@@ -57,8 +57,8 @@ static int __init utsrv_init(void)
         if(rc != 0) {
                 CERROR("LNetEQAlloc failed %d\n",rc);
                 goto exit2;
-        }        
-        
+        }
+
         anypid.nid = LNET_NID_ANY;
         anypid.pid = LNET_PID_ANY;
 
@@ -75,8 +75,8 @@ static int __init utsrv_init(void)
         if(rc != 0) {
                 CERROR("LNetMeAttach failed %d\n",rc);
                 goto exit3;
-        }        
-        
+        }
+
         md.start = buffer;
         md.length = pkt_size;
         md.threshold = auto_unlink ? 1 : 100;
@@ -97,26 +97,26 @@ static int __init utsrv_init(void)
         if(rc != 0){
                 CERROR("LNetMDAttach failed %d\n",rc);
                 goto exit4;
-        }        
-        
+        }
+
         rc = 0;
         goto exit0;
-        
-exit4:        
+
+exit4:
         PJK_UT_MSG("LNetMEUnlink()\n");
         LNetMEUnlink(meh);
-exit3:        
+exit3:
         PJK_UT_MSG("LNetEQFree()\n");
         LNetEQFree(eqh);
 exit2:
         PJK_UT_MSG("LNetNiFini()\n");
         LNetNIFini();
 exit1:
-        PORTAL_FREE(buffer,pkt_size);             
+        PORTAL_FREE(buffer,pkt_size);
 exit0:
         PJK_UT_MSG("<<< rc=%d\n",rc);
         return rc;
-        
+
 } /* utsrv_init() */
 
 
@@ -126,12 +126,12 @@ static void /*__exit*/ utsrv_cleanup(void)
         PJK_UT_MSG("LNetMDUnlink()\n");
         LNetMDUnlink(mdh);
         PJK_UT_MSG("LNetMEUnlink()\n");
-        LNetMEUnlink(meh);        
+        LNetMEUnlink(meh);
         PJK_UT_MSG("LNetEQFree()\n");
-        LNetEQFree(eqh);        
+        LNetEQFree(eqh);
         PJK_UT_MSG("LNetNiFini()\n");
         LNetNIFini();
-        PORTAL_FREE(buffer,pkt_size);             
+        PORTAL_FREE(buffer,pkt_size);
         PJK_UT_MSG("<<<\n");
 } /* utsrv_cleanup() */
 

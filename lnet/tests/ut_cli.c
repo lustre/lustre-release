@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
- 
- #define UT_MSG_MODULE_NAME "utcli " 
+
+ #define UT_MSG_MODULE_NAME "utcli "
  #include "ut.h"
 
 int pkt_size = 300;
@@ -46,7 +46,7 @@ static int __init utcli_init(void)
         PORTAL_ALLOC (buffer, pkt_size);
         if (buffer == NULL)
         {
-                CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", pkt_size);
+                CERROR ("Unable to allocate out_buf (%d bytes)\n", pkt_size);
                 return -ENOMEM;
         }
 
@@ -100,9 +100,9 @@ static int __init utcli_init(void)
 
         target.pid = 0;
         target.nid = libcfs_str2nid(nid);
-                
+
         PJK_UT_MSG("target.nid="LPX64"\n",target.nid);
-        
+
         for(i=0;i<1;i++)
         {
                 if(get){
@@ -141,7 +141,7 @@ static int __init utcli_init(void)
         while(i++ < 10 && seen == 0)
                 cfs_pause(cfs_time_seconds(1));
         if(seen == 0)
-                PJK_UT_MSG("------------------TIMEDOUT--------------------\n");                        
+                PJK_UT_MSG("------------------TIMEDOUT--------------------\n");
         else{
                 int good;
                 if(get){
@@ -153,12 +153,12 @@ static int __init utcli_init(void)
                 }else{
                         good = 1;
                 }
-                
+
                 if(good)
                         PJK_UT_MSG("------------------COMPLETE--------------------\n");
                 else
-                        PJK_UT_MSG("------------------TIMEDOUT--------------------\n");                                
-        }                
+                        PJK_UT_MSG("------------------TIMEDOUT--------------------\n");
+        }
 
 
 
@@ -172,6 +172,15 @@ static int __init utcli_init(void)
 exit5:
         PJK_UT_MSG("LNetMDUnlink()\n");
         LNetMDUnlink(mdh);
+
+        if(!seen_unlink){
+                PJK_UT_MSG("------------Waiting for UNLINK ------------\n");
+                i=0;
+                while(i++ < 120 && seen_unlink == 0)
+                        cfs_pause(cfs_time_seconds(1));
+        }
+
+        cfs_pause(cfs_time_seconds(1));
 exit4:
         PJK_UT_MSG("LNetEQFree()\n");
         LNetEQFree(eqh);
@@ -189,7 +198,7 @@ exit0:
 static void /*__exit*/ utcli_cleanup(void)
 {
         PJK_UT_MSG(">>>\n");
-        PJK_UT_MSG("<<<\n");        
+        PJK_UT_MSG("<<<\n");
 } /* utcli_cleanup() */
 
 
