@@ -258,11 +258,13 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
         LASSERT_REPSWABBED(req, 1);     /* and swabbed down */
 
         if (!(body->valid & OBD_MD_CAPA)) {
-                if (atomic_read(&ll_capa_stat))
+                if (atomic_read(&ll_capa_stat)) {
                         DEBUG_REQ(D_ERROR, req,
                                   "no capa for (uid %u, op %d, "DLID4"\n",
-                                   (unsigned)current->uid, it->it_flags,
-                                   OLID4(&lli->lli_id));
+                                  (unsigned)current->uid, it->it_flags,
+                                  OLID4(&lli->lli_id));
+                        atomic_set(&ll_capa_stat, 0);
+                }
 
                 return 0;
         }
