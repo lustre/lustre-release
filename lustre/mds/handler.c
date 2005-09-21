@@ -1757,13 +1757,14 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         de = mds_id2dentry(obd, &body->id1, NULL);
         if (IS_ERR(de)) {
-                rc = req->rq_status = PTR_ERR(de);
+                rc = PTR_ERR(de);
                 GOTO(out_pop, rc);
         }
 
         rc = mds_getattr_pack_msg(req, de, offset);
         if (rc != 0) {
                 CERROR("mds_getattr_pack_msg: %d\n", rc);
+                l_dput(de);
                 GOTO(out_pop, rc);
         }
 
@@ -1773,9 +1774,10 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
 
         EXIT;
 out_pop:
+        req->rq_status = rc;
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         mds_exit_ucred(&uc);
-        return rc;
+        return 0;
 }
 
 static int mds_access_check(struct ptlrpc_request *req, int offset)
