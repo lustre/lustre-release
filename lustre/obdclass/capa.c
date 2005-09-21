@@ -120,13 +120,6 @@ find_capa(struct hlist_head *head, uid_t uid, int capa_op, __u64 mdsid,
                 return ocapa;
         }
 
-        if (atomic_read(&ll_capa_stat)) {
-                CDEBUG(D_ERROR, "find capa for (uid %u, op %d, mdsid "LPU64","
-                       " ino %lu igen %u, type %d) failed.\n",
-                       (unsigned) uid, capa_op, mdsid, ino, igen, type);
-                atomic_set(&ll_capa_stat, 0);
-        }
-
         return NULL;
 }
 
@@ -331,6 +324,13 @@ capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
 
         ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, igen, type);
         
+        if (ocapa == NULL && type == CLIENT_CAPA && atomic_read(&ll_capa_stat)){
+                CDEBUG(D_ERROR, "find capa for (uid %u, op %d, mdsid "LPU64","
+                       " ino %lu igen %u, type %d) failed.\n",
+                       (unsigned) uid, capa_op, mdsid, ino, igen, type);
+                atomic_set(&ll_capa_stat, 0);
+        }
+
         return ocapa;
 }
 
