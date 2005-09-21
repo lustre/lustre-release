@@ -208,14 +208,6 @@ int filter_verify_fid(struct obd_export *exp, struct inode *inode,
         RETURN(0);
 }
 
-static void dump_capa_hmac(char *buf, char *key)
-{
-        int i, n = 0;
-
-        for (i = 0; i < CAPA_DIGEST_SIZE; i++)
-                n += sprintf(buf + n, "%02x", (unsigned char) key[i]);
-}
-
 int
 filter_verify_capa(int cmd, struct obd_export *exp, struct lustre_capa *capa)
 {

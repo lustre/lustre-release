@@ -324,9 +324,9 @@ capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
 
         ocapa = find_capa_locked(head, uid, capa_op, mdsid, ino, igen, type);
         
-        if (ocapa == NULL && type == CLIENT_CAPA && atomic_read(&ll_capa_stat)){
-                CDEBUG(D_ERROR, "find capa for (uid %u, op %d, mdsid "LPU64","
-                       " ino %lu igen %u, type %d) failed.\n",
+        if (type == CLIENT_CAPA && !ocapa && atomic_read(&ll_capa_stat)) {
+                CDEBUG(D_ERROR, "can't find capa for (uid %u, op %d, mdsid "
+                       LPU64", ino %lu igen %u, type %d) failed.\n",
                        (unsigned) uid, capa_op, mdsid, ino, igen, type);
                 atomic_set(&ll_capa_stat, 0);
         }
@@ -460,6 +460,15 @@ int capa_is_to_expire(struct obd_capa *ocapa)
         return rc;
 }
 
+void dump_capa_hmac(char *buf, char *key)
+{
+        int i, n = 0;
+
+        for (i = 0; i < CAPA_DIGEST_SIZE; i++)
+                n += sprintf(buf + n, "%02x", (unsigned char) key[i]);
+}
+
+
 EXPORT_SYMBOL(capa_op);
 EXPORT_SYMBOL(capa_get);
 EXPORT_SYMBOL(filter_capa_get);
@@ -472,3 +481,5 @@ EXPORT_SYMBOL(capa_dup2);
 EXPORT_SYMBOL(capa_expired);
 EXPORT_SYMBOL(__capa_is_to_expire);
 EXPORT_SYMBOL(capa_is_to_expire);
+EXPORT_SYMBOL(dump_capa_hmac);
+

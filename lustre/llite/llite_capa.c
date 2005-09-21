@@ -341,8 +341,8 @@ struct obd_capa *ll_get_capa(struct inode *inode, uid_t uid, int op)
         }
 
         if (atomic_read(&ll_capa_stat)) {
-                CDEBUG(D_ERROR, "find capa for (uid %u, op %d, mdsid "LPU64","
-                       " ino %u igen %u) failed.\n",
+                CDEBUG(D_ERROR, "can't find capa for (uid %u, op %d, mdsid "
+                       LPU64", ino %u igen %u) failed.\n",
                        (unsigned)uid, op, id_group(&lli->lli_id),
                        (unsigned)id_ino(&lli->lli_id), id_gen(&lli->lli_id));
                 atomic_set(&ll_capa_stat, 0);
