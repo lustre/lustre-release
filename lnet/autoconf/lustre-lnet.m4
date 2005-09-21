@@ -85,7 +85,7 @@ fi
 AC_DEFUN([LN_CONFIG_PTLLND],
 [AC_MSG_CHECKING([for Portals API headers])
 
-if test $PORTALS -o test $LUSTRE_PORTALS ; then
+if test ! "x$PORTALS" = "x" -o ! "x$LUSTRE_PORTALS" = "x" ; then
 	AC_MSG_RESULT([yes])
 	PTLLND="ptllnd"
 	if test $PORTALS ; then
@@ -93,12 +93,10 @@ if test $PORTALS -o test $LUSTRE_PORTALS ; then
 	else
         	PTLLNDCPPFLAGS="-I$LUSTRE_PORTALS/include"
 	fi
-	AC_MSG_RESULT([$LUSTRE_PORTALS])
 else
 	AC_MSG_RESULT([no])
 	PTLLND=""
 	PTLLNDCPPFLAGS=""
-	AC_MSG_RESULT([no])
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)
@@ -239,7 +237,7 @@ else
 		AC_MSG_RESULT([yes])
 	],[
 		AC_MSG_RESULT([no.
-Please patch the GM sources as follows... 
+Please patch the GM sources as follows...
     cd $GM_SRC
     patch -p0 < $PWD/lnet/klnds/gmlnd/gm-reg-phys.patch
 ...then rebuild and re-install them])
@@ -745,7 +743,7 @@ AC_MSG_RESULT([$enable_efence])
 if test "$enable_efence" = "yes" ; then
 	LIBEFENCE="-lefence"
 	AC_DEFINE(HAVE_LIBEFENCE, 1, [libefence support is requested])
-else 
+else
 	LIBEFENCE=""
 fi
 AC_SUBST(LIBEFENCE)
