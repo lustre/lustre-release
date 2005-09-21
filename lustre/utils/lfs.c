@@ -77,7 +77,7 @@ command_t cmdlist[] = {
          "delete the default striping pattern from an existing directory\n"
          "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "       or \n"
-         "       setstripe -d <dirname>\n"
+         "       setstripe -d <dirname>   (to delete default striping)\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
