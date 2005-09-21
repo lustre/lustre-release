@@ -86,7 +86,6 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 LASSERT (body != NULL);          /* checked by md_readpage() */
                 LASSERT_REPSWABBED (request, 0); /* swabbed by md_readpage() */
 
-#warning "FIXME ASAP!"
                 //inode->i_size = body->size;
                 SetPageUptodate(page);
         }

@@ -1621,7 +1621,6 @@ static int lmv_readpage(struct obd_export *exp, struct lustre_id *id,
         int rc, i;
         ENTRY;
 
-#warning "we need well-desgined readdir() implementation"
         rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);

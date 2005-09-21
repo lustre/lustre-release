@@ -1385,7 +1385,6 @@ got_child:
         }
 #else
 /* re-enable test 24n in sanity.sh: it needs LOOKUP lock on open */
-#warning "disable opencache lock for CMD2"
 #endif
 
         /* Step 5: mds_open it */

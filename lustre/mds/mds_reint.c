@@ -2398,7 +2398,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 rc = vfs_rmdir(dparent->d_inode, dchild);
                 break;
         case S_IFREG: {
-#warning "optimization is possible here: we could drop nlink w/o removing local dentry in FIDS/"
+                /* optimization is possible here: we could drop nlink
+                 * w/o removing local dentry in FIDS */
                 struct lov_mds_md *lmm = lustre_msg_buf(req->rq_repmsg,
                                                         offset + 1, 0);
                 handle = fsfilt_start_log(obd, dparent->d_inode,
