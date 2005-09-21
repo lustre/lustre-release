@@ -141,7 +141,7 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
         /* zero counters/flags, NULL pointers... */
         memset(ni, 0, sizeof(*ni));
 
-        /* NAL will fill in the address part of the NID */
+        /* LND will fill in the address part of the NID */
         ni->ni_nid = PTL_MKNID(net, 0);
         CFS_INIT_LIST_HEAD(&ni->ni_txq);
 
@@ -187,7 +187,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                 int        niface;
 		char      *iface;
 
-                /* NB we don't check interface conflicts here; it's the NALs
+                /* NB we don't check interface conflicts here; it's the LNDs
                  * responsibility (if it cares at all) */
 
                 if (bracket == NULL ||
@@ -202,10 +202,12 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 			if (net == PTL_NIDNET(LNET_NID_ANY)) {
                                 lnet_syntax("networks", networks, 
                                             str - tokens, strlen(str));
+                                LCONSOLE_ERROR("Unrecognised network type\n");
                                 goto failed;
                         }
 
-                        if (lnet_new_ni(net, nilist) == NULL)
+                        if (PTL_NETTYP(net) != LOLND && /* loopback is implicit */
+                            lnet_new_ni(net, nilist) == NULL)
                                 goto failed;
 
 			str = comma;
@@ -285,10 +287,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                 }
 	}
 
-        if (list_empty(nilist)) {
-                LCONSOLE_ERROR("No networks specified\n");
-                goto failed;
-        }
+        LASSERT (!list_empty(nilist));
         return 0;
 
  failed:
@@ -732,7 +731,7 @@ lnet_set_ip_niaddr (lnet_ni_t *ni)
         int    i;
         int    rc;
 
-        /* Convenience for NALs that use the IP address of a local interface as
+        /* Convenience for LNDs that use the IP address of a local interface as
          * the local address part of their NID */
 
         if (ni->ni_interfaces[0] != NULL) {

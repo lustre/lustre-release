@@ -868,6 +868,7 @@ lnet/tests/autoMakefile
 lnet/ulnds/Makefile
 lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
+lnet/ulnds/ptllnd/Makefile
 lnet/utils/Makefile
 ])
 case $lb_target_os in

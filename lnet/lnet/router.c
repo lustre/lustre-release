@@ -29,10 +29,6 @@ static int forwarding = 0;
 CFS_MODULE_PARM(forwarding, "i", int, 0444,
                 "Boolean: set non-zero to forward between networks");
 
-static char *routes = "";
-CFS_MODULE_PARM(routes, "s", charp, 0444,
-                "routes to non-local networks");
-
 static int tiny_router_buffers = 512;
 CFS_MODULE_PARM(tiny_router_buffers, "i", int, 0444,
                 "# of 0 payload messages to buffer in the router");
@@ -180,6 +176,17 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
 
         return (0);
 }
+EXPORT_SYMBOL(lnet_notify);
+
+#else
+
+int
+lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
+{
+        return -EOPNOTSUPP;
+}
+
+#endif
 
 lnet_remotenet_t *
 lnet_find_net_locked (__u32 net) 
@@ -413,6 +420,12 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
         return rc;
 }
 
+void
+lnet_destroy_routes (void)
+{
+        lnet_del_route(PTL_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
+}
+
 int
 lnet_get_route (int idx, __u32 *net, __u32 *hops, 
                lnet_nid_t *gateway, __u32 *alive)
@@ -444,6 +457,8 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
         LNET_UNLOCK();
         return -ENOENT;
 }
+
+#ifdef __KERNEL
 
 void
 lnet_destory_rtrbuf(lnet_rtrbuf_t *rb, int npages)
@@ -621,85 +636,18 @@ lnet_alloc_rtrpools(void)
         return rc;
 }
 
-
-void
-lnet_router_fini (void)
-{
-        lnet_del_route(PTL_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
-        lnet_free_rtrpools();
-}
-
-int
-lnet_router_init (void)
-{
-        int   rc;
-
-        rc = lnet_alloc_rtrpools();
-        if (rc != 0)
-                return rc;
-        
-        rc = lnet_parse_routes(routes);
-        if (rc != 0) {
-                lnet_del_route(PTL_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
-                lnet_free_rtrpools();
-                return rc;
-        }
-
-        return 0;
-}
-
-EXPORT_SYMBOL(lnet_notify);
-
 #else
 
-int
-lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
-{
-        return -EOPNOTSUPP;
-}
-
-int
-lnet_del_route (__u32 net, lnet_nid_t gw_nid)
-{
-        return -EOPNOTSUPP;
-}
-
-int
-lnet_get_route (int idx, __u32 *net, __u32 *hops, 
-               lnet_nid_t *gateway, __u32 *alive)
-{
-        return -ENOENT;
-}
-
-lnet_remotenet_t *
-lnet_find_net_locked (__u32 net) 
-{
-        return NULL;
-}
-
-int
-lnet_distance(lnet_nid_t nid, int *orderp)
-{
-        if (!lnet_islocalnet(PTL_NIDNET(nid), orderp))
-                return -ENETUNREACH;
-        
-        return 0;
-}
-
-int
-lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
-{
-        return -EOPNOTSUPP;
-}
-
 void
-lnet_router_fini (void)
+lnet_free_rtrpools (void)
 {
 }
 
 int
-lnet_router_init (void)
+lnet_alloc_rtrpools (void)
 {
+        /* No userspace routing */
+        the_lnet.ln_routing = 0;
         return 0;
 }
 

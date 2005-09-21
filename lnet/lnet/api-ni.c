@@ -22,16 +22,94 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <lnet/lib-lnet.h>
 
+lnet_t      the_lnet;                           /* THE state of the network */
+
+#ifdef __KERNEL__
+
 #define DEFAULT_NETWORKS  "tcp"
 static char *networks = DEFAULT_NETWORKS;
 CFS_MODULE_PARM(networks, "s", charp, 0444,
                 "local networks (default='"DEFAULT_NETWORKS"')");
 
+static char *routes = "";
+CFS_MODULE_PARM(routes, "s", charp, 0444,
+                "routes to non-local networks");
+
 static char *portals_compatibility = "none";
 CFS_MODULE_PARM(portals_compatibility, "s", charp, 0444,
                 "wire protocol compatibility: 'strong'|'weak'|'none'");
 
-lnet_t      the_lnet;                           /* THE state of the network */
+char *
+lnet_get_routes(void)
+{
+        return routes;
+}
+
+char *
+lnet_get_networks(void)
+{
+        return networks;
+}
+
+#else
+
+char *
+lnet_get_routes(void)
+{
+        char *str = getenv("LNET_ROUTES");
+        
+        return (str == NULL) ? "" : str;
+}
+
+char *
+lnet_get_networks (void)
+{
+        static char       default_networks[256];
+        char             *str;
+        char             *sep;
+        int               len;
+        int               nob;
+        struct list_head *tmp;
+
+        str = getenv ("LNET_NETWORKS");
+        if (str != NULL)
+                return str;
+
+        /* In userland, the default 'networks=' is the list of known net types */
+
+        len = sizeof(default_networks);
+        str = default_networks;
+        *str = 0;
+        sep = "";
+                
+        list_for_each (tmp, &the_lnet.ln_lnds) {
+                        lnd_t *lnd = list_entry(tmp, lnd_t, lnd_list);
+                        
+                        nob = snprintf(str, len, "%s%s", sep,
+                                       libcfs_lnd2str(lnd->lnd_type));
+                        len -= nob;
+                        if (len < 0) {
+                                /* overflowed the string; leave it where it was */
+                                *str = 0;
+                                break;
+                        }
+                        
+                        str += nob;
+                        sep = ",";
+        }
+
+        return default_networks;
+}
+
+void lnet_proc_init(void)
+{
+}
+
+void lnet_proc_fini(void)
+{
+}
+
+#endif
 
 void lnet_assert_wire_constants (void)
 {
@@ -152,7 +230,7 @@ lnet_register_lnd (lnd_t *lnd)
         LASSERT (libcfs_isknown_lnd(lnd->lnd_type));
         LASSERT (lnet_find_lnd_by_type(lnd->lnd_type) == NULL);
         
-        list_add (&lnd->lnd_list, &the_lnet.ln_lnds);
+        list_add_tail (&lnd->lnd_list, &the_lnet.ln_lnds);
         lnd->lnd_refcount = 0;
 
         if (lnd->lnd_type != LOLND)
@@ -390,7 +468,6 @@ lnet_init(lnet_pid_t requested_pid)
 {
         int               rc = 0;
         int               i;
-        ENTRY;
 
         LASSERT (the_lnet.ln_refcount == 0);
 
@@ -402,9 +479,9 @@ lnet_init(lnet_pid_t requested_pid)
         the_lnet.ln_pid |= LNET_PID_USERFLAG;
 #endif
 
-        rc = lnet_descriptor_setup ();
+        rc = lnet_descriptor_setup();
         if (rc != 0)
-                goto out;
+                goto failed0;
 
         memset(&the_lnet.ln_counters, 0, 
                sizeof(the_lnet.ln_counters));
@@ -421,11 +498,15 @@ lnet_init(lnet_pid_t requested_pid)
 
         rc = lnet_setup_handle_hash ();
         if (rc != 0)
-                goto out;
+                goto failed0;
 
         rc = lnet_create_peer_table();
         if (rc != 0)
-                goto out;
+                goto failed1;
+
+        rc = lnet_alloc_rtrpools();
+        if (rc != 0)
+                goto failed2;
         
         the_lnet.ln_nportals = MAX_PORTALS;
         PORTAL_ALLOC(the_lnet.ln_portals, 
@@ -433,20 +514,23 @@ lnet_init(lnet_pid_t requested_pid)
                      sizeof(*the_lnet.ln_portals));
         if (the_lnet.ln_portals == NULL) {
                 rc = -ENOMEM;
-                goto out;
+                goto failed3;
         }
 
         for (i = 0; i < the_lnet.ln_nportals; i++)
                 CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i]));
 
- out:
-        if (rc != 0) {
-                lnet_destroy_peer_table();
-                lnet_cleanup_handle_hash();
-                lnet_descriptor_cleanup();
-        }
-
-        RETURN (rc);
+        return 0;
+        
+ failed3:
+        lnet_free_rtrpools();
+ failed2:
+        lnet_destroy_peer_table();
+ failed1:
+        lnet_cleanup_handle_hash();
+ failed0:
+        lnet_descriptor_cleanup();
+        return rc;
 }
 
 int
@@ -508,14 +592,10 @@ lnet_fini (void)
         PORTAL_FREE(the_lnet.ln_portals,  
                     the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
 
+        lnet_free_rtrpools();
         lnet_destroy_peer_table();
         lnet_cleanup_handle_hash();
         lnet_descriptor_cleanup();
-
-#ifndef __KERNEL__
-        pthread_mutex_destroy(&the_lnet.ln_mutex);
-        pthread_cond_destroy(&the_lnet.ln_cond);
-#endif
 
         return (0);
 }
@@ -721,7 +801,7 @@ lnet_startup_lndnis (void)
         int                retry;
 
         INIT_LIST_HEAD(&nilist);
-        rc = lnet_parse_networks(&nilist, networks);
+        rc = lnet_parse_networks(&nilist, lnet_get_networks());
         if (rc != 0) 
                 goto failed;
 
@@ -823,10 +903,6 @@ lnet_startup_lndnis (void)
         return -ENETDOWN;
 }
 
-#ifndef __KERNEL__
-extern lnd_t the_tcplnd;
-#endif
-
 int
 LNetInit(void)
 {
@@ -842,14 +918,6 @@ LNetInit(void)
         cfs_waitq_init (&the_lnet.ln_waitq);
         init_mutex(&the_lnet.ln_lnd_mutex);
         init_mutex(&the_lnet.ln_api_mutex);
-#else
-        pthread_mutex_init(&the_lnet.ln_mutex, NULL);
-        pthread_cond_init(&the_lnet.ln_cond, NULL);
-        pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
-        pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
-#endif
-
-        the_lnet.ln_init = 1;
 
         if (!strcmp(portals_compatibility, "none")) {
                 the_lnet.ln_ptlcompat = 0;
@@ -865,14 +933,23 @@ LNetInit(void)
                 return -1;
         }
 
-        /* NALs in separate modules register themselves when their module
-         * loads, and unregister themselves when their module is unloaded.
-         * Otherwise they are plugged in explicitly here... */
+        /* All LNDs apart from the LOLND are in separate modules.  They
+         * register themselves when their module loads, and unregister
+         * themselves when their module is unloaded. */
+#else
+        pthread_mutex_init(&the_lnet.ln_mutex, NULL);
+        pthread_cond_init(&the_lnet.ln_cond, NULL);
+        pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
+        pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
 
-        lnet_register_lnd (&the_lolnd);
-#ifndef __KERNEL__
-        lnet_register_lnd (&the_tcplnd);
+        /* Register all LNDs that have been loaded
+         * NB the order here determines default 'networks=' order */
+        LNET_REGISTER_LND_IF_PRESENT(the_ptllnd);
+        LNET_REGISTER_LND_IF_PRESENT(the_tcplnd);
 #endif
+        lnet_register_lnd(&the_lolnd);
+
+        the_lnet.ln_init = 1;
         return 0;
 }
 
@@ -882,28 +959,23 @@ LNetFini(void)
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount == 0);
 
-        /* See comment where the_tcplnd registers itself */
-#ifndef __KERNEL__
-        lnet_unregister_lnd(&the_tcplnd);
-#endif
+#ifdef __KERNEL__
+        /* LNDs unregister themselves when their module unloads */
         lnet_unregister_lnd(&the_lolnd);
-
         LASSERT (list_empty(&the_lnet.ln_lnds));
+#else
+        while (!list_empty(&the_lnet.ln_lnds))
+                lnet_unregister_lnd(list_entry(the_lnet.ln_lnds.next,
+                                               lnd_t, lnd_list));
+
+        pthread_mutex_destroy(&the_lnet.ln_api_mutex);
+        pthread_mutex_destroy(&the_lnet.ln_lnd_mutex);
+        pthread_cond_destroy(&the_lnet.ln_cond);
+        pthread_mutex_destroy(&the_lnet.ln_mutex);
+#endif
 
         the_lnet.ln_init = 0;
-
-
 }
-
-#ifndef __KERNEL__
-void lnet_proc_init(void)
-{
-}
-
-void lnet_proc_fini(void)
-{
-}
-#endif
 
 int
 LNetNIInit(lnet_pid_t requested_pid)
@@ -930,7 +1002,7 @@ LNetNIInit(lnet_pid_t requested_pid)
                 goto out;
         }
         
-        rc = lnet_router_init();
+        rc = lnet_parse_routes(lnet_get_routes());
         if (rc != 0) {
                 lnet_shutdown_lndnis();
                 lnet_fini();
@@ -939,7 +1011,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         
         rc = lnet_acceptor_start();
         if (rc != 0) {
-                lnet_router_fini();
+                lnet_destroy_routes();
                 lnet_shutdown_lndnis();
                 lnet_fini();
                 goto out;
@@ -966,7 +1038,7 @@ LNetNIFini()
         if (the_lnet.ln_refcount == 0) {
                 lnet_proc_fini();
                 lnet_acceptor_stop();
-                lnet_router_fini();
+                lnet_destroy_routes();
                 lnet_shutdown_lndnis();
                 lnet_fini();
         }

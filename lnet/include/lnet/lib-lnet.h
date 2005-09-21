@@ -434,6 +434,16 @@ lnet_nid2peerhash (lnet_nid_t nid)
 extern lnd_t      the_lolnd;
 extern lnet_ni_t *lnet_loni;
 
+#ifndef __KERNEL__
+#define LNET_REGISTER_LND_IF_PRESENT(lnd)                               \
+do {                                                                    \
+        extern lnd_t lnd __attribute__ ((weak, alias("the_lolnd")));    \
+                                                                        \
+        if (&(lnd) != &the_lolnd)                                       \
+                lnet_register_lnd(&(lnd));                              \
+} while (0)
+#endif
+
 extern lnet_ni_t *lnet_net2ni_locked (__u32 net);
 static inline lnet_ni_t *
 lnet_net2ni (__u32 net) 
@@ -450,13 +460,14 @@ lnet_net2ni (__u32 net)
 int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
 int lnet_distance(lnet_nid_t nid, int *order);
 int lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
-int lnet_del_route (__u32 net, lnet_nid_t gw_nid);
-int lnet_get_route (int idx, __u32 *net, __u32 *hops, 
-                    lnet_nid_t *gateway, __u32 *alive);
+int lnet_del_route(__u32 net, lnet_nid_t gw_nid);
+void lnet_destroy_routes(void);
+int lnet_get_route(int idx, __u32 *net, __u32 *hops, 
+                   lnet_nid_t *gateway, __u32 *alive);
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
-int lnet_router_init(void);
-void lnet_router_fini(void);
+int lnet_alloc_rtrpools(void);
+void lnet_free_rtrpools(void);
 lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 
 int lnet_islocalnid(lnet_nid_t nid);
@@ -562,6 +573,7 @@ int lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 #endif
+
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
