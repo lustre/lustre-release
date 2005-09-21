@@ -932,16 +932,20 @@ LNetInit(void)
                                portals_compatibility);
                 return -1;
         }
-
-        /* All LNDs apart from the LOLND are in separate modules.  They
-         * register themselves when their module loads, and unregister
-         * themselves when their module is unloaded. */
 #else
         pthread_mutex_init(&the_lnet.ln_mutex, NULL);
         pthread_cond_init(&the_lnet.ln_cond, NULL);
         pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
         pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
+#endif
 
+        the_lnet.ln_init = 1;
+
+#ifdef __KERNEL__
+        /* All LNDs apart from the LOLND are in separate modules.  They
+         * register themselves when their module loads, and unregister
+         * themselves when their module is unloaded. */
+#else
         /* Register all LNDs that have been loaded
          * NB the order here determines default 'networks=' order */
         LNET_REGISTER_LND_IF_PRESENT(the_ptllnd);
@@ -949,7 +953,6 @@ LNetInit(void)
 #endif
         lnet_register_lnd(&the_lolnd);
 
-        the_lnet.ln_init = 1;
         return 0;
 }
 
