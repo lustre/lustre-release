@@ -259,11 +259,10 @@ int ll_set_capa(struct inode *inode, struct lookup_intent *it,
 
         if (!(body->valid & OBD_MD_CAPA)) {
                 if (atomic_read(&ll_capa_stat))
-                        CDEBUG(D_ERROR, "no capa for (uid %u, op %d, mdsid "
-                               LPU64", ino %lu igen %u)\n",
-                               (unsigned)current->uid, it->it_flags,
-                               id_group(&lli->lli_id), id_ino(&lli->lli_id),
-                               id_gen(&lli->lli_id));
+                        DEBUG_REQ(D_ERROR, req,
+                                  "no capa for (uid %u, op %d, "DLID4"\n",
+                                   (unsigned)current->uid, it->it_flags,
+                                   OLID4(&lli->lli_id));
 
                 return 0;
         }

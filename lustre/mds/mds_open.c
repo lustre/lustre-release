@@ -632,6 +632,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 if (!(body->valid & OBD_MD_FLEASIZE))
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
+                DEBUG_REQ(D_ERROR, req, "no capa for "DLID4, OLID4(&body->id1));
         }
         
         /* If we have -EEXIST as the status, and we were asked to create
