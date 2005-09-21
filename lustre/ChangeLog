@@ -114,6 +114,14 @@ Details    : qos_prep_create() uses an OST index reseed value that is an
 	     reseed happens in the middle of the object allocation it will
 	     still utilize the OSTs as uniformly as possible.
 
+Severity   : major
+Frequency  : rare
+Bugzilla   : 8322
+Description: OST or MDS may oops in ping_evictor_main()
+Details    : ping_evictor_main() drops obd_dev_lock if deleting a stale export
+	     but doesn't restart at beginning of obd_exports_timed list
+	     afterward.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
