@@ -152,6 +152,32 @@ out:
         return rc;
 }
 
+/* must be called under lli_och_sem */
+void ll_drop_needless_capa(struct inode *inode)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_capa *ocapa, *tmp;
+
+        /* drop capa's we don't need */
+        spin_lock(&lli->lli_lock);
+        list_for_each_entry_safe(ocapa, tmp, &lli->lli_capas, u.client.lli_list) {
+                struct lustre_capa *capa = &ocapa->c_capa;
+                if (capa->lc_op == CAPA_READ) {
+                        /* we need CAPA_READ only for read-only handles */
+                        if (lli->lli_mds_read_och == NULL) {
+                                //DEBUG_CAPA(D_ERROR, capa, "drop read capa");
+                                capa_put(ocapa);
+                        }
+                } else if (ocapa->c_capa.lc_op == CAPA_WRITE) {
+                        if (lli->lli_mds_write_och == NULL) {
+                                //DEBUG_CAPA(D_ERROR, capa, "drop write capa");
+                                capa_put(ocapa);
+                        }
+                }
+        }
+        spin_unlock(&lli->lli_lock);
+}
+
 int ll_md_real_close(struct obd_export *md_exp,
                      struct inode *inode, int flags)
 {
@@ -208,6 +234,8 @@ int ll_md_real_close(struct obd_export *md_exp,
                 epoch = lli->lli_io_epoch;
                 lli->lli_io_epoch = 0;
         }
+
+        ll_drop_needless_capa(inode);
 
         up(&lli->lli_och_sem);
 
