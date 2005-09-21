@@ -613,6 +613,12 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         body = lustre_swab_repbuf(req, 1, sizeof(*body), lustre_swab_mds_body);
         LASSERT (body != NULL);
 
+
+        if (body->valid & OBD_MD_CAPA) {
+                DEBUG_REQ(D_HA, req, "swap capa data from open");
+                lustre_swab_repbuf(req, 7, sizeof(struct lustre_capa),
+                                   lustre_swab_lustre_capa);
+        }
         if (mod == NULL) {
                 DEBUG_REQ(D_ERROR, req,
                           "can't properly replay without open data");
