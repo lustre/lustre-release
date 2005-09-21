@@ -24,6 +24,7 @@
 #define DEBUG_SUBSYSTEM S_NAL
 
 #include <lnet/lib-lnet.h>
+#include <lnet/ptllnd_wire.h>
 
 #include <portals/p30.h>
 

@@ -95,10 +95,6 @@
 #define PtlHandleIsEqual(a,b) (a == b)
 #endif
 
-#define PTL_RESERVED_MATCHBITS  0x100   /* below this value is reserved
-                                         * above is for bult data transfer */
-#define LNET_MSG_MATCHBITS       0       /* the value for the message channel */
-
 #if CONFIG_SMP
 # define PTLLND_N_SCHED         num_online_cpus()   /* # schedulers */
 #else
@@ -113,11 +109,8 @@
 #define PTLLND_CONCURRENT_PEERS 1152       /* # nodes all talking at once to me */
 #define PTLLND_CKSUM            0          /* checksum kptl_msg_t? 0 = Diabled */
 #define PTLLND_TIMEOUT          50         /* default comms timeout (seconds) */
-#define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
 #define PTLLND_RXB_NPAGES       1          /* Number of pages for a single RX Buffer */
 #define PTLLND_CREDITS          128        /* concurrent sends */
-#define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer*/
-#define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
 #define PTLLND_PEER_HASH_SIZE   101        /* # of buckets in peer hash table */
 
 /* tunables fixed at compile time */

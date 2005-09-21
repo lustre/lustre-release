@@ -82,7 +82,7 @@ kptllnd_get_idle_tx(
         kptl_data_t *kptllnd_data,
         kptl_tx_type_t purpose)
 {
-        kptl_tx_t      *tx;
+        kptl_tx_t      *tx = NULL;
 
         PJK_UT_MSG(">>> purpose=%d\n",purpose);
 

@@ -1,7 +1,20 @@
 /************************************************************************
+ * Tunable defaults that {u,k}lnds/ptllnd should have in common.
+ */
+
+#define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
+#define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer*/
+#define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
+
+
+/************************************************************************
  * Portal NAL Wire message format.
  * These are sent in sender's byte order (i.e. receiver flips).
  */
+
+#define PTL_RESERVED_MATCHBITS  0x100   /* below this value is reserved
+                                         * above is for bult data transfer */
+#define LNET_MSG_MATCHBITS       0       /* the value for the message channel */
 
 typedef struct
 {
