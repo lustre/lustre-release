@@ -686,6 +686,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                         .lc_uid   = rec->ur_uc.luc_uid,
                         .lc_op    = CAPA_TRUNC,
                         .lc_ino   = inode->i_ino,
+                        .lc_igen  = inode->i_generation,
                         .lc_mdsid = mds->mds_num,
                 };
                 int offset = 1;
