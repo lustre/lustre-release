@@ -326,7 +326,7 @@ capa_get(uid_t uid, int capa_op,__u64 mdsid, unsigned long ino,
         
         if (type == CLIENT_CAPA && !ocapa && atomic_read(&ll_capa_stat)) {
                 CDEBUG(D_ERROR, "can't find capa for (uid %u, op %d, mdsid "
-                       LPU64", ino %lu igen %u, type %d) failed.\n",
+                       LPU64", ino %lu igen %u, type %d)\n",
                        (unsigned) uid, capa_op, mdsid, ino, igen, type);
                 atomic_set(&ll_capa_stat, 0);
         }
