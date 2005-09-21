@@ -18,9 +18,9 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
          * First initialize the tx descriptors
          */
         memset(kptllnd_data->kptl_tx_descs, 0,
-               PTLLND_TX_MSGS() * sizeof(kptl_tx_t));
+               (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
 
-        for (i = 0; i < PTLLND_TX_MSGS(); i++) {
+        for (i = 0; i < (*kptllnd_tunables.kptl_ntx); i++) {
                 tx = &kptllnd_data->kptl_tx_descs[i];
 
 
@@ -30,11 +30,6 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
 
                 CFS_INIT_LIST_HEAD(&tx->tx_list);
                 CFS_INIT_LIST_HEAD(&tx->tx_schedlist);
-
-                /*
-                 * Determine if this is a regular or reserved descriptor
-                 */
-                tx->tx_isnblk = (i >= *kptllnd_tunables.kptl_ntx);
 
                 /*
                  * Set the state
@@ -49,14 +44,9 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
 
 
                 /*
-                 * Add this to the correct queue
+                 * Add this to the queue
                  */
-                if (tx->tx_isnblk)
-                        list_add (&tx->tx_list,
-                                  &kptllnd_data->kptl_idle_nblk_txs);
-                else
-                        list_add (&tx->tx_list,
-                                  &kptllnd_data->kptl_idle_txs);
+                list_add (&tx->tx_list,&kptllnd_data->kptl_idle_txs);
         }
 
         return (0);
@@ -70,7 +60,7 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
 
         PJK_UT_MSG("\n");
 
-        for (i = 0; i < PTLLND_TX_MSGS(); i++) {
+        for (i = 0; i < (*kptllnd_tunables.kptl_ntx); i++) {
                 tx = &kptllnd_data->kptl_tx_descs[i];
 
 
@@ -90,13 +80,11 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
 kptl_tx_t *
 kptllnd_get_idle_tx(
         kptl_data_t *kptllnd_data,
-        int may_block,
         kptl_tx_type_t purpose)
 {
-        kptl_tx_t      *tx = NULL;
-        ENTRY;
+        kptl_tx_t      *tx;
 
-        PJK_UT_MSG(">>> may_block=%d purpose=%d\n",may_block,purpose);
+        PJK_UT_MSG(">>> purpose=%d\n",purpose);
 
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_PUT_ALLOC ) && purpose == TX_TYPE_LARGE_PUT){
                 PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
@@ -120,36 +108,18 @@ kptllnd_get_idle_tx(
                 goto exit;
         }
 
-        while ( !kptllnd_data->kptl_shutdown ) {
+        spin_lock(&kptllnd_data->kptl_tx_lock);
 
-                spin_lock(&kptllnd_data->kptl_tx_lock);
-
-                /* "normal" descriptor is free */
-                if (!list_empty (&kptllnd_data->kptl_idle_txs)) {
-                        tx = list_entry (kptllnd_data->kptl_idle_txs.next,
-                                         kptl_tx_t, tx_list);
-                        break;
-                }
-
-                if (!may_block) {
-                        /* may dip into reserve pool */
-                        if (list_empty (&kptllnd_data->kptl_idle_nblk_txs)) {
-                                CERROR ("reserved tx desc pool exhausted\n");
-                                break;
-                        }
-
-                        tx = list_entry (kptllnd_data->kptl_idle_nblk_txs.next,
-                                         kptl_tx_t, tx_list);
-                        break;
-                }
-
-                /* block for idle tx */
-                spin_unlock(&kptllnd_data->kptl_tx_lock);
-
-                wait_event (kptllnd_data->kptl_idle_tx_waitq,
-                            !list_empty (&kptllnd_data->kptl_idle_txs) ||
-                            kptllnd_data->kptl_shutdown);
+        if (!list_empty (&kptllnd_data->kptl_idle_txs)) {
+                tx = list_entry (kptllnd_data->kptl_idle_txs.next,
+                                 kptl_tx_t, tx_list);
+                /*
+                 * Remove it from the idle queue
+                 */
+                list_del_init (&tx->tx_list);
         }
+
+        spin_unlock(&kptllnd_data->kptl_tx_lock);
 
         if (tx != NULL) {
 
@@ -164,10 +134,7 @@ kptllnd_get_idle_tx(
                 LASSERT(atomic_read(&tx->tx_refcount)== 0);
                 atomic_set(&tx->tx_refcount,1);
 
-                /*
-                 * Remove it from the idle queue
-                 */
-                list_del_init (&tx->tx_list);
+
 
                 /*
                  * Set the state and type
@@ -204,12 +171,10 @@ kptllnd_get_idle_tx(
                 STAT_UPDATE(kpt_tx_allocation_failed);
         }
 
-        spin_unlock(&kptllnd_data->kptl_tx_lock);
 
 exit:
         PJK_UT_MSG("<<< tx=%p\n",tx);
-
-        RETURN(tx);
+        return tx;
 }
 
 void
@@ -225,7 +190,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
         LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
         LASSERT(atomic_read(&tx->tx_refcount) == 0);
         LASSERT(list_empty(&tx->tx_schedlist)); /*not any the scheduler list*/
-        
+
         /*
          * Cleanup any mapped KIOVs
          */
@@ -269,21 +234,11 @@ kptllnd_tx_done (kptl_tx_t *tx)
         tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
 
         /*
-         * Put this tx descriptor back on the correct idle queue
-         * If this is a "normal" descriptor then somebody might
-         * be waiting so wake them up
+         * Put this tx descriptor back on the idle queue
          */
         spin_lock(&kptllnd_data->kptl_tx_lock);
-
-        if (tx->tx_isnblk) {
-                list_add (&tx->tx_list, &kptllnd_data->kptl_idle_nblk_txs);
-        } else {
-                list_add (&tx->tx_list, &kptllnd_data->kptl_idle_txs);
-                wake_up (&kptllnd_data->kptl_idle_tx_waitq);
-        }
-
+        list_add (&tx->tx_list, &kptllnd_data->kptl_idle_txs);
         STAT_UPDATE(kps_tx_released);
-
         spin_unlock(&kptllnd_data->kptl_tx_lock);
 
         PJK_UT_MSG("<<< tx=%p\n",tx);

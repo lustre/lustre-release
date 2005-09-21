@@ -507,9 +507,8 @@ kptllnd_peer_check_sends (
 
                 /*
                  * Get an idle tx descriptor
-                 * may NOT block: (That's the "0" param)
                  */
-                tx = kptllnd_get_idle_tx(kptllnd_data,0,TX_TYPE_SMALL_MESSAGE);
+                tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
                 if( tx == NULL ) {
                         CERROR ("Can't return credits to "LPX64": tx descs exhausted\n",
                                 peer->peer_nid);
@@ -1094,7 +1093,7 @@ kptllnd_peer_handle_hello (
                  * Setup a connect HELLO message.  We ultimately might not
                  * use it but likely we will.
                  */
-                tx_hello = kptllnd_get_idle_tx(kptllnd_data,0,TX_TYPE_SMALL_MESSAGE);
+                tx_hello = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
                 if( tx_hello == NULL) {
                         CERROR("Unable to allocate connect message for "LPX64"\n",nid);
                         goto failed;
@@ -1234,7 +1233,7 @@ kptllnd_tx_launch (
          * (in the case that the peer is racing to connect with us)
          * but more than likely we will.
          */
-        tx_hello = kptllnd_get_idle_tx(kptllnd_data,0,TX_TYPE_SMALL_MESSAGE);
+        tx_hello = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
         if( tx_hello == NULL) {
                 CERROR("Unable to allocate connect message for "LPX64"\n",target_nid);
                 kptllnd_tx_decref (tx);

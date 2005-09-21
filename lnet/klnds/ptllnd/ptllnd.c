@@ -267,6 +267,8 @@ kptllnd_startup (lnet_ni_t *ni)
         PJK_UT_MSG(">>>\n");
 
         LASSERT (ni->ni_lnd == &kptllnd_lnd);
+        
+      
 
         PORTAL_ALLOC (kptllnd_data,sizeof(*kptllnd_data));
         if (kptllnd_data == NULL){
@@ -376,8 +378,6 @@ kptllnd_startup (lnet_ni_t *ni)
          */
         spin_lock_init (&kptllnd_data->kptl_tx_lock);
         INIT_LIST_HEAD (&kptllnd_data->kptl_idle_txs);
-        INIT_LIST_HEAD (&kptllnd_data->kptl_idle_nblk_txs);
-        init_waitqueue_head(&kptllnd_data->kptl_idle_tx_waitq);
 
         /*
          * Allocate and setup the peer hash table
@@ -428,10 +428,10 @@ kptllnd_startup (lnet_ni_t *ni)
          */
         PJK_UT_MSG("Allocate TX Descriptor array\n");
         PORTAL_ALLOC (kptllnd_data->kptl_tx_descs,
-                      PTLLND_TX_MSGS() * sizeof(kptl_tx_t));
+                      (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
         if (kptllnd_data->kptl_tx_descs == NULL){
                 CERROR ("Can't allocate space for TX Descriptor array count=%d\n",
-                        PTLLND_TX_MSGS());
+                        (*kptllnd_tunables.kptl_ntx));
                 rc = -ENOMEM;
                 goto failed;
         }
@@ -646,7 +646,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
          */
         if (kptllnd_data->kptl_tx_descs != NULL)
                 PORTAL_FREE(kptllnd_data->kptl_tx_descs,
-                        PTLLND_TX_MSGS() * sizeof(kptl_tx_t));
+                        (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
 
         /*
          * Cleanup the RX descriptor slab
@@ -686,7 +686,6 @@ kptllnd_module_init (void)
          * Display the module parameters
          */
         CDEBUG(D_INFO,"ntx = %d\n",*kptllnd_tunables.kptl_ntx);
-        CDEBUG(D_INFO,"ntx_nblk = %d\n",*kptllnd_tunables.kptl_ntx_nblk);
         CDEBUG(D_INFO,"concurrent_peers = %d\n",*kptllnd_tunables.kptl_concurrent_peers);
         CDEBUG(D_INFO,"cksum = %d\n",*kptllnd_tunables.kptl_cksum);
         CDEBUG(D_INFO,"portal = %d\n",*kptllnd_tunables.kptl_portal);
@@ -697,6 +696,16 @@ kptllnd_module_init (void)
         CDEBUG(D_INFO,"max_immd_size = %d\n",*kptllnd_tunables.kptl_max_immd_size);
 
         ptllnd_assert_wire_constants();
+        
+        /*
+         * Check for valid parameters.
+         */
+        if (*kptllnd_tunables.kptl_credits > *kptllnd_tunables.kptl_ntx) {
+                CERROR ("Can't set credits(%d) > ntx(%d)\n",
+                        *kptllnd_tunables.kptl_credits,
+                        *kptllnd_tunables.kptl_ntx);
+                return -EINVAL;
+        }          
 
         rc = kptllnd_tunables_init();
         if (rc != 0)

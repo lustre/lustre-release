@@ -26,11 +26,7 @@
 
 static int ntx = PTLLND_NTX;
 CFS_MODULE_PARM(ntx, "i", int, 0444,
-		"# of 'normal' message descriptors");
-
-static int ntx_nblk = PTLLND_NTX_NBLK;
-CFS_MODULE_PARM(ntx_nblk, "i", int, 0444,
-		"# of 'reserved' message descriptors");
+		"# of TX descriptors");
 
 static int concurrent_peers = PTLLND_CONCURRENT_PEERS;
 CFS_MODULE_PARM(concurrent_peers, "i", int, 0444,
@@ -77,7 +73,6 @@ CFS_MODULE_PARM(simulation_bitmap, "i", int, 0444,
 
 kptl_tunables_t kptllnd_tunables = {
         .kptl_ntx                    = &ntx,
-        .kptl_ntx_nblk               = &ntx_nblk,
         .kptl_concurrent_peers       = &concurrent_peers,
         .kptl_cksum                  = &cksum,
         .kptl_portal                 = &portal,
@@ -98,29 +93,27 @@ kptl_tunables_t kptllnd_tunables = {
 static ctl_table kptllnd_ctl_table[] = {
 	{1, "ntx", &ntx,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{2, "ntx_nblk", &ntx_nblk,
+	{2, "concurrent_peers", &concurrent_peers,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{3, "concurrent_peers", &concurrent_peers,
-	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{4, "cksum", &cksum,
+	{3, "cksum", &cksum,
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{5, "timeout", &timeout,
+	{4, "timeout", &timeout,
 	 sizeof(int), 0644, NULL, &proc_dointvec},
-	{6, "portal", &portal,
+	{5, "portal", &portal,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{7, "rxb_npages", &rxb_npages,
+	{6, "rxb_npages", &rxb_npages,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{8, "credits", &credits,
+	{7, "credits", &credits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "peercredits", &peercredits,
+	{8, "peercredits", &peercredits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{10, "max_immd_size", &max_immd_size,
+	{9, "max_immd_size", &max_immd_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{11, "peer_hash_table_size,", &peer_hash_table_size,
+	{10, "peer_hash_table_size,", &peer_hash_table_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	 
 #ifdef PJK_DEBUGGING	 
-	{12, "simulation_bitmap,", &simulation_bitmap,
+	{11, "simulation_bitmap,", &simulation_bitmap,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 #endif
 	 

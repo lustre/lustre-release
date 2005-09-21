@@ -108,15 +108,14 @@
 
 
 /* defaults for modparams/tunables */
-#define PTLLND_NTX              32         /* # tx descs */
-#define PTLLND_NTX_NBLK         256        /* # reserved tx descs */
+#define PTLLND_NTX              256        /* # tx descs */
 #define PTLLND_NRX              (64 * num_online_cpus()) /* # rx desc */
 #define PTLLND_CONCURRENT_PEERS 1152       /* # nodes all talking at once to me */
 #define PTLLND_CKSUM            0          /* checksum kptl_msg_t? 0 = Diabled */
 #define PTLLND_TIMEOUT          50         /* default comms timeout (seconds) */
 #define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
 #define PTLLND_RXB_NPAGES       1          /* Number of pages for a single RX Buffer */
-#define PTLLND_CREDITS          256        /* concurrent sends */
+#define PTLLND_CREDITS          128        /* concurrent sends */
 #define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer*/
 #define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
 #define PTLLND_PEER_HASH_SIZE   101        /* # of buckets in peer hash table */
@@ -125,17 +124,9 @@
 #define PTLLND_CREDIT_HIGHWATER (*kptllnd_tunables.kptl_peercredits-1)  /* when to eagerly return credits */
 #define PTLLND_TIMEOUT_SEC      3          /* How often we check a subset of the peer hash table for timeout*/
 
-/************************/
-/* derived constants... */
-/* TX messages (shared by all connections) */
-#define PTLLND_TX_MSGS()       (*kptllnd_tunables.kptl_ntx +       \
-                               *kptllnd_tunables.kptl_ntx_nblk)
-
-
 typedef struct
 {
         int             *kptl_ntx;              /* # tx descs */
-        int             *kptl_ntx_nblk;         /* # reserved tx descs */
         int             *kptl_concurrent_peers; /* max # nodes all talking to me */
         int             *kptl_cksum;            /* checksum kptl_msg_t? */
         int             *kptl_timeout;          /* comms timeout (seconds) */
@@ -145,11 +136,11 @@ typedef struct
         int             *kptl_peercredits;      /* number of credits */
         int             *kptl_max_immd_size;    /* max immd message size*/
         int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
-        
-#ifdef PJK_DEBUGGING        
+
+#ifdef PJK_DEBUGGING
         int             *kptl_simulation_bitmap;/* simulation bitmap */
 #endif
-        
+
 #if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM
         struct ctl_table_header *kptl_sysctl;    /* sysctl interface */
 #endif
@@ -260,7 +251,6 @@ typedef struct kptl_tx                           /* transmit message */
         int                     tx_seen_reply_end; /* if we've seen a REPLY_END event */
         kptl_tx_type_t          tx_type;      /* type of transfer */
         int                     tx_status;    /* the status of this tx descriptor */
-        int                     tx_isnblk;    /* I'm reserved for non-blocking sends */
         ptl_handle_md_t         tx_mdh;       /* the portals memory descriptor (MD) handle */
         ptl_handle_md_t         tx_mdh_msg;   /* the portals MD handle for the initial message */
         lnet_msg_t             *tx_ptlmsg;    /* the cookie for finalize */
@@ -275,9 +265,9 @@ typedef struct kptl_tx                           /* transmit message */
         lnet_kiov_t            *tx_payload_kiov;
         unsigned int            tx_payload_offset;
         int                     tx_payload_nob;
-        
+
         int                     tx_mapped_kiov; /* KIOV's have been mapped */
-        
+
 } kptl_tx_t;
 
 
@@ -333,8 +323,6 @@ struct kptl_data
         struct kptl_tx         *kptl_tx_descs;         /* the tx descriptors array */
         spinlock_t              kptl_tx_lock;          /* serialise the next 4 members*/
         struct list_head        kptl_idle_txs;         /* idle tx descriptors */
-        struct list_head        kptl_idle_nblk_txs;    /* idle reserved tx descriptors */
-        wait_queue_head_t       kptl_idle_tx_waitq;    /* block here for tx descriptor */
 
         rwlock_t                kptl_peer_rw_lock;     /* lock for peer table */
         struct list_head       *kptl_peers;            /* hash table of all my known peers */
@@ -358,9 +346,9 @@ typedef struct kptl_stats
         int                     kps_rx_allocated;
         int                     kps_rx_released;
         int                     kps_rx_allocation_failed;
-        int                     kps_tx_allocated;              /* MP Safe*/
+        int                     kps_tx_allocated;
         int                     kps_tx_released;               /* MP Safe*/
-        int                     kpt_tx_allocation_failed;      /* MP Safe*/
+        int                     kpt_tx_allocation_failed;
         int                     kpx_recv_delayed;
         int                     kpx_send_routing;
         int                     kpx_send_target_is_router;
@@ -450,7 +438,7 @@ kptllnd_posted_object_setup(
         kptl_posted_object_t* posted_obj,
         kptl_data_t *kptllnd_data,
         int type);
-        
+
 /*
  * RX BUFFER SUPPORT FUNCTIONS
  */
@@ -613,7 +601,6 @@ kptllnd_tx_done (
 kptl_tx_t *
 kptllnd_get_idle_tx(
         kptl_data_t *kptllnd_data,
-        int may_block,
         kptl_tx_type_t purpose);
 
 void
@@ -660,10 +647,10 @@ kptllnd_setup_md(
         unsigned int     payload_offset,
         int              payload_nob,
         struct iovec    *tempiovec);
-         
+
 void
 kptllnd_cleanup_kiov(
-        kptl_tx_t       *tx);                 
+        kptl_tx_t       *tx);
 
 int kptllnd_process_scheduled_tx(kptl_data_t *kptllnd_data);
 int kptllnd_process_scheduled_rx(kptl_data_t *kptllnd_data);
@@ -700,15 +687,15 @@ do{                                                     \
 
 
 #if 1
-#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
-#else
 #define PJK_UT_MSG_DATA(fmt, a...)              PJK_UT_MSG_ALWAYS(fmt, ## a )
+#else
+#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
 #endif
 
 #if 1
-#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
-#else
 #define PJK_UT_MSG(fmt, a...)                   PJK_UT_MSG_ALWAYS(fmt, ## a )
+#else
+#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
 #endif
 
 

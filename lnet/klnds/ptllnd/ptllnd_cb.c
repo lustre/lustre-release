@@ -112,15 +112,15 @@ kptllnd_setup_md(
 
                 while(payload_nob){
                         u8 *ptr;
-                        
+
                         LASSERT( payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < PTL_MD_MAX_IOV );                        
-                        
-                        
+                        LASSERT (niov < PTL_MD_MAX_IOV );
+
+
                         ptr = cfs_kmap(payload_kiov->kiov_page);
                         ptr += payload_kiov->kiov_offset + payload_offset;
-                        
+
                         tempiovec[niov].iov_base = ptr;
                         tempiovec[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
@@ -131,13 +131,13 @@ kptllnd_setup_md(
                         payload_niov--;
                         niov++;
                 }
-                
-                /* 
+
+                /*
                  * We've mapped the KIOVs
-                 */        
+                 */
                 tx->tx_mapped_kiov = 1;
         }
-        
+
         md->start = tempiovec;
         md->options |= PTL_MD_IOVEC;
 
@@ -159,14 +159,14 @@ kptllnd_cleanup_kiov(
 
         /*
          * Do nothing if the KIOVs weren't mapped
-         */        
+         */
         if(tx->tx_mapped_kiov == 0)
                 return;
-                
+
         if (payload_kiov != NULL){
-                
+
                 LASSERT(tx->tx_payload_iov == NULL);
-                
+
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
                         payload_kiov++;
@@ -176,11 +176,11 @@ kptllnd_cleanup_kiov(
 
                 while(payload_nob){
                         int temp_iov_len;
-                                                
+
                         LASSERT( payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        
-                        
+
+
                         cfs_kunmap(payload_kiov->kiov_page);
                         temp_iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
@@ -189,8 +189,8 @@ kptllnd_cleanup_kiov(
                         payload_nob -= temp_iov_len;
                         payload_kiov++;
                         payload_niov--;
-                }        
-        }                
+                }
+        }
 }
 
 int
@@ -217,10 +217,9 @@ kptllnd_start_bulk_rdma(
 
         /*
          * Get an idle tx descriptor
-         * may NOT block: (That's the "0" param)
          */
         LASSERT(op ==  PTL_MD_OP_GET || op == PTL_MD_OP_PUT);
-        tx = kptllnd_get_idle_tx(kptllnd_data,0,
+        tx = kptllnd_get_idle_tx(kptllnd_data,
                 op == PTL_MD_OP_GET ? TX_TYPE_LARGE_PUT_RESPONSE :
                                       TX_TYPE_LARGE_GET_RESPONSE);
         if(tx == NULL){
@@ -410,13 +409,13 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         kptl_data_t      *kptllnd_data = ni->ni_data;
         int               nob;
         int               rc;
-        kptl_rx_t        *rx = NULL;
 
         PJK_UT_MSG_DATA(">>> SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
-        PJK_UT_MSG_DATA("nob=%d nov=%d offset=%d to %s r=%d\n",
+        PJK_UT_MSG_DATA("nob=%d nov=%d offset=%d to %s\n",
                payload_nob, payload_niov, payload_offset,
-               libcfs_id2str(target),
-               routing);
+               libcfs_id2str(target));
+        PJK_UT_MSG_DATA("routing=%d target_is_router=%d\n",
+                routing,target_is_router);
 
         if(routing)
                 STAT_UPDATE(kpx_send_routing);
@@ -452,9 +451,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /*
                  * Get an idle tx descriptor
-                 * may block: caller is app thread (That's the "1" param)
                  */
-                tx = kptllnd_get_idle_tx(kptllnd_data,1,TX_TYPE_LARGE_PUT);
+                tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_PUT);
                 if(tx == NULL){
                         CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
                                 type, target.nid);
@@ -479,9 +477,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /*
                  * Get an idle tx descriptor
-                 * may block: caller is app thread (That's the "1" param)
                  */
-                tx = kptllnd_get_idle_tx(kptllnd_data,1,TX_TYPE_LARGE_GET);
+                tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_GET);
                 if(tx == NULL){
                         CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
                                 type, target.nid);
@@ -530,19 +527,12 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         case LNET_MSG_REPLY:
                 PJK_UT_MSG_DATA("LNET_MSG_REPLY\n");
 
-                /*
-                 * Reply's private is the incoming rx descriptor
-                 */
-                rx = private;
-                LASSERT(rx != NULL);
-
-                if(lntmsg==NULL)
+                if(routing!=0 || target_is_router!=0)
                 {
                         /*
                          * Get an idle tx descriptor
-                         * may NOT block That's the "0" param)
                          */
-                        tx = kptllnd_get_idle_tx(kptllnd_data,0,TX_TYPE_LARGE_PUT);
+                        tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_LARGE_PUT);
                         if(tx == NULL){
                                 CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
                                         type, target.nid);
@@ -561,6 +551,12 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
                         return 0;
                 }else{
+                        /*
+                         * Reply's private is the incoming rx descriptor
+                         */
+                        kptl_rx_t *rx = private;
+                        LASSERT(rx != NULL);
+
                         /*
                          * If the request was to NOT do RDMA
                          * break out and just send back an IMMEDIATE message
@@ -609,9 +605,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /*
                  * Get an idle tx descriptor
-                 * may NOT block: (That's the "0" param)
                  */
-                tx = kptllnd_get_idle_tx(kptllnd_data,0,TX_TYPE_SMALL_MESSAGE);
+                tx = kptllnd_get_idle_tx(kptllnd_data,TX_TYPE_SMALL_MESSAGE);
                 if(tx == NULL){
                         CERROR ("Can't send %d to "LPX64": tx descs exhausted\n",
                                 type, target.nid);
