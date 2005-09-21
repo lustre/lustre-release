@@ -10,4 +10,4 @@ endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(kptllnd-objs:%.o=%.c) ptllnd.h ptllnd_wire.h
+DIST_SOURCES = $(kptllnd-objs:%.o=%.c) ptllnd.h
