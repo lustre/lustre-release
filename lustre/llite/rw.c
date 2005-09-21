@@ -174,6 +174,7 @@ void ll_truncate(struct inode *inode)
         
         rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL, capa);
+        capa_put(ocapa);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
