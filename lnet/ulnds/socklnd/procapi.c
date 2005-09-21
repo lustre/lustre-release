@@ -131,6 +131,12 @@ procbridge_startup (lnet_ni_t *ni)
     LASSERT (!tcpnal_running);                  /* only single instance supported */
     LASSERT (ni->ni_interfaces[0] == NULL);     /* explicit interface(s) not supported */
 
+    /* The credit settings here are pretty irrelevent.  Userspace tcplnd has no
+     * tx descriptor pool to exhaust and does a blocking send; that's the real
+     * limit on send concurrency. */
+    ni->ni_maxtxcredits = 1000;
+    ni->ni_peertxcredits = 1000;
+    
     init_unix_timer();
 
     b=(bridge)malloc(sizeof(struct bridge));

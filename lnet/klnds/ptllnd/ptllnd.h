@@ -157,7 +157,7 @@ typedef struct
 
 
 
-#include "ptllnd_wire.h"
+#include "lnet/ptllnd_wire.h"
 
 /***********************************************************************/
 

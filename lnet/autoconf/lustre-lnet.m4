@@ -85,10 +85,10 @@ fi
 AC_DEFUN([LN_CONFIG_PTLLND],
 [AC_MSG_CHECKING([for Portals API headers])
 
-if test ! "x$PORTALS" = "x" -o ! "x$LUSTRE_PORTALS" = "x" ; then
+if test -n "$PORTALS" -o -n "$LUSTRE_PORTALS"; then
 	AC_MSG_RESULT([yes])
 	PTLLND="ptllnd"
-	if test $PORTALS ; then
+	if test -n "$PORTALS"; then
         	PTLLNDCPPFLAGS="-I$PORTALS/include"
 	else
         	PTLLNDCPPFLAGS="-I$LUSTRE_PORTALS/include"
