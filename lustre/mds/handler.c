@@ -1768,14 +1768,15 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
                 GOTO(out_pop, rc);
         }
 
-        req->rq_status = mds_getattr_internal(obd, de, req, offset, body,
-                                              0, rsd);
+        rc = mds_getattr_internal(obd, de, req, offset, body, 0, rsd);
         l_dput(de);
 
         EXIT;
 out_pop:
         req->rq_status = rc;
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
+        if (req->rq_reply_state == NULL)
+                lustre_pack_reply(req, 0, NULL, NULL);
         mds_exit_ucred(&uc);
         return 0;
 }
