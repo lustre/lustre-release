@@ -686,6 +686,38 @@ struct cache_deferred_req* my_defer(struct cache_req *req)
 static struct cache_req my_chandle = {my_defer};
 
 /* Implements sequence number algorithm as specified in RFC 2203. */
+static inline void __dbg_dump_seqwin(struct gss_svc_seq_data *sd)
+{
+        char buf[sizeof(sd->sd_win)*2+1];
+        int i;
+
+        for (i = 0; i < sizeof(sd->sd_win); i++)
+                sprintf(&buf[i+i], "%02x", ((__u8 *) sd->sd_win)[i]);
+        CWARN("dump seqwin: %s\n", buf);
+}
+
+static inline void __dbg_seq_jump(struct gss_svc_seq_data *sd, __u32 seq_num)
+{
+        CWARN("seq jump to %u, cur max %u!\n", seq_num, sd->sd_max);
+        __dbg_dump_seqwin(sd);
+}
+
+static inline void __dbg_seq_increase(struct gss_svc_seq_data *sd, __u32 seq_num)
+{
+        int n = seq_num - sd->sd_max;
+        int i, notset=0;
+
+        for (i = 0; i < n; i++) {
+                if (!test_bit(i, sd->sd_win))
+                        notset++;
+        }
+        if (!notset)
+                return;
+
+        CWARN("seq increase to %u, cur max %u\n", seq_num, sd->sd_max);
+        __dbg_dump_seqwin(sd);
+}
+
 static int
 gss_check_seq_num(struct gss_svc_seq_data *sd, __u32 seq_num)
 {
@@ -694,9 +726,11 @@ gss_check_seq_num(struct gss_svc_seq_data *sd, __u32 seq_num)
         spin_lock(&sd->sd_lock);
         if (seq_num > sd->sd_max) {
                 if (seq_num >= sd->sd_max + GSS_SEQ_WIN) {
+                        __dbg_seq_jump(sd, seq_num);
                         memset(sd->sd_win, 0, sizeof(sd->sd_win));
                         sd->sd_max = seq_num;
                 } else {
+                        __dbg_seq_increase(sd, seq_num);
                         while(sd->sd_max < seq_num) {
                                 sd->sd_max++;
                                 __clear_bit(sd->sd_max % GSS_SEQ_WIN,
