@@ -238,9 +238,11 @@ static inline void list_add_capa(struct obd_capa *ocapa, struct list_head *head)
                                 return;
                         }
                 }
+                list_add(&ocapa->c_list, head);
+                return;
         }
 
-        list_add(&ocapa->c_list, head);
+        list_add_tail(&ocapa->c_list, head);
 }
 
 static inline void do_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
