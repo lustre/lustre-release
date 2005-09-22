@@ -763,8 +763,7 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 
                 if (S_ISREG(dchild->d_inode->i_mode) &&
                     (body->valid & OBD_MD_FLEASIZE)) {
-                        rc = mds_revalidate_lov_ea(obd, dchild->d_inode,
-                                                   req->rq_repmsg, 2);
+                        rc = mds_revalidate_lov_ea(obd,dchild,req->rq_repmsg,2);
                         if (!rc)
                                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                                  dchild->d_inode, 0, 0);
@@ -1652,7 +1651,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 goto out; /* Don't bother updating attrs on unlinked inode */
         } else if ((mfd->mfd_mode & FMODE_WRITE) && rc == 0) {
                 /* last writer closed file - let's update i_size/i_blocks */
-                mds_validate_size(obd, inode, request_body, &iattr);
+                mds_validate_size(obd, inode, request_body, NULL, &iattr);
         }
 
 #if 0
@@ -1782,12 +1781,12 @@ __u64 lov_merge_blocks(struct lov_stripe_md *lsm);
 __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time);
 
 int mds_validate_size(struct obd_device *obd, struct inode *inode,
-                      struct mds_body *body, struct iattr *iattr)
+                      struct mds_body *body, struct lov_stripe_md *lsm,
+                      struct iattr *iattr)
 {
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        struct lov_stripe_md *lsm = NULL;
-        int rc, len, flags;
+        int rc, len = 0, flags;
         void *lmm = NULL;
         ENTRY;
 
@@ -1809,6 +1808,9 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
          * 2: we seem to be last writer
          * 3: the file doesn't look like to be disappeared
          * conclusion: we're gonna fetch them from OSSes */
+
+        if (lsm)
+                goto have_lsm;
 
         down(&inode->i_sem);
         len = fsfilt_get_md(obd, inode, NULL, 0, EA_LOV);
@@ -1842,7 +1844,9 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
                 CERROR("error getting inode %lu MD: %d\n", inode->i_ino, rc);
                 GOTO(cleanup, rc);
         }
-        
+
+ have_lsm:
+
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
         
         flags = LDLM_FL_HAS_INTENT;
@@ -1860,8 +1864,11 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
                 GOTO(cleanup, rc);
         }
 
-        CDEBUG(D_INODE, "LOV reports "LPD64"/%lu for "DLID4" [%s%s%s]\n",
-               inode->i_size, inode->i_blocks, OLID4(&body->id1),
+        if (body)
+                CDEBUG(D_INODE, ""DLID4"\n", OLID4(&body->id1));
+
+        CDEBUG(D_INODE, "LOV reports "LPD64"/%lu [%s%s%s]\n",
+               inode->i_size, inode->i_blocks,
                atomic_read(&inode->i_writecount) > 1 ? "U" : "",
                mds_inode_has_old_attrs(inode) ? "D" : "",
                mds_inode_is_orphan(inode) ? "O" : "");
@@ -1880,10 +1887,11 @@ int mds_validate_size(struct obd_device *obd, struct inode *inode,
         obd_cancel(obd->u.mds.mds_dt_exp, lsm, LCK_PR, &lockh);
         
 cleanup:
-        if (lsm != NULL)
-                obd_free_memmd(obd->u.mds.mds_dt_exp, &lsm);
-        if (lmm != NULL)
+        if (lmm != NULL) {
+                if (lsm != NULL)
+                        obd_free_memmd(obd->u.mds.mds_dt_exp, &lsm);
                 OBD_FREE(lmm, len);
+        }
         RETURN(rc);
 }
 

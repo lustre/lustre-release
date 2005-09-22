@@ -3702,6 +3702,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         obd->obd_replayable = 1;
         
         mds->mds_crypto_type = NO_CRYPTO;
+        mds->mds_capa_stat = 1;
         
         rc = mds_postsetup(obd);
         if (rc)

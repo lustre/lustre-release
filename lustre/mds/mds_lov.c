@@ -928,21 +928,26 @@ conv_end:
 }
 
 /* Must be called with i_sem held */
-int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
+int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
                           struct lustre_msg *msg, int offset)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_export *dt_exp = mds->mds_dt_exp;
+        struct inode *inode = dentry->d_inode;
         struct lov_mds_md *lmm= NULL;
         struct lov_stripe_md *lsm = NULL;
         struct obdo *oa = NULL;
         struct obd_trans_info oti = {0};
+        struct iattr iattr = { 0 };
         obd_valid valid = 0;
+        char idname[LL_ID_NAMELEN];
         int lmm_size = 0, lsm_size = 0, err, rc;
         void *handle;
         ENTRY;
 
         LASSERT(down_trylock(&inode->i_sem) != 0);
+
+        ll_id2str(idname, inode->i_ino, inode->i_generation);
 
         /* XXX - add way to know if EA is already up to date & return
          * without doing anything. Easy to do since we get notified of
@@ -995,6 +1000,10 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(out_oa, rc);
         lmm_size = rc;
 
+        DOWN_WRITE_I_ALLOC_SEM(inode);
+        mds_inode_set_attrs_old(inode);
+        UP_WRITE_I_ALLOC_SEM(inode);
+
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
@@ -1002,10 +1011,23 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
         }
 
         rc = fsfilt_set_md(obd, inode, handle, lmm, lmm_size, EA_LOV);
+        if (rc) {
+                CERROR("error in fsfilt_set_md(%s): rc %d\n", idname, rc);
+                GOTO(commit, rc);
+        }
+
+        /* the EA has changed - let's update i_size/i_blocks */
+        /* NOTE: that we're calling mds_validate_size() with the i_sem held. */
+        mds_validate_size(obd, inode, NULL, lsm, &iattr);
+        if (iattr.ia_valid != 0) {
+                rc = fsfilt_setattr(obd, dentry, handle, &iattr, 0);
+                if (rc)
+                        CERROR("error in setattr(%s): rc %d\n", idname, rc);
+        }
+commit:
         err = fsfilt_commit(obd, inode->i_sb, inode, handle, 0);
         if (!rc)
                 rc = err;
-
         EXIT;
 out_oa:
         obdo_free(oa);

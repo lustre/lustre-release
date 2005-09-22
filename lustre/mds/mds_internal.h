@@ -178,7 +178,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
 int mds_dt_update_config(struct obd_device *obd, int transno);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
-int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
+int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
                           struct lustre_msg *msg, int offset);
 void mds_dt_update_objids(struct obd_device *obd, obd_id *ids);
 void mds_dt_save_objids(struct obd_device *obd, obd_id *ids);
@@ -202,7 +202,8 @@ int mds_done_writing(struct ptlrpc_request *req, int offset);
 struct mds_file_data *mds_handle2mfd(struct lustre_handle *handle);
 void mds_mfd_put(struct mds_file_data *mfd);
 int mds_validate_size(struct obd_device *obd, struct inode *inode,
-                      struct mds_body *body, struct iattr *iattr);
+                      struct mds_body *body, struct lov_stripe_md *lsm,
+                      struct iattr *iattr);
 int accmode(int flags);
 
 /* mds/mds_fs.c */
