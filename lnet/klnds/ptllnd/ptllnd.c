@@ -308,7 +308,7 @@ kptllnd_startup (lnet_ni_t *ni)
         ptl_rc = PtlNIInit(
 #ifdef _USING_LUSTRE_PORTALS_
                 PTL_IFACE_DEFAULT,
-#else
+#else /* _USING_CRAY_PORTALS_ */
                 CRAY_KERN_NAL,
 #endif
                 PTLLND_PID, NULL, NULL,

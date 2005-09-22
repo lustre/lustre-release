@@ -662,7 +662,7 @@ kptllnd_peer_check_sends (
 
                 if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET ||
                    tx->tx_msg->ptlm_type == PLTLND_MSG_TYPE_PUT){
-                        struct iovec     tempiovec[PTL_MD_MAX_IOV];
+                        tempiov_t tempiov;
 
 #ifdef TESTING_WITH_LOOPBACK
                         /*
@@ -705,7 +705,7 @@ kptllnd_peer_check_sends (
                                 tx->tx_payload_kiov,
                                 tx->tx_payload_offset,
                                 tx->tx_payload_nob,
-                                tempiovec);
+                                &tempiov);
 
                         /*
                          * Add a ref for this MD, because unlink

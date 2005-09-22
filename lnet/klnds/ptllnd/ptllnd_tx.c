@@ -164,7 +164,6 @@ kptllnd_get_idle_tx(
                 tx->tx_payload_kiov     = 0;
                 tx->tx_payload_offset   = 0;
                 tx->tx_payload_nob      = 0;
-                tx->tx_mapped_kiov      = 0;
 
                 STAT_UPDATE(kps_tx_allocated);
         }else{
@@ -190,11 +189,6 @@ kptllnd_tx_done (kptl_tx_t *tx)
         LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
         LASSERT(atomic_read(&tx->tx_refcount) == 0);
         LASSERT(list_empty(&tx->tx_schedlist)); /*not any the scheduler list*/
-
-        /*
-         * Cleanup any mapped KIOVs
-         */
-        kptllnd_cleanup_kiov(tx);
 
         if(tx->tx_ptlmsg != 0){
                 PJK_UT_MSG("tx=%p finalize\n",tx);

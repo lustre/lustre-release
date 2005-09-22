@@ -89,7 +89,7 @@
 
 #ifdef _USING_LUSTRE_PORTALS_
 #define FMT_NID LPX64
-#else
+#else /* _USING_CRAY_PORTALS_ */
 #define FMT_NID "%x"
 #define ptl_err_t ptl_ni_fail_t
 #define PtlHandleIsEqual(a,b) (a == b)
@@ -258,9 +258,7 @@ typedef struct kptl_tx                           /* transmit message */
         lnet_kiov_t            *tx_payload_kiov;
         unsigned int            tx_payload_offset;
         int                     tx_payload_nob;
-
-        int                     tx_mapped_kiov; /* KIOV's have been mapped */
-
+        
 } kptl_tx_t;
 
 
@@ -622,6 +620,15 @@ kptllnd_msg_unpack(
 /*
  * MISC SUPPORT FUNCTIONS
  */
+ 
+ 
+typedef union {
+        struct iovec iov[PTL_MD_MAX_IOV];
+#ifdef _USING_LUSTRE_PORTALS_        
+        ptl_kiov_t kiov[PTL_MD_MAX_IOV];
+#endif        
+}tempiov_t; 
+ 
 
 void
 kptllnd_setup_md(
@@ -634,11 +641,7 @@ kptllnd_setup_md(
         lnet_kiov_t     *payload_kiov,
         unsigned int     payload_offset,
         int              payload_nob,
-        struct iovec    *tempiovec);
-
-void
-kptllnd_cleanup_kiov(
-        kptl_tx_t       *tx);
+        tempiov_t       *tempiov);
 
 int kptllnd_process_scheduled_tx(kptl_data_t *kptllnd_data);
 int kptllnd_process_scheduled_rx(kptl_data_t *kptllnd_data);
@@ -648,7 +651,7 @@ static inline lnet_nid_t ptl2lnetnid(kptl_data_t *kptllnd_data,ptl_nid_t portals
 {
 #ifdef _USING_LUSTRE_PORTALS_
         return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_ni->ni_nid),   PTL_NIDADDR(portals_nid) );
-#else
+#else /* _USING_CRAY_PORTALS_ */
 	return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_ni->ni_nid), portals_nid);
 #endif
 }
@@ -657,7 +660,7 @@ static inline ptl_nid_t lnet2ptlnid(kptl_data_t *kptllnd_data,lnet_nid_t lnet_ni
 {
 #ifdef _USING_LUSTRE_PORTALS_
         return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_portals_id.nid), PTL_NIDADDR(lnet_nid) );
-#else
+#else /* _USING_CRAY_PORTALS_ */
 	return PTL_NIDADDR(lnet_nid);
 #endif
 }

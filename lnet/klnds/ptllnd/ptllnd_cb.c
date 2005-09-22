@@ -36,7 +36,7 @@ kptllnd_setup_md(
         lnet_kiov_t     *payload_kiov,
         unsigned int     payload_offset,
         int              payload_nob,
-        struct iovec    *tempiovec)
+        tempiov_t       *tempiov)
 {
         unsigned int niov = 0;
 
@@ -89,25 +89,27 @@ kptllnd_setup_md(
                 while(payload_nob){
                         LASSERT( payload_offset < payload_iov->iov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < PTL_MD_MAX_IOV);
+                        LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
 
-                        tempiovec[niov].iov_base = payload_iov->iov_base + payload_offset;
-                        tempiovec[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
+                        tempiov->iov[niov].iov_base = payload_iov->iov_base + payload_offset;
+                        tempiov->iov[niov].iov_len  = min((int)(payload_iov->iov_len - payload_offset),
                                                 (int)payload_nob);
 
-                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiovec[niov].iov_base);
-                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiovec[niov].iov_len);
+                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiov->iov[niov].iov_base);
+                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiov->iov[niov].iov_len);
 
                         payload_offset = 0;
-                        payload_nob -= tempiovec[niov].iov_len;
+                        payload_nob -= tempiov->iov[niov].iov_len;
                         payload_iov++;
                         payload_niov--;
                         niov++;
                 }
+                
+                md->start = tempiov->iov;
+                md->options |= PTL_MD_IOVEC;             
         }else{
-
-                PJK_UT_MSG_DATA("Mapping KIOVs tx=%p\n",tx);
-
+       
+#ifdef _USING_LUSTRE_PORTALS_        
 
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
@@ -117,93 +119,74 @@ kptllnd_setup_md(
                 }
 
                 while(payload_nob){
-                        u8 *ptr;
-
                         LASSERT( payload_offset < payload_kiov->kiov_len);
                         LASSERT (payload_niov > 0);
-                        LASSERT (niov < PTL_MD_MAX_IOV );
+                        LASSERT (niov < sizeof(tempiov->kiov)/sizeof(tempiov->kiov[0]));
 
-
-                        ptr = cfs_kmap(payload_kiov->kiov_page);
-                        LASSERT( ptr != 0);
-                        ptr += payload_kiov->kiov_offset;
-
-                        tempiovec[niov].iov_base = ptr + payload_offset;
-                        tempiovec[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
+                        tempiov->kiov[niov].kiov_page   = payload_kiov->kiov_page;
+                        tempiov->kiov[niov].kiov_offset = payload_kiov->kiov_offset + payload_offset;
+                        tempiov->kiov[niov].kiov_len    = min((int)(payload_kiov->kiov_len - payload_offset),
                                                         (int)payload_nob);
 
-                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiovec[niov].iov_base);
-                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiovec[niov].iov_len);
-
-
                         payload_offset = 0;
-                        payload_nob -= tempiovec[niov].iov_len;
+                        payload_nob -=  tempiov->kiov[niov].kiov_len;
                         payload_kiov++;
                         payload_niov--;
                         niov++;
                 }
+                
+                md->start = tempiov->kiov;
+                md->options |= PTL_MD_KIOV;                  
+                             
+#else /* _USING_CRAY_PORTALS_ */
 
-                /*
-                 * We've mapped the KIOVs
-                 */
-                tx->tx_mapped_kiov = 1;
+/*
+ * If we're using CRAY PORTALS
+ * it is not supposed to support PTL_MD_KIOV
+ */
+#ifdef PTL_MD_KIOV
+#error "Conflicting compilation directives"
+#endif
+
+                while (payload_offset >= payload_kiov->kiov_len) {
+                        payload_offset -= payload_kiov->kiov_len;
+                        payload_kiov++;
+                        payload_niov--;
+                        LASSERT (payload_niov > 0);
+                }
+
+                while(payload_nob){
+
+                        LASSERT( payload_offset < payload_kiov->kiov_len);
+                        LASSERT (payload_niov > 0);
+                        LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
+
+                        tempiov->iov[niov].iov_base = (void *)(
+                                page_to_phys(payload_kiov->kiov_page) + payload_offset);
+                        tempiov->iov[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
+                                                        (int)payload_nob);
+
+                        PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiov->iov[niov].iov_base);
+                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiov->iov[niov].iov_len);
+
+                        payload_offset = 0;
+                        payload_nob -= tempiov->iov[niov].iov_len;
+                        payload_kiov++;
+                        payload_niov--;
+                        niov++;
+                }
+                
+                md->start = tempiov->iov;
+                md->options |= PTL_MD_IOVEC | PTL_MD_PHYS;
+#endif                
+                
         }
-
-        md->start = tempiovec;
-        md->options |= PTL_MD_IOVEC;
 
         /*
          * When using PTL_MD_IOVEC or PTL_MD_KIOV this is not
          * length, rather it is # iovs
          */
         md->length = niov;
-}
-
-void
-kptllnd_cleanup_kiov(
-        kptl_tx_t       *tx)
-{
-        unsigned int     payload_niov = tx->tx_payload_niov;
-        lnet_kiov_t     *payload_kiov = tx->tx_payload_kiov;
-        unsigned int     payload_offset = tx->tx_payload_offset;
-        int              payload_nob = tx->tx_payload_nob;
-
-        /*
-         * Do nothing if the KIOVs weren't mapped
-         */
-        if(tx->tx_mapped_kiov == 0)
-                return;
-
-        PJK_UT_MSG("Un Mapping KIOVs tx=%p\n",tx);
-
-        if (payload_kiov != NULL){
-
-                LASSERT(tx->tx_payload_iov == NULL);
-
-                while (payload_offset >= payload_kiov->kiov_len) {
-                        payload_offset -= payload_kiov->kiov_len;
-                        payload_kiov++;
-                        payload_niov--;
-                        LASSERT (payload_niov > 0);
-                }
-
-                while(payload_nob){
-                        int temp_iov_len;
-
-                        LASSERT( payload_offset < payload_kiov->kiov_len);
-                        LASSERT (payload_niov > 0);
-
-
-                        cfs_kunmap(payload_kiov->kiov_page);
-                        temp_iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
-                                                        (int)payload_nob);
-
-                        payload_offset = 0;
-                        payload_nob -= temp_iov_len;
-                        payload_kiov++;
-                        payload_niov--;
-                }
-        }
 }
 
 int
@@ -223,7 +206,7 @@ kptllnd_start_bulk_rdma(
         ptl_err_t        ptl_rc;
         ptl_err_t        ptl_rc2;
         int              rc;
-        struct iovec     tempiovec[PTL_MD_MAX_IOV];
+        tempiov_t        tempiov;
         kptl_msg_t      *rxmsg = rx->rx_msg;
         kptl_peer_t     *peer = rx->rx_peer;
 
@@ -258,7 +241,7 @@ kptllnd_start_bulk_rdma(
          */
         kptllnd_setup_md(kptllnd_data,&md,op,tx,
                 payload_niov,payload_iov,payload_kiov,
-                payload_offset,payload_nob,tempiovec);
+                payload_offset,payload_nob,&tempiov);
 
         spin_lock(&peer->peer_lock);
 
