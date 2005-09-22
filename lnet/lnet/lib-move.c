@@ -1143,7 +1143,6 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
         lnet_remotenet_t *rnet = NULL;
         lnet_route_t     *route;
         struct list_head *tmp;
-        lnet_ni_t        *tmp_ni;
         lnet_nid_t        src_nid;
         lnet_peer_t      *lp;
         lnet_peer_t      *lp2;
@@ -1152,6 +1151,7 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
         LASSERT (msg->msg_txpeer == NULL);
         LASSERT (!msg->msg_sending);
         LASSERT (!msg->msg_target_is_router);
+        LASSERT (!msg->msg_routing || ni == NULL);
 
         msg->msg_sending = 1;
 
@@ -1163,73 +1163,46 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 LNET_UNLOCK();
                 return -ESHUTDOWN;
         }
-        
-        if (msg->msg_routing) {
-                LASSERT (ni == NULL);
 
-                /* msg->msg_hdr.src_nid/pid are already set up and I already
-                 * know this message isn't for me; is it for someone local? */
-                list_for_each (tmp, &the_lnet.ln_nis) {
-                        tmp_ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-                        if (PTL_NIDNET(tmp_ni->ni_nid) ==
-                            PTL_NIDNET(dst_nid)) {
-                                src_ni = tmp_ni;
-                                break;
-                        }
-                }
-        } else {
-                /* msg->msg_hdr.src_nid/pid get set depending on where I send
-                 * from.  If (ni != NULL) this is a response to a message that
-                 * came in on that NI, and I should be replying on it. */
-
-                msg->msg_hdr.src_pid = the_lnet.ln_pid;
-                
-                if (PTL_NETTYP(PTL_NIDNET(dst_nid)) == LOLND) {
-                        src_ni = lnet_loni;
-                        msg->msg_hdr.src_nid = cpu_to_le64(lnet_loni->ni_nid);
-                } else {
-                        list_for_each (tmp, &the_lnet.ln_nis) {
-                                tmp_ni = list_entry(tmp, lnet_ni_t, ni_list);
-                                
-                                if (PTL_NIDNET(tmp_ni->ni_nid) !=
-                                    PTL_NIDNET(dst_nid))
-                                        continue;
-                                
-                                /* dst is on a local net */
-                                src_ni = tmp_ni;
-                                src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, 
-                                                                dst_nid);
-                                msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-                                
-                                /* send via lo0? */
-                                if (implicit_loopback &&
-                                    lnet_ptlcompat_matchnid(src_ni->ni_nid, dst_nid))
-                                        src_ni = lnet_loni;
-                                break;
-                        }
-                }
-
-                if (src_ni == lnet_loni) {
-                        /* No send credit hassles with LOLND */
-                        lnet_ni_addref_locked(src_ni);
-                        LNET_UNLOCK();
-
-                        if (ni != NULL && ni != src_ni) {
-                                /* a different LND expects a response */
-                                rc = -EPROTO;
-                        } else {
-                                rc = 0;
-                                lnet_ni_send(src_ni, msg);
-                        }
-                        lnet_ni_decref(src_ni);
-                        return rc;
-                }
-        }
-
+        /* Is this for someone on a local network? */
+        src_ni = lnet_net2ni_locked(PTL_NIDNET(dst_nid));
         if (src_ni != NULL) {
-                /* sending to a local network */
+                if (!msg->msg_routing) {
+                        /* I'm the original message source and I'm sending to
+                         * someone local. Set msg_hdr.src_nid/pid from the NI
+                         * I'm sending from and see if I should actually use
+                         * the loopback NI. */
+                        
+                        src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
+                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
+                
+                        /* send via lo0? */
+                        if (implicit_loopback &&
+                            lnet_ptlcompat_matchnid(src_ni->ni_nid, dst_nid)) {
+                                lnet_ni_decref_locked(src_ni);
+                                src_ni = lnet_loni;
+                                lnet_ni_addref_locked(src_ni);
+                        }
+
+                        if (src_ni == lnet_loni) {
+                                /* No send credit hassles with LOLND */
+                                LNET_UNLOCK();
+                                
+                                if (ni != NULL && ni != src_ni) {
+                                        /* a different LND expects a response */
+                                        rc = -EPROTO;
+                                } else {
+                                        rc = 0;
+                                        lnet_ni_send(src_ni, msg);
+                                }
+                                lnet_ni_decref(src_ni);
+                                return rc;
+                        }
+                }
+                
                 rc = lnet_nid2peer_locked(&lp, dst_nid);
+                lnet_ni_decref_locked(src_ni);  /* lp has ref on src_ni; lose mine */
                 if (rc != 0) {
                         LNET_UNLOCK();
                         CERROR("Error %d finding peer %s\n", rc,
@@ -1248,9 +1221,10 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 src_ni = rnet->lrn_ni;
 
                 if (!msg->msg_routing) {
-                        /* I'm the source; now I know which NI */
+                        /* I'm the source and now I know which NI to send on */
                         src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
                 }
 
                 /* Find the best gateway I can use */
@@ -1300,12 +1274,14 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
         LASSERT (!msg->msg_peertxcredit);
         LASSERT (!msg->msg_txcredit);
 
-        msg->msg_txpeer = lp;
+        msg->msg_txpeer = lp;                   /* msg takes my ref on lp */
 
         if (!msg->msg_delayed &&
             (lp->lp_txcredits <= 0 || src_ni->ni_txcredits <= 0)) {
                 rc = lnet_eager_recv_locked(msg);
                 if (rc != 0) {
+                        msg->msg_txpeer = NULL;
+                        lnet_peer_decref_locked(lp);
                         LNET_UNLOCK();
                         return rc;
                 }
@@ -1826,6 +1802,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                     lnet_msg2bufpool(msg)->rbp_credits <= 0) {
                         rc = lnet_eager_recv_locked(msg);
                         if (rc != 0) {
+                                lnet_peer_decref_locked(msg->msg_rxpeer);
+                                msg->msg_rxpeer = NULL;
                                 LNET_UNLOCK();
                                 goto free_drop;
                         }
