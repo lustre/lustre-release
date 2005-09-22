@@ -837,7 +837,7 @@ kptllnd_rx_alloc(
                 return 0;
         }
 
-        rx = cfs_mem_cache_alloc ( kptllnd_data->kptl_rx_cache , GFP_ATOMIC);
+        rx = cfs_mem_cache_alloc ( kptllnd_data->kptl_rx_cache , CFS_SLAB_ATOMIC);
         if(rx == 0 ){
                 CERROR("Failed to allocate rx\n");
                 STAT_UPDATE(kps_rx_allocation_failed);
