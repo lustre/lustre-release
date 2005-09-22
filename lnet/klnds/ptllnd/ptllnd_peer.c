@@ -651,7 +651,7 @@ kptllnd_peer_check_sends (
                  */
 
                 target.nid = lnet2ptlnid(kptllnd_data,peer->peer_nid);
-                target.pid = 0;
+                target.pid = PTLLND_PID;
 
                 PJK_UT_MSG_DATA("Msg NOB = %d\n",tx->tx_msg->ptlm_nob);
                 PJK_UT_MSG_DATA("Returned Credits=%d\n",tx->tx_msg->ptlm_credits);
@@ -671,7 +671,7 @@ kptllnd_peer_check_sends (
                          */
                         ptl_process_id_t target;
                         target.nid = PTL_NID_ANY;
-                        target.pid = 0;
+                        target.pid = PTLLND_PID;
 #endif
 
                         PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",
@@ -692,7 +692,7 @@ kptllnd_peer_check_sends (
                             &meh);
                         if(rc != 0) {
                                 CERROR("PtlMeAttach failed %d\n",rc);
-                                goto failed;
+                                goto failed_with_lock;
                         }
 
                         /* Setup the MD */
@@ -730,11 +730,14 @@ kptllnd_peer_check_sends (
                                  * posted to portals
                                  */
                                 tx->tx_mdh = PTL_INVALID_HANDLE;
+                                
+                                spin_unlock(&peer->peer_lock);
+                                
                                 kptllnd_tx_decref(tx);
 
                                 rc2 = PtlMEUnlink(meh);
                                 LASSERT(rc2 == 0);
-                                goto failed;
+                                goto failed_without_lock;
                         }
                 }
 
@@ -764,7 +767,7 @@ kptllnd_peer_check_sends (
                 if(rc != 0){
                         CERROR("PtlMDBind failed %d\n",rc);
                         tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-                        goto failed;
+                        goto failed_with_lock;
                 }
 
                 list_add_tail(&tx->tx_list, &peer->peer_active_txs);
@@ -797,11 +800,13 @@ kptllnd_peer_check_sends (
                         LASSERT(atomic_read(&tx->tx_refcount)>1);
                         rc2 = PtlMDUnlink(tx->tx_mdh_msg);
                         LASSERT( rc2 == 0);
+                        
+                       
 #ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
                         tx->tx_mdh_msg = PTL_INVALID_HANDLE;
                         kptllnd_tx_decref(tx);
 #endif
-                        goto failed;
+                        goto failed_without_lock;
                 }
 
                 /*
@@ -819,7 +824,9 @@ kptllnd_peer_check_sends (
         PJK_UT_MSG_DATA("<<<\n");
         return;
 
-failed:
+failed_with_lock:
+        spin_unlock(&peer->peer_lock);
+failed_without_lock:
 
         /*
          * Now unlink the MDs (if they were posted)
@@ -838,15 +845,6 @@ failed:
         }
 
         /*
-         * Get back the credits
-         * ??? WHY even do this because we're killing the peer
-         */
-        peer->peer_outstanding_credits += tx->tx_msg->ptlm_credits;
-        peer->peer_credits++;
-
-        spin_unlock(&peer->peer_lock);
-
-        /*
          * And cleanup this peer
          */
         kptllnd_peer_cancel(peer);
@@ -863,6 +861,7 @@ int
 kptllnd_peer_timedout(kptl_peer_t *peer)
 {
         kptl_tx_t          *tx;
+        int rc = 0;
 
         spin_lock(&peer->peer_lock);
 
@@ -874,10 +873,9 @@ kptllnd_peer_timedout(kptl_peer_t *peer)
         if(!list_empty(&peer->peer_pending_txs)){
                 tx = list_entry(peer->peer_pending_txs.next,kptl_tx_t,tx_list);
                 if(time_after_eq(jiffies,tx->tx_deadline)){
-                        spin_unlock(&peer->peer_lock);
                         PJK_UT_MSG("Peer=%p PENDING tx=%p time=%lu sec\n",
                                 peer,tx,(jiffies - tx->tx_deadline)/HZ);
-                        return 1;
+                        rc = 0;
                 }
         }
 
@@ -887,15 +885,14 @@ kptllnd_peer_timedout(kptl_peer_t *peer)
         if(!list_empty(&peer->peer_active_txs)){
                 tx = list_entry(peer->peer_active_txs.next,kptl_tx_t,tx_list);
                 if(time_after_eq(jiffies,tx->tx_deadline)){
-                        spin_unlock(&peer->peer_lock);
                         PJK_UT_MSG("Peer=%p ACTIVE tx=%p time=%lu sec\n",
                                 peer,tx,(jiffies - tx->tx_deadline)/HZ);
-                        return 1;
+                        rc = 0;
                 }
         }
 
         spin_unlock(&peer->peer_lock);
-        return 0;
+        return rc;
 }
 
 
@@ -953,7 +950,7 @@ kptllnd_peer_find (
         unsigned long flags;
         read_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
         peer = kptllnd_peer_find_locked(kptllnd_data,nid);
-        read_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
+        read_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
         return peer;
 }
 
@@ -1107,7 +1104,6 @@ kptllnd_peer_handle_hello (
                 rc = kptllnd_peer_create_locked ( kptllnd_data, &peer, nid);
                 if(rc != 0){
                         CERROR("Failed to create peer (nid="LPX64")\n",nid);
-                        write_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
                         peer = NULL;
                         goto failed;
                 }

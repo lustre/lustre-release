@@ -23,7 +23,6 @@
 
 #include "ptllnd.h"
 
-
 lnd_t               kptllnd_lnd = {
         .lnd_type       = PTLLND,
         .lnd_startup    = kptllnd_startup,
@@ -83,7 +82,7 @@ kptllnd_msg_pack(
         msg->ptlm_dstnid   = dstnid;
         msg->ptlm_dststamp = dststamp;
         msg->ptlm_seq      = seq;
-        
+
         if (*kptllnd_tunables.kptl_cksum) {
                 /* NB ptlm_cksum zero while computing cksum */
                 msg->ptlm_cksum = kptllnd_cksum(msg, msg->ptlm_nob);
@@ -267,8 +266,6 @@ kptllnd_startup (lnet_ni_t *ni)
         PJK_UT_MSG(">>>\n");
 
         LASSERT (ni->ni_lnd == &kptllnd_lnd);
-        
-      
 
         PORTAL_ALLOC (kptllnd_data,sizeof(*kptllnd_data));
         if (kptllnd_data == NULL){
@@ -308,8 +305,14 @@ kptllnd_startup (lnet_ni_t *ni)
          * way to choose a better interface.
          * Requested and actual limits are ignored.
          */
-        ptl_rc = PtlNIInit(PTL_IFACE_DEFAULT, 0, NULL, NULL,
-                           &kptllnd_data->kptl_nih);
+        ptl_rc = PtlNIInit(
+#ifdef _USING_LUSTRE_PORTALS_
+                PTL_IFACE_DEFAULT,
+#else
+                CRAY_KERN_NAL,
+#endif
+                PTLLND_PID, NULL, NULL,
+                &kptllnd_data->kptl_nih);
 
         /*
          * Note: PTL_IFACE_DUP simply means that the requested
@@ -696,7 +699,7 @@ kptllnd_module_init (void)
         CDEBUG(D_INFO,"max_immd_size = %d\n",*kptllnd_tunables.kptl_max_immd_size);
 
         ptllnd_assert_wire_constants();
-        
+
         /*
          * Check for valid parameters.
          */
@@ -705,7 +708,7 @@ kptllnd_module_init (void)
                         *kptllnd_tunables.kptl_credits,
                         *kptllnd_tunables.kptl_ntx);
                 return -EINVAL;
-        }          
+        }
 
         rc = kptllnd_tunables_init();
         if (rc != 0)

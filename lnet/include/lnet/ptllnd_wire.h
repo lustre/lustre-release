@@ -3,6 +3,7 @@
  */
 
 #define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
+#define PTLLND_PID              9          /* The Portals PID */
 #define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer*/
 #define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
 
