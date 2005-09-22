@@ -18,6 +18,7 @@
 # include <linux/errno.h>
 # include <linux/unistd.h>
 # include <asm/system.h>
+# include <asm/arch/system.h>
 # include <linux/kmod.h>
 # include <linux/notifier.h>
 # include <linux/fs.h>
