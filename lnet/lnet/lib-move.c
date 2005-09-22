@@ -442,7 +442,6 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
         if (nob == 0)
                 return;
 
-        LASSERT (!in_interrupt ());
         LASSERT (!irqs_disabled ());
 
         LASSERT (ndiov > 0);
@@ -521,7 +520,6 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
         if (nob == 0)
                 return;
 
-        LASSERT (!in_interrupt ());
         LASSERT (!irqs_disabled ());
 
         LASSERT (niov > 0);
@@ -589,7 +587,6 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
         if (nob == 0)
                 return;
 
-        LASSERT (!in_interrupt ());
         LASSERT (!irqs_disabled ());
 
         LASSERT (nkiov > 0);
@@ -702,9 +699,8 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
         struct iovec *iov = NULL;
         lnet_kiov_t  *kiov = NULL;
         int           rc;
-        
-        LASSERT (!in_interrupt());      
-        LASSERT (!irqs_disabled ());  
+
+        LASSERT (!irqs_disabled ());
         LASSERT (mlen == 0 || msg != NULL);
         
         if (msg != NULL) {
@@ -797,8 +793,7 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
         int     delayed = msg->msg_delayed;
         int     rc;
 
-        LASSERT (!in_interrupt());  
-        LASSERT (!irqs_disabled ());      
+        LASSERT (!irqs_disabled ());
 
         /* On GET, call lnet_ni_recv() right after the send. The recv gets
          * delayed until after the send to ensure the LND still has any RDMA
@@ -1689,9 +1684,8 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
         __u32          payload_length;
         __u32          type;
 
-        LASSERT (!in_interrupt());
         LASSERT (!irqs_disabled ());
-        
+
         type = le32_to_cpu(hdr->type);
         src_nid = le64_to_cpu(hdr->src_nid);
         dest_nid = le64_to_cpu(hdr->dest_nid);

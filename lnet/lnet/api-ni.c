@@ -764,7 +764,6 @@ lnet_shutdown_lndnis (void)
 
                 islo = ni->ni_lnd->lnd_type == LOLND;
 
-                LASSERT (!in_interrupt());
                 LASSERT (!irqs_disabled ());
                 (ni->ni_lnd->lnd_shutdown)(ni);
 
