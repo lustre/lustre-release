@@ -155,7 +155,6 @@ cfs_time_t cfs_timer_deadline(struct cfs_timer *t);
 #endif
 
 #define in_interrupt()    (0)
-#define irqs_disabled()   (0)
 
 static inline void cfs_pause(cfs_duration_t d)
 {

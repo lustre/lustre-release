@@ -518,7 +518,6 @@ struct __dummy_ ## name ## _struct {}
 
 #define NR_IRQS                         512
 #define in_interrupt()                  (0)
-#define irqs_disabled()                 (0)
 
 #define KERN_EMERG      "<0>"   /* system is unusable                   */
 #define KERN_ALERT      "<1>"   /* action must be taken immediately     */

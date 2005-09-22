@@ -764,7 +764,7 @@ lnet_shutdown_lndnis (void)
 
                 islo = ni->ni_lnd->lnd_type == LOLND;
 
-                LASSERT (!irqs_disabled ());
+                LASSERT (!in_interrupt ());
                 (ni->ni_lnd->lnd_shutdown)(ni);
 
                 /* can't deref lnd anymore now; it might have unregistered
