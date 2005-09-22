@@ -714,6 +714,7 @@ kptllnd_module_init (void)
         if (rc != 0)
                 return rc;
 
+        kptllnd_proc_init();
         lnet_register_lnd(&kptllnd_lnd);
 
         PJK_UT_MSG("<<<\n");
@@ -726,6 +727,7 @@ kptllnd_module_fini (void)
 
         PJK_UT_MSG(">>> %s %s\n",__DATE__,__TIME__);
         lnet_unregister_lnd(&kptllnd_lnd);
+        kptllnd_proc_fini();
         kptllnd_tunables_fini();
         kpttllnd_get_stats();
         PJK_UT_MSG("<<<\n");
@@ -784,9 +786,13 @@ kptl_stats_t* kpttllnd_get_stats(void)
         LOGSTAT(kps_tx_allocated);
         LOGSTAT(kps_tx_released);
         LOGSTAT(kpt_tx_allocation_failed);
-        LOGSTAT(kpx_recv_delayed);
-        LOGSTAT(kpx_send_routing);
-        LOGSTAT(kpx_send_target_is_router);
+        LOGSTAT(kps_recv_delayed);
+        LOGSTAT(kps_send_routing);
+        LOGSTAT(kps_send_target_is_router);
+        LOGSTAT(kpt_send_put);
+        LOGSTAT(kps_send_get);
+        LOGSTAT(kps_send_immd);
+        LOGSTAT(kps_send_reply);
 
         return &kptllnd_stats;
 }

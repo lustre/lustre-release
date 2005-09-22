@@ -258,7 +258,7 @@ typedef struct kptl_tx                           /* transmit message */
         lnet_kiov_t            *tx_payload_kiov;
         unsigned int            tx_payload_offset;
         int                     tx_payload_nob;
-        
+
 } kptl_tx_t;
 
 
@@ -340,9 +340,14 @@ typedef struct kptl_stats
         int                     kps_tx_allocated;
         int                     kps_tx_released;               /* MP Safe*/
         int                     kpt_tx_allocation_failed;
-        int                     kpx_recv_delayed;
-        int                     kpx_send_routing;
-        int                     kpx_send_target_is_router;
+        int                     kps_recv_delayed;
+        int                     kps_send_routing;
+        int                     kps_send_target_is_router;
+        int                     kpt_send_put;
+        int                     kps_send_get;
+        int                     kps_send_immd;
+        int                     kps_send_reply;
+        int                     kpt_send_reply_routed;
 }kptl_stats_t;
 
 /*
@@ -415,6 +420,8 @@ int  kptllnd_thread_start(
 
 int  kptllnd_tunables_init(void);
 void kptllnd_tunables_fini(void);
+void kptllnd_proc_init(void);
+void kptllnd_proc_fini(void);
 
 const char *get_ev_type_string(
         int evtype);
@@ -620,15 +627,15 @@ kptllnd_msg_unpack(
 /*
  * MISC SUPPORT FUNCTIONS
  */
- 
- 
+
+
 typedef union {
         struct iovec iov[PTL_MD_MAX_IOV];
-#ifdef _USING_LUSTRE_PORTALS_        
+#ifdef _USING_LUSTRE_PORTALS_
         ptl_kiov_t kiov[PTL_MD_MAX_IOV];
-#endif        
-}tempiov_t; 
- 
+#endif
+}tempiov_t;
+
 
 void
 kptllnd_setup_md(

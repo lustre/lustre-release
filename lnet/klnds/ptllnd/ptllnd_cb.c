@@ -104,12 +104,12 @@ kptllnd_setup_md(
                         payload_niov--;
                         niov++;
                 }
-                
+
                 md->start = tempiov->iov;
-                md->options |= PTL_MD_IOVEC;             
+                md->options |= PTL_MD_IOVEC;
         }else{
-       
-#ifdef _USING_LUSTRE_PORTALS_        
+
+#ifdef _USING_LUSTRE_PORTALS_
 
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
@@ -134,10 +134,10 @@ kptllnd_setup_md(
                         payload_niov--;
                         niov++;
                 }
-                
+
                 md->start = tempiov->kiov;
-                md->options |= PTL_MD_KIOV;                  
-                             
+                md->options |= PTL_MD_KIOV;
+
 #else /* _USING_CRAY_PORTALS_ */
 
 /*
@@ -175,11 +175,11 @@ kptllnd_setup_md(
                         payload_niov--;
                         niov++;
                 }
-                
+
                 md->start = tempiov->iov;
                 md->options |= PTL_MD_IOVEC | PTL_MD_PHYS;
-#endif                
-                
+#endif
+
         }
 
         /*
@@ -407,9 +407,9 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 routing,target_is_router);
 
         if(routing)
-                STAT_UPDATE(kpx_send_routing);
+                STAT_UPDATE(kps_send_routing);
         if(target_is_router)
-                STAT_UPDATE(kpx_send_target_is_router);
+                STAT_UPDATE(kps_send_target_is_router);
 
         /* NB 'private' is different depending on what we're sending.... */
 
@@ -453,6 +453,9 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= *kptllnd_tunables.kptl_max_immd_size)
                         break;
 
+
+                STAT_UPDATE(kpt_send_put);
+
                 kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
                 PJK_UT_MSG_DATA("<<< SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
@@ -482,6 +485,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[lntmsg->msg_md->md_length]);
                 if (nob <= *kptllnd_tunables.kptl_max_immd_size)
                         break;
+
+                STAT_UPDATE(kps_send_get);
 
                 tx->tx_payload_offset = 0;
                 tx->tx_payload_niov = lntmsg->msg_md->md_niov;
@@ -513,6 +518,9 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         case LNET_MSG_REPLY:
                 PJK_UT_MSG_DATA("LNET_MSG_REPLY\n");
+
+                STAT_UPDATE(kps_send_reply);
+
 
                 if(routing!=0 || target_is_router!=0)
                 {
@@ -606,6 +614,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         }
 
+        STAT_UPDATE(kps_send_immd);
+
         LASSERT (offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob])
                  <= *kptllnd_tunables.kptl_max_immd_size);
 
@@ -695,7 +705,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         LASSERT (!(kiov != NULL && iov != NULL));
 
         if(delayed)
-                STAT_UPDATE(kpx_recv_delayed);
+                STAT_UPDATE(kps_recv_delayed);
 
         switch(rxmsg->ptlm_type)
         {
