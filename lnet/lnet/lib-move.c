@@ -314,17 +314,19 @@ lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, unsigned int doffset,
                         siov->iov_base + soffset, this_nob);
                 nob -= this_nob;
 
-                if (diov->iov_len < doffset + this_nob) {
+                if (diov->iov_len > doffset + this_nob) {
                         doffset += this_nob;
                 } else {
                         diov++;
+                        ndiov--;
                         doffset = 0;
                 }
                 
-                if (siov->iov_len < soffset + this_nob) {
+                if (siov->iov_len > soffset + this_nob) {
                         soffset += this_nob;
                 } else {
                         siov++;
+                        nsiov--;
                         soffset = 0;
                 }
         } while (nob > 0);
@@ -488,6 +490,7 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
                         cfs_kunmap(diov->kiov_page);
                         daddr = NULL;
                         diov++;
+                        ndiov--;
                         doffset = 0;
                 }
 
@@ -498,6 +501,7 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
                         cfs_kunmap(siov->kiov_page);
                         saddr = NULL;
                         siov++;
+                        nsiov--;
                         soffset = 0;
                 }
         } while (nob > 0);
@@ -552,20 +556,22 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
                 memcpy (iov->iov_base + iovoffset, addr, this_nob);
                 nob -= this_nob;
 
-                if (iov->iov_len < iovoffset + this_nob) {
+                if (iov->iov_len > iovoffset + this_nob) {
                         iovoffset += this_nob;
                 } else {
                         iov++;
+                        niov--;
                         iovoffset = 0;
                 }
 
-                if (kiov->kiov_len < kiovoffset + this_nob) {
+                if (kiov->kiov_len > kiovoffset + this_nob) {
                         addr += this_nob;
                         kiovoffset += this_nob;
                 } else {
                         cfs_kunmap(kiov->kiov_page);
                         addr = NULL;
                         kiov++;
+                        nkiov--;
                         kiovoffset = 0;
                 }
 
@@ -619,20 +625,22 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
                 memcpy (addr, iov->iov_base + iovoffset, this_nob);
                 nob -= this_nob;
 
-                if (kiov->kiov_len < kiovoffset + this_nob) {
+                if (kiov->kiov_len > kiovoffset + this_nob) {
                         addr += this_nob;
                         kiovoffset += this_nob;
                 } else {
                         cfs_kunmap(kiov->kiov_page);
                         addr = NULL;
                         kiov++;
+                        nkiov--;
                         kiovoffset = 0;
                 }
 
-                if (iov->iov_len < iovoffset + this_nob) {
+                if (iov->iov_len > iovoffset + this_nob) {
                         iovoffset += this_nob;
                 } else {
                         iov++;
+                        niov--;
                         iovoffset = 0;
                 }
         } while (nob > 0);

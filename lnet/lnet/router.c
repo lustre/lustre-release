@@ -249,7 +249,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         __u32                net2;
         int                  rc;
 
-        CDEBUG(D_WARNING, "Add route: net %s hops %u gw %s\n",
+        CDEBUG(D_NET, "Add route: net %s hops %u gw %s\n",
                libcfs_net2str(net), hops, libcfs_nid2str(gateway));
 
         if (gateway == LNET_NID_ANY ||
@@ -369,7 +369,7 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
         struct list_head    *e2;
         int                  rc = -ENOENT;
 
-        CDEBUG(D_WARNING, "Del route: net %s : gw %s\n",
+        CDEBUG(D_NET, "Del route: net %s : gw %s\n",
                libcfs_net2str(net), libcfs_nid2str(gw_nid));
 
         /* NB Caller may specify either all routes via the given gateway
@@ -586,7 +586,7 @@ lnet_alloc_rtrpools(void)
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[2], large_pages);
 
         for (rc = 0; rc < LNET_NRBPOOLS; rc++)
-                CDEBUG(D_WARNING, "Pages[%d]: %d\n", rc,
+                CDEBUG(D_NET, "Pages[%d]: %d\n", rc,
                        the_lnet.ln_rtrpools[rc].rbp_npages);
 
         the_lnet.ln_routing = forwarding;
