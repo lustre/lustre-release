@@ -244,7 +244,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 	lnet_remotenet_t    *rnet2;
 	lnet_route_t        *route;
 	lnet_route_t        *route2;
-        lnet_peer_t         *lp;
+        int                  add_route;
         int                  rc;
 
         CDEBUG(D_NET, "Add route: net %s hops %u gw %s\n",
@@ -272,9 +272,13 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 return -ENOMEM;
         }
 
+        INIT_LIST_HEAD(&rnet->lrn_routes);
+        rnet->lrn_net = net;
+        rnet->lrn_hops = hops;
+
         LNET_LOCK();
 
-        rc = lnet_nid2peer_locked(&lp, gateway);
+        rc = lnet_nid2peer_locked(&route->lr_gateway, gateway);
         if (rc != 0) {
                 LNET_UNLOCK();
 
@@ -290,75 +294,102 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         }
 
         LASSERT (!the_lnet.ln_shutdown);
+        CFS_INIT_LIST_HEAD(&zombies);
 
         rnet2 = lnet_find_net_locked(net);
         if (rnet2 == NULL) {
                 /* new network */
-                INIT_LIST_HEAD(&rnet->lrn_routes);
-                rnet->lrn_net = net;
-                rnet->lrn_hops = hops;
-                rnet->lrn_ni = lp->lp_ni;
-
-                lnet_ni_addref_locked(rnet->lrn_ni);
-
                 list_add_tail(&rnet->lrn_list, &the_lnet.ln_remote_nets);
-
-                route->lr_gateway = lp;
-                list_add_tail(&route->lr_list, &rnet->lrn_routes);
-
-                the_lnet.ln_remote_nets_version++;
-                LNET_UNLOCK();
-                return 0;
+                rnet2 = rnet;
         }
 
-        if (rnet2->lrn_hops < hops) {
-                /* new route is longer than ones we have already: 
-                 * Ignore it silently */
-                LNET_UNLOCK();
-                PORTAL_FREE(route, sizeof(*route));
-                goto out;
-        }
-        
-        if (rnet2->lrn_hops > hops) {
+        if (hops > rnet2->lrn_hops) {
+                /* New route is longer; ignore it */
+                add_route = 0;
+        } else if (hops < rnet2->lrn_hops) {
                 /* new route supercedes all currently known routes to this
                  * net */
                 list_add(&zombies, &rnet2->lrn_routes);
                 list_del_init(&rnet2->lrn_routes);
-                list_add(&route->lr_list, &rnet2->lrn_routes);
+                add_route = 1;
+        } else {
+                add_route = 1;
+                /* New route has the same hopcount as existing routes; search
+                 * for a duplicate route (it's a NOOP if it is) */
+                list_for_each (e, &rnet2->lrn_routes) {
+                        route2 = list_entry(e, lnet_route_t, lr_list);
+
+                        if (route2->lr_gateway == route->lr_gateway) {
+                                add_route = 0;
+                                break;
+                        }
+
+                        /* our loopups must be true */
+                        LASSERT (route2->lr_gateway->lp_nid != gateway);
+                }
+        }
+        
+        if (add_route) {
+                LASSERT (rc == 0);
+                list_add_tail(&route->lr_list, &rnet2->lrn_routes);
                 the_lnet.ln_remote_nets_version++;
                 LNET_UNLOCK();
+        } else {
+                lnet_peer_decref_locked(route->lr_gateway);
+                LNET_UNLOCK();
+                PORTAL_FREE(route, sizeof(*route));
+        }
 
-                while (!list_empty(&zombies)) {
-                        route = list_entry(zombies.next, lnet_route_t, lr_list);
-                        list_del(&route->lr_list);
-                        
-                        LNET_LOCK();
-                        lnet_peer_decref_locked(route->lr_gateway);
-                        LNET_UNLOCK();
-                        PORTAL_FREE(route, sizeof(*route));
+        if (rnet != rnet2)
+                PORTAL_FREE(rnet, sizeof(*rnet));
+
+        while (!list_empty(&zombies)) {
+                route = list_entry(zombies.next, lnet_route_t, lr_list);
+                list_del(&route->lr_list);
+                
+                LNET_LOCK();
+                lnet_peer_decref_locked(route->lr_gateway);
+                LNET_UNLOCK();
+                PORTAL_FREE(route, sizeof(*route));
+        }
+
+        return rc;
+}
+
+int
+lnet_check_routes (void)
+{
+        lnet_remotenet_t    *rnet;
+        lnet_route_t        *route;
+        lnet_route_t        *route2;
+        struct list_head    *e1;
+        struct list_head    *e2;
+
+        LNET_LOCK();
+
+        list_for_each (e1, &the_lnet.ln_remote_nets) {
+                rnet = list_entry(e1, lnet_remotenet_t, lrn_list);
+
+                route2 = NULL;
+                list_for_each (e2, &rnet->lrn_routes) {
+                        route = list_entry(e2, lnet_route_t, lr_list);
+
+                        if (route2 == NULL)
+                                route2 = route;
+                        else if (route->lr_gateway->lp_ni !=
+                                 route2->lr_gateway->lp_ni) {
+                                LNET_UNLOCK();
+                                
+                                CERROR("Routes to %s via %s and %s not supported\n",
+                                       libcfs_net2str(rnet->lrn_net),
+                                       libcfs_nid2str(route->lr_gateway->lp_nid),
+                                       libcfs_nid2str(route2->lr_gateway->lp_nid));
+                                return -EINVAL;
+                        }
                 }
-                goto out;
         }
         
-        /* New route has the same hopcount as existing routes; search for
-         * a duplicate route (it's a NOOP if it is) */
-        list_for_each (e, &rnet2->lrn_routes) {
-                route2 = list_entry(e, lnet_route_t, lr_list);
-
-                if (route2->lr_gateway->lp_nid == gateway) {
-                        LNET_UNLOCK();
-                        PORTAL_FREE(route, sizeof(*route));
-                        goto out;
-                }
-        }
-        
-        /* Add the new route */
-        list_add_tail(&route->lr_list, &rnet2->lrn_routes);
-        the_lnet.ln_remote_nets_version++;
         LNET_UNLOCK();
-
- out:
-        PORTAL_FREE(rnet, sizeof(*rnet));
         return 0;
 }
 
@@ -388,8 +419,7 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
                         continue;
 
                 list_for_each (e2, &rnet->lrn_routes) {
-                        route = list_entry(e2, lnet_route_t,
-                                        lr_list);
+                        route = list_entry(e2, lnet_route_t, lr_list);
 
                         if (!(gw_nid == LNET_NID_ANY ||
                               gw_nid == route->lr_gateway->lp_nid))
@@ -408,10 +438,8 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
 
                         PORTAL_FREE(route, sizeof (*route));
 
-                        if (rnet != NULL) {
-                                lnet_ni_decref(rnet->lrn_ni);
+                        if (rnet != NULL)
                                 PORTAL_FREE(rnet, sizeof(*rnet));
-                        }
 
                         rc = 0;
                         goto again;
@@ -587,7 +615,6 @@ lnet_init_rtrpools(void)
 {
         int small_pages = 1;
         int large_pages = (PTL_MTU + PAGE_SIZE - 1) / PAGE_SIZE;
-        int rc;
 
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[0], 0);
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[1], small_pages);

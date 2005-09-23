@@ -1080,6 +1080,10 @@ LNetNIInit(lnet_pid_t requested_pid)
         if (rc != 0)
                 goto failed2;
 
+        rc = lnet_check_routes();
+        if (rc != 0)
+                goto failed3;
+
         rc = lnet_alloc_rtrpools(im_a_router);
         if (rc != 0)
                 goto failed3;
@@ -1147,8 +1151,10 @@ LNetCtl(unsigned int cmd, void *arg)
                 return lnet_fail_nid(data->ioc_nid, data->ioc_count);
                 
         case IOC_PORTAL_ADD_ROUTE:
-                return lnet_add_route(data->ioc_net, data->ioc_count, 
-                                      data->ioc_nid);
+                rc = lnet_add_route(data->ioc_net, data->ioc_count, 
+                                    data->ioc_nid);
+                return (rc != 0) ? rc : lnet_check_routes();
+                
         case IOC_PORTAL_DEL_ROUTE:
                 return lnet_del_route(data->ioc_net, data->ioc_nid);
 

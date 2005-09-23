@@ -1247,7 +1247,7 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 }
 
                 lnet_peer_addref_locked(lp);
-                src_ni = rnet->lrn_ni;
+                src_ni = lp->lp_ni;
 
                 if (!msg->msg_routing) {
                         /* I'm the source and now I know which NI to send on */

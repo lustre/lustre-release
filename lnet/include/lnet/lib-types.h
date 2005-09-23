@@ -360,7 +360,6 @@ typedef struct {
         struct list_head        lrn_routes;     /* routes to me */
         __u32                   lrn_net;        /* my net number */
         unsigned int            lrn_hops;       /* how far I am */
-        lnet_ni_t              *lrn_ni;         /* local net that sends to me */
 } lnet_remotenet_t;
 
 typedef struct {

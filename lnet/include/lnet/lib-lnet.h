@@ -474,6 +474,7 @@ lnet_net2ni (__u32 net)
 int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
 int lnet_distance(lnet_nid_t nid, int *order);
 int lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
+int lnet_check_routes(void);
 int lnet_del_route(__u32 net, lnet_nid_t gw_nid);
 void lnet_destroy_routes(void);
 int lnet_get_route(int idx, __u32 *net, __u32 *hops, 
