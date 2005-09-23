@@ -90,7 +90,6 @@ struct config_llog_instance {
         struct obd_uuid cfg_uuid;
         ptl_nid_t cfg_local_nid;
         int  cfg_flags;
-        struct obd_export *cfg_exp;
 };
 
 int class_config_process_llog(struct llog_ctxt *ctxt, char *name,

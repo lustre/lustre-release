@@ -665,12 +665,7 @@ static int class_config_parse_handler(struct llog_handle * handle,
                 lcfg_new->lcfg_flags = lcfg->lcfg_flags;
                 lcfg_new->lcfg_nid   = lcfg->lcfg_nid;
                 lcfg_new->lcfg_nal   = lcfg->lcfg_nal;
-                if (cfg && (lcfg->lcfg_command == LCFG_LOV_DEL_OBD)) {
-                        if (cfg->cfg_exp)
-                                lcfg_new->lcfg_nal = (unsigned long)cfg->cfg_exp;
-                        else
-                                lcfg_new->lcfg_nal = 0;
-                } 
+
                 rc = class_process_config(lcfg_new);
                 lustre_cfg_free(lcfg_new);
 

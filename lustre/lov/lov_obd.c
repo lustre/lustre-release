@@ -573,8 +573,7 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 }
 
 static int
-lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen,
-            struct obd_export *md_exp)
+lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
@@ -614,13 +613,6 @@ lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen,
                                        LDLM_FL_CONFIG_CHANGE, NULL);
                 if (rc != 0)
                         CWARN("obd_cancel_unused(osc): %d\n", rc);
-
-                if (md_exp) { 
-                        rc = obd_cancel_unused(md_exp, NULL,
-                                       LDLM_FL_CONFIG_CHANGE, NULL);
-                        if (rc != 0)
-                                CWARN("obd_cancel_unused(md): %d\n", rc);
-                }
 
                 osc_obd = class_exp2obd(tgt->ltd_exp);
                 if (osc_obd) {
@@ -686,10 +678,8 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                         GOTO(out, rc = -EINVAL);
                 if (cmd == LCFG_LOV_ADD_OBD)
                         rc = lov_add_obd(obd, &obd_uuid, index, gen);
-                else {
-                        struct obd_export *md_exp = (struct obd_export *)lcfg->lcfg_nal;
-                        rc = lov_del_obd(obd, &obd_uuid, index, gen, md_exp);
-                }
+                else
+                        rc = lov_del_obd(obd, &obd_uuid, index, gen);
                 GOTO(out, rc);
         }
         default: {
@@ -2155,11 +2145,10 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 
                 /* This can happen if a deleted OST has been replaced
                  * in the lsm by the MDS.  */
-#if 0
                 LDLM_ERROR(data->lock, "lock on inode without such object");
                 dump_lsm(D_ERROR, data->lsm);
                 portals_debug_dumpstack(NULL);
-#endif
+
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {
