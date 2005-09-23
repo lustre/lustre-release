@@ -102,6 +102,28 @@ AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)
 ])
 
+# LN_CONFIG_USOCKLND
+#
+# configure support for Portals
+#
+AC_DEFUN([LN_CONFIG_USOCKLND],
+[AC_MSG_CHECKING([usocklnd])
+AC_ARG_ENABLE([usocklnd],
+        AC_HELP_STRING([--disable-usocklnd],
+                       [disable usocklnd]),
+        [],[enable_usocklnd='yes'])
+
+AC_MSG_CHECKING([for usocklnd support])
+if test x$enable_usocklnd = xyes ; then
+      AC_MSG_RESULT([no (by request)])
+      USOCKLND="usocklnd"
+else
+      AC_MSG_RESULT([yes])
+      USOCKLND=""
+fi
+AC_SUBST(USOCKLND)
+])
+
 #
 # LN_CONFIG_QUADRICS
 #
@@ -674,6 +696,7 @@ LN_CONFIG_VIB
 LN_CONFIG_IIB
 LN_CONFIG_RALND
 LN_CONFIG_PTLLND
+LN_CONFIG_USOCKLND
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
@@ -821,6 +844,7 @@ AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
 AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
+AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
 
 #

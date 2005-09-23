@@ -1,5 +1,7 @@
 if LIBLUSTRE
+if BUILD_USOCKLND
 noinst_LIBRARIES = libsocklnd.a
+endif
 endif
 
 noinst_HEADERS =  pqtimer.h dispatch.h table.h timer.h \
