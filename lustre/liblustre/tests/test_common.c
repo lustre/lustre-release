@@ -179,7 +179,7 @@ int t_open(const char *path)
 {
         int fd;
 
-        fd = open(path, O_RDWR);
+        fd = open(path, O_RDWR | O_LARGEFILE);
         if (fd < 0) {
                 printf("open(%s) error: %s\n", path, strerror(errno));
                 EXIT_RET(fd);

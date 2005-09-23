@@ -826,6 +826,7 @@ int t23(char *name)
         }
 
         close(fd);
+        t_unlink(path);
         LEAVE();
 }
 
