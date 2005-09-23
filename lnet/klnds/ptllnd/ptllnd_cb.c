@@ -63,14 +63,14 @@ kptllnd_setup_md(
 
         /* setup the options*/
         md->options = op;
+        md->options |= PTL_MD_LUSTRE_COMPLETION_SEMANTICS;
+        /* we don't care about the start event */
+        md->options |= PTL_MD_EVENT_START_DISABLE;
 
         /* If this is a PUT then we need to disable ACK */
         /* we don't need an ACK, we'll get a callback when it is complete */
         if( op == PTL_MD_OP_PUT)
                 md->options |= PTL_MD_ACK_DISABLE;
-
-        /* we don't care about the start event */
-        md->options |= PTL_MD_EVENT_START_DISABLE;
 
         /* point back to this TX descriptor so we know what to complete
          * when the event is triggered */

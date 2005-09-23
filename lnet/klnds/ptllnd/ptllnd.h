@@ -77,22 +77,28 @@
  */
 //#define PJK_DEBUGGING
 
-/*
- * This was used for some single node testing
- * which has some hacks to allow packets that come
- * back on the lookback LND to have their address
- * fixed up, so that match MD's properly.  And you
- * can setup a connection with your self and transfer data.
- * WARNING: This was for UNIT testing purposes only.
- */
-//#define TESTING_WITH_LOOPBACK
-
 #ifdef _USING_LUSTRE_PORTALS_
+
+/* NIDs are 64-bits on Lustre Portals */
 #define FMT_NID LPX64
+
+/* When using Lustre Portals Lustre completion semantics are imlicit*/
+#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS      0
+
 #else /* _USING_CRAY_PORTALS_ */
+
+/* NIDs are integers on Lustre Portals */
 #define FMT_NID "%x"
-#define ptl_err_t ptl_ni_fail_t
+
+/* When using Cray Portals this is defined in the Cray Portals Header*/
+/*#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS */
+
+/* Can compare handles directly on Cray Portals */
 #define PtlHandleIsEqual(a,b) (a == b)
+
+/* Diffrent error types on Cray Portals*/
+#define ptl_err_t ptl_ni_fail_t
+
 #endif
 
 #if CONFIG_SMP

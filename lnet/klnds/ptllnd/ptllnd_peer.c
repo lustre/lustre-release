@@ -664,16 +664,6 @@ kptllnd_peer_check_sends (
                    tx->tx_msg->ptlm_type == PLTLND_MSG_TYPE_PUT){
                         tempiov_t tempiov;
 
-#ifdef TESTING_WITH_LOOPBACK
-                        /*
-                         * When doing loopback testing the data comes back
-                         * on the given loopback nid
-                         */
-                        ptl_process_id_t target;
-                        target.nid = PTL_NID_ANY;
-                        target.pid = PTLLND_PID;
-#endif
-
                         PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",
                                 tx->tx_msg->ptlm_u.req.kptlrm_matchbits);
 
@@ -749,6 +739,7 @@ kptllnd_peer_check_sends (
                 md.length = tx->tx_msg->ptlm_nob;
                 md.threshold = 1;
                 md.options = PTL_MD_OP_PUT;
+                md.options |= PTL_MD_LUSTRE_COMPLETION_SEMANTICS;
                 md.options |= PTL_MD_EVENT_START_DISABLE;
                 /* we don't need an ACK, we'll get a callback when the get is complete */
                 md.options |= PTL_MD_ACK_DISABLE;

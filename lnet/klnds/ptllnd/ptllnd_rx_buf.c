@@ -369,6 +369,7 @@ kptllnd_rx_buffer_post(
         md.length = PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages;
         md.threshold = PTL_MD_THRESH_INF;
         md.options = PTL_MD_OP_PUT;
+        md.options |= PTL_MD_LUSTRE_COMPLETION_SEMANTICS;
         md.options |= PTL_MD_EVENT_START_DISABLE;
         md.options |= PTL_MD_MAX_SIZE;
         md.user_ptr = rxb;
@@ -562,17 +563,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         rx->rx_msg = rxb->rxb_buffer + ev->offset;
         rx->rx_rxb = rxb;
         rx->rx_nob = nob;
-#ifdef TESTING_WITH_LOOPBACK
-        /*
-         * When testing with loopback on socknal
-         * packets are received on loopback NAL so
-         * until I figure out how to do that properly
-         * just make it look like it came from this NID
-         */
-        rx->rx_initiator = rxb->rxb_po.po_kptllnd_data->kptl_portals_id;
-#else
         rx->rx_initiator = ev->initiator;
-#endif
 
         kptllnd_rx_schedule(rx);
 
