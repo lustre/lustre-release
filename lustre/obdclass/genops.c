@@ -1273,42 +1273,45 @@ char *obd_export_nid2str(struct obd_export *exp, char *ipbuf)
         return ipbuf;
 }
 
+#define EVICT_BATCH 32
 int obd_export_evict_by_nid(struct obd_device *obd, char *nid)
 {
-        struct obd_export *doomed_exp = NULL;
+        struct obd_export *doomed_exp[EVICT_BATCH] = { NULL };
         struct list_head *p;
-        int exports_evicted = 0;
+        int exports_evicted = 0, num_to_evict = 0, i;
 
 search_again:
         spin_lock(&obd->obd_dev_lock);
         list_for_each(p, &obd->obd_exports) {
                 char ipbuf[PTL_NALFMT_SIZE];
 
-                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
-                obd_export_nid2str(doomed_exp, ipbuf);
+                doomed_exp[num_to_evict] = list_entry(p, struct obd_export,
+                                                      exp_obd_chain);
+                obd_export_nid2str(doomed_exp[num_to_evict], ipbuf);
 
                 if (strcmp(ipbuf, nid) == 0) {
-                        class_export_get(doomed_exp);
-                        break;
+                        class_export_get(doomed_exp[num_to_evict]);
+                        if (++num_to_evict == EVICT_BATCH)
+                                break;
                 }
-                doomed_exp = NULL;
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        if (doomed_exp == NULL) {
-                goto out;
-        } else {
-                CERROR("evicting nid %s (%s) at adminstrative request\n",
-                       nid, doomed_exp->exp_client_uuid.uuid);
-                class_fail_export(doomed_exp);
-                class_export_put(doomed_exp);
+        for (i = 0; i < num_to_evict; i++) {
                 exports_evicted++;
+                CERROR("evicting NID '%s' (%s) #%d at adminstrative request\n",
+                       nid, doomed_exp[i]->exp_client_uuid.uuid,
+                       exports_evicted);
+                class_fail_export(doomed_exp[i]);
+                class_export_put(doomed_exp[i]);
+        }
+        if (num_to_evict == EVICT_BATCH) {
+                num_to_evict = 0;
                 goto search_again;
         }
 
-out:
         if (!exports_evicted)
-                CERROR("can't disconnect %s: no exports found\n", nid);
+                CERROR("can't disconnect NID '%s': no exports found\n", nid);
         return exports_evicted;
 }
 EXPORT_SYMBOL(obd_export_evict_by_nid);

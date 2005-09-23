@@ -122,6 +122,12 @@ Details    : ping_evictor_main() drops obd_dev_lock if deleting a stale export
 	     but doesn't restart at beginning of obd_exports_timed list
 	     afterward.
 
+Severity   : enhancement
+Bugzilla   : 7304
+Description: improve by-nid export eviction on the MDS and OST
+Details    : allow multiple exports with the same NID to be evicted at one
+	     time without re-searching the exports list.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
