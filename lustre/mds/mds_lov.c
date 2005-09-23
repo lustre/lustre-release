@@ -851,6 +851,7 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 sprintf(name, "%s-%d", profile, version);
         }
         CWARN("Applying configuration log %s\n", name);
+        mds->mds_config_generation++;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
