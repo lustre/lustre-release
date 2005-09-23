@@ -838,7 +838,7 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 RETURN(0);
         cfg.cfg_instance = NULL;
         cfg.cfg_uuid = mds->mds_dt_uuid;
-
+        cfg.cfg_exp = NULL;
         namelen = strlen(profile) + 20; /* -clean-######### */
         OBD_ALLOC(name, namelen);
         if (name == NULL)
