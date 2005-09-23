@@ -182,6 +182,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         struct timeval   then;
         struct timeval   now;
         struct timespec  ts;
+        lnet_ni_t       *ni;
 #endif
         ENTRY;
 
@@ -210,9 +211,6 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         RETURN (0);
                 }
 
-                /* Some architectures force us to do spin locking/unlocking
-                 * in the same stack frame, means we can abstract the
-                 * locking here */
 #ifdef __KERNEL__
                 cfs_waitlink_init(&wl);
                 set_current_state(TASK_INTERRUPTIBLE);
@@ -236,9 +234,23 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                 LNET_LOCK();
                 cfs_waitq_del(&the_lnet.ln_waitq, &wl);
 #else
+                ni = the_lnet.ln_eqwaitni;
+                if (ni != NULL) {
+                        lnet_ni_addref_locked(ni);
+                        LNET_UNLOCK();
+                        (ni->ni_lnd->lnd_wait)(ni, timeout_ms);
+                        LNET_LOCK();
+                        lnet_ni_decref_locked(ni);
+                        continue;
+                }
+
+# if LNET_SINGLE_THREADED
+                LNET_UNLOCK();
+                return -ENOENT;
+# else
                 if (timeout_ms < 0) {
                         pthread_cond_wait(&the_lnet.ln_cond, 
-                                          &the_lnet.ln_mutex);
+                                          &the_lnet.ln_lock);
                 } else {
                         gettimeofday(&then, NULL);
                         
@@ -251,7 +263,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         }
                         
                         pthread_cond_timedwait(&the_lnet.ln_cond,
-                                               &the_lnet.ln_mutex, &ts);
+                                               &the_lnet.ln_lock, &ts);
                         
                         gettimeofday(&now, NULL);
                         timeout_ms -= (now.tv_sec - then.tv_sec) * 1000 +
@@ -260,6 +272,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         if (timeout_ms < 0)
                                 timeout_ms = 0;
                 }
+# endif
 #endif
         }
 }

@@ -38,19 +38,34 @@ static inline int lnet_md_exhausted (lnet_libmd_t *md)
 }
 
 #ifdef __KERNEL__
-#define LNET_LOCK()                                                \
-        spin_lock(&the_lnet.ln_lock)                 
-#define LNET_UNLOCK()                                              \
-        spin_unlock(&the_lnet.ln_lock)               
+#define LNET_LOCK()        spin_lock(&the_lnet.ln_lock)                 
+#define LNET_UNLOCK()      spin_unlock(&the_lnet.ln_lock)               
 #define LNET_MUTEX_DOWN(m) mutex_down(m)
 #define LNET_MUTEX_UP(m)   mutex_up(m)
-#else                                                                   
-#define LNET_LOCK()                                                \
-        pthread_mutex_lock(&the_lnet.ln_mutex)       
-#define LNET_UNLOCK()                                              \
-        pthread_mutex_unlock(&the_lnet.ln_mutex)
+#else
+# if LNET_SINGLE_THREADED
+#define LNET_SINGLE_THREADED_LOCK(l)            \
+do {                                            \
+        LASSERT ((l) == 0);                     \
+        (l) = 1;                                \
+} while (0)
+
+#define LNET_SINGLE_THREADED_UNLOCK(l)          \
+do {                                            \
+        LASSERT ((l) == 1);                     \
+        (l) = 0;                                \
+} while (0)
+
+#define LNET_LOCK()        LNET_SINGLE_THREADED_LOCK(the_lnet.ln_lock)
+#define LNET_UNLOCK()      LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_lock)
+#define LNET_MUTEX_DOWN(m) LNET_SINGLE_THREADED_LOCK(*(m))
+#define LNET_MUTEX_UP(m)   LNET_SINGLE_THREADED_UNLOCK(*(m))
+# else
+#define LNET_LOCK()        pthread_mutex_lock(&the_lnet.ln_lock)
+#define LNET_UNLOCK()      pthread_mutex_unlock(&the_lnet.ln_lock)
 #define LNET_MUTEX_DOWN(m) pthread_mutex_lock(m)
 #define LNET_MUTEX_UP(m)   pthread_mutex_unlock(m)
+# endif
 #endif
 
 #define MAX_PORTALS     64
@@ -431,8 +446,7 @@ lnet_nid2peerhash (lnet_nid_t nid)
         return &the_lnet.ln_peer_hash[idx];
 }
 
-extern lnd_t      the_lolnd;
-extern lnet_ni_t *lnet_loni;
+extern lnd_t the_lolnd;
 
 #ifndef __KERNEL__
 #define LNET_REGISTER_LND_IF_PRESENT(lnd)                               \
@@ -466,7 +480,8 @@ int lnet_get_route(int idx, __u32 *net, __u32 *hops,
                    lnet_nid_t *gateway, __u32 *alive);
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
-int lnet_alloc_rtrpools(void);
+void lnet_init_rtrpools(void);
+int  lnet_alloc_rtrpools(int im_a_router);
 void lnet_free_rtrpools(void);
 lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 
@@ -577,7 +592,7 @@ int lnet_acceptor_port(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 
-int lnet_parse_routes (char *route_str);
+int lnet_parse_routes (char *route_str, int *im_a_router);
 int lnet_parse_networks (struct list_head *nilist, char *networks);
 
 int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid);

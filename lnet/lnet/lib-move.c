@@ -1187,13 +1187,14 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 
                         /* send via lo0? */
                         if (implicit_loopback &&
+                            the_lnet.ln_loni != NULL &&
                             lnet_ptlcompat_matchnid(src_ni->ni_nid, dst_nid)) {
                                 lnet_ni_decref_locked(src_ni);
-                                src_ni = lnet_loni;
+                                src_ni = the_lnet.ln_loni;
                                 lnet_ni_addref_locked(src_ni);
                         }
 
-                        if (src_ni == lnet_loni) {
+                        if (src_ni == the_lnet.ln_loni) {
                                 /* No send credit hassles with LOLND */
                                 LNET_UNLOCK();
                                 
@@ -1226,14 +1227,6 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                         CERROR("No route to %s\n", libcfs_id2str(msg->msg_target));
                         return -EHOSTUNREACH;
                 }
-                src_ni = rnet->lrn_ni;
-
-                if (!msg->msg_routing) {
-                        /* I'm the source and now I know which NI to send on */
-                        src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
-                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
-                }
 
                 /* Find the best gateway I can use */
                 lp = NULL;
@@ -1241,13 +1234,8 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                         route = list_entry(tmp, lnet_route_t, lr_list);
                         lp2 = route->lr_gateway;
 
-                        LASSERT (lp2->lp_ni == src_ni);
-                        
-                        if (!lp2->lp_alive)
-                                continue;
-                        
-                        if (lp == NULL ||
-                            lnet_compare_routers(lp2, lp))
+                        if (lp2->lp_alive &&
+                            (lp == NULL || lnet_compare_routers(lp2, lp)))
                                 lp = lp2;
                 }
 
@@ -1259,6 +1247,14 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 }
 
                 lnet_peer_addref_locked(lp);
+                src_ni = rnet->lrn_ni;
+
+                if (!msg->msg_routing) {
+                        /* I'm the source and now I know which NI to send on */
+                        src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
+                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
+                }
 
                 msg->msg_target_is_router = 1;
                 msg->msg_target.nid = lp->lp_nid;

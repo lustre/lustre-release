@@ -52,12 +52,17 @@ lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
         if (eq->eq_callback != NULL)
                 eq->eq_callback (eq_slot);
 
-        /* Wake anyone sleeping for an event (see lib-eq.c) */
 #ifdef __KERNEL__
+        /* Wake anyone waiting in LNetEQPoll() */
         if (cfs_waitq_active(&the_lnet.ln_waitq))
                 cfs_waitq_broadcast(&the_lnet.ln_waitq);
 #else
+# if LNET_SINGLE_THREADED
+        /* LNetEQPoll() calls into _the_ LND to wait for action */
+# else
+        /* Wake anyone waiting in LNetEQPoll() */
         pthread_cond_broadcast(&the_lnet.ln_cond);
+# endif
 #endif
 }
 

@@ -28,6 +28,13 @@
 
 #include <portals/p30.h>
 
+typedef struct
+{
+        ptl_handle_ni_t            pls_ni;
+        ptl_handle_eq_t            pls_eq;
+
+} ptllnd_state;
+
 extern int ptllnd_startup(struct lnet_ni *ni);
 extern void ptllnd_shutdown(struct lnet_ni *ni);
 extern int ptllnd_send(struct lnet_ni *ni, void *private, lnet_msg_t *msg);

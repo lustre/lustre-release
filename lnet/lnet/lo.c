@@ -102,4 +102,3 @@ lnd_t the_lolnd = {
         .lnd_recv       = lolnd_recv,
 };
 
-lnet_ni_t *lnet_loni;

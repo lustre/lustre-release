@@ -541,7 +541,7 @@ lnet_parse_hops (char *str, unsigned int *hops)
 
 
 int
-lnet_parse_route (char *str)
+lnet_parse_route (char *str, int *im_a_router)
 {
 	/* static scratch buffer OK (single threaded) */
 	static char       cmd[LNET_SINGLE_TEXTBUF_NOB];
@@ -649,6 +649,11 @@ lnet_parse_route (char *str)
 			nid = libcfs_str2nid(ptb->ptb_text);
 			LASSERT (nid != LNET_NID_ANY);
 
+                        if (lnet_islocalnid(nid)) {
+                                *im_a_router = 1;
+                                continue;
+                        }
+                        
                         rc = lnet_add_route (net, hops, nid);
                         if (rc != 0) {
                                 CERROR("Can't create route "
@@ -672,14 +677,14 @@ lnet_parse_route (char *str)
 }
 
 int
-lnet_parse_route_tbs(struct list_head *tbs)
+lnet_parse_route_tbs(struct list_head *tbs, int *im_a_router)
 {
 	lnet_text_buf_t   *ptb;
 
 	while (!list_empty(tbs)) {
 		ptb = list_entry(tbs->next, lnet_text_buf_t, ptb_list);
 
-		if (lnet_parse_route(ptb->ptb_text) < 0) {
+		if (lnet_parse_route(ptb->ptb_text, im_a_router) < 0) {
 			lnet_free_text_bufs(tbs);
 			return -EINVAL;
 		}
@@ -692,10 +697,12 @@ lnet_parse_route_tbs(struct list_head *tbs)
 }
 
 int
-lnet_parse_routes (char *routes)
+lnet_parse_routes (char *routes, int *im_a_router)
 {
 	struct list_head  tbs;
 	int               rc = 0;
+
+        *im_a_router = 0;
 
         if (the_lnet.ln_ptlcompat > 0 && 
             routes[0] != 0) {
@@ -711,7 +718,7 @@ lnet_parse_routes (char *routes)
 		CERROR("Error parsing routes\n");
 		rc = -EINVAL;
 	} else {
-                rc = lnet_parse_route_tbs(&tbs);
+                rc = lnet_parse_route_tbs(&tbs, im_a_router);
         }
 
 	LASSERT (lnet_tbnob == 0);

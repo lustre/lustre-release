@@ -25,9 +25,9 @@
 
 #ifdef __KERNEL__
 
-static int forwarding = 0;
-CFS_MODULE_PARM(forwarding, "i", int, 0444,
-                "Boolean: set non-zero to forward between networks");
+static char *forwarding = "";
+CFS_MODULE_PARM(forwarding, "s", charp, 0444,
+                "Explicitly enable/disable forwarding between networks");
 
 static int tiny_router_buffers = 512;
 CFS_MODULE_PARM(tiny_router_buffers, "i", int, 0444,
@@ -238,21 +238,21 @@ lnet_distance (lnet_nid_t nid, int *orderp)
 int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
+        struct list_head     zombies;
 	struct list_head    *e;
 	lnet_remotenet_t    *rnet;
 	lnet_remotenet_t    *rnet2;
 	lnet_route_t        *route;
 	lnet_route_t        *route2;
         lnet_peer_t         *lp;
-        int                  dup;
-        int                  hops2;
-        __u32                net2;
         int                  rc;
 
         CDEBUG(D_NET, "Add route: net %s hops %u gw %s\n",
                libcfs_net2str(net), hops, libcfs_nid2str(gateway));
 
         if (gateway == LNET_NID_ANY ||
+            net == PTL_NIDNET(LNET_NID_ANY) ||
+            PTL_NIDNET(gateway) == net ||
             hops < 1 || hops > 255)
                 return (-EINVAL);
 
@@ -311,53 +311,55 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 return 0;
         }
 
-        hops2 = rnet2->lrn_hops;
-        net2 = PTL_NIDNET(rnet2->lrn_ni->ni_nid);
-
-        if (rnet2->lrn_ni == lp->lp_ni && hops2 == hops) {
-                /* New route consistent with existing routes; search for
-                 * duplicate route (NOOP if this is) */
-                dup = 0;
-                list_for_each (e, &rnet2->lrn_routes) {
-                        route2 = list_entry(e, lnet_route_t, lr_list);
-
-                        if (route2->lr_gateway->lp_nid == gateway) {
-                                dup = 1;
-                                break;
-                        }
-                }
-
-                if (!dup) {
-                        /* New route */
-                        list_add_tail(&route->lr_list, &rnet2->lrn_routes);
-                        the_lnet.ln_remote_nets_version++;
-                } else {
-                        lnet_peer_decref_locked(lp);
-                }
-
+        if (rnet2->lrn_hops < hops) {
+                /* new route is longer than ones we have already: 
+                 * Ignore it silently */
+                LNET_UNLOCK();
+                PORTAL_FREE(route, sizeof(*route));
+                goto out;
+        }
+        
+        if (rnet2->lrn_hops > hops) {
+                /* new route supercedes all currently known routes to this
+                 * net */
+                list_add(&zombies, &rnet2->lrn_routes);
+                list_del_init(&rnet2->lrn_routes);
+                list_add(&route->lr_list, &rnet2->lrn_routes);
+                the_lnet.ln_remote_nets_version++;
                 LNET_UNLOCK();
 
-                PORTAL_FREE(rnet, sizeof(*rnet));
-                if (dup)
+                while (!list_empty(&zombies)) {
+                        route = list_entry(zombies.next, lnet_route_t, lr_list);
+                        list_del(&route->lr_list);
+                        
+                        LNET_LOCK();
+                        lnet_peer_decref_locked(route->lr_gateway);
+                        LNET_UNLOCK();
                         PORTAL_FREE(route, sizeof(*route));
-
-                return 0;
+                }
+                goto out;
         }
+        
+        /* New route has the same hopcount as existing routes; search for
+         * a duplicate route (it's a NOOP if it is) */
+        list_for_each (e, &rnet2->lrn_routes) {
+                route2 = list_entry(e, lnet_route_t, lr_list);
 
-        lnet_peer_decref_locked(lp);
+                if (route2->lr_gateway->lp_nid == gateway) {
+                        LNET_UNLOCK();
+                        PORTAL_FREE(route, sizeof(*route));
+                        goto out;
+                }
+        }
+        
+        /* Add the new route */
+        list_add_tail(&route->lr_list, &rnet2->lrn_routes);
+        the_lnet.ln_remote_nets_version++;
         LNET_UNLOCK();
-        PORTAL_FREE(rnet, sizeof(*rnet));
-        PORTAL_FREE(route, sizeof(*route));
 
-        if (hops != hops2)
-                CERROR("Hopcount not consistent on route: %s %d(%d) %s\n",
-                       libcfs_net2str(net), hops, hops2,
-                       libcfs_nid2str(gateway));
-        else
-                CERROR("Router network not consistent on route: %s %d %s(%s)\n",
-                       libcfs_net2str(net), hops,
-                       libcfs_nid2str(gateway), libcfs_net2str(net2));
-        return -EINVAL;
+ out:
+        PORTAL_FREE(rnet, sizeof(*rnet));
+        return 0;
 }
 
 int
@@ -534,6 +536,11 @@ lnet_rtrpool_alloc_bufs(lnet_rtrbufpool_t *rbp, int nbufs)
         lnet_rtrbuf_t *rb;
         int            i;
 
+        if (rbp->rbp_nbuffers != 0) {
+                LASSERT (rbp->rbp_nbuffers == nbufs);
+                return 0;
+        }
+        
         for (i = 0; i < nbufs; i++) {
                 rb = lnet_new_rtrbuf(rbp);
 
@@ -547,8 +554,9 @@ lnet_rtrpool_alloc_bufs(lnet_rtrbufpool_t *rbp, int nbufs)
                 rbp->rbp_credits++;
                 list_add(&rb->rb_list, &rbp->rbp_bufs);
 
-                /* NB if this is live there need to be code to schedule blocked
-                 * msgs */
+                /* No allocation "under fire" */
+                /* Otherwise we'd need code to schedule blocked msgs etc */
+                LASSERT (!the_lnet.ln_routing);
         }
 
         LASSERT (rbp->rbp_credits == nbufs);
@@ -574,8 +582,8 @@ lnet_free_rtrpools(void)
         lnet_rtrpool_free_bufs(&the_lnet.ln_rtrpools[2]);
 }
 
-int
-lnet_alloc_rtrpools(void)
+void
+lnet_init_rtrpools(void)
 {
         int small_pages = 1;
         int large_pages = (PTL_MTU + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -584,15 +592,29 @@ lnet_alloc_rtrpools(void)
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[0], 0);
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[1], small_pages);
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[2], large_pages);
+}
 
-        for (rc = 0; rc < LNET_NRBPOOLS; rc++)
-                CDEBUG(D_NET, "Pages[%d]: %d\n", rc,
-                       the_lnet.ln_rtrpools[rc].rbp_npages);
 
-        the_lnet.ln_routing = forwarding;
-        if (!forwarding)
+int
+lnet_alloc_rtrpools(int im_a_router)
+{
+        int       rc;
+        
+        if (!strcmp(forwarding, "")) {
+                /* not set either way */
+                if (!im_a_router)
+                        return 0;
+        } else if (!strcmp(forwarding, "disabled")) {
+                /* explicitly disabled */
                 return 0;
-
+        } else if (!strcmp(forwarding, "enabled")) {
+                /* explicitly enabled */
+        } else {
+                LCONSOLE_ERROR("'forwarding' not set to either "
+                               "'enabled' or 'disabled'\n");
+                return -EINVAL;
+        }
+        
         if (tiny_router_buffers <= 0) {
                 LCONSOLE_ERROR("tiny_router_buffers=%d invalid when "
                                "routing enabled\n", tiny_router_buffers);
@@ -629,6 +651,10 @@ lnet_alloc_rtrpools(void)
         if (rc != 0)
                 goto failed;
 
+        LNET_LOCK();
+        the_lnet.ln_routing = 1;
+        LNET_UNLOCK();
+        
         return 0;
 
  failed:
@@ -643,12 +669,15 @@ lnet_free_rtrpools (void)
 {
 }
 
-int
-lnet_alloc_rtrpools (void)
+void
+lnet_init_rtrpools (void)
 {
-        /* No userspace routing */
-        the_lnet.ln_routing = 0;
-        return 0;
+}
+
+int
+lnet_alloc_rtrpools (int im_a_arouter)
+{
+        return -EOPNOTSUPP;
 }
 
 #endif

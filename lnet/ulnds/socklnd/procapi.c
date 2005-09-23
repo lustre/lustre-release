@@ -46,6 +46,10 @@
 # include <sys/utsname.h>
 #endif
 
+#if LNET_SINGLE_THREADED
+# error "This LND requires a multi-threaded runtime"
+#endif
+
 /* XXX CFS workaround, to give a chance to let nal thread wake up
  * from waiting in select
  */

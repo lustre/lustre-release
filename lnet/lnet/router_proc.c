@@ -22,6 +22,9 @@
  */
 
 #include <lnet/lib-lnet.h>
+
+#ifdef __KERNEL__
+
 #include <linux/seq_file.h>
 #include <linux/lustre_compat25.h>
 
@@ -820,3 +823,17 @@ lnet_proc_fini(void)
         remove_proc_entry(LNET_PROC_BUFFERS, 0);
         remove_proc_entry(LNET_PROC_NIS, 0);
 }
+
+#else
+
+void 
+lnet_proc_init(void)
+{
+}
+
+void 
+lnet_proc_fini(void)
+{
+}
+
+#endif

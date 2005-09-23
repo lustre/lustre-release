@@ -101,10 +101,10 @@ typedef struct {
  * code in the header's dest_nid, the peer's NID in the src_nid, and
  * LNET_MSG_HELLO in the type field.  All other common fields are zero
  * (including payload_size; i.e. no payload).  
- * This is for use by byte-stream NALs (e.g. TCP/IP) to check the peer is
- * running the same protocol and to find out its NID. These NALs should
+ * This is for use by byte-stream LNDs (e.g. TCP/IP) to check the peer is
+ * running the same protocol and to find out its NID. These LNDs should
  * exchange HELLO messages when a connection is first established.  Individual
- * NALs can put whatever else they fancy in lnet_hdr_t::msg.
+ * LNDs can put whatever else they fancy in lnet_hdr_t::msg.
  */
 typedef struct {
         __u32	magic;                          /* LNET_PROTO_TCP_MAGIC */
@@ -112,7 +112,7 @@ typedef struct {
         __u16   version_minor;                  /* increment on compatible change */
 } WIRE_ATTR lnet_magicversion_t;
 
-/* PROTO MAGIC for NALs that once used their own private acceptor */
+/* PROTO MAGIC for LNDs that once used their own private acceptor */
 #define LNET_PROTO_OPENIB_MAGIC             0x0be91b91
 #define LNET_PROTO_RA_MAGIC                 0x0be91b92
 #define LNET_PROTO_TCP_MAGIC                0xeebc0ded
@@ -259,10 +259,10 @@ struct lnet_ni;                                  /* forward ref */
 typedef struct lnet_lnd
 {
         /* fields managed by portals */
-        struct list_head  lnd_list;             /* stash in the NAL table */
+        struct list_head  lnd_list;             /* stash in the LND table */
         int               lnd_refcount;         /* # active instances */
 
-        /* fields initialised by the NAL */
+        /* fields initialised by the LND */
         unsigned int      lnd_type;
         
         int  (*lnd_startup) (struct lnet_ni *ni);
@@ -275,7 +275,7 @@ typedef struct lnet_lnd
          *    in virtual memory (struct iovec *iov != NULL)
          * OR
          *    in pages (kernel only: plt_kiov_t *kiov != NULL).
-         * The NAL may NOT overwrite these fragment descriptors.
+         * The LND may NOT overwrite these fragment descriptors.
          * An 'offset' and may specify a byte offset within the set of
          * fragments to start from 
          */
@@ -312,6 +312,9 @@ typedef struct lnet_lnd
 #ifdef __KERNEL__
         /* accept a new connection */
         int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
+#else
+        /* wait for something to happen */
+        void (*lnd_wait)(struct lnet_ni *ni, int milliseconds);
 #endif
 } lnd_t;
 
@@ -402,7 +405,7 @@ typedef struct
 
         int                ln_ptlcompat;        /* do I support talking to portals? */
         
-        struct list_head   ln_lnds;             /* registered NALs */
+        struct list_head   ln_lnds;             /* registered LNDs */
 
 #ifdef __KERNEL__
         spinlock_t         ln_lock;
@@ -410,10 +413,16 @@ typedef struct
         struct semaphore   ln_api_mutex;
         struct semaphore   ln_lnd_mutex;
 #else
-        pthread_mutex_t    ln_mutex;
+# if LNET_SINGLE_THREADED
+        int                ln_lock;
+        int                ln_api_mutex;
+        int                ln_lnd_mutex;
+# else
         pthread_cond_t     ln_cond;
+        pthread_mutex_t    ln_lock;
         pthread_mutex_t    ln_api_mutex;
         pthread_mutex_t    ln_lnd_mutex;
+# endif
 #endif
 
         /* Stuff initialised at LNetNIInit() */
@@ -424,9 +433,11 @@ typedef struct
 
         lnet_pid_t         ln_pid;              /* requested pid */
 
-        struct list_head   ln_nis;              /* NAL instances */
-        struct list_head   ln_zombie_nis;       /* dying NAL instances */
-        int                ln_nzombie_nis;      /* # of NIS to wait for */
+        struct list_head   ln_nis;              /* LND instances */
+        lnet_ni_t         *ln_loni;             /* the loopback NI */
+        lnet_ni_t         *ln_eqwaitni;         /* NI to wait for events in */
+        struct list_head   ln_zombie_nis;       /* dying LND instances */
+        int                ln_nzombie_nis;      /* # of NIs to wait for */
 
         struct list_head   ln_remote_nets;      /* remote networks with routes to them */
         __u64              ln_remote_nets_version; /* validity stamp */
