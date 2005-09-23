@@ -148,6 +148,10 @@ kptllnd_setup_md(
 #error "Conflicting compilation directives"
 #endif
 
+                PJK_UT_MSG("payload_offset %d\n",payload_offset);
+                PJK_UT_MSG("payload_niov   %d\n",payload_niov);
+                PJK_UT_MSG("payload_nob    %d\n",payload_nob);
+
                 while (payload_offset >= payload_kiov->kiov_len) {
                         payload_offset -= payload_kiov->kiov_len;
                         payload_kiov++;
@@ -161,13 +165,20 @@ kptllnd_setup_md(
                         LASSERT (payload_niov > 0);
                         LASSERT (niov < sizeof(tempiov->iov)/sizeof(tempiov->iov[0]));
 
+                        PJK_UT_MSG("kiov_page  [%d]=%p (phys)\n",niov,(void*)page_to_phys(payload_kiov->kiov_page));
+                        PJK_UT_MSG("kiov_offset[%d]=%d (phys)\n",niov,payload_kiov->kiov_offset);
+                        PJK_UT_MSG("kiov_len   [%d]=%d (phys)\n",niov,payload_kiov->kiov_len);
+
                         tempiov->iov[niov].iov_base = (void *)(
-                                page_to_phys(payload_kiov->kiov_page) + payload_offset);
-                        tempiov->iov[niov].iov_len = min((int)(payload_kiov->kiov_len - payload_offset),
-                                                        (int)payload_nob);
+                                page_to_phys(payload_kiov->kiov_page) +
+                                payload_kiov->kiov_offset +
+                                payload_offset);
+                        tempiov->iov[niov].iov_len = min(
+                                (int)(payload_kiov->kiov_len - payload_offset),
+                                (int)payload_nob);
 
                         PJK_UT_MSG("iov_base[%d]=%p\n",niov,tempiov->iov[niov].iov_base);
-                        PJK_UT_MSG("iov_len[%d] =%d\n",niov,tempiov->iov[niov].iov_len);
+                        PJK_UT_MSG("iov_len [%d]=%d\n",niov,tempiov->iov[niov].iov_len);
 
                         payload_offset = 0;
                         payload_nob -= tempiov->iov[niov].iov_len;
@@ -187,6 +198,9 @@ kptllnd_setup_md(
          * length, rather it is # iovs
          */
         md->length = niov;
+
+        PJK_UT_MSG("md->options=%x\n",md->options);
+        PJK_UT_MSG("md->length=%d\n",md->length);
 }
 
 int

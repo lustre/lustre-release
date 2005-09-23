@@ -630,12 +630,13 @@ kptllnd_msg_unpack(
 
 
 typedef union {
-        struct iovec iov[PTL_MD_MAX_IOV];
 #ifdef _USING_LUSTRE_PORTALS_
+        struct iovec iov[PTL_MD_MAX_IOV];
         ptl_kiov_t kiov[PTL_MD_MAX_IOV];
+#else /* _USING_CRAY_PORTALS_ */
+        ptl_md_iovec_t iov[PTL_MD_MAX_IOV];
 #endif
 }tempiov_t;
-
 
 void
 kptllnd_setup_md(
