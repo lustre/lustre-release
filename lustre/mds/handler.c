@@ -1474,8 +1474,8 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
                 RETURN(0);
         }
 
-       if (mds->mds_config_generation)
-               return 0;
+        /*if (mds->mds_config_generation)
+                return 0;*/
 
         if (atomic_read(&inode->i_writecount)) {
                 /* some one has opened the file for write.

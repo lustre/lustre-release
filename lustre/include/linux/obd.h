@@ -478,6 +478,7 @@ struct mds_obd {
         int                              mds_capa_key_idx;  /* the red key index */
         struct file                     *mds_capa_keys_filp;
         unsigned long                    mds_capa_key_timeout; /* sec */
+        unsigned                         mds_config_generation;
 };
 
 struct echo_obd {
