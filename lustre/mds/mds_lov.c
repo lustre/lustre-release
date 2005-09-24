@@ -862,13 +862,15 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 GOTO(exit, rc);
         }
         /* retrieve size of EA */
-        rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
-                          "mdsize", &valsize, &value);
-        
-        if (value > mds->mds_max_mdsize)
-                mds->mds_max_mdsize = value;
+        if (mds->mds_md_exp) {
+                rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
+                                  "mdsize", &valsize, &value);
 
-        CDEBUG(D_INFO, "mds max md size %d \n", mds->mds_max_mdsize);
+                if (value > mds->mds_max_mdsize)
+                        mds->mds_max_mdsize = value;
+
+                CDEBUG(D_INFO, "mds max md size %d \n", mds->mds_max_mdsize);
+        }
         
         if (rc == 0)
                 mds->mds_config_version = version;
