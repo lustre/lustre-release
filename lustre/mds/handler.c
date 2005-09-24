@@ -1456,7 +1456,6 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
                      struct ptlrpc_request *req, struct mds_body *body)
 {
         struct inode *inode = dentry->d_inode;
-        struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
         LASSERT(body != NULL);
@@ -1473,9 +1472,6 @@ int mds_getattr_size(struct obd_device *obd, struct dentry *dentry,
                        OLID4(&body->id1));
                 RETURN(0);
         }
-
-        /*if (mds->mds_config_generation)
-                return 0;*/
 
         if (atomic_read(&inode->i_writecount)) {
                 /* some one has opened the file for write.

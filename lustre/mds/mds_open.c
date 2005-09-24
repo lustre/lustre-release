@@ -718,8 +718,7 @@ int accmode(int flags)
 /* Handles object creation, actual opening, and I/O epoch */
 static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                            struct mds_body *body, int flags, void **handle,
-                           struct mds_update_record *rec, struct ldlm_reply *rep,
-                           int *cancel_update_lock)
+                           struct mds_update_record *rec, struct ldlm_reply *rep)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_obd *mds = mds_req2mds(req);
@@ -729,8 +728,6 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         unsigned mode;
         int rc = 0, reply_off;
         ENTRY;
-
-        *cancel_update_lock = 0;
 
         /* atomically create objects if necessary */
         down(&dchild->d_inode->i_sem);
@@ -766,22 +763,10 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 
                 if (S_ISREG(dchild->d_inode->i_mode) &&
                     (body->valid & OBD_MD_FLEASIZE)) {
-                        int changed;
-                        rc = mds_revalidate_lov_ea(obd, dchild,
-                                                   req->rq_repmsg, 2,
-                                                   &changed);
-                        if (!rc) {
+                        rc = mds_revalidate_lov_ea(obd,dchild,req->rq_repmsg,2);
+                        if (!rc)
                                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                                  dchild->d_inode, 0, 0);
-                                /* after ost add/delete, lov ea can change
-                                 * along with size/blocks, which we have
-                                 * to update as well */
-                                if (changed) {
-                                        body->size = dchild->d_inode->i_size;
-                                        body->blocks = dchild->d_inode->i_blocks;
-                                        *cancel_update_lock = 1;
-                                }
-                        }
                         if (rc) {
                                 up(&dchild->d_inode->i_sem);
                                 RETURN(rc);
@@ -861,7 +846,7 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         struct dentry *dchild;
         char idname[LL_ID_NAMELEN];
-        int idlen = 0, rc, fake;
+        int idlen = 0, rc;
         void *handle = NULL;
         ENTRY;
 
@@ -904,7 +889,7 @@ static int mds_open_by_id(struct ptlrpc_request *req,
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
  open:
-        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep,&fake);
+        rc = mds_finish_open(req, dchild, body, flags, &handle, rec, rep);
         rc = mds_finish_transno(mds, dchild ? dchild->d_inode : NULL, handle,
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
         /* XXX what do we do here if mds_finish_transno itself failed? */
@@ -985,7 +970,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         int child_mode = LCK_PR;
         struct lustre_id sid;
         __u64 fid = 0;
-        int cancel_update_lock;
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "parent "DLID4" name %*s mode %o",
@@ -1414,7 +1398,7 @@ got_child:
 
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle,
-                             rec, rep, &cancel_update_lock);
+                             rec, rep);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1434,7 +1418,7 @@ got_child:
          * isize/iblocks from mds anymore.
          * FIXME: can cause a deadlock, use mds_get_parent_child_locked()
          * XXX: optimization is to do this for first writer only */
-        if ((accmode(rec->ur_flags) & MAY_WRITE) || cancel_update_lock) {
+        if (accmode(rec->ur_flags) & MAY_WRITE) {
                 struct ldlm_res_id child_res_id = { .name = {0}};
                 ldlm_policy_data_t sz_policy;
                 struct lustre_handle sz_lockh;

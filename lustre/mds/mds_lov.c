@@ -851,7 +851,6 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 sprintf(name, "%s-%d", profile, version);
         }
         CWARN("Applying configuration log %s\n", name);
-        mds->mds_config_generation++;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
@@ -862,15 +861,13 @@ int mds_dt_update_config(struct obd_device *obd, int clean)
                 GOTO(exit, rc);
         }
         /* retrieve size of EA */
-        if (mds->mds_md_exp) {
-                rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
-                                  "mdsize", &valsize, &value);
+        rc = obd_get_info(mds->mds_md_exp, strlen("mdsize"),
+                          "mdsize", &valsize, &value);
+        
+        if (value > mds->mds_max_mdsize)
+                mds->mds_max_mdsize = value;
 
-                if (value > mds->mds_max_mdsize)
-                        mds->mds_max_mdsize = value;
-
-                CDEBUG(D_INFO, "mds max md size %d \n", mds->mds_max_mdsize);
-        }
+        CDEBUG(D_INFO, "mds max md size %d \n", mds->mds_max_mdsize);
         
         if (rc == 0)
                 mds->mds_config_version = version;
@@ -932,7 +929,7 @@ conv_end:
 
 /* Must be called with i_sem held */
 int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
-                          struct lustre_msg *msg, int offset, int *changed)
+                          struct lustre_msg *msg, int offset)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_export *dt_exp = mds->mds_dt_exp;
@@ -948,7 +945,6 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
         void *handle;
         ENTRY;
 
-        *changed = 0;
         LASSERT(down_trylock(&inode->i_sem) != 0);
 
         ll_id2str(idname, inode->i_ino, inode->i_generation);
@@ -999,7 +995,6 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
                 GOTO(out_oa, rc);
         }
 
-        *changed = 1;
         rc = obd_packmd(dt_exp, &lmm, lsm);
         if (rc < 0)
                 GOTO(out_oa, rc);

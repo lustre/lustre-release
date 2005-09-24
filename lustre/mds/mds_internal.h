@@ -179,7 +179,7 @@ int mds_dt_update_config(struct obd_device *obd, int transno);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
 int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
-                          struct lustre_msg *msg, int offset, int *changed);
+                          struct lustre_msg *msg, int offset);
 void mds_dt_update_objids(struct obd_device *obd, obd_id *ids);
 void mds_dt_save_objids(struct obd_device *obd, obd_id *ids);
 
