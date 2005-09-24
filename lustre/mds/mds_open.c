@@ -766,16 +766,21 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
                 
                 if (S_ISREG(dchild->d_inode->i_mode) &&
                     (body->valid & OBD_MD_FLEASIZE)) {
-                        rc = mds_revalidate_lov_ea(obd,dchild,req->rq_repmsg,2);
+                        int changed;
+                        rc = mds_revalidate_lov_ea(obd, dchild,
+                                                   req->rq_repmsg, 2,
+                                                   &changed);
                         if (!rc) {
                                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                                  dchild->d_inode, 0, 0);
                                 /* after ost add/delete, lov ea can change
                                  * along with size/blocks, which we have
                                  * to update as well */
-                                body->size = dchild->d_inode->i_size;
-                                body->blocks = dchild->d_inode->i_blocks;
-                                *cancel_update_lock = 1;
+                                if (changed) {
+                                        body->size = dchild->d_inode->i_size;
+                                        body->blocks = dchild->d_inode->i_blocks;
+                                        *cancel_update_lock = 1;
+                                }
                         }
                         if (rc) {
                                 up(&dchild->d_inode->i_sem);

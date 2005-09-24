@@ -932,7 +932,7 @@ conv_end:
 
 /* Must be called with i_sem held */
 int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
-                          struct lustre_msg *msg, int offset)
+                          struct lustre_msg *msg, int offset, int *changed)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_export *dt_exp = mds->mds_dt_exp;
@@ -948,6 +948,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
         void *handle;
         ENTRY;
 
+        *changed = 0;
         LASSERT(down_trylock(&inode->i_sem) != 0);
 
         ll_id2str(idname, inode->i_ino, inode->i_generation);
@@ -998,6 +999,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct dentry *dentry,
                 GOTO(out_oa, rc);
         }
 
+        *changed = 1;
         rc = obd_packmd(dt_exp, &lmm, lsm);
         if (rc < 0)
                 GOTO(out_oa, rc);
