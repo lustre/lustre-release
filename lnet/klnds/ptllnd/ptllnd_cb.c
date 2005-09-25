@@ -390,7 +390,7 @@ kptllnd_do_put(
 
         tx->tx_msg->ptlm_u.req.kptlrm_hdr = lntmsg->msg_hdr;
         kptllnd_init_msg (tx->tx_msg,
-                          PLTLND_MSG_TYPE_PUT,
+                          PTLLND_MSG_TYPE_PUT,
                           sizeof(kptl_request_msg_t));
         kptllnd_tx_launch(tx, lntmsg->msg_target.nid,lntmsg);
 }
@@ -769,8 +769,8 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 rc = 0;
                 break;
 
-        case PLTLND_MSG_TYPE_PUT:
-                PJK_UT_MSG_DATA("PLTLND_MSG_TYPE_PUT\n");
+        case PTLLND_MSG_TYPE_PUT:
+                PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_PUT\n");
 
                 if (mlen == 0) { /* No payload */
                         lnet_finalize(ni, lntmsg, 0);

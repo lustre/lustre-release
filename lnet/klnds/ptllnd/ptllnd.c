@@ -168,7 +168,7 @@ kptllnd_msg_unpack(kptl_msg_t *msg, int nob,kptl_data_t *kptllnd_data)
 
                 switch(msg->ptlm_type)
                 {
-                        case PLTLND_MSG_TYPE_PUT:
+                        case PTLLND_MSG_TYPE_PUT:
                         case PTLLND_MSG_TYPE_GET:
                                 __swab64s(&msg->ptlm_u.req.kptlrm_matchbits);
                                 break;
@@ -759,7 +759,7 @@ const char *get_msg_type_string(int type)
         switch(type)
         {
                 DO_TYPE(PTLLND_MSG_TYPE_INVALID);
-                DO_TYPE(PLTLND_MSG_TYPE_PUT);
+                DO_TYPE(PTLLND_MSG_TYPE_PUT);
                 DO_TYPE(PTLLND_MSG_TYPE_GET);
                 DO_TYPE(PTLLND_MSG_TYPE_IMMEDIATE);
                 DO_TYPE(PTLLND_MSG_TYPE_HELLO);

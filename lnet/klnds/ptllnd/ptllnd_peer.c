@@ -579,7 +579,7 @@ kptllnd_peer_check_sends (
                 /*
                  * Assign matchbits for a put/get
                  */
-                if(tx->tx_msg->ptlm_type == PLTLND_MSG_TYPE_PUT ||
+                if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT ||
                    tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET){
 
                         PJK_UT_MSG_DATA("next matchbits="LPX64" (before)\n",
@@ -661,7 +661,7 @@ kptllnd_peer_check_sends (
                 PJK_UT_MSG("ptl  TX nid=" LPX64 "\n",target.nid);
 
                 if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET ||
-                   tx->tx_msg->ptlm_type == PLTLND_MSG_TYPE_PUT){
+                   tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT){
                         tempiov_t tempiov;
 
                         PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",

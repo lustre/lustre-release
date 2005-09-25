@@ -728,10 +728,10 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
                         rx = 0;
                 break;
 
-        case PLTLND_MSG_TYPE_PUT:
+        case PTLLND_MSG_TYPE_PUT:
         case PTLLND_MSG_TYPE_GET:
                 PJK_UT_MSG("PTLLND_MSG_TYPE_%s\n",
-                        msg->ptlm_type == PLTLND_MSG_TYPE_PUT ?
+                        msg->ptlm_type == PTLLND_MSG_TYPE_PUT ?
                         "PUT" : "GET");
 
                 /*
