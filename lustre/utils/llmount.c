@@ -383,80 +383,6 @@ get_local_elan_id(char *fname, char *buf)
         return (rc == 1) ? 0 : -1;
 }
 
-#if !CRAY_PORTALS
-#if WITH_GM
-#include <gm.h>
-#define GM_UNIT 0
-
-int getgmnid(char *name, ptl_nid_t *nid)
-{
-        struct gm_port *gm_port;
-        int             gm_port_id = 2;
-        gm_status_t     gm_status = GM_SUCCESS;
-        unsigned        global_nid = 0, local_nid = 0; /* gm ids never 0 */
-
-        gm_status = gm_init();
-        if (gm_status != GM_SUCCESS) {
-                fprintf(stderr, "gm_init: %s\n", gm_strerror(gm_status));
-                return(0);
-        }
-
-        gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id, "gmnalnid",
-                            GM_API_VERSION);
-        if (gm_status != GM_SUCCESS) {
-                int num_ports = gm_num_ports(gm_port);
-
-                /* Couldn't open port 2, try 4 ... num_ports */
-                for (gm_port_id = 4; gm_port_id < num_ports; gm_port_id++) {
-                        gm_status = gm_open(&gm_port, GM_UNIT, gm_port_id,
-                                            "gmnalnid", GM_API_VERSION);
-                        if (gm_status == GM_SUCCESS)
-                                break;
-                }
-
-                if (gm_status != GM_SUCCESS) {
-                        fprintf(stderr, "gm_open: %s\n",gm_strerror(gm_status));
-                        gm_finalize();
-                        return(0);
-                }
-        }
-
-        if (name == NULL) {
-                local_nid = 1;
-        } else {
-                gm_status = gm_host_name_to_node_id_ex(gm_port, 1000000, name,
-                                                       &local_nid);
-                if (gm_status != GM_SUCCESS) {
-                        fprintf(stderr, "gm_host_name_to_node_id_ex: %s\n",
-                                gm_strerror(gm_status));
-                        gm_close(gm_port);
-                        gm_finalize();
-                        return(0);
-                }
-        }
-
-        gm_status = gm_node_id_to_global_id(gm_port, local_nid, &global_nid) ;
-        if (gm_status != GM_SUCCESS) {
-                fprintf(stderr, "gm_node_id_to_global_id: %s\n",
-                        gm_strerror(gm_status));
-                gm_close(gm_port);
-                gm_finalize();
-                return(0);
-        }
-        gm_close(gm_port);
-        gm_finalize();
-
-        *nid = (__u64)global_nid;
-        return 1;
-}
-#else
-int getgmnid(char *name, ptl_nid_t *nid)
-{
-        return 0;
-}
-#endif
-#endif
-
 int
 set_local(struct lustre_mount_data *lmd)
 {
@@ -533,13 +459,6 @@ set_local(struct lustre_mount_data *lmd)
                 break;
         }
 #if !CRAY_PORTALS
-        case GMNAL:
-                if (!getgmnid(NULL, &lmd->lmd_local_nid)) {
-                        fprintf(stderr, "Can't get local GM NID\n");
-                        return 1;
-                }
-                return 0;
-
         case QSWNAL:
         {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
@@ -635,15 +554,6 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
                 }
                 break;
 #if !CRAY_PORTALS
-        case GMNAL:
-                if (lmd->lmd_server_nid != PTL_NID_ANY)
-                        break;
-                if (!getgmnid(hostname, &lmd->lmd_server_nid)) {
-                        fprintf(stderr, "Can't get GM NID for %s\n", hostname);
-                        return 1;
-                }
-                break;
-                
         case QSWNAL: {
                 char buf[64];
 
