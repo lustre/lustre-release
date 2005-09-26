@@ -45,8 +45,8 @@ kptllnd_setup_md(
                 payload_nob,payload_offset,payload_niov);
 
         /* One but not both of iov or kiov must be NULL (XOR) */
-        LASSERT( (payload_iov != 0 && payload_kiov == 0) ||
-                 (payload_iov == 0 && payload_kiov != 0 ) );
+        LASSERT( (payload_iov != NULL && payload_kiov == NULL) ||
+                 (payload_iov == NULL && payload_kiov != NULL ) );
 
         /* We have a put or get operation*/
         LASSERT( op == PTL_MD_OP_GET || op == PTL_MD_OP_PUT);
@@ -349,7 +349,7 @@ kptllnd_start_bulk_rdma(
                  * want tx_done to finalize the message
                  * so we set it to zero
                  */
-                tx->tx_ptlmsg = 0;
+                tx->tx_ptlmsg = NULL;
 
                 kptllnd_peer_dequeue_tx_locked(peer,tx);
                 tx->tx_peer = NULL;
@@ -507,11 +507,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 tx->tx_payload_nob  = lntmsg->msg_md->md_length;
 
                 if((lntmsg->msg_md->md_options & LNET_MD_KIOV) != 0){
-                        tx->tx_payload_iov = 0;
+                        tx->tx_payload_iov = NULL;
                         tx->tx_payload_kiov = lntmsg->msg_md->md_iov.kiov;
                 }else{
                         tx->tx_payload_iov = lntmsg->msg_md->md_iov.iov;
-                        tx->tx_payload_kiov = 0;
+                        tx->tx_payload_kiov = NULL;
                 }
 
 
@@ -984,7 +984,7 @@ kptllnd_scheduler(void *arg)
 
 int kptllnd_process_scheduled_tx(kptl_data_t *kptllnd_data)
 {
-        kptl_tx_t      *tx = 0;
+        kptl_tx_t      *tx = NULL;
         unsigned long   flags;
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
@@ -1012,7 +1012,7 @@ int kptllnd_process_scheduled_tx(kptl_data_t *kptllnd_data)
 
 int kptllnd_process_scheduled_rx(kptl_data_t *kptllnd_data)
 {
-        kptl_rx_t      *rx = 0;
+        kptl_rx_t      *rx = NULL;
         unsigned long   flags;
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
@@ -1037,7 +1037,7 @@ int kptllnd_process_scheduled_rx(kptl_data_t *kptllnd_data)
 
 int kptllnd_process_scheduled_rxb(kptl_data_t *kptllnd_data)
 {
-        kptl_rx_buffer_t       *rxb = 0;
+        kptl_rx_buffer_t       *rxb = NULL;
         unsigned long           flags;
 
         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);

@@ -984,9 +984,9 @@ kptllnd_peer_handle_hello (
         kptl_msg_t *msg)
 {
         kptl_peer_t    *peer;
-        kptl_peer_t    *peer_to_cancel = 0;
+        kptl_peer_t    *peer_to_cancel = NULL;
         unsigned long   flags;
-        kptl_tx_t      *tx_hello = 0;
+        kptl_tx_t      *tx_hello = NULL;
         int             rc;
         __u64           safe_matchbits_from_peer;
         __u64           safe_matchbits_to_peer = 0;
@@ -1137,7 +1137,7 @@ kptllnd_peer_handle_hello (
                 /*
                  * And don't free it because it's queued
                  */
-                tx_hello = 0;
+                tx_hello = NULL;
 
         }
 

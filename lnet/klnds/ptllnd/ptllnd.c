@@ -468,7 +468,7 @@ kptllnd_startup (lnet_ni_t *ni)
                 0, /* offset */
                 0, /* flags */
                 NULL,NULL); /* CTOR/DTOR */
-        if( kptllnd_data->kptl_rx_cache == 0 ){
+        if( kptllnd_data->kptl_rx_cache == NULL ){
                 CERROR("Can't create slab for RX descriptrs\n");
                 goto failed;
         }

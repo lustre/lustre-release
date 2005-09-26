@@ -37,7 +37,7 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
                 tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
 
                 PORTAL_ALLOC( tx->tx_msg, *kptllnd_tunables.kptl_max_immd_size );
-                if(tx->tx_msg == 0){
+                if(tx->tx_msg == NULL){
                         CERROR("Failed to allocate TX payload\n");
                         kptllnd_cleanup_tx_descs(kptllnd_data);
                 }
@@ -68,7 +68,7 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
                  * Handle partial initization by stopping
                  * when we hit one that is not fully initialized
                  */
-                if( tx->tx_msg == 0 )
+                if( tx->tx_msg == NULL )
                         break;
 
                 LASSERT( tx->tx_state == TX_STATE_ON_IDLE_QUEUE );
@@ -148,20 +148,20 @@ kptllnd_get_idle_tx(
                  */
                 tx->tx_mdh = PTL_INVALID_HANDLE;
                 tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-                tx->tx_ptlmsg = 0;
-                tx->tx_ptlmsg_reply = 0;
-                tx->tx_peer = 0;
-                tx->tx_associated_rx = 0;
+                tx->tx_ptlmsg           = NULL;
+                tx->tx_ptlmsg_reply     = NULL;
+                tx->tx_peer             = NULL;
+                tx->tx_associated_rx    = NULL;
 
                 /*
                  * These must be re-initialized
                  */
-                tx->tx_status = -EINVAL;
+                tx->tx_status           = -EINVAL;
                 tx->tx_seen_send_end    = 0;
                 tx->tx_seen_reply_end   = 0;
                 tx->tx_payload_niov     = 0;
-                tx->tx_payload_iov      = 0;
-                tx->tx_payload_kiov     = 0;
+                tx->tx_payload_iov      = NULL;
+                tx->tx_payload_kiov     = NULL;
                 tx->tx_payload_offset   = 0;
                 tx->tx_payload_nob      = 0;
 
@@ -190,15 +190,15 @@ kptllnd_tx_done (kptl_tx_t *tx)
         LASSERT(atomic_read(&tx->tx_refcount) == 0);
         LASSERT(list_empty(&tx->tx_schedlist)); /*not any the scheduler list*/
 
-        if(tx->tx_ptlmsg != 0){
+        if(tx->tx_ptlmsg != NULL){
                 PJK_UT_MSG("tx=%p finalize\n",tx);
                 lnet_finalize (kptllnd_data->kptl_ni, tx->tx_ptlmsg, tx->tx_status);
-                tx->tx_ptlmsg = 0;
+                tx->tx_ptlmsg = NULL;
         }
-        if(tx->tx_ptlmsg_reply != 0){
+        if(tx->tx_ptlmsg_reply != NULL){
                 PJK_UT_MSG("tx=%p finalize reply\n",tx);
                 lnet_finalize (kptllnd_data->kptl_ni, tx->tx_ptlmsg_reply, tx->tx_status);
-                tx->tx_ptlmsg_reply = 0;
+                tx->tx_ptlmsg_reply = NULL;
         }
 
         /*
@@ -207,7 +207,7 @@ kptllnd_tx_done (kptl_tx_t *tx)
         if(tx->tx_associated_rx){
                 PJK_UT_MSG("tx=%p destroy associated rx %p\n",tx,tx->tx_associated_rx);
                 kptllnd_rx_decref(tx->tx_associated_rx,"tx",kptllnd_data);
-                tx->tx_associated_rx =0;
+                tx->tx_associated_rx = NULL;
         }
 
         /*
