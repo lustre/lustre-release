@@ -1110,7 +1110,9 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
         fixme("automatic local address for loopback")
     elif net_type == 'gm':
         found=0
-        paths = ['/usr/sbin', config.portals + "/utils"]
+        paths = ['/usr/sbin']
+        if config.portals:
+            paths = paths + [config.portals + "/utils"]
         for path in paths:
             gmnalnid = path + '/gmnalnid'
             if (os.path.exists(gmnalnid) and os.access(gmnalnid, os.X_OK)):

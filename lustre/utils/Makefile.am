@@ -43,7 +43,8 @@ obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c parser.c obd.c
 llmount_SOURCES = llmount.c 
-llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL)
+llmount_CFLAGS = $(LLMOUNT_GM_CFLAGS)
+llmount_LDADD = $(LIBREADLINE) $(LIBPTLCTL) $(LLMOUNT_GM_LDADD)
 llmount_DEPENDENCIES := $(LIBPTLCTL)
 
 EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
