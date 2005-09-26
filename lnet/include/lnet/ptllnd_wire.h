@@ -62,7 +62,7 @@ typedef struct kptl_msg
 #define PTLLND_MSG_VERSION              0x01
 
 #define PTLLND_MSG_TYPE_INVALID         0x00
-#define PLTLND_MSG_TYPE_PUT             0x01
+#define PTLLND_MSG_TYPE_PUT             0x01
 #define PTLLND_MSG_TYPE_GET             0x02
 #define PTLLND_MSG_TYPE_IMMEDIATE       0x03    /* No bulk data xfer*/
 #define PTLLND_MSG_TYPE_NOOP            0x04
