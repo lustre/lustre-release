@@ -9,6 +9,13 @@ SUBDIRS += darwin
 endif
 DIST_SUBDIRS := $(SUBDIRS)
 
+if LIBLUSTRE
+noinst_LIBRARIES= libcfs.a
+libcfs_a_SOURCES= debug.c
+libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
+libcfs_a_CFLAGS = $(LLCFLAGS)
+endif
+
 if MODULES
 
 if LINUX

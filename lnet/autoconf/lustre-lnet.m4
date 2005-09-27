@@ -113,6 +113,17 @@ AC_ARG_ENABLE([usocklnd],
                        [disable usocklnd]),
         [],[enable_usocklnd='yes'])
 
+# disable usocklnd if no libpthread
+if test x$enable_usocklnd = xyes ; then
+	AC_CHECK_LIB([pthread], [pthread_create],
+		[
+			enable_usocklnd="yes"
+		],
+		[
+			enable_usocklnd=""
+		])
+fi
+
 AC_MSG_CHECKING([for usocklnd support])
 if test x$enable_usocklnd = xyes ; then
       AC_MSG_RESULT([no (by request)])
@@ -826,7 +837,10 @@ if test x$enable_liblustre = xyes ; then
 			PTHREAD_LIBS="-lpthread"
 			AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
 		],
-		[PTHREAD_LIBS=""])
+		[
+			PTHREAD_LIBS=""
+			AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
+		])
 	AC_SUBST(PTHREAD_LIBS)
 fi
 ])

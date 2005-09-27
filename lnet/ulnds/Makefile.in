@@ -1,4 +1,4 @@
-subdir-m += socklnd
+@BUILD_USOCKLND_TRUE@subdir-m += socklnd
 subdir-m += ptllnd
 
 @INCLUDE_RULES@
