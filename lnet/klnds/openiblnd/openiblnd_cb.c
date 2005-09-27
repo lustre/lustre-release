@@ -1337,7 +1337,7 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
                 if (msg_nob > rx->rx_nob) {
                         CERROR ("Immediate message from %s too big: %d(%d)\n",
                                 libcfs_nid2str(rxmsg->ibm_u.immediate.ibim_hdr.src_nid),
-                                rlen, rx->rx_nob);
+                                msg_nob, rx->rx_nob);
                         rc = -EPROTO;
                         break;
                 }

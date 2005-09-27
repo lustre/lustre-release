@@ -4,18 +4,18 @@
 
 #define PTLLND_PORTAL           9          /* The same portal PTLPRC used when talking to cray portals */
 #define PTLLND_PID              9          /* The Portals PID */
-#define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer*/
+#define PTLLND_PEERCREDITS      8          /* concurrent sends to 1 peer */
 #define PTLLND_MAX_MSG_SIZE     512        /* Maximum message size */
 
 
 /************************************************************************
- * Portal NAL Wire message format.
+ * Portals LNS Wire message format.
  * These are sent in sender's byte order (i.e. receiver flips).
  */
 
-#define PTL_RESERVED_MATCHBITS  0x100   /* below this value is reserved
-                                         * above is for bult data transfer */
-#define LNET_MSG_MATCHBITS       0       /* the value for the message channel */
+#define PTL_RESERVED_MATCHBITS  0x100	/* below this value is reserved
+                                         * above is for bulk data transfer */
+#define LNET_MSG_MATCHBITS       0      /* the value for the message channel */
 
 typedef struct
 {
@@ -38,7 +38,7 @@ typedef struct
 typedef struct kptl_msg
 {
         /* First 2 fields fixed FOR ALL TIME */
-        __u32           ptlm_magic;     /* I'm an ptl NAL message */
+        __u32           ptlm_magic;     /* I'm a Portals LND message */
         __u16           ptlm_version;   /* this is my version number */
         __u8            ptlm_type;      /* the message type */
         __u8            ptlm_credits;   /* returned credits */

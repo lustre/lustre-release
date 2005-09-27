@@ -534,20 +534,22 @@ void lnet_copy_kiov2kiov (unsigned int ndkiov, lnet_kiov_t *dkiov,
 
 static inline void
 lnet_copy_iov2flat(int dlen, void *dest, unsigned int doffset,
-                   unsigned int nsiov, struct iovec *siov,
-                   unsigned int soffset, unsigned int nob)
+                   unsigned int nsiov, struct iovec *siov, unsigned int soffset,
+                   unsigned int nob)
 {
         struct iovec diov = {.iov_base = dest, .iov_len = dlen};
+
         lnet_copy_iov2iov(1, &diov, doffset,
                           nsiov, siov, soffset, nob);
 }
 
 static inline void
 lnet_copy_kiov2flat(int dlen, void *dest, unsigned int doffset,
-                    unsigned int nsiov, lnet_kiov_t *skiov,
-                    unsigned int soffset, unsigned int nob)
+                    unsigned int nsiov, lnet_kiov_t *skiov, unsigned int soffset,
+                    unsigned int nob)
 {
         struct iovec diov = {.iov_base = dest, .iov_len = dlen};
+
         lnet_copy_kiov2iov(1, &diov, doffset,
                            nsiov, skiov, soffset, nob);
 }

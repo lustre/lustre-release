@@ -1623,7 +1623,7 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 if (nob > rx->rx_nob) {
                         CERROR ("Immediate message from %s too big: %d(%d)\n",
                                 libcfs_nid2str(rxmsg->ibm_u.immediate.ibim_hdr.src_nid),
-                                rlen, rx->rx_nob);
+                                nob, rx->rx_nob);
                         rc = -EPROTO;
                         break;
                 }
@@ -2350,11 +2350,19 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
 
         vvrc = gid2gid_index(kibnal_data.kib_hca, cv->cv_port,
                              &cv->cv_path.sgid, &cv->cv_sgid_index);
-        LASSERT (vvrc == vv_return_ok);
+        if (vvrc != vv_return_ok) {
+                CERROR("gid2gid_index failed for %s: %d\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
+                goto reject;
+        }
         
         vvrc = pkey2pkey_index(kibnal_data.kib_hca, cv->cv_port,
                                cv->cv_path.pkey, &cv->cv_pkey_index);
-        LASSERT (vvrc == vv_return_ok);
+        if (vvrc != vv_return_ok) {
+                CERROR("pkey2pkey_index failed for %s: %d\n",
+                       libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
+                goto reject;
+        }
 
         rc = kibnal_set_qp_state(conn, vv_qp_state_init);
         if (rc != 0)
@@ -2729,7 +2737,6 @@ kibnal_arp_done (kib_conn_t *conn)
                       cv->cv_arprc);
                 goto failed;
         }
-        
 
         if ((arp->mask & IBAT_PRI_PATH_VALID) != 0) {
                 CDEBUG(D_NET, "Got valid path for %s\n",
