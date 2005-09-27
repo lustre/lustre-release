@@ -69,12 +69,14 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         snprintf(lov_path, sizeof(lov_path) - 1, "/proc/fs/lustre/lov/%s", buf);
 
         stripe_count = (int)lum_dir->lmm_stripe_count;
-        if (stripe_count == 0 || stripe_count == (__u16)-1) {
+        if (stripe_count == 0) {
                 snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount", lov_path);
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
                         return 4;
 
                 stripe_count = atoi(buf);
+                if (stripe_count == 0)
+                        stripe_count = 1;
         }
 
         snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
@@ -82,7 +84,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
                 return 6;
 
         ost_count = atoi(buf);
-        stripe_count = stripe_count ? stripe_count : ost_count;
+        stripe_count = stripe_count > 0 ? stripe_count : ost_count;
 
         if (lum_file1->lmm_stripe_count != stripe_count) {
                 fprintf(stderr, "stripe count %d != %d\n",
