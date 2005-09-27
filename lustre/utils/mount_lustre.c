@@ -36,7 +36,7 @@
 #include <sys/utsname.h>
 
 #include <linux/lustre_disk.h>
-#include <portals/ptlctl.h>
+//#include <portals/ptlctl.h>
 #include "obdctl.h"
 
 int          verbose;
@@ -61,30 +61,6 @@ void usage(FILE *out)
         exit(out != stdout);
 }
 
-int get_os_version()
-{
-        static int version = 0;
-
-        if (!version) {
-                int fd;
-                char release[4] = "";
-
-                fd = open("/proc/sys/kernel/osrelease", O_RDONLY);
-                if (fd < 0) 
-                        fprintf(stderr, "Warning: Can't resolve kernel version,"
-                        " assuming 2.6\n");
-                else {
-                        read(fd, release, 4);
-                        close(fd);
-                }
-                if (strncmp(release, "2.4.", 4) == 0) 
-                        version = 24;
-                else 
-                        version = 26;
-        }
-        return version;
-}
-
 static int load_module(char *module_name)
 {
         char buf[256];
@@ -102,19 +78,13 @@ static int load_module(char *module_name)
         return rc;
 }
 
-static int load_modules(struct lustre_mount_data *lmd)
+static int load_modules()
 {
         int rc = 0;
 
-        rc = load_module("_lustre");
-
-        if (lmd_is_client(lmd)) {
-                rc = load_module("llite");
-        } else {
-                rc = load_module("mds");
-                if (rc) return rc;
-                rc = load_module("ost");
-        }
+        rc = load_module("lustre");
+        rc = load_module("mds");
+        rc = load_module("ost");
         return rc;
 }
 
@@ -177,41 +147,6 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
         return rc;
 }
 
-int
-init_options(struct lustre_mount_data *lmd)
-{
-        memset(lmd, 0, sizeof(*lmd));
-        //gethostname(lmd->lmd_hostname, sizeof lmd->lmd_hostname);
-        //lmd->lmd_server_nid = PTL_NID_ANY;
-        //ptl_parse_nid(&lmd->lmd_nid, lmd->lmd_hostname);
-        //lmd->lmd_port = 988;    /* XXX define LUSTRE_DEFAULT_PORT */
-        //lmd->lmd_nal = SOCKNAL;
-        //ptl_parse_ipaddr(&lmd->lmd_ipaddr, lmd->lmd_hostname); 
-        lmd->lmd_magic = LMD_MAGIC;
-        lmd->lmd_flags = LMD_FLG_MNTCNF;
-        lmd->lmd_mgsnid.primary = PTL_NID_ANY;
-        lmd->lmd_mgsnid.backup  = PTL_NID_ANY;
-        return 0;
-}
-
-int
-print_options(struct lustre_mount_data *lmd)
-{
-        printf("mgmt primary nid: %s\n",
-               libcfs_nid2str(lmd->lmd_mgsnid.primary));
-        printf("mgmt backup nid:  %s\n",
-               libcfs_nid2str(lmd->lmd_mgsnid.backup));
-        printf("device:           %s\n", lmd->lmd_dev);
-        printf("mount point:      %s\n", lmd->lmd_mtpt);
-        printf("options:          %s\n", lmd->lmd_opts);
-        printf("flags:            %x\n", lmd->lmd_flags);
-        if (lmd_is_client(lmd)) 
-                printf("CLIENT\n");
-        else 
-                printf("SERVER\n");
-
-        return 0;
-}
 
 /*****************************************************************************
  *
@@ -253,7 +188,7 @@ static int parse_one_option(const char *check, int *flagp)
         const struct opt_map *opt;
 
         for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
-                if (strcmp(check, opt->opt) == 0) {
+                if (strncmp(check, opt->opt, strlen(opt->opt)) == 0) {
                         if (opt->inv)
                                 *flagp &= ~(opt->mask);
                         else
@@ -264,10 +199,13 @@ static int parse_one_option(const char *check, int *flagp)
         return 0;
 }
 
-int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
+int parse_options(char *orig_options, int *flagp)
 {
         int val;
-        char *opt, *opteq;
+        char *options, *opt, *opteq;
+
+        options = malloc(strlen(orig_options) + 1);
+        strcpy(options, orig_options);
 
         *flagp = 0;
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
@@ -275,109 +213,21 @@ int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
                 if ((opteq = strchr(opt, '='))) {
                         val = atoi(opteq + 1);
                         *opteq = '\0';
-                        if (0) {
-                                /* NO special lustre options, just standard
-                                   mount options */
-                        } else {
-                                fprintf(stderr, "%s: unknown option '%s'\n",
-                                        progname, opt);
-                                usage(stderr);
-                        }
+                        /* All the network options have gone :)) */
+                        fprintf(stderr, "%s: unknown option '%s'. "
+                                "Ignoring.\n", progname, opt);
                 } else {
                         if (parse_one_option(opt, flagp))
                                 continue;
 
                         fprintf(stderr, "%s: unknown option '%s'\n",
                                 progname, opt);
-                        usage(stderr);
                 }
         }
+        free(options);
         return 0;
 }
 
-int
-build_data(char *source, char *target, char *options, 
-           struct lustre_mount_data *lmd, int *flagp)
-{
-        char  buf[1024];
-        char *nid = NULL;
-        char *devname = NULL;
-        char *s;
-        int   rc;
-
-        init_options(lmd);
-
-        if (lmd_bad_magic(lmd))
-                return 4;
-
-        if (strlen(source) >= sizeof(buf)) {
-                fprintf(stderr, "%s: device name too long\n",
-                        progname);
-                return 1;
-        }
-        strcpy(buf, source);
-
-        if ((s = strchr(buf, ':'))) {
-                /* Client */
-                if (verbose)
-                        printf("CLIENT\n");
-                lmd->lmd_flags |= LMD_FLG_CLIENT;
-
-                /* <mgsnid>[,<alt mgsnid>]:/fsname[/fsetname[/subdir/]]
-                   nid=mgsnid, devname=fsname */
-                nid = buf;
-                *s = '\0';
-                while (*++s == '/') /*spin*/;
-                devname = s; /* for clients, devname=fsname */
-
-                rc = parse_options(options, lmd, flagp);
-                if (rc)
-                        return rc;
-
-                if (lmd->lmd_mgsnid.primary != PTL_NID_ANY)
-                        /* In case it was defined as -o mgmtnode= */
-                        //FIXME set_nid_pair(&lmd->lmd_mgsnid, nid);
-                if (lmd->lmd_mgsnid.primary == PTL_NID_ANY) {
-                        fprintf(stderr, "%s: can't parse nid '%s'\n",
-                                progname, nid);
-                        return 1;
-                }
-        } else {
-                /* Server */
-                if (verbose)
-                        printf("SERVER\n");
-
-                devname = source;
-
-                /* We have to keep the loop= option in the mtab file
-                   in order for umount to free the loop device. The strtok
-                   in parse_options terminates the options list at the first
-                   comma, so we're saving a local copy here. */
-                strcpy(buf, options);
-                rc = parse_options(options, lmd, flagp); 
-                if (rc)
-                        return rc;
-                strcpy(options, buf);
-
-                // move into lustre: rc = read_mount_options(source, target, lmd);
-        }
-
-        if (strlen(devname) + 1 > sizeof(lmd->lmd_dev)) {
-                fprintf(stderr, "%s: device name too long\n", progname);
-                return(1);
-        }
-        strcpy(lmd->lmd_dev, devname);
-
-        if (strlen(target) + 1 > sizeof(lmd->lmd_mtpt)) {
-                fprintf(stderr, "%s: mount point too long\n", progname);
-                return(1);
-        }
-        strcpy(lmd->lmd_mtpt, target);
-        
-        if (verbose)
-                print_options(lmd);
-        return 0;
-}
 
 int main(int argc, char *const argv[])
 {
@@ -396,6 +246,8 @@ int main(int argc, char *const argv[])
 
         progname = strrchr(argv[0], '/');
         progname = progname ? progname + 1 : argv[0];
+
+        printf("starting %s\n", progname);
 
         while ((opt = getopt_long(argc, argv, "fhno:v",
                                   long_opt, NULL)) != EOF){
@@ -452,8 +304,10 @@ int main(int argc, char *const argv[])
         if (!force && check_mtab_entry(source, target, "lustre"))
                 exit(32);
 
-        rc = build_data(source, target, options, &lmd, &flags);
+        rc = parse_options(options, &flags); 
         if (rc) {
+                fprintf(stderr, "%s: can't parse options: %s\n",
+                        progname, options);
                 exit(1);
         }
 
@@ -466,7 +320,7 @@ int main(int argc, char *const argv[])
         }
 
         /* FIXME remove */
-        if ((rc = load_modules(&lmd))) {
+        if ((rc = load_modules())) {
                 return rc;
         }
 
@@ -474,7 +328,7 @@ int main(int argc, char *const argv[])
                 /* flags and target get to lustre_get_sb, but not 
                    lustre_fill_super.  Lustre ignores the flags, but mount 
                    does not. */
-                rc = mount(source, target, "lustre", flags, (void *)&lmd);
+                rc = mount(source, target, "lustre", flags, (void *)options);
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname, 
                         source, target, strerror(errno));

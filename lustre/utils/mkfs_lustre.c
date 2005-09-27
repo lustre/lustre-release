@@ -37,7 +37,7 @@
 
 #include <linux/types.h>
 #include <linux/lustre_disk.h>
-#include <portals/ptlctl.h>
+#include <lnet/lnetctl.h>
 #include "obdctl.h"
 
 /* So obd.o will link */
@@ -590,9 +590,9 @@ static int jt_setup()
 {
         int ret;
         /* FIXME uneeded? */
-        ret = access(PORTALS_DEV_PATH, F_OK);
+        ret = access(LNET_DEV_PATH, F_OK);
         if (ret) 
-                system("mknod "PORTALS_DEV_PATH" c 10 240");
+                system("mknod "LNET_DEV_PATH" c 10 240");
         ret = access(OBD_DEV_PATH, F_OK);
         if (ret) 
                 system("mknod "OBD_DEV_PATH" c 10 241");
@@ -603,7 +603,7 @@ static int jt_setup()
 }
 
 /* see jt_ptl_network */
-int jt_getnids(ptl_nid_t *nidarray, int maxnids)
+int jt_getnids(lnet_nid_t *nidarray, int maxnids)
 {
         struct portal_ioctl_data data;
         int                      count;
@@ -612,7 +612,7 @@ int jt_getnids(ptl_nid_t *nidarray, int maxnids)
         for (count = 0; count < maxnids; count++) {
                 PORTAL_IOC_INIT (data);
                 data.ioc_count = count;
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NI, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_NI, &data);
 
                 if (rc >= 0) {
                         vprint("%s\n", libcfs_nid2str(data.ioc_nid));
@@ -752,11 +752,11 @@ int write_llog_files(struct mkfs_opts *mop)
         }
         
         if (IS_MDT(&mop->mo_ldd)) {
-                ptl_nid_t nidarray[128];
+                lnet_nid_t nidarray[128];
                 char scnt[20], ssz[20], soff[20], spat[20];
                 char cliname[sizeof(mop->mo_ldd.ldd_fsname)];
                 char mdcname[sizeof(mop->mo_ldd.ldd_fsname)];
-                ptl_nid_t nid;
+                lnet_nid_t nid;
                 int numnids;
 
                 /* Write mds-conf log */
@@ -1088,13 +1088,13 @@ int main(int argc , char *const argv[])
         }
 
         if (IS_MDT(&mop.mo_ldd) && !IS_MGMT(&mop.mo_ldd) && 
-            mop.mo_ldd.ldd_mgmtnid.primary == PTL_NID_ANY) {
+            mop.mo_ldd.ldd_mgmtnid.primary == LNET_NID_ANY) {
                 vprint("No MGMT specified, adding to this MDT\n");
                 mop.mo_ldd.ldd_flags |= LDD_F_SV_TYPE_MGMT;
                 //FIXME mop.mo_ldd.ldd_mgmt.primary == libcfs_str2nid(localhost);
         }
 
-        if (mop.mo_ldd.ldd_mgmtnid.primary == PTL_NID_ANY) {
+        if (mop.mo_ldd.ldd_mgmtnid.primary == LNET_NID_ANY) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgmt or --mgmtnode\n");
                 usage(stderr);

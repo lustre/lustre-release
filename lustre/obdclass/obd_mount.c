@@ -28,7 +28,7 @@
 #include <linux/lvfs.h>
 #include <linux/lustre_disk.h>
 #include <linux/lustre_fsfilt.h>
-#include <linux/lustre_mgs.h>
+//#include <linux/lustre_mgs.h>
 #include <linux/obd_class.h>
 #include <lustre/lustre_user.h>
 #include <linux/version.h> 
@@ -494,7 +494,7 @@ static int lustre_update_llog(struct obd_device *obd)
 }
 
 
-static int do_lcfg(char *cfgname, ptl_nid_t nid, int cmd,
+static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
                    char *s1, char *s2, char *s3, char *s4)
 {
         struct lustre_cfg_bufs bufs;
@@ -538,7 +538,8 @@ static int lustre_start_mgs(struct super_block *sb, struct vfsmount *mnt)
         cfg.cfg_instance = mgsname;
         snprintf(cfg.cfg_uuid.uuid, sizeof(cfg.cfg_uuid.uuid), mgsname);
  
-        err = do_lcfg(mgsname, 0, LCFG_ATTACH, LUSTRE_MGS_NAME, cfg.cfg_uuid.uuid, 0, 0);
+        err = do_lcfg(mgsname, 0, LCFG_ATTACH, /*LUSTRE_MGS_NAME*/ "mgs",
+                      cfg.cfg_uuid.uuid, 0, 0);
         if (err)
                 GOTO(out_dereg, err);
                                                                                        
@@ -727,10 +728,11 @@ static struct vfsmount *lustre_kern_mount(struct super_block *sb)
         options = (char *)page;
         memset(options, 0, PAGE_SIZE);
         strcpy(options, ldd->ldd_mount_opts);
+        /* Add in any mount-line options */
         if (strlen(lmd->lmd_opts)) {
                 if (strlen(options)) 
                         strcat(options, ",");
-                strcat(options, ldd->ldd_mount_opts);
+                strcat(options, lmd->lmd_opts);
         }
 
         CERROR("kern_mount: %s %s %s\n", MT_STR(ldd), lmd->lmd_dev, options);
@@ -968,6 +970,68 @@ void lustre_common_put_super(struct super_block *sb)
         lustre_free_sbi(sb);
 }      
 
+static void print_lmd(struct lustre_mount_data *lmd)
+{
+        int i;
+
+        for (i = 0; i < lmd->lmd_mgsnid_count; i++) 
+        CERROR("nid %d:           %s\n", i, libcfs_nid2str(lmd->lmd_mgsnid[i]));
+        CERROR("fsname:          %s\n", lmd->lmd_dev);
+        CERROR("options:         %s\n", lmd->lmd_opts);
+
+}
+
+static int parse_lmd(char *devname, char *options,
+                     struct lustre_mount_data *lmd)
+{
+        char *s1, *s2;
+        if (strchr(devname, ',')) {
+                LCONSOLE_ERROR("No commas are allowed in the device name\n");
+                goto invalid;
+        }
+        s1 = devname;
+        while ((s2 = strchr(s1, ':'))) {
+                lnet_nid_t nid;
+                *s2 = 0;
+                lmd->lmd_flags = LMD_FLG_CLIENT;
+                nid = libcfs_str2nid(s1);
+                if (nid == LNET_NID_ANY) {
+                        LCONSOLE_ERROR("Can't parse NID '%s'\n", s1);
+                        goto invalid;
+                }
+                if (lmd->lmd_mgsnid_count >= MAX_FAILOVER_LIST) {
+                        LCONSOLE_ERROR("Too many NIDs: '%s'\n", s1);
+                        goto invalid;
+                }
+                lmd->lmd_mgsnid[lmd->lmd_mgsnid_count++] = libcfs_str2nid(s1);
+                s1 = s2 + 1;
+        }
+
+        while (*++s1 == '/')
+                ;
+        
+        if (strlen(s1) > sizeof(lmd->lmd_dev)) {
+                LCONSOLE_ERROR("Filesystem name too long: '%s'\n", s1);
+                goto invalid;
+        }
+        strcpy(lmd->lmd_dev, s1);
+        
+        if (strlen(options) > sizeof(lmd->lmd_opts)) {
+                LCONSOLE_ERROR("Options string too long: '%s'\n", options);
+                goto invalid;
+        }
+        strcpy(lmd->lmd_opts, options);
+
+        lmd->lmd_magic = LMD_MAGIC;
+
+        print_lmd(lmd);
+        return 0;
+
+invalid:
+        return -EINVAL;          
+}
+
+
 /* Common mount */
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
 {
@@ -1001,7 +1065,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                         char mgcname[64];
                         snprintf(mgcname, sizeof(mgcname), "mgc-client-%s", 
                                  lmd->lmd_dev);
-                        CERROR("Mounting client\n");
+                        CERROR("Mounting client for fs %s\n", lmd->lmd_dev);
                         err = lustre_start_mgc(sb, NULL);
                         if (err) {
                                 lustre_free_sbi(sb);
@@ -1039,8 +1103,20 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
+        struct lustre_mount_data lmd;
+
+        if (((struct lustre_mount_data *)data)->lmd_magic == LMD_MAGIC ) {
+                /* mount.lustre is sending lmd */
+                CERROR("Using mount.lustre's lmd\n");
+                return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
+        }
+
+        /* Figure out the lmd from the mount line */
+        if (parse_lmd((char *)devname, (char *)data, &lmd))
+                return ERR_PTR(-EINVAL);
+        
         /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
+        return get_sb_nodev(fs_type, flags, (void *)&lmd, lustre_fill_super);
 }
 
 struct file_system_type lustre_fs_type = {
@@ -1056,6 +1132,7 @@ struct file_system_type lustre_fs_type = {
 static struct super_block *lustre_read_super(struct super_block *sb,
                                              void *data, int silent)
 {
+        //FIXME need the device for the lmd!!
         int err;
         ENTRY;
         err = lustre_fill_super(sb, data, silent);

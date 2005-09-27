@@ -449,7 +449,7 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
         }
         EXIT;
 }
-
+                
 void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
@@ -482,6 +482,8 @@ int ll_fill_super(struct super_block *sb)
         if (!sbi) {
                 RETURN(-ENOMEM);
         }
+
+        ll_options(lsi->lsi_lmd->lmd_opts, &osc, &mdc, &sbi->ll_flags);
 
         /* generate a string unique to this super, let's try
            the address of the super itself.*/

@@ -88,16 +88,17 @@ struct lustre_disk_data {
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /****************** mount command *********************/
+#define MAX_FAILOVER_LIST 10
 
 /* Passed by mount - no persistent info here */
 struct lustre_mount_data {
-        __u32     lmd_magic;
-        __u32     lmd_flags;          /* lustre mount flags */
-        struct host_desc lmd_mgsnid;  /* who to contact at startup */
+        __u32      lmd_magic;
+        __u32      lmd_flags;          /* lustre mount flags */
+        __u16      lmd_mgsnid_count;   /* how many failover nids we have for the MGS */
+        lnet_nid_t lmd_mgsnid[MAX_FAILOVER_LIST];  /* who to contact at startup */
         //struct lustre_disk_data *lmd_ldd; /* in-mem copy of ldd */
-        char      lmd_dev[128];       /* device or file system name */
-        char      lmd_mtpt[128];      /* mount point (for client overmount) */
-        char      lmd_opts[256];      /* lustre mount options (as opposed to 
+        char       lmd_dev[128];       /* device or file system name */
+        char       lmd_opts[256];      /* lustre mount options (as opposed to 
                                          _device_ mount options) */
 };
 
