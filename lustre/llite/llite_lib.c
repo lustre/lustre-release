@@ -133,7 +133,6 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lustre_handle mdc_conn = {0, };
         struct lustre_md md;
         struct obd_connect_data *data = NULL;
-        kdev_t devno;
         int err;
         ENTRY;
 
@@ -186,10 +185,15 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
         sbi->ll_namelen = osfs.os_namelen;
 
-        devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
-                             strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
-        /* s_dev is also used in lt_compare() to compare two fs */
-        sb->s_dev = devno;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
+        /* We set sb->s_dev equal on all lustre clients in order to support
+         * NFS export clustering.  NFSD requires that the FSID be the same
+         * on all clients. */
+        /* s_dev is also used in lt_compare() to compare two fs, but that is
+         * only a node-local comparison. */
+        sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
+                         strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+#endif
 
         obd = class_name2obd(osc);
         if (!obd) {
@@ -1288,7 +1292,11 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static struct backing_dev_info ll_backing_dev_info = {
         .ra_pages       = 0,    /* No readahead */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12))
+        .capabilities   = 0,    /* Does contribute to dirty memory */
+#else
         .memory_backed  = 0,    /* Does contribute to dirty memory */
+#endif
 };
 #endif
 
