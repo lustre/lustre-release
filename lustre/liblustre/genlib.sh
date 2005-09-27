@@ -108,8 +108,13 @@ $RANLIB $CWD/liblustre.a
 
 # create shared lib lustre
 rm -f $CWD/liblustre.so
+OS=`uname`
+if test x$OS = xAIX; then
+gcc -shared -o $CWD/liblustre.so  $ALL_OBJS -lpthread -Xlinker -bnoipath ../../libsyscall.so
+else
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
 	$ALL_OBJS -lcap -lpthread
+fi
 
 rm -rf $sysio_tmp
 rm -rf $cray_tmp

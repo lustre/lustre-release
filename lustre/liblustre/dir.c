@@ -30,7 +30,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/queue.h>
 
 #ifdef HAVE_XTIO_H
@@ -182,7 +182,9 @@ static int filldir(char *buf, int buflen,
         dirent->d_ino = ino;
         dirent->d_off = offset;
         dirent->d_reclen = reclen;
+#ifndef _AIX
         dirent->d_type = (unsigned short) d_type;
+#endif
         memcpy(dirent->d_name, name, namelen);
         dirent->d_name[namelen] = 0;
 
@@ -200,12 +202,12 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
         int maxpages, pgidx, filled = 0;
         ENTRY;
 
+        liblustre_wait_event(0);
+
         if (st->st_size == 0) {
                 CWARN("dir size is 0?\n");
                 RETURN(0);
         }
-
-        liblustre_wait_event(0);
 
         if (pos == -1)
                 pos = lli->lli_dir_pos;
@@ -255,5 +257,6 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
 done:
         lli->lli_dir_pos = pgidx << PAGE_SHIFT | offset;
         *basep = lli->lli_dir_pos;
+        liblustre_wait_event(0);
         RETURN(filled);
 }

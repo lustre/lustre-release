@@ -29,7 +29,11 @@
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
+#ifdef _AIX
+#include "syscall_AIX.h"
+#else
 #include <syscall.h>
+#endif
 #include <sys/utsname.h>
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>

@@ -756,11 +756,13 @@ static int llu_file_rwx(struct inode *ino,
         if (cc >= 0) {
                 LASSERT(!ioctx->ioctx_cc);
                 ioctx->ioctx_private = session;
-                RETURN(0);
+                cc = 0;
         } else {
                 put_io_session(session);
-                RETURN(cc);
         }
+
+        liblustre_wait_event(0);
+        RETURN(cc);
 }
 
 int llu_iop_read(struct inode *ino,
@@ -825,6 +827,7 @@ int llu_iop_iodone(struct ioctx *ioctx)
 
         put_io_session(session);
         ioctx->ioctx_private = NULL;
+        liblustre_wait_event(0);
 
         RETURN(1);
 }
