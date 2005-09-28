@@ -88,7 +88,7 @@ struct ptldebug_header {
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) && !defined(__x86_64__)
 # ifdef  __ia64__
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_dwarf_cfa() &            \
