@@ -30,6 +30,7 @@ lnd_t               kptllnd_lnd = {
         .lnd_ctl        = kptllnd_ctl,
         .lnd_send       = kptllnd_send,
         .lnd_recv       = kptllnd_recv,
+        .lnd_eager_recv = kptllnd_eager_recv,
 };
 
 kptl_data_t             kptllnd_data;

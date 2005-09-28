@@ -179,7 +179,7 @@ typedef struct kptl_rx                          /* receive message */
         int                     rx_nob;         /* the number of bytes rcvd */
         ptl_process_id_t        rx_initiator;   /* who send the packet */
         kptl_peer_t            *rx_peer;        /* pointer to peer */
-        size_t                  rx_payload[0];  /* payload QQQ*/
+        size_t                  rx_payload[0];  /* payload */
 } kptl_rx_t;
 
 typedef struct kptl_rx_buffer_pool
@@ -412,6 +412,12 @@ int kptllnd_recv (
         unsigned int offset,
         unsigned int mlen,
         unsigned int rlen);
+        
+int kptllnd_eager_recv(
+        struct lnet_ni *ni, 
+        void *private,
+        lnet_msg_t *msg,
+        void **new_privatep);        
 
 void kptllnd_eq_callback(
         ptl_event_t *evp);
@@ -697,7 +703,7 @@ do{                                                     \
 #define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
 #endif
 
-#if 1
+#if 0
 #define PJK_UT_MSG(fmt, a...)                   PJK_UT_MSG_ALWAYS(fmt, ## a )
 #else
 #define PJK_UT_MSG(fmt, a...)                   do{}while(0)

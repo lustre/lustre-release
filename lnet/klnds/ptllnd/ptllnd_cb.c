@@ -477,7 +477,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         case LNET_MSG_GET:
 
-                PJK_UT_MSG_DATA("LNET_MSG_GET nob=%d\n",lntmsg->msg_md->md_length);
+                PJK_UT_MSG_DATA("LNET_MSG_GET\n");
 
                 /*
                  * Get an idle tx descriptor
@@ -494,6 +494,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  */
                 if(target_is_router || routing)
                         break;
+                        
+                PJK_UT_MSG_DATA("nob=%d\n",lntmsg->msg_md->md_length);                        
 
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[lntmsg->msg_md->md_length]);
@@ -665,10 +667,16 @@ launch:
         return 0;
 }
 
-int kptllnd_eager_recv(void *private,void **new_privatep)
+int kptllnd_eager_recv(
+        struct lnet_ni *ni, 
+        void *private,
+        lnet_msg_t *msg,
+        void **new_privatep)
 {
+        //kptl_data_t    *kptllnd_data = ni->ni_data;
         kptl_rx_t    *rx = private;
-
+        
+        PJK_UT_MSG_DATA("Eager RX=%p RXB=%p\n",rx,rx->rx_rxb);
 
         LASSERT(rx->rx_nob < *kptllnd_tunables.kptl_max_immd_size);
 
@@ -687,7 +695,6 @@ int kptllnd_eager_recv(void *private,void **new_privatep)
         kptllnd_rx_buffer_decref(rx->rx_rxb,"rx-eager");
         rx->rx_rxb = NULL;
 
-
         /*
          * Now point the msg buffer at the RX descriptor payload
          * rather than the RXB (because that is now freed!
@@ -704,7 +711,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 {
         kptl_rx_t    *rx = private;
         kptl_msg_t   *rxmsg = rx->rx_msg;
-        kptl_data_t  *kptllnd_data = rx->rx_rxb->rxb_po.po_kptllnd_data;
+        kptl_data_t  *kptllnd_data = ni->ni_data;
         int           nob;
         int           rc;
 
