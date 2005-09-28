@@ -231,9 +231,8 @@ int parse_options(char *orig_options, int *flagp)
 
 int main(int argc, char *const argv[])
 {
-        char *source, *target, *options = "";
-        int i, nargs = 3, opt, rc, flags;
-        struct lustre_mount_data lmd;
+        char *source, *target, *options = "", *optcopy;
+        int i, nargs = 3, opt, rc, flags, optlen;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
                 {"force", 0, 0, 1},
@@ -324,11 +323,19 @@ int main(int argc, char *const argv[])
                 return rc;
         }
 
+        /* In Linux 2.4, the target device doesn't get passed to any of our
+           functions.  So we'll stick it on the end of the options. */
+        optlen = strlen(options) + strlen(",device=") + strlen(target);
+        optcopy = malloc(optlen);
+        strcpy(optcopy, options);
+        strcat(optcopy, ",device=");
+        strcat(optcopy, source);
+
         if (!fake)
                 /* flags and target get to lustre_get_sb, but not 
                    lustre_fill_super.  Lustre ignores the flags, but mount 
                    does not. */
-                rc = mount(source, target, "lustre", flags, (void *)options);
+                rc = mount(source, target, "lustre", flags, (void *)optcopy);
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", progname, 
                         source, target, strerror(errno));
@@ -340,5 +347,6 @@ int main(int argc, char *const argv[])
                 rc = update_mtab_entry(source, target, "lustre", options,0,0,0);
         }
 
+        free(optcopy);
         return rc;
 }

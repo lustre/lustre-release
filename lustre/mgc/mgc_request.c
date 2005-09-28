@@ -127,15 +127,10 @@ static int mgc_cleanup(struct obd_device *obd)
         struct mgc_obd *mgc = &obd->u.mgc;
         int rc;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
-
-        // FIXME REPL rc = obd_llog_finish(obd, 0);
-        if (rc != 0)
-                CERROR("failed to cleanup llogging subsystems\n");
 
         //lprocfs_obd_cleanup(obd);
         
-        //rc = mgc_obd_cleanup(obd);
+        rc = mgc_obd_cleanup(obd);
 
         if (mgc->mgc_vfsmnt) {
                 /* if we're a server, eg. something's mounted */
@@ -144,9 +139,14 @@ static int mgc_cleanup(struct obd_device *obd)
                      CERROR("mount_put failed %d\n", rc);
         }
 
+        rc = obd_llog_finish(obd, 0);
+        if (rc != 0)
+                CERROR("failed to cleanup llogging subsystems\n");
+
         ptlrpcd_decref();
         
         OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
+        
 
         return(rc);
 }
@@ -181,13 +181,14 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                         CERROR("fs setup failed %d\n", rc);
                         mgc_cleanup(obd);
                         RETURN(-ENOENT);
-                        GOTO(err_rpc_lock, rc);
                 }                                                                                                     
         } else {
                 CERROR("mgc does not have local disk (client only)\n");
                 rc = mgc_obd_setup(obd, len, buf);
-                if (rc)
-                        GOTO(err_rpc_lock, rc);
+                if (rc) {
+                        mgc_cleanup(obd);
+                        RETURN(-ENOENT);
+                }
         }
 
         RETURN(rc);
@@ -340,10 +341,12 @@ static int mgc_llog_finish(struct obd_device *obd, int count)
         ENTRY;
 
         rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
+        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
+
         RETURN(rc);
 }
 
-/*mgc_obd_setup for mount-conf*/
+/* create a mgs client */
 int mgc_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;

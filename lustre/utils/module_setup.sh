@@ -17,9 +17,9 @@ echo "Copying modules from local build dir to "$MDIR
 
 mkdir -p $MDIR
 
-cp ../../portals/libcfs/libcfs.$EXT $MDIR
-cp ../../portals/portals/portals.$EXT $MDIR
-cp ../../portals/knals/socknal/ksocknal.$EXT $MDIR
+cp ../../lnet/libcfs/libcfs.$EXT $MDIR
+cp ../../lnet/lnet/lnet.$EXT $MDIR
+cp ../../lnet/klnds/socklnd/ksocklnd.$EXT $MDIR
 cp ../lvfs/lvfs.$EXT $MDIR
 cp ../obdclass/obdclass.$EXT $MDIR
 cp ../ptlrpc/ptlrpc.$EXT $MDIR
@@ -47,25 +47,17 @@ MP="/sbin/modprobe"
 MPI="$MP --ignore-install"
 
 [ -e $MODFILE ] || touch $MODFILE
-if [ `grep -c lustre $MODFILE` -eq 0 ]; then
+if [ `egrep -c "lustre|lnet" $MODFILE` -eq 0 ]; then
     echo Modifying $MODFILE
     echo "# Lustre modules added by $0" >> $MODFILE
+    echo "# Networking options, see /sys/module/lnet/parameters" >> $MODFILE
+    echo "options lnet networks=tcp" >> $MODFILE
+    echo "# for zeroconf clients" >> $MODFILE
     if [ $KVER -eq 24 ]; then
-	echo alias _lustre ksocknal >> $MODFILE
-	echo add above _lustre mgc $FSFLT portals >> $MODFILE
-	echo add below mds _lustre osc lov >> $MODFILE
-	echo add below ost _lustre >> $MODFILE
-	echo add below llite _lustre osc mdc lov >> $MODFILE
-	echo alias lustre llite >> $MODFILE
+        echo "add below llite lov osc" >> $MODFILE
     else
-	echo "install kptlrouter $MP portals && $MPI kptlrouter" >> $MODFILE
-	echo "install _lustre $MP portals && $MP lvfs && $MP obdclass && $MP ptlrpc && $MP mgc" >> $MODFILE
-	echo "install obdfilter $MP _lustre && $MP ost && $MP ldiskfs && $MP $FSFLT && $MPI obdfilter" >> $MODFILE
-	echo "install ost $MP _lustre && $MPI ost" >> $MODFILE
-	echo "install mds $MP _lustre && $MP osc && $MP lov && $MPI mds" >> $MODFILE
-	echo "install llite $MP _lustre && $MP osc && $MP mdc && $MP lov && $MPI llite" >> $MODFILE
-	echo "alias lustre llite" >> $MODFILE
+        echo "install llite $MP lov; $MP osc; $MPI llite" >> $MODFILE
     fi
+    echo "alias lustre llite" >> $MODFILE
     echo "# end Lustre modules" >> $MODFILE
 fi
-

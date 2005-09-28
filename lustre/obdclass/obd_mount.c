@@ -652,7 +652,12 @@ struct lustre_sb_info *lustre_init_sbi(struct super_block *sb)
 
         OBD_ALLOC(sbi, sizeof(*sbi));
         if (!sbi)
-                RETURN(NULL);
+                return(NULL);
+        OBD_ALLOC(sbi->lsi_lmd, sizeof(*sbi->lsi_lmd));
+        if (!sbi->lsi_lmd) {
+                OBD_FREE(sbi, sizeof(*sbi));
+                return(NULL);
+        }
 
         s2sbi_nocast(sb) = sbi;
         atomic_set(&sbi->lsi_mounts, 0);
@@ -667,8 +672,15 @@ void lustre_free_sbi(struct super_block *sb)
         if (sbi != NULL) {
                 if (sbi->lsi_ldd != NULL) 
                         OBD_FREE(sbi->lsi_ldd, sizeof(*sbi->lsi_ldd));
-                if (sbi->lsi_lmd != NULL) 
+                if (sbi->lsi_lmd != NULL) {
+                        if (sbi->lsi_lmd->lmd_dev != NULL) 
+                                OBD_FREE(sbi->lsi_lmd->lmd_dev, 
+                                         strlen(sbi->lsi_lmd->lmd_dev) + 1);
+                        if (sbi->lsi_lmd->lmd_opts != NULL) 
+                                OBD_FREE(sbi->lsi_lmd->lmd_opts, 
+                                         strlen(sbi->lsi_lmd->lmd_opts) + 1);
                         OBD_FREE(sbi->lsi_lmd, sizeof(*sbi->lsi_lmd));
+                }
                 LASSERT(sbi->lsi_llsbi == NULL);
                 OBD_FREE(sbi, sizeof(*sbi));
                 s2sbi_nocast(sb) = NULL;
@@ -975,21 +987,37 @@ static void print_lmd(struct lustre_mount_data *lmd)
         int i;
 
         for (i = 0; i < lmd->lmd_mgsnid_count; i++) 
-        CERROR("nid %d:           %s\n", i, libcfs_nid2str(lmd->lmd_mgsnid[i]));
-        CERROR("fsname:          %s\n", lmd->lmd_dev);
-        CERROR("options:         %s\n", lmd->lmd_opts);
-
+                CERROR("nid %d:   %s\n", i, libcfs_nid2str(lmd->lmd_mgsnid[i]));
+        if (lmd_is_client(lmd)) 
+                CERROR("fsname:  %s\n", lmd->lmd_dev);
+        else
+                CERROR("device:  %s\n", lmd->lmd_dev);
+        CERROR("options: %s\n", lmd->lmd_opts);
 }
 
-static int parse_lmd(char *devname, char *options,
-                     struct lustre_mount_data *lmd)
+static int parse_lmd(char *options, struct lustre_mount_data *lmd)
 {
-        char *s1, *s2;
+        char *s1, *s2, *devname;
+        ENTRY;
+
+        /* Linux 2.4 doesn't pass the device, so we stuck it at the end of 
+           the options. */
+        s1 = strstr(options, ",device=");
+        if (s1) {
+                devname = s1 + 8; /* strlen(",device=") */
+                *s1 = 0; /* cut it out of the options */
+        } else {
+                LCONSOLE_ERROR("Can't find device name\n");
+                goto invalid;
+        }
+
         if (strchr(devname, ',')) {
                 LCONSOLE_ERROR("No commas are allowed in the device name\n");
                 goto invalid;
         }
+
         s1 = devname;
+        /* Get MGS nids if client mount */
         while ((s2 = strchr(s1, ':'))) {
                 lnet_nid_t nid;
                 *s2 = 0;
@@ -1007,55 +1035,65 @@ static int parse_lmd(char *devname, char *options,
                 s1 = s2 + 1;
         }
 
-        while (*++s1 == '/')
-                ;
-        
-        if (strlen(s1) > sizeof(lmd->lmd_dev)) {
-                LCONSOLE_ERROR("Filesystem name too long: '%s'\n", s1);
+        if (lmd_is_client(lmd)) {
+                /* Remove leading /s from fsname */
+                while (*++s1 == '/')
+                        ;
+        }
+
+        if (!strlen(s1)) {
+                LCONSOLE_ERROR("No filesytem specified\n");
                 goto invalid;
         }
+
+        /* freed in lustre_free_sbi */
+        OBD_ALLOC(lmd->lmd_dev, strlen(s1) + 1);
+        if (!lmd->lmd_dev) 
+                RETURN(-ENOMEM);
         strcpy(lmd->lmd_dev, s1);
         
-        if (strlen(options) > sizeof(lmd->lmd_opts)) {
-                LCONSOLE_ERROR("Options string too long: '%s'\n", options);
-                goto invalid;
+        if (strlen(options)) {
+                /* freed in lustre_free_sbi */
+                OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
+                if (!lmd->lmd_opts) 
+                        RETURN(-ENOMEM);
+                strcpy(lmd->lmd_opts, options);
         }
-        strcpy(lmd->lmd_opts, options);
 
         lmd->lmd_magic = LMD_MAGIC;
 
         print_lmd(lmd);
-        return 0;
+        RETURN(0);
 
 invalid:
-        return -EINVAL;          
+        RETURN(-EINVAL);          
 }
 
 
 /* Common mount */
 int lustre_fill_super(struct super_block *sb, void *data, int silent)
 {
-        struct lustre_mount_data * lmd = data;
+        struct lustre_mount_data *lmd;
         struct lustre_sb_info *sbi;
         int err;
         ENTRY;
  
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-        if (lmd_bad_magic(lmd))
-                RETURN(-EINVAL);
- 
-        sbi = lustre_init_sbi(sb);
-        if (!sbi)
-                RETURN(-ENOMEM);
-
-        /* save mount data */
-        OBD_ALLOC(sbi->lsi_lmd, sizeof(*sbi->lsi_lmd));
-        if (sbi->lsi_lmd == NULL) {
-                lustre_free_sbi(sb);
-                RETURN(-ENOMEM);
-        }
-        memcpy(sbi->lsi_lmd, lmd, sizeof(*lmd));
         
+        sbi = lustre_init_sbi(sb);
+        if (!sbi) 
+                RETURN(-ENOMEM);
+        lmd = sbi->lsi_lmd;
+
+        /* Figure out the lmd from the mount options */
+        if (parse_lmd((char *)data, lmd)) {
+                lustre_free_sbi(sb);
+                RETURN(-EINVAL);
+        }
+        if (lmd_bad_magic(lmd)) {
+                lustre_free_sbi(sb);
+                RETURN(-EINVAL);
+        }
         if (lmd_is_client(lmd)) {
                 if (!client_fill_super) {
                         CERROR("Nothing registered for client_fill_super!\n"
@@ -1078,6 +1116,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         } else {
                 CERROR("Mounting server\n");
                 err = server_fill_super(sb);
+                /* calls lustre_start_mgc */
         }
                                                                                 
         if (err){
@@ -1103,20 +1142,8 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
-        struct lustre_mount_data lmd;
-
-        if (((struct lustre_mount_data *)data)->lmd_magic == LMD_MAGIC ) {
-                /* mount.lustre is sending lmd */
-                CERROR("Using mount.lustre's lmd\n");
-                return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
-        }
-
-        /* Figure out the lmd from the mount line */
-        if (parse_lmd((char *)devname, (char *)data, &lmd))
-                return ERR_PTR(-EINVAL);
-        
         /* calls back in fill super */
-        return get_sb_nodev(fs_type, flags, (void *)&lmd, lustre_fill_super);
+        return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
 }
 
 struct file_system_type lustre_fs_type = {
@@ -1132,9 +1159,9 @@ struct file_system_type lustre_fs_type = {
 static struct super_block *lustre_read_super(struct super_block *sb,
                                              void *data, int silent)
 {
-        //FIXME need the device for the lmd!!
         int err;
         ENTRY;
+
         err = lustre_fill_super(sb, data, silent);
         if (err)
                 RETURN(NULL);
