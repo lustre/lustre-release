@@ -105,7 +105,6 @@ subsystem_names = {
     "log" :          (1 << 6),
     "llite" :        (1 << 7),
     "rpc" :          (1 << 8),
-    "mgmt" :         (1 << 9),
     "portals" :      (1 << 10),
     "nal" :          (1 << 11),
     "pinger" :       (1 << 12),
@@ -1547,27 +1546,6 @@ class RouteTable(Module):
                 e.dump()
                 cleanup_error(e.rc)
 
-class Management(Module):
-    def __init__(self, db):
-        Module.__init__(self, 'MGMT', db)
-        self.add_lustre_module('lvfs', 'lvfs')
-        self.add_lustre_module('obdclass', 'obdclass')
-        self.add_lustre_module('ptlrpc', 'ptlrpc')
-        self.add_lustre_module('mgmt', 'mgmt_svc')
-
-    def prepare(self):
-        if is_prepared(self.name):
-            return
-        self.info()
-        lctl.newdev("mgmt", self.name, self.uuid)
-
-    def safe_to_clean(self):
-        return 1
-
-    def cleanup(self):
-        if is_prepared(self.name):
-            Module.cleanup(self)
-
 # This is only needed to load the modules; the LDLM device
 # is now created automatically.
 class LDLM(Module):
@@ -2088,16 +2066,6 @@ class OSD(Module):
         if not self.osdtype == 'obdecho':
             clean_loop(self.devpath)
 
-def mgmt_uuid_for_fs(mtpt_name):
-    if not mtpt_name:
-        return ''
-    mtpt_db = toplustreDB.lookup_name(mtpt_name)
-    fs_uuid = mtpt_db.get_first_ref('filesystem')
-    fs = toplustreDB.lookup(fs_uuid)
-    if not fs:
-        return ''
-    return fs.get_first_ref('mgmt')
-
 # Generic client module, used by OSC and MDC
 class Client(Module):
     def __init__(self, tgtdb, uuid, module, fs_name, self_name=None,
@@ -2125,11 +2093,6 @@ class Client(Module):
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
 	self.lookup_backup_targets()
-        mgmt_uuid = mgmt_uuid_for_fs(fs_name)
-        if mgmt_uuid:
-            self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
-        else:
-            self.mgmt_name = ''
         self.fs_name = fs_name
         if not module_dir:
             module_dir = module
@@ -2187,8 +2150,8 @@ class Client(Module):
                 debug("%s active" % self.target_uuid)
                 inactive_p = ""
             lctl.newdev(self.module, self.name, self.uuid,
-                        setup ="%s %s %s %s" % (self.target_uuid, srv.nid_uuid,
-                                                inactive_p, self.mgmt_name))
+                        setup ="%s %s %s" % (self.target_uuid, srv.nid_uuid,
+                                                inactive_p))
         else:
             panic("Unable to create OSC for ", self.target_uuid)
 
@@ -2247,15 +2210,6 @@ class OSC(Client):
 
     def permits_inactive(self):
         return 1
-
-def mgmtcli_name_for_uuid(uuid):
-    return 'MGMTCLI_%s' % uuid
-
-class ManagementClient(Client):
-    def __init__(self, db, uuid):
-        Client.__init__(self, db, uuid, 'mgmt_cli', '',
-                        self_name = mgmtcli_name_for_uuid(db.getUUID()),
-                        module_dir = 'mgmt')
 
 class COBD(Module):
     def __init__(self, db):
@@ -2366,7 +2320,6 @@ class Mountpoint(Module):
         fs = self.db.lookup(self.fs_uuid)
         self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        self.mgmt_uuid = fs.get_first_ref('mgmt')
         obd = self.db.lookup(self.obd_uuid)
         client_uuid = generate_client_uuid(self.name)
         self.vosc = VOSC(obd, client_uuid, self.name)
@@ -2374,19 +2327,12 @@ class Mountpoint(Module):
 
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('llite', 'llite')
-        if self.mgmt_uuid:
-            self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),
-                                            client_uuid)
-        else:
-            self.mgmtcli = None
 
     def prepare(self):
         if fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
         run_acceptors()
-        if self.mgmtcli:
-            self.mgmtcli.prepare()
         self.vosc.prepare()
         self.mdc.prepare()
         mdc_name = self.mdc.name
@@ -2435,20 +2381,14 @@ class Mountpoint(Module):
 
         self.mdc.cleanup()
         self.vosc.cleanup()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup()
 
     def load_module(self):
-        if self.mgmtcli:
-            self.mgmtcli.load_module()
         self.vosc.load_module()
         Module.load_module(self)
 
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.vosc.cleanup_module()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup_module()
 
 
 # ============================================================
@@ -2480,8 +2420,6 @@ def getServiceLevel(self):
         ret = 6
     elif type in ('ldlm',):
         ret = 20
-    elif type in ('mgmt',):
-        ret = 25
     elif type in ('osd', 'cobd'):
         ret = 30
     elif type in ('mdsdev',):
@@ -2667,8 +2605,6 @@ def newService(db):
         n = Mountpoint(db)
     elif type == 'echoclient':
         n = ECHO_CLIENT(db)
-    elif type == 'mgmt':
-        n = Management(db)
     else:
         panic("unknown service type:", type)
     return n
@@ -3086,7 +3022,7 @@ def sys_set_debug_path():
 
 def validate_upcall(upcall):
     import os
-    if upcall in ('DEFAULT',):
+    if upcall in ('DEFAULT','NONE'):
         pass
     elif os.path.exists(upcall):
         if not os.access(upcall, os.X_OK):
@@ -3310,7 +3246,7 @@ lconf_options = [
     ('make_service_scripts', "Create per-service symlinks for use with clumanager"),
 # Client recovery options
     ('recover', "Recover a device"),
-    ('group', "The group of devices to configure or cleanup", PARAM),
+    ('group,g', "The group of devices to configure or cleanup", PARAM),
     ('tgt_uuid', "The failed target (required for recovery)", PARAM),
     ('client_uuid', "The failed client (required for recovery)", PARAM),
     ('conn_uuid', "The failed connection (required for recovery)", PARAM),

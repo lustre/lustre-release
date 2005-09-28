@@ -35,7 +35,6 @@
 #include <linux/obd.h>
 #include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
 #include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
-#include <linux/lustre_mgmt.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
 
@@ -195,10 +194,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_uuid server_uuid;
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
-        char *mgmt_name = NULL;
         int rc;
-        struct obd_device *mgmt_obd;
-        mgmtcli_register_for_events_t register_f;
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
@@ -211,10 +207,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
-        } else if (!strcmp(name, LUSTRE_MGMTCLI_NAME)) {
-                rq_portal = MGMT_REQUEST_PORTAL;
-                rp_portal = MGMT_REPLY_PORTAL;
-                connect_op = MGMT_CONNECT;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -317,37 +309,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                                name, obddev->obd_name,
                                imp->imp_target_uuid.uuid);
                         imp->imp_invalid = 1;
-
-                        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0)
-                                mgmt_name = lustre_cfg_string(lcfg, 4);
-                } else {
-                        mgmt_name = lustre_cfg_string(lcfg, 3);
                 }
-        }
-
-        if (mgmt_name != NULL) {
-                /* Register with management client if we need to. */
-                CDEBUG(D_HA, "%s registering with %s for events about %s\n",
-                       obddev->obd_name, mgmt_name, server_uuid.uuid);
-
-                mgmt_obd = class_name2obd(mgmt_name);
-                if (!mgmt_obd) {
-                        CERROR("can't find mgmtcli %s to register\n",
-                               mgmt_name);
-                        GOTO(err_import, rc = -ENOSYS);
-                }
-
-                register_f = PORTAL_SYMBOL_GET(mgmtcli_register_for_events);
-                if (!register_f) {
-                        CERROR("can't i_m_g mgmtcli_register_for_events\n");
-                        GOTO(err_import, rc = -ENOSYS);
-                }
-
-                rc = register_f(mgmt_obd, obddev, &imp->imp_target_uuid);
-                PORTAL_SYMBOL_PUT(mgmtcli_register_for_events);
-
-                if (!rc)
-                        cli->cl_mgmtcli_obd = mgmt_obd;
         }
 
         spin_lock_init(&cli->cl_qchk_lock);
@@ -370,13 +332,6 @@ int client_obd_cleanup(struct obd_device *obddev)
 
         if (!cli->cl_import)
                 RETURN(-EINVAL);
-        if (cli->cl_mgmtcli_obd) {
-                mgmtcli_deregister_for_events_t dereg_f;
-
-                dereg_f = PORTAL_SYMBOL_GET(mgmtcli_deregister_for_events);
-                dereg_f(cli->cl_mgmtcli_obd, obddev);
-                PORTAL_SYMBOL_PUT(mgmtcli_deregister_for_events);
-        }
         class_destroy_import(cli->cl_import);
         cli->cl_import = NULL;
 

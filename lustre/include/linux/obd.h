@@ -274,8 +274,6 @@ struct client_obd {
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
-        struct obd_device       *cl_mgmtcli_obd;
-
         /* the grant values are protected by loi_list_lock below */
         long                     cl_dirty;         /* all _dirty_ in bytes */
         long                     cl_dirty_max;     /* allowed w/o rpc */
@@ -319,18 +317,6 @@ struct client_obd {
         int                      cl_qchk_stat; /* quotacheck stat of the peer */
         struct ptlrpc_request_pool *cl_rq_pool; /* emergency pool of requests */
 };
-
-/* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
- * can reuse the various client setup/connect functions. */
-struct mgmtcli_obd {
-        struct client_obd        mc_client_obd; /* nested */
-        struct ptlrpc_thread    *mc_ping_thread;
-        struct obd_export       *mc_ping_exp; /* XXX single-target */
-        struct list_head         mc_registered;
-        void                    *mc_hammer;
-};
-
-#define mc_import mc_client_obd.cl_import
 
 struct mds_obd {
         struct ptlrpc_service           *mds_service;
@@ -586,7 +572,6 @@ struct obd_device {
                 struct lov_obd lov;
                 struct cache_obd cobd;
                 struct ptlbd_obd ptlbd;
-                struct mgmtcli_obd mgmtcli;
         } u;
        /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
