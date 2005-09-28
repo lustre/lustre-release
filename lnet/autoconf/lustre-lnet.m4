@@ -126,10 +126,10 @@ fi
 
 AC_MSG_CHECKING([for usocklnd support])
 if test x$enable_usocklnd = xyes ; then
-      AC_MSG_RESULT([no (by request)])
+      AC_MSG_RESULT([yes])
       USOCKLND="usocklnd"
 else
-      AC_MSG_RESULT([yes])
+      AC_MSG_RESULT([no (by request)])
       USOCKLND=""
 fi
 AC_SUBST(USOCKLND)
