@@ -1,23 +1,18 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2005 Cluster File Systems, Inc.
+ * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
  *   Author: PJ Kirner <pjkirner@clusterfs.com>
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   This file is confidential source code owned by Cluster File Systems.
+ *   No viewing, modification, compilation, redistribution, or any other
+ *   form of use is permitted except through a signed license agreement.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   If you have not signed such an agreement, then you have no rights to
+ *   this file.  Please destroy it immediately and contact CFS.
  *
  */
 
@@ -494,8 +489,8 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                  */
                 if(target_is_router || routing)
                         break;
-                        
-                PJK_UT_MSG_DATA("nob=%d\n",lntmsg->msg_md->md_length);                        
+
+                PJK_UT_MSG_DATA("nob=%d\n",lntmsg->msg_md->md_length);
 
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[lntmsg->msg_md->md_length]);
@@ -668,14 +663,14 @@ launch:
 }
 
 int kptllnd_eager_recv(
-        struct lnet_ni *ni, 
+        struct lnet_ni *ni,
         void *private,
         lnet_msg_t *msg,
         void **new_privatep)
 {
         //kptl_data_t    *kptllnd_data = ni->ni_data;
         kptl_rx_t    *rx = private;
-        
+
         PJK_UT_MSG_DATA("Eager RX=%p RXB=%p\n",rx,rx->rx_rxb);
 
         LASSERT(rx->rx_nob < *kptllnd_tunables.kptl_max_immd_size);

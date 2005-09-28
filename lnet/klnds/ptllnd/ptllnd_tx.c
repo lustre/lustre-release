@@ -1,4 +1,22 @@
-#include "ptllnd.h"
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
+ *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ *
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
+ *
+ *   This file is confidential source code owned by Cluster File Systems.
+ *   No viewing, modification, compilation, redistribution, or any other
+ *   form of use is permitted except through a signed license agreement.
+ *
+ *   If you have not signed such an agreement, then you have no rights to
+ *   this file.  Please destroy it immediately and contact CFS.
+ *
+ */
+
+ #include "ptllnd.h"
 
 
 void

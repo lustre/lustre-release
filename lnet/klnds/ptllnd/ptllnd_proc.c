@@ -1,23 +1,18 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
+ *   Author: PJ Kirner <pjkirner@clusterfs.com>
  *
- *   This file is part of Portals
- *   http://sourceforge.net/projects/sandiaportals/
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   This file is confidential source code owned by Cluster File Systems.
+ *   No viewing, modification, compilation, redistribution, or any other
+ *   form of use is permitted except through a signed license agreement.
  *
- *   Portals is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Portals; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *   If you have not signed such an agreement, then you have no rights to
+ *   this file.  Please destroy it immediately and contact CFS.
  *
  */
 
@@ -63,16 +58,16 @@ ptllnd_stats_seq_seek (ptllnd_stats_seq_iterator_t *pssi, loff_t off)
             off < sizeof(stats_name_table) / sizeof(stats_name_table[0])){
                 pssi->pssi_index = off;
                 return 0;
-        }                
+        }
         return -ENOENT;
 }
 
 static void *
-ptllnd_stats_seq_start (struct seq_file *s, loff_t *pos) 
+ptllnd_stats_seq_start (struct seq_file *s, loff_t *pos)
 {
         ptllnd_stats_seq_iterator_t *pssi;
         int                         rc;
-        
+
         PORTAL_ALLOC(pssi, sizeof(*pssi));
         if (pssi == NULL)
                 return NULL;
@@ -81,7 +76,7 @@ ptllnd_stats_seq_start (struct seq_file *s, loff_t *pos)
         rc = ptllnd_stats_seq_seek(pssi, *pos);
         if (rc == 0)
                 return pssi;
-        
+
         PORTAL_FREE(pssi, sizeof(*pssi));
         return NULL;
 }
@@ -90,7 +85,7 @@ static void
 ptllnd_stats_seq_stop (struct seq_file *s, void *iter)
 {
         ptllnd_stats_seq_iterator_t  *pssi = iter;
-        
+
         if (pssi != NULL)
                 PORTAL_FREE(pssi, sizeof(*pssi));
 }
@@ -107,21 +102,21 @@ ptllnd_stats_seq_next (struct seq_file *s, void *iter, loff_t *pos)
                 PORTAL_FREE(pssi, sizeof(*pssi));
                 return NULL;
         }
-        
+
         *pos = next;
         return pssi;
 }
 
-static int 
+static int
 ptllnd_stats_seq_show (struct seq_file *s, void *iter)
 {
         ptllnd_stats_seq_iterator_t *pssi = iter;
-      
+
         seq_printf(s,"%02d %-40s %d\n",
                 (int)pssi->pssi_index,
                 stats_name_table[pssi->pssi_index],
                 ((int*)&kptllnd_stats)[pssi->pssi_index]);
-                
+
         return 0;
 }
 
@@ -138,13 +133,13 @@ ptllnd_stats_seq_open(struct inode *inode, struct file *file)
         struct proc_dir_entry *dp = PDE(inode);
         struct seq_file       *sf;
         int                    rc;
-        
+
         rc = seq_open(file, &ptllnd_stats_sops);
         if (rc == 0) {
                 sf = file->private_data;
                 sf->private = dp->data;
         }
-        
+
         return rc;
 }
 
@@ -156,7 +151,7 @@ static struct file_operations ptllnd_stats_fops = {
         .release = seq_release,
 };
 
-void 
+void
 kptllnd_proc_init(void)
 {
         struct proc_dir_entry *stats;
@@ -167,9 +162,9 @@ kptllnd_proc_init(void)
                 CERROR("couldn't create proc entry %s\n", LNET_PTLLND_PROC_STATS);
                 return;
         }
-        
+
         stats->proc_fops = &ptllnd_stats_fops;
-        stats->data = NULL;        
+        stats->data = NULL;
 }
 
 void

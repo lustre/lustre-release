@@ -1,4 +1,22 @@
-#include "ptllnd.h"
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2005 Cluster File Systems, Inc. All rights reserved.
+ *   Author: PJ Kirner <pjkirner@clusterfs.com>
+ *
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
+ *
+ *   This file is confidential source code owned by Cluster File Systems.
+ *   No viewing, modification, compilation, redistribution, or any other
+ *   form of use is permitted except through a signed license agreement.
+ *
+ *   If you have not signed such an agreement, then you have no rights to
+ *   this file.  Please destroy it immediately and contact CFS.
+ *
+ */
+
+ #include "ptllnd.h"
 
 kptl_rx_t*
 kptllnd_rx_alloc(
@@ -852,7 +870,7 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
         kptl_peer_t  *peer = rx->rx_peer;
         kptl_msg_t   *msg = rx->rx_msg;
         int returned_credits = msg->ptlm_credits;
-        
+
         PJK_UT_MSG(">>> rx=%p\n",rx);
 
         STAT_UPDATE(kps_rx_released);
