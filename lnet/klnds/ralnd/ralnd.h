@@ -51,7 +51,7 @@
 #include <net/sock.h>
 #include <linux/in.h>
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>

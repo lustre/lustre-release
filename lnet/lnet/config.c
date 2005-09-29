@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
 typedef struct {                                /* tmp struct for parsing routes */
@@ -113,7 +113,7 @@ lnet_net_unique(__u32 net, struct list_head *nilist)
         list_for_each (tmp, nilist) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (PTL_NIDNET(ni->ni_nid) == net)
+                if (LNET_NIDNET(ni->ni_nid) == net)
                         return 0;
         }
         
@@ -131,7 +131,7 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
                 return NULL;
         }
         
-        PORTAL_ALLOC(ni, sizeof(*ni));
+        LIBCFS_ALLOC(ni, sizeof(*ni));
         if (ni == NULL) {
                 CERROR("Out of memory creating network %s\n",
                        libcfs_net2str(net));
@@ -142,7 +142,7 @@ lnet_new_ni(__u32 net, struct list_head *nilist)
         memset(ni, 0, sizeof(*ni));
 
         /* LND will fill in the address part of the NID */
-        ni->ni_nid = PTL_MKNID(net, 0);
+        ni->ni_nid = LNET_MKNID(net, 0);
         CFS_INIT_LIST_HEAD(&ni->ni_txq);
 
         list_add_tail(&ni->ni_list, nilist);
@@ -165,7 +165,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 		return -EINVAL;
 	}
 
-        PORTAL_ALLOC(tokens, tokensize);
+        LIBCFS_ALLOC(tokens, tokensize);
         if (tokens == NULL) {
                 CERROR("Can't allocate net tokens\n");
 		return -ENOMEM;
@@ -177,7 +177,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 	str = tokens;
         
         /* Add in the loopback network */
-        ni = lnet_new_ni(PTL_MKNET(LOLND, 0), nilist);
+        ni = lnet_new_ni(LNET_MKNET(LOLND, 0), nilist);
         if (ni == NULL)
                 goto failed;
         
@@ -199,14 +199,14 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 				*comma++ = 0;
 			net = libcfs_str2net(lnet_trimwhite(str));
 			
-			if (net == PTL_NIDNET(LNET_NID_ANY)) {
+			if (net == LNET_NIDNET(LNET_NID_ANY)) {
                                 lnet_syntax("networks", networks, 
                                             str - tokens, strlen(str));
                                 LCONSOLE_ERROR("Unrecognised network type\n");
                                 goto failed;
                         }
 
-                        if (PTL_NETTYP(net) != LOLND && /* loopback is implicit */
+                        if (LNET_NETTYP(net) != LOLND && /* loopback is implicit */
                             lnet_new_ni(net, nilist) == NULL)
                                 goto failed;
 
@@ -216,7 +216,7 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
 
 		*bracket = 0;
 		net = libcfs_str2net(lnet_trimwhite(str));
-		if (net == PTL_NIDNET(LNET_NID_ANY)) {
+		if (net == LNET_NIDNET(LNET_NID_ANY)) {
                         lnet_syntax("networks", networks,
                                     str - tokens, strlen(str));
                         goto failed;
@@ -295,9 +295,9 @@ lnet_parse_networks(struct list_head *nilist, char *networks)
                 ni = list_entry(nilist->next, lnet_ni_t, ni_list);
                 
                 list_del(&ni->ni_list);
-                PORTAL_FREE(ni, sizeof(*ni));
+                LIBCFS_FREE(ni, sizeof(*ni));
         }
-	PORTAL_FREE(tokens, tokensize);
+	LIBCFS_FREE(tokens, tokensize);
         the_lnet.ln_network_tokens = NULL;
 
         return -EINVAL;
@@ -321,7 +321,7 @@ lnet_new_text_buf (int str_len)
 		return NULL;
 	}
 	
-	PORTAL_ALLOC(ptb, nob);
+	LIBCFS_ALLOC(ptb, nob);
 	if (ptb == NULL)
 		return NULL;
 
@@ -333,7 +333,7 @@ lnet_new_text_buf (int str_len)
 void
 lnet_free_text_buf (lnet_text_buf_t *ptb)
 {
-	PORTAL_FREE(ptb, ptb->ptb_size);
+	LIBCFS_FREE(ptb, ptb->ptb_size);
 	lnet_tbnob -= ptb->ptb_size;
 }
 
@@ -623,13 +623,13 @@ lnet_parse_route (char *str, int *im_a_router)
 
 			if (ntokens == 1) {
 				net = libcfs_str2net(ptb->ptb_text);
-				if (net == PTL_NIDNET(LNET_NID_ANY) ||
-                                    PTL_NETTYP(net) == LOLND)
+				if (net == LNET_NIDNET(LNET_NID_ANY) ||
+                                    LNET_NETTYP(net) == LOLND)
 					goto token_error;
 			} else {
 				nid = libcfs_str2nid(ptb->ptb_text);
 				if (nid == LNET_NID_ANY ||
-                                    PTL_NETTYP(PTL_NIDNET(nid)) == LOLND)
+                                    LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
 					goto token_error;
 			}
 		}
@@ -644,7 +644,7 @@ lnet_parse_route (char *str, int *im_a_router)
 	list_for_each (tmp1, &nets) {
 		ptb = list_entry(tmp1, lnet_text_buf_t, ptb_list);
 		net = libcfs_str2net(ptb->ptb_text);
-		LASSERT (net != PTL_NIDNET(LNET_NID_ANY));
+		LASSERT (net != LNET_NIDNET(LNET_NID_ANY));
 
 		list_for_each (tmp2, &gateways) {
 			ptb = list_entry(tmp2, lnet_text_buf_t, ptb_list);
@@ -731,7 +731,7 @@ lnet_parse_routes (char *routes, int *im_a_router)
 int
 lnet_set_ip_niaddr (lnet_ni_t *ni) 
 {
-        __u32  net = PTL_NIDNET(ni->ni_nid);
+        __u32  net = LNET_NIDNET(ni->ni_nid);
         char **names;
         int    n;
         __u32  ip;
@@ -767,7 +767,7 @@ lnet_set_ip_niaddr (lnet_ni_t *ni)
                         return -ENETDOWN;
                 }
                 
-                ni->ni_nid = PTL_MKNID(net, ip);
+                ni->ni_nid = LNET_MKNID(net, ip);
                 return 0;
         }
 
@@ -797,7 +797,7 @@ lnet_set_ip_niaddr (lnet_ni_t *ni)
                 }
 
                 libcfs_ipif_free_enumeration(names, n);
-                ni->ni_nid = PTL_MKNID(net, ip);
+                ni->ni_nid = LNET_MKNID(net, ip);
                 return 0;
         }
 

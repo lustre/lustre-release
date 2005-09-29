@@ -39,7 +39,7 @@ ptllnd_destroy_peer(ptllnd_peer_t *peer)
         LASSERT (peer->plp_closing);
         LASSERT (plni->plni_npeers > 0);
         plni->plni_npeers--;
-        PORTAL_FREE(peer, sizeof(*peer));
+        LIBCFS_FREE(peer, sizeof(*peer));
 }
 
 void
@@ -69,13 +69,13 @@ ptllnd_peer_t *
 ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 {
         ptllnd_ni_t       *plni = ni->ni_data;
-        unsigned int       hash = PTL_NIDADDR(nid) % plni->plni_peer_hash_size;
+        unsigned int       hash = LNET_NIDADDR(nid) % plni->plni_peer_hash_size;
         struct list_head  *tmp;
         ptllnd_peer_t     *plp;
         ptllnd_tx_t       *tx;
         int                rc;
 
-        LASSERT (PTL_NIDNET(nid) == PTL_NIDNET(ni->ni_nid));
+        LASSERT (LNET_NIDNET(nid) == LNET_NIDNET(ni->ni_nid));
 
         list_for_each(tmp, &plni->plni_peer_hash[hash]) {
                 plp = list_entry(tmp, ptllnd_peer_t, plp_list);
@@ -97,7 +97,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
                 return NULL;
         }
         
-        PORTAL_ALLOC(plp, sizeof(*plp));
+        LIBCFS_ALLOC(plp, sizeof(*plp));
         if (plp == NULL) {
                 CERROR("Can't allocate new peer %s\n",
                        libcfs_nid2str(nid));
@@ -107,7 +107,7 @@ ptllnd_find_peer(lnet_ni_t *ni, lnet_nid_t nid, int create)
 
         plp->plp_ni = ni;
         plp->plp_nid = nid;
-        plp->plp_ptlid.nid = PTL_NIDADDR(nid);
+        plp->plp_ptlid.nid = LNET_NIDADDR(nid);
         plp->plp_ptlid.pid = plni->plni_pid;
         plp->plp_max_credits =
         plp->plp_credits = 1; /* add more later when she gives me credits */
@@ -182,7 +182,7 @@ ptllnd_new_tx(ptllnd_peer_t *peer, int type, int payload_nob)
 
         LASSERT (msgsize <= peer->plp_max_msg_size);
 
-        PORTAL_ALLOC(tx, offsetof(ptllnd_tx_t, tx_msg) + msgsize);
+        LIBCFS_ALLOC(tx, offsetof(ptllnd_tx_t, tx_msg) + msgsize);
         
         if (tx == NULL) {
                 CERROR("Can't allocate msg type %d for %s\n",
@@ -266,7 +266,7 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
         ptllnd_abort_tx(tx, &tx->tx_bulkmdh);
 
         if (tx->tx_niov > 0) {
-                PORTAL_FREE(tx->tx_iov, tx->tx_niov * sizeof(*tx->tx_iov));
+                LIBCFS_FREE(tx->tx_iov, tx->tx_niov * sizeof(*tx->tx_iov));
                 tx->tx_niov = 0;
         }
 
@@ -284,7 +284,7 @@ ptllnd_tx_done(ptllnd_tx_t *tx)
 
         LASSERT (plni->plni_ntxs > 0);
         plni->plni_ntxs--;
-        PORTAL_FREE(tx, offsetof(ptllnd_tx_t, tx_msg) + tx->tx_msgsize);
+        LIBCFS_FREE(tx, offsetof(ptllnd_tx_t, tx_msg) + tx->tx_msgsize);
 }
 
 void
@@ -323,7 +323,7 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
         }
 
         for (;;) {
-                PORTAL_ALLOC(piov, niov * sizeof(*piov));
+                LIBCFS_ALLOC(piov, niov * sizeof(*piov));
                 if (piov == NULL)
                         return -ENOMEM;
 
@@ -352,7 +352,7 @@ ptllnd_set_txiov(ptllnd_tx_t *tx,
                 /* Dang! The piov I allocated was too big and it's a drag to
                  * have to maintain separate 'allocated' and 'used' sizes, so
                  * I'll just do it again; NB this doesn't happen normally... */
-                PORTAL_FREE(piov, niov * sizeof(*piov));
+                LIBCFS_FREE(piov, niov * sizeof(*piov));
                 niov = npiov;
         }
 }
@@ -785,7 +785,7 @@ ptllnd_rx_done(ptllnd_rx_t *rx)
         ptllnd_check_sends(rx->rx_peer);
         
         if (rx->rx_msg != (kptl_msg_t *)rx->rx_space)
-                PORTAL_FREE(rx, offsetof(ptllnd_rx_t, rx_space[rx->rx_nob]));
+                LIBCFS_FREE(rx, offsetof(ptllnd_rx_t, rx_space[rx->rx_nob]));
 
         LASSERT (plni->plni_nrxs > 0);
         plni->plni_nrxs--;
@@ -802,7 +802,7 @@ ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
 
         LASSERT (stackrx->rx_msg != (kptl_msg_t *)stackrx->rx_space);
         
-        PORTAL_ALLOC(heaprx, offsetof(ptllnd_rx_t, rx_space[stackrx->rx_nob]));
+        LIBCFS_ALLOC(heaprx, offsetof(ptllnd_rx_t, rx_space[stackrx->rx_nob]));
         if (heaprx == NULL)
                 return -ENOMEM;
 

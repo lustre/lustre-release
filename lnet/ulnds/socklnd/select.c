@@ -25,7 +25,7 @@
  *  io events through the select system call.
  */
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #ifdef sun
 #include <sys/filio.h>

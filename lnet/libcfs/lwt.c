@@ -39,7 +39,7 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 
@@ -202,7 +202,7 @@ lwt_init ()
 				return (-ENOMEM);
 			}
 
-                        PORTAL_ALLOC(lwtp, sizeof (*lwtp));
+                        LIBCFS_ALLOC(lwtp, sizeof (*lwtp));
 			if (lwtp == NULL) {
 				CERROR ("Can't allocate lwtp\n");
                                 __free_page(page);
@@ -253,7 +253,7 @@ lwt_fini ()
                         }
                         
                         __free_page (lwtp->lwtp_page);
-                        PORTAL_FREE (lwtp, sizeof (*lwtp));
+                        LIBCFS_FREE (lwtp, sizeof (*lwtp));
                 }
 }
 

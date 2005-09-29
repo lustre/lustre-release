@@ -1,4 +1,4 @@
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
@@ -28,21 +28,21 @@ libcfs_blockallsigs ()
 	SIGNAL_MASK_UNLOCK(current, flags);
 }
 
-int portal_ioctl_getdata(char *buf, char *end, void *arg)
+int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 {
-        struct portal_ioctl_hdr *hdr;
-        struct portal_ioctl_data *data;
+        struct libcfs_ioctl_hdr   *hdr;
+        struct libcfs_ioctl_data  *data;
         int err;
         ENTRY;
 
-        hdr = (struct portal_ioctl_hdr *)buf;
-        data = (struct portal_ioctl_data *)buf;
+        hdr = (struct libcfs_ioctl_hdr *)buf;
+        data = (struct libcfs_ioctl_data *)buf;
 
         err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
         if (err)
                 RETURN(err);
 
-        if (hdr->ioc_version != PORTAL_IOCTL_VERSION) {
+        if (hdr->ioc_version != LIBCFS_IOCTL_VERSION) {
                 CERROR("PORTALS: version mismatch kernel vs application\n");
                 RETURN(-EINVAL);
         }
@@ -53,7 +53,7 @@ int portal_ioctl_getdata(char *buf, char *end, void *arg)
         }
 
 
-        if (hdr->ioc_len < sizeof(struct portal_ioctl_data)) {
+        if (hdr->ioc_len < sizeof(struct libcfs_ioctl_data)) {
                 CERROR("PORTALS: user buffer too small for ioctl\n");
                 RETURN(-EINVAL);
         }
@@ -62,7 +62,7 @@ int portal_ioctl_getdata(char *buf, char *end, void *arg)
         if (err)
                 RETURN(err);
 
-        if (portal_ioctl_is_invalid(data)) {
+        if (libcfs_ioctl_is_invalid(data)) {
                 CERROR("PORTALS: ioctl not correctly formatted\n");
                 RETURN(-EINVAL);
         }
@@ -82,12 +82,12 @@ extern struct cfs_psdev_ops          libcfs_psdev_ops;
 static int 
 libcfs_psdev_open(struct inode * inode, struct file * file)
 { 
-	struct portals_device_userstate **pdu = NULL;
+	struct libcfs_device_userstate **pdu = NULL;
 	int    rc = 0;
 
 	if (!inode) 
 		return (-EINVAL);
-	pdu = (struct portals_device_userstate **)&file->private_data;
+	pdu = (struct libcfs_device_userstate **)&file->private_data;
 	if (libcfs_psdev_ops.p_open != NULL)
 		rc = libcfs_psdev_ops.p_open(0, (void *)pdu);
 	else
@@ -99,7 +99,7 @@ libcfs_psdev_open(struct inode * inode, struct file * file)
 static int 
 libcfs_psdev_release(struct inode * inode, struct file * file)
 {
-	struct portals_device_userstate *pdu;
+	struct libcfs_device_userstate *pdu;
 	int    rc = 0;
 
 	if (!inode) 
@@ -122,9 +122,9 @@ libcfs_ioctl(struct inode *inode, struct file *file,
 	if (current->fsuid != 0) 
 		return -EACCES; 
 	
-	if ( _IOC_TYPE(cmd) != IOC_PORTAL_TYPE || 
-	     _IOC_NR(cmd) < IOC_PORTAL_MIN_NR  || 
-	     _IOC_NR(cmd) > IOC_PORTAL_MAX_NR ) { 
+	if ( _IOC_TYPE(cmd) != IOC_LIBCFS_TYPE || 
+	     _IOC_NR(cmd) < IOC_LIBCFS_MIN_NR  || 
+	     _IOC_NR(cmd) > IOC_LIBCFS_MAX_NR ) { 
 		CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n", 
 		       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd)); 
 		return (-EINVAL); 
@@ -132,12 +132,12 @@ libcfs_ioctl(struct inode *inode, struct file *file,
 	
 	/* Handle platform-dependent IOC requests */
 	switch (cmd) { 
-	case IOC_PORTAL_PANIC: 
+	case IOC_LIBCFS_PANIC: 
 		if (!capable (CAP_SYS_BOOT)) 
 			return (-EPERM); 
 		panic("debugctl-invoked panic"); 
 		return (0);
-	case IOC_PORTAL_MEMHOG: 
+	case IOC_LIBCFS_MEMHOG: 
 		if (!capable (CAP_SYS_ADMIN)) 
 			return -EPERM;
 		/* go thought */

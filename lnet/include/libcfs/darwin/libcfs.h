@@ -155,7 +155,7 @@ __entry_nesting(&__cdd);
 /* ENTRY_NESTING_SUPPORT */
 #endif
 
-#define LUSTRE_PTL_PID          12345
+#define LUSTRE_LNET_PID          12345
 
 #define _XNU_LIBCFS_H
 

@@ -250,7 +250,7 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
         RAP_RETURN     rrc;
 
         LASSERT (!in_interrupt());
-        PORTAL_ALLOC(conn, sizeof(*conn));
+        LIBCFS_ALLOC(conn, sizeof(*conn));
 
         if (conn == NULL)
                 return -ENOMEM;
@@ -275,7 +275,7 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
                            &conn->rac_rihandle);
         if (rrc != RAP_SUCCESS) {
                 CERROR("RapkCreateRi failed: %d\n", rrc);
-                PORTAL_FREE(conn, sizeof(*conn));
+                LIBCFS_FREE(conn, sizeof(*conn));
                 return -ENETDOWN;
         }
 
@@ -306,7 +306,7 @@ kranal_destroy_conn(kra_conn_t *conn)
         if (conn->rac_peer != NULL)
                 kranal_peer_decref(conn->rac_peer);
 
-        PORTAL_FREE(conn, sizeof(*conn));
+        LIBCFS_FREE(conn, sizeof(*conn));
         atomic_dec(&kranal_data.kra_nconns);
 }
 
@@ -782,7 +782,7 @@ void
 kranal_free_acceptsock (kra_acceptsock_t *ras)
 {
         libcfs_sock_release(ras->ras_sock);
-        PORTAL_FREE(ras, sizeof(*ras));
+        LIBCFS_FREE(ras, sizeof(*ras));
 }
 
 int
@@ -797,7 +797,7 @@ kranal_accept (lnet_ni_t *ni, struct socket *sock)
         rc = libcfs_sock_getaddr(sock, 1, &peer_ip, &peer_port);
         LASSERT (rc == 0);                      /* we succeeded before */
 
-        PORTAL_ALLOC(ras, sizeof(*ras));
+        LIBCFS_ALLOC(ras, sizeof(*ras));
         if (ras == NULL) {
                 CERROR("ENOMEM allocating connection request from "
                        "%u.%u.%u.%u\n", HIPQUAD(peer_ip));
@@ -823,7 +823,7 @@ kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
 
         LASSERT (nid != LNET_NID_ANY);
 
-        PORTAL_ALLOC(peer, sizeof(*peer));
+        LIBCFS_ALLOC(peer, sizeof(*peer));
         if (peer == NULL)
                 return -ENOMEM;
 
@@ -845,7 +845,7 @@ kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
                 /* shutdown has started already */
                 write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 
-                PORTAL_FREE(peer, sizeof(*peer));
+                LIBCFS_FREE(peer, sizeof(*peer));
                 CERROR("Can't create peer: network shutdown\n");
                 return -ESHUTDOWN;
         }
@@ -874,7 +874,7 @@ kranal_destroy_peer (kra_peer_t *peer)
         LASSERT (list_empty(&peer->rap_tx_queue));
         LASSERT (list_empty(&peer->rap_connd_list));
 
-        PORTAL_FREE(peer, sizeof(*peer));
+        LIBCFS_FREE(peer, sizeof(*peer));
 
         /* NB a peer's connections keep a reference on their peer until
          * they are destroyed, so we can be assured that _all_ state to do
@@ -1168,13 +1168,13 @@ kranal_close_matching_conns (lnet_nid_t nid)
 int
 kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-        struct portal_ioctl_data *data = arg;
+        struct libcfs_ioctl_data *data = arg;
         int                       rc = -EINVAL;
 
         LASSERT (ni == kranal_data.kra_ni);
 
         switch(cmd) {
-        case IOC_PORTAL_GET_PEER: {
+        case IOC_LIBCFS_GET_PEER: {
                 lnet_nid_t   nid = 0;
                 __u32       ip = 0;
                 int         port = 0;
@@ -1188,17 +1188,17 @@ kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 data->ioc_u32[1] = port;
                 break;
         }
-        case IOC_PORTAL_ADD_PEER: {
+        case IOC_LIBCFS_ADD_PEER: {
                 rc = kranal_add_persistent_peer(data->ioc_nid,
                                                 data->ioc_u32[0], /* IP */
                                                 data->ioc_u32[1]); /* port */
                 break;
         }
-        case IOC_PORTAL_DEL_PEER: {
+        case IOC_LIBCFS_DEL_PEER: {
                 rc = kranal_del_peer(data->ioc_nid);
                 break;
         }
-        case IOC_PORTAL_GET_CONN: {
+        case IOC_LIBCFS_GET_CONN: {
                 kra_conn_t *conn = kranal_get_conn_by_idx(data->ioc_count);
 
                 if (conn == NULL)
@@ -1211,16 +1211,16 @@ kranal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 }
                 break;
         }
-        case IOC_PORTAL_CLOSE_CONNECTION: {
+        case IOC_LIBCFS_CLOSE_CONNECTION: {
                 rc = kranal_close_matching_conns(data->ioc_nid);
                 break;
         }
-        case IOC_PORTAL_REGISTER_MYNID: {
+        case IOC_LIBCFS_REGISTER_MYNID: {
                 /* Ignore if this is a noop */
                 if (data->ioc_nid == ni->ni_nid) {
                         rc = 0;
                 } else {
-                        CERROR("obsolete IOC_PORTAL_REGISTER_MYNID: %s(%s)\n",
+                        CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID: %s(%s)\n",
                                libcfs_nid2str(data->ioc_nid),
                                libcfs_nid2str(ni->ni_nid));
                         rc = -EINVAL;
@@ -1241,8 +1241,8 @@ kranal_free_txdescs(struct list_head *freelist)
                 tx = list_entry(freelist->next, kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
-                PORTAL_FREE(tx->tx_phys, PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
-                PORTAL_FREE(tx, sizeof(*tx));
+                LIBCFS_FREE(tx->tx_phys, PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
+                LIBCFS_FREE(tx, sizeof(*tx));
         }
 }
 
@@ -1257,19 +1257,19 @@ kranal_alloc_txdescs(struct list_head *freelist, int n)
 
         for (i = 0; i < n; i++) {
 
-                PORTAL_ALLOC(tx, sizeof(*tx));
+                LIBCFS_ALLOC(tx, sizeof(*tx));
                 if (tx == NULL) {
                         CERROR("Can't allocate tx[%d]\n", i);
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
 
-                PORTAL_ALLOC(tx->tx_phys,
+                LIBCFS_ALLOC(tx->tx_phys,
                              PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
                 if (tx->tx_phys == NULL) {
                         CERROR("Can't allocate tx[%d]->tx_phys\n", i);
 
-                        PORTAL_FREE(tx, sizeof(*tx));
+                        LIBCFS_FREE(tx, sizeof(*tx));
                         kranal_free_txdescs(freelist);
                         return -ENOMEM;
                 }
@@ -1445,7 +1445,7 @@ kranal_shutdown (lnet_ni_t *ni)
                 for (i = 0; i < kranal_data.kra_peer_hash_size; i++)
                         LASSERT (list_empty(&kranal_data.kra_peers[i]));
 
-                PORTAL_FREE(kranal_data.kra_peers,
+                LIBCFS_FREE(kranal_data.kra_peers,
                             sizeof (struct list_head) *
                             kranal_data.kra_peer_hash_size);
         }
@@ -1455,7 +1455,7 @@ kranal_shutdown (lnet_ni_t *ni)
                 for (i = 0; i < kranal_data.kra_conn_hash_size; i++)
                         LASSERT (list_empty(&kranal_data.kra_conns[i]));
 
-                PORTAL_FREE(kranal_data.kra_conns,
+                LIBCFS_FREE(kranal_data.kra_conns,
                             sizeof (struct list_head) *
                             kranal_data.kra_conn_hash_size);
         }
@@ -1548,7 +1548,7 @@ kranal_startup (lnet_ni_t *ni)
         PORTAL_MODULE_USE;
 
         kranal_data.kra_peer_hash_size = RANAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC(kranal_data.kra_peers,
+        LIBCFS_ALLOC(kranal_data.kra_peers,
                      sizeof(struct list_head) * kranal_data.kra_peer_hash_size);
         if (kranal_data.kra_peers == NULL)
                 goto failed;
@@ -1557,7 +1557,7 @@ kranal_startup (lnet_ni_t *ni)
                 INIT_LIST_HEAD(&kranal_data.kra_peers[i]);
 
         kranal_data.kra_conn_hash_size = RANAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC(kranal_data.kra_conns,
+        LIBCFS_ALLOC(kranal_data.kra_conns,
                      sizeof(struct list_head) * kranal_data.kra_conn_hash_size);
         if (kranal_data.kra_conns == NULL)
                 goto failed;

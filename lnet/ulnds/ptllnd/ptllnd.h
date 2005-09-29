@@ -17,7 +17,7 @@
  */
 
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include <lnet/lib-lnet.h>
 #include <lnet/ptllnd_wire.h>

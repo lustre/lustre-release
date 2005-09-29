@@ -43,7 +43,7 @@ lnet_router_proc_stats_read (char *page, char **start, off_t off,
         lnet_counters_t *ctrs;
         int              rc;
         
-        PORTAL_ALLOC(ctrs, sizeof(*ctrs));
+        LIBCFS_ALLOC(ctrs, sizeof(*ctrs));
         if (ctrs == NULL)
                 return -ENOMEM;
         
@@ -65,7 +65,7 @@ lnet_router_proc_stats_read (char *page, char **start, off_t off,
                      ctrs->send_length, ctrs->recv_length,
                      ctrs->route_length, ctrs->drop_length);
 
-        PORTAL_FREE(ctrs, sizeof(*ctrs));
+        LIBCFS_FREE(ctrs, sizeof(*ctrs));
         return rc;
 }
 
@@ -160,7 +160,7 @@ lnet_router_seq_start (struct seq_file *s, loff_t *pos)
         lnet_route_seq_iterator_t *lrsi;
         int                        rc;
         
-        PORTAL_ALLOC(lrsi, sizeof(*lrsi));
+        LIBCFS_ALLOC(lrsi, sizeof(*lrsi));
         if (lrsi == NULL)
                 return NULL;
 
@@ -169,7 +169,7 @@ lnet_router_seq_start (struct seq_file *s, loff_t *pos)
         if (rc == 0)
                 return lrsi;
         
-        PORTAL_FREE(lrsi, sizeof(*lrsi));
+        LIBCFS_FREE(lrsi, sizeof(*lrsi));
         return NULL;
 }
 
@@ -179,7 +179,7 @@ lnet_router_seq_stop (struct seq_file *s, void *iter)
         lnet_route_seq_iterator_t  *lrsi = iter;
         
         if (lrsi != NULL)
-                PORTAL_FREE(lrsi, sizeof(*lrsi));
+                LIBCFS_FREE(lrsi, sizeof(*lrsi));
 }
 
 static void *
@@ -191,7 +191,7 @@ lnet_router_seq_next (struct seq_file *s, void *iter, loff_t *pos)
 
         rc = lnet_router_seq_seek(lrsi, next);
         if (rc != 0) {
-                PORTAL_FREE(lrsi, sizeof(*lrsi));
+                LIBCFS_FREE(lrsi, sizeof(*lrsi));
                 return NULL;
         }
         
@@ -338,7 +338,7 @@ lnet_peer_seq_start (struct seq_file *s, loff_t *pos)
         lnet_peer_seq_iterator_t *lpsi;
         int                        rc;
         
-        PORTAL_ALLOC(lpsi, sizeof(*lpsi));
+        LIBCFS_ALLOC(lpsi, sizeof(*lpsi));
         if (lpsi == NULL)
                 return NULL;
 
@@ -348,7 +348,7 @@ lnet_peer_seq_start (struct seq_file *s, loff_t *pos)
         if (rc == 0)
                 return lpsi;
         
-        PORTAL_FREE(lpsi, sizeof(*lpsi));
+        LIBCFS_FREE(lpsi, sizeof(*lpsi));
         return NULL;
 }
 
@@ -358,7 +358,7 @@ lnet_peer_seq_stop (struct seq_file *s, void *iter)
         lnet_peer_seq_iterator_t  *lpsi = iter;
         
         if (lpsi != NULL)
-                PORTAL_FREE(lpsi, sizeof(*lpsi));
+                LIBCFS_FREE(lpsi, sizeof(*lpsi));
 }
 
 static void *
@@ -370,7 +370,7 @@ lnet_peer_seq_next (struct seq_file *s, void *iter, loff_t *pos)
 
         rc = lnet_peer_seq_seek(lpsi, next);
         if (rc != 0) {
-                PORTAL_FREE(lpsi, sizeof(*lpsi));
+                LIBCFS_FREE(lpsi, sizeof(*lpsi));
                 return NULL;
         }
         
@@ -503,7 +503,7 @@ lnet_buffer_seq_start (struct seq_file *s, loff_t *pos)
         lnet_buffer_seq_iterator_t *lbsi;
         int                        rc;
         
-        PORTAL_ALLOC(lbsi, sizeof(*lbsi));
+        LIBCFS_ALLOC(lbsi, sizeof(*lbsi));
         if (lbsi == NULL)
                 return NULL;
 
@@ -512,7 +512,7 @@ lnet_buffer_seq_start (struct seq_file *s, loff_t *pos)
         if (rc == 0)
                 return lbsi;
         
-        PORTAL_FREE(lbsi, sizeof(*lbsi));
+        LIBCFS_FREE(lbsi, sizeof(*lbsi));
         return NULL;
 }
 
@@ -522,7 +522,7 @@ lnet_buffer_seq_stop (struct seq_file *s, void *iter)
         lnet_buffer_seq_iterator_t  *lbsi = iter;
         
         if (lbsi != NULL)
-                PORTAL_FREE(lbsi, sizeof(*lbsi));
+                LIBCFS_FREE(lbsi, sizeof(*lbsi));
 }
 
 static void *
@@ -534,7 +534,7 @@ lnet_buffer_seq_next (struct seq_file *s, void *iter, loff_t *pos)
 
         rc = lnet_buffer_seq_seek(lbsi, next);
         if (rc != 0) {
-                PORTAL_FREE(lbsi, sizeof(*lbsi));
+                LIBCFS_FREE(lbsi, sizeof(*lbsi));
                 return NULL;
         }
         
@@ -653,7 +653,7 @@ lnet_ni_seq_start (struct seq_file *s, loff_t *pos)
         lnet_ni_seq_iterator_t *lnsi;
         int                     rc;
         
-        PORTAL_ALLOC(lnsi, sizeof(*lnsi));
+        LIBCFS_ALLOC(lnsi, sizeof(*lnsi));
         if (lnsi == NULL)
                 return NULL;
 
@@ -662,7 +662,7 @@ lnet_ni_seq_start (struct seq_file *s, loff_t *pos)
         if (rc == 0)
                 return lnsi;
         
-        PORTAL_FREE(lnsi, sizeof(*lnsi));
+        LIBCFS_FREE(lnsi, sizeof(*lnsi));
         return NULL;
 }
 
@@ -672,7 +672,7 @@ lnet_ni_seq_stop (struct seq_file *s, void *iter)
         lnet_ni_seq_iterator_t  *lnsi = iter;
         
         if (lnsi != NULL)
-                PORTAL_FREE(lnsi, sizeof(*lnsi));
+                LIBCFS_FREE(lnsi, sizeof(*lnsi));
 }
 
 static void *
@@ -684,7 +684,7 @@ lnet_ni_seq_next (struct seq_file *s, void *iter, loff_t *pos)
 
         rc = lnet_ni_seq_seek(lnsi, next);
         if (rc != 0) {
-                PORTAL_FREE(lnsi, sizeof(*lnsi));
+                LIBCFS_FREE(lnsi, sizeof(*lnsi));
                 return NULL;
         }
         

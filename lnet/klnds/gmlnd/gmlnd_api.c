@@ -40,16 +40,16 @@ gmnal_ni_t *the_gmni = NULL;
 int
 gmnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-	struct portal_ioctl_data *data = arg;
+	struct libcfs_ioctl_data *data = arg;
 
 	switch (cmd) {
-	case IOC_PORTAL_REGISTER_MYNID:
+	case IOC_LIBCFS_REGISTER_MYNID:
 		if (data->ioc_nid == ni->ni_nid)
 			return 0;
 		
-		LASSERT (PTL_NIDNET(data->ioc_nid) == PTL_NIDNET(ni->ni_nid));
+		LASSERT (LNET_NIDNET(data->ioc_nid) == LNET_NIDNET(ni->ni_nid));
 
-		CERROR("obsolete IOC_PORTAL_REGISTER_MYNID for %s(%s)\n",
+		CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID for %s(%s)\n",
 		       libcfs_nid2str(data->ioc_nid),
 		       libcfs_nid2str(ni->ni_nid));
 		return 0;
@@ -82,7 +82,7 @@ gmnal_set_local_nid (gmnal_ni_t *gmni)
         
 	CDEBUG(D_NET, "Global node id is [%u]\n", global_gmid);
 
-        ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), global_gmid);
+        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), global_gmid);
         return 1;
 }
 
@@ -108,7 +108,7 @@ gmnal_shutdown(lnet_ni_t *ni)
 	gmnal_free_txs(gmni);
 	gmnal_free_rxs(gmni);
 
-	PORTAL_FREE(gmni, sizeof(*gmni));
+	LIBCFS_FREE(gmni, sizeof(*gmni));
 
         the_gmni = NULL;
 }
@@ -131,7 +131,7 @@ gmnal_startup(lnet_ni_t *ni)
                 return -EINVAL;
         }
 
-	PORTAL_ALLOC(gmni, sizeof(*gmni));
+	LIBCFS_ALLOC(gmni, sizeof(*gmni));
 	if (gmni == NULL) {
 		CERROR("can't allocate gmni\n");
                 return -ENOMEM;
@@ -240,7 +240,7 @@ gmnal_startup(lnet_ni_t *ni)
         gmnal_free_txs(gmni);
         gmnal_free_rxs(gmni);
 
-        PORTAL_FREE(gmni, sizeof(*gmni));
+        LIBCFS_FREE(gmni, sizeof(*gmni));
 
         return -EIO;
 }

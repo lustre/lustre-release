@@ -470,7 +470,7 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
                         return;
                 }
 
-                rc = kranal_add_persistent_peer(nid, PTL_NIDADDR(nid),
+                rc = kranal_add_persistent_peer(nid, LNET_NIDADDR(nid),
                                                 lnet_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",

@@ -24,7 +24,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #ifdef __KERNEL__
 #include <libcfs/kp30.h>
@@ -41,7 +41,7 @@
 #endif
 
 #ifdef __KERNEL__
-unsigned int libcfs_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
+unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
 EXPORT_SYMBOL(libcfs_subsystem_debug);
 
 unsigned int libcfs_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
@@ -145,7 +145,7 @@ static struct notifier_block lustre_panic_notifier = {
 #endif
 
 
-int portals_debug_init(unsigned long bufsize)
+int libcfs_debug_init(unsigned long bufsize)
 {
         cfs_waitq_init(&debug_ctlwq);
 #ifdef PORTALS_DUMP_ON_PANIC
@@ -156,7 +156,7 @@ int portals_debug_init(unsigned long bufsize)
         return tracefile_init();
 }
 
-int portals_debug_cleanup(void)
+int libcfs_debug_cleanup(void)
 {
         tracefile_exit();
 #ifdef PORTALS_DUMP_ON_PANIC
@@ -165,17 +165,17 @@ int portals_debug_cleanup(void)
         return 0;
 }
 
-int portals_debug_clear_buffer(void)
+int libcfs_debug_clear_buffer(void)
 {
         trace_flush_pages();
         return 0;
 }
 
-/* Debug markers, although printed by S_PORTALS
+/* Debug markers, although printed by S_LNET
  * should not be be marked as such. */
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_UNDEFINED
-int portals_debug_mark_buffer(char *text)
+int libcfs_debug_mark_buffer(char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
         CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);
@@ -184,9 +184,9 @@ int portals_debug_mark_buffer(char *text)
         return 0;
 }
 #undef DEBUG_SUBSYSTEM
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
-void portals_debug_set_level(unsigned int debug_level)
+void libcfs_debug_set_level(unsigned int debug_level)
 {
         printk(KERN_WARNING "Lustre: Setting portals debug level to %08x\n",
                debug_level);
@@ -194,7 +194,7 @@ void portals_debug_set_level(unsigned int debug_level)
 }
 
 EXPORT_SYMBOL(libcfs_debug_dumplog);
-EXPORT_SYMBOL(portals_debug_set_level);
+EXPORT_SYMBOL(libcfs_debug_set_level);
 
 
 #else /* !__KERNEL__ */
@@ -226,34 +226,29 @@ void libcfs_debug_dumplog(void)
 }
 
 
-int portals_debug_init(unsigned long bufsize)
+int libcfs_debug_init(unsigned long bufsize)
 { 
         debug_file_fd = stdout;
         return 0;
 }
 
-int portals_debug_cleanup(void)
+int libcfs_debug_cleanup(void)
 {
         return 0; //close(portals_debug_fd);
 }
 
-int portals_debug_clear_buffer(void)
+int libcfs_debug_clear_buffer(void)
 {
         return 0;
 }
 
-int portals_debug_mark_buffer(char *text)
+int libcfs_debug_mark_buffer(char *text)
 {
 
         fprintf(debug_file_fd, "*******************************************************************************\n");
         fprintf(debug_file_fd, "DEBUG MARKER: %s\n", text);
         fprintf(debug_file_fd, "*******************************************************************************\n");
 
-        return 0;
-}
-
-int portals_debug_copy_to_user(char *buf, unsigned long len)
-{
         return 0;
 }
 

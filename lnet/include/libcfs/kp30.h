@@ -4,7 +4,7 @@
 #ifndef __LIBCFS_KP30_H__
 #define __LIBCFS_KP30_H__
 
-#define PORTAL_DEBUG
+#define LIBCFS_DEBUG
 #include <libcfs/libcfs.h>
 
 #if defined(__linux__)
@@ -21,7 +21,7 @@
 
 #ifdef __KERNEL__
 
-#ifdef PORTAL_DEBUG
+#ifdef LIBCFS_DEBUG
 #define LASSERT(e) ((e) ? 0 : libcfs_assertion_failed( #e , __FILE__,  \
                                                       __FUNCTION__, __LINE__))
 #define LASSERTF(cond, fmt...)                                                \
@@ -39,46 +39,46 @@
 #define LASSERTF(cond, fmt...) do { } while (0)
 #endif
 
-/* LBUG_WITH_LOC defined in portals/<os>/kp30.h */
+/* LBUG_WITH_LOC defined in lnet/<os>/kp30.h */
 #define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
 
 /*
  * Memory
  */
-#ifdef PORTAL_DEBUG
+#ifdef LIBCFS_DEBUG
 extern atomic_t libcfs_kmemory;
 
-# define portal_kmem_inc(ptr, size)                                           \
-do {                                                                          \
-        atomic_add(size, &libcfs_kmemory);                                    \
+# define libcfs_kmem_inc(ptr, size)             \
+do {                                            \
+        atomic_add(size, &libcfs_kmemory);      \
 } while (0)
 
-# define portal_kmem_dec(ptr, size) do {                                      \
-        atomic_sub(size, &libcfs_kmemory);                                    \
+# define libcfs_kmem_dec(ptr, size) do {        \
+        atomic_sub(size, &libcfs_kmemory);      \
 } while (0)
 
 #else
-# define portal_kmem_inc(ptr, size) do {} while (0)
-# define portal_kmem_dec(ptr, size) do {} while (0)
-#endif /* PORTAL_DEBUG */
+# define libcfs_kmem_inc(ptr, size) do {} while (0)
+# define libcfs_kmem_dec(ptr, size) do {} while (0)
+#endif /* LIBCFS_DEBUG */
 
-#define PORTAL_VMALLOC_SIZE        16384
+#define LIBCFS_VMALLOC_SIZE        16384
 
-#define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
+#define LIBCFS_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT(!in_interrupt() ||                                        \
-               (size <= PORTAL_VMALLOC_SIZE && mask == CFS_ALLOC_ATOMIC));\
-        if ((size) > PORTAL_VMALLOC_SIZE)                                 \
+               (size <= LIBCFS_VMALLOC_SIZE && mask == CFS_ALLOC_ATOMIC));\
+        if ((size) > LIBCFS_VMALLOC_SIZE)                                 \
                 (ptr) = cfs_alloc_large(size);                            \
         else                                                              \
                 (ptr) = cfs_alloc((size), (mask));                        \
         if ((ptr) == NULL) {                                              \
-                CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
+                CERROR("LNET: out of memory at %s:%d (tried to alloc '"   \
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
-                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
+                CERROR("LNET: %d total bytes allocated by lnet\n",        \
                        atomic_read(&libcfs_kmemory));                     \
         } else {                                                          \
-                portal_kmem_inc((ptr), (size));                           \
+                libcfs_kmem_inc((ptr), (size));                           \
                 if (!((mask) & CFS_ALLOC_ZERO))                           \
                        memset((ptr), 0, (size));                          \
         }                                                                 \
@@ -86,25 +86,25 @@ do {                                                                      \
                (int)(size), (ptr), atomic_read (&libcfs_kmemory));        \
 } while (0)
 
-#define PORTAL_ALLOC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, CFS_ALLOC_IO)
+#define LIBCFS_ALLOC(ptr, size) \
+        LIBCFS_ALLOC_GFP(ptr, size, CFS_ALLOC_IO)
 
-#define PORTAL_ALLOC_ATOMIC(ptr, size) \
-        PORTAL_ALLOC_GFP(ptr, size, CFS_ALLOC_ATOMIC)
+#define LIBCFS_ALLOC_ATOMIC(ptr, size) \
+        LIBCFS_ALLOC_GFP(ptr, size, CFS_ALLOC_ATOMIC)
 
-#define PORTAL_FREE(ptr, size)                                          \
+#define LIBCFS_FREE(ptr, size)                                          \
 do {                                                                    \
         int s = (size);                                                 \
         if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
+                CERROR("LIBCFS: free NULL '" #ptr "' (%d bytes) at "    \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
-        if (s > PORTAL_VMALLOC_SIZE)                                    \
+        if (s > LIBCFS_VMALLOC_SIZE)                                    \
                 cfs_free_large(ptr);                                    \
         else                                                            \
                 cfs_free(ptr);                                          \
-        portal_kmem_dec((ptr), s);                                      \
+        libcfs_kmem_dec((ptr), s);                                      \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
                s, (ptr), atomic_read(&libcfs_kmemory));                 \
 } while (0)
@@ -168,21 +168,18 @@ void libcfs_debug_dumpstack(cfs_task_t *tsk);
 void libcfs_run_upcall(char **argv);
 void libcfs_run_lbug_upcall(char * file, const char *fn, const int line);
 void libcfs_debug_dumplog(void);
-int portals_debug_init(unsigned long bufsize);
-int portals_debug_cleanup(void);
-int portals_debug_clear_buffer(void);
-int portals_debug_mark_buffer(char *text);
-int portals_debug_set_daemon(unsigned int cmd, unsigned int length,
-                             char *file, unsigned int size);
-__s32 portals_debug_copy_to_user(char *buf, unsigned long len);
+int libcfs_debug_init(unsigned long bufsize);
+int libcfs_debug_cleanup(void);
+int libcfs_debug_clear_buffer(void);
+int libcfs_debug_mark_buffer(char *text);
 
-void portals_debug_set_level(unsigned int debug_level);
+void libcfs_debug_set_level(unsigned int debug_level);
 
 extern void libcfs_daemonize (char *name);
 extern void libcfs_blockallsigs (void);
 
 #else  /* !__KERNEL__ */
-# ifdef PORTAL_DEBUG
+# ifdef LIBCFS_DEBUG
 #  undef NDEBUG
 #  include <assert.h>
 #  define LASSERT(e)     assert(e)
@@ -198,8 +195,8 @@ do {                                                                           \
 # endif
 # define LBUG()   assert(0)
 # define printk(format, args...) printf (format, ## args)
-# define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
-# define PORTAL_FREE(a, b) do { free(a); } while (0);
+# define LIBCFS_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
+# define LIBCFS_FREE(a, b) do { free(a); } while (0);
 void libcfs_debug_dumplog(void);
 #endif
 
@@ -220,26 +217,26 @@ void libcfs_debug_dumplog(void);
 #define CLASSERT(cond) ({ switch(42) { case (cond): case 0: break; } })
 
 /* support decl needed both by kernel and liblustre */
-int        libcfs_isknown_lnd(int type);
-char      *libcfs_lnd2modname(int type);
-char      *libcfs_lnd2str(int type);
-int        libcfs_str2lnd(char *str);
-char      *libcfs_net2str(__u32 net);
-char      *libcfs_nid2str(lnet_nid_t nid);
-__u32      libcfs_str2net(char *str);
+int         libcfs_isknown_lnd(int type);
+char       *libcfs_lnd2modname(int type);
+char       *libcfs_lnd2str(int type);
+int         libcfs_str2lnd(char *str);
+char       *libcfs_net2str(__u32 net);
+char       *libcfs_nid2str(lnet_nid_t nid);
+__u32       libcfs_str2net(char *str);
 lnet_nid_t  libcfs_str2nid(char *str);
-int        libcfs_str2anynid(lnet_nid_t *nid, char *str);
-char      *libcfs_id2str(lnet_process_id_t id);
-void       libcfs_setnet0alias(int type);
+int         libcfs_str2anynid(lnet_nid_t *nid, char *str);
+char       *libcfs_id2str(lnet_process_id_t id);
+void        libcfs_setnet0alias(int type);
 
-/* how a lustre portals NID encodes net:address */
-#define PTL_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
-#define PTL_NIDNET(nid)       ((__u32)(((nid) >> 32)) & 0xffffffff)
-#define PTL_MKNID(net,addr)   ((((__u64)(net))<<32)|((__u64)(addr)))
+/* how an LNET NID encodes net:address */
+#define LNET_NIDADDR(nid)      ((__u32)((nid) & 0xffffffff))
+#define LNET_NIDNET(nid)       ((__u32)(((nid) >> 32)) & 0xffffffff)
+#define LNET_MKNID(net,addr)   ((((__u64)(net))<<32)|((__u64)(addr)))
 /* how net encodes type:number */
-#define PTL_NETNUM(net)       ((net) & 0xffff)
-#define PTL_NETTYP(net)       (((net) >> 16) & 0xffff)
-#define PTL_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
+#define LNET_NETNUM(net)       ((net) & 0xffff)
+#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
+#define LNET_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -251,10 +248,10 @@ void       libcfs_setnet0alias(int type);
  * All stuff about lwt are put in arch/kp30.h
  * -------------------------------------------------------------------- */
 
-struct portals_device_userstate
+struct libcfs_device_userstate
 {
-        int          pdu_memhog_pages;
-        cfs_page_t   *pdu_memhog_root_page;
+        int           ldu_memhog_pages;
+        cfs_page_t   *ldu_memhog_root_page;
 };
 
 #include <libcfs/portals_lib.h>
@@ -263,9 +260,9 @@ struct portals_device_userstate
  * USER LEVEL STUFF BELOW
  */
 
-#define PORTAL_IOCTL_VERSION 0x0001000a
+#define LIBCFS_IOCTL_VERSION 0x0001000a
 
-struct portal_ioctl_data {
+struct libcfs_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
 
@@ -291,29 +288,29 @@ struct portal_ioctl_data {
 };
 
 
-struct portal_ioctl_hdr {
+struct libcfs_ioctl_hdr {
         __u32 ioc_len;
         __u32 ioc_version;
 };
 
-struct portals_debug_ioctl_data
+struct libcfs_debug_ioctl_data
 {
-        struct portal_ioctl_hdr hdr;
+        struct libcfs_ioctl_hdr hdr;
         unsigned int subs;
         unsigned int debug;
 };
 
-#define PORTAL_IOC_INIT(data)                           \
+#define LIBCFS_IOC_INIT(data)                           \
 do {                                                    \
         memset(&data, 0, sizeof(data));                 \
-        data.ioc_version = PORTAL_IOCTL_VERSION;        \
+        data.ioc_version = LIBCFS_IOCTL_VERSION;        \
         data.ioc_len = sizeof(data);                    \
 } while (0)
 
 /* FIXME check conflict with lustre_lib.h */
-#define PTL_IOC_DEBUG_MASK             _IOWR('f', 250, long)
+#define LIBCFS_IOC_DEBUG_MASK             _IOWR('f', 250, long)
 
-static inline int portal_ioctl_packlen(struct portal_ioctl_data *data)
+static inline int libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 {
         int len = sizeof(*data);
         len += size_round(data->ioc_inllen1);
@@ -321,79 +318,79 @@ static inline int portal_ioctl_packlen(struct portal_ioctl_data *data)
         return len;
 }
 
-static inline int portal_ioctl_is_invalid(struct portal_ioctl_data *data)
+static inline int libcfs_ioctl_is_invalid(struct libcfs_ioctl_data *data)
 {
         if (data->ioc_len > (1<<30)) {
-                CERROR ("PORTALS ioctl: ioc_len larger than 1<<30\n");
+                CERROR ("LIBCFS ioctl: ioc_len larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen1 > (1<<30)) {
-                CERROR ("PORTALS ioctl: ioc_inllen1 larger than 1<<30\n");
+                CERROR ("LIBCFS ioctl: ioc_inllen1 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inllen2 > (1<<30)) {
-                CERROR ("PORTALS ioctl: ioc_inllen2 larger than 1<<30\n");
+                CERROR ("LIBCFS ioctl: ioc_inllen2 larger than 1<<30\n");
                 return 1;
         }
         if (data->ioc_inlbuf1 && !data->ioc_inllen1) {
-                CERROR ("PORTALS ioctl: inlbuf1 pointer but 0 length\n");
+                CERROR ("LIBCFS ioctl: inlbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_inlbuf2 && !data->ioc_inllen2) {
-                CERROR ("PORTALS ioctl: inlbuf2 pointer but 0 length\n");
+                CERROR ("LIBCFS ioctl: inlbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf1 && !data->ioc_plen1) {
-                CERROR ("PORTALS ioctl: pbuf1 pointer but 0 length\n");
+                CERROR ("LIBCFS ioctl: pbuf1 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_pbuf2 && !data->ioc_plen2) {
-                CERROR ("PORTALS ioctl: pbuf2 pointer but 0 length\n");
+                CERROR ("LIBCFS ioctl: pbuf2 pointer but 0 length\n");
                 return 1;
         }
         if (data->ioc_plen1 && !data->ioc_pbuf1) {
-                CERROR ("PORTALS ioctl: plen1 nonzero but no pbuf1 pointer\n");
+                CERROR ("LIBCFS ioctl: plen1 nonzero but no pbuf1 pointer\n");
                 return 1;
         }
         if (data->ioc_plen2 && !data->ioc_pbuf2) {
-                CERROR ("PORTALS ioctl: plen2 nonzero but no pbuf2 pointer\n");
+                CERROR ("LIBCFS ioctl: plen2 nonzero but no pbuf2 pointer\n");
                 return 1;
         }
-        if (portal_ioctl_packlen(data) != data->ioc_len ) {
-                CERROR ("PORTALS ioctl: packlen != ioc_len\n");
+        if (libcfs_ioctl_packlen(data) != data->ioc_len ) {
+                CERROR ("LIBCFS ioctl: packlen != ioc_len\n");
                 return 1;
         }
         if (data->ioc_inllen1 &&
             data->ioc_bulk[data->ioc_inllen1 - 1] != '\0') {
-                CERROR ("PORTALS ioctl: inlbuf1 not 0 terminated\n");
+                CERROR ("LIBCFS ioctl: inlbuf1 not 0 terminated\n");
                 return 1;
         }
         if (data->ioc_inllen2 &&
             data->ioc_bulk[size_round(data->ioc_inllen1) +
                            data->ioc_inllen2 - 1] != '\0') {
-                CERROR ("PORTALS ioctl: inlbuf2 not 0 terminated\n");
+                CERROR ("LIBCFS ioctl: inlbuf2 not 0 terminated\n");
                 return 1;
         }
         return 0;
 }
 
 #ifndef __KERNEL__
-static inline int portal_ioctl_pack(struct portal_ioctl_data *data, char **pbuf,
+static inline int libcfs_ioctl_pack(struct libcfs_ioctl_data *data, char **pbuf,
                                     int max)
 {
         char *ptr;
-        struct portal_ioctl_data *overlay;
-        data->ioc_len = portal_ioctl_packlen(data);
-        data->ioc_version = PORTAL_IOCTL_VERSION;
+        struct libcfs_ioctl_data *overlay;
+        data->ioc_len = libcfs_ioctl_packlen(data);
+        data->ioc_version = LIBCFS_IOCTL_VERSION;
 
-        if (*pbuf && portal_ioctl_packlen(data) > max)
+        if (*pbuf && libcfs_ioctl_packlen(data) > max)
                 return 1;
         if (*pbuf == NULL) {
                 *pbuf = malloc(data->ioc_len);
         }
         if (!*pbuf)
                 return 1;
-        overlay = (struct portal_ioctl_data *)*pbuf;
+        overlay = (struct libcfs_ioctl_data *)*pbuf;
         memcpy(*pbuf, data, sizeof(*data));
 
         ptr = overlay->ioc_bulk;
@@ -401,7 +398,7 @@ static inline int portal_ioctl_pack(struct portal_ioctl_data *data, char **pbuf,
                 LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
         if (data->ioc_inlbuf2)
                 LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
-        if (portal_ioctl_is_invalid(overlay))
+        if (libcfs_ioctl_is_invalid(overlay))
                 return 1;
 
         return 0;
@@ -409,46 +406,46 @@ static inline int portal_ioctl_pack(struct portal_ioctl_data *data, char **pbuf,
 
 #else
 
-extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
+extern int libcfs_ioctl_getdata(char *buf, char *end, void *arg);
 
 #endif
 
 /* ioctls for manipulating snapshots 30- */
-#define IOC_PORTAL_TYPE                   'e'
-#define IOC_PORTAL_MIN_NR                 30
+#define IOC_LIBCFS_TYPE                   'e'
+#define IOC_LIBCFS_MIN_NR                 30
 /* libcfs ioctls */
-#define IOC_PORTAL_PANIC                   _IOWR('e', 30, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 31, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 32, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 33, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 34, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_MEMHOG                  _IOWR('e', 36, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_PING                    _IOWR('e', 37, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_PANIC                   _IOWR('e', 30, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_CLEAR_DEBUG             _IOWR('e', 31, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_MARK_DEBUG              _IOWR('e', 32, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_LWT_CONTROL             _IOWR('e', 33, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_LWT_SNAPSHOT            _IOWR('e', 34, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_LWT_LOOKUP_STRING       _IOWR('e', 35, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_MEMHOG                  _IOWR('e', 36, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_PING                    _IOWR('e', 37, IOCTL_PORTAL_TYPE)
 /* lnet ioctls */
-#define IOC_PORTAL_GET_NI                  _IOWR('e', 50, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_FAIL_NID                _IOWR('e', 51, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_ADD_ROUTE               _IOWR('e', 52, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_DEL_ROUTE               _IOWR('e', 53, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_ROUTE               _IOWR('e', 54, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_UNCONFIGURE             _IOWR('e', 56, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_NI                  _IOWR('e', 50, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_FAIL_NID                _IOWR('e', 51, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_ADD_ROUTE               _IOWR('e', 52, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_DEL_ROUTE               _IOWR('e', 53, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_ROUTE               _IOWR('e', 54, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_NOTIFY_ROUTER           _IOWR('e', 55, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_UNCONFIGURE             _IOWR('e', 56, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_PORTALS_COMPATIBILITY   _IOWR('e', 57, IOCTL_PORTAL_TYPE)
 /* lnd ioctls */
-#define IOC_PORTAL_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_PUSH_CONNECTION         _IOWR('e', 72, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_CONN                _IOWR('e', 73, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_DEL_PEER                _IOWR('e', 74, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_ADD_PEER                _IOWR('e', 75, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_PEER                _IOWR('e', 76, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_TXDESC              _IOWR('e', 77, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_ADD_INTERFACE           _IOWR('e', 78, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_DEL_INTERFACE           _IOWR('e', 79, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_INTERFACE           _IOWR('e', 80, IOCTL_PORTAL_TYPE)
-#define IOC_PORTAL_GET_GMID                _IOWR('e', 81, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_REGISTER_MYNID          _IOWR('e', 70, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_CLOSE_CONNECTION        _IOWR('e', 71, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_PUSH_CONNECTION         _IOWR('e', 72, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_CONN                _IOWR('e', 73, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_DEL_PEER                _IOWR('e', 74, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_ADD_PEER                _IOWR('e', 75, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_PEER                _IOWR('e', 76, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_TXDESC              _IOWR('e', 77, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_ADD_INTERFACE           _IOWR('e', 78, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_DEL_INTERFACE           _IOWR('e', 79, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_INTERFACE           _IOWR('e', 80, IOCTL_PORTAL_TYPE)
+#define IOC_LIBCFS_GET_GMID                _IOWR('e', 81, IOCTL_PORTAL_TYPE)
 
-#define IOC_PORTAL_MAX_NR                             81
+#define IOC_LIBCFS_MAX_NR                             81
 
 
 enum {

@@ -1272,7 +1272,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
 
-        fromnid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), ep_rxd_node(krx->krx_rxd));
+        fromnid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ep_rxd_node(krx->krx_rxd));
         
         rc = lnet_parse(ni, hdr, kqswnal_rx_nid(krx), krx);
         if (rc < 0) {

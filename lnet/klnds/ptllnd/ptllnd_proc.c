@@ -68,7 +68,7 @@ ptllnd_stats_seq_start (struct seq_file *s, loff_t *pos)
         ptllnd_stats_seq_iterator_t *pssi;
         int                         rc;
 
-        PORTAL_ALLOC(pssi, sizeof(*pssi));
+        LIBCFS_ALLOC(pssi, sizeof(*pssi));
         if (pssi == NULL)
                 return NULL;
 
@@ -77,7 +77,7 @@ ptllnd_stats_seq_start (struct seq_file *s, loff_t *pos)
         if (rc == 0)
                 return pssi;
 
-        PORTAL_FREE(pssi, sizeof(*pssi));
+        LIBCFS_FREE(pssi, sizeof(*pssi));
         return NULL;
 }
 
@@ -87,7 +87,7 @@ ptllnd_stats_seq_stop (struct seq_file *s, void *iter)
         ptllnd_stats_seq_iterator_t  *pssi = iter;
 
         if (pssi != NULL)
-                PORTAL_FREE(pssi, sizeof(*pssi));
+                LIBCFS_FREE(pssi, sizeof(*pssi));
 }
 
 static void *
@@ -99,7 +99,7 @@ ptllnd_stats_seq_next (struct seq_file *s, void *iter, loff_t *pos)
 
         rc = ptllnd_stats_seq_seek(pssi, next);
         if (rc != 0) {
-                PORTAL_FREE(pssi, sizeof(*pssi));
+                LIBCFS_FREE(pssi, sizeof(*pssi));
                 return NULL;
         }
 

@@ -22,7 +22,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
 
@@ -33,7 +33,7 @@ lnet_create_peer_table(void)
 	int               i;
 
 	LASSERT (the_lnet.ln_peer_hash == NULL);
-	PORTAL_ALLOC(hash, LNET_PEER_HASHSIZE * sizeof(struct list_head));
+	LIBCFS_ALLOC(hash, LNET_PEER_HASHSIZE * sizeof(struct list_head));
 	
 	if (hash == NULL) {
 		CERROR("Can't allocate peer hash table\n");
@@ -58,7 +58,7 @@ lnet_destroy_peer_table(void)
 	for (i = 0; i < LNET_PEER_HASHSIZE; i++)
 		LASSERT (list_empty(&the_lnet.ln_peer_hash[i]));
 	
-	PORTAL_FREE(the_lnet.ln_peer_hash,
+	LIBCFS_FREE(the_lnet.ln_peer_hash,
 		    LNET_PEER_HASHSIZE * sizeof (struct list_head));
         the_lnet.ln_peer_hash = NULL;
 }
@@ -108,7 +108,7 @@ lnet_destroy_peer_locked (lnet_peer_t *lp)
 	LASSERT (list_empty(&lp->lp_txq));
         LASSERT (lp->lp_txqnob == 0);
 
-	PORTAL_FREE(lp, sizeof(*lp));
+	LIBCFS_FREE(lp, sizeof(*lp));
 
         LNET_LOCK();
 
@@ -119,7 +119,7 @@ lnet_destroy_peer_locked (lnet_peer_t *lp)
 lnet_peer_t *
 lnet_find_peer_locked (lnet_nid_t nid)
 {
-	unsigned int      idx = PTL_NIDADDR(nid) % LNET_PEER_HASHSIZE;
+	unsigned int      idx = LNET_NIDADDR(nid) % LNET_PEER_HASHSIZE;
 	struct list_head *peers = &the_lnet.ln_peer_hash[idx];
 	struct list_head *tmp;
         lnet_peer_t      *lp;
@@ -154,7 +154,7 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         
         LNET_UNLOCK();
 	
-	PORTAL_ALLOC(lp, sizeof(*lp));
+	LIBCFS_ALLOC(lp, sizeof(*lp));
 	if (lp == NULL) {
                 *lpp = NULL;
                 return -ENOMEM;
@@ -175,17 +175,17 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         lp2 = lnet_find_peer_locked(nid);
         if (lp2 != NULL) {
                 LNET_UNLOCK();
-                PORTAL_FREE(lp, sizeof(*lp));
+                LIBCFS_FREE(lp, sizeof(*lp));
                 LNET_LOCK();
 
                 *lpp = lp2;
                 return 0;
         }
                 
-        lp->lp_ni = lnet_net2ni_locked(PTL_NIDNET(nid));
+        lp->lp_ni = lnet_net2ni_locked(LNET_NIDNET(nid));
         if (lp->lp_ni == NULL) {
                 LNET_UNLOCK();
-                PORTAL_FREE(lp, sizeof(*lp));
+                LIBCFS_FREE(lp, sizeof(*lp));
                 LNET_LOCK();
 
                 *lpp = NULL;

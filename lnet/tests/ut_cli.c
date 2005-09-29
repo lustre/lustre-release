@@ -42,8 +42,8 @@ static int __init utcli_init(void)
                 return -EINVAL;
         }
 
-        PJK_UT_MSG("PORTAL_ALLOC\n");
-        PORTAL_ALLOC (buffer, pkt_size);
+        PJK_UT_MSG("LIBCFS_ALLOC\n");
+        LIBCFS_ALLOC (buffer, pkt_size);
         if (buffer == NULL)
         {
                 CERROR ("Unable to allocate out_buf (%d bytes)\n", pkt_size);
@@ -191,7 +191,7 @@ exit1:
         LNetNIFini();
 exit0:
         if(buffer)
-                PORTAL_FREE(buffer,pkt_size);
+                LIBCFS_FREE(buffer,pkt_size);
 
         return -1;
 } /* utcli_init() */

@@ -54,7 +54,7 @@ kptllnd_setup_tx_descs (kptl_data_t *kptllnd_data)
                  */
                 tx->tx_state = TX_STATE_ON_IDLE_QUEUE;
 
-                PORTAL_ALLOC( tx->tx_msg, *kptllnd_tunables.kptl_max_immd_size );
+                LIBCFS_ALLOC( tx->tx_msg, *kptllnd_tunables.kptl_max_immd_size );
                 if(tx->tx_msg == NULL){
                         CERROR("Failed to allocate TX payload\n");
                         kptllnd_cleanup_tx_descs(kptllnd_data);
@@ -91,7 +91,7 @@ kptllnd_cleanup_tx_descs(kptl_data_t *kptllnd_data)
 
                 LASSERT( tx->tx_state == TX_STATE_ON_IDLE_QUEUE );
 
-                PORTAL_FREE(tx->tx_msg,*kptllnd_tunables.kptl_max_immd_size);
+                LIBCFS_FREE(tx->tx_msg,*kptllnd_tunables.kptl_max_immd_size);
         }
 }
 

@@ -24,7 +24,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
@@ -203,7 +203,7 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
             ('A' <= str[0] && str[0] <= 'Z')) {
                 char *tmp;
 
-                PORTAL_ALLOC(tmp, nob + 1);
+                LIBCFS_ALLOC(tmp, nob + 1);
                 if (tmp != NULL) {
                         struct hostent *he;
 
@@ -212,7 +212,7 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
 
                         he = gethostbyname(tmp);
 
-                        PORTAL_FREE(tmp, nob);
+                        LIBCFS_FREE(tmp, nob);
 
                         if (he != NULL) {
                                 __u32 ip = *(__u32 *)he->h_addr;
@@ -314,8 +314,8 @@ libcfs_str2lnd(char *str)
 char *
 libcfs_net2str(__u32 net)
 {
-        int               lnd = PTL_NETTYP(net);
-        int               num = PTL_NETNUM(net);
+        int               lnd = LNET_NETTYP(net);
+        int               num = LNET_NETNUM(net);
         struct netstrfns *nf  = libcfs_lnd2netstrfns(lnd);
         char             *str = libcfs_next_nidstring();
 
@@ -332,10 +332,10 @@ libcfs_net2str(__u32 net)
 char *
 libcfs_nid2str(lnet_nid_t nid)
 {
-        __u32             addr = PTL_NIDADDR(nid);
-        __u32             net = PTL_NIDNET(nid);
-        int               lnd = PTL_NETTYP(net);
-        int               nnum = PTL_NETNUM(net);
+        __u32             addr = LNET_NIDADDR(nid);
+        __u32             net = LNET_NIDNET(nid);
+        int               lnd = LNET_NETTYP(net);
+        int               nnum = LNET_NETNUM(net);
         struct netstrfns *nf;
         char             *str;
         int               nob;
@@ -343,7 +343,7 @@ libcfs_nid2str(lnet_nid_t nid)
         if (nid == LNET_NID_ANY)
                 return "LNET_NID_ANY";
 
-        nf = libcfs_lnd2netstrfns(PTL_NETTYP(net));
+        nf = libcfs_lnd2netstrfns(LNET_NETTYP(net));
         str = libcfs_next_nidstring();
 
         if (nf == NULL)
@@ -395,7 +395,7 @@ libcfs_str2net_internal(char *str, __u32 *net)
                         return NULL;
         }
         
-        *net = PTL_MKNET(nf->nf_type, netnum);
+        *net = LNET_MKNET(nf->nf_type, netnum);
         return nf;
 }
 
@@ -407,7 +407,7 @@ libcfs_str2net(char *str)
         if (libcfs_str2net_internal(str, &net) != NULL)
                 return net;
         
-        return PTL_NIDNET(LNET_NID_ANY);
+        return LNET_NIDNET(LNET_NID_ANY);
 }
 
 lnet_nid_t
@@ -424,7 +424,7 @@ libcfs_str2nid(char *str)
                         return LNET_NID_ANY;
         } else {
                 sep = str + strlen(str);
-                net = PTL_MKNET(SOCKLND, 0);
+                net = LNET_MKNET(SOCKLND, 0);
                 nf = libcfs_lnd2netstrfns(SOCKLND);
                 LASSERT (nf != NULL);
         }
@@ -432,7 +432,7 @@ libcfs_str2nid(char *str)
         if (!nf->nf_str2addr(str, sep - str, &addr))
                 return LNET_NID_ANY;
         
-        return PTL_MKNID(net, addr);
+        return LNET_MKNID(net, addr);
 }
 
 char *

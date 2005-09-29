@@ -129,7 +129,7 @@ dump(int dev_id, unsigned int opc, void *buf)
 {
 	FILE *fp;
 	struct dump_hdr dump_hdr;
-        struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
+        struct libcfs_ioctl_hdr * ioc_hdr = (struct  libcfs_ioctl_hdr *) buf;
 	int rc;
 	
 	printf("dumping opc %x to %s\n", opc, dump_filename);
@@ -278,13 +278,13 @@ parse_dump(char * dump_file, ioc_handler_t ioc_func)
 
 	while (buf < end) {
                 struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
-                struct portal_ioctl_hdr * data;
+                struct libcfs_ioctl_hdr * data;
                 char tmp[8096];
                 int rc;
 
                 line++;
 
-                data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
+                data = (struct libcfs_ioctl_hdr *) (buf + sizeof(*dump_hdr));
                 if (buf + data->ioc_len > end ) {
                         fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
                                 data->ioc_len, end);

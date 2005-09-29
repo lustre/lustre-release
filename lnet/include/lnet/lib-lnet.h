@@ -194,7 +194,7 @@ lnet_eq_alloc (void)
         /* NEVER called with liblock held */
         lnet_eq_t *eq;
 
-        PORTAL_ALLOC(eq, sizeof(*eq));
+        LIBCFS_ALLOC(eq, sizeof(*eq));
         return (eq);
 }
 
@@ -202,7 +202,7 @@ static inline void
 lnet_eq_free (lnet_eq_t *eq)
 {
         /* ALWAYS called with liblock held */
-        PORTAL_FREE(eq, sizeof(*eq));
+        LIBCFS_FREE(eq, sizeof(*eq));
 }
 
 static inline lnet_libmd_t *
@@ -222,7 +222,7 @@ lnet_md_alloc (lnet_md_t *umd)
                 size = offsetof(lnet_libmd_t, md_iov.iov[niov]);
         }
 
-        PORTAL_ALLOC(md, size);
+        LIBCFS_ALLOC(md, size);
 
         if (md != NULL) {
                 /* Set here in case of early free */
@@ -244,7 +244,7 @@ lnet_md_free (lnet_libmd_t *md)
         else
                 size = offsetof(lnet_libmd_t, md_iov.iov[md->md_niov]);
 
-        PORTAL_FREE(md, size);
+        LIBCFS_FREE(md, size);
 }
 
 static inline lnet_me_t *
@@ -253,7 +253,7 @@ lnet_me_alloc (void)
         /* NEVER called with liblock held */
         lnet_me_t *me;
 
-        PORTAL_ALLOC(me, sizeof(*me));
+        LIBCFS_ALLOC(me, sizeof(*me));
         return (me);
 }
 
@@ -261,7 +261,7 @@ static inline void
 lnet_me_free(lnet_me_t *me)
 {
         /* ALWAYS called with liblock held */
-        PORTAL_FREE(me, sizeof(*me));
+        LIBCFS_FREE(me, sizeof(*me));
 }
 
 static inline lnet_msg_t *
@@ -270,7 +270,7 @@ lnet_msg_alloc(void)
         /* NEVER called with liblock held; may be in interrupt... */
         lnet_msg_t *msg;
 
-        PORTAL_ALLOC(msg, sizeof(*msg));
+        LIBCFS_ALLOC(msg, sizeof(*msg));
 
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
@@ -284,7 +284,7 @@ lnet_msg_free(lnet_msg_t *msg)
 {
         /* ALWAYS called with liblock held */
         LASSERT (!msg->msg_onactivelist);
-        PORTAL_FREE(msg, sizeof(*msg));
+        LIBCFS_FREE(msg, sizeof(*msg));
 }
 #endif
 
@@ -423,8 +423,8 @@ lnet_ptlcompat_srcnid(lnet_nid_t src, lnet_nid_t dst)
 {
         /* Give myself a portals srcnid if I'm sending to portals */
         if (the_lnet.ln_ptlcompat > 0 &&   
-            PTL_NIDNET(dst) == 0)
-                return PTL_MKNID(0, PTL_NIDADDR(src));
+            LNET_NIDNET(dst) == 0)
+                return LNET_MKNID(0, LNET_NIDADDR(src));
         
         return src;
 }
@@ -434,9 +434,9 @@ lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid)
 {
         return ((ptl_nid == lnet_nid) ||
                 (the_lnet.ln_ptlcompat > 0 &&
-                 PTL_NIDNET(ptl_nid) == 0 &&
-                 PTL_NETTYP(PTL_NIDNET(lnet_nid)) != LOLND &&
-                 PTL_NIDADDR(ptl_nid) == PTL_NIDADDR(lnet_nid)));
+                 LNET_NIDNET(ptl_nid) == 0 &&
+                 LNET_NETTYP(LNET_NIDNET(lnet_nid)) != LOLND &&
+                 LNET_NIDADDR(ptl_nid) == LNET_NIDADDR(lnet_nid)));
 }
 
 static inline int
@@ -445,13 +445,13 @@ lnet_ptlcompat_matchnet(__u32 lnet_net, __u32 ptl_net)
         return ((ptl_net == lnet_net) ||
                 (the_lnet.ln_ptlcompat > 0 &&
                  ptl_net == 0 &&
-                 PTL_NETTYP(lnet_net) != LOLND));
+                 LNET_NETTYP(lnet_net) != LOLND));
 }
 
 static inline struct list_head *
 lnet_nid2peerhash (lnet_nid_t nid)
 {
-	unsigned int idx = PTL_NIDADDR(nid) % LNET_PEER_HASHSIZE;
+	unsigned int idx = LNET_NIDADDR(nid) % LNET_PEER_HASHSIZE;
 
         return &the_lnet.ln_peer_hash[idx];
 }

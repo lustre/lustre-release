@@ -84,7 +84,7 @@ typedef struct {
 
 /* -------------------------------------------------------------------------- */
 
-#define IOCTL_PORTAL_TYPE struct portal_ioctl_data
+#define IOCTL_PORTAL_TYPE struct libcfs_ioctl_data
 
 #define LPU64 "%llu"
 #define LPD64 "%lld"

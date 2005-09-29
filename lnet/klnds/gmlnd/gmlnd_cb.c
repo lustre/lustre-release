@@ -95,7 +95,7 @@ gmnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         tx->tx_nid = target.nid;
 
-        gmrc = gm_global_id_to_node_id(gmni->gmni_port, PTL_NIDADDR(target.nid),
+        gmrc = gm_global_id_to_node_id(gmni->gmni_port, LNET_NIDADDR(target.nid),
                                        &tx->tx_gmlid);
         if (gmrc != GM_SUCCESS) {
                 CERROR("Can't map Nid %s to a GM local ID: %d\n", 

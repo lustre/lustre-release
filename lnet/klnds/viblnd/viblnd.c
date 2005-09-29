@@ -470,7 +470,7 @@ kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid)
 
         LASSERT (nid != LNET_NID_ANY);
 
-        PORTAL_ALLOC(peer, sizeof (*peer));
+        LIBCFS_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
                 CERROR("Cannot allocate peer\n");
                 return -ENOMEM;
@@ -506,7 +506,7 @@ kibnal_create_peer (kib_peer_t **peerp, lnet_nid_t nid)
                 CERROR("Can't create peer: %s\n", 
                        (rc == -ESHUTDOWN) ? "shutting down" : 
                        "too many peers");
-                PORTAL_FREE(peer, sizeof(*peer));
+                LIBCFS_FREE(peer, sizeof(*peer));
         } else {
                 *peerp = peer;
         }
@@ -524,7 +524,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
         LASSERT (list_empty (&peer->ibp_conns));
         LASSERT (list_empty (&peer->ibp_tx_queue));
         
-        PORTAL_FREE (peer, sizeof (*peer));
+        LIBCFS_FREE (peer, sizeof (*peer));
 
         /* NB a peer's connections keep a reference on their peer until
          * they are destroyed, so we can be assured that _all_ state to do
@@ -865,7 +865,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         LASSERT(!in_interrupt());
         LASSERT(current == kibnal_data.kib_connd);
         
-        PORTAL_ALLOC(conn, sizeof (*conn));
+        LIBCFS_ALLOC(conn, sizeof (*conn));
         if (conn == NULL) {
                 CERROR ("Can't allocate connection\n");
                 return (NULL);
@@ -884,7 +884,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
 
         conn->ibc_cep = cep;
 
-        PORTAL_ALLOC(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+        LIBCFS_ALLOC(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
         if (conn->ibc_connvars == NULL) {
                 CERROR("Can't allocate in-progress connection state\n");
                 goto failed;
@@ -894,7 +894,7 @@ kibnal_create_conn (cm_cep_handle_t cep)
         get_random_bytes(&conn->ibc_connvars->cv_rxpsn,
                          sizeof(conn->ibc_connvars->cv_rxpsn));
 
-        PORTAL_ALLOC(conn->ibc_rxs, IBNAL_RX_MSGS * sizeof (kib_rx_t));
+        LIBCFS_ALLOC(conn->ibc_rxs, IBNAL_RX_MSGS * sizeof (kib_rx_t));
         if (conn->ibc_rxs == NULL) {
                 CERROR("Cannot allocate RX buffers\n");
                 goto failed;
@@ -1032,16 +1032,16 @@ kibnal_destroy_conn (kib_conn_t *conn)
                 kibnal_free_pages(conn->ibc_rx_pages);
 
         if (conn->ibc_rxs != NULL)
-                PORTAL_FREE(conn->ibc_rxs, 
+                LIBCFS_FREE(conn->ibc_rxs, 
                             IBNAL_RX_MSGS * sizeof(kib_rx_t));
 
         if (conn->ibc_connvars != NULL)
-                PORTAL_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+                LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
 
         if (conn->ibc_peer != NULL)
                 kibnal_peer_decref(conn->ibc_peer);
 
-        PORTAL_FREE(conn, sizeof (*conn));
+        LIBCFS_FREE(conn, sizeof (*conn));
 
         atomic_dec(&kibnal_data.kib_nconns);
 }
@@ -1137,13 +1137,13 @@ kibnal_close_matching_conns (lnet_nid_t nid)
 int
 kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-        struct portal_ioctl_data *data = arg;
+        struct libcfs_ioctl_data *data = arg;
         int                       rc = -EINVAL;
 
         LASSERT (ni == kibnal_data.kib_ni);
 
         switch(cmd) {
-        case IOC_PORTAL_GET_PEER: {
+        case IOC_LIBCFS_GET_PEER: {
                 lnet_nid_t   nid = 0;
                 __u32       ip = 0;
                 int         share_count = 0;
@@ -1156,16 +1156,16 @@ kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 data->ioc_u32[1] = *kibnal_tunables.kib_service_number; /* port */
                 break;
         }
-        case IOC_PORTAL_ADD_PEER: {
+        case IOC_LIBCFS_ADD_PEER: {
                 rc = kibnal_add_persistent_peer (data->ioc_nid,
                                                  data->ioc_u32[0]); /* IP */
                 break;
         }
-        case IOC_PORTAL_DEL_PEER: {
+        case IOC_LIBCFS_DEL_PEER: {
                 rc = kibnal_del_peer (data->ioc_nid);
                 break;
         }
-        case IOC_PORTAL_GET_CONN: {
+        case IOC_LIBCFS_GET_CONN: {
                 kib_conn_t *conn = kibnal_get_conn_by_idx (data->ioc_count);
 
                 if (conn == NULL)
@@ -1177,15 +1177,15 @@ kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
                 }
                 break;
         }
-        case IOC_PORTAL_CLOSE_CONNECTION: {
+        case IOC_LIBCFS_CLOSE_CONNECTION: {
                 rc = kibnal_close_matching_conns (data->ioc_nid);
                 break;
         }
-        case IOC_PORTAL_REGISTER_MYNID: {
+        case IOC_LIBCFS_REGISTER_MYNID: {
                 if (ni->ni_nid == data->ioc_nid) {
                         rc = 0;
                 } else {
-                        CERROR("obsolete IOC_PORTAL_REGISTER_MYNID: %s(%s)\n",
+                        CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID: %s(%s)\n",
                                libcfs_nid2str(data->ioc_nid),
                                libcfs_nid2str(ni->ni_nid));
                         rc = -EINVAL;
@@ -1207,7 +1207,7 @@ kibnal_free_pages (kib_pages_t *p)
                 if (p->ibp_pages[i] != NULL)
                         __free_page(p->ibp_pages[i]);
         
-        PORTAL_FREE (p, offsetof(kib_pages_t, ibp_pages[npages]));
+        LIBCFS_FREE (p, offsetof(kib_pages_t, ibp_pages[npages]));
 }
 
 int
@@ -1216,7 +1216,7 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
         kib_pages_t   *p;
         int            i;
 
-        PORTAL_ALLOC(p, offsetof(kib_pages_t, ibp_pages[npages]));
+        LIBCFS_ALLOC(p, offsetof(kib_pages_t, ibp_pages[npages]));
         if (p == NULL) {
                 CERROR ("Can't allocate buffer %d\n", npages);
                 return (-ENOMEM);
@@ -1243,7 +1243,7 @@ kibnal_alloc_tx_descs (void)
 {
         int    i;
         
-        PORTAL_ALLOC (kibnal_data.kib_tx_descs,
+        LIBCFS_ALLOC (kibnal_data.kib_tx_descs,
                       IBNAL_TX_MSGS() * sizeof(kib_tx_t));
         if (kibnal_data.kib_tx_descs == NULL)
                 return -ENOMEM;
@@ -1255,24 +1255,24 @@ kibnal_alloc_tx_descs (void)
                 kib_tx_t *tx = &kibnal_data.kib_tx_descs[i];
 
 #if IBNAL_USE_FMR
-                PORTAL_ALLOC(tx->tx_pages, PTL_MD_MAX_IOV *
+                LIBCFS_ALLOC(tx->tx_pages, PTL_MD_MAX_IOV *
                              sizeof(*tx->tx_pages));
                 if (tx->tx_pages == NULL)
                         return -ENOMEM;
 #else
-                PORTAL_ALLOC(tx->tx_wrq, 
+                LIBCFS_ALLOC(tx->tx_wrq, 
                              (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_wrq));
                 if (tx->tx_wrq == NULL)
                         return -ENOMEM;
                 
-                PORTAL_ALLOC(tx->tx_gl, 
+                LIBCFS_ALLOC(tx->tx_gl, 
                              (1 + IBNAL_MAX_RDMA_FRAGS) * 
                              sizeof(*tx->tx_gl));
                 if (tx->tx_gl == NULL)
                         return -ENOMEM;
                 
-                PORTAL_ALLOC(tx->tx_rd, 
+                LIBCFS_ALLOC(tx->tx_rd, 
                              offsetof(kib_rdma_desc_t, 
                                       rd_frags[IBNAL_MAX_RDMA_FRAGS]));
                 if (tx->tx_rd == NULL)
@@ -1296,27 +1296,27 @@ kibnal_free_tx_descs (void)
 
 #if IBNAL_USE_FMR
                 if (tx->tx_pages != NULL)
-                        PORTAL_FREE(tx->tx_pages, PTL_MD_MAX_IOV *
+                        LIBCFS_FREE(tx->tx_pages, PTL_MD_MAX_IOV *
                                     sizeof(*tx->tx_pages));
 #else
                 if (tx->tx_wrq != NULL)
-                        PORTAL_FREE(tx->tx_wrq, 
+                        LIBCFS_FREE(tx->tx_wrq, 
                                     (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_wrq));
 
                 if (tx->tx_gl != NULL)
-                        PORTAL_FREE(tx->tx_gl, 
+                        LIBCFS_FREE(tx->tx_gl, 
                                     (1 + IBNAL_MAX_RDMA_FRAGS) * 
                                     sizeof(*tx->tx_gl));
 
                 if (tx->tx_rd != NULL)
-                        PORTAL_FREE(tx->tx_rd, 
+                        LIBCFS_FREE(tx->tx_rd, 
                                     offsetof(kib_rdma_desc_t, 
                                              rd_frags[IBNAL_MAX_RDMA_FRAGS]));
 #endif
         }
 
-        PORTAL_FREE(kibnal_data.kib_tx_descs,
+        LIBCFS_FREE(kibnal_data.kib_tx_descs,
                     IBNAL_TX_MSGS() * sizeof(kib_tx_t));
 }
 
@@ -1527,7 +1527,7 @@ kibnal_shutdown (lnet_ni_t *ni)
         kibnal_free_tx_descs();
 
         if (kibnal_data.kib_peers != NULL)
-                PORTAL_FREE (kibnal_data.kib_peers,
+                LIBCFS_FREE (kibnal_data.kib_peers,
                              sizeof (struct list_head) * 
                              kibnal_data.kib_peer_hash_size);
 
@@ -1625,7 +1625,7 @@ kibnal_startup (lnet_ni_t *ni)
                 return -ENETDOWN;
         }
         
-        ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), ip);
+        ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ip);
         
         PORTAL_MODULE_USE;
         memset (&kibnal_data, 0, sizeof (kibnal_data)); /* zero pointers, flags etc */
@@ -1639,7 +1639,7 @@ kibnal_startup (lnet_ni_t *ni)
         rwlock_init(&kibnal_data.kib_global_lock);
 
         kibnal_data.kib_peer_hash_size = IBNAL_PEER_HASH_SIZE;
-        PORTAL_ALLOC (kibnal_data.kib_peers,
+        LIBCFS_ALLOC (kibnal_data.kib_peers,
                       sizeof (struct list_head) * kibnal_data.kib_peer_hash_size);
         if (kibnal_data.kib_peers == NULL) {
                 goto failed;

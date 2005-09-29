@@ -28,8 +28,8 @@ static int __init utsrv_init(void)
         PJK_UT_MSG("pkt_size=%d\n",pkt_size);
         PJK_UT_MSG("auto_unlink=%d\n",auto_unlink);
 
-        PJK_UT_MSG("PORTAL_ALLOC\n");
-        PORTAL_ALLOC (buffer, pkt_size);
+        PJK_UT_MSG("LIBCFS_ALLOC\n");
+        LIBCFS_ALLOC (buffer, pkt_size);
         if (buffer == NULL)
         {
                 CERROR ("Unable to allocate out_buf (%d bytes)\n", pkt_size);
@@ -112,7 +112,7 @@ exit2:
         PJK_UT_MSG("LNetNiFini()\n");
         LNetNIFini();
 exit1:
-        PORTAL_FREE(buffer,pkt_size);
+        LIBCFS_FREE(buffer,pkt_size);
 exit0:
         PJK_UT_MSG("<<< rc=%d\n",rc);
         return rc;
@@ -131,7 +131,7 @@ static void /*__exit*/ utsrv_cleanup(void)
         LNetEQFree(eqh);
         PJK_UT_MSG("LNetNiFini()\n");
         LNetNIFini();
-        PORTAL_FREE(buffer,pkt_size);
+        LIBCFS_FREE(buffer,pkt_size);
         PJK_UT_MSG("<<<\n");
 } /* utsrv_cleanup() */
 

@@ -1306,7 +1306,7 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
                         return;
                 }
 
-                rc = kibnal_add_persistent_peer(nid, PTL_NIDADDR(nid));
+                rc = kibnal_add_persistent_peer(nid, LNET_NIDADDR(nid));
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
                                libcfs_nid2str(nid), rc);
@@ -2018,7 +2018,7 @@ kibnal_connreq_done(kib_conn_t *conn, int active, int status)
                 LASSERT (!kibnal_peer_active(peer));
         }
         
-        PORTAL_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
+        LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
         conn->ibc_connvars = NULL;
 
         if (status != 0) {
@@ -2445,7 +2445,7 @@ kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *data, void *arg)
                 return;
         }
 
-        PORTAL_ALLOC_ATOMIC(pcr, sizeof(*pcr));
+        LIBCFS_ALLOC_ATOMIC(pcr, sizeof(*pcr));
         if (pcr == NULL) {
                 CERROR("Can't allocate passive connreq\n");
 
@@ -3121,7 +3121,7 @@ kibnal_connd (void *arg)
                         dropped_lock = 1;
 
                         kibnal_recv_connreq(pcr->pcr_cep, &pcr->pcr_cmreq);
-                        PORTAL_FREE(pcr, sizeof(*pcr));
+                        LIBCFS_FREE(pcr, sizeof(*pcr));
 
                         spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
                 }

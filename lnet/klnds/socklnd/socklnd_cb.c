@@ -29,7 +29,7 @@ void
 ksocknal_free_ltx (ksock_ltx_t *ltx)
 {
         atomic_dec(&ksocknal_data.ksnd_nactive_ltxs);
-        PORTAL_FREE(ltx, ltx->ltx_desc_size);
+        LIBCFS_FREE(ltx, ltx->ltx_desc_size);
 }
 
 int
@@ -743,7 +743,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                 }
                 
                 rc = ksocknal_add_peer(ni, id, 
-                                       PTL_NIDADDR(id.nid),
+                                       LNET_NIDADDR(id.nid),
                                        lnet_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
@@ -823,9 +823,9 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
             type == LNET_MSG_REPLY) {
                 /* Can't block if in interrupt or responding to an incoming
                  * message */
-                PORTAL_ALLOC_ATOMIC(ltx, desc_size);
+                LIBCFS_ALLOC_ATOMIC(ltx, desc_size);
         } else {
-                PORTAL_ALLOC(ltx, desc_size);
+                LIBCFS_ALLOC(ltx, desc_size);
         }
         
         if (ltx == NULL) {
@@ -1539,12 +1539,12 @@ ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
         if (conn->ksnc_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {          
                 /* Userspace NAL assigns peer process ID from socket */
                 recv_id.pid = conn->ksnc_port | LNET_PID_USERFLAG;
-                recv_id.nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
+                recv_id.nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), conn->ksnc_ipaddr);
         } else {
                 recv_id.nid = le64_to_cpu(hdr.src_nid);
 
                 if (the_lnet.ln_ptlcompat > 1 && /* portals peers may exist */
-                    PTL_NIDNET(recv_id.nid) == 0) /* this is one */
+                    LNET_NIDNET(recv_id.nid) == 0) /* this is one */
                         recv_id.pid = the_lnet.ln_pid; /* give it a sensible pid */
                 else
                         recv_id.pid = le32_to_cpu(hdr.src_pid);
@@ -1769,7 +1769,7 @@ ksocknal_connd (void *arg)
                         ksocknal_create_conn(cr->ksncr_ni, NULL, 
                                              cr->ksncr_sock, SOCKLND_CONN_NONE);
                         lnet_ni_decref(cr->ksncr_ni);
-                        PORTAL_FREE(cr, sizeof(*cr));
+                        LIBCFS_FREE(cr, sizeof(*cr));
                         
                         spin_lock_irqsave(&ksocknal_data.ksnd_connd_lock,
                                           flags);

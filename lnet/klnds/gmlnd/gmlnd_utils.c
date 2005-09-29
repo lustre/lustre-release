@@ -86,7 +86,7 @@ gmnal_free_ltxbuf (gmnal_ni_t *gmni, gmnal_txbuf_t *txb)
         /* No unmapping; the port has been closed */
 
         gmnal_free_netbuf_pages(&txb->txb_buf, gmni->gmni_large_pages);
-        PORTAL_FREE(txb, offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]));
+        LIBCFS_FREE(txb, offsetof(gmnal_txbuf_t, txb_buf.nb_kiov[npages]));
 }
 
 int
@@ -97,7 +97,7 @@ gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
         gmnal_txbuf_t *txb;
         int            rc;
         
-        PORTAL_ALLOC(txb, sz);
+        LIBCFS_ALLOC(txb, sz);
         if (txb == NULL) {
                 CERROR("Can't allocate large txbuffer\n");
                 return -ENOMEM;
@@ -105,7 +105,7 @@ gmnal_alloc_ltxbuf (gmnal_ni_t *gmni)
 
         rc = gmnal_alloc_netbuf_pages(gmni, &txb->txb_buf, npages);
         if (rc != 0) {
-                PORTAL_FREE(txb, sz);
+                LIBCFS_FREE(txb, sz);
                 return rc;
         }
 
@@ -123,7 +123,7 @@ gmnal_free_tx (gmnal_tx_t *tx)
         LASSERT (tx->tx_gmni->gmni_port == NULL);
 
         gmnal_free_netbuf_pages(&tx->tx_buf, 1);
-        PORTAL_FREE(tx, sizeof(*tx));
+        LIBCFS_FREE(tx, sizeof(*tx));
 }
 
 int
@@ -132,7 +132,7 @@ gmnal_alloc_tx (gmnal_ni_t *gmni)
         gmnal_tx_t  *tx;
         int          rc;
         
-        PORTAL_ALLOC(tx, sizeof(*tx));
+        LIBCFS_ALLOC(tx, sizeof(*tx));
         if (tx == NULL) {
                 CERROR("Failed to allocate tx\n");
                 return -ENOMEM;
@@ -142,7 +142,7 @@ gmnal_alloc_tx (gmnal_ni_t *gmni)
 
         rc = gmnal_alloc_netbuf_pages(gmni, &tx->tx_buf, 1);
         if (rc != 0) {
-                PORTAL_FREE(tx, sizeof(*tx));
+                LIBCFS_FREE(tx, sizeof(*tx));
                 return -ENOMEM;
         }
 
@@ -164,7 +164,7 @@ gmnal_free_rx(gmnal_ni_t *gmni, gmnal_rx_t *rx)
         LASSERT (gmni->gmni_port == NULL);
 
         gmnal_free_netbuf_pages(&rx->rx_buf, npages);
-        PORTAL_FREE(rx, offsetof(gmnal_rx_t, rx_buf.nb_kiov[npages]));
+        LIBCFS_FREE(rx, offsetof(gmnal_rx_t, rx_buf.nb_kiov[npages]));
 }
 
 int
@@ -176,7 +176,7 @@ gmnal_alloc_rx (gmnal_ni_t *gmni, int islarge)
         gmnal_rx_t *rx;
         gm_status_t gmrc;
         
-        PORTAL_ALLOC(rx, sz);
+        LIBCFS_ALLOC(rx, sz);
         if (rx == NULL) {
                 CERROR("Failed to allocate rx\n");
                 return -ENOMEM;
@@ -186,7 +186,7 @@ gmnal_alloc_rx (gmnal_ni_t *gmni, int islarge)
 
         rc = gmnal_alloc_netbuf_pages(gmni, &rx->rx_buf, npages);
         if (rc != 0) {
-                PORTAL_FREE(rx, sz);
+                LIBCFS_FREE(rx, sz);
                 return rc;
         }
         

@@ -66,7 +66,7 @@ kpr_do_upcall (void *arg)
 
         libcfs_run_upcall (argv);
 
-        PORTAL_FREE(u, sizeof(*u));
+        LIBCFS_FREE(u, sizeof(*u));
 }
 
 void
@@ -75,7 +75,7 @@ kpr_upcall (lnet_nid_t gw_nid, int alive, time_t when)
         /* May be in arbitrary context */
         kpr_upcall_t  *u;
 
-        PORTAL_ALLOC_ATOMIC(u, sizeof(*u));
+        LIBCFS_ALLOC_ATOMIC(u, sizeof(*u));
         if (u == NULL) {
                 CERROR ("Upcall out of memory: nid %s %s\n",
                         libcfs_nid2str(gw_nid), alive ? "up" : "down");
@@ -102,7 +102,7 @@ lnet_notify (lnet_ni_t *ni, lnet_nid_t gateway_nid, int alive, time_t when)
                 alive ? "up" : "down");
 
         if (ni != NULL &&
-            PTL_NIDNET(ni->ni_nid) != PTL_NIDNET(gateway_nid)) {
+            LNET_NIDNET(ni->ni_nid) != LNET_NIDNET(gateway_nid)) {
                 CWARN ("Ignoring notification of %s %s by %s (different net)\n",
                         libcfs_nid2str(gateway_nid), alive ? "birth" : "death",
                         libcfs_nid2str(ni->ni_nid));
@@ -221,10 +221,10 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                libcfs_net2str(net), hops, libcfs_nid2str(gateway));
 
         if (gateway == LNET_NID_ANY ||
-            PTL_NETTYP(PTL_NIDNET(gateway)) == LOLND ||
-            net == PTL_NIDNET(LNET_NID_ANY) ||
-            PTL_NETTYP(net) == LOLND ||
-            PTL_NIDNET(gateway) == net ||
+            LNET_NETTYP(LNET_NIDNET(gateway)) == LOLND ||
+            net == LNET_NIDNET(LNET_NID_ANY) ||
+            LNET_NETTYP(net) == LOLND ||
+            LNET_NIDNET(gateway) == net ||
             hops < 1 || hops > 255)
                 return (-EINVAL);
 
@@ -232,15 +232,15 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 return 0;                       /* ignore the route entry */
 
         /* Assume net, route, all new */
-        PORTAL_ALLOC(route, sizeof(*route));
-        PORTAL_ALLOC(rnet, sizeof(*rnet));
+        LIBCFS_ALLOC(route, sizeof(*route));
+        LIBCFS_ALLOC(rnet, sizeof(*rnet));
         if (route == NULL || rnet == NULL) {
                 CERROR("Out of memory creating route %s %d %s\n",
                        libcfs_net2str(net), hops, libcfs_nid2str(gateway));
                 if (route != NULL)
-                        PORTAL_FREE(route, sizeof(*route));
+                        LIBCFS_FREE(route, sizeof(*route));
                 if (rnet != NULL)
-                        PORTAL_FREE(rnet, sizeof(*rnet));
+                        LIBCFS_FREE(rnet, sizeof(*rnet));
                 return -ENOMEM;
         }
 
@@ -254,8 +254,8 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         if (rc != 0) {
                 LNET_UNLOCK();
 
-                PORTAL_FREE(route, sizeof(*route));
-                PORTAL_FREE(rnet, sizeof(*rnet));
+                LIBCFS_FREE(route, sizeof(*route));
+                LIBCFS_FREE(rnet, sizeof(*rnet));
 
                 if (rc == -EHOSTUNREACH)        /* gateway is not on a local net */
                         return 0;               /* ignore the route entry */
@@ -309,11 +309,11 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         } else {
                 lnet_peer_decref_locked(route->lr_gateway);
                 LNET_UNLOCK();
-                PORTAL_FREE(route, sizeof(*route));
+                LIBCFS_FREE(route, sizeof(*route));
         }
 
         if (rnet != rnet2)
-                PORTAL_FREE(rnet, sizeof(*rnet));
+                LIBCFS_FREE(rnet, sizeof(*rnet));
 
         while (!list_empty(&zombies)) {
                 route = list_entry(zombies.next, lnet_route_t, lr_list);
@@ -322,7 +322,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 LNET_LOCK();
                 lnet_peer_decref_locked(route->lr_gateway);
                 LNET_UNLOCK();
-                PORTAL_FREE(route, sizeof(*route));
+                LIBCFS_FREE(route, sizeof(*route));
         }
 
         return rc;
@@ -386,7 +386,7 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
         list_for_each (e1, &the_lnet.ln_remote_nets) {
                 rnet = list_entry(e1, lnet_remotenet_t, lrn_list);
 
-                if (!(net == PTL_NIDNET(LNET_NID_ANY) ||
+                if (!(net == LNET_NIDNET(LNET_NID_ANY) ||
                       net == rnet->lrn_net))
                         continue;
 
@@ -408,10 +408,10 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
                         lnet_peer_decref_locked(route->lr_gateway);
                         LNET_UNLOCK();
 
-                        PORTAL_FREE(route, sizeof (*route));
+                        LIBCFS_FREE(route, sizeof (*route));
 
                         if (rnet != NULL)
-                                PORTAL_FREE(rnet, sizeof(*rnet));
+                                LIBCFS_FREE(rnet, sizeof(*rnet));
 
                         rc = 0;
                         goto again;
@@ -425,7 +425,7 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
 void
 lnet_destroy_routes (void)
 {
-        lnet_del_route(PTL_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
+        lnet_del_route(LNET_NIDNET(LNET_NID_ANY), LNET_NID_ANY);
 }
 
 int
@@ -470,7 +470,7 @@ lnet_destory_rtrbuf(lnet_rtrbuf_t *rb, int npages)
         while (--npages >= 0)
                 __free_page(rb->rb_kiov[npages].kiov_page);
 
-        PORTAL_FREE(rb, sz);
+        LIBCFS_FREE(rb, sz);
 }
 
 lnet_rtrbuf_t *
@@ -482,7 +482,7 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
         lnet_rtrbuf_t *rb;
         int            i;
 
-        PORTAL_ALLOC(rb, sz);
+        LIBCFS_ALLOC(rb, sz);
 
         rb->rb_pool = rbp;
 
@@ -492,7 +492,7 @@ lnet_new_rtrbuf(lnet_rtrbufpool_t *rbp)
                         while (--i >= 0)
                                 __free_page(rb->rb_kiov[i].kiov_page);
 
-                        PORTAL_FREE(rb, sz);
+                        LIBCFS_FREE(rb, sz);
                         return NULL;
                 }
 

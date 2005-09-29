@@ -47,7 +47,7 @@
 #include <linux/miscdevice.h>
 #include <linux/version.h>
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/linux/portals_compat25.h>

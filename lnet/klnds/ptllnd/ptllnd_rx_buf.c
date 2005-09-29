@@ -237,7 +237,7 @@ kptllnd_rx_buffer_pool_reserve(
         spin_unlock(&rxbp->rxbp_lock);
 
         for(i=0;i<add;i++){
-                PORTAL_ALLOC( rxb,sizeof(*rxb));
+                LIBCFS_ALLOC( rxb,sizeof(*rxb));
                 if(rxb == NULL){
                         CERROR("Failed to allocate data rxb%d\n",i);
                         rc = -ENOMEM;
@@ -256,7 +256,7 @@ kptllnd_rx_buffer_pool_reserve(
                 INIT_LIST_HEAD (&rxb->rxb_list);
                 INIT_LIST_HEAD (&rxb->rxb_repost_list);
 
-                PORTAL_ALLOC( rxb->rxb_buffer,
+                LIBCFS_ALLOC( rxb->rxb_buffer,
                         PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
                 if(rxb->rxb_buffer == NULL) {
                         CERROR("Failed to allocate data buffer or size %d pages for rx%d\n",
@@ -289,8 +289,8 @@ failed:
 
         if(rxb){
                 if(rxb->rxb_buffer)
-                        PORTAL_FREE( rxb->rxb_buffer,PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
-                PORTAL_FREE( rxb,sizeof(*rxb));
+                        LIBCFS_FREE( rxb->rxb_buffer,PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
+                LIBCFS_FREE( rxb,sizeof(*rxb));
         }
 
         return rc;
@@ -482,8 +482,8 @@ kptllnd_rx_buffer_destroy(
         rxbp->rxbp_count--;
         spin_unlock(&rxbp->rxbp_lock);
 
-        PORTAL_FREE( rxb->rxb_buffer,PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
-        PORTAL_FREE(rxb,sizeof(*rxb));
+        LIBCFS_FREE( rxb->rxb_buffer,PAGE_SIZE * *kptllnd_tunables.kptl_rxb_npages);
+        LIBCFS_FREE(rxb,sizeof(*rxb));
 }
 
 

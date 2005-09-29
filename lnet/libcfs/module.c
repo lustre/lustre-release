@@ -22,16 +22,16 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 
 void
-kportal_memhog_free (struct portals_device_userstate *pdu)
+kportal_memhog_free (struct libcfs_device_userstate *ldu)
 {
-        cfs_page_t **level0p = &pdu->pdu_memhog_root_page;
+        cfs_page_t **level0p = &ldu->ldu_memhog_root_page;
         cfs_page_t **level1p;
         cfs_page_t **level2p;
         int           count1;
@@ -52,28 +52,28 @@ kportal_memhog_free (struct portals_device_userstate *pdu)
                                *level2p != NULL) {
 
                                 cfs_free_page(*level2p);
-                                pdu->pdu_memhog_pages--;
+                                ldu->ldu_memhog_pages--;
                                 level2p++;
                                 count2++;
                         }
 
                         cfs_free_page(*level1p);
-                        pdu->pdu_memhog_pages--;
+                        ldu->ldu_memhog_pages--;
                         level1p++;
                         count1++;
                 }
 
                 cfs_free_page(*level0p);
-                pdu->pdu_memhog_pages--;
+                ldu->ldu_memhog_pages--;
 
                 *level0p = NULL;
         }
 
-        LASSERT (pdu->pdu_memhog_pages == 0);
+        LASSERT (ldu->ldu_memhog_pages == 0);
 }
 
 int
-kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flags)
+kportal_memhog_alloc (struct libcfs_device_userstate *ldu, int npages, int flags)
 {
         cfs_page_t **level0p;
         cfs_page_t **level1p;
@@ -81,8 +81,8 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
         int           count1;
         int           count2;
 
-        LASSERT (pdu->pdu_memhog_pages == 0);
-        LASSERT (pdu->pdu_memhog_root_page == NULL);
+        LASSERT (ldu->ldu_memhog_pages == 0);
+        LASSERT (ldu->ldu_memhog_root_page == NULL);
 
         if (npages < 0)
                 return -EINVAL;
@@ -90,17 +90,17 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
         if (npages == 0)
                 return 0;
 
-        level0p = &pdu->pdu_memhog_root_page;
+        level0p = &ldu->ldu_memhog_root_page;
         *level0p = cfs_alloc_page(flags);
         if (*level0p == NULL)
                 return -ENOMEM;
-        pdu->pdu_memhog_pages++;
+        ldu->ldu_memhog_pages++;
 
         level1p = (cfs_page_t **)cfs_page_address(*level0p);
         count1 = 0;
         memset(level1p, 0, CFS_PAGE_SIZE);
 
-        while (pdu->pdu_memhog_pages < npages &&
+        while (ldu->ldu_memhog_pages < npages &&
                count1 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
 
                 if (cfs_signal_pending(cfs_current()))
@@ -109,13 +109,13 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
                 *level1p = cfs_alloc_page(flags);
                 if (*level1p == NULL)
                         return -ENOMEM;
-                pdu->pdu_memhog_pages++;
+                ldu->ldu_memhog_pages++;
 
                 level2p = (cfs_page_t **)cfs_page_address(*level1p);
                 count2 = 0;
                 memset(level2p, 0, CFS_PAGE_SIZE);
 
-                while (pdu->pdu_memhog_pages < npages &&
+                while (ldu->ldu_memhog_pages < npages &&
                        count2 < CFS_PAGE_SIZE/sizeof(cfs_page_t *)) {
 
                         if (cfs_signal_pending(cfs_current()))
@@ -124,7 +124,7 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
                         *level2p = cfs_alloc_page(flags);
                         if (*level2p == NULL)
                                 return (-ENOMEM);
-                        pdu->pdu_memhog_pages++;
+                        ldu->ldu_memhog_pages++;
 
                         level2p++;
                         count2++;
@@ -140,17 +140,17 @@ kportal_memhog_alloc (struct portals_device_userstate *pdu, int npages, int flag
 /* called when opening /dev/device */
 static int libcfs_psdev_open(unsigned long flags, void *args)
 {
-        struct portals_device_userstate *pdu;
+        struct libcfs_device_userstate *ldu;
         ENTRY;
 
         PORTAL_MODULE_USE;
 
-        PORTAL_ALLOC(pdu, sizeof(*pdu));
-        if (pdu != NULL) {
-                pdu->pdu_memhog_pages = 0;
-                pdu->pdu_memhog_root_page = NULL;
+        LIBCFS_ALLOC(ldu, sizeof(*ldu));
+        if (ldu != NULL) {
+                ldu->ldu_memhog_pages = 0;
+                ldu->ldu_memhog_root_page = NULL;
         }
-        *(struct portals_device_userstate **)args = pdu;
+        *(struct libcfs_device_userstate **)args = ldu;
 
         RETURN(0);
 }
@@ -158,13 +158,13 @@ static int libcfs_psdev_open(unsigned long flags, void *args)
 /* called when closing /dev/device */
 static int libcfs_psdev_release(unsigned long flags, void *args)
 {
-        struct portals_device_userstate *pdu;
+        struct libcfs_device_userstate *ldu;
         ENTRY;
 
-        pdu = (struct portals_device_userstate *)args;
-        if (pdu != NULL) {
-                kportal_memhog_free(pdu);
-                PORTAL_FREE(pdu, sizeof(*pdu));
+        ldu = (struct libcfs_device_userstate *)args;
+        if (ldu != NULL) {
+                kportal_memhog_free(ldu);
+                LIBCFS_FREE(ldu, sizeof(*ldu));
         }
 
         PORTAL_MODULE_UNUSE;
@@ -208,38 +208,38 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 {
         char    buf[1024];
         int err = -EINVAL;
-        struct portal_ioctl_data *data;
+        struct libcfs_ioctl_data *data;
         ENTRY;
 
         /* 'cmd' and permissions get checked in our arch-specific caller */
 
-        if (portal_ioctl_getdata(buf, buf + 800, (void *)arg)) {
+        if (libcfs_ioctl_getdata(buf, buf + 800, (void *)arg)) {
                 CERROR("PORTALS ioctl: data error\n");
                 return (-EINVAL);
         }
-        data = (struct portal_ioctl_data *)buf;
+        data = (struct libcfs_ioctl_data *)buf;
 
         switch (cmd) {
-        case IOC_PORTAL_CLEAR_DEBUG:
-                portals_debug_clear_buffer();
+        case IOC_LIBCFS_CLEAR_DEBUG:
+                libcfs_debug_clear_buffer();
                 RETURN(0);
         /*
-         * case IOC_PORTAL_PANIC:
+         * case IOC_LIBCFS_PANIC:
          * Handled in arch/cfs_module.c
          */
-        case IOC_PORTAL_MARK_DEBUG:
+        case IOC_LIBCFS_MARK_DEBUG:
                 if (data->ioc_inlbuf1 == NULL ||
                     data->ioc_inlbuf1[data->ioc_inllen1 - 1] != '\0')
                         RETURN(-EINVAL);
-                portals_debug_mark_buffer(data->ioc_inlbuf1);
+                libcfs_debug_mark_buffer(data->ioc_inlbuf1);
                 RETURN(0);
 #if LWT_SUPPORT
-        case IOC_PORTAL_LWT_CONTROL:
+        case IOC_LIBCFS_LWT_CONTROL:
                 err = lwt_control ((data->ioc_flags & 1) != 0, 
                                    (data->ioc_flags & 2) != 0);
                 break;
 
-        case IOC_PORTAL_LWT_SNAPSHOT: {
+        case IOC_LIBCFS_LWT_SNAPSHOT: {
                 cycles_t   now;
                 int        ncpu;
                 int        total_size;
@@ -260,7 +260,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 break;
         }
 
-        case IOC_PORTAL_LWT_LOOKUP_STRING:
+        case IOC_LIBCFS_LWT_LOOKUP_STRING:
                 err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
                                          data->ioc_pbuf2, data->ioc_plen2);
                 if (err == 0 &&
@@ -268,7 +268,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                         err = -EFAULT;
                 break;
 #endif
-        case IOC_PORTAL_MEMHOG:
+        case IOC_LIBCFS_MEMHOG:
                 if (pfile->private_data == NULL) {
                         err = -EINVAL;
                 } else {
@@ -282,9 +282,9 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
                 }
                 break;
 
-        case IOC_PORTAL_PING: {
-                extern void (kping_client)(struct portal_ioctl_data *);
-                void (*ping)(struct portal_ioctl_data *);
+        case IOC_LIBCFS_PING: {
+                extern void (kping_client)(struct libcfs_ioctl_data *);
+                void (*ping)(struct libcfs_ioctl_data *);
 
                 CDEBUG(D_IOCTL, "doing %d pings to nid %s (%s)\n",
                        data->ioc_count, libcfs_nid2str(data->ioc_nid),
@@ -353,9 +353,9 @@ static int init_libcfs_module(void)
         init_rwsem(&ioctl_list_sem);
         CFS_INIT_LIST_HEAD(&ioctl_list);
 
-        rc = portals_debug_init(5 * 1024 * 1024);
+        rc = libcfs_debug_init(5 * 1024 * 1024);
         if (rc < 0) {
-                printk(KERN_ERR "LustreError: portals_debug_init: %d\n", rc);
+                printk(KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
                 return (rc);
         }
 
@@ -388,7 +388,7 @@ static int init_libcfs_module(void)
         lwt_fini();
  cleanup_debug:
 #endif
-        portals_debug_cleanup();
+        libcfs_debug_cleanup();
         return rc;
 }
 
@@ -413,9 +413,9 @@ static void exit_libcfs_module(void)
                 CERROR("Portals memory leaked: %d bytes\n",
                        atomic_read(&libcfs_kmemory));
 
-        rc = portals_debug_cleanup();
+        rc = libcfs_debug_cleanup();
         if (rc)
-                printk(KERN_ERR "LustreError: portals_debug_cleanup: %d\n", rc);
+                printk(KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n", rc);
         libcfs_arch_cleanup();
 }
 

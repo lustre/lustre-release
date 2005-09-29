@@ -22,7 +22,7 @@
 #include <stdio.h>
 #endif
 
-#define PORTAL_DEBUG
+#define LIBCFS_DEBUG
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
@@ -58,15 +58,15 @@ extern unsigned int libcfs_catastrophe;
 #define S_LLITE       0x00000080
 #define S_RPC         0x00000100
 #define S_MGMT        0x00000200
-#define S_PORTALS     0x00000400
-#define S_NAL         0x00000800 /* ALL NALs */
+#define S_LNET        0x00000400
+#define S_LND         0x00000800 /* ALL LNDs */
 #define S_PINGER      0x00001000
 #define S_FILTER      0x00002000
 #define S_PTLBD       0x00004000
 #define S_ECHO        0x00008000
 #define S_LDLM        0x00010000
 #define S_LOV         0x00020000
-#define S_PTLROUTER   0x00040000
+/* unused */
 #define S_COBD        0x00080000
 #define S_SM          0x00100000
 #define S_ASOBD       0x00200000
@@ -258,22 +258,22 @@ do {                                                                    \
 #define EXIT                            do { } while (0)
 #endif /* !__KERNEL__ */
 
-#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID
+#define LUSTRE_SRV_LNET_PID      LUSTRE_LNET_PID
 
 #ifdef __KERNEL__
 
 #include <libcfs/list.h>
 
-struct portal_ioctl_data;                       /* forward ref */
+struct libcfs_ioctl_data;                       /* forward ref */
 
 struct libcfs_ioctl_handler {
         struct list_head item;
-        int (*handle_ioctl)(unsigned int cmd, struct portal_ioctl_data *data);
+        int (*handle_ioctl)(unsigned int cmd, struct libcfs_ioctl_data *data);
 };
 
 #define DECLARE_IOCTL_HANDLER(ident, func)              \
         struct libcfs_ioctl_handler ident = {           \
-                .item = CFS_LIST_HEAD_INIT(ident.item),     \
+                .item = CFS_LIST_HEAD_INIT(ident.item), \
                 .handle_ioctl = func                    \
         }
 

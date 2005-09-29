@@ -115,7 +115,7 @@ struct ptldebug_header {
 #endif /* __KERNEL__ */
 
 /* initial pid  */
-#define LUSTRE_PTL_PID          12345
+#define LUSTRE_LNET_PID          12345
 
 #define ENTRY_NESTING_SUPPORT (0)
 #define ENTRY_NESTING   do {;} while (0)

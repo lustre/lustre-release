@@ -22,7 +22,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
 
@@ -161,7 +161,7 @@ lnet_fail_nid (lnet_nid_t nid, unsigned int threshold)
         
         if (threshold != 0) {
                 /* Adding a new entry */
-                PORTAL_ALLOC(tp, sizeof(*tp));
+                LIBCFS_ALLOC(tp, sizeof(*tp));
                 if (tp == NULL)
                         return -ENOMEM;
 
@@ -197,7 +197,7 @@ lnet_fail_nid (lnet_nid_t nid, unsigned int threshold)
                 tp = list_entry (cull.next, lnet_test_peer_t, tp_list);
 
                 list_del (&tp->tp_list);
-                PORTAL_FREE(tp, sizeof (*tp));
+                LIBCFS_FREE(tp, sizeof (*tp));
         }
         return 0;
 }
@@ -253,7 +253,7 @@ fail_peer (lnet_nid_t nid, int outgoing)
                 tp = list_entry (cull.next, lnet_test_peer_t, tp_list);
                 list_del (&tp->tp_list);
 
-                PORTAL_FREE(tp, sizeof (*tp));
+                LIBCFS_FREE(tp, sizeof (*tp));
         }
 
         return (fail);
@@ -811,7 +811,7 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
         msg->msg_recvaftersend = 0;
         msg->msg_receiving = 0;
 
-        LASSERT (PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) == LOLND ||
+        LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
                  (msg->msg_txcredit && msg->msg_peertxcredit));
 
         rc = (ni->ni_lnd->lnd_send)(ni, priv, msg);
@@ -1182,7 +1182,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
         }
 
         /* Is this for someone on a local network? */ 
-        local_ni = lnet_net2ni_locked(PTL_NIDNET(dst_nid));
+        local_ni = lnet_net2ni_locked(LNET_NIDNET(dst_nid));
 
         if (local_ni != NULL) {
                 if (src_ni == NULL) {
@@ -1226,7 +1226,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                 LASSERT (lp->lp_ni == src_ni);
         } else {
                 /* sending to a remote network */
-                rnet = lnet_find_net_locked(PTL_NIDNET(dst_nid));
+                rnet = lnet_find_net_locked(LNET_NIDNET(dst_nid));
                 if (rnet == NULL) {
                         if (src_ni != NULL)
                                 lnet_ni_decref_locked(src_ni);
@@ -1277,7 +1277,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 
                 msg->msg_target_is_router = 1;
                 msg->msg_target.nid = lp->lp_nid;
-                msg->msg_target.pid = LUSTRE_SRV_PTL_PID;
+                msg->msg_target.pid = LUSTRE_SRV_LNET_PID;
         }
 
         /* 'lp' is our best choice of peer */
@@ -1736,7 +1736,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                 }
 
                 if (the_lnet.ln_ptlcompat == 0 &&
-                    PTL_NIDNET(dest_nid) == PTL_NIDNET(ni->ni_nid)) {
+                    LNET_NIDNET(dest_nid) == LNET_NIDNET(ni->ni_nid)) {
                         /* should have gone direct */
                         CERROR ("%s, %s: Bad dest nid %s "
                                 "(should have been sent direct)\n",
@@ -2128,7 +2128,7 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
         lnet_ni_t        *ni;
         lnet_route_t     *route;
         lnet_remotenet_t *rnet;
-        __u32             dstnet = PTL_NIDNET(dstnid);
+        __u32             dstnet = LNET_NIDNET(dstnid);
         int               hops;
         int               order = 0;
 
@@ -2142,9 +2142,9 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
                 
                 if (ni->ni_nid == dstnid ||
                     (the_lnet.ln_ptlcompat > 0 &&
-                     PTL_NIDNET(dstnid) == 0 &&
-                     PTL_NIDADDR(dstnid) == PTL_NIDADDR(ni->ni_nid) &&
-                     PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) != LOLND)) {
+                     LNET_NIDNET(dstnid) == 0 &&
+                     LNET_NIDADDR(dstnid) == LNET_NIDADDR(ni->ni_nid) &&
+                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
                         if (srcnidp != NULL)
                                 *srcnidp = dstnid;
                         if (orderp != NULL)
@@ -2153,10 +2153,10 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
                         return 0;
                 }
 
-                if (PTL_NIDNET(ni->ni_nid) == dstnet ||
+                if (LNET_NIDNET(ni->ni_nid) == dstnet ||
                     (the_lnet.ln_ptlcompat > 0 &&
                      dstnet == 0 &&
-                     PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) != LOLND)) {
+                     LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
                         if (srcnidp != NULL)
                                 *srcnidp = ni->ni_nid;
                         if (orderp != NULL)

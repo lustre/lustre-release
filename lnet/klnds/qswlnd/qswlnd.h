@@ -72,7 +72,7 @@
 #include <linux/sysctl.h>
 #include <asm/segment.h>
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
@@ -272,13 +272,13 @@ extern void kqswnal_rx_done (kqswnal_rx_t *krx);
 static inline lnet_nid_t
 kqswnal_elanid2nid (int elanid)
 {
-        return PTL_MKNID(PTL_NIDNET(kqswnal_data.kqn_ni->ni_nid), elanid);
+        return LNET_MKNID(LNET_NIDNET(kqswnal_data.kqn_ni->ni_nid), elanid);
 }
 
 static inline int
 kqswnal_nid2elanid (lnet_nid_t nid)
 {
-        __u32 elanid = PTL_NIDADDR(nid);
+        __u32 elanid = LNET_NIDADDR(nid);
 
         /* not in this cluster? */
         return (elanid >= kqswnal_data.kqn_nnodes) ? -1 : elanid;

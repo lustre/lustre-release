@@ -19,7 +19,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
 lnet_t      the_lnet;                           /* THE state of the network */
@@ -350,7 +350,7 @@ lnet_freelist_init (lnet_freelist_t *fl, int n, int size)
 
         size += offsetof (lnet_freeobj_t, fo_contents);
 
-        PORTAL_ALLOC(space, n * size);
+        LIBCFS_ALLOC(space, n * size);
         if (space == NULL)
                 return (-ENOMEM);
 
@@ -384,7 +384,7 @@ lnet_freelist_fini (lnet_freelist_t *fl)
 
         LASSERT (count == fl->fl_nobjs);
 
-        PORTAL_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
+        LIBCFS_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
         memset (fl, 0, sizeof (fl));
 }
 
@@ -463,7 +463,7 @@ lnet_setup_handle_hash (void)
 #else
         the_lnet.ln_lh_hash_size = (MAX_MES + MAX_MDS + MAX_EQS)/4;
 #endif
-        PORTAL_ALLOC(the_lnet.ln_lh_hash_table,
+        LIBCFS_ALLOC(the_lnet.ln_lh_hash_table,
                      the_lnet.ln_lh_hash_size * sizeof (struct list_head));
         if (the_lnet.ln_lh_hash_table == NULL)
                 return (-ENOMEM);
@@ -482,7 +482,7 @@ lnet_cleanup_handle_hash (void)
         if (the_lnet.ln_lh_hash_table == NULL)
                 return;
         
-        PORTAL_FREE(the_lnet.ln_lh_hash_table,
+        LIBCFS_FREE(the_lnet.ln_lh_hash_table,
                     the_lnet.ln_lh_hash_size * sizeof (struct list_head));
 }
 
@@ -577,7 +577,7 @@ lnet_prepare(lnet_pid_t requested_pid)
                 goto failed1;
 
         the_lnet.ln_nportals = MAX_PORTALS;
-        PORTAL_ALLOC(the_lnet.ln_portals, 
+        LIBCFS_ALLOC(the_lnet.ln_portals, 
                      the_lnet.ln_nportals * 
                      sizeof(*the_lnet.ln_portals));
         if (the_lnet.ln_portals == NULL) {
@@ -655,7 +655,7 @@ lnet_unprepare (void)
                 lnet_msg_free (msg);
         }
 
-        PORTAL_FREE(the_lnet.ln_portals,  
+        LIBCFS_FREE(the_lnet.ln_portals,  
                     the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
 
         lnet_free_rtrpools();
@@ -675,7 +675,7 @@ lnet_net2ni_locked (__u32 net)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (lnet_ptlcompat_matchnet(PTL_NIDNET(ni->ni_nid), net)) {
+                if (lnet_ptlcompat_matchnet(LNET_NIDNET(ni->ni_nid), net)) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
@@ -842,7 +842,7 @@ lnet_shutdown_lndnis (void)
                         LCONSOLE(0, "Removed NI %s\n", 
                                  libcfs_nid2str(ni->ni_nid));
 
-                PORTAL_FREE(ni, sizeof(*ni));
+                LIBCFS_FREE(ni, sizeof(*ni));
 
                 LNET_LOCK();
                 the_lnet.ln_nzombie_nis--;
@@ -852,7 +852,7 @@ lnet_shutdown_lndnis (void)
         LNET_UNLOCK();
 
         if (the_lnet.ln_network_tokens != NULL) {
-                PORTAL_FREE(the_lnet.ln_network_tokens,
+                LIBCFS_FREE(the_lnet.ln_network_tokens,
                             the_lnet.ln_network_tokens_nob);
                 the_lnet.ln_network_tokens = NULL;
         }
@@ -875,7 +875,7 @@ lnet_startup_lndnis (void)
 
         while (!list_empty(&nilist)) {
                 ni = list_entry(nilist.next, lnet_ni_t, ni_list);
-                lnd_type = PTL_NETTYP(PTL_NIDNET(ni->ni_nid));
+                lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
 
                 LASSERT (libcfs_isknown_lnd(lnd_type));
 
@@ -992,7 +992,7 @@ lnet_startup_lndnis (void)
         while (!list_empty(&nilist)) {
                 ni = list_entry(nilist.next, lnet_ni_t, ni_list);
                 list_del(&ni->ni_list);
-                PORTAL_FREE(ni, sizeof(*ni));
+                LIBCFS_FREE(ni, sizeof(*ni));
         }
         
         return -ENETDOWN;
@@ -1128,7 +1128,7 @@ LNetNIFini()
 int
 LNetCtl(unsigned int cmd, void *arg)
 {
-        struct portal_ioctl_data *data = arg;
+        struct libcfs_ioctl_data *data = arg;
         lnet_process_id_t         id;
         lnet_ni_t                *ni;
         int                       rc;
@@ -1137,31 +1137,31 @@ LNetCtl(unsigned int cmd, void *arg)
         LASSERT (the_lnet.ln_refcount > 0);
 
         switch (cmd) {
-        case IOC_PORTAL_GET_NI:
+        case IOC_LIBCFS_GET_NI:
                 rc = LNetGetId(data->ioc_count, &id);
                 data->ioc_nid = id.nid;
                 return rc;
 
-        case IOC_PORTAL_FAIL_NID:
+        case IOC_LIBCFS_FAIL_NID:
                 return lnet_fail_nid(data->ioc_nid, data->ioc_count);
                 
-        case IOC_PORTAL_ADD_ROUTE:
+        case IOC_LIBCFS_ADD_ROUTE:
                 rc = lnet_add_route(data->ioc_net, data->ioc_count, 
                                     data->ioc_nid);
                 return (rc != 0) ? rc : lnet_check_routes();
                 
-        case IOC_PORTAL_DEL_ROUTE:
+        case IOC_LIBCFS_DEL_ROUTE:
                 return lnet_del_route(data->ioc_net, data->ioc_nid);
 
-        case IOC_PORTAL_GET_ROUTE:
+        case IOC_LIBCFS_GET_ROUTE:
                 return lnet_get_route(data->ioc_count, 
                                       &data->ioc_net, &data->ioc_count, 
                                       &data->ioc_nid, &data->ioc_flags);
-        case IOC_PORTAL_NOTIFY_ROUTER:
+        case IOC_LIBCFS_NOTIFY_ROUTER:
                 return lnet_notify(NULL, data->ioc_nid, data->ioc_flags, 
                                    (time_t)data->ioc_u64[0]);
 
-        case IOC_PORTAL_PORTALS_COMPATIBILITY:
+        case IOC_LIBCFS_PORTALS_COMPATIBILITY:
                 return the_lnet.ln_ptlcompat;
 
         default:

@@ -24,7 +24,7 @@
 /*
  * miscellaneous libcfs stuff
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/types.h>
 
 /*

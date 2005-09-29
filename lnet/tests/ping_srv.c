@@ -69,10 +69,10 @@ static void *pingsrv_shutdown(int err)
                         
                 case 5:
                         if (server->in_buf != NULL)
-                                PORTAL_FREE (server->in_buf, MAXSIZE);
+                                LIBCFS_FREE (server->in_buf, MAXSIZE);
                         
                         if (server != NULL)
-                                PORTAL_FREE (server, 
+                                LIBCFS_FREE (server, 
                                              sizeof (struct pingsrv_data));
                         
         }
@@ -217,7 +217,7 @@ static struct pingsrv_data *pingsrv_setup(void)
                 return pingsrv_shutdown (2);
         }
         
-        PORTAL_ALLOC (server->in_buf, MAXSIZE);
+        LIBCFS_ALLOC (server->in_buf, MAXSIZE);
         if(!server->in_buf){
                 CDEBUG (D_OTHER,"Allocation error\n");
                 return pingsrv_shutdown(2);
@@ -257,7 +257,7 @@ static int __init pingsrv_init(void)
 {
         ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
         ping_bulk_magic = __cpu_to_le32(PING_BULK_MAGIC);
-        PORTAL_ALLOC (server, sizeof(struct pingsrv_data));  
+        LIBCFS_ALLOC (server, sizeof(struct pingsrv_data));  
         atomic_set(&pkt, 0);
         return pingsrv_start ();
 } /* pingsrv_init() */

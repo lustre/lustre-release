@@ -35,7 +35,7 @@ lnd_t the_kqswlnd =
 kqswnal_data_t		kqswnal_data;
 
 int
-kqswnal_get_tx_desc (struct portal_ioctl_data *data)
+kqswnal_get_tx_desc (struct libcfs_ioctl_data *data)
 {
 	unsigned long      flags;
 	struct list_head  *tmp;
@@ -71,21 +71,21 @@ kqswnal_get_tx_desc (struct portal_ioctl_data *data)
 int
 kqswnal_ctl (lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-	struct portal_ioctl_data *data = arg;
+	struct libcfs_ioctl_data *data = arg;
 
 	LASSERT (ni == kqswnal_data.kqn_ni);
 
 	switch (cmd) {
-	case IOC_PORTAL_GET_TXDESC:
+	case IOC_LIBCFS_GET_TXDESC:
 		return (kqswnal_get_tx_desc (data));
 
-	case IOC_PORTAL_REGISTER_MYNID:
+	case IOC_LIBCFS_REGISTER_MYNID:
 		if (data->ioc_nid == ni->ni_nid)
 			return 0;
 		
-		LASSERT (PTL_NIDNET(data->ioc_nid) == PTL_NIDNET(ni->ni_nid));
+		LASSERT (LNET_NIDNET(data->ioc_nid) == LNET_NIDNET(ni->ni_nid));
 
-		CERROR("obsolete IOC_PORTAL_REGISTER_MYNID for %s(%s)\n",
+		CERROR("obsolete IOC_LIBCFS_REGISTER_MYNID for %s(%s)\n",
 		       libcfs_nid2str(data->ioc_nid),
 		       libcfs_nid2str(ni->ni_nid));
 		return 0;
@@ -256,10 +256,10 @@ kqswnal_shutdown(lnet_ni_t *ni)
 		ktx = kqswnal_data.kqn_txds;
 
 		if (ktx->ktx_buffer != NULL)
-			PORTAL_FREE(ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
+			LIBCFS_FREE(ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
 
 		kqswnal_data.kqn_txds = ktx->ktx_alloclist;
-		PORTAL_FREE(ktx, sizeof(*ktx));
+		LIBCFS_FREE(ktx, sizeof(*ktx));
 	}
 
 	while (kqswnal_data.kqn_rxds != NULL) {
@@ -271,7 +271,7 @@ kqswnal_shutdown(lnet_ni_t *ni)
 				__free_page (krx->krx_kiov[i].kiov_page);
 
 		kqswnal_data.kqn_rxds = krx->krx_alloclist;
-		PORTAL_FREE(krx, sizeof (*krx));
+		LIBCFS_FREE(krx, sizeof (*krx));
 	}
 
 	/* resets flags, pointers to NULL etc */
@@ -378,7 +378,7 @@ kqswnal_startup (lnet_ni_t *ni)
 	kqswnal_data.kqn_nnodes = ep_numnodes (kqswnal_data.kqn_ep);
 	kqswnal_data.kqn_elanid = ep_nodeid (kqswnal_data.kqn_ep);
 
-	ni->ni_nid = PTL_MKNID(PTL_NIDNET(ni->ni_nid), kqswnal_data.kqn_elanid);
+	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), kqswnal_data.kqn_elanid);
 	
 	/**********************************************************************/
 	/* Get the transmitter */
@@ -489,7 +489,7 @@ kqswnal_startup (lnet_ni_t *ni)
 		int           premapped_pages;
 		int           basepage = i * KQSW_NTXMSGPAGES;
 
-		PORTAL_ALLOC (ktx, sizeof(*ktx));
+		LIBCFS_ALLOC (ktx, sizeof(*ktx));
 		if (ktx == NULL) {
 			kqswnal_shutdown (ni);
 			return (-ENOMEM);
@@ -499,7 +499,7 @@ kqswnal_startup (lnet_ni_t *ni)
 		ktx->ktx_alloclist = kqswnal_data.kqn_txds;
 		kqswnal_data.kqn_txds = ktx;
 
-		PORTAL_ALLOC (ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
+		LIBCFS_ALLOC (ktx->ktx_buffer, KQSW_TX_BUFFER_SIZE);
 		if (ktx->ktx_buffer == NULL)
 		{
 			kqswnal_shutdown (ni);
@@ -545,7 +545,7 @@ kqswnal_startup (lnet_ni_t *ni)
 #endif
 		int           j;
 
-		PORTAL_ALLOC(krx, sizeof(*krx));
+		LIBCFS_ALLOC(krx, sizeof(*krx));
 		if (krx == NULL) {
 			kqswnal_shutdown(ni);
 			return (-ENOMEM);

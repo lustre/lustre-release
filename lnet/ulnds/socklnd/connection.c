@@ -360,7 +360,7 @@ connection force_tcp_connection(manager    m,
                                 lnet_nid_t nid,
                                 procbridge pb)
 {
-    unsigned int       ip = PTL_NIDADDR(nid);
+    unsigned int       ip = LNET_NIDADDR(nid);
     connection         conn;
     struct sockaddr_in addr;
     struct sockaddr_in locaddr; 

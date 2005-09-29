@@ -49,7 +49,7 @@
 #include <sys/types.h>
 #include <kern/simple_lock.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>

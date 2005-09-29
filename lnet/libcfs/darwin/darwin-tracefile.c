@@ -1,5 +1,5 @@
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #define LUSTRE_TRACEFILE_PRIVATE
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>

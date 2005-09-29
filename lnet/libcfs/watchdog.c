@@ -20,7 +20,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
@@ -263,7 +263,7 @@ struct lc_watchdog *lc_watchdog_add(int timeout_ms,
         struct lc_watchdog *lcw = NULL;
         ENTRY;
 
-        PORTAL_ALLOC(lcw, sizeof(*lcw));
+        LIBCFS_ALLOC(lcw, sizeof(*lcw));
         if (!lcw) {
                 CDEBUG(D_INFO, "Could not allocate new lc_watchdog\n");
                 RETURN(ERR_PTR(-ENOMEM));
@@ -380,7 +380,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
                 lcw_dispatch_stop();
         up(&lcw_refcount_sem);
 
-        PORTAL_FREE(lcw, sizeof(*lcw));
+        LIBCFS_FREE(lcw, sizeof(*lcw));
 
         EXIT;
 }

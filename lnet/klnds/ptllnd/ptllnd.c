@@ -198,7 +198,7 @@ kptllnd_msg_unpack(kptl_msg_t *msg, int nob,kptl_data_t *kptllnd_data)
 int
 kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 {
-        struct portal_ioctl_data *data = arg;
+        struct libcfs_ioctl_data *data = arg;
         int          rc = -EINVAL;
         kptl_data_t *kptllnd_data = ni->ni_data;
 
@@ -211,17 +211,17 @@ kptllnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
         LASSERT (ni == kptllnd_data->kptl_ni);
 
         switch(cmd) {
-        case IOC_PORTAL_DEL_PEER: {
+        case IOC_LIBCFS_DEL_PEER: {
                 rc = kptllnd_peer_del (kptllnd_data,data->ioc_nid);
                 break;
         }
         /*
          * Not Supported - This is Legacy stuff
-        case IOC_PORTAL_GET_PEER:
-        case IOC_PORTAL_ADD_PEER:
-        case IOC_PORTAL_GET_CONN:
-        case IOC_PORTAL_CLOSE_CONNECTION:
-        case IOC_PORTAL_REGISTER_MYNID:
+        case IOC_LIBCFS_GET_PEER:
+        case IOC_LIBCFS_ADD_PEER:
+        case IOC_LIBCFS_GET_CONN:
+        case IOC_LIBCFS_CLOSE_CONNECTION:
+        case IOC_LIBCFS_REGISTER_MYNID:
         */
         default:
                 CERROR("Unsupported IOCTL command %d\n",cmd);
@@ -263,7 +263,7 @@ kptllnd_startup (lnet_ni_t *ni)
 
         LASSERT (ni->ni_lnd == &kptllnd_lnd);
 
-        PORTAL_ALLOC (kptllnd_data,sizeof(*kptllnd_data));
+        LIBCFS_ALLOC (kptllnd_data,sizeof(*kptllnd_data));
         if (kptllnd_data == NULL){
                 CERROR ("Failed to allocate memory for PTLLND context\n");
                 return -ENOMEM;
@@ -385,7 +385,7 @@ kptllnd_startup (lnet_ni_t *ni)
         rwlock_init(&kptllnd_data->kptl_peer_rw_lock);
         kptllnd_data->kptl_peer_hash_size = *kptllnd_tunables.kptl_peer_hash_table_size;
         INIT_LIST_HEAD(&kptllnd_data->kptl_canceled_peers);
-        PORTAL_ALLOC (kptllnd_data->kptl_peers,
+        LIBCFS_ALLOC (kptllnd_data->kptl_peers,
                       sizeof (struct list_head) * kptllnd_data->kptl_peer_hash_size);
         if (kptllnd_data->kptl_peers == NULL) {
                 CERROR("Failed to allocate space for peer hash table size=%d\n",
@@ -426,7 +426,7 @@ kptllnd_startup (lnet_ni_t *ni)
          * to know that we have to clean this up
          */
         PJK_UT_MSG("Allocate TX Descriptor array\n");
-        PORTAL_ALLOC (kptllnd_data->kptl_tx_descs,
+        LIBCFS_ALLOC (kptllnd_data->kptl_tx_descs,
                       (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
         if (kptllnd_data->kptl_tx_descs == NULL){
                 CERROR ("Can't allocate space for TX Descriptor array count=%d\n",
@@ -644,7 +644,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
          *  Free the tx descriptors
          */
         if (kptllnd_data->kptl_tx_descs != NULL)
-                PORTAL_FREE(kptllnd_data->kptl_tx_descs,
+                LIBCFS_FREE(kptllnd_data->kptl_tx_descs,
                         (*kptllnd_tunables.kptl_ntx) * sizeof(kptl_tx_t));
 
         /*
@@ -657,7 +657,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
          * Cleanup the peer hash table
          */
         if (kptllnd_data->kptl_peers != NULL){
-                PORTAL_FREE (kptllnd_data->kptl_peers,
+                LIBCFS_FREE (kptllnd_data->kptl_peers,
                              sizeof (struct list_head) *
                              kptllnd_data->kptl_peer_hash_size);
         }
@@ -665,7 +665,7 @@ kptllnd_shutdown (lnet_ni_t *ni)
         /*
          * And free the context block
          */
-        PORTAL_FREE(kptllnd_data,sizeof(*kptllnd_data));
+        LIBCFS_FREE(kptllnd_data,sizeof(*kptllnd_data));
 
         CDEBUG(D_MALLOC, "after LND cleanup: kmem %d\n",
                atomic_read (&libcfs_kmemory));

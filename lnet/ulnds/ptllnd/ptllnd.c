@@ -115,7 +115,7 @@ ptllnd_create_buffer (lnet_ni_t *ni)
         ptllnd_ni_t     *plni = ni->ni_data;
         ptllnd_buffer_t *buf;
         
-        PORTAL_ALLOC(buf, sizeof(*buf));
+        LIBCFS_ALLOC(buf, sizeof(*buf));
         if (buf == NULL) {
                 CERROR("Can't allocate buffer descriptor\n");
                 return NULL;
@@ -124,11 +124,11 @@ ptllnd_create_buffer (lnet_ni_t *ni)
         buf->plb_ni = ni;
         buf->plb_posted = 0;
         
-        PORTAL_ALLOC(buf->plb_buffer, plni->plni_buffer_size);
+        LIBCFS_ALLOC(buf->plb_buffer, plni->plni_buffer_size);
         if (buf->plb_buffer == NULL) {
                 CERROR("Can't allocate buffer size %d\n",
                        plni->plni_buffer_size);
-                PORTAL_FREE(buf, sizeof(*buf));
+                LIBCFS_FREE(buf, sizeof(*buf));
                 return NULL;
         }
         
@@ -147,8 +147,8 @@ ptllnd_destroy_buffer (ptllnd_buffer_t *buf)
 
         plni->plni_nbuffers--;
         list_del(&buf->plb_list);
-        PORTAL_FREE(buf->plb_buffer, plni->plni_buffer_size);
-        PORTAL_FREE(buf, sizeof(*buf));
+        LIBCFS_FREE(buf->plb_buffer, plni->plni_buffer_size);
+        LIBCFS_FREE(buf, sizeof(*buf));
 }
 
 int
@@ -225,7 +225,7 @@ ptllnd_create_peer_hash (lnet_ni_t *ni)
         ptllnd_ni_t *plni = ni->ni_data;
         int          i;
 
-        PORTAL_ALLOC(plni->plni_peer_hash, 
+        LIBCFS_ALLOC(plni->plni_peer_hash, 
                      plni->plni_peer_hash_size * sizeof(*plni->plni_peer_hash));
         if (plni->plni_peer_hash == NULL) {
                 CERROR("Can't allocate ptllnd peer hash (size %d)\n",
@@ -248,7 +248,7 @@ ptllnd_destroy_peer_hash (lnet_ni_t *ni)
         for (i = 0; i < plni->plni_peer_hash_size; i++)
                 LASSERT (list_empty(&plni->plni_peer_hash[i]));
         
-        PORTAL_FREE(plni->plni_peer_hash,
+        LIBCFS_FREE(plni->plni_peer_hash,
                     plni->plni_peer_hash_size * sizeof(*plni->plni_peer_hash));
 }
 
@@ -303,7 +303,7 @@ ptllnd_shutdown (lnet_ni_t *ni)
         LASSERT (rc == PTL_OK);
         
         ptllnd_destroy_peer_hash(ni);
-        PORTAL_FREE(plni, sizeof(*plni));
+        LIBCFS_FREE(plni, sizeof(*plni));
         ptllnd_ni_count--;
 }
 
@@ -324,7 +324,7 @@ ptllnd_startup (lnet_ni_t *ni)
 
         ptllnd_ni_count++;
         
-        PORTAL_ALLOC(plni, sizeof(*plni));
+        LIBCFS_ALLOC(plni, sizeof(*plni));
         if (plni == NULL) {
                 CERROR("Can't allocate ptllnd state\n");
                 rc = -ENOMEM;
@@ -377,7 +377,7 @@ ptllnd_startup (lnet_ni_t *ni)
  failed2:
         ptllnd_destroy_peer_hash(ni);
  failed1:
-        PORTAL_FREE(plni, sizeof(*plni));
+        LIBCFS_FREE(plni, sizeof(*plni));
  failed0:
         ptllnd_ni_count--;
         return rc;

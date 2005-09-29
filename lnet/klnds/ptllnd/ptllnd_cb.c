@@ -828,7 +828,7 @@ void
 kptllnd_thread_fini (kptllnd_thread_data_t *thread_data)
 {
         atomic_dec (&thread_data->kptllnd_data->kptl_nthreads);
-        PORTAL_FREE(thread_data,sizeof(*thread_data));
+        LIBCFS_FREE(thread_data,sizeof(*thread_data));
 }
 
 int
@@ -841,7 +841,7 @@ kptllnd_thread_start (int (*fn)(void *arg), int id,kptl_data_t *kptllnd_data)
          * Allocate the tread data so we can pass more that
          * one param to the thread function
          */
-        PORTAL_ALLOC (thread_data,sizeof(*thread_data));
+        LIBCFS_ALLOC (thread_data,sizeof(*thread_data));
         if(thread_data == 0){
                 CERROR("No memory to allocated thread data structure\n");
                 return 0;

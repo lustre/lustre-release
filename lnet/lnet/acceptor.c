@@ -20,7 +20,7 @@
  *
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
 #ifdef __KERNEL__
@@ -258,7 +258,7 @@ lnet_accept(lnet_ni_t *blind_ni, struct socket *sock, __u32 magic)
                 return -EPROTO;
         }
 
-        ni = lnet_net2ni(PTL_NIDNET(cr.acr_nid));
+        ni = lnet_net2ni(LNET_NIDNET(cr.acr_nid));
         if (ni == NULL ||             /* no matching net */
             ni->ni_nid != cr.acr_nid) /* right NET, but wrong NID! */ {
                 if (ni != NULL)

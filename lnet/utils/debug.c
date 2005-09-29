@@ -195,14 +195,14 @@ static void applymask_all(unsigned int subs_mask, unsigned int debug_mask)
                 applymask("/proc/sys/lnet/subsystem_debug", subs_mask);
                 applymask("/proc/sys/lnet/debug", debug_mask);
         } else {
-                struct portals_debug_ioctl_data data;
+                struct libcfs_debug_ioctl_data data;
 
                 data.hdr.ioc_len = sizeof(data);
                 data.hdr.ioc_version = 0;
                 data.subs = subs_mask;
                 data.debug = debug_mask;
 
-                dump(OBD_DEV_ID, PTL_IOC_DEBUG_MASK, &data);
+                dump(OBD_DEV_ID, LIBCFS_IOC_DEBUG_MASK, &data);
         }
         printf("Applied subsystem_debug=%d, debug=%d to /proc/sys/lnet\n",
                subs_mask, debug_mask);
@@ -596,7 +596,7 @@ out:
 int jt_dbg_clear_debug_buf(int argc, char **argv)
 {
         int rc;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc != 1) {
                 fprintf(stderr, "usage: %s\n", argv[0]);
@@ -604,14 +604,14 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
         }
 
         memset(&data, 0, sizeof(data));
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_CLEAR_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CLEAR_DEBUG, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_CLEAR_DEBUG failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_CLEAR_DEBUG failed: %s\n",
                         strerror(errno));
                 return -1;
         }
@@ -621,7 +621,7 @@ int jt_dbg_clear_debug_buf(int argc, char **argv)
 int jt_dbg_mark_debug_buf(int argc, char **argv)
 {
         int rc, max_size = MAX_MARK_SIZE-1;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         char *text;
         time_t now = time(NULL);
 
@@ -647,14 +647,14 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
         memset(&data, 0, sizeof(data));
         data.ioc_inllen1 = strlen(text) + 1;
         data.ioc_inlbuf1 = text;
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_MARK_DEBUG, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_MARK_DEBUG, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_MARK_DEBUG failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_MARK_DEBUG failed: %s\n",
                         strerror(errno));
                 return -1;
         }
@@ -822,7 +822,7 @@ int jt_dbg_modules(int argc, char **argv)
 int jt_dbg_panic(int argc, char **argv)
 {
         int rc;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc != 1) {
                 fprintf(stderr, "usage: %s\n", argv[0]);
@@ -830,14 +830,14 @@ int jt_dbg_panic(int argc, char **argv)
         }
 
         memset(&data, 0, sizeof(data));
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
+        if (libcfs_ioctl_pack(&data, &buf, max) != 0) {
+                fprintf(stderr, "libcfs_ioctl_pack failed.\n");
                 return -1;
         }
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PANIC, buf);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PANIC, buf);
         if (rc) {
-                fprintf(stderr, "IOC_PORTAL_PANIC failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_PANIC failed: %s\n",
                         strerror(errno));
                 return -1;
         }

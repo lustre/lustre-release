@@ -246,7 +246,7 @@ int g_net_is_compatible (char *cmd, ...)
 
         do {
                 nal = va_arg (ap, int);
-                if (nal == PTL_NETTYP(g_net)) {
+                if (nal == LNET_NETTYP(g_net)) {
                         va_end (ap);
                         return 1;
                 }
@@ -258,7 +258,7 @@ int g_net_is_compatible (char *cmd, ...)
                 fprintf (stderr, 
                          "Command %s not compatible with %s NAL\n",
                          cmd, 
-                         libcfs_lnd2str(PTL_NETTYP(g_net)));
+                         libcfs_lnd2str(LNET_NETTYP(g_net)));
         return 0;
 }
 
@@ -271,8 +271,8 @@ int ptl_initialize(int argc, char **argv)
 
 int jt_ptl_network(int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        __u32                    net = PTL_NIDNET(LNET_NID_ANY);
+        struct libcfs_ioctl_data data;
+        __u32                    net = LNET_NIDNET(LNET_NID_ANY);
         int                      set = argc >= 2;
         int                      count;
         int                      rc;
@@ -280,8 +280,8 @@ int jt_ptl_network(int argc, char **argv)
         if (set && 
             (!strcmp(argv[1], "unconfigure") ||
              !strcmp(argv[1], "down"))) {
-                PORTAL_IOC_INIT(data);
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_UNCONFIGURE, &data);
+                LIBCFS_IOC_INIT(data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_UNCONFIGURE, &data);
                 
                 if (rc == 0) {
                         printf ("lnet ready to unload\n");
@@ -298,16 +298,16 @@ int jt_ptl_network(int argc, char **argv)
         
         if (set) {
                 net = libcfs_str2net(argv[1]);
-                if (net == PTL_NIDNET(LNET_NID_ANY)) {
+                if (net == LNET_NIDNET(LNET_NID_ANY)) {
                         fprintf(stderr, "Can't parse net %s\n", argv[1]);
                         return -1;
                 }
         }
 
         for (count = 0;; count++) {
-                PORTAL_IOC_INIT (data);
+                LIBCFS_IOC_INIT (data);
                 data.ioc_count = count;
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_NI, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
 
                 if (rc >= 0) {
                         if (!set) {
@@ -315,7 +315,7 @@ int jt_ptl_network(int argc, char **argv)
                                 continue;
                         }
                         
-                        if (net == PTL_NIDNET(data.ioc_nid)) {
+                        if (net == LNET_NIDNET(data.ioc_nid)) {
                                 g_net_set = 1;
                                 g_net = net;
                                 return 0;
@@ -326,7 +326,7 @@ int jt_ptl_network(int argc, char **argv)
                 if (errno == ENOENT)
                         break;
 
-                fprintf(stderr,"IOC_PORTAL_GET_NI error %d: %s\n",
+                fprintf(stderr,"IOC_LIBCFS_GET_NI error %d: %s\n",
                         errno, strerror(errno));
                 return -1;
         }
@@ -350,7 +350,7 @@ int jt_ptl_network(int argc, char **argv)
 int
 jt_ptl_print_interfaces (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         char                     buffer[3][64];
         int                      index;
         int                      rc;
@@ -359,11 +359,11 @@ jt_ptl_print_interfaces (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT(data);
+                LIBCFS_IOC_INIT(data);
                 data.ioc_net   = g_net;
                 data.ioc_count = index;
                 
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_INTERFACE, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_INTERFACE, &data);
                 if (rc != 0)
                         break;
 
@@ -390,7 +390,7 @@ jt_ptl_print_interfaces (int argc, char **argv)
 int
 jt_ptl_add_interface (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         __u32                    ipaddr;
         int                      rc;
         __u32                    netmask = 0xffffff00;
@@ -423,12 +423,12 @@ jt_ptl_add_interface (int argc, char **argv)
                 }
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_u32[0] = ipaddr;
         data.ioc_u32[1] = netmask;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_ADD_INTERFACE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_INTERFACE, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to add interface: %s\n",
                          strerror (errno));
@@ -441,7 +441,7 @@ jt_ptl_add_interface (int argc, char **argv)
 int
 jt_ptl_del_interface (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      rc;
         __u32                    ipaddr = 0;
 
@@ -459,11 +459,11 @@ jt_ptl_del_interface (int argc, char **argv)
                 return -1;
         }
         
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_u32[0] = ipaddr;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_INTERFACE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_INTERFACE, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to delete interface: %s\n",
                          strerror (errno));
@@ -476,8 +476,8 @@ jt_ptl_del_interface (int argc, char **argv)
 int
 jt_ptl_print_peers (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_process_id_t         id;
+        struct libcfs_ioctl_data data;
+        lnet_process_id_t        id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -487,11 +487,11 @@ jt_ptl_print_peers (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT(data);
+                LIBCFS_IOC_INIT(data);
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
                 
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_PEER, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER, &data);
                 if (rc != 0)
                         break;
 
@@ -532,8 +532,8 @@ jt_ptl_print_peers (int argc, char **argv)
 int 
 jt_ptl_add_peer (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_nid_t                nid;
+        struct libcfs_ioctl_data data;
+        lnet_nid_t               nid;
         __u32                    ip = 0;
         int                      port = 0;
         int                      rc;
@@ -577,13 +577,13 @@ jt_ptl_add_peer (int argc, char **argv)
                 return -1;
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_nid    = nid;
         data.ioc_u32[0] = ip;
         data.ioc_u32[1] = port;
 
-        rc = l_ioctl (LNET_DEV_ID, IOC_PORTAL_ADD_PEER, &data);
+        rc = l_ioctl (LNET_DEV_ID, IOC_LIBCFS_ADD_PEER, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to add peer: %s\n",
                          strerror (errno));
@@ -596,8 +596,8 @@ jt_ptl_add_peer (int argc, char **argv)
 int 
 jt_ptl_del_peer (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_nid_t                nid = LNET_NID_ANY;
+        struct libcfs_ioctl_data data;
+        lnet_nid_t               nid = LNET_NID_ANY;
         __u32                    ip = 0;
         int                      rc;
 
@@ -631,12 +631,12 @@ jt_ptl_del_peer (int argc, char **argv)
                 }
         }
         
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net    = g_net;
         data.ioc_nid    = nid;
         data.ioc_u32[0] = ip;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_PEER, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_PEER, &data);
         if (rc != 0) {
                 fprintf (stderr, "failed to remove peer: %s\n",
                          strerror (errno));
@@ -649,8 +649,8 @@ jt_ptl_del_peer (int argc, char **argv)
 int 
 jt_ptl_print_connections (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_process_id_t         id;
+        struct libcfs_ioctl_data data;
+        lnet_process_id_t        id;
         char                     buffer[2][64];
         int                      index;
         int                      rc;
@@ -660,11 +660,11 @@ jt_ptl_print_connections (int argc, char **argv)
                 return -1;
 
         for (index = 0; ; index++) {
-                PORTAL_IOC_INIT(data);
+                LIBCFS_IOC_INIT(data);
                 data.ioc_net     = g_net;
                 data.ioc_count   = index;
 
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_CONN, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_CONN, &data);
                 if (rc != 0)
                         break;
 
@@ -707,8 +707,8 @@ jt_ptl_print_connections (int argc, char **argv)
 
 int jt_ptl_disconnect(int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_nid_t                nid = LNET_NID_ANY;
+        struct libcfs_ioctl_data data;
+        lnet_nid_t               nid = LNET_NID_ANY;
         __u32                    ipaddr = 0;
         int                      rc;
 
@@ -734,12 +734,12 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return -1;
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net     = g_net;
         data.ioc_nid     = nid;
         data.ioc_u32[0]  = ipaddr;
         
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_CLOSE_CONNECTION, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_CLOSE_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to remove connection: %s\n",
                         strerror(errno));
@@ -751,9 +751,9 @@ int jt_ptl_disconnect(int argc, char **argv)
 
 int jt_ptl_push_connection (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      rc;
-        lnet_nid_t                nid = LNET_NID_ANY;
+        lnet_nid_t               nid = LNET_NID_ANY;
 
         if (argc > 2) {
                 fprintf(stderr, "usage: %s [nid]\n", argv[0]);
@@ -769,11 +769,11 @@ int jt_ptl_push_connection (int argc, char **argv)
                 return -1;
         }
                         
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net     = g_net;
         data.ioc_nid     = nid;
         
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PUSH_CONNECTION, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PUSH_CONNECTION, &data);
         if (rc != 0) {
                 fprintf(stderr, "failed to push connection: %s\n",
                         strerror(errno));
@@ -786,7 +786,7 @@ int jt_ptl_push_connection (int argc, char **argv)
 int 
 jt_ptl_print_active_txs (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      index;
         int                      rc;
 
@@ -794,11 +794,11 @@ jt_ptl_print_active_txs (int argc, char **argv)
                 return -1;
 
         for (index = 0;;index++) {
-                PORTAL_IOC_INIT(data);
+                LIBCFS_IOC_INIT(data);
                 data.ioc_net   = g_net;
                 data.ioc_count = index;
 
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_TXDESC, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_TXDESC, &data);
                 if (rc != 0)
                         break;
 
@@ -833,7 +833,7 @@ int jt_ptl_ping(int argc, char **argv)
         long      count   = 1;
         long      size    = 4;
         long      timeout = 1;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc < 2) {
                 fprintf(stderr, "usage: %s nid [count] [size] [timeout (secs)]\n", argv[0]);
@@ -863,13 +863,13 @@ int jt_ptl_ping(int argc, char **argv)
         if (argc > 4)
                 timeout = atol (argv[4]);
         
-        PORTAL_IOC_INIT (data);
+        LIBCFS_IOC_INIT (data);
         data.ioc_count   = count;
         data.ioc_nid     = nid;
         data.ioc_u32[0]  = size;
         data.ioc_u32[1]  = timeout;
         
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_PING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_PING, &data);
         if (rc) {
                 fprintf(stderr, "failed to start pinger: %s\n",
                         strerror(errno));
@@ -880,8 +880,8 @@ int jt_ptl_ping(int argc, char **argv)
 
 int jt_ptl_mynid(int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_nid_t                nid;
+        struct libcfs_ioctl_data data;
+        lnet_nid_t               nid;
         int rc;
 
         if (argc != 2) {
@@ -895,11 +895,11 @@ int jt_ptl_mynid(int argc, char **argv)
                 return -1;
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_net = PTL_NIDNET(nid);
+        LIBCFS_IOC_INIT(data);
+        data.ioc_net = LNET_NIDNET(nid);
         data.ioc_nid = nid;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_REGISTER_MYNID, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_REGISTER_MYNID, &data);
         if (rc < 0)
                 fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));
@@ -913,9 +913,9 @@ int
 jt_ptl_fail_nid (int argc, char **argv)
 {
         int                      rc;
-        lnet_nid_t                nid;
+        lnet_nid_t               nid;
         unsigned int             threshold;
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
 
         if (argc < 2 || argc > 3)
         {
@@ -936,13 +936,13 @@ jt_ptl_fail_nid (int argc, char **argv)
                 return (-1);
         }
         
-        PORTAL_IOC_INIT (data);
+        LIBCFS_IOC_INIT (data);
         data.ioc_nid = nid;
         data.ioc_count = threshold;
         
-        rc = l_ioctl (LNET_DEV_ID, IOC_PORTAL_FAIL_NID, &data);
+        rc = l_ioctl (LNET_DEV_ID, IOC_LIBCFS_FAIL_NID, &data);
         if (rc < 0)
-                fprintf (stderr, "IOC_PORTAL_FAIL_NID failed: %s\n",
+                fprintf (stderr, "IOC_LIBCFS_FAIL_NID failed: %s\n",
                          strerror (errno));
         else
                 printf ("%s %s\n", threshold == 0 ? "Unfailing" : "Failing", argv[1]);
@@ -953,7 +953,7 @@ jt_ptl_fail_nid (int argc, char **argv)
 int
 jt_ptl_add_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         lnet_nid_t               gateway_nid;
         unsigned int             hops = 1;
         char                    *end;
@@ -982,14 +982,14 @@ jt_ptl_add_route (int argc, char **argv)
                 }
         }
         
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net = g_net;
         data.ioc_count = hops;
         data.ioc_nid = gateway_nid;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_ROUTE, &data);
         if (rc != 0) {
-                fprintf (stderr, "IOC_PORTAL_ADD_ROUTE failed: %s\n", strerror (errno));
+                fprintf (stderr, "IOC_LIBCFS_ADD_ROUTE failed: %s\n", strerror (errno));
                 return (-1);
         }
         
@@ -999,8 +999,8 @@ jt_ptl_add_route (int argc, char **argv)
 int
 jt_ptl_del_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
-        lnet_nid_t                nid;
+        struct libcfs_ioctl_data data;
+        lnet_nid_t               nid;
         int                      rc;
         
         if (argc != 2) {
@@ -1014,13 +1014,13 @@ jt_ptl_del_route (int argc, char **argv)
                 return -1;
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_net = g_net;
         data.ioc_nid = nid;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_ROUTE, &data);
         if (rc != 0) {
-                fprintf (stderr, "IOC_PORTAL_DEL_ROUTE (%s) failed: %s\n", 
+                fprintf (stderr, "IOC_LIBCFS_DEL_ROUTE (%s) failed: %s\n", 
                          libcfs_nid2str(nid), strerror (errno));
                 return (-1);
         }
@@ -1031,9 +1031,9 @@ jt_ptl_del_route (int argc, char **argv)
 int
 jt_ptl_notify_router (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      enable;
-        lnet_nid_t                nid;
+        lnet_nid_t               nid;
         int                      rc;
         struct timeval           now;
         time_t                   when;
@@ -1071,15 +1071,15 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_nid = nid;
         data.ioc_flags = enable;
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
         data.ioc_u64[0] = (__u64)when;
         
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_NOTIFY_ROUTER, &data);
         if (rc != 0) {
-                fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER (%s) failed: %s\n",
+                fprintf (stderr, "IOC_LIBCFS_NOTIFY_ROUTER (%s) failed: %s\n",
                          libcfs_nid2str(nid), strerror (errno));
                 return (-1);
         }
@@ -1090,7 +1090,7 @@ jt_ptl_notify_router (int argc, char **argv)
 int
 jt_ptl_print_routes (int argc, char **argv)
 {
-        struct portal_ioctl_data  data;
+        struct libcfs_ioctl_data  data;
         int                       rc;
         int                       index;
         __u32			  net;
@@ -1100,10 +1100,10 @@ jt_ptl_print_routes (int argc, char **argv)
 
         for (index = 0;;index++)
         {
-                PORTAL_IOC_INIT(data);
+                LIBCFS_IOC_INIT(data);
                 data.ioc_count = index;
                 
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_ROUTE, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_ROUTE, &data);
                 if (rc != 0)
                         break;
 
@@ -1127,17 +1127,17 @@ jt_ptl_print_routes (int argc, char **argv)
 static int
 lwt_control(int enable, int clear)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      rc;
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_flags = (enable ? 1 : 0) | (clear ? 2 : 0);
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_CONTROL, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LWT_CONTROL, &data);
         if (rc == 0)
                 return (0);
 
-        fprintf(stderr, "IOC_PORTAL_LWT_CONTROL failed: %s\n",
+        fprintf(stderr, "IOC_LIBCFS_LWT_CONTROL failed: %s\n",
                 strerror(errno));
         return (-1);
 }
@@ -1146,16 +1146,16 @@ static int
 lwt_snapshot(cycles_t *now, int *ncpu, int *totalsize, 
              lwt_event_t *events, int size)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      rc;
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_pbuf1 = (char *)events;
         data.ioc_plen1 = size;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_SNAPSHOT, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LWT_SNAPSHOT, &data);
         if (rc != 0) {
-                fprintf(stderr, "IOC_PORTAL_LWT_SNAPSHOT failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_LWT_SNAPSHOT failed: %s\n",
                         strerror(errno));
                 return (-1);
         }
@@ -1188,22 +1188,22 @@ static char *
 lwt_get_string(char *kstr)
 {
         char                     *ustr;
-        struct portal_ioctl_data  data;
+        struct libcfs_ioctl_data  data;
         int                       size;
         int                       rc;
 
         /* FIXME: this could maintain a symbol table since we expect to be
          * looking up the same strings all the time... */
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_pbuf1 = kstr;
         data.ioc_plen1 = 1;        /* non-zero just to fool portal_ioctl_is_invalid() */
         data.ioc_pbuf2 = NULL;
         data.ioc_plen2 = 0;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LWT_LOOKUP_STRING, &data);
         if (rc != 0) {
-                fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_LWT_LOOKUP_STRING failed: %s\n",
                         strerror(errno));
                 return (NULL);
         }
@@ -1216,15 +1216,15 @@ lwt_get_string(char *kstr)
                 return (NULL);
         }
 
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_pbuf1 = kstr;
         data.ioc_plen1 = 1;        /* non-zero just to fool portal_ioctl_is_invalid() */
         data.ioc_pbuf2 = ustr;
         data.ioc_plen2 = size;
 
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_LWT_LOOKUP_STRING, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LWT_LOOKUP_STRING, &data);
         if (rc != 0) {
-                fprintf(stderr, "IOC_PORTAL_LWT_LOOKUP_STRING failed: %s\n",
+                fprintf(stderr, "IOC_LIBCFS_LWT_LOOKUP_STRING failed: %s\n",
                         strerror(errno));
                 return (NULL);
         }
@@ -1491,7 +1491,7 @@ int jt_ptl_memhog(int argc, char **argv)
 {
         static int                gfp = 0;        /* sticky! */
 
-        struct portal_ioctl_data  data;
+        struct libcfs_ioctl_data  data;
         int                       rc;
         int                       count;
         char                     *end;
@@ -1516,10 +1516,10 @@ int jt_ptl_memhog(int argc, char **argv)
                 gfp = rc;
         }
         
-        PORTAL_IOC_INIT(data);
+        LIBCFS_IOC_INIT(data);
         data.ioc_count = count;
         data.ioc_flags = gfp;
-        rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_MEMHOG, &data);
+        rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_MEMHOG, &data);
 
         if (rc != 0) {
                 fprintf(stderr, "memhog %d failed: %s\n", count, strerror(errno));

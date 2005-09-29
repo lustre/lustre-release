@@ -502,7 +502,7 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
         }
 
         phys_size = nkiov * sizeof (*phys);
-        PORTAL_ALLOC(phys, phys_size);
+        LIBCFS_ALLOC(phys, phys_size);
         if (phys == NULL) {
                 CERROR ("Can't allocate tmp phys\n");
                 return (-ENOMEM);
@@ -590,7 +590,7 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
         }
 
  out:
-        PORTAL_FREE(phys, phys_size);
+        LIBCFS_FREE(phys, phys_size);
         return (rc);
 }
 
@@ -934,7 +934,7 @@ kibnal_launch_tx (kib_tx_t *tx, lnet_nid_t nid)
                         return;
                 }
 
-                rc = kibnal_add_persistent_peer(nid, PTL_NIDADDR(nid),
+                rc = kibnal_add_persistent_peer(nid, LNET_NIDADDR(nid),
                                                 lnet_acceptor_port());
                 if (rc != 0) {
                         CERROR("Can't add peer %s: %d\n",
@@ -1541,7 +1541,7 @@ kibnal_connreq_done (kib_conn_t *conn, int status)
         int               i;
 
         if (conn->ibc_connreq != NULL) {
-                PORTAL_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
+                LIBCFS_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
                 conn->ibc_connreq = NULL;
         }
 
@@ -2099,7 +2099,7 @@ kibnal_connect_peer (kib_peer_t *peer)
         conn->ibc_peer = peer;
         atomic_inc (&peer->ibp_refcount);
 
-        PORTAL_ALLOC (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
+        LIBCFS_ALLOC (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
         if (conn->ibc_connreq == NULL) {
                 CERROR ("Can't allocate connreq\n");
                 kibnal_connreq_done(conn, -ENOMEM);

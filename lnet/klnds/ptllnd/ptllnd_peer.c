@@ -54,7 +54,7 @@ kptllnd_peer_create_locked (
                 rc = -EOVERFLOW;        /* !! but at least it distinguishes */
         }
 
-        PORTAL_ALLOC(peer, sizeof (*peer));
+        LIBCFS_ALLOC(peer, sizeof (*peer));
         if (peer == NULL) {
                 CERROR("Cannot allocate memory for peer\n");
                 return -ENOMEM;
@@ -99,7 +99,7 @@ kptllnd_peer_create_locked (
                 *kptllnd_tunables.kptl_peercredits);
         if(rc != 0){
                 CERROR("Cannot reserve rx buffer pool space\n");
-                PORTAL_FREE(peer, sizeof (*peer));
+                LIBCFS_FREE(peer, sizeof (*peer));
                 return rc;
         }
 
@@ -140,7 +140,7 @@ kptllnd_peer_destroy (
         /* No active tx descriptors */
         LASSERT (list_empty (&peer->peer_active_txs));
 
-        PORTAL_FREE (peer, sizeof (*peer));
+        LIBCFS_FREE (peer, sizeof (*peer));
 
         kptllnd_rx_buffer_pool_unreserve(
                 &kptllnd_data->kptl_rx_buffer_pool,

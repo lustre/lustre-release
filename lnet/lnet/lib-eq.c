@@ -22,7 +22,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
 int
@@ -53,7 +53,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
         if (eq == NULL)
                 return (-ENOMEM);
 
-        PORTAL_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
+        LIBCFS_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
         if (eq->eq_events == NULL) {
                 LNET_LOCK();
                 lnet_eq_free (eq);
@@ -114,7 +114,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
 
         LNET_UNLOCK();
 
-        PORTAL_FREE(events, size * sizeof (lnet_event_t));
+        LIBCFS_FREE(events, size * sizeof (lnet_event_t));
 
         return 0;
 }

@@ -28,7 +28,7 @@
 #include <sys/unistd.h>
 #include <mach/mach_types.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
 
 static cfs_sysctl_table_header_t *portals_table_header = NULL;

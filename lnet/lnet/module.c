@@ -22,19 +22,19 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
 static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
-static int lnet_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
+static int lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 {
         int                initrc;
         int                rc;
 
-        if (cmd == IOC_PORTAL_UNCONFIGURE) {
+        if (cmd == IOC_LIBCFS_UNCONFIGURE) {
                 /* ghastly hack to prevent repeated net config */
                 LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
                 initrc = the_lnet.ln_niinit_self;
@@ -50,7 +50,7 @@ static int lnet_ioctl(unsigned int cmd, struct portal_ioctl_data *data)
                 return rc == 0 ? 0 : -EBUSY;
         }
         
-        initrc = LNetNIInit(LUSTRE_SRV_PTL_PID);
+        initrc = LNetNIInit(LUSTRE_SRV_LNET_PID);
         if (initrc < 0)
                 RETURN (-ENETDOWN);
 
@@ -86,7 +86,7 @@ static int init_lnet(void)
                 the_lnet.ln_niinit_self = 1;
                 LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
 
-                rc = LNetNIInit(LUSTRE_SRV_PTL_PID);
+                rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
                 if (rc != 0) {
                         /* Can't LNetFini or fail now if I loaded NALs */
                         LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);

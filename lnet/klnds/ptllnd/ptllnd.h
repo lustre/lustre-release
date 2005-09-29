@@ -48,7 +48,7 @@
 #include <linux/in.h>
 
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include <libcfs/kp30.h>
 #include <lnet/lnet.h>
@@ -665,18 +665,18 @@ int kptllnd_process_scheduled_rxb(kptl_data_t *kptllnd_data);
 static inline lnet_nid_t ptl2lnetnid(kptl_data_t *kptllnd_data,ptl_nid_t portals_nid)
 {
 #ifdef _USING_LUSTRE_PORTALS_
-        return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_ni->ni_nid),   PTL_NIDADDR(portals_nid) );
+        return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_ni->ni_nid), LNET_NIDADDR(portals_nid));
 #else /* _USING_CRAY_PORTALS_ */
-	return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_ni->ni_nid), portals_nid);
+	return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_ni->ni_nid), portals_nid);
 #endif
 }
 
 static inline ptl_nid_t lnet2ptlnid(kptl_data_t *kptllnd_data,lnet_nid_t lnet_nid)
 {
 #ifdef _USING_LUSTRE_PORTALS_
-        return PTL_MKNID(PTL_NIDNET(kptllnd_data->kptl_portals_id.nid), PTL_NIDADDR(lnet_nid) );
+        return LNET_MKNID(LNET_NIDNET(kptllnd_data->kptl_portals_id.nid), LNET_NIDADDR(lnet_nid));
 #else /* _USING_CRAY_PORTALS_ */
-	return PTL_NIDADDR(lnet_nid);
+	return LNET_NIDADDR(lnet_nid);
 #endif
 }
 

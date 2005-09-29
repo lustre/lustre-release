@@ -696,7 +696,7 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
 
         if (!kibnal_whole_mem()) {
                 phys_size = nkiov * sizeof (*phys);
-                PORTAL_ALLOC(phys, phys_size);
+                LIBCFS_ALLOC(phys, phys_size);
                 if (phys == NULL) {
                         CERROR ("Can't allocate tmp phys\n");
                         return (-ENOMEM);
@@ -803,7 +803,7 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
 
  out:
         if (phys != NULL)
-                PORTAL_FREE(phys, phys_size);
+                LIBCFS_FREE(phys, phys_size);
         return (rc);
 }
 
@@ -1815,7 +1815,7 @@ kibnal_connreq_done (kib_conn_t *conn, int active, int status)
         LASSERTF(!active == !(conn->ibc_connreq != NULL),
                  "%d %p\n", active, conn->ibc_connreq);
         if (active) {
-                PORTAL_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
+                LIBCFS_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
                 conn->ibc_connreq = NULL;
         }
 
@@ -2057,13 +2057,13 @@ kibnal_reject (IB_HANDLE cep, uint16_t reason)
 {
         CM_REJECT_INFO *rej;
 
-        PORTAL_ALLOC(rej, sizeof(*rej));
-        if (rej == NULL) /* PORTAL_ALLOC() will CERROR on failure */
+        LIBCFS_ALLOC(rej, sizeof(*rej));
+        if (rej == NULL) /* LIBCFS_ALLOC() will CERROR on failure */
                 return;  
 
         rej->Reason = reason;
         iibt_cm_reject(cep, rej);
-        PORTAL_FREE(rej, sizeof(*rej));
+        LIBCFS_FREE(rej, sizeof(*rej));
 }
 
 static FSTATUS
@@ -2339,11 +2339,11 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         }
         query = &conn->ibc_qp_attrs;
 
-        PORTAL_ALLOC(rep, sizeof(*rep));
-        PORTAL_ALLOC(rcv, sizeof(*rcv));
+        LIBCFS_ALLOC(rep, sizeof(*rep));
+        LIBCFS_ALLOC(rcv, sizeof(*rcv));
         if (rep == NULL || rcv == NULL) {
-                if (rep) PORTAL_FREE(rep, sizeof(*rep));
-                if (rcv) PORTAL_FREE(rcv, sizeof(*rcv));
+                if (rep) LIBCFS_FREE(rep, sizeof(*rep));
+                if (rcv) LIBCFS_FREE(rcv, sizeof(*rcv));
                 CERROR ("can't allocate reply and receive buffers\n");
                 GOTO(out, reason = RC_INSUFFICIENT_RESP_RES);
         }
@@ -2375,8 +2375,8 @@ kibnal_listen_callback(IB_HANDLE cep, CM_CONN_INFO *info, void *arg)
         frc = iibt_cm_accept(cep, rep, rcv, kibnal_cm_callback, conn, 
                              &conn->ibc_cep);
 
-        PORTAL_FREE(rep, sizeof(*rep));
-        PORTAL_FREE(rcv, sizeof(*rcv));
+        LIBCFS_FREE(rep, sizeof(*rep));
+        LIBCFS_FREE(rcv, sizeof(*rcv));
 
         if (frc != FCM_CONNECT_ESTABLISHED) {
                 /* XXX it seems we don't call reject after this point? */
@@ -2619,7 +2619,7 @@ kibnal_connect_peer (kib_peer_t *peer)
         conn->ibc_peer = peer;
         kib_peer_addref(peer);
 
-        PORTAL_ALLOC (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
+        LIBCFS_ALLOC (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
         if (conn->ibc_connreq == NULL) {
                 CERROR ("Can't allocate connreq\n");
                 kibnal_connreq_done (conn, 1, -ENOMEM);

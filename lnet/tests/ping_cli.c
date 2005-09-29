@@ -71,14 +71,14 @@ pingcli_shutdown(int err)
                 case 4:
                         /* Free our buffers */
                         if (client->outbuf != NULL)
-                                PORTAL_FREE (client->outbuf, STDSIZE + client->size);
+                                LIBCFS_FREE (client->outbuf, STDSIZE + client->size);
 
                         if (client->inbuf != NULL)
-                                PORTAL_FREE (client->inbuf,
+                                LIBCFS_FREE (client->inbuf,
                                              (client->size + STDSIZE) * client->count);
 
                         if (client != NULL)
-                                PORTAL_FREE (client,
+                                LIBCFS_FREE (client,
                                                 sizeof(struct pingcli_data));
         }
 
@@ -105,7 +105,7 @@ static void pingcli_callback(lnet_event_t *ev)
 
 
 static void
-pingcli_start(struct portal_ioctl_data *args)
+pingcli_start(struct libcfs_ioctl_data *args)
 {
         unsigned ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
         int rc;
@@ -124,7 +124,7 @@ pingcli_start(struct portal_ioctl_data *args)
                         client->size, client->count, client->timeout);
 
 
-        PORTAL_ALLOC (client->outbuf, STDSIZE + client->size) ;
+        LIBCFS_ALLOC (client->outbuf, STDSIZE + client->size) ;
         if (client->outbuf == NULL)
         {
                 CERROR ("Unable to allocate out_buf ("LPSZ" bytes)\n", STDSIZE);
@@ -132,7 +132,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 return;
         }
 
-        PORTAL_ALLOC (client->inbuf,
+        LIBCFS_ALLOC (client->inbuf,
                         (client->size + STDSIZE) * client->count);
         if (client->inbuf == NULL)
         {
@@ -260,9 +260,9 @@ pingcli_start(struct portal_ioctl_data *args)
 
 
 /* called by the portals_ioctl for ping requests */
-int kping_client(struct portal_ioctl_data *args)
+int kping_client(struct libcfs_ioctl_data *args)
 {
-        PORTAL_ALLOC (client, sizeof(struct pingcli_data));
+        LIBCFS_ALLOC (client, sizeof(struct pingcli_data));
         if (client == NULL)
         {
                 CERROR ("Unable to allocate client structure\n");

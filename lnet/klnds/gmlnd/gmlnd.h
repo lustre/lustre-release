@@ -60,7 +60,7 @@
 #include "linux/vmalloc.h"
 #include "linux/sysctl.h"
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #include "libcfs/kp30.h"
 #include "lnet/lnet.h"

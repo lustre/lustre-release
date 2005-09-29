@@ -18,7 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <libcfs/libcfs.h>
@@ -137,7 +137,7 @@ libcfs_ipif_enumerate (char ***namesp)
 			      nalloc);
 		}
 
-		PORTAL_ALLOC(ifr, nalloc * sizeof(*ifr));
+		LIBCFS_ALLOC(ifr, nalloc * sizeof(*ifr));
 		if (ifr == NULL) {
 			CERROR ("ENOMEM enumerating up to %d interfaces\n", nalloc);
 			rc = -ENOMEM;
@@ -164,14 +164,14 @@ libcfs_ipif_enumerate (char ***namesp)
 		if (nfound < nalloc || toobig)
 			break;
 
-                PORTAL_FREE(ifr, nalloc * sizeof(*ifr));
+                LIBCFS_FREE(ifr, nalloc * sizeof(*ifr));
 		nalloc *= 2;
 	}
 
         if (nfound == 0)
                 goto out1;
 
-        PORTAL_ALLOC(names, nfound * sizeof(*names));
+        LIBCFS_ALLOC(names, nfound * sizeof(*names));
         if (names == NULL) {
                 rc = -ENOMEM;
                 goto out1;
@@ -190,7 +190,7 @@ libcfs_ipif_enumerate (char ***namesp)
                         goto out2;
 		}
 
-                PORTAL_ALLOC(names[i], IFNAMSIZ);
+                LIBCFS_ALLOC(names[i], IFNAMSIZ);
                 if (names[i] == NULL) {
                         rc = -ENOMEM;
                         goto out2;
@@ -207,7 +207,7 @@ libcfs_ipif_enumerate (char ***namesp)
         if (rc < 0)
                 libcfs_ipif_free_enumeration(names, nfound);
  out1:
-	PORTAL_FREE(ifr, nalloc * sizeof(*ifr));
+	LIBCFS_FREE(ifr, nalloc * sizeof(*ifr));
  out0:
 	sock_release(sock);
 	return rc;
@@ -223,9 +223,9 @@ libcfs_ipif_free_enumeration (char **names, int n)
         LASSERT (n > 0);
 
         for (i = 0; i < n && names[i] != NULL; i++)
-                PORTAL_FREE(names[i], IFNAMSIZ);
+                LIBCFS_FREE(names[i], IFNAMSIZ);
 
-        PORTAL_FREE(names, n * sizeof(*names));
+        LIBCFS_FREE(names, n * sizeof(*names));
 }
 
 EXPORT_SYMBOL(libcfs_ipif_free_enumeration);

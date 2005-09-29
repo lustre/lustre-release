@@ -51,7 +51,7 @@
 #include <linux/proc_fs.h>
 #include <linux/sysctl.h>
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+# define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/kp30.h>
 #include <asm/div64.h>
@@ -69,9 +69,9 @@ enum {
         PSDEV_CONSOLE,            /* allow _any_ messages to console */
         PSDEV_DEBUG_PATH,         /* crashdump log location */
         PSDEV_DEBUG_DUMP_PATH,    /* crashdump tracelog location */
-        PSDEV_PORTALS_UPCALL,     /* User mode upcall script  */
-        PSDEV_PORTALS_MEMUSED,    /* bytes currently PORTAL_ALLOCated */
-        PSDEV_PORTALS_CATASTROPHE,/* if we have LBUGged or panic'd */
+        PSDEV_LNET_UPCALL,        /* User mode upcall script  */
+        PSDEV_LNET_MEMUSED,       /* bytes currently PORTAL_ALLOCated */
+        PSDEV_LNET_CATASTROPHE,   /* if we have LBUGged or panic'd */
 };
 
 static struct ctl_table lnet_table[] = {
@@ -83,12 +83,12 @@ static struct ctl_table lnet_table[] = {
          &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
-        {PSDEV_PORTALS_UPCALL, "upcall", lnet_upcall,
+        {PSDEV_LNET_UPCALL, "upcall", lnet_upcall,
          sizeof(lnet_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
-        {PSDEV_PORTALS_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
+        {PSDEV_LNET_MEMUSED, "memused", (int *)&libcfs_kmemory.counter,
          sizeof(int), 0644, NULL, &proc_dointvec},
-        {PSDEV_PORTALS_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
+        {PSDEV_LNET_CATASTROPHE, "catastrophe", &libcfs_catastrophe,
          sizeof(int), 0444, NULL, &proc_dointvec},
         {0}
 };

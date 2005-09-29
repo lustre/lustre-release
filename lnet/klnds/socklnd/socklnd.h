@@ -28,7 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#define DEBUG_SUBSYSTEM S_NAL
+#define DEBUG_SUBSYSTEM S_LND
 
 #if defined(__linux__)
 #include "socklnd_lib-linux.h"
@@ -214,7 +214,7 @@ typedef struct                                  /* transmit packet */
         int                     tx_nkiov;       /* # packet page frags */
         lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
-        lnet_hdr_t              *tx_hdr;         /* packet header (for debug only) */
+        lnet_hdr_t             *tx_hdr;         /* packet header (for debug only) */
 #if SOCKNAL_ZC        
         zccd_t                  tx_zccd;        /* zero copy callback descriptor */
 #endif
@@ -228,7 +228,7 @@ typedef struct                                  /* locally transmitted packet */
         ksock_tx_t              ltx_tx;         /* send info */
         void                   *ltx_private;    /* lnet_finalize() callback arg */
         void                   *ltx_cookie;     /* lnet_finalize() callback arg */
-        lnet_hdr_t               ltx_hdr;        /* buffer for packet header */
+        lnet_hdr_t              ltx_hdr;        /* buffer for packet header */
         int                     ltx_desc_size;  /* bytes allocated for this desc */
         struct iovec            ltx_iov[1];     /* iov for hdr + payload */
         lnet_kiov_t             ltx_kiov[0];    /* kiov for payload */

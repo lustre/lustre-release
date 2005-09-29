@@ -4,23 +4,23 @@
 #include <sys/conf.h>
 #include <miscfs/devfs/devfs.h>
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_LNET
 #include <libcfs/libcfs.h>
 #include <libcfs/kp30.h>
 
-int portal_ioctl_getdata(char *buf, char *end, void *arg)
+int libcfs_ioctl_getdata(char *buf, char *end, void *arg)
 {
-        struct portal_ioctl_hdr *hdr;
-        struct portal_ioctl_data *data;
+        struct libcfs_ioctl_hdr   *hdr;
+        struct libcfs_ioctl_data  *data;
         int err = 0;
         ENTRY;
 
-        hdr = (struct portal_ioctl_hdr *)buf; 
-        data = (struct portal_ioctl_data *)buf;
+        hdr = (struct libcfs_ioctl_hdr *)buf; 
+        data = (struct libcfs_ioctl_data *)buf;
 	/* portals_ioctl_data has been copied in by ioctl of osx */
-	memcpy(buf, arg, sizeof(struct portal_ioctl_data));
+	memcpy(buf, arg, sizeof(struct libcfs_ioctl_data));
 
-        if (hdr->ioc_version != PORTAL_IOCTL_VERSION) {
+        if (hdr->ioc_version != LIBCFS_IOCTL_VERSION) {
                 CERROR("PORTALS: version mismatch kernel vs application\n");
                 RETURN(-EINVAL);
         }
@@ -30,7 +30,7 @@ int portal_ioctl_getdata(char *buf, char *end, void *arg)
                 RETURN(-EINVAL);
         }
 
-        if (hdr->ioc_len < sizeof(struct portal_ioctl_data)) {
+        if (hdr->ioc_len < sizeof(struct libcfs_ioctl_data)) {
                 CERROR("PORTALS: user buffer too small for ioctl\n");
                 RETURN(-EINVAL);
         }
@@ -55,12 +55,12 @@ int portal_ioctl_getdata(char *buf, char *end, void *arg)
 }
 
 extern struct cfs_psdev_ops		libcfs_psdev_ops;
-struct portals_device_userstate		*mdev_state[16];
+struct libcfs_device_userstate         *mdev_state[16];
 
 static int 
 libcfs_psdev_open(dev_t dev, int flags, int devtype, struct proc *p)
 { 
-	struct	portals_device_userstate *mstat = NULL;
+	struct	libcfs_device_userstate *mstat = NULL;
 	int	rc = 0;
 	int	devid; 
 	devid = minor(dev);    
