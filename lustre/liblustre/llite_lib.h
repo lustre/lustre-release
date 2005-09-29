@@ -30,11 +30,12 @@ struct llu_sb_info
         struct obd_export      *ll_osc_exp;
         obd_id                  ll_rootino;
         int                     ll_flags;
+        __u64                   ll_connect_flags;
         struct list_head        ll_conn_chain;
 
         struct obd_uuid         ll_mds_uuid;
         struct obd_uuid         ll_mds_peer_uuid;
-        char                   *ll_instance; 
+        char                   *ll_instance;
 };
 
 #define LL_SBI_NOLCK            0x1
@@ -149,7 +150,7 @@ struct it_cb_data {
 void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
-                                struct inode *parent, struct pnode *pnode, 
+                                struct inode *parent, struct pnode *pnode,
                                 struct lookup_intent *, int offset, obd_id ino);
 int llu_intent_lock(struct inode *parent, struct pnode *pnode,
                     struct lookup_intent *, int flags, intent_finish_cb);

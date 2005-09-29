@@ -2,6 +2,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * bug fixes
 
+Severity   : minor
+Frequency  : liblustre-only, when liblustre client dies or becomes busy
+Bugzilla   : 7311
+Description: Doing ls on Linux clients can take a long time with active
+	     liblustre clients
+Details    : Newer more complete fix for 7311 issue: add connection flags
+	     handling.
+
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407

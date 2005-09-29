@@ -2109,9 +2109,8 @@ static int osc_set_async_flags(struct obd_export *exp,
          * up by, e.g., ->writepage().
          */
         LASSERT(!(oap->oap_brw_flags & OBD_BRW_SRVLOCK));
-#ifndef __KERNEL__
-        LASSERT(0); /* check that liblustre angels do fear to tread here. */
-#endif
+        LASSERT(!LIBLUSTRE_CLIENT); /* check that liblustre angels do fear to
+                                     * tread here. */
 
         if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
                 RETURN(-EIO);

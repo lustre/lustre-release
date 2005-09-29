@@ -977,8 +977,8 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
 
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, *res_id[0],
                               LDLM_PLAIN, NULL, lock_modes[0], &flags[0],
-                              mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
-                              NULL, 0, NULL, handles[0]);
+                              ldlm_blocking_ast, ldlm_completion_ast,
+                              NULL, NULL, NULL, 0, NULL, handles[0]);
         if (rc != ELDLM_OK)
                 RETURN(-EIO);
         ldlm_lock_dump_handle(D_OTHER, handles[0]);
@@ -989,9 +989,9 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
         } else if (res_id[1]->name[0] != 0) {
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                       *res_id[1], LDLM_PLAIN, NULL,
-                                      lock_modes[1], &flags[1],mds_blocking_ast,
-                                      ldlm_completion_ast, NULL, NULL, NULL, 0,
-                                      NULL, handles[1]);
+                                      lock_modes[1], &flags[1],
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      NULL, NULL, NULL, 0, NULL, handles[1]);
                 if (rc != ELDLM_OK) {
                         ldlm_lock_decref(handles[0], lock_modes[0]);
                         RETURN(-EIO);
@@ -1066,7 +1066,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                               *res_id[i], LDLM_PLAIN, NULL,
                                               lock_modes[i], &flags,
-                                              mds_blocking_ast,
+                                              ldlm_blocking_ast,
                                               ldlm_completion_ast, NULL, NULL,
                                               NULL, 0, NULL, dlm_handles[i]);
                         if (rc != ELDLM_OK)
@@ -1151,7 +1151,7 @@ static int mds_verify_child(struct obd_device *obd,
 
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                       *child_res_id, LDLM_PLAIN, NULL,
-                                      child_mode, &flags, mds_blocking_ast,
+                                      child_mode, &flags, ldlm_blocking_ast,
                                       ldlm_completion_ast, NULL, NULL, NULL, 0,
                                       NULL, child_lockh);
                 if (rc != ELDLM_OK)

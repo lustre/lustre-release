@@ -95,7 +95,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         } else {
                 spin_unlock(&imp->imp_lock);
                 GOTO(out_free, rc = -ENOENT);
-                
+
         }
 
         spin_unlock(&imp->imp_lock);
@@ -348,6 +348,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
+        struct obd_connect_data *ocd;
         int rc;
         ENTRY;
 
@@ -373,14 +374,22 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         if (rc != 0)
                 GOTO(out_ldlm, rc);
 
+        ocd = &imp->imp_connect_data;
         if (data)
-                memcpy(&imp->imp_connect_data, data, sizeof(*data));
+                *ocd = *data;
+
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);
         }
         LASSERT(exp->exp_connection);
+
+        if (data) {
+                LASSERT((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
+                        ocd->ocd_connect_flags);
+                data->ocd_connect_flags = ocd->ocd_connect_flags;
+        }
 
         ptlrpc_pinger_add_import(imp);
         EXIT;
@@ -655,7 +664,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
                 CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
-                       cluuid.uuid, export->exp_conn_cnt, 
+                       cluuid.uuid, export->exp_conn_cnt,
                        req->rq_reqmsg->conn_cnt);
                 spin_unlock_irqrestore(&export->exp_lock, flags);
                 GOTO(out, rc = -EALREADY);
@@ -805,14 +814,14 @@ static void abort_recovery_queue(struct obd_device *obd)
         }
 }
 
-/* Called from a cleanup function if the device is being cleaned up 
-   forcefully.  The exports should all have been disconnected already, 
-   the only thing left to do is 
+/* Called from a cleanup function if the device is being cleaned up
+   forcefully.  The exports should all have been disconnected already,
+   the only thing left to do is
      - clear the recovery flags
      - cancel the timer
      - free queued requests and replies, but don't send replies
    Because the obd_stopping flag is set, no new requests should be received.
-     
+
 */
 void target_cleanup_recovery(struct obd_device *obd)
 {
@@ -1223,7 +1232,7 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
         return (ptlrpc_send_reply(req, 1));
 }
 
-void 
+void
 target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 {
         int                        netrc;
@@ -1267,12 +1276,12 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs->rs_xid       = req->rq_xid;
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
-        
+
         spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
 
         if (rs->rs_transno > obd->obd_last_committed) {
-                /* not committed already */ 
-                list_add_tail (&rs->rs_obd_list, 
+                /* not committed already */
+                list_add_tail (&rs->rs_obd_list,
                                &obd->obd_uncommitted_replies);
         }
 

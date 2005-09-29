@@ -102,7 +102,7 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uu
 
         if (*uuid_len < strlen(UUID_STR))
                 return;
-        
+
         if (!strncmp(*uuid_start + *uuid_len - strlen(UUID_STR),
                     UUID_STR, strlen(UUID_STR)))
                 *uuid_len -= strlen(UUID_STR);
@@ -132,7 +132,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
                                target_len, target_start,
                                ptlrpc_peernid2str(&imp->imp_connection->c_peer,
                                                   nidbuf),
-                               imp->imp_replayable 
+                               imp->imp_replayable
                                ? "wait for recovery to complete"
                                : "fail");
 
@@ -264,7 +264,7 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        if (imp->imp_conn_current && 
+        if (imp->imp_conn_current &&
             imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
                 imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
                                       struct obd_import_conn, oic_item);
@@ -443,7 +443,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         /* All imports are pingable */
         imp->imp_pingable = 1;
-        
+
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
@@ -533,7 +533,23 @@ finish:
                         RETURN(0);
                 }
         } else {
+                struct obd_connect_data *ocd;
+
+                ocd = lustre_swab_repbuf(request, 0,
+                                         sizeof *ocd, lustre_swab_connect);
+                if (ocd == NULL) {
+                        CERROR("Wrong connect data from server\n");
+                        rc = -EPROTO;
+                        GOTO(out, rc);
+                }
                 spin_lock_irqsave(&imp->imp_lock, flags);
+                /*
+                 * check that server granted subset of flags we asked for.
+                 */
+                LASSERT((ocd->ocd_connect_flags &
+                         imp->imp_connect_data.ocd_connect_flags) ==
+                        ocd->ocd_connect_flags);
+                imp->imp_connect_data = *ocd;
                 if (imp->imp_conn_current != NULL) {
                         list_del(&imp->imp_conn_current->oic_item);
                         list_add(&imp->imp_conn_current->oic_item,
@@ -576,7 +592,7 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
                 ptlrpc_import_recovery_state_machine(req->rq_import);
         } else {
                 CDEBUG(D_HA, "%s: LAST_REPLAY message error: %d, "
-                       "reconnecting\n", 
+                       "reconnecting\n",
                        req->rq_import->imp_obd->obd_name, req->rq_status);
                 ptlrpc_connect_import(req->rq_import, NULL);
         }

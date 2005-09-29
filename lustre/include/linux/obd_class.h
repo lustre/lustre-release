@@ -64,19 +64,19 @@ int class_name2dev(char *name);
 struct obd_device *class_name2obd(char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
-struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid, 
+struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           char * typ_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
                                              struct obd_uuid *grp_uuid);
-struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, 
+struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 
 int oig_init(struct obd_io_group **oig);
 void oig_add_one(struct obd_io_group *oig,
                   struct oig_callback_context *occ);
-void oig_complete_one(struct obd_io_group *oig, 
-                       struct oig_callback_context *occ, int rc);
+void oig_complete_one(struct obd_io_group *oig,
+                      struct oig_callback_context *occ, int rc);
 void oig_release(struct obd_io_group *oig);
 int oig_wait(struct obd_io_group *oig);
 /* ping evictor */
@@ -533,16 +533,20 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 
 static inline int obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                               struct obd_uuid *cluuid,
-                              struct obd_connect_data *data)
+                              struct obd_connect_data *d)
 {
         int rc;
+        __u64 ocf = d ? d->ocd_connect_flags : 0; /* for post-condition check */
         ENTRY;
 
         OBD_CHECK_DEV_ACTIVE(obd);
         OBD_CHECK_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, data);
+        rc = OBP(obd, connect)(conn, obd, cluuid, d);
+        /* check that only subset is granted */
+        LASSERT(ergo(d != NULL,
+                     (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
         RETURN(rc);
 }
 

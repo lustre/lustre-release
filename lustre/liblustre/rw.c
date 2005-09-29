@@ -676,6 +676,9 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         }
         LASSERT(len == 0 || is_read); /* libsysio should guarantee this */
 
+        /*
+         * BUG: lock is released too early. Fix is in bug 9296.
+         */
         err = llu_extent_unlock(fd, inode, lsm, p.lrp_lock_mode, &lockh);
         if (err)
                 CERROR("extent unlock error %d\n", err);

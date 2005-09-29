@@ -522,6 +522,9 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
 
 /* ldlm_request.c */
 int ldlm_expired_completion_wait(void *data);
+int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                      void *data, int flag);
+int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp);
 int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_cli_enqueue(struct obd_export *exp,
                      struct ptlrpc_request *req,
@@ -552,8 +555,6 @@ int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *,
 /* This has to be here because recursive inclusion sucks. */
 int intent_disposition(struct ldlm_reply *rep, int flag);
 void intent_set_disposition(struct ldlm_reply *rep, int flag);
-int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                     void *data, int flag);
 
 
 /* ioctls for trying requests */

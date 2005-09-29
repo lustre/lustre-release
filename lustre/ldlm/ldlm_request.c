@@ -151,6 +151,78 @@ noreproc:
         RETURN(0);
 }
 
+/*
+ * ->l_blocking_ast() callback for LDLM locks acquired by server-side OBDs.
+ */
+int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+                      void *data, int flag)
+{
+        int do_ast;
+        ENTRY;
+
+        if (flag == LDLM_CB_CANCELING) {
+                /* Don't need to do anything here. */
+                RETURN(0);
+        }
+
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* Get this: if ldlm_blocking_ast is racing with intent_policy, such
+         * that ldlm_blocking_ast is called just before intent_policy method
+         * takes the ns_lock, then by the time we get the lock, we might not
+         * be the correct blocking function anymore.  So check, and return
+         * early, if so. */
+        if (lock->l_blocking_ast != ldlm_blocking_ast) {
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                RETURN(0);
+        }
+
+        lock->l_flags |= LDLM_FL_CBPENDING;
+        do_ast = (!lock->l_readers && !lock->l_writers);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+        if (do_ast) {
+                struct lustre_handle lockh;
+                int rc;
+
+                LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0)
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+        } else {
+                LDLM_DEBUG(lock, "Lock still has references, will be "
+                           "cancelled later");
+        }
+        RETURN(0);
+}
+
+/*
+ * ->l_glimpse_ast() for DLM extent locks acquired on the server-side. See
+ * comment in filter_intent_policy() on why you may need this.
+ */
+int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
+{
+        /*
+         * Returning -ELDLM_NO_LOCK_DATA actually works, but the reason for
+         * that is rather subtle: with OST-side locking, it may so happen that
+         * _all_ extent locks are held by the OST. If client wants to obtain
+         * current file size it calls ll{,u}_glimpse_size(), and (as locks are
+         * on the server), dummy glimpse callback fires and does
+         * nothing. Client still receives correct file size due to the
+         * following fragment in filter_intent_policy():
+         *
+         * rc = l->l_glimpse_ast(l, NULL); // this will update the LVB
+         * if (rc != 0 && res->lr_namespace->ns_lvbo &&
+         *     res->lr_namespace->ns_lvbo->lvbo_update) {
+         *         res->lr_namespace->ns_lvbo->lvbo_update(res, NULL, 0, 1);
+         * }
+         *
+         * that is, after glimpse_ast() fails, filter_lvbo_update() runs, and
+         * returns correct file size to the client.
+         */
+        return -ELDLM_NO_LOCK_DATA;
+}
+
 static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                                   struct ldlm_res_id res_id,
                                   __u32 type,
@@ -347,6 +419,14 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 }
                 GOTO(cleanup, rc);
         }
+
+        /*
+         * Liblustre client doesn't get extent locks, except for O_APPEND case
+         * where [0, OBD_OBJECT_EOF] lock is taken.
+         */
+        LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
+                     (policy->l_extent.start == 0 &&
+                      policy->l_extent.end   == OBD_OBJECT_EOF)));
 
         reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
                                    lustre_swab_ldlm_reply);

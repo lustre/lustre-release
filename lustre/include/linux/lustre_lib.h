@@ -321,7 +321,7 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         ENTRY;
 
         err = copy_from_user(&hdr, (void *)arg, sizeof(hdr));
-        if (err) 
+        if (err)
                 RETURN(err);
 
         if (hdr.ioc_version != OBD_IOCTL_VERSION) {
@@ -724,6 +724,7 @@ do {                                                                           \
 #else
 #define LIBLUSTRE_CLIENT (1)
 #endif
+
 
 #endif /* _LUSTRE_LIB_H */
 

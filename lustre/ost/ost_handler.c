@@ -471,20 +471,31 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         int nrbufs                = obj->ioo_bufcnt;
         struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
         ldlm_policy_data_t policy;
+        int i;
 
         ENTRY;
 
         LASSERT(mode == LCK_PR || mode == LCK_PW);
-        /*
-         * assertions to add here:
-         *
-         *  - all niobufs have the same OBD_BRW_SRVLOCK value
-         *
-         *  - in OST-side locking case, niobufs are contiguous ->offset-wise.
-         */
+
+        /* EXPENSIVE ASSERTION */
+        for (i = 1; i < nrbufs; i ++)
+                LASSERT((nb[0].flags & OBD_BRW_SRVLOCK) ==
+                        (nb[i].flags & OBD_BRW_SRVLOCK));
 
         if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
                 RETURN(0);
+
+        /* EXPENSIVE ASSERTION */
+        for (i = 1; i < nrbufs; i ++)
+                /*
+                 * check that niobufs are contiguous ->offset-wise. Strictly
+                 * speaking, this is not required by the code below. What we
+                 * are trying to assert here is that RPC we are handling was
+                 * sent by a liblustre-style cache-less client rather than by
+                 * usual llite OSC layer than can arbitrarily mix pages from
+                 * different write(2) calls.
+                 */
+                LASSERT(nb[i].offset == nb[i - 1].offset + nb[i - 1].len);
 
         policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
@@ -492,8 +503,9 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
 
         RETURN(ldlm_cli_enqueue(NULL, NULL, exp->exp_obd->obd_namespace,
                                 res_id, LDLM_EXTENT, &policy, mode, &flags,
-                                ost_blocking_ast, ldlm_completion_ast,
-                                ost_glimpse_ast, NULL, NULL, 0, NULL, lh));
+                                ldlm_blocking_ast, ldlm_completion_ast,
+                                ldlm_glimpse_ast,
+                                NULL, NULL, 0, NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,

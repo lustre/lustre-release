@@ -238,7 +238,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(st->st_mtime), 
+                       valid, LTIME_S(st->st_mtime),
                        LTIME_S(st->st_ctime));
 
         if (valid & OBD_MD_FLATIME) {
@@ -329,7 +329,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         if (rc)
                 RETURN(rc);
 
-        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
+        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE;
 
         obdo_refresh_inode(inode, &oa, refresh_valid);
@@ -781,7 +781,7 @@ static int llu_iop_setattr(struct pnode *pno,
 
         liblustre_wait_event(0);
 
-        LASSERT(!(mask & ~(SETATTR_MTIME | SETATTR_ATIME | 
+        LASSERT(!(mask & ~(SETATTR_MTIME | SETATTR_ATIME |
                            SETATTR_UID | SETATTR_GID |
                            SETATTR_LEN | SETATTR_MODE)));
         memset(&iattr, 0, sizeof(iattr));
@@ -1635,7 +1635,7 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
         inode = llu_new_inode(fs, &fid);
         if (inode)
                 llu_update_inode(inode, md->body, md->lsm);
-        
+
         return inode;
 }
 
@@ -1667,6 +1667,7 @@ llu_fsswop_mount(const char *source,
 	char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
         int async = 1, err = -EINVAL;
+        struct obd_connect_data ocd = {0,};
 
         ENTRY;
 
@@ -1763,12 +1764,14 @@ llu_fsswop_mount(const char *source,
         obd_set_info(obd->obd_self_export, strlen("async"), "async",
                      sizeof(async), &async);
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, NULL /* ocd */);
+        ocd.ocd_connect_flags |= OBD_CONNECT_SRVLOCK;
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);
         }
         sbi->ll_osc_exp = class_conn2export(&osc_conn);
+        sbi->ll_connect_flags = ocd.ocd_connect_flags;
 
         mdc_init_ea_size(sbi->ll_mdc_exp, sbi->ll_osc_exp);
 

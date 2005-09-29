@@ -65,6 +65,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         struct obd_device *tgt_obd;
         struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
         struct lustre_handle conn = {0, };
+        struct obd_import *imp;
 #ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
 #endif
@@ -89,7 +90,12 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 ptlrpc_activate_import(tgt_obd->u.cli.cl_import);
         }
 
-        if (tgt_obd->u.cli.cl_import->imp_invalid) {
+        /*
+         * Divine LOV knows that OBDs under it are OSCs.
+         */
+        imp = tgt_obd->u.cli.cl_import;
+
+        if (imp->imp_invalid) {
                 CERROR("not connecting OSC %s; administratively "
                        "disabled\n", tgt_uuid->uuid);
                 rc = obd_register_observer(tgt_obd, obd);
@@ -155,6 +161,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         struct obd_export *exp;
+        __u64 connect_flags = data ? data->ocd_connect_flags : 0;
         int rc, rc2, i;
         ENTRY;
 
@@ -178,7 +185,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 rc = lov_connect_obd(obd, tgt, 0, data);
                 if (rc)
                         GOTO(out_disc, rc);
+                if (data)
+                        connect_flags &= data->ocd_connect_flags;
         }
+
+        if (data)
+                data->ocd_connect_flags = connect_flags;
 
         class_export_put(exp);
         RETURN (0);

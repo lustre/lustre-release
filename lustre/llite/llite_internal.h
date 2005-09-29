@@ -136,6 +136,7 @@ struct ll_sb_info {
 
         int                       ll_flags;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+        __u64                     ll_connect_flags;
 
         struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
         struct ll_close_queue    *ll_lcq;

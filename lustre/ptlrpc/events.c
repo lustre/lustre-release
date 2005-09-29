@@ -29,6 +29,11 @@
 #include <linux/module.h>
 #else
 #include <liblustre.h>
+#include <sys/types.h>
+#include <linux/unistd.h>
+
+_syscall0(pid_t,gettid)
+
 #endif
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
@@ -43,7 +48,7 @@ static void cray_portals_callback(ptl_event_t *ev);
 struct ptlrpc_ni  ptlrpc_interfaces[8];
 int               ptlrpc_ninterfaces;
 
-/*  
+/*
  *  Client's outgoing request callback
  */
 void request_out_callback(ptl_event_t *ev)
@@ -69,7 +74,7 @@ void request_out_callback(ptl_event_t *ev)
                 spin_lock_irqsave(&req->rq_lock, flags);
                 req->rq_net_err = 1;
                 spin_unlock_irqrestore(&req->rq_lock, flags);
-                
+
                 ptlrpc_wake_client_req(req);
         }
 
@@ -94,7 +99,7 @@ void reply_in_callback(ptl_event_t *ev)
         LASSERT (ev->md.start == req->rq_repmsg);
         LASSERT (ev->offset == 0);
         LASSERT (ev->mlength <= req->rq_replen);
-        
+
         DEBUG_REQ((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->ni_fail_type);
 
@@ -117,7 +122,7 @@ void reply_in_callback(ptl_event_t *ev)
         EXIT;
 }
 
-/* 
+/*
  * Client's bulk has been written/read
  */
 void client_bulk_callback (ptl_event_t *ev)
@@ -127,7 +132,7 @@ void client_bulk_callback (ptl_event_t *ev)
         unsigned long            flags;
         ENTRY;
 
-        LASSERT ((desc->bd_type == BULK_PUT_SINK && 
+        LASSERT ((desc->bd_type == BULK_PUT_SINK &&
                   ev->type == PTL_EVENT_PUT_END) ||
                  (desc->bd_type == BULK_GET_SOURCE &&
                   ev->type == PTL_EVENT_GET_END) ||
@@ -135,7 +140,7 @@ void client_bulk_callback (ptl_event_t *ev)
         LASSERT (ev->unlinked);
 
         CDEBUG((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n", 
+               "event type %d, status %d, desc %p\n",
                ev->type, ev->ni_fail_type, desc);
 
         spin_lock_irqsave (&desc->bd_lock, flags);
@@ -157,7 +162,7 @@ void client_bulk_callback (ptl_event_t *ev)
         EXIT;
 }
 
-/* 
+/*
  * Server's incoming request callback
  */
 void request_in_callback(ptl_event_t *ev)
@@ -178,7 +183,7 @@ void request_in_callback(ptl_event_t *ev)
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
         CDEBUG((ev->ni_fail_type == PTL_OK) ? D_NET : D_ERROR,
-               "event type %d, status %d, service %s\n", 
+               "event type %d, status %d, service %s\n",
                ev->type, ev->ni_fail_type, service->srv_name);
 
         if (ev->unlinked) {
@@ -199,7 +204,7 @@ void request_in_callback(ptl_event_t *ev)
                 if (req == NULL) {
                         CERROR("Can't allocate incoming request descriptor: "
                                "Dropping %s RPC from %s\n",
-                               service->srv_name, 
+                               service->srv_name,
                                portals_id2str(srv_ni->sni_ni->pni_number,
                                               ev->initiator, str));
                         return;
@@ -316,11 +321,11 @@ void server_bulk_callback (ptl_event_t *ev)
                   ev->type == PTL_EVENT_REPLY_END));
 
         CDEBUG((ev->ni_fail_type == PTL_NI_OK) ? D_NET : D_ERROR,
-               "event type %d, status %d, desc %p\n", 
+               "event type %d, status %d, desc %p\n",
                ev->type, ev->ni_fail_type, desc);
 
         spin_lock_irqsave (&desc->bd_lock, flags);
-        
+
         if ((ev->type == PTL_EVENT_ACK ||
              ev->type == PTL_EVENT_REPLY_END) &&
             ev->ni_fail_type == PTL_NI_OK) {
@@ -354,7 +359,7 @@ static void ptlrpc_master_callback(ptl_event_t *ev)
                  callback == request_in_callback ||
                  callback == reply_out_callback ||
                  callback == server_bulk_callback);
-        
+
         callback (ev);
 }
 
@@ -368,7 +373,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
         int                 rc;
 
         ENTRY;
-        
+
         rc = lustre_uuid_to_peer (uuid->uuid, &peer_nal, &peer_nid);
 
         if (rc != 0)
@@ -381,7 +386,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
                 if (pni->pni_number == peer_nal) {
 #else
 		/* compatible nals but may be from different bridges */
-		if (NALID_FROM_IFACE(pni->pni_number) == 
+		if (NALID_FROM_IFACE(pni->pni_number) ==
 		    NALID_FROM_IFACE(peer_nal)) {
 #endif
                         peer->peer_id.nid = peer_nid;
@@ -402,7 +407,7 @@ void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
         struct l_wait_info  lwi;
         int                 rc;
         int                 retries;
-        
+
         /* Wait for the event queue to become idle since there may still be
          * messages in flight with pending events (i.e. the fire-and-forget
          * messages == client requests and "non-difficult" server
@@ -417,12 +422,12 @@ void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
                 case PTL_OK:
                         PtlNIFini(pni->pni_ni_h);
                         return;
-                        
+
                 case PTL_EQ_IN_USE:
                         if (retries != 0)
                                 CWARN("Event queue for %s still busy\n",
                                       pni->pni_name);
-                        
+
                         /* Wait for a bit */
                         init_waitqueue_head(&waitq);
                         lwi = LWI_TIMEOUT(2*HZ, NULL, NULL);
@@ -438,7 +443,7 @@ ptl_pid_t ptl_get_pid(void)
         ptl_pid_t        pid;
 
 #ifndef  __KERNEL__
-        pid = getpid();
+        pid = gettid();
 # if CRAY_PORTALS
 	/* hack to keep pid in range accepted by ernal */
 	pid &= 0xFF;
@@ -463,7 +468,7 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         /* We're not passing any limits yet... */
         rc = PtlNIInit(number, pid, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                CDEBUG (D_NET, "Can't init network interface %s: %d\n", 
+                CDEBUG (D_NET, "Can't init network interface %s: %d\n",
                         name, rc);
                 return (-ENOENT);
         }
@@ -526,14 +531,14 @@ void *
 liblustre_register_wait_callback (int (*fn)(void *arg), void *arg)
 {
         struct liblustre_wait_callback *llwc;
-        
+
         OBD_ALLOC(llwc, sizeof(*llwc));
         LASSERT (llwc != NULL);
-        
+
         llwc->llwc_fn = fn;
         llwc->llwc_arg = arg;
         list_add_tail(&llwc->llwc_list, &liblustre_wait_callbacks);
-        
+
         return (llwc);
 }
 
@@ -541,7 +546,7 @@ void
 liblustre_deregister_wait_callback (void *opaque)
 {
         struct liblustre_wait_callback *llwc = opaque;
-        
+
         list_del(&llwc->llwc_list);
         OBD_FREE(llwc, sizeof(*llwc));
 }
@@ -558,16 +563,16 @@ liblustre_check_events (int timeout)
                        &ev, &i);
         if (rc == PTL_EQ_EMPTY)
                 RETURN(0);
-        
+
         LASSERT (rc == PTL_EQ_DROPPED || rc == PTL_OK);
-        
+
         /* liblustre: no asynch callback so we can't affort to miss any
          * events... */
         if (rc == PTL_EQ_DROPPED) {
                 CERROR ("Dropped an event!!!\n");
                 abort();
         }
-        
+
         ptlrpc_master_callback (&ev);
         RETURN(1);
 }
@@ -591,9 +596,9 @@ liblustre_wait_event (int timeout)
 
                 /* Give all registered callbacks a bite at the cherry */
                 list_for_each(tmp, &liblustre_wait_callbacks) {
-                        llwc = list_entry(tmp, struct liblustre_wait_callback, 
+                        llwc = list_entry(tmp, struct liblustre_wait_callback,
                                           llwc_list);
-                
+
                         if (llwc->llwc_fn(llwc->llwc_arg))
                                 found_something = 1;
                 }
@@ -684,7 +689,7 @@ int ptlrpc_init_portals(void)
                 return -EIO;
         }
 #ifndef __KERNEL__
-        liblustre_services_callback = 
+        liblustre_services_callback =
                 liblustre_register_wait_callback(&liblustre_check_services, NULL);
 #endif
         return 0;
