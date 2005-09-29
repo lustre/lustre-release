@@ -94,6 +94,17 @@
 /* Diffrent error types on Cray Portals*/
 #define ptl_err_t ptl_ni_fail_t
 
+
+/*
+ * *** TEMPORARY UNTIL I GET CONFIRMATION FROM CRAY ***
+ *
+ * It looks like there is no maxum number of IOVs for 
+ * Cray Portals.  We only really require that the underyling
+ * implemenation be >= LNET_MAX_IOV, so simply set that here
+ *
+ */
+#define PTL_MD_MAX_IOV          LNET_MAX_IOV
+
 #endif
 
 #if CONFIG_SMP
