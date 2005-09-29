@@ -136,6 +136,14 @@ Details    : in rare race conditions a newly allocated group_info struct is
 	     freed again, and this can be NULL.  The 2.4 compatibility code
 	     for groups_free() checked for a NULL pointer, but 2.6 did not.
 
+Severity   : minor
+Frequency  : common for liblustre clients doing little filesystem IO
+Bugzilla   : 9352, 7313
+Description: server may evict liblustre clients accessing contended locks
+Details    : if a client is granted a lock or receives a completion AST
+	     with a blocking AST already set it would not reply to the AST
+	     for LDLM_FL_CANCEL_ON_BLOCK locks.  It now replies to such ASTs.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

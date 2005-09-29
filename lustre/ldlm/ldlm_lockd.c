@@ -483,8 +483,9 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (instant_cancel) {
                 ldlm_lock_cancel(lock);
 //                ldlm_reprocess_all(lock->l_resource);
-        } else if (lock->l_granted_mode == lock->l_req_mode)
+        } else if (lock->l_granted_mode == lock->l_req_mode) {
                 ldlm_add_waiting_lock(lock);
+        }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -567,6 +568,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
                 body->lock_flags |= LDLM_FL_AST_SENT;
+                body->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
                 ldlm_add_waiting_lock(lock); /* start the lock-timeout clock */
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -775,6 +777,7 @@ existing_lock:
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
+                dlm_rep->lock_flags &= ~LDLM_FL_CANCEL_ON_BLOCK;
                 if (lock->l_granted_mode == lock->l_req_mode)
                         ldlm_add_waiting_lock(lock);
         }
@@ -1258,8 +1261,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 break;
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
-                if (!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK))
-                        ldlm_callback_reply(req, 0);
+                ldlm_callback_reply(req, 0);
                 ldlm_handle_cp_callback(req, ns, dlm_req, lock);
                 break;
         case LDLM_GL_CALLBACK:
@@ -1447,7 +1449,7 @@ static int ldlm_setup(void)
         ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL, 1500,
+                                LDLM_CB_REPLY_PORTAL, ldlm_timeout * 900,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
 
