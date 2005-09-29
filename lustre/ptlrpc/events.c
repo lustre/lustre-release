@@ -29,11 +29,6 @@
 #include <linux/module.h>
 #else
 #include <liblustre.h>
-#include <sys/types.h>
-#include <linux/unistd.h>
-
-_syscall0(pid_t,gettid)
-
 #endif
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
@@ -443,7 +438,7 @@ ptl_pid_t ptl_get_pid(void)
         ptl_pid_t        pid;
 
 #ifndef  __KERNEL__
-        pid = gettid();
+        pid = getpid();
 # if CRAY_PORTALS
 	/* hack to keep pid in range accepted by ernal */
 	pid &= 0xFF;
