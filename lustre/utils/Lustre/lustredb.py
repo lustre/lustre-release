@@ -497,21 +497,27 @@ class LustreDB_LDAP(LustreDB):
     #
     # [(ref_class, ref_uuid),]
     def _get_all_refs(self):
-        list = []
+        reflist = []
         for k in self._attrs.keys():
             if re.search('.*Ref', k):
                 for uuid in self._attrs[k]:
                     ref_class = self.get_ref_type(k)
-                    list.append((ref_class, uuid))
-        return list
+                    reflist.append((ref_class, uuid))
+        return reflist
 
     def _get_refs(self, tag):
         """ Get all the refs of type TAG.  Returns list of uuids. """
-        uuids = []
         refname = '%sRef' % tag
+
         if self._attrs.has_key(refname):
             return self._attrs[refname]
-        return []
+
+        reflist = []
+        for obj in self._lookup_by_class("*"):
+            if obj._attrs.has_key(refname):
+                reflist.extend(obj._attrs[refname])
+
+        return reflist
 
     def getName(self):
         return self._get_val('lustreName')

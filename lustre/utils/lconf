@@ -2119,6 +2119,7 @@ class Client(Module):
                     devdb = toplustreDB.lookup(ref_uuid)
                     uuid = devdb.get_first_ref('target')
                     if self.target_uuid == uuid and self.tgt_dev_uuid != ref_uuid:
+                        debug("add backup target", ref_uuid)
                         self.backup_targets.append(ref_uuid)
 
     def prepare(self, ignore_connect_failure = 0):
@@ -2966,22 +2967,14 @@ def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
     if not srv_list[0]:
         raise Lustre.LconfError("Unable to find a connection to:" + new_uuid)
 
-    for srv in srv_list:
-        log("Reconnecting", tgt_uuid, " to ",  srv.nid_uuid);
-        try:
-            oldsrv = get_server_by_nid_uuid(lustreDB, nid_uuid)
-            lustreDB.close()
-            if oldsrv:
-                lctl.disconnect(oldsrv)
-        except CommandError, e:
-            log("recover: disconnect", nid_uuid, "failed: ")
-            e.dump()
+    oldsrv = get_server_by_nid_uuid(lustreDB, nid_uuid)
+    lustreDB.close()
 
-        try:
-            lctl.connect(srv)
-        except CommandError, e:
-            log("recover: connect failed")
-            e.dump()
+    for srv in srv_list:
+        if oldsrv.net_type != srv.net_type:
+            continue
+
+        log("Reconnecting", tgt_uuid, "to", srv.nid_uuid)
 
         lctl.recover(client_uuid, srv.nid_uuid)
 

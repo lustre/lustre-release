@@ -152,6 +152,12 @@ Description: unable to set striping with a starting offset beyond OST 160
 Details    : llapi_create_file() incorrectly limited the starting stripe
 	     index to the maximum single-file stripe count.
 
+Severity   : minor
+Frequency  : LDAP users only
+Bugzilla   : 6163
+Description: lconf did not handle in-kernel recovery with LDAP properly
+Details    : lconf/LustreDB get_refs() is searching the wrong namespace
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
