@@ -218,6 +218,7 @@ kptllnd_start_bulk_rdma(
         tempiov_t        tempiov;
         kptl_msg_t      *rxmsg = rx->rx_msg;
         kptl_peer_t     *peer = rx->rx_peer;
+        unsigned long   flags;
 
 
         /*
@@ -252,7 +253,7 @@ kptllnd_start_bulk_rdma(
                 payload_niov,payload_iov,payload_kiov,
                 payload_offset,payload_nob,&tempiov);
 
-        spin_lock(&peer->peer_lock);
+        spin_lock_irqsave(&peer->peer_lock, flags);
 
         /*
          * Attach the MD
@@ -265,7 +266,7 @@ kptllnd_start_bulk_rdma(
         if(ptl_rc != PTL_OK){
                 CERROR("PtlMDBind failed %d\n",ptl_rc);
 
-                spin_unlock(&peer->peer_lock);
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
                 /*
                  * Just drop the ref for this MD because it was never
                  * posted to portals
@@ -290,7 +291,7 @@ kptllnd_start_bulk_rdma(
          */
         kptllnd_tx_addref(tx);
 
-        spin_unlock(&peer->peer_lock);
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
 
 
         /*
@@ -321,7 +322,7 @@ kptllnd_start_bulk_rdma(
                 CERROR("Ptl%s failed: %d\n",
                         op == PTL_MD_OP_GET ? "Get" : "Put",ptl_rc);
 
-                spin_lock(&peer->peer_lock);
+                spin_lock_irqsave(&peer->peer_lock, flags);
 
                 /*
                  * Unlink the MD because it's not yet in use
@@ -349,7 +350,7 @@ kptllnd_start_bulk_rdma(
                 kptllnd_peer_dequeue_tx_locked(peer,tx);
                 tx->tx_peer = NULL;
 
-                spin_unlock(&peer->peer_lock);
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
 
                 rc = -ENOMEM;
                 goto end;
@@ -888,6 +889,10 @@ kptllnd_scheduler(void *arg)
         cfs_time_t      last_check = cfs_time_current();
         cfs_duration_t  duration;
         time_t          duration_sec;
+        unsigned long           flags;
+        kptl_rx_t               *rx = NULL;
+        kptl_rx_buffer_t        *rxb = NULL;
+        kptl_tx_t               *tx = NULL;
 
         PJK_UT_MSG(">>>\n");
 
@@ -959,26 +964,65 @@ kptllnd_scheduler(void *arg)
                         }
                 }
 
-                /*
-                 * Drain the RX queue
-                 */
-                while(kptllnd_process_scheduled_rx(kptllnd_data)!=0);
 
                 /*
-                 * Repost all RXBs
+                 * Now service the queuse
                  */
-                while(kptllnd_process_scheduled_rxb(kptllnd_data)!=0);
+                do{
+                        spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
+                        
+                        /*
+                         * Drain the RX queue
+                         */     
+                        rx = NULL;                   
+                        if(!list_empty(&kptllnd_data->kptl_sched_rxq)){
+                                rx = list_entry (kptllnd_data->kptl_sched_rxq.next,
+                                                 kptl_rx_t, rx_list);
+                                list_del_init(&rx->rx_list);
+                        }
+                        
+                        /*
+                         * IDrain the RXB Repost queue
+                         */
+                        rxb = NULL;
+                        if(!list_empty(&kptllnd_data->kptl_sched_rxbq)){
+                                rxb = list_entry (kptllnd_data->kptl_sched_rxbq.next,
+                                                 kptl_rx_buffer_t, rxb_repost_list);
+                                list_del_init(&rxb->rxb_repost_list);
+                        }
+                        /*
+                         * Drain the TX queue.  Note RX's can cause new TX's
+                         * to be added to the queue.
+                         */         
+                        tx = NULL;               
+                        if(!list_empty(&kptllnd_data->kptl_sched_txq)){
+                                tx = list_entry (kptllnd_data->kptl_sched_txq.next,
+                                                 kptl_tx_t, tx_schedlist);
+                                list_del_init(&tx->tx_schedlist);
+                        }       
+                        
+                        spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);                  
+                        
+                        
+                        /*
+                         * Process anything that came off the list
+                         */         
+                        if(rx)
+                                kptllnd_rx_scheduler_handler(rx);
+                        if(rxb)
+                                kptllnd_rx_buffer_post_handle_error(rxb);
+                        if(tx){
+                                PJK_UT_MSG(">>> tx=%p\n",tx);
+                                kptllnd_tx_done(tx);
+                                PJK_UT_MSG("<<<\n");
+                        }                                
+                
+                        /*
+                         * As long as we did something this time around
+                         * try again.
+                         */                
+                }while(rx != NULL || rxb != NULL || tx != NULL);
 
-                /*
-                 * Drain the TX queue.  Note RX's can cause new TX's
-                 * to be added to the queue.
-                 */
-                while(kptllnd_process_scheduled_tx(kptllnd_data)!=0);
-
-
-                /*
-                 * Clean any canceled peers
-                 */
                 kptllnd_clean_canceled_peers(kptllnd_data);
         }
 

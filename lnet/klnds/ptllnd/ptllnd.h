@@ -266,9 +266,10 @@ typedef struct kptl_tx                           /* transmit message */
 typedef enum
 {
         PEER_STATE_UNINITIALIZED        = 0,
-        PEER_STATE_WAITING_HELLO        = 1,
-        PEER_STATE_ACTIVE               = 2,
-        PEER_STATE_CANCELED             = 3,
+        PEER_STATE_ALLOCATED            = 1,    //QQQ
+        PEER_STATE_WAITING_HELLO        = 2,
+        PEER_STATE_ACTIVE               = 3,
+        PEER_STATE_CANCELED             = 4,
 }kptllnd_peer_state_t;
 
 struct kptl_peer
@@ -313,7 +314,7 @@ struct kptl_data
         cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
 
         struct kptl_tx         *kptl_tx_descs;         /* the tx descriptors array */
-        spinlock_t              kptl_tx_lock;          /* serialise the next 4 members*/
+        spinlock_t              kptl_tx_lock;          /* serialise idle tx list*/
         struct list_head        kptl_idle_txs;         /* idle tx descriptors */
 
         rwlock_t                kptl_peer_rw_lock;     /* lock for peer table */
@@ -657,10 +658,6 @@ kptllnd_setup_md(
         unsigned int     payload_offset,
         int              payload_nob,
         tempiov_t       *tempiov);
-
-int kptllnd_process_scheduled_tx(kptl_data_t *kptllnd_data);
-int kptllnd_process_scheduled_rx(kptl_data_t *kptllnd_data);
-int kptllnd_process_scheduled_rxb(kptl_data_t *kptllnd_data);
 
 static inline lnet_nid_t ptl2lnetnid(kptl_data_t *kptllnd_data,ptl_nid_t portals_nid)
 {

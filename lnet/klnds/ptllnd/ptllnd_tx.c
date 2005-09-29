@@ -274,10 +274,11 @@ kptllnd_tx_schedule (kptl_tx_t *tx)
 void
 kptllnd_tx_callback(ptl_event_t *ev)
 {
-        kptl_tx_t *tx = ev->md.user_ptr;
-        kptl_peer_t *peer;
-        int rc;
-        int do_decref = 0;
+        kptl_tx_t       *tx = ev->md.user_ptr;
+        kptl_peer_t     *peer;
+        int              rc;
+        int              do_decref = 0;
+        unsigned long    flags;
 
         PJK_UT_MSG(">>> %s(%d) tx=%p fail=%d\n",
                 get_ev_type_string(ev->type),ev->type,tx,ev->ni_fail_type);
@@ -315,8 +316,8 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
         LASSERT(tx->tx_peer != NULL);
         peer = tx->tx_peer;
-
-        spin_lock(&peer->peer_lock);
+        
+        spin_lock_irqsave(&peer->peer_lock, flags);
 
         /*
          * Save the status flag
@@ -443,7 +444,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
                 LBUG();
         }
 
-        spin_unlock(&peer->peer_lock);
+        spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         if(do_decref)
                 kptllnd_tx_scheduled_decref(tx);
