@@ -285,6 +285,10 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
+        if (imp->imp_conn_current && (imp->imp_conn_current != imp_conn)) {
+                LCONSOLE_WARN("Changing connection for %s to %s\n",
+                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid);
+        }
         imp->imp_conn_current = imp_conn;
         CDEBUG(D_HA, "%s: import %p using connection %s\n",
                imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
@@ -373,8 +377,12 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         aa->pcaa_peer_committed = committed_before_reconnect;
         aa->pcaa_initial_connect = initial_connect;
 
-        if (aa->pcaa_initial_connect)
+        if (aa->pcaa_initial_connect) {
                 imp->imp_replayable = 1;
+                /* On an initial connect, we don't know which one of a 
+                   failover server pair is up.  Don't wait long. */
+                request->rq_timeout = max((int)(obd_timeout / 20), 5);
+        }
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request");
         ptlrpcd_add_req(request);
