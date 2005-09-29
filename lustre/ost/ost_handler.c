@@ -457,12 +457,6 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
-/* ->l_glimpse_ast() for DLM extent locks acquired on the server-side. */
-static int ost_glimpse_ast(struct ldlm_lock *lock, void *reqp)
-{
-        return -ELDLM_NO_LOCK_DATA;
-}
-
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
                             struct obd_ioobj *obj, struct niobuf_remote *nb,
                             struct lustre_handle *lh)
