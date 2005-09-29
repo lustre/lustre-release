@@ -945,7 +945,7 @@ lnet_msg2bufpool(lnet_msg_t *msg)
 {
         lnet_rtrbufpool_t *rbp = &the_lnet.ln_rtrpools[0];
 
-        LASSERT (msg->msg_len <= PTL_MTU);
+        LASSERT (msg->msg_len <= LNET_MTU);
         while (msg->msg_len > rbp->rbp_npages * PAGE_SIZE) {
                 rbp++;
                 LASSERT (rbp < &the_lnet.ln_rtrpools[LNET_NRBPOOLS]);
@@ -1701,13 +1701,13 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
                                
         case LNET_MSG_PUT:
         case LNET_MSG_REPLY:
-                if (payload_length > PTL_MTU) {
+                if (payload_length > LNET_MTU) {
                         CERROR("%s, src %s: bad %s payload %d "
                                "(%d max expected)\n", 
                                libcfs_nid2str(from_nid),
                                libcfs_nid2str(src_nid), 
                                lnet_msgtyp2str(type),
-                               payload_length, PTL_MTU);
+                               payload_length, LNET_MTU);
                         return -EPROTO;
                 }
                 break;

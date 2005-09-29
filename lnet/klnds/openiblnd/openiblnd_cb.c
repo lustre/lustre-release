@@ -542,7 +542,7 @@ kibnal_map_kiov (kib_tx_t *tx, enum ib_memory_access access,
                         goto out;
                 }
 
-                if (nphys == PTL_MD_MAX_IOV) {
+                if (nphys == LNET_MAX_IOV) {
                         CERROR ("payload too big (%d)\n", nphys);
                         rc = -EMSGSIZE;
                         goto out;
@@ -1219,7 +1219,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
 
         /* Thread context if we're sending payload */
         LASSERT (!in_interrupt() || payload_niov == 0);

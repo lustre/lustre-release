@@ -680,6 +680,8 @@ ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg)
         LASSERT (!msg->msg_routing);
         LASSERT (msg->msg_kiov == NULL);
 
+        LASSERT (msg->msg_niov <= PTL_MD_MAX_IOV); /* !!! */
+        
         plp = ptllnd_find_peer(ni, msg->msg_target.nid, 1);
         if (plp == NULL)
                 return -ENOMEM;
@@ -823,6 +825,7 @@ ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
         int             nob;
 
         LASSERT (kiov == NULL);
+        LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
         switch (rx->rx_msg->ptlm_type) {
         default:

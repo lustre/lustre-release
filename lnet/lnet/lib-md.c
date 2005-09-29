@@ -205,7 +205,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         LASSERT (the_lnet.ln_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
-            umd.length > PTL_MD_MAX_IOV) /* too many fragments */
+            umd.length > LNET_MAX_IOV) /* too many fragments */
                 return -EINVAL;
 
         md = lnet_md_alloc(&umd);
@@ -248,7 +248,7 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
         LASSERT (the_lnet.ln_refcount > 0);
         
         if ((umd.options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
-            umd.length > PTL_MD_MAX_IOV) /* too many fragments */
+            umd.length > LNET_MAX_IOV) /* too many fragments */
                 return -EINVAL;
 
         md = lnet_md_alloc(&umd);

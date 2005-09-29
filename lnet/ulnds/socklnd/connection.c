@@ -50,7 +50,7 @@
 
 /* tunables (via environment) */
 int tcpnal_acceptor_port = 988;
-int tcpnal_buffer_size   = 2 * (PTL_MTU + sizeof(lnet_hdr_t));
+int tcpnal_buffer_size   = 2 * (LNET_MTU + sizeof(lnet_hdr_t));
 int tcpnal_nagle         = 0;
 
 int

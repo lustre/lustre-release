@@ -972,7 +972,7 @@ kqswnal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
 
         /* It must be OK to kmap() if required */
         LASSERT (payload_kiov == NULL || !in_interrupt ());

@@ -154,7 +154,7 @@
 #if IBNAL_USE_FMR
 # define IBNAL_MAX_RDMA_FRAGS 1
 #else
-# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
+# define IBNAL_MAX_RDMA_FRAGS LNET_MAX_IOV
 #endif
 
 /* RX messages (per connection) */

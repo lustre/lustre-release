@@ -114,7 +114,7 @@
 #define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#define IBNAL_TX_MAX_SG (PTL_MD_MAX_IOV + 1)
+#define IBNAL_TX_MAX_SG (LNET_MAX_IOV + 1)
 
 /* RX messages (per connection) */
 #define IBNAL_RX_MSGS       IBNAL_MSG_QUEUE_SIZE

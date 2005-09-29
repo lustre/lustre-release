@@ -441,7 +441,7 @@ kibnal_rx_callback (IB_WORK_COMPLETION *wc)
                 CDEBUG(D_NET, "%d RDMA: cookie "LPX64":\n",
                        msg->ibm_type, msg->ibm_u.rdma.ibrm_cookie);
 
-                if ((msg->ibm_u.rdma.ibrm_num_descs > PTL_MD_MAX_IOV) ||
+                if ((msg->ibm_u.rdma.ibrm_num_descs > LNET_MAX_IOV) ||
                     (kib_rdma_msg_len(msg->ibm_u.rdma.ibrm_num_descs) > 
                      min(nob, IBNAL_MSG_SIZE))) {
                         CERROR ("num_descs %d too large\n", 
@@ -575,7 +575,7 @@ kibnal_fill_ibrm(kib_tx_t *tx, struct page *page, unsigned long page_offset,
         kib_rdma_msg_t *ibrm = &tx->tx_msg->ibm_u.rdma;
         kib_rdma_desc_t *desc;
 
-        LASSERTF(ibrm->ibrm_num_descs < PTL_MD_MAX_IOV, "%u\n", 
+        LASSERTF(ibrm->ibrm_num_descs < LNET_MAX_IOV, "%u\n", 
                  ibrm->ibrm_num_descs);
 
         desc = &ibrm->ibrm_desc[ibrm->ibrm_num_descs];
@@ -734,7 +734,7 @@ kibnal_map_kiov (kib_tx_t *tx, IB_ACCESS_CONTROL access,
                         goto out;
                 }
 
-                if (nphys == PTL_MD_MAX_IOV) {
+                if (nphys == LNET_MAX_IOV) {
                         CERROR ("payload too big (%d)\n", nphys);
                         rc = -EMSGSIZE;
                         goto out;
@@ -1484,7 +1484,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
 
         /* Thread context if we're sending payload */
         LASSERT (!in_interrupt() || payload_nob == 0);

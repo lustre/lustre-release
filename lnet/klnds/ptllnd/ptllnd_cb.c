@@ -426,7 +426,9 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
+
+        LASSERT (payload_niov <= PTL_MD_MAX_IOV); /* !!! */
 
         /* Thread context */
         LASSERT (!in_interrupt());
@@ -719,6 +721,8 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         LASSERT (!in_interrupt());
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
+
+        LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
         if(delayed)
                 STAT_UPDATE(kps_recv_delayed);

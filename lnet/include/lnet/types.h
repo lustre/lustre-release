@@ -57,9 +57,9 @@ typedef struct {
 } lnet_md_t;
 
 /* Max message size */
-#define PTL_MTU        (1<<20)
+#define LNET_MTU        (1<<20)
 /* limit on the number of entries in discontiguous MDs */
-#define PTL_MD_MAX_IOV 256
+#define LNET_MAX_IOV    256
 
 /* Options for the MD structure */
 #define LNET_MD_OP_PUT               (1 << 0)

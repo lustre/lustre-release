@@ -673,7 +673,7 @@ kibnal_map_tx (kib_tx_t *tx, kib_rdma_desc_t *rd, int active,
         LASSERT (tx->tx_md.md_fmrcount > 0);
         LASSERT (page_offset < PAGE_SIZE);
         LASSERT (npages >= (1 + ((page_offset + nob - 1)>>PAGE_SHIFT)));
-        LASSERT (npages <= PTL_MD_MAX_IOV);
+        LASSERT (npages <= LNET_MAX_IOV);
 
         memset(&map_props, 0, sizeof(map_props));
 
@@ -742,7 +742,7 @@ kibnal_setup_rd_iov (kib_tx_t *tx, kib_rdma_desc_t *rd,
         npages = 0;
 
         do {
-                LASSERT (npages < PTL_MD_MAX_IOV);
+                LASSERT (npages < LNET_MAX_IOV);
 
                 page = kibnal_kvaddr_to_page(vaddr);
                 if (page == NULL) {
@@ -776,7 +776,7 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
 
         LASSERT (nob > 0);
         LASSERT (nkiov > 0);
-        LASSERT (nkiov <= PTL_MD_MAX_IOV);
+        LASSERT (nkiov <= LNET_MAX_IOV);
         LASSERT (!tx->tx_md.md_active);
         LASSERT ((rd != tx->tx_rd) == !active);
 
@@ -793,7 +793,7 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
         npages = 0;
 
         do {
-                LASSERT (npages < PTL_MD_MAX_IOV);
+                LASSERT (npages < LNET_MAX_IOV);
                 LASSERT (nkiov > 0);
 
                 if ((npages > 0 && kiov->kiov_offset != 0) ||
@@ -1374,7 +1374,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
 
         /* Thread context */
         LASSERT (!in_interrupt());

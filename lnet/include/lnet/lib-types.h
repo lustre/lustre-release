@@ -216,8 +216,8 @@ typedef struct lnet_libmd {
         void             *md_addrkey;
         unsigned int      md_niov;                /* # frags */
         union {
-                struct iovec  iov[PTL_MD_MAX_IOV];
-                lnet_kiov_t   kiov[PTL_MD_MAX_IOV];
+                struct iovec  iov[LNET_MAX_IOV];
+                lnet_kiov_t   kiov[LNET_MAX_IOV];
         } md_iov;
 } lnet_libmd_t;
 

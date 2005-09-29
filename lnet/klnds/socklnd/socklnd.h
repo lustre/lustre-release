@@ -234,10 +234,10 @@ typedef struct                                  /* transmit packet */
 /* network zero copy callback descriptor embedded in ksock_tx_t */
 
 /* space for the rx frag descriptors; we either read a single contiguous
- * header, or up to PTL_MD_MAX_IOV frags of payload of either type. */
+ * header, or up to LNET_MAX_IOV frags of payload of either type. */
 typedef union {
-        struct iovec     iov[PTL_MD_MAX_IOV];
-        lnet_kiov_t      kiov[PTL_MD_MAX_IOV];
+        struct iovec     iov[LNET_MAX_IOV];
+        lnet_kiov_t      kiov[LNET_MAX_IOV];
 } ksock_rxiovspace_t;
 
 #define SOCKNAL_RX_HEADER       1               /* reading header */
@@ -291,10 +291,10 @@ typedef struct ksock_conn
         int                 ksnc_tx_scheduled;  /* being progressed */
 
 #if !SOCKNAL_SINGLE_FRAG_RX
-        struct iovec        ksnc_rx_scratch_iov[PTL_MD_MAX_IOV];
+        struct iovec        ksnc_rx_scratch_iov[LNET_MAX_IOV];
 #endif
 #if !SOCKNAL_SINGLE_FRAG_TX
-        struct iovec        ksnc_tx_scratch_iov[PTL_MD_MAX_IOV];
+        struct iovec        ksnc_tx_scratch_iov[LNET_MAX_IOV];
 #endif
 } ksock_conn_t;
 

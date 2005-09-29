@@ -1255,7 +1255,7 @@ kibnal_alloc_tx_descs (void)
                 kib_tx_t *tx = &kibnal_data.kib_tx_descs[i];
 
 #if IBNAL_USE_FMR
-                LIBCFS_ALLOC(tx->tx_pages, PTL_MD_MAX_IOV *
+                LIBCFS_ALLOC(tx->tx_pages, LNET_MAX_IOV *
                              sizeof(*tx->tx_pages));
                 if (tx->tx_pages == NULL)
                         return -ENOMEM;
@@ -1296,7 +1296,7 @@ kibnal_free_tx_descs (void)
 
 #if IBNAL_USE_FMR
                 if (tx->tx_pages != NULL)
-                        LIBCFS_FREE(tx->tx_pages, PTL_MD_MAX_IOV *
+                        LIBCFS_FREE(tx->tx_pages, LNET_MAX_IOV *
                                     sizeof(*tx->tx_pages));
 #else
                 if (tx->tx_wrq != NULL)
@@ -1375,7 +1375,7 @@ kibnal_setup_tx_descs (void)
                 fmr_props.pd_hndl              = kibnal_data.kib_pd;
                 fmr_props.acl                  = (vv_acc_r_mem_write |
                                                   vv_acc_l_mem_write);
-                fmr_props.max_pages            = PTL_MD_MAX_IOV;
+                fmr_props.max_pages            = LNET_MAX_IOV;
                 fmr_props.log2_page_sz         = PAGE_SHIFT;
                 fmr_props.max_outstanding_maps = *kibnal_tunables.kib_fmr_remaps;
                 

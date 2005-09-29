@@ -801,7 +801,7 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
-        LASSERT (payload_niov <= PTL_MD_MAX_IOV);
+        LASSERT (payload_niov <= LNET_MAX_IOV);
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
         LASSERT (!in_interrupt ());
@@ -1042,7 +1042,7 @@ ksocknal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
         unsigned long  flags;
 
         LASSERT (mlen <= rlen);
-        LASSERT (niov <= PTL_MD_MAX_IOV);
+        LASSERT (niov <= LNET_MAX_IOV);
         
         conn->ksnc_cookie = msg;
         conn->ksnc_rx_nob_wanted = mlen;
@@ -1053,14 +1053,14 @@ ksocknal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
                 conn->ksnc_rx_kiov = NULL;
                 conn->ksnc_rx_iov = conn->ksnc_rx_iov_space.iov;
                 conn->ksnc_rx_niov =
-                        lnet_extract_iov(PTL_MD_MAX_IOV, conn->ksnc_rx_iov,
+                        lnet_extract_iov(LNET_MAX_IOV, conn->ksnc_rx_iov,
                                          niov, iov, offset, mlen);
         } else {
                 conn->ksnc_rx_niov = 0;
                 conn->ksnc_rx_iov  = NULL;
                 conn->ksnc_rx_kiov = conn->ksnc_rx_iov_space.kiov;
                 conn->ksnc_rx_nkiov = 
-                        lnet_extract_kiov(PTL_MD_MAX_IOV, conn->ksnc_rx_kiov,
+                        lnet_extract_kiov(LNET_MAX_IOV, conn->ksnc_rx_kiov,
                                           niov, kiov, offset, mlen);
         }
         

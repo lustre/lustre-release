@@ -232,7 +232,7 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, lnet_kiov_t *kiov,
                         return -EINVAL;
                 }
 
-                if ((phys - tx->tx_phys) == PTL_MD_MAX_IOV) {
+                if ((phys - tx->tx_phys) == LNET_MAX_IOV) {
                         CERROR ("payload too big (%d)\n", (int)(phys - tx->tx_phys));
                         return -EMSGSIZE;
                 }
@@ -609,7 +609,7 @@ kranal_send (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                nob, niov, libcfs_id2str(target));
 
         LASSERT (nob == 0 || niov > 0);
-        LASSERT (niov <= PTL_MD_MAX_IOV);
+        LASSERT (niov <= LNET_MAX_IOV);
 
         LASSERT (!in_interrupt());
         /* payload is either all vaddrs or all pages */

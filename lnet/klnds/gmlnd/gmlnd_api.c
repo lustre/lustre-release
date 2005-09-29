@@ -180,7 +180,7 @@ gmnal_startup(lnet_ni_t *ni)
 	CDEBUG(D_NET, "portals_nid is %s\n", libcfs_nid2str(ni->ni_nid));
 
         gmni->gmni_large_msgsize = 
-                offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[PTL_MTU]);
+                offsetof(gmnal_msg_t, gmm_u.immediate.gmim_payload[LNET_MTU]);
         gmni->gmni_large_gmsize = 
                 gm_min_size_for_length(gmni->gmni_large_msgsize);
         gmni->gmni_large_pages =

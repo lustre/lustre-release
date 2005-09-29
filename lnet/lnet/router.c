@@ -586,7 +586,7 @@ void
 lnet_init_rtrpools(void)
 {
         int small_pages = 1;
-        int large_pages = (PTL_MTU + PAGE_SIZE - 1) / PAGE_SIZE;
+        int large_pages = (LNET_MTU + PAGE_SIZE - 1) / PAGE_SIZE;
 
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[0], 0);
         lnet_rtrpool_init(&the_lnet.ln_rtrpools[1], small_pages);

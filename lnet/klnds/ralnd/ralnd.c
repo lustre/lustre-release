@@ -1241,7 +1241,7 @@ kranal_free_txdescs(struct list_head *freelist)
                 tx = list_entry(freelist->next, kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
-                LIBCFS_FREE(tx->tx_phys, PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
+                LIBCFS_FREE(tx->tx_phys, LNET_MAX_IOV * sizeof(*tx->tx_phys));
                 LIBCFS_FREE(tx, sizeof(*tx));
         }
 }
@@ -1265,7 +1265,7 @@ kranal_alloc_txdescs(struct list_head *freelist, int n)
                 }
 
                 LIBCFS_ALLOC(tx->tx_phys,
-                             PTL_MD_MAX_IOV * sizeof(*tx->tx_phys));
+                             LNET_MAX_IOV * sizeof(*tx->tx_phys));
                 if (tx->tx_phys == NULL) {
                         CERROR("Can't allocate tx[%d]->tx_phys\n", i);
 

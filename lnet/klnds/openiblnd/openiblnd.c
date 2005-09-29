@@ -1573,7 +1573,7 @@ kibnal_startup (lnet_ni_t *ni)
         {
                 const int pool_size = *kibnal_tunables.kib_ntx;
                 struct ib_fmr_pool_param params = {
-                        .max_pages_per_fmr = PTL_MTU/PAGE_SIZE,
+                        .max_pages_per_fmr = LNET_MTU/PAGE_SIZE,
                         .access            = (IB_ACCESS_LOCAL_WRITE |
                                               IB_ACCESS_REMOTE_WRITE |
                                               IB_ACCESS_REMOTE_READ),
