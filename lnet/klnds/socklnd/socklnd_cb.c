@@ -26,10 +26,10 @@
 #include "socklnd.h"
 
 void
-ksocknal_free_ltx (ksock_ltx_t *ltx)
+ksocknal_free_tx (ksock_tx_t *tx)
 {
-        atomic_dec(&ksocknal_data.ksnd_nactive_ltxs);
-        LIBCFS_FREE(ltx, ltx->ltx_desc_size);
+        atomic_dec(&ksocknal_data.ksnd_nactive_txs);
+        LIBCFS_FREE(tx, tx->tx_desc_size);
 }
 
 int
@@ -359,7 +359,6 @@ ksocknal_zc_callback (zccd_t *zcd)
 void
 ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 {
-        ksock_ltx_t   *ltx;
         ENTRY;
 
         if (tx->tx_conn != NULL) {
@@ -374,12 +373,10 @@ ksocknal_tx_done (ksock_peer_t *peer, ksock_tx_t *tx, int asynch)
 #endif
         }
 
-        ltx = KSOCK_TX_2_KSOCK_LTX (tx);
-
-        lnet_finalize (peer->ksnp_ni, ltx->ltx_cookie,
+        lnet_finalize (peer->ksnp_ni, tx->tx_lnetmsg,
                       (tx->tx_resid == 0) ? 0 : -EIO);
 
-        ksocknal_free_ltx (ltx);
+        ksocknal_free_tx (tx);
         EXIT;
 }
 
@@ -691,14 +688,12 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                  lnet_kiov_nob (tx->tx_nkiov, tx->tx_kiov) == tx->tx_nob);
         LASSERT (tx->tx_niov >= 1);
         LASSERT (tx->tx_iov[0].iov_len >= sizeof (lnet_hdr_t));
+        LASSERT (tx->tx_conn == NULL);
+        LASSERT (tx->tx_resid == tx->tx_nob);
 
         CDEBUG (D_NET, "packet %p type %d, nob %d niov %d nkiov %d\n",
                 tx, ((lnet_hdr_t *)tx->tx_iov[0].iov_base)->type, 
                 tx->tx_nob, tx->tx_niov, tx->tx_nkiov);
-
-        tx->tx_conn = NULL;                     /* only set when assigned a conn */
-        tx->tx_resid = tx->tx_nob;
-        tx->tx_hdr = (lnet_hdr_t *)tx->tx_iov[0].iov_base;
 
         g_lock = &ksocknal_data.ksnd_global_lock;
         
@@ -795,7 +790,7 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         lnet_kiov_t      *payload_kiov = lntmsg->msg_kiov;
         unsigned int      payload_offset = lntmsg->msg_offset;
         unsigned int      payload_nob = lntmsg->msg_len;
-        ksock_ltx_t      *ltx;
+        ksock_tx_t       *tx;
         int               desc_size;
         int               rc;
 
@@ -807,73 +802,57 @@ ksocknal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
         LASSERT (payload_niov <= PTL_MD_MAX_IOV);
-
-        /* It must be OK to kmap() if required */
-        LASSERT (payload_kiov == NULL || !in_interrupt ());
         /* payload is either all vaddrs or all pages */
         LASSERT (!(payload_kiov != NULL && payload_iov != NULL));
+        LASSERT (!in_interrupt ());
         
         if (payload_iov != NULL)
-                desc_size = offsetof(ksock_ltx_t, ltx_iov[1 + payload_niov]);
+                desc_size = offsetof(ksock_tx_t, 
+                                     tx_frags.virt.iov[1 + payload_niov]);
         else
-                desc_size = offsetof(ksock_ltx_t, ltx_kiov[payload_niov]);
+                desc_size = offsetof(ksock_tx_t, 
+                                     tx_frags.paged.kiov[payload_niov]);
         
-        if (in_interrupt() ||
-            type == LNET_MSG_ACK ||
-            type == LNET_MSG_REPLY) {
-                /* Can't block if in interrupt or responding to an incoming
-                 * message */
-                LIBCFS_ALLOC_ATOMIC(ltx, desc_size);
-        } else {
-                LIBCFS_ALLOC(ltx, desc_size);
-        }
-        
-        if (ltx == NULL) {
-                CERROR("Can't allocate tx desc type %d size %d %s\n",
-                       type, desc_size, in_interrupt() ? "(intr)" : "");
+        LIBCFS_ALLOC(tx, desc_size);
+        if (tx == NULL) {
+                CERROR("Can't allocate tx desc type %d size %d\n",
+                       type, desc_size);
                 return (-ENOMEM);
         }
 
-        atomic_inc(&ksocknal_data.ksnd_nactive_ltxs);
-
-        ltx->ltx_desc_size = desc_size;
+        atomic_inc(&ksocknal_data.ksnd_nactive_txs);
         
-        /* We always have 1 mapped frag for the header */
-        ltx->ltx_tx.tx_iov = ltx->ltx_iov;
-        ltx->ltx_iov[0].iov_base = &ltx->ltx_hdr;
-        ltx->ltx_iov[0].iov_len = sizeof(*hdr);
-        ltx->ltx_hdr = *hdr;
-        
-        ltx->ltx_private = private;
-        ltx->ltx_cookie = lntmsg;
-        
-        ltx->ltx_tx.tx_nob = sizeof (*hdr) + payload_nob;
+        tx->tx_conn = NULL;                     /* set when assigned a conn */
+        tx->tx_desc_size = desc_size;
+        tx->tx_lnetmsg = lntmsg;
 
         if (payload_iov != NULL) {
-                /* payload is all mapped */
-                ltx->ltx_tx.tx_kiov  = NULL;
-                ltx->ltx_tx.tx_nkiov = 0;
-
-                ltx->ltx_tx.tx_niov = 
-                        1 + lnet_extract_iov(payload_niov, &ltx->ltx_iov[1],
-                                            payload_niov, payload_iov,
-                                            payload_offset, payload_nob);
+                tx->tx_kiov = NULL;
+                tx->tx_nkiov = 0;
+                tx->tx_iov = tx->tx_frags.virt.iov;
+                tx->tx_niov = 1 + 
+                              lnet_extract_iov(payload_niov, &tx->tx_iov[1],
+                                               payload_niov, payload_iov,
+                                               payload_offset, payload_nob);
         } else {
-                /* payload is all pages */
-                ltx->ltx_tx.tx_niov = 1;
-
-                ltx->ltx_tx.tx_kiov = ltx->ltx_kiov;
-                ltx->ltx_tx.tx_nkiov =
-                        lnet_extract_kiov(payload_niov, ltx->ltx_kiov,
-                                         payload_niov, payload_kiov,
-                                         payload_offset, payload_nob);
+                tx->tx_niov = 1;
+                tx->tx_iov = &tx->tx_frags.paged.iov;
+                tx->tx_kiov = tx->tx_frags.paged.kiov;
+                tx->tx_nkiov = lnet_extract_kiov(payload_niov, tx->tx_kiov,
+                                                 payload_niov, payload_kiov,
+                                                 payload_offset, payload_nob);
         }
 
-        rc = ksocknal_launch_packet(ni, &ltx->ltx_tx, target);
+        /* first frag is the header */
+        tx->tx_iov[0].iov_base = (void *)hdr;
+        tx->tx_iov[0].iov_len = sizeof(*hdr);
+        tx->tx_resid = tx->tx_nob = sizeof (*hdr) + payload_nob;
+
+        rc = ksocknal_launch_packet(ni, tx, target);
         if (rc == 0)
                 return (0);
         
-        ksocknal_free_ltx(ltx);
+        ksocknal_free_tx(tx);
         return (-EIO);
 }
 
@@ -1725,10 +1704,10 @@ ksocknal_connect (ksock_route_t *route)
                 tx = list_entry (zombies.next, ksock_tx_t, tx_list);
 
                 CERROR ("Deleting packet type %d len %d %s->%s\n",
-                        le32_to_cpu (tx->tx_hdr->type),
-                        le32_to_cpu (tx->tx_hdr->payload_length),
-                        libcfs_nid2str(le64_to_cpu(tx->tx_hdr->src_nid)),
-                        libcfs_nid2str(le64_to_cpu (tx->tx_hdr->dest_nid)));
+                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.type),
+                        le32_to_cpu (tx->tx_lnetmsg->msg_hdr.payload_length),
+                        libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
+                        libcfs_nid2str(le64_to_cpu (tx->tx_lnetmsg->msg_hdr.dest_nid)));
 
                 list_del (&tx->tx_list);
                 /* complete now */

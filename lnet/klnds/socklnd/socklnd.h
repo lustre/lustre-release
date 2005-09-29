@@ -165,7 +165,7 @@ typedef struct
         int               ksnd_nschedulers;     /* # schedulers */
         ksock_sched_t    *ksnd_schedulers;      /* their state */
 
-        atomic_t          ksnd_nactive_ltxs;    /* #active ltxs */
+        atomic_t          ksnd_nactive_txs;     /* #active txs */
 
         struct list_head  ksnd_deathrow_conns;  /* conns to close: reaper_lock*/
         struct list_head  ksnd_zombie_conns;    /* conns to free: reaper_lock */
@@ -214,36 +214,29 @@ typedef struct                                  /* transmit packet */
         int                     tx_nkiov;       /* # packet page frags */
         lnet_kiov_t            *tx_kiov;        /* packet page frags */
         struct ksock_conn      *tx_conn;        /* owning conn */
-        lnet_hdr_t             *tx_hdr;         /* packet header (for debug only) */
+        lnet_msg_t             *tx_lnetmsg;     /* lnet message for lnet_finalize() */
 #if SOCKNAL_ZC        
         zccd_t                  tx_zccd;        /* zero copy callback descriptor */
 #endif
+        int                     tx_desc_size;   /* size of this descriptor */
+        union {
+                struct {
+                        struct iovec iov;       /* virt hdr */
+                        lnet_kiov_t  kiov[0];   /* paged payload */
+                }                  paged;
+                struct {
+                        struct iovec iov[1];    /* virt hdr + payload */
+                }                  virt;
+        }                       tx_frags;
 } ksock_tx_t;
 
 #define KSOCK_ZCCD_2_TX(ptr)	list_entry (ptr, ksock_tx_t, tx_zccd)
 /* network zero copy callback descriptor embedded in ksock_tx_t */
 
-typedef struct                                  /* locally transmitted packet */
-{
-        ksock_tx_t              ltx_tx;         /* send info */
-        void                   *ltx_private;    /* lnet_finalize() callback arg */
-        void                   *ltx_cookie;     /* lnet_finalize() callback arg */
-        lnet_hdr_t              ltx_hdr;        /* buffer for packet header */
-        int                     ltx_desc_size;  /* bytes allocated for this desc */
-        struct iovec            ltx_iov[1];     /* iov for hdr + payload */
-        lnet_kiov_t             ltx_kiov[0];    /* kiov for payload */
-} ksock_ltx_t;
-
-#define KSOCK_TX_2_KSOCK_LTX(ptr)       list_entry (ptr, ksock_ltx_t, ltx_tx)
-/* local packets (lib->socknal) embedded in ksock_ltx_t::ltx_tx */
-
-/* NB list_entry() is used here as convenient macro for calculating a
- * pointer to a struct from the address of a member. */
-
 /* space for the rx frag descriptors; we either read a single contiguous
  * header, or up to PTL_MD_MAX_IOV frags of payload of either type. */
 typedef union {
-        struct iovec    iov[PTL_MD_MAX_IOV];
+        struct iovec     iov[PTL_MD_MAX_IOV];
         lnet_kiov_t      kiov[PTL_MD_MAX_IOV];
 } ksock_rxiovspace_t;
 

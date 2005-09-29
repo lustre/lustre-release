@@ -1873,7 +1873,7 @@ ksocknal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 void
 ksocknal_free_buffers (void)
 {
-        LASSERT (atomic_read(&ksocknal_data.ksnd_nactive_ltxs) == 0);
+        LASSERT (atomic_read(&ksocknal_data.ksnd_nactive_txs) == 0);
 
         if (ksocknal_data.ksnd_schedulers != NULL)
                 LIBCFS_FREE (ksocknal_data.ksnd_schedulers,
