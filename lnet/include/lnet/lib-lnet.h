@@ -435,7 +435,17 @@ lnet_ptlcompat_matchnid(lnet_nid_t lnet_nid, lnet_nid_t ptl_nid)
         return ((ptl_nid == lnet_nid) ||
                 (the_lnet.ln_ptlcompat > 0 &&
                  PTL_NIDNET(ptl_nid) == 0 &&
+                 PTL_NETTYP(PTL_NIDNET(lnet_nid)) != LOLND &&
                  PTL_NIDADDR(ptl_nid) == PTL_NIDADDR(lnet_nid)));
+}
+
+static inline int
+lnet_ptlcompat_matchnet(__u32 lnet_net, __u32 ptl_net) 
+{
+        return ((ptl_net == lnet_net) ||
+                (the_lnet.ln_ptlcompat > 0 &&
+                 ptl_net == 0 &&
+                 PTL_NETTYP(lnet_net) != LOLND));
 }
 
 static inline struct list_head *
@@ -458,6 +468,7 @@ do {                                                                    \
 } while (0)
 #endif
 
+extern lnet_ni_t *lnet_nid2ni_locked (lnet_nid_t nid);
 extern lnet_ni_t *lnet_net2ni_locked (__u32 net);
 static inline lnet_ni_t *
 lnet_net2ni (__u32 net) 
@@ -472,7 +483,6 @@ lnet_net2ni (__u32 net)
 }
 
 int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, time_t when);
-int lnet_distance(lnet_nid_t nid, int *order);
 int lnet_add_route(__u32 net, unsigned int hops, lnet_nid_t gateway_nid);
 int lnet_check_routes(void);
 int lnet_del_route(__u32 net, lnet_nid_t gw_nid);
@@ -487,12 +497,12 @@ void lnet_free_rtrpools(void);
 lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 
 int lnet_islocalnid(lnet_nid_t nid);
-int lnet_islocalnet(__u32 net, int *orderp);
+int lnet_islocalnet(__u32 net);
 
 void lnet_enq_event_locked(lnet_eq_t *eq, lnet_event_t *ev);
 void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
                     unsigned int offset, unsigned int len);
-int lnet_send(lnet_ni_t *ni, lnet_msg_t *msg);
+int lnet_send(lnet_nid_t nid, lnet_msg_t *msg);
 void lnet_return_credits_locked (lnet_msg_t *msg);
 int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr, 
                 lnet_nid_t fromnid, void *private);

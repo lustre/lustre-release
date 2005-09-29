@@ -1815,6 +1815,13 @@ kranal_check_fma_rx (kra_conn_t *conn)
 
                 LASSERT (tx->tx_buftype == RANAL_BUF_PHYS_MAPPED ||
                          tx->tx_buftype == RANAL_BUF_VIRT_MAPPED);
+#if 0
+                /* completion message should send rdma length if we ever allow
+                 * GET truncation */
+                LASSERT (tx->tx_lntmsg[1] != NULL);
+                LASSERT (tx->tx_lntmsg[1]->msg_ev.type == LNET_EVENT_REPLY);
+                tx->tx_lntmsg[1]->msg_ev.mlength = ???;
+#endif
                 kranal_tx_done(tx, 0);
                 break;
         }

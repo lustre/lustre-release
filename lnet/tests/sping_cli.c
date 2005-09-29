@@ -211,7 +211,7 @@ pingcli_start(struct portal_ioctl_data *args)
                 return;
         }
         /* Put the ping packet */
-        if((rc = LNetPut (client->md_out_head_h, LNET_NOACK_REQ,
+        if((rc = LNetPut (LNET_NID_ANY, client->md_out_head_h, LNET_NOACK_REQ,
                           client->id_remote, PTL_PING_SERVER, 
                           0, 0, 0))) {
                 PDEBUG ("LNetPut (header)", rc);

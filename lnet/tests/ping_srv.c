@@ -137,7 +137,8 @@ int pingsrv_thread(void *arg)
                         CDEBUG (D_OTHER, "ping server resources allocated\n");
                 }
                 
-                if ((rc = LNetPut (server->mdout_h, LNET_NOACK_REQ,
+                if ((rc = LNetPut (server->evnt.target.nid, server->mdout_h, 
+                                   LNET_NOACK_REQ,
                                    server->evnt.initiator, PTL_PING_CLIENT, 
                                    0, 0, 0)))
                          PDEBUG ("LNetPut", rc);

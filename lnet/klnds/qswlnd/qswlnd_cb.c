@@ -732,6 +732,8 @@ kqswnal_rdma_store_complete (EP_RXD *rxd)
         LASSERT (krx->krx_rxd == rxd);
         LASSERT (krx->krx_rpc_reply_needed);
 
+        /* XXX Set REPLY mlength here */
+
         krx->krx_rpc_reply_needed = 0;
         kqswnal_rx_decref (krx);
 

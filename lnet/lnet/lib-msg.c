@@ -149,7 +149,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
                 
                 LASSERT(!in_interrupt());
-                rc = lnet_send(ni, msg);
+                rc = lnet_send(ni->ni_nid, msg);
                 LASSERT(!in_interrupt());
                 if (rc == 0)
                         return;
@@ -164,7 +164,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 LNET_UNLOCK();
                 
                 LASSERT(!in_interrupt());
-                rc = lnet_send(NULL, msg);
+                rc = lnet_send(LNET_NID_ANY, msg);
                 LASSERT(!in_interrupt());
                 if (rc == 0)
                         return;

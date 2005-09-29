@@ -206,36 +206,6 @@ lnet_find_net_locked (__u32 net)
 }
 
 int
-lnet_distance (lnet_nid_t nid, int *orderp)
-{
-	struct list_head *e;
-        lnet_remotenet_t *rnet;
-        __u32             net = PTL_NIDNET(nid);
-        int               dist = -ENETUNREACH;
-        int               order = 0;
-
-        if (lnet_islocalnet(net, orderp))
-                return 0;
-
-        LNET_LOCK();
-
-        list_for_each (e, &the_lnet.ln_remote_nets) {
-		rnet = list_entry(e, lnet_remotenet_t, lrn_list);
-
-                if (rnet->lrn_net == net) {
-                        dist = rnet->lrn_hops;
-                        if (orderp != NULL)
-                                *orderp = order;
-                        break;
-                }
-                order++;
-        }
-
-        LNET_UNLOCK();
-        return dist;
-}
-
-int
 lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
 {
         struct list_head     zombies;
@@ -251,12 +221,14 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                libcfs_net2str(net), hops, libcfs_nid2str(gateway));
 
         if (gateway == LNET_NID_ANY ||
+            PTL_NETTYP(PTL_NIDNET(gateway)) == LOLND ||
             net == PTL_NIDNET(LNET_NID_ANY) ||
+            PTL_NETTYP(net) == LOLND ||
             PTL_NIDNET(gateway) == net ||
             hops < 1 || hops > 255)
                 return (-EINVAL);
 
-        if (lnet_islocalnet(net, NULL))         /* it's a local network */
+        if (lnet_islocalnet(net))               /* it's a local network */
                 return 0;                       /* ignore the route entry */
 
         /* Assume net, route, all new */

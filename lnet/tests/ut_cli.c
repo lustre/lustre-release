@@ -108,6 +108,7 @@ static int __init utcli_init(void)
                 if(get){
                         PJK_UT_MSG("LNetGet()\n");
                         if((rc = LNetGet (
+                                    LNET_ID_ANY,
                                     mdh,
                                     target,       /* peer "address" */
                                     UT_PORTAL,    /* portal */
@@ -121,6 +122,7 @@ static int __init utcli_init(void)
 
                         PJK_UT_MSG("LNetPut()\n");
                         if((rc = LNetPut (
+                                    LNET_ID_ANY,
                                     mdh,
                                     LNET_ACK_REQ, /* we want ack */
                                     target,       /* peer "address" */

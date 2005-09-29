@@ -434,7 +434,8 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
 
         rx->rx_nob = nob;                       /* Can trust 'nob' now */
 
-        if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+        if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                     msg->ibm_srcnid) ||
             !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid, 
                                      msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||

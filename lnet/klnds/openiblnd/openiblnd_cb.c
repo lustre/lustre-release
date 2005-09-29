@@ -172,6 +172,8 @@ kibnal_complete_passive_rdma(kib_conn_t *conn, __u64 cookie, int status)
 
                 CDEBUG(D_NET, "Complete %p "LPD64": %d\n", tx, cookie, status);
 
+                /* XXX Set mlength of reply here */
+
                 tx->tx_status = status;
                 tx->tx_passive_rdma_wait = 0;
                 idle = (tx->tx_sending == 0);
@@ -289,7 +291,8 @@ kibnal_rx_callback (struct ib_cq_entry *e)
                 goto failed;
         }
 
-        if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+        if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                     msg->ibm_srcnid) ||
             !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
                                      msg->ibm_dstnid) ||
             msg->ibm_srcstamp != conn->ibc_incarnation ||
@@ -1958,7 +1961,8 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                         return TS_IB_CM_CALLBACK_ABORT;
                 }
 
-                if (msg->ibm_srcnid != conn->ibc_peer->ibp_nid ||
+                if (!lnet_ptlcompat_matchnid(conn->ibc_peer->ibp_nid,
+                                             msg->ibm_srcnid) ||
                     !lnet_ptlcompat_matchnid(kibnal_data.kib_ni->ni_nid,
                                              msg->ibm_dstnid) ||
                     msg->ibm_srcstamp != conn->ibc_incarnation ||

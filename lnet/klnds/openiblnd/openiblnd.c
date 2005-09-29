@@ -278,7 +278,7 @@ kibnal_make_svcqry (kib_conn_t *conn)
                 goto out;
         }
 
-        if (msg->ibm_srcnid != peer->ibp_nid) {
+        if (!lnet_ptlcompat_matchnid(peer->ibp_nid, msg->ibm_srcnid)) {
                 CERROR("Unexpected src NID %s from %s at %u.%u.%u.%u/%d\n", 
                        libcfs_nid2str(msg->ibm_srcnid),
                        libcfs_nid2str(peer->ibp_nid), 

@@ -10,7 +10,7 @@ int LNetNIInit(lnet_pid_t requested_pid);
 int LNetNIFini(void);
 
 int LNetGetId(unsigned int index, lnet_process_id_t *id);
-int LNetDist(lnet_nid_t nid, int *order);
+int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, int *order);
 int LNetCtl(unsigned int cmd, void *arg);
 void LNetSnprintHandle (char *str, int str_len, lnet_handle_any_t handle);
 
@@ -75,7 +75,8 @@ int LNetEQPoll(lnet_handle_eq_t *eventqs_in,
 /*
  * Data movement
  */
-int LNetPut(lnet_handle_md_t  md_in, 
+int LNetPut(lnet_nid_t        self,
+	    lnet_handle_md_t  md_in, 
 	    lnet_ack_req_t    ack_req_in,
 	    lnet_process_id_t target_in, 
 	    unsigned int      portal_in,
@@ -83,7 +84,8 @@ int LNetPut(lnet_handle_md_t  md_in,
 	    unsigned int      offset_in, 
 	    __u64             hdr_data_in);
 
-int LNetGet(lnet_handle_md_t  md_in, 
+int LNetGet(lnet_nid_t        self,
+	    lnet_handle_md_t  md_in, 
 	    lnet_process_id_t target_in,
 	    unsigned int      portal_in, 
 	    __u64             match_bits_in, 

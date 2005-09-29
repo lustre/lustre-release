@@ -26,10 +26,6 @@
 
 #include <lnet/lib-lnet.h>
 
-static int implicit_loopback = 1;
-CFS_MODULE_PARM(implicit_loopback, "i", int, 0644,
-                "Boolean: substitute 0@lo when sending to any local NID");
-
 /* forward ref */
 static void lnet_commit_md (lnet_libmd_t *md, lnet_msg_t *msg);
 
@@ -789,7 +785,8 @@ lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
         msg->msg_hdr.type           = cpu_to_le32(type);
         msg->msg_hdr.dest_nid       = cpu_to_le64(target.nid);
         msg->msg_hdr.dest_pid       = cpu_to_le32(target.pid);
-        /* src not set yet */
+        /* src_nid will be set later */
+        msg->msg_hdr.src_pid        = cpu_to_le32(the_lnet.ln_pid);
         msg->msg_hdr.payload_length = cpu_to_le32(len);
 }
 
@@ -1144,14 +1141,14 @@ lnet_return_credits_locked (lnet_msg_t *msg)
 }
 
 int
-lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
+lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 {
         lnet_nid_t        dst_nid = msg->msg_target.nid;
-        lnet_ni_t        *src_ni = NULL;
-        lnet_remotenet_t *rnet = NULL;
+        lnet_ni_t        *src_ni;
+        lnet_ni_t        *local_ni;
+        lnet_remotenet_t *rnet;
         lnet_route_t     *route;
         struct list_head *tmp;
-        lnet_nid_t        src_nid;
         lnet_peer_t      *lp;
         lnet_peer_t      *lp2;
         int               rc;
@@ -1159,7 +1156,6 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
         LASSERT (msg->msg_txpeer == NULL);
         LASSERT (!msg->msg_sending);
         LASSERT (!msg->msg_target_is_router);
-        LASSERT (!msg->msg_routing || ni == NULL);
 
         msg->msg_sending = 1;
 
@@ -1172,42 +1168,50 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                 return -ESHUTDOWN;
         }
 
-        /* Is this for someone on a local network? */
-        src_ni = lnet_net2ni_locked(PTL_NIDNET(dst_nid));
-        if (src_ni != NULL) {
-                if (!msg->msg_routing) {
-                        /* I'm the original message source and I'm sending to
-                         * someone local. Set msg_hdr.src_nid/pid from the NI
-                         * I'm sending from and see if I should actually use
-                         * the loopback NI. */
-                        
-                        src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
-                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
-                
-                        /* send via lo0? */
-                        if (implicit_loopback &&
-                            the_lnet.ln_loni != NULL &&
-                            lnet_ptlcompat_matchnid(src_ni->ni_nid, dst_nid)) {
-                                lnet_ni_decref_locked(src_ni);
-                                src_ni = the_lnet.ln_loni;
-                                lnet_ni_addref_locked(src_ni);
-                        }
+        if (src_nid == LNET_NID_ANY) {
+                src_ni = NULL;
+        } else {
+                src_ni = lnet_nid2ni_locked(src_nid);
+                if (src_ni == NULL) {
+                        LNET_UNLOCK();
+                        CERROR("Can't send to %s: src %s is not a local nid\n",
+                               libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
+                        return -EINVAL;
+                }
+                LASSERT (!msg->msg_routing);
+        }
 
-                        if (src_ni == the_lnet.ln_loni) {
-                                /* No send credit hassles with LOLND */
-                                LNET_UNLOCK();
-                                
-                                if (ni != NULL && ni != src_ni) {
-                                        /* a different LND expects a response */
-                                        rc = -EPROTO;
-                                } else {
-                                        rc = 0;
-                                        lnet_ni_send(src_ni, msg);
-                                }
-                                lnet_ni_decref(src_ni);
-                                return rc;
-                        }
+        /* Is this for someone on a local network? */ 
+        local_ni = lnet_net2ni_locked(PTL_NIDNET(dst_nid));
+
+        if (local_ni != NULL) {
+                if (src_ni == NULL) {
+                        src_ni = local_ni;
+                        src_nid = src_ni->ni_nid;
+                } else if (src_ni == local_ni) {
+                        lnet_ni_decref_locked(local_ni);
+                } else {
+                        lnet_ni_decref_locked(local_ni);
+                        lnet_ni_decref_locked(src_ni);
+                        LNET_UNLOCK();
+                        CERROR("no route to %s via from %s\n",
+                               libcfs_nid2str(dst_nid), libcfs_nid2str(src_nid));
+                        return -EINVAL;
+                }
+
+                LASSERT (src_nid != LNET_NID_ANY);
+
+                if (!msg->msg_routing) {
+                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
+                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+                }
+                
+                if (src_ni == the_lnet.ln_loni) {
+                        /* No send credit hassles with LOLND */
+                        LNET_UNLOCK();
+                        lnet_ni_send(src_ni, msg);
+                        lnet_ni_decref(src_ni);
+                        return 0;
                 }
                 
                 rc = lnet_nid2peer_locked(&lp, dst_nid);
@@ -1219,10 +1223,13 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                         /* ENOMEM or shutting down */
                         return rc;
                 }
+                LASSERT (lp->lp_ni == src_ni);
         } else {
                 /* sending to a remote network */
                 rnet = lnet_find_net_locked(PTL_NIDNET(dst_nid));
                 if (rnet == NULL) {
+                        if (src_ni != NULL)
+                                lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
                         CERROR("No route to %s\n", libcfs_id2str(msg->msg_target));
                         return -EHOSTUNREACH;
@@ -1235,25 +1242,37 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
                         lp2 = route->lr_gateway;
 
                         if (lp2->lp_alive &&
+                            (src_ni == NULL || lp2->lp_ni == src_ni) &&
                             (lp == NULL || lnet_compare_routers(lp2, lp)))
                                 lp = lp2;
                 }
 
                 if (lp == NULL) {
+                        if (src_ni == NULL)
+                                lnet_ni_decref_locked(src_ni);
                         LNET_UNLOCK();
                         CERROR("No route to %s (all routers down)\n", 
                                libcfs_id2str(msg->msg_target));
                         return -EHOSTUNREACH;
                 }
 
+                if (src_ni == NULL) {
+                        src_ni = lp->lp_ni;
+                        src_nid = src_ni->ni_nid;
+                } else {
+                        LASSERT (src_ni == lp->lp_ni);
+                        lnet_ni_decref_locked(src_ni);
+                }
+
                 lnet_peer_addref_locked(lp);
                 src_ni = lp->lp_ni;
 
+                LASSERT (src_nid != LNET_NID_ANY);
+
                 if (!msg->msg_routing) {
                         /* I'm the source and now I know which NI to send on */
-                        src_nid = lnet_ptlcompat_srcnid(src_ni->ni_nid, dst_nid);
+                        src_nid = lnet_ptlcompat_srcnid(src_nid, dst_nid);
                         msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-                        msg->msg_hdr.src_pid = cpu_to_le32(the_lnet.ln_pid);
                 }
 
                 msg->msg_target_is_router = 1;
@@ -1262,21 +1281,10 @@ lnet_send(lnet_ni_t *ni, lnet_msg_t *msg)
         }
 
         /* 'lp' is our best choice of peer */
-        LASSERT (lp->lp_ni == src_ni);
 
-        if (ni != NULL && ni != src_ni) {
-                /* A different LND expects a response */
-                lnet_peer_decref_locked(lp);
-                LNET_UNLOCK();
-                CERROR("NI mismatch: dest %s expected %s\n",
-                       libcfs_nid2str(dst_nid),
-                       libcfs_net2str(PTL_NIDNET(ni->ni_nid)));
-                return -EPROTO;
-        }
-
-        LASSERT (msg->msg_txpeer == NULL);
         LASSERT (!msg->msg_peertxcredit);
         LASSERT (!msg->msg_txcredit);
+        LASSERT (msg->msg_txpeer == NULL);
 
         msg->msg_txpeer = lp;                   /* msg takes my ref on lp */
 
@@ -1376,6 +1384,8 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
                 lnet_setpayloadbuffer(msg);
 
         msg->msg_ev.type = LNET_EVENT_PUT;
+        msg->msg_ev.target.pid = hdr->dest_pid;
+        msg->msg_ev.target.nid = hdr->dest_nid;
         msg->msg_ev.hdr_data = hdr->msg.put.hdr_data;
 
         /* Must I ACK?  If so I'll grab the ack_wmd out of the header and put
@@ -1428,6 +1438,8 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
         msg->msg_hdr.msg.reply.dst_wmd = reply_wmd;
 
         msg->msg_ev.type = LNET_EVENT_GET;
+        msg->msg_ev.target.pid = hdr->dest_pid;
+        msg->msg_ev.target.nid = hdr->dest_nid;
         msg->msg_ev.hdr_data = 0;
 
         /* set msg_recvaftersend so the incoming message is consumed (by
@@ -1437,7 +1449,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg)
          * valid. */
         msg->msg_recvaftersend = 1;
         
-        rc = lnet_send(ni, msg);
+        rc = lnet_send(ni->ni_nid, msg);
         if (rc < 0) {
                 /* didn't get as far as lnet_ni_send() */
                 CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
@@ -1507,6 +1519,8 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                 lnet_setpayloadbuffer(msg);
 
         msg->msg_ev.type = LNET_EVENT_REPLY;
+        msg->msg_ev.target.pid = hdr->dest_pid;
+        msg->msg_ev.target.nid = hdr->dest_nid;
         msg->msg_ev.initiator = src;
         msg->msg_ev.rlength = rlength;
         msg->msg_ev.mlength = mlength;
@@ -1560,6 +1574,8 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
         lnet_commit_md(md, msg);
 
         msg->msg_ev.type = LNET_EVENT_ACK;
+        msg->msg_ev.target.pid = hdr->dest_pid;
+        msg->msg_ev.target.nid = hdr->dest_nid;
         msg->msg_ev.initiator = src;
         msg->msg_ev.mlength = hdr->msg.ack.mlength;
         msg->msg_ev.match_bits = hdr->msg.ack.match_bits;
@@ -1707,9 +1723,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
          * know what they're doing; if they don't they're misconfigured, buggy
          * or malicious so we chop them off at the knees :) */
 
-        for_me = (PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) == LOLND ||
-                  lnet_ptlcompat_matchnid(ni->ni_nid, dest_nid));
-
+        for_me = lnet_ptlcompat_matchnid(ni->ni_nid, dest_nid);
         if (!for_me) {
                 if (the_lnet.ln_ptlcompat > 0) {
                         /* portals compatibility is single-network */
@@ -1866,7 +1880,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid, void *private)
 }
 
 int
-LNetPut(lnet_handle_md_t mdh, lnet_ack_req_t ack,
+LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         lnet_process_id_t target, unsigned int portal,
         __u64 match_bits, unsigned int offset, 
         __u64 hdr_data)
@@ -1944,7 +1958,7 @@ LNetPut(lnet_handle_md_t mdh, lnet_ack_req_t ack,
 
         LNET_UNLOCK();
 
-        rc = lnet_send(NULL, msg);
+        rc = lnet_send(self, msg);
         if (rc != 0) {
                 CERROR("Error sending PUT to %s: %d\n",
                        libcfs_id2str(target), rc);
@@ -2024,7 +2038,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 }
 
 int
-LNetGet(lnet_handle_md_t mdh, 
+LNetGet(lnet_nid_t self, lnet_handle_md_t mdh, 
         lnet_process_id_t target, unsigned int portal, 
         __u64 match_bits, unsigned int offset)
 {
@@ -2096,7 +2110,7 @@ LNetGet(lnet_handle_md_t mdh,
 
         LNET_UNLOCK();
 
-        rc = lnet_send(NULL, msg);
+        rc = lnet_send(self, msg);
         if (rc < 0) {
                 CERROR("error sending GET to %s: %d\n",
                        libcfs_id2str(target), rc);
@@ -2108,10 +2122,71 @@ LNetGet(lnet_handle_md_t mdh,
 }
 
 int
-LNetDist (lnet_nid_t nid, int *order)
+LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
 {
+	struct list_head *e;
+        lnet_ni_t        *ni;
+        lnet_route_t     *route;
+        lnet_remotenet_t *rnet;
+        __u32             dstnet = PTL_NIDNET(dstnid);
+        int               hops;
+        int               order = 0;
+
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
+
+        LNET_LOCK();
         
-        return lnet_distance(nid, order);
+        list_for_each (e, &the_lnet.ln_nis) {
+                ni = list_entry(e, lnet_ni_t, ni_list);
+                
+                if (ni->ni_nid == dstnid ||
+                    (the_lnet.ln_ptlcompat > 0 &&
+                     PTL_NIDNET(dstnid) == 0 &&
+                     PTL_NIDADDR(dstnid) == PTL_NIDADDR(ni->ni_nid) &&
+                     PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) != LOLND)) {
+                        if (srcnidp != NULL)
+                                *srcnidp = dstnid;
+                        if (orderp != NULL)
+                                *orderp = 0;
+                        LNET_UNLOCK();
+                        return 0;
+                }
+
+                if (PTL_NIDNET(ni->ni_nid) == dstnet ||
+                    (the_lnet.ln_ptlcompat > 0 &&
+                     dstnet == 0 &&
+                     PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) != LOLND)) {
+                        if (srcnidp != NULL)
+                                *srcnidp = ni->ni_nid;
+                        if (orderp != NULL)
+                                *orderp = order;
+                        LNET_UNLOCK();
+                        return 1;
+                }
+
+                order++;
+        }
+
+        list_for_each (e, &the_lnet.ln_remote_nets) {
+		rnet = list_entry(e, lnet_remotenet_t, lrn_list);
+
+                if (rnet->lrn_net == dstnet) {
+                        LASSERT (!list_empty(&rnet->lrn_routes));
+                        route = list_entry(rnet->lrn_routes.next,
+                                           lnet_route_t, lr_list);
+                        hops = rnet->lrn_hops;
+                        if (srcnidp != NULL)
+                                *srcnidp = route->lr_gateway->lp_ni->ni_nid;
+                        if (orderp != NULL)
+                                *orderp = order;
+                        LNET_UNLOCK();
+                        return hops + 1;
+                }
+                order++;
+        }
+
+        LNET_UNLOCK();
+        return -EHOSTUNREACH;
 }
+

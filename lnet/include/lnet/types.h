@@ -108,6 +108,7 @@ typedef unsigned LNET_SEQ_BASETYPE lnet_seq_t;
 #endif
 typedef struct {
         lnet_event_kind_t   type;
+	lnet_process_id_t   target;
         lnet_process_id_t   initiator;
         unsigned int        pt_index;
         __u64               match_bits;

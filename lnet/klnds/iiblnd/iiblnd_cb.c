@@ -172,6 +172,8 @@ kibnal_complete_passive_rdma(kib_conn_t *conn, __u64 cookie, int status)
 
                 CDEBUG(D_NET, "Complete %p "LPD64": %d\n", tx, cookie, status);
 
+                /* XXX Set mlength of REPLY here */
+
                 tx->tx_status = status;
                 tx->tx_passive_rdma_wait = 0;
                 idle = (tx->tx_sending == 0);

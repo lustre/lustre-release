@@ -623,11 +623,13 @@ lnet_parse_route (char *str, int *im_a_router)
 
 			if (ntokens == 1) {
 				net = libcfs_str2net(ptb->ptb_text);
-				if (net == PTL_NIDNET(LNET_NID_ANY))
+				if (net == PTL_NIDNET(LNET_NID_ANY) ||
+                                    PTL_NETTYP(net) == LOLND)
 					goto token_error;
 			} else {
 				nid = libcfs_str2nid(ptb->ptb_text);
-				if (nid == LNET_NID_ANY)
+				if (nid == LNET_NID_ANY ||
+                                    PTL_NETTYP(PTL_NIDNET(nid)) == LOLND)
 					goto token_error;
 			}
 		}

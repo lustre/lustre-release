@@ -675,16 +675,59 @@ lnet_net2ni_locked (__u32 net)
         list_for_each (tmp, &the_lnet.ln_nis) {
                 ni = list_entry(tmp, lnet_ni_t, ni_list);
 
-                if (PTL_NIDNET(ni->ni_nid) == net ||
-                    (the_lnet.ln_ptlcompat > 0 &&
-                     net == 0 &&
-                     PTL_NETTYP(PTL_NIDNET(ni->ni_nid)) != LOLND)) {
+                if (lnet_ptlcompat_matchnet(PTL_NIDNET(ni->ni_nid), net)) {
                         lnet_ni_addref_locked(ni);
                         return ni;
                 }
         }
         
         return NULL;
+}
+
+int
+lnet_islocalnet (__u32 net)
+{
+        lnet_ni_t        *ni;
+        
+        LNET_LOCK();
+        ni = lnet_net2ni_locked(net);
+        if (ni != NULL)
+                lnet_ni_decref_locked(ni);
+        LNET_UNLOCK();
+
+        return ni != NULL;
+}
+
+lnet_ni_t  *
+lnet_nid2ni_locked (lnet_nid_t nid)
+{
+        struct list_head *tmp;
+        lnet_ni_t        *ni;
+
+        list_for_each (tmp, &the_lnet.ln_nis) {
+                ni = list_entry(tmp, lnet_ni_t, ni_list);
+
+                if (lnet_ptlcompat_matchnid(ni->ni_nid, nid)) {
+                        lnet_ni_addref_locked(ni);
+                        return ni;
+                }
+        }
+        
+        return NULL;
+}
+
+int
+lnet_islocalnid (lnet_nid_t nid)
+{
+        lnet_ni_t     *ni;
+        
+        LNET_LOCK();
+        ni = lnet_nid2ni_locked(nid);
+        if (ni != NULL)
+                lnet_ni_decref_locked(ni);
+        LNET_UNLOCK();
+
+        return ni != NULL;
 }
 
 int
@@ -715,54 +758,6 @@ lnet_count_acceptor_nis (lnet_ni_t **first_ni)
         LNET_UNLOCK();
 #endif
         return count;
-}
-
-int
-lnet_islocalnid (lnet_nid_t nid)
-{
-        struct list_head *tmp;
-        lnet_ni_t        *ni;
-        int               islocal = 0;
-
-        LNET_LOCK();
-
-        list_for_each (tmp, &the_lnet.ln_nis) {
-                ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-                if (ni->ni_nid == nid) {
-                        islocal = 1;
-                        break;
-                }
-        }
-        
-        LNET_UNLOCK();
-        return islocal;
-}
-
-int
-lnet_islocalnet (__u32 net, int *orderp)
-{
-        struct list_head *tmp;
-        lnet_ni_t        *ni;
-        int               order = 0;
-        int               islocal = 0;
-
-        LNET_LOCK();
-
-        list_for_each (tmp, &the_lnet.ln_nis) {
-                ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-                if (PTL_NIDNET(ni->ni_nid) == net) {
-                        islocal = 1;
-                        if (orderp != NULL)
-                                *orderp = order;
-                        break;
-                }
-                order++;
-        }
-        
-        LNET_UNLOCK();
-        return islocal;
 }
 
 void
