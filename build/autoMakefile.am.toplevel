@@ -65,3 +65,6 @@ build/lustre.spec: build/lustre.spec.in config.status
 
 rpms: build/lustre.spec dist Makefile
 	rpmbuild -ta $(distdir).tar.gz
+
+srpm: build/lustre.spec dist Makefile
+	rpmbuild -ts $(distdir).tar.gz
