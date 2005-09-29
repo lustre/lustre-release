@@ -102,7 +102,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                         "multiple of %d bytes", page_size);
                 goto out;
         }
-        if (stripe_offset < -1 || stripe_offset > LOV_MAX_STRIPE_COUNT) {
+        if (stripe_offset < -1 || stripe_offset > 2048) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe offset %d", stripe_offset);
                 goto out;

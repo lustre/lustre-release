@@ -2,14 +2,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.6
        * bug fixes
 
-Severity   : minor
-Frequency  : liblustre-only, when liblustre client dies or becomes busy
-Bugzilla   : 7311
-Description: Doing ls on Linux clients can take a long time with active
-	     liblustre clients
-Details    : Newer more complete fix for 7311 issue: add connection flags
-	     handling.
-
 Severity   : major
 Frequency  : rare
 Bugzilla   : 7407
@@ -103,7 +95,8 @@ Description: Doing ls on Linux clients can take a long time with active
 Details    : Liblustre client cannot handle ASTs in timely manner, so avoid
 	     granting such locks to it in the first place if possible.  Locks
 	     are taken by proxy on the OST during the read or write and
-	     dropped immediately afterward.
+	     dropped immediately afterward.  Add connect flags handling, do
+	     not grant locks to liblustre clients for glimpse ASTs.
 
 Severity   : enhancement
 Bugzilla   : 6252
@@ -151,6 +144,13 @@ Description: server may evict liblustre clients accessing contended locks
 Details    : if a client is granted a lock or receives a completion AST
 	     with a blocking AST already set it would not reply to the AST
 	     for LDLM_FL_CANCEL_ON_BLOCK locks.  It now replies to such ASTs.
+
+Severity   : minor
+Frequency  : lfs setstripe, only systems with more than 160 OSTs
+Bugzilla   : 9440
+Description: unable to set striping with a starting offset beyond OST 160
+Details    : llapi_create_file() incorrectly limited the starting stripe
+	     index to the maximum single-file stripe count.
 
 ------------------------------------------------------------------------------
 
