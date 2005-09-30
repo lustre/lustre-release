@@ -96,11 +96,13 @@
 
 
 /*
- * *** TEMPORARY UNTIL I GET CONFIRMATION FROM CRAY ***
- *
- * It looks like there is no maxum number of IOVs for 
- * Cray Portals.  We only really require that the underyling
- * implemenation be >= LNET_MAX_IOV, so simply set that here
+ * The Cray Portals has no maximum number of IOVs.  The
+ * maximum is limited only my memory and size of the 
+ * int parameters (2^31-1).
+ * Lustre only really require that the underyling
+ * implemenation to support at least LNET_MAX_IOV, 
+ * so for Cray portals we can safely just use that
+ * value here.
  *
  */
 #define PTL_MD_MAX_IOV          LNET_MAX_IOV
