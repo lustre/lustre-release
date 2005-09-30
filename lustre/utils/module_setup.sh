@@ -43,6 +43,7 @@ echo "Copying mount and acceptor from local build dir to "$MDIR
 cp ../../portals/utils/acceptor /sbin/.
 cp ../utils/mount.lustre /sbin/.
 
+[ -e $MODFILE ] || touch $MODFILE
 if [ `grep -c lustre $MODFILE` -eq 0 ]; then
     echo Modifying $MODFILE
     echo "# Lustre modules added by $0" >> $MODFILE
