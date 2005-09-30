@@ -1816,14 +1816,6 @@ class MDSDEV(Module):
             client.prepare()
             lctl.mount_option(self.name, client.get_name(), "")
             lctl.end_record()
-
-            config.cleanup = 1
-            lctl.clear_log(self.name, self.name + '-clean')
-            lctl.record(self.name, self.name + '-clean')
-            client.cleanup()
-            lctl.del_mount_option(self.name)
-            lctl.end_record()
-            config.cleanup = 0
             config.record = 0
 
         # record logs for each client
@@ -1861,26 +1853,6 @@ class MDSDEV(Module):
                             self.cleanup()
                             panic("Record client log %s on %s failed" %(
                                            client_name, self.name))
-                        if config.verbose:
-                            for s in out: log("record> ", string.strip(s))
-                        ret, out = run (sys.argv[0],
-                                        noexec_opt[old_noexec == 1],
-                                        "--cleanup -v --record --nomod",
-                                        "--record_log", client_name + "-clean",
-                                        "--record_device", self.name,
-                                        "--node", client_name,
-                                        config_options)
-                        if ret:
-              # In this case, although 0-conf mount works but 0-conf umount
-              # doesn't work. As a boring result, the user is forced to
-              # cleanup client service manually again and again. So I prefer
-              # deleting these two llogs together and let the user write_conf.
-                            lctl.clear_log(self.name, client_name)
-                            lctl.clear_log(self.name, client_name + '-clean')
-                            print out
-                            self.cleanup()
-                            panic("Record client log %s on %s failed" %(
-                                           client_name + '-clean', self.name))
                         if config.verbose:
                             for s in out: log("record> ", string.strip(s))
                         config.noexec = old_noexec

@@ -1477,7 +1477,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
-
+        
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
@@ -1673,7 +1673,7 @@ int mds_postrecov(struct obd_device *obd)
                           0, NULL);
         if (rc)
                 GOTO(out, rc);
-
+        
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
                           NULL, NULL, NULL);
@@ -1682,7 +1682,7 @@ int mds_postrecov(struct obd_device *obd)
                        obd->obd_name, rc);
                 GOTO(out, rc);
         }
-
+        
         /* remove the orphaned precreated objects */
         rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
         if (rc) {
@@ -1704,28 +1704,30 @@ err_llog:
 int mds_lov_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct obd_device *osc = mds->mds_osc_obd;
+        ENTRY;
 
         if (mds->mds_profile) {
-                char * cln_prof;
-                struct config_llog_instance cfg;
-                struct lvfs_run_ctxt saved;
-                int len = strlen(mds->mds_profile) + sizeof("-clean") + 1;
-
-                OBD_ALLOC(cln_prof, len);
-                sprintf(cln_prof, "%s-clean", mds->mds_profile);
-
-                cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
-
-                push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-                class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
-                                        cln_prof, &cfg);
-                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-
-                OBD_FREE(cln_prof, len);
+                class_del_profile(mds->mds_profile);
                 OBD_FREE(mds->mds_profile, strlen(mds->mds_profile) + 1);
                 mds->mds_profile = NULL;
         }
+
+        /* There better be a lov */
+        if (!osc)
+                RETURN(0);
+
+        obd_register_observer(osc, NULL);
+
+        /* Give lov our same shutdown flags */
+        osc->obd_force = obd->obd_force;
+        osc->obd_fail = obd->obd_fail;
+        
+        /* Cleanup the lov */
+        obd_disconnect(mds->mds_osc_exp);
+        class_manual_cleanup(osc);
+        mds->mds_osc_exp = NULL;
+
         RETURN(0);
 }
 

@@ -428,6 +428,7 @@ EXPORT_SYMBOL(class_attach);
 EXPORT_SYMBOL(class_setup);
 EXPORT_SYMBOL(class_cleanup);
 EXPORT_SYMBOL(class_detach);
+EXPORT_SYMBOL(class_manual_cleanup);
 
 #ifdef LPROCFS
 int obd_proc_read_version(char *page, char **start, off_t off, int count,

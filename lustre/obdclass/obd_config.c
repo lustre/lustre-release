@@ -876,3 +876,44 @@ parse_out:
         RETURN(rc);
 
 }
+
+/* Cleanup and detach */
+void class_manual_cleanup(struct obd_device *obd)
+{
+        struct lustre_cfg *lcfg;
+        struct lustre_cfg_bufs bufs;
+        int err;
+        char flags[3]="";
+        ENTRY;
+ 
+        if (!obd) {
+                CERROR("empty cleanup\n");
+                EXIT;
+                return;
+        }
+
+        if (obd->obd_force)
+                strcat(flags, "F");
+        if (obd->obd_fail)
+                strcat(flags, "A");
+
+        CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n", 
+               obd->obd_name, flags);
+
+        lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+        lustre_cfg_bufs_set_string(&bufs, 1, flags);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        
+        err = class_process_config(lcfg);
+        if (err) 
+                CERROR("cleanup failed %d: %s\n", err, obd->obd_name);
+        
+        /* the lcfg is almost the same for both ops */
+        lcfg->lcfg_command = LCFG_DETACH;
+        err = class_process_config(lcfg);
+        lustre_cfg_free(lcfg);
+        if (err) 
+                CERROR("detach failed %d: %s\n", err, obd->obd_name);
+        EXIT;
+}
+

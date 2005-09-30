@@ -265,9 +265,13 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
         RETURN(0);
 }
 
+static int
+lov_del_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen);
+
 static int lov_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
+        struct obd_device *osc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         int rc, i;
@@ -284,8 +288,18 @@ static int lov_disconnect(struct obd_export *exp)
                 RETURN(rc);
 
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
-                if (tgt->ltd_exp)
-                        lov_disconnect_obd(obd, tgt);
+                if (tgt->ltd_exp) {
+                        osc_obd = class_exp2obd(tgt->ltd_exp);
+                        /* Disconnect and delete from list */
+                        lov_del_obd(obd, &tgt->uuid, i, tgt->ltd_gen);
+                        /* Cleanup the osc now - can't do it from 
+                           lov_cleanup because we just lost our only reference
+                           to it. */ 
+                        /* Use lov's force/fail flags. */
+                        osc_obd->obd_force = obd->obd_force;
+                        osc_obd->obd_fail = obd->obd_fail;
+                        class_manual_cleanup(osc_obd);
+                }
         }
 
         RETURN(rc);
@@ -592,7 +606,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         /* Allocate space for target list */
         if (desc->ld_tgt_count)
                 count = desc->ld_tgt_count;
-        lov->bufsize = sizeof(struct lov_tgt_desc) * count;
+        lov->bufsize = sizeof(struct lov_tgt_desc) * max(count, 1);
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (lov->tgts == NULL) {
                 CERROR("Out of memory\n");

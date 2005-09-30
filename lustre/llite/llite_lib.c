@@ -684,32 +684,12 @@ out:
 
 static void lustre_manual_cleanup(struct ll_sb_info *sbi)
 {
-        struct lustre_cfg *lcfg;
-        struct lustre_cfg_bufs bufs;
         struct obd_device *obd;
         int next = 0;
 
-        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL){
-                int err;
-
-                /* the lcfg is almost the same for both ops */
-                lustre_cfg_bufs_reset(&bufs, obd->obd_name);
-                lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-
-                err = class_process_config(lcfg);
-                if (err) {
-                        CERROR("cleanup failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-
-                lcfg->lcfg_command = LCFG_DETACH;
-                err = class_process_config(lcfg);
-                lustre_cfg_free(lcfg);
-                if (err) {
-                        CERROR("detach failed: %s\n", obd->obd_name);
-                        //continue;
-                }
-        }
+        while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
+                class_manual_cleanup(obd);
+        }                       
 
         if (sbi->ll_lmd != NULL)
                 class_del_profile(sbi->ll_lmd->lmd_profile);
@@ -818,14 +798,21 @@ void lustre_put_super(struct super_block *sb)
 {
         struct obd_device *obd;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int force_umount = 0;
+        int force = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
         obd = class_exp2obd(sbi->ll_mdc_exp);
-        if (obd)
-                force_umount = obd->obd_no_recov;
-        obd = NULL;
+        if (obd) {
+                int next = 0;
+                /* We need to set force before the lov_disconnect in 
+                lustre_common_put_super, since l_d cleans up osc's as well. */
+                force = obd->obd_no_recov;
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                       !=NULL) {
+                        obd->obd_force = force;
+                }                       
+        }
 
         lustre_common_put_super(sb);
 
