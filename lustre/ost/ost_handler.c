@@ -479,18 +479,6 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         if (nrbufs == 0 || !(nb[0].flags & OBD_BRW_SRVLOCK))
                 RETURN(0);
 
-        /* EXPENSIVE ASSERTION */
-        for (i = 1; i < nrbufs; i ++)
-                /*
-                 * check that niobufs are contiguous ->offset-wise. Strictly
-                 * speaking, this is not required by the code below. What we
-                 * are trying to assert here is that RPC we are handling was
-                 * sent by a liblustre-style cache-less client rather than by
-                 * usual llite OSC layer than can arbitrarily mix pages from
-                 * different write(2) calls.
-                 */
-                LASSERT(nb[i].offset == nb[i - 1].offset + nb[i - 1].len);
-
         policy.l_extent.start = nb[0].offset & CFS_PAGE_MASK;
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
