@@ -164,6 +164,14 @@ Description: bind OST threads to NUMA nodes to improve performance
 Details    : all OST threads are uniformly bound to CPUs on a single NUMA
 	     node and do their allocations there to localize memory access
 
+Severity   : minor
+Frequency  : liblustre-only, when liblustre client dies or becomes busy
+Bugzilla   : 7311
+Description: Doing ls on Linux clients can take a long time with active
+	     liblustre clients
+Details    : Newer more complete fix for 7311 issue: add connection flags
+	     handling.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
