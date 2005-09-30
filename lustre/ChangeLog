@@ -158,6 +158,12 @@ Bugzilla   : 6163
 Description: lconf did not handle in-kernel recovery with LDAP properly
 Details    : lconf/LustreDB get_refs() is searching the wrong namespace
 
+Severity   : enhancement
+Bugzilla   : 7342
+Description: bind OST threads to NUMA nodes to improve performance
+Details    : all OST threads are uniformly bound to CPUs on a single NUMA
+	     node and do their allocations there to localize memory access
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

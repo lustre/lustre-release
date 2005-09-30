@@ -484,9 +484,8 @@ struct ptlrpc_thread {
 
         struct list_head t_link; /* active threads for service, from svc->srv_threads */
 
+        void *t_data;            /* thread-private data (preallocated memory) */
         __u32 t_flags;
-
-        void *t_data; /* thread-private data (preallocated memory) */
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         wait_queue_head_t t_ctl_waitq;
@@ -538,7 +537,8 @@ struct ptlrpc_service {
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
         int              srv_watchdog_timeout; /* soft watchdog timeout, in ms */
-        int              srv_num_threads;      /*# of threads to start/started*/
+        int              srv_num_threads;       /* # threads to start/started */
+        unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
 
         __u32 srv_req_portal;
         __u32 srv_rep_portal;

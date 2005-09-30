@@ -1440,6 +1440,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ost->ost_service->srv_init = ost_thread_init;
         ost->ost_service->srv_done = ost_thread_done;
+        ost->ost_service->srv_cpu_affinity = 1;
         rc = ptlrpc_start_threads(obd, ost->ost_service, "ll_ost");
         if (rc)
                 GOTO(out_service, rc = -EINVAL);

@@ -812,11 +812,13 @@ static int ptlrpc_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_service  *svc = data->svc;
         struct ptlrpc_thread   *thread = data->thread;
+        struct ptlrpc_reply_state *rs;
         struct lc_watchdog     *watchdog;
         unsigned long           flags;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info *ginfo = NULL;
 #endif
+        int rc = 0;
         ENTRY;
 
         lock_kernel();
@@ -833,16 +835,47 @@ static int ptlrpc_main(void *arg)
         THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && CONFIG_NUMA && \
+        LUSTRE_KERNEL_VERSION >= 48
+        /* we need to do this before any per-thread allocation is done so that
+         * we get the per-thread allocations on local node.  bug 7342 */
+        if (svc->srv_cpu_affinity) {
+                int cpu, num_cpu;
+
+                for (cpu = 0, num_cpu = 0; cpu < NR_CPUS; cpu++) {
+                        if (!cpu_online(cpu))
+                                continue;
+                        if (num_cpu == thread->t_id % num_online_cpus())
+                                break;
+                        num_cpu++;
+                }
+                set_cpus_allowed(current, node_to_cpumask(cpu_to_node(cpu)));
+        }
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         ginfo = groups_alloc(0);
         if (!ginfo) {
-                thread->t_flags = SVC_RUNNING;
-                wake_up(&thread->t_ctl_waitq);
-                return (-ENOMEM);
+                rc = -ENOMEM;
+                goto out;
         }
+
         set_current_groups(ginfo);
         put_group_info(ginfo);
 #endif
+
+        if (svc->srv_init != NULL) {
+                rc = svc->srv_init(thread);
+                if (rc)
+                        goto out;
+        }
+
+        /* Alloc reply state structure for this one */
+        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
+        if (!rs) {
+                rc = -ENOMEM;
+                goto out_srv_init;
+        }
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
@@ -857,7 +890,11 @@ static int ptlrpc_main(void *arg)
 
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_nthreads++;
+        list_add(&rs->rs_list, &svc->srv_free_rs_list);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
+        wake_up(&svc->srv_free_rs_waitq);
+
+        CDEBUG(D_NET, "service thread %d started\n", thread->t_id);
 
         /* XXX maintain a list of all managed devices: insert here */
 
@@ -908,9 +945,13 @@ static int ptlrpc_main(void *arg)
         /*
          * deconstruct service specific state created by ptlrpc_start_thread()
          */
+        lc_watchdog_delete(watchdog);
+
+out_srv_init:
         if (svc->srv_done != NULL)
                 svc->srv_done(thread);
 
+out:
         spin_lock_irqsave(&svc->srv_lock, flags);
 
         svc->srv_nthreads--;                    /* must know immediately */
@@ -919,10 +960,10 @@ static int ptlrpc_main(void *arg)
 
         spin_unlock_irqrestore(&svc->srv_lock, flags);
 
-        lc_watchdog_delete(watchdog);
+        CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
+        thread->t_id = rc;
 
-        CDEBUG(D_NET, "service thread exiting, process %d\n", current->pid);
-        return 0;
+        return rc;
 }
 
 static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
@@ -991,7 +1032,6 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         struct ptlrpc_svc_data d;
         struct ptlrpc_thread *thread;
         unsigned long flags;
-        struct ptlrpc_reply_state *rs;
         int rc;
         ENTRY;
 
@@ -1000,22 +1040,10 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                 RETURN(-ENOMEM);
         init_waitqueue_head(&thread->t_ctl_waitq);
         thread->t_id = id;
-          
-        if (svc->srv_init != NULL) {
-                rc = svc->srv_init(thread);
-                if (rc != 0)
-                        RETURN(rc);
-        }
 
-        /* Alloc reply state structure for this one */
-        OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, GFP_KERNEL);
-        if (!rs)
-                RETURN(-ENOMEM);
         spin_lock_irqsave(&svc->srv_lock, flags);
-        list_add(&rs->rs_list, &svc->srv_free_rs_list);
         list_add(&thread->t_link, &svc->srv_threads);
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-        wake_up(&svc->srv_free_rs_waitq);
 
         d.dev = dev;
         d.svc = svc;
@@ -1033,15 +1061,14 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                 list_del(&thread->t_link);
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
 
-                if (svc->srv_done != NULL)
-                        svc->srv_done(thread);
-
                 OBD_FREE(thread, sizeof(*thread));
                 RETURN(rc);
         }
-        l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING, &lwi);
+        l_wait_event(thread->t_ctl_waitq,
+                     thread->t_flags & (SVC_RUNNING | SVC_STOPPED), &lwi);
 
-        RETURN(0);
+        rc = (thread->t_flags & SVC_STOPPED) ? thread->t_id : 0;
+        RETURN(rc);
 }
 #endif
 
