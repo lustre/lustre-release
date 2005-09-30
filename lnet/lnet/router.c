@@ -35,7 +35,7 @@ CFS_MODULE_PARM(tiny_router_buffers, "i", int, 0444,
 static int small_router_buffers = 256;
 CFS_MODULE_PARM(small_router_buffers, "i", int, 0444,
                 "# of small (1 page) messages to buffer in the router");
-static int large_router_buffers = 16;
+static int large_router_buffers = 32;
 CFS_MODULE_PARM(large_router_buffers, "i", int, 0444,
                 "# of large messages to buffer in the router");
 
@@ -463,7 +463,7 @@ lnet_get_route (int idx, __u32 *net, __u32 *hops,
 #ifdef __KERNEL__
 
 void
-lnet_destory_rtrbuf(lnet_rtrbuf_t *rb, int npages)
+lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages)
 {
         int sz = offsetof(lnet_rtrbuf_t, rb_kiov[npages]);
 
@@ -520,7 +520,7 @@ lnet_rtrpool_free_bufs(lnet_rtrbufpool_t *rbp)
                 rb = list_entry(rbp->rbp_bufs.next,
                                 lnet_rtrbuf_t, rb_list);
                 list_del(&rb->rb_list);
-                lnet_destory_rtrbuf(rb, npages);
+                lnet_destroy_rtrbuf(rb, npages);
                 nbuffers++;
         }
 
@@ -552,6 +552,7 @@ lnet_rtrpool_alloc_bufs(lnet_rtrbufpool_t *rbp, int nbufs)
 
                 rbp->rbp_nbuffers++;
                 rbp->rbp_credits++;
+                rbp->rbp_mincredits++;
                 list_add(&rb->rb_list, &rbp->rbp_bufs);
 
                 /* No allocation "under fire" */

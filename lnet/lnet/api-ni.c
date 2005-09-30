@@ -26,10 +26,13 @@ lnet_t      the_lnet;                           /* THE state of the network */
 
 #ifdef __KERNEL__
 
-#define DEFAULT_NETWORKS  "tcp"
-static char *networks = DEFAULT_NETWORKS;
+static char *ip2nets = "";
+CFS_MODULE_PARM(ip2nets, "s", charp, 0444,
+                "LNET network <- IP table");
+
+static char *networks = "";
 CFS_MODULE_PARM(networks, "s", charp, 0444,
-                "local networks (default='"DEFAULT_NETWORKS"')");
+                "local networks");
 
 static char *routes = "";
 CFS_MODULE_PARM(routes, "s", charp, 0444,
@@ -48,7 +51,45 @@ lnet_get_routes(void)
 char *
 lnet_get_networks(void)
 {
-        return networks;
+        if (*networks != 0 && *ip2nets != 0) {
+                LCONSOLE_ERROR("Please specify EITHER 'networks' or 'ip2nets'"
+                               " but not both at once\n");
+                return NULL;
+        }
+        
+        if (*networks != 0)
+                return networks;
+        
+        if (*ip2nets != 0) {
+                int   rc = lnet_parse_ip2nets(&networks, ip2nets);
+
+                switch (rc) {
+                case 0:
+                        return networks;
+
+                case -ENOENT:
+                        LCONSOLE_ERROR("Can't match any networks in "
+                                       "ip2nets\n");
+                        break;
+                        
+                case -ENOMEM:
+                        LCONSOLE_ERROR("Out of memory parsing ip2nets\n");
+                        break;
+                        
+                case -EINVAL:
+                        LCONSOLE_ERROR("Can't parse ip2nets\n");
+                        break;
+                        
+                default:
+                        LCONSOLE_ERROR("Unexpected error %d parsing ip2nets\n",
+                                       rc);
+                        break;
+                }
+                
+                return NULL;
+        }
+
+        return "tcp";
 }
 
 int
@@ -533,6 +574,50 @@ lnet_invalidate_handle (lnet_libhandle_t *lh)
 }
 
 int
+lnet_init_finalizers(void)
+{
+#ifdef __KERNEL__
+        int    i;
+
+        the_lnet.ln_nfinalizers = num_online_cpus();
+
+        LIBCFS_ALLOC(the_lnet.ln_finalizers,
+                     the_lnet.ln_nfinalizers * 
+                     sizeof(*the_lnet.ln_finalizers));
+        if (the_lnet.ln_finalizers == NULL) {
+                CERROR("Can't allocate ln_finalizers\n");
+                return -ENOMEM;
+        }
+
+        for (i = 0; i < the_lnet.ln_nfinalizers; i++)
+                the_lnet.ln_finalizers[i] = NULL;
+#else
+        the_lnet.ln_finalizing = 0;
+#endif
+
+        CFS_INIT_LIST_HEAD(&the_lnet.ln_finalizeq);
+        return 0;
+}
+
+void
+lnet_fini_finalizers(void)
+{
+#ifdef __KERNEL__
+        int    i;
+        
+        for (i = 0; i < the_lnet.ln_nfinalizers; i++)
+                LASSERT (the_lnet.ln_finalizers[i] == NULL);
+
+        LIBCFS_FREE(the_lnet.ln_finalizers,
+                    the_lnet.ln_nfinalizers *
+                    sizeof(*the_lnet.ln_finalizers));
+#else
+        LASSERT (!the_lnet.ln_finalizing);
+#endif
+        LASSERT (list_empty(&the_lnet.ln_finalizeq));
+}
+
+int
 lnet_prepare(lnet_pid_t requested_pid)
 {
         /* Prepare to bring up the network */
@@ -567,7 +652,7 @@ lnet_prepare(lnet_pid_t requested_pid)
         the_lnet.ln_interface_cookie = lnet_create_interface_cookie();
 
         lnet_init_rtrpools();
-        
+
         rc = lnet_setup_handle_hash ();
         if (rc != 0)
                 goto failed0;
@@ -576,13 +661,17 @@ lnet_prepare(lnet_pid_t requested_pid)
         if (rc != 0)
                 goto failed1;
 
+        rc = lnet_init_finalizers();
+        if (rc != 0)
+                goto failed2;
+
         the_lnet.ln_nportals = MAX_PORTALS;
         LIBCFS_ALLOC(the_lnet.ln_portals, 
                      the_lnet.ln_nportals * 
                      sizeof(*the_lnet.ln_portals));
         if (the_lnet.ln_portals == NULL) {
                 rc = -ENOMEM;
-                goto failed2;
+                goto failed3;
         }
 
         for (i = 0; i < the_lnet.ln_nportals; i++)
@@ -590,6 +679,8 @@ lnet_prepare(lnet_pid_t requested_pid)
 
         return 0;
         
+ failed3:
+        lnet_fini_finalizers();
  failed2:
         lnet_destroy_peer_table();
  failed1:
@@ -659,6 +750,7 @@ lnet_unprepare (void)
                     the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
 
         lnet_free_rtrpools();
+        lnet_fini_finalizers();
         lnet_destroy_peer_table();
         lnet_cleanup_handle_hash();
         lnet_descriptor_cleanup();
@@ -867,9 +959,14 @@ lnet_startup_lndnis (void)
         int                rc = 0;
         int                lnd_type;
         int                nicount = 0;
+        char              *nets = lnet_get_networks();
 
         INIT_LIST_HEAD(&nilist);
-        rc = lnet_parse_networks(&nilist, lnet_get_networks());
+        
+        if (nets == NULL)
+                goto failed;
+
+        rc = lnet_parse_networks(&nilist, nets);
         if (rc != 0) 
                 goto failed;
 

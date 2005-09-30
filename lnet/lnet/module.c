@@ -25,7 +25,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
 
-static int config_on_load = 0;
+static int config_on_load = 1;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
@@ -70,9 +70,27 @@ static int lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
+void
+lnet_configure (void *arg)
+{
+        int    rc;
+
+        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+        the_lnet.ln_niinit_self = 1;
+        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+
+        rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
+        if (rc != 0) {
+                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+                the_lnet.ln_niinit_self = 0;
+                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+        }
+}
+
 static int init_lnet(void)
 {
-        int rc;
+        static work_struct_t work;
+        int                  rc;
         ENTRY;
 
         rc = LNetInit();
@@ -81,24 +99,16 @@ static int init_lnet(void)
                 RETURN(rc);
         }
 
-        if (config_on_load) {
-                LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-                the_lnet.ln_niinit_self = 1;
-                LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
-
-                rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
-                if (rc != 0) {
-                        /* Can't LNetFini or fail now if I loaded NALs */
-                        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
-                        the_lnet.ln_niinit_self = 0;
-                        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
-                }
-        }
-        
         rc = libcfs_register_ioctl(&lnet_ioctl_handler);
         LASSERT (rc == 0);
 
-        RETURN(rc);
+        if (config_on_load) {
+                /* Have to schedule a task to avoid deadlocking modload */
+                prepare_work(&work, lnet_configure, NULL);
+                schedule_work(&work);
+        }
+
+        RETURN(0);
 }
 
 static void fini_lnet(void)

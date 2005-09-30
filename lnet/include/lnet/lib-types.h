@@ -455,7 +455,14 @@ typedef struct
 
         char              *ln_network_tokens;   /* space for network names */
         int                ln_network_tokens_nob;
-        
+
+        struct list_head   ln_finalizeq;        /* msgs waiting to complete finalizing */
+#ifdef __KERNEL__
+        void             **ln_finalizers;       /* threads doing finalization */
+        int                ln_nfinalizers;      /* max # threads finalizing */
+#else
+        int                ln_finalizing;
+#endif
         struct list_head   ln_test_peers;       /* failure simulation */
         
 #ifdef LNET_USE_LIB_FREELIST

@@ -94,6 +94,13 @@ lnet_router_seq_seek (lnet_route_seq_iterator_t *lrsi, loff_t off)
         struct list_head  *r;
         int                rc;
         loff_t             here;
+
+        if (off == 0) {
+                lrsi->lrsi_net = NULL;
+                lrsi->lrsi_route = NULL;
+                lrsi->lrsi_off = 0;
+                return 0;
+        }
         
         LNET_LOCK();
         
@@ -108,7 +115,7 @@ lnet_router_seq_seek (lnet_route_seq_iterator_t *lrsi, loff_t off)
                 /* search from start */
                 n = the_lnet.ln_remote_nets.next;
                 r = NULL;
-                here = 0;
+                here = 1;
         } else {
                 /* continue search */
                 n = &lrsi->lrsi_net->lrn_list;
@@ -208,6 +215,14 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
         lnet_nid_t                 nid;
         int                        alive;
 
+        if (lrsi->lrsi_off == 0) {
+                seq_printf(s, "Routing %s\n",
+                           the_lnet.ln_routing ? "enabled" : "disabled");
+                seq_printf(s, "%-8s %4s %7s %s\n",
+                           "net", "hops", "state", "router");
+                return 0;
+        }
+        
         LASSERT (lrsi->lrsi_net != NULL);
         LASSERT (lrsi->lrsi_route != NULL);
 
@@ -225,7 +240,7 @@ lnet_router_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "%-8s %2u %7s %s\n", libcfs_net2str(net), hops,
+        seq_printf(s, "%-8s %4u %7s %s\n", libcfs_net2str(net), hops,
                    alive ? "up" : "down", libcfs_nid2str(nid));
         return 0;
 }
@@ -276,6 +291,13 @@ lnet_peer_seq_seek (lnet_peer_seq_iterator_t *lpsi, loff_t off)
         loff_t             here;
         int                rc;
         
+        if (off == 0) {
+                lpsi->lpsi_idx = 0;
+                lpsi->lpsi_peer = NULL;
+                lpsi->lpsi_off = 0;
+                return 0;
+        }
+
         LNET_LOCK();
         
         if (lpsi->lpsi_peer != NULL &&
@@ -290,7 +312,7 @@ lnet_peer_seq_seek (lnet_peer_seq_iterator_t *lpsi, loff_t off)
                 /* search from start */
                 idx = 0;
                 p = NULL;
-                here = 0;
+                here = 1;
         } else {
                 /* continue search */
                 idx = lpsi->lpsi_idx;
@@ -392,6 +414,13 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
         int                       alive;
         int                       txqnob;
         int                       nrefs;
+
+        if (lpsi->lpsi_off == 0) {
+                seq_printf(s, "%-16s %4s %5s %5s %5s %5s %5s %5s %s\n", 
+                           "nid", "refs", "state", "max", 
+                           "rtr", "min", "tx", "min", "queue");
+                return 0;
+        }
         
         LASSERT (lpsi->lpsi_peer != NULL);
 
@@ -416,7 +445,7 @@ lnet_peer_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "%-16s [%3d] %4s %3d rtr %3d %3d tx %3d %3d # %d\n", 
+        seq_printf(s, "%-16s %4d %5s %5d %5d %5d %5d %5d %d\n", 
                    libcfs_nid2str(nid), nrefs, alive ? "up" : "down",
                    maxcr, rtrcr, minrtrcr, txcr, mintxcr, txqnob);
         return 0;
@@ -464,6 +493,12 @@ lnet_buffer_seq_seek (lnet_buffer_seq_iterator_t *lbsi, loff_t off)
         int                idx;
         loff_t             here;
         int                rc;
+
+        if (off == 0) {
+                lbsi->lbsi_idx = -1;
+                lbsi->lbsi_off = 0;
+                return 0;
+        }
         
         LNET_LOCK();
         
@@ -471,7 +506,7 @@ lnet_buffer_seq_seek (lnet_buffer_seq_iterator_t *lbsi, loff_t off)
             lbsi->lbsi_off > off) {
                 /* search from start */
                 idx = 0;
-                here = 0;
+                here = 1;
         } else {
                 /* continue search */
                 idx = lbsi->lbsi_idx;
@@ -552,6 +587,12 @@ lnet_buffer_seq_show (struct seq_file *s, void *iter)
         int                         cr;
         int                         mincr;
 
+        if (lbsi->lbsi_off == 0) {
+                seq_printf(s, "%5s %5s %7s %7s\n",  
+                           "pages", "count", "credits", "min");
+                return 0;
+        }
+        
         LASSERT (lbsi->lbsi_idx >= 0 && lbsi->lbsi_idx < LNET_PEER_HASHSIZE);
 
         LNET_LOCK();
@@ -565,7 +606,7 @@ lnet_buffer_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "[%d] %4d x %3d %5d %5d\n", lbsi->lbsi_idx, 
+        seq_printf(s, "%5d %5d %7d %7d\n", 
                    npages, nbuf, cr, mincr);
         return 0;
 }
@@ -612,20 +653,27 @@ lnet_ni_seq_seek (lnet_ni_seq_iterator_t *lnsi, loff_t off)
         struct list_head  *n;
         loff_t             here;
         int                rc;
+
+        if (off == 0) {
+                lnsi->lnsi_ni = NULL;
+                lnsi->lnsi_off = 0;
+                return 0;
+        }
         
         LNET_LOCK();
         
-        if (lnsi->lnsi_off > off) {
+        if (lnsi->lnsi_ni == NULL ||
+            lnsi->lnsi_off > off) {
                 /* search from start */
                 n = NULL;
-                here = 0;
+                here = 1;
         } else {
                 /* continue search */
                 n = &lnsi->lnsi_ni->ni_list;
                 here = lnsi->lnsi_off;
         }
         
-        lnsi->lnsi_off     = off;
+        lnsi->lnsi_off = off;
 
         if (n == NULL)
                 n = the_lnet.ln_nis.next;
@@ -704,6 +752,12 @@ lnet_ni_seq_show (struct seq_file *s, void *iter)
         lnet_nid_t              nid;
         int                     nref;
 
+        if (lnsi->lnsi_off == 0) {
+                seq_printf(s, "%-16s %4s %4s %5s %5s %5s\n",
+                           "nid", "refs", "peer", "max", "tx", "min");
+                return 0;
+        }
+        
         LASSERT (lnsi->lnsi_ni != NULL);
 
         LNET_LOCK();
@@ -719,8 +773,9 @@ lnet_ni_seq_show (struct seq_file *s, void *iter)
 
         LNET_UNLOCK();
 
-        seq_printf(s, "%-16s [%3d] %4d %5d %5d %5d\n",
-                   libcfs_nid2str(nid), nref, npeertxcr, maxtxcr, txcr, mintxcr);
+        seq_printf(s, "%-16s %4d %4d %5d %5d %5d\n",
+                   libcfs_nid2str(nid), nref, 
+                   npeertxcr, maxtxcr, txcr, mintxcr);
         return 0;
 }
 

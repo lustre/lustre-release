@@ -67,18 +67,83 @@ lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
 }
 
 void
-lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
+lnet_complete_msg_locked(lnet_msg_t *msg)
 {
         lnet_handle_wire_t ack_wmd;
+        int                rc;
+        int                status = msg->msg_ev.status;
+
+        LASSERT (msg->msg_onactivelist);
+
+        if (status == 0 && msg->msg_ack) {
+                /* Only send an ACK if the PUT completed successfully */
+
+                lnet_return_credits_locked(msg);
+
+                msg->msg_ack = 0;
+                LNET_UNLOCK();
+        
+                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
+                LASSERT(!msg->msg_routing);
+
+                ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
+                
+                
+                lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
+
+                msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
+                msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
+                msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
+                
+                LASSERT(!in_interrupt());
+                rc = lnet_send(msg->msg_ev.target.nid, msg);
+                LASSERT(!in_interrupt());
+
+                LNET_LOCK();
+
+                if (rc == 0)
+                        return;
+        } else if (status == 0 &&               /* OK so far */
+                   (msg->msg_routing && !msg->msg_sending)) { /* not forwarded */
+                
+                LASSERT (!msg->msg_receiving);  /* called back recv already */
+        
+                LNET_UNLOCK();
+                
+                LASSERT(!in_interrupt());
+                rc = lnet_send(LNET_NID_ANY, msg);
+                LASSERT(!in_interrupt());
+
+                LNET_LOCK();
+
+                if (rc == 0)
+                        return;
+        }
+
+        lnet_return_credits_locked(msg);
+
+        LASSERT (msg->msg_onactivelist);
+        msg->msg_onactivelist = 0;
+        list_del (&msg->msg_activelist);
+        the_lnet.ln_counters.msgs_alloc--;
+        lnet_msg_free(msg);
+}
+
+
+void
+lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
+{
+#ifdef __KERNEL__
+        int                i;
+        int                my_slot;
+#endif
         lnet_libmd_t      *md;
         int                unlink;
-        int                rc;
 
         LASSERT (!in_interrupt ());
 
         if (msg == NULL)
                 return;
-
 #if 0
         CDEBUG(D_WARNING, "%s msg->%s Flags:%s%s%s%s%s%s%s%s%s%s%s%s txp %s rxp %s\n",
                lnet_msgtyp2str(msg->msg_type), libcfs_id2str(msg->msg_target),
@@ -101,6 +166,8 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 
         LASSERT (msg->msg_onactivelist);
 
+        msg->msg_ev.status = status;
+
         md = msg->msg_md;
         if (md != NULL) {
                 /* Now it's safe to drop my caller's ref */
@@ -117,7 +184,6 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 else
                         unlink = lnet_md_exhausted(md);
                 
-                msg->msg_ev.status = status;
                 msg->msg_ev.unlinked = unlink;
                 
                 if (md->md_eq != NULL)
@@ -129,57 +195,46 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 msg->msg_md = NULL;
         }
 
-        if (status == 0 && msg->msg_ack) {
-                /* Only send an ACK if the PUT completed successfully */
+        list_add_tail (&msg->msg_list, &the_lnet.ln_finalizeq);
 
-                lnet_return_credits_locked(msg);
+        /* Recursion breaker.  Don't complete the message here if I am (or
+         * enough other threads are) already completing messages */
 
-                msg->msg_ack = 0;
-                LNET_UNLOCK();
-        
-                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
-                LASSERT(!msg->msg_routing);
+#ifdef __KERNEL__
+        my_slot = -1;
+        for (i = 0; i < the_lnet.ln_nfinalizers; i++) {
+                if (the_lnet.ln_finalizers[i] == cfs_current())
+                        goto out;
+                if (my_slot < 0 && the_lnet.ln_finalizers[i] == NULL)
+                        my_slot = i;
+        }
+        if (my_slot < 0)
+                goto out;
 
-                ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
+        the_lnet.ln_finalizers[my_slot] = cfs_current();
+#else
+        if (the_lnet.ln_finalizing)
+                goto out;
+#endif
+
+        while (!list_empty(&the_lnet.ln_finalizeq)) {
+                msg = list_entry(the_lnet.ln_finalizeq.next,
+                                 lnet_msg_t, msg_list);
                 
-                lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
+                list_del(&msg->msg_list);
 
-                msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
-                msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
-                msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
-                
-                LASSERT(!in_interrupt());
-                rc = lnet_send(ni->ni_nid, msg);
-                LASSERT(!in_interrupt());
-                if (rc == 0)
-                        return;
-
-                LNET_LOCK();
-
-        } else if (status == 0 &&               /* OK so far */
-                   (msg->msg_routing && !msg->msg_sending)) { /* not forwarded */
-                
-                LASSERT (!msg->msg_receiving);  /* called back recv already */
-        
-                LNET_UNLOCK();
-                
-                LASSERT(!in_interrupt());
-                rc = lnet_send(LNET_NID_ANY, msg);
-                LASSERT(!in_interrupt());
-                if (rc == 0)
-                        return;
-
-                LNET_LOCK();
+                /* NB drops and regains the lnet lock if it actually does
+                 * anything, so my finalizing friends can chomp along too */
+                lnet_complete_msg_locked(msg);
         }
 
-        lnet_return_credits_locked(msg);
+#ifdef __KERNEL__
+        the_lnet.ln_finalizers[my_slot] = NULL;
+#else
+        the_lnet.ln_finalizing = 0;
+#endif
 
-        LASSERT (msg->msg_onactivelist);
-        msg->msg_onactivelist = 0;
-        list_del (&msg->msg_activelist);
-        the_lnet.ln_counters.msgs_alloc--;
-        lnet_msg_free(msg);
-        
+ out:
         LNET_UNLOCK();
 }
 
