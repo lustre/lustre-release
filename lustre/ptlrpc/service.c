@@ -835,8 +835,7 @@ static int ptlrpc_main(void *arg)
         THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && CONFIG_NUMA && \
-        LUSTRE_KERNEL_VERSION >= 48
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && CONFIG_NUMA
         /* we need to do this before any per-thread allocation is done so that
          * we get the per-thread allocations on local node.  bug 7342 */
         if (svc->srv_cpu_affinity) {
