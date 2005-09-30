@@ -108,21 +108,21 @@ kptllnd_get_idle_tx(
                 PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX_PUT_ALLOC SIMULATION triggered\n");
                 tx = NULL;
-                STAT_UPDATE(kpt_tx_allocation_failed);
+                STAT_UPDATE(kps_tx_allocation_failed);
                 goto exit;
         }
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX_GET_ALLOC ) && purpose == TX_TYPE_LARGE_GET){
                 PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX_GET_ALLOC SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX_GET_ALLOC SIMULATION triggered\n");
                 tx = NULL;
-                STAT_UPDATE(kpt_tx_allocation_failed);
+                STAT_UPDATE(kps_tx_allocation_failed);
                 goto exit;
         }
         if(IS_SIMULATION_ENABLED( FAIL_BLOCKING_TX )){
                 PJK_UT_MSG_SIMULATION("FAIL_BLOCKING_TX SIMULATION triggered\n");
                 CERROR ("FAIL_BLOCKING_TX SIMULATION triggered\n");
                 tx = NULL;
-                STAT_UPDATE(kpt_tx_allocation_failed);
+                STAT_UPDATE(kps_tx_allocation_failed);
                 goto exit;
         }
 
@@ -185,7 +185,7 @@ kptllnd_get_idle_tx(
 
                 STAT_UPDATE(kps_tx_allocated);
         }else{
-                STAT_UPDATE(kpt_tx_allocation_failed);
+                STAT_UPDATE(kps_tx_allocation_failed);
         }
 
 
@@ -283,12 +283,17 @@ kptllnd_tx_callback(ptl_event_t *ev)
         PJK_UT_MSG(">>> %s(%d) tx=%p fail=%d\n",
                 get_ev_type_string(ev->type),ev->type,tx,ev->ni_fail_type);
 
+        STAT_UPDATE(kps_tx_event);
+
 #ifdef LUSTRE_PORTALS_UNLINK_SEMANTICS
         PJK_UT_MSG("ev->unlinked=%d\n",ev->unlinked);
+        if(ev->unlinked)
+                STAT_UPDATE(kps_tx_unlink_event);
 #endif
 
         if(ev->type == PTL_EVENT_UNLINK ){
 #ifndef LUSTRE_PORTALS_UNLINK_SEMANTICS
+                STAT_UPDATE(kps_tx_unlink_event);
                 /*
                  * Ignore unlink events if we don't
                  * have lustre semantics as these only occur
@@ -316,7 +321,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
         LASSERT(tx->tx_peer != NULL);
         peer = tx->tx_peer;
-        
+
         spin_lock_irqsave(&peer->peer_lock, flags);
 
         /*
@@ -421,19 +426,16 @@ kptllnd_tx_callback(ptl_event_t *ev)
 
         case PTL_EVENT_GET_END:
                 LASSERT(tx->tx_type == TX_TYPE_LARGE_PUT);
-                LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
                 tx->tx_mdh = PTL_INVALID_HANDLE;
                 do_decref = 1;
                 break;
         case PTL_EVENT_PUT_END:
                 LASSERT(tx->tx_type == TX_TYPE_LARGE_GET);
-                LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
                 tx->tx_mdh = PTL_INVALID_HANDLE;
                 do_decref = 1;
                 break;
         case PTL_EVENT_REPLY_END:
                 LASSERT(tx->tx_type == TX_TYPE_LARGE_PUT_RESPONSE);
-                LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
                 tx->tx_seen_reply_end = 1;
                 if(tx->tx_seen_send_end){
                         tx->tx_mdh = PTL_INVALID_HANDLE;

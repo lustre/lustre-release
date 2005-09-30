@@ -50,10 +50,11 @@ kptllnd_setup_md(
         /* Only one operation then unlink */
         md->threshold = 1;
 
-        /* Get operations need threshold +1 to handle the
-         * reply operation
+        /*
+         * Get operations need threshold +1 to handle the
+         * reply operation.  But only on the receiver side. QQQ
          */
-        if( op == PTL_MD_OP_GET)
+        if( op == PTL_MD_OP_GET && tx->tx_associated_rx != NULL)
                 md->threshold++;
 
         /* setup the options*/
@@ -275,6 +276,7 @@ kptllnd_start_bulk_rdma(
                 rc = -ENOMEM;
                 goto end;
         }
+        STAT_UPDATE(kps_posted_tx_bulk_mds);
 
         /*
          * And save the portals message
@@ -510,10 +512,10 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         tx->tx_payload_iov = NULL;
                         tx->tx_payload_kiov = lntmsg->msg_md->md_iov.kiov;
                 }else{
+                        LASSERT((lntmsg->msg_md->md_options & LNET_MD_IOVEC) != 0);
                         tx->tx_payload_iov = lntmsg->msg_md->md_iov.iov;
                         tx->tx_payload_kiov = NULL;
                 }
-
 
                 tx->tx_msg->ptlm_u.req.kptlrm_hdr = *hdr;
                 kptllnd_init_msg (tx->tx_msg,
@@ -534,7 +536,6 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 PJK_UT_MSG_DATA("LNET_MSG_REPLY\n");
 
                 STAT_UPDATE(kps_send_reply);
-
 
                 if(routing!=0 || target_is_router!=0)
                 {
@@ -970,17 +971,17 @@ kptllnd_scheduler(void *arg)
                  */
                 do{
                         spin_lock_irqsave(&kptllnd_data->kptl_sched_lock, flags);
-                        
+
                         /*
                          * Drain the RX queue
-                         */     
-                        rx = NULL;                   
+                         */
+                        rx = NULL;
                         if(!list_empty(&kptllnd_data->kptl_sched_rxq)){
                                 rx = list_entry (kptllnd_data->kptl_sched_rxq.next,
                                                  kptl_rx_t, rx_list);
                                 list_del_init(&rx->rx_list);
                         }
-                        
+
                         /*
                          * IDrain the RXB Repost queue
                          */
@@ -993,20 +994,20 @@ kptllnd_scheduler(void *arg)
                         /*
                          * Drain the TX queue.  Note RX's can cause new TX's
                          * to be added to the queue.
-                         */         
-                        tx = NULL;               
+                         */
+                        tx = NULL;
                         if(!list_empty(&kptllnd_data->kptl_sched_txq)){
                                 tx = list_entry (kptllnd_data->kptl_sched_txq.next,
                                                  kptl_tx_t, tx_schedlist);
                                 list_del_init(&tx->tx_schedlist);
-                        }       
-                        
-                        spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);                  
-                        
-                        
+                        }
+
+                        spin_unlock_irqrestore(&kptllnd_data->kptl_sched_lock, flags);
+
+
                         /*
                          * Process anything that came off the list
-                         */         
+                         */
                         if(rx)
                                 kptllnd_rx_scheduler_handler(rx);
                         if(rxb)
@@ -1015,12 +1016,12 @@ kptllnd_scheduler(void *arg)
                                 PJK_UT_MSG(">>> tx=%p\n",tx);
                                 kptllnd_tx_done(tx);
                                 PJK_UT_MSG("<<<\n");
-                        }                                
-                
+                        }
+
                         /*
                          * As long as we did something this time around
                          * try again.
-                         */                
+                         */
                 }while(rx != NULL || rxb != NULL || tx != NULL);
 
                 kptllnd_clean_canceled_peers(kptllnd_data);

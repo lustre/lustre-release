@@ -37,14 +37,20 @@ char* stats_name_table[] = {
         "rx_allocation_failed",
         "tx_allocated",
         "tx_released",
-        "kpt_tx_allocation_failed",
+        "tx_allocation_failed",
         "recv_delayed",
         "send_routing",
         "send_target_is_router",
-        "kps_send_put",
+        "send_put",
         "send_get",
         "send_immd",
         "send_reply",
+        "rx_event",
+        "rx_unlink_event",
+        "tx_event",
+        "tx_unlink_event",
+        "posted_tx_msg_mds",
+        "posted_tx_bulk_mds"
 };
 
 typedef struct {

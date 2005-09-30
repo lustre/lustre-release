@@ -502,7 +502,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         int                     nob;
         int                     unlinked;
         unsigned long           flags;
-
+       
         /*
          * Set the local unlinked flag
          */
@@ -511,6 +511,10 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         if( ev->unlinked )
                 unlinked = 1;
 #endif
+
+        STAT_UPDATE(kps_rx_event);
+        if(unlinked)
+                STAT_UPDATE(kps_rx_unlink_event);
 
         if(!rxbp->rxbp_shutdown){
                 PJK_UT_MSG("RXB Callback %s(%d) rxb=%p nid="FMT_NID" unlink=%d\n",

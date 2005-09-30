@@ -782,7 +782,7 @@ kptl_stats_t* kpttllnd_get_stats(void)
         LOGSTAT(kps_rx_allocation_failed);
         LOGSTAT(kps_tx_allocated);
         LOGSTAT(kps_tx_released);
-        LOGSTAT(kpt_tx_allocation_failed);
+        LOGSTAT(kps_tx_allocation_failed);
         LOGSTAT(kps_recv_delayed);
         LOGSTAT(kps_send_routing);
         LOGSTAT(kps_send_target_is_router);
@@ -790,7 +790,13 @@ kptl_stats_t* kpttllnd_get_stats(void)
         LOGSTAT(kps_send_get);
         LOGSTAT(kps_send_immd);
         LOGSTAT(kps_send_reply);
-
+        LOGSTAT(kps_rx_event);
+        LOGSTAT(kps_rx_unlink_event);
+        LOGSTAT(kps_tx_event);
+        LOGSTAT(kps_tx_unlink_event);
+        LOGSTAT(kps_posted_tx_msg_mds);
+        LOGSTAT(kps_posted_tx_bulk_mds);
+        
         return &kptllnd_stats;
 }
 

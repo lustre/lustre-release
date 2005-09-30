@@ -29,7 +29,7 @@ kptllnd_peer_find_holding_list_lock (
         lnet_nid_t nid);
 
 
-int 
+int
 kptllnd_peer_add_to_list_locked (
         kptl_data_t *kptllnd_data,
         kptl_peer_t *peer)
@@ -44,13 +44,13 @@ kptllnd_peer_add_to_list_locked (
                 CERROR("Can't create peer: too many peers\n");
                 return -EOVERFLOW;      /* !! but at least it distinguishes */
         }
-        
+
         /*
          * Update the state
          */
         LASSERT(peer->peer_state == PEER_STATE_ALLOCATED);
         peer->peer_state = PEER_STATE_WAITING_HELLO;
-        
+
         /*
          * +1 ref for the list
          */
@@ -65,7 +65,7 @@ kptllnd_peer_add_to_list_locked (
                        kptllnd_nid2peerlist (kptllnd_data,peer->peer_nid));
 
         STAT_UPDATE(kps_peers_created);
-        
+
         return 0;
 }
 
@@ -162,15 +162,15 @@ kptllnd_peer_destroy (
         kptllnd_rx_buffer_pool_unreserve(
                 &kptllnd_data->kptl_rx_buffer_pool,
                 *kptllnd_tunables.kptl_peercredits);
-                
+
         /*
          * If the peer is only in the ALLOCATED state
          * then it isn't yet trackied in kptl_npeers,
          * so do nothing in that case.  In all other cases
          * we need to decrement the counter.
-         */         
-        if(peer->peer_state != PEER_STATE_ALLOCATED) 
-                atomic_dec(&kptllnd_data->kptl_npeers);                        
+         */
+        if(peer->peer_state != PEER_STATE_ALLOCATED)
+                atomic_dec(&kptllnd_data->kptl_npeers);
 }
 
 
@@ -217,7 +217,7 @@ kptllnd_peer_decref (
         if(peer->peer_state == PEER_STATE_CANCELED)
                 kptllnd_data->kptl_canceled_peers_counter++;
         write_unlock_irqrestore(&kptllnd_data->kptl_peer_rw_lock, flags);
-        
+
         kptllnd_peer_destroy(peer);
 }
 
@@ -520,7 +520,7 @@ kptllnd_peer_check_sends (
         ptl_handle_me_t  meh;
         ptl_process_id_t target;
         unsigned long    flags;
-        
+
         LASSERT(!in_interrupt());
 
         /*
@@ -773,6 +773,7 @@ kptllnd_peer_check_sends (
                                 LASSERT(rc2 == 0);
                                 goto failed_without_lock;
                         }
+                        STAT_UPDATE(kps_posted_tx_bulk_mds);
                 }
 
 
@@ -804,6 +805,8 @@ kptllnd_peer_check_sends (
                         tx->tx_mdh_msg = PTL_INVALID_HANDLE;
                         goto failed_with_lock;
                 }
+                STAT_UPDATE(kps_posted_tx_msg_mds);
+
 
                 list_add_tail(&tx->tx_list, &peer->peer_active_txs);
                 peer->peer_active_txs_change_counter++;
@@ -1054,7 +1057,7 @@ kptllnd_peer_handle_hello (
 
                 return 0;
         }
-        
+
         /*
          * Setup a connect HELLO message.  We ultimately might not
          * use it but likely we will.
@@ -1068,19 +1071,19 @@ kptllnd_peer_handle_hello (
         kptllnd_init_msg(
                 tx_hello->tx_msg,
                 PTLLND_MSG_TYPE_HELLO,
-                sizeof(kptl_hello_msg_t));        
-         
+                sizeof(kptl_hello_msg_t));
+
         /*
          * Allocate a peer, even though we might not ultimatly use it
          * however we want to avoid doing this while holidng
          * the peer_rw_lock and be forced into atomic context
-         */                
+         */
         rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, nid);
         if(rc != 0){
                 kptllnd_tx_decref(tx_hello);
                 CERROR("Failed to create peer (nid="LPX64")\n",nid);
                 return 0;
-        }                
+        }
 
         write_lock_irqsave(&kptllnd_data->kptl_peer_rw_lock, flags);
 
@@ -1159,10 +1162,10 @@ kptllnd_peer_handle_hello (
                         CERROR("Failed to create peer (nid="LPX64")\n",nid);
                         goto failed;
                 }
-                
+
                 peer = peer_allocated;
                 peer_allocated = NULL;
-                
+
 
                 LASSERT(peer->peer_state == PEER_STATE_WAITING_HELLO);
                 peer->peer_state = PEER_STATE_ACTIVE;
@@ -1223,7 +1226,7 @@ failed:
                 kptllnd_peer_cancel(peer_to_cancel);
                 kptllnd_peer_decref(peer_to_cancel,"find");
         }
-        
+
         if(peer_allocated)
                 kptllnd_peer_decref(peer_allocated,"alloc");
 
@@ -1245,7 +1248,7 @@ kptllnd_tx_launch (
         rwlock_t        *g_lock = &kptllnd_data->kptl_peer_rw_lock;
         int              rc;
         kptl_tx_t       *tx_hello = NULL;
-        
+
 
         /* If I get here, I've committed to send, so I complete the tx with
          * failure on any problems */
@@ -1297,7 +1300,7 @@ kptllnd_tx_launch (
                 tx_hello->tx_msg,
                 PTLLND_MSG_TYPE_HELLO,
                 sizeof(kptl_hello_msg_t));
-                
+
         /*
          * We've never seen this peer before.  So setup
          * a default message.
@@ -1306,18 +1309,18 @@ kptllnd_tx_launch (
         tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_immd_size =
                 *kptllnd_tunables.kptl_max_immd_size;
 
-        /* 
+        /*
          * Allocate a new peer
          * (it's not active until its on the list)
-         */       
-        PJK_UT_MSG("TX %p creating NEW PEER nid="LPX64"\n",tx,target_nid);         
+         */
+        PJK_UT_MSG("TX %p creating NEW PEER nid="LPX64"\n",tx,target_nid);
         rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, target_nid);
         if(rc != 0){
                 CERROR("Failed to create peer (nid="LPX64")\n",target_nid);
                 kptllnd_tx_decref (tx);
                 kptllnd_tx_decref (tx_hello);
                 return;
-        }                     
+        }
 
 
         /*
@@ -1341,7 +1344,7 @@ kptllnd_tx_launch (
                 spin_lock_irqsave(&peer->peer_lock, flags);
                 kptllnd_peer_queue_tx_locked ( peer, tx );
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
-                
+
                 kptllnd_peer_check_sends(peer);
                 kptllnd_peer_decref(peer,"find");
                 kptllnd_peer_decref(peer_allocated,"alloc");
@@ -1352,27 +1355,27 @@ kptllnd_tx_launch (
                 PJK_UT_MSG("<<< FOUND2\n");
                 return;
         }
-        
-      
+
+
         rc = kptllnd_peer_add_to_list_locked ( kptllnd_data, peer_allocated);
         if(rc != 0){
                 write_unlock_irqrestore(g_lock, flags);
-                
+
                 CERROR("Failed to add peer to list (nid="LPX64")\n",target_nid);
-                
+
                 /* Drop these TXs tx*/
                 kptllnd_tx_decref (tx);
                 kptllnd_tx_decref (tx_hello);
                 kptllnd_peer_decref(peer_allocated,"create");
                 return;
         }
-        
+
         peer = peer_allocated;
         peer_allocated = NULL;
 
         write_unlock_irqrestore(g_lock,flags);
-        
-        
+
+
         /*
          * Queue the connection request
          * and the actually tx.  We have one credit so
@@ -1380,8 +1383,8 @@ kptllnd_tx_launch (
          * the tx will wait for a reply.
          */
         PJK_UT_MSG("TXHello=%p\n",tx_hello);
-        
-        
+
+
         spin_lock_irqsave(&peer->peer_lock, flags);
         kptllnd_peer_queue_tx_locked(peer,tx_hello);
         kptllnd_peer_queue_tx_locked(peer,tx);

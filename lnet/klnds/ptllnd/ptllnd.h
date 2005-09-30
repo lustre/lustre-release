@@ -97,10 +97,10 @@
 
 /*
  * The Cray Portals has no maximum number of IOVs.  The
- * maximum is limited only my memory and size of the 
+ * maximum is limited only my memory and size of the
  * int parameters (2^31-1).
  * Lustre only really require that the underyling
- * implemenation to support at least LNET_MAX_IOV, 
+ * implemenation to support at least LNET_MAX_IOV,
  * so for Cray portals we can safely just use that
  * value here.
  *
@@ -355,7 +355,7 @@ typedef struct kptl_stats
         int                     kps_rx_allocation_failed;
         int                     kps_tx_allocated;
         int                     kps_tx_released;               /* MP Safe*/
-        int                     kpt_tx_allocation_failed;
+        int                     kps_tx_allocation_failed;
         int                     kps_recv_delayed;
         int                     kps_send_routing;
         int                     kps_send_target_is_router;
@@ -363,7 +363,12 @@ typedef struct kptl_stats
         int                     kps_send_get;
         int                     kps_send_immd;
         int                     kps_send_reply;
-        int                     kpt_send_reply_routed;
+        int                     kps_rx_event;
+        int                     kps_rx_unlink_event;
+        int                     kps_tx_event;
+        int                     kps_tx_unlink_event;
+        int                     kps_posted_tx_msg_mds;
+        int                     kps_posted_tx_bulk_mds;
 }kptl_stats_t;
 
 /*
