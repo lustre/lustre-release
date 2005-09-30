@@ -976,6 +976,22 @@ lnet_match_network_tokens(char *net_entry, __u32 *ipaddrs, int nip)
         return 1;
 }
 
+__u32 lnet_netspec2net(char *netspec)
+{
+        char   *bracket = strchr(netspec, '(');
+        __u32   net;
+
+        if (bracket != NULL)
+                *bracket = 0;
+
+        net = libcfs_str2net(netspec);
+
+        if (bracket != NULL)
+                *bracket = '(';
+                
+        return net;
+}
+
 int
 lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
 {
@@ -986,6 +1002,8 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
         struct list_head   *t;
         lnet_text_buf_t    *tb;
         lnet_text_buf_t    *tb2;
+        __u32               net1;
+        __u32               net2;
         int                 len;
         int                 dup;
         int                 rc;
@@ -1018,10 +1036,18 @@ lnet_match_networks (char **networksp, char *ip2nets, __u32 *ipaddrs, int nip)
                 }
 
                 dup = 0;
+                net1 = lnet_netspec2net(tb->ltb_text);
+                if (net1 == LNET_NIDNET(LNET_NID_ANY)) {
+                        lnet_syntax("ip2nets", tb->ltb_text,
+                                    0, strlen(tb->ltb_text));
+                        return -EINVAL;
+                }
+                
                 list_for_each(t, &matched) {
                         tb2 = list_entry(t, lnet_text_buf_t, ltb_list);
-                        
-                        if (!strcmp(tb->ltb_text, tb2->ltb_text)) {
+                        net2 = lnet_netspec2net(tb2->ltb_text);
+
+                        if (net1 == net2) {
                                 dup = 1;
                                 break;
                         }
