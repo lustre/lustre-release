@@ -78,6 +78,33 @@ fi
 ])
 
 #
+# LN_CONFIG_PTHREAD
+#
+# configure support for libpthread
+#
+AC_DEFUN([LN_CONFIG_PTHREAD],
+[AC_MSG_CHECKING([whether to use libpthread for lnet library])
+AC_ARG_ENABLE([libpthread],
+       	AC_HELP_STRING([--disable-libpthread],
+               	[disable libpthread for liblustre]),
+       	[],[enable_libpthread=yes])
+if test "$enable_libpthread" = "yes" ; then
+	AC_CHECK_LIB([pthread], [pthread_create],
+		[ENABLE_LIBPTHREAD="yes"],
+		[ENABLE_LIBPTHREAD="no"])
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_MSG_RESULT([no libpthread is found])
+	else
+		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+	fi
+else
+	AC_MSG_RESULT([no (disabled explicitly)])
+	ENABLE_LIBPTHREAD="no"
+fi
+AC_SUBST(ENABLE_LIBPTHREAD)
+])
+
+#
 # LN_CONFIG_PTLLND
 #
 # configure support for Portals
@@ -107,30 +134,23 @@ AC_SUBST(PTLLND)
 # configure support for Portals
 #
 AC_DEFUN([LN_CONFIG_USOCKLND],
-[AC_MSG_CHECKING([usocklnd])
+[AC_MSG_CHECKING([whether to build usocklnd])
 AC_ARG_ENABLE([usocklnd],
-        AC_HELP_STRING([--disable-usocklnd],
-                       [disable usocklnd]),
-        [],[enable_usocklnd='yes'])
+       	AC_HELP_STRING([--disable-usocklnd],
+                      	[disable usocklnd]),
+       	[],[enable_usocklnd='yes'])
 
-# disable usocklnd if no libpthread
 if test x$enable_usocklnd = xyes ; then
-	AC_CHECK_LIB([pthread], [pthread_create],
-		[
-			enable_usocklnd="yes"
-		],
-		[
-			enable_usocklnd=""
-		])
-fi
-
-AC_MSG_CHECKING([for usocklnd support])
-if test x$enable_usocklnd = xyes ; then
-      AC_MSG_RESULT([yes])
-      USOCKLND="usocklnd"
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_MSG_RESULT([yes])
+      		USOCKLND="usocklnd"
+	else
+		AC_MSG_RESULT([no (libpthread not present or disabled)])
+		USOCKLND=""
+	fi
 else
-      AC_MSG_RESULT([no (by request)])
-      USOCKLND=""
+	AC_MSG_RESULT([no (disabled explicitly)])
+     	USOCKLND=""
 fi
 AC_SUBST(USOCKLND)
 ])
@@ -700,6 +720,7 @@ fi
 AC_DEFUN([LN_PROG_LINUX],
 [LN_CONFIG_ZEROCOPY
 LN_CONFIG_AFFINITY
+LN_CONFIG_PTHREAD
 LN_CONFIG_QUADRICS
 LN_CONFIG_GM
 LN_CONFIG_OPENIB
@@ -832,15 +853,21 @@ if test x$enable_liblustre = xyes ; then
 		],
 		[CAP_LIBS=""])
 	AC_SUBST(CAP_LIBS)
-	AC_CHECK_LIB([pthread], [pthread_create],
-		[
-			PTHREAD_LIBS="-lpthread"
-			AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
-		],
-		[
-			PTHREAD_LIBS=""
-			AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
-		])
+
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_CHECK_LIB([pthread], [pthread_create],
+			[
+				PTHREAD_LIBS="-lpthread"
+				AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
+			],
+			[
+				PTHREAD_LIBS=""
+				AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
+			])
+	else
+		PTHREAD_LIBS=""
+		AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
+	fi
 	AC_SUBST(PTHREAD_LIBS)
 fi
 ])
