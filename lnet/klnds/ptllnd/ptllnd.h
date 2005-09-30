@@ -348,6 +348,7 @@ typedef struct kptl_stats
         int                     kps_too_many_peers;             /* MP Safe*/
         int                     kps_peers_created;              /* MP Safe*/
         int                     kps_no_credits;
+        int                     kps_sending_credits_back_noop_msg;
         int                     kps_saving_last_credit;
         int                     kps_rx_allocated;
         int                     kps_rx_released;
@@ -358,7 +359,7 @@ typedef struct kptl_stats
         int                     kps_recv_delayed;
         int                     kps_send_routing;
         int                     kps_send_target_is_router;
-        int                     kpt_send_put;
+        int                     kps_send_put;
         int                     kps_send_get;
         int                     kps_send_immd;
         int                     kps_send_reply;
@@ -702,7 +703,7 @@ do{                                                     \
 #define PJK_UT_MSG_SIMULATION(fmt, a...)        PJK_UT_MSG_ALWAYS(fmt, ## a )
 
 
-#if 1
+#if 0
 #define PJK_UT_MSG_DATA(fmt, a...)              PJK_UT_MSG_ALWAYS(fmt, ## a )
 #else
 #define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)

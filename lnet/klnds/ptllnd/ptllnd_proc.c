@@ -23,27 +23,28 @@
 #define LNET_PTLLND_PROC_STATS   "sys/lnet/ptllnd_stats"
 
 char* stats_name_table[] = {
-        "kps_incoming_checksums_calculated",
-        "kps_incoming_checksums_invalid",
-        "kps_cleaning_caneled_peers",
-        "kps_checking_buckets",
-        "kps_too_many_peers",
-        "kps_peers_created",
-        "kps_no_credits",
-        "kps_saving_last_credit",
-        "kps_rx_allocated",
-        "kps_rx_released",
-        "kps_rx_allocation_failed",
-        "kps_tx_allocated",
-        "kps_tx_released",
+        "incoming_checksums_calculated",
+        "incoming_checksums_invalid",
+        "cleaning_caneled_peers",
+        "checking_buckets",
+        "too_many_peers",
+        "peers_created",
+        "no_credits",
+        "sending_credits_back_noop_msg",
+        "saving_last_credit",
+        "rx_allocated",
+        "rx_released",
+        "rx_allocation_failed",
+        "tx_allocated",
+        "tx_released",
         "kpt_tx_allocation_failed",
-        "kps_recv_delayed",
-        "kps_send_routing",
-        "kps_send_target_is_router",
-        "kpt_send_put",
-        "kps_send_get",
-        "kps_send_immd",
-        "kps_send_reply",
+        "recv_delayed",
+        "send_routing",
+        "send_target_is_router",
+        "kps_send_put",
+        "send_get",
+        "send_immd",
+        "send_reply",
 };
 
 typedef struct {
@@ -112,7 +113,7 @@ ptllnd_stats_seq_show (struct seq_file *s, void *iter)
 {
         ptllnd_stats_seq_iterator_t *pssi = iter;
 
-        seq_printf(s,"%02d %-40s %d\n",
+        seq_printf(s,"%02d %-40s %u\n",
                 (int)pssi->pssi_index,
                 stats_name_table[pssi->pssi_index],
                 ((int*)&kptllnd_stats)[pssi->pssi_index]);

@@ -545,6 +545,7 @@ kptllnd_peer_check_sends (
                 }else{
                         kptllnd_init_msg(tx->tx_msg, PTLLND_MSG_TYPE_NOOP,0);
                         kptllnd_peer_queue_tx_locked(peer,tx);
+                        STAT_UPDATE(kps_sending_credits_back_noop_msg);
                 }
         }
         /*

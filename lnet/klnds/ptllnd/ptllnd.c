@@ -774,6 +774,7 @@ kptl_stats_t* kpttllnd_get_stats(void)
         LOGSTAT(kps_checking_buckets);
         LOGSTAT(kps_too_many_peers);
         LOGSTAT(kps_peers_created);
+        LOGSTAT(kps_sending_credits_back_noop_msg);
         LOGSTAT(kps_no_credits);
         LOGSTAT(kps_saving_last_credit);
         LOGSTAT(kps_rx_allocated);
@@ -785,7 +786,7 @@ kptl_stats_t* kpttllnd_get_stats(void)
         LOGSTAT(kps_recv_delayed);
         LOGSTAT(kps_send_routing);
         LOGSTAT(kps_send_target_is_router);
-        LOGSTAT(kpt_send_put);
+        LOGSTAT(kps_send_put);
         LOGSTAT(kps_send_get);
         LOGSTAT(kps_send_immd);
         LOGSTAT(kps_send_reply);

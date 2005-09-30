@@ -466,7 +466,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         break;
 
 
-                STAT_UPDATE(kpt_send_put);
+                STAT_UPDATE(kps_send_put);
 
                 kptllnd_do_put(tx,lntmsg,kptllnd_data);
 
@@ -937,7 +937,7 @@ kptllnd_scheduler(void *arg)
                                    (*kptllnd_tunables.kptl_timeout);
 
                 if(buckets_to_check){
-                        /*PJK_UT_MSG("Check Buckets %d\n",buckets_to_check);*/
+                        /*PJK_UT_MSG("buckets_to_check=%d\n",buckets_to_check);*/
                         STAT_UPDATE(kps_checking_buckets);
 
                         /*
@@ -950,8 +950,8 @@ kptllnd_scheduler(void *arg)
                          */
                         last_check = cfs_time_add( last_check,
                                 cfs_time_seconds(buckets_to_check *
-                                        *kptllnd_tunables.kptl_timeout /
-                                        kptllnd_data->kptl_peer_hash_size));
+                                        (*kptllnd_tunables.kptl_timeout))/
+                                        kptllnd_data->kptl_peer_hash_size);
 
                         /*
                          * If we are supposed to check buckets then
