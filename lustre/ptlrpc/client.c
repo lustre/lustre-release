@@ -1500,13 +1500,13 @@ restart:
                 lwi = LWI_INTR(interrupted_request, req);
                 rc = l_wait_event(req->rq_reply_waitq,
                                   (req->rq_send_state == imp->imp_state ||
-                                   req->rq_err),
+                                   req->rq_err || req->rq_intr),
                                   &lwi);
-                DEBUG_REQ(D_HA, req, "\"%s\" awake: (%s == %s or %d == 1)",
+                DEBUG_REQ(D_HA, req, "\"%s\" awake: (%s == %s or %d/%d == 1)",
                           current->comm,
                           ptlrpc_import_state_name(imp->imp_state),
                           ptlrpc_import_state_name(req->rq_send_state),
-                          req->rq_err);
+                          req->rq_err, req->rq_intr);
 
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 list_del_init(&req->rq_list);

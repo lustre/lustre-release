@@ -165,12 +165,14 @@ Details    : all OST threads are uniformly bound to CPUs on a single NUMA
 	     node and do their allocations there to localize memory access
 
 Severity   : minor
-Frequency  : liblustre-only, when liblustre client dies or becomes busy
-Bugzilla   : 7311
-Description: Doing ls on Linux clients can take a long time with active
-	     liblustre clients
-Details    : Newer more complete fix for 7311 issue: add connection flags
-	     handling.
+Frequency  : if client is started with down MDS
+Bugzilla   : 7184
+Description: if client is started with down MDS mount hangs in ptlrpc_queue_wait
+Details    : Having an LWI_INTR() wait event (interruptible, but no timeout)
+	     will wait indefinitely in ptlrpc_queue_wait->l_wait_event() after
+	     ptlrpc_import_delayed_req() because we didn't check if the
+	     request was interrupted, and we also didn't break out of the
+	     event loop if there was no timeout
 
 ------------------------------------------------------------------------------
 

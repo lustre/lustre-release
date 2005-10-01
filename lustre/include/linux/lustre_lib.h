@@ -611,7 +611,7 @@ do {                                                                           \
             if (condition)                                                     \
                     break;                                                     \
             if (signal_pending(current)) {                                     \
-                    if (__timed_out) {                                         \
+                    if (!info->lwi_timeout || __timed_out) {                   \
                             break;                                             \
                     } else {                                                   \
                             /* We have to do this here because some signals */ \
@@ -633,7 +633,7 @@ do {                                                                           \
         RECALC_SIGPENDING;                                                     \
         SIGNAL_MASK_UNLOCK(current, irqflags);                                 \
                                                                                \
-        if (__timed_out && signal_pending(current)) {                          \
+        if ((!info->lwi_timeout || __timed_out) && signal_pending(current)) {  \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \
