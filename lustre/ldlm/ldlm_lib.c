@@ -906,10 +906,12 @@ static void reset_recovery_timer(struct obd_device *obd)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
-               (int)(OBD_RECOVERY_TIMEOUT / HZ));
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
         spin_unlock_bh(&obd->obd_processing_task_lock);
+        CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
+               (int)(OBD_RECOVERY_TIMEOUT / HZ));
+        /* Only used for lprocfs_status */
+        obd->obd_recovery_end = CURRENT_SECONDS + OBD_RECOVERY_TIMEOUT/HZ;
 }
 
 
