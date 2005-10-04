@@ -29,7 +29,9 @@
 
 
 command_t list[] = {
-        {"network", jt_ptl_network, 0,"setup the NAL (args: nal name)"},
+        {"network", jt_ptl_network, 0,"select a network (args: LND name)"},
+        {"list_nids", jt_ptl_list_nids, 0,"list local NIDs"},
+        {"which_nid", jt_ptl_which_nid, 0,"select the closest NID"},
         {"print_interfaces", jt_ptl_print_interfaces, 0, "print interface entries (no args)"},
         {"add_interface", jt_ptl_add_interface, 0, "add interface entry (args: ip [netmask])"},
         {"del_interface", jt_ptl_del_interface, 0, "delete interface entries (args: [ip])"},

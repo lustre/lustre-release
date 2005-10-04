@@ -273,35 +273,36 @@ int jt_ptl_network(int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
         __u32                    net = LNET_NIDNET(LNET_NID_ANY);
-        int                      set = argc >= 2;
         int                      count;
         int                      rc;
 
-        if (set && 
-            (!strcmp(argv[1], "unconfigure") ||
-             !strcmp(argv[1], "down"))) {
+        if (argc < 2) {
+                fprintf(stderr, "usage: %s <net>|down\n", argv[0]);
+                return 0;
+        }
+
+        if (!strcmp(argv[1], "unconfigure") ||
+            !strcmp(argv[1], "down")) {
                 LIBCFS_IOC_INIT(data);
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_UNCONFIGURE, &data);
                 
                 if (rc == 0) {
-                        printf ("lnet ready to unload\n");
+                        printf ("LNET ready to unload\n");
                         return 0;
                 }
                 
                 if (errno == EBUSY)
-                        fprintf(stderr, "Portals still in use\n");
+                        fprintf(stderr, "LNET busy");
                 else
-                        fprintf(stderr, "Unconfigure error %d: %s\n",
+                        fprintf(stderr, "LNET unconfigure error %d: %s\n",
                                 errno, strerror(errno));
                 return -1;
         }
         
-        if (set) {
-                net = libcfs_str2net(argv[1]);
-                if (net == LNET_NIDNET(LNET_NID_ANY)) {
-                        fprintf(stderr, "Can't parse net %s\n", argv[1]);
-                        return -1;
-                }
+        net = libcfs_str2net(argv[1]);
+        if (net == LNET_NIDNET(LNET_NID_ANY)) {
+                fprintf(stderr, "Can't parse net %s\n", argv[1]);
+                return -1;
         }
 
         for (count = 0;; count++) {
@@ -310,11 +311,6 @@ int jt_ptl_network(int argc, char **argv)
                 rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
 
                 if (rc >= 0) {
-                        if (!set) {
-                                printf("%s\n", libcfs_nid2str(data.ioc_nid));
-                                continue;
-                        }
-                        
                         if (net == LNET_NIDNET(data.ioc_nid)) {
                                 g_net_set = 1;
                                 g_net = net;
@@ -330,21 +326,121 @@ int jt_ptl_network(int argc, char **argv)
                         errno, strerror(errno));
                 return -1;
         }
-        
-        if (!set) {
-                if (count == 0) 
-                        printf("<no networks>\n");
-                return 0;
-        }
 
         if (count == 0) {
                 fprintf(stderr,"No local networks\n");
                 return -1;
         }
         
-        fprintf(stderr,"%s not a local network (%s on its own to list them all)\n",
-                argv[1], argv[0]);
+        fprintf(stderr,"%s is not a local network\n", argv[1]);
         return -1;
+}
+
+int 
+jt_ptl_list_nids(int argc, char **argv)
+{
+        struct libcfs_ioctl_data data;
+        int                      all = 0;
+        int                      count;
+        int                      rc;
+
+        if (argc > 2 ||
+            (argc == 2 && strcmp(argv[1], "all"))) {
+                fprintf(stderr, "usage: %s [all]\n", argv[0]);
+                return 0;
+        }
+
+        all = argc == 2;
+
+        for (count = 0;; count++) {
+                LIBCFS_IOC_INIT (data);
+                data.ioc_count = count;
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
+
+                if (rc >= 0) {
+                        if (all ||
+                            LNET_NETTYP(LNET_NIDNET(data.ioc_nid)) != LOLND) {
+                                printf("%s\n", libcfs_nid2str(data.ioc_nid));
+                        }
+                        continue;
+                }
+
+                if (errno == ENOENT)
+                        break;
+
+                fprintf(stderr,"IOC_LIBCFS_GET_NI error %d: %s\n",
+                        errno, strerror(errno));
+                return -1;
+        }
+
+        return 0;
+}
+
+int
+jt_ptl_which_nid (int argc, char **argv)
+{
+        struct libcfs_ioctl_data data;
+        int          best_dist = 0;
+        int          best_order = 0;
+        lnet_nid_t   best_nid = LNET_NID_ANY;
+        int          dist;
+        int          order;
+        lnet_nid_t   nid;
+        char        *nidstr;
+        int          rc;
+        int          i;
+
+        if (argc < 2) {
+                fprintf(stderr, "usage: %s NID [NID...]\n", argv[0]);
+                return 0;
+        }
+        
+        for (i = 1; i < argc; i++) {
+                nidstr = argv[i];
+                nid = libcfs_str2nid(nidstr);
+                if (nid == LNET_NID_ANY) {
+                        fprintf(stderr, "Can't parse NID %s\n", nidstr);
+                        return -1;
+                }
+                
+                LIBCFS_IOC_INIT(data);
+                data.ioc_nid = nid;
+                
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_LNET_DIST, &data);
+                if (rc != 0) {
+                        fprintf(stderr, "Can't get distance to %s: %s\n",
+                                nidstr, strerror(errno));
+                        return -1;
+                }
+
+                dist = data.ioc_u32[0];
+                order = data.ioc_u32[1];
+
+                if (dist < 0) {
+                        if (dist == -EHOSTUNREACH)
+                                continue;
+                
+                        fprintf(stderr, "Unexpected distance to %s: %d\n",
+                                nidstr, dist);
+                        return -1;
+                }
+                
+                if (best_nid == LNET_NID_ANY ||
+                    dist < best_dist ||
+                    (dist == best_dist && order < best_order)) {
+                        best_dist = dist;
+                        best_order = order;
+                        best_nid = nid;
+                }
+        }
+
+        if (best_nid == LNET_NID_ANY) {
+                fprintf(stderr, "No reachable NID\n");
+                return -1;
+        }
+        
+        printf("%s\n", libcfs_nid2str(best_nid));
+        return 0;
 }
 
 int

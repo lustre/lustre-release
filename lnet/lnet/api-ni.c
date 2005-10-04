@@ -1261,6 +1261,14 @@ LNetCtl(unsigned int cmd, void *arg)
         case IOC_LIBCFS_PORTALS_COMPATIBILITY:
                 return the_lnet.ln_ptlcompat;
 
+        case IOC_LIBCFS_LNET_DIST:
+                rc = LNetDist(data->ioc_nid, &data->ioc_nid, &data->ioc_u32[1]);
+                if (rc < 0 && rc != -EHOSTUNREACH)
+                        return rc;
+                
+                data->ioc_u32[0] = rc;
+                return 0;
+                
         default:
                 ni = lnet_net2ni(data->ioc_net);
                 if (ni == NULL)

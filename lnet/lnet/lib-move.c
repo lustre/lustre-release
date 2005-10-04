@@ -2147,8 +2147,12 @@ LNetDist (lnet_nid_t dstnid, lnet_nid_t *srcnidp, int *orderp)
                      LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) != LOLND)) {
                         if (srcnidp != NULL)
                                 *srcnidp = dstnid;
-                        if (orderp != NULL)
-                                *orderp = 0;
+                        if (orderp != NULL) {
+                                if (LNET_NETTYP(LNET_NIDNET(dstnid)) == LOLND)
+                                        *orderp = 0;
+                                else
+                                        *orderp = 1;
+                        }
                         LNET_UNLOCK();
                         return 0;
                 }

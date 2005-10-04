@@ -34,6 +34,8 @@
 
 int ptl_initialize(int argc, char **argv);
 int jt_ptl_network(int argc, char **argv);
+int jt_ptl_list_nids(int argc, char **argv);
+int jt_ptl_which_nid(int argc, char **argv);
 int jt_ptl_print_interfaces(int argc, char **argv);
 int jt_ptl_add_interface(int argc, char **argv);
 int jt_ptl_del_interface(int argc, char **argv);
