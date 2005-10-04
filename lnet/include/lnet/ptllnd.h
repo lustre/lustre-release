@@ -37,6 +37,9 @@
 
 #else /* _USING_CRAY_PORTALS_ */
 
+/* Explicit NULL function pointer for EQ handler */
+#define PTL_EQ_HANDLER_NONE                     0
+
 /* NIDs are integers on Lustre Portals */
 #define FMT_NID "%x"
 
@@ -48,7 +51,6 @@
 
 /* Diffrent error types on Cray Portals*/
 #define ptl_err_t ptl_ni_fail_t
-
 
 /*
  * The Cray Portals has no maximum number of IOVs.  The
