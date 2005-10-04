@@ -238,6 +238,11 @@ void        libcfs_setnet0alias(int type);
 #define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
 #define LNET_MKNET(typ,num)    ((((__u32)(typ))<<16)|((__u32)(num)))
 
+/* implication */
+#define ergo(a, b) (!(a) || (b))
+/* logical equivalence */
+#define equi(a, b) (!!(a) == !!(b))
+
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
 #endif
