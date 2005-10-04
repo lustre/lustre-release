@@ -54,60 +54,13 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <portals/p30.h>
-
-/*
- * The PTLLND was designed to support Portals with
- * Lustre and non-lustre UNLINK semantics.
- * However for now the two targets are Cray Portals
- * on the XT3 and Lustre Portals (for testing) both
- * have Lustre UNLINK semantics, so this is defined
- * by default.
- */
-#define LUSTRE_PORTALS_UNLINK_SEMANTICS
-
+#include <lnet/ptllnd.h>        /* Depends on portals/p30.h */
 
 /*
  * Define this to enable console debug logging
  * and simulation
  */
 //#define PJK_DEBUGGING
-
-#ifdef _USING_LUSTRE_PORTALS_
-
-/* NIDs are 64-bits on Lustre Portals */
-#define FMT_NID LPX64
-
-/* When using Lustre Portals Lustre completion semantics are imlicit*/
-#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS      0
-
-#else /* _USING_CRAY_PORTALS_ */
-
-/* NIDs are integers on Lustre Portals */
-#define FMT_NID "%x"
-
-/* When using Cray Portals this is defined in the Cray Portals Header*/
-/*#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS */
-
-/* Can compare handles directly on Cray Portals */
-#define PtlHandleIsEqual(a,b) (a == b)
-
-/* Diffrent error types on Cray Portals*/
-#define ptl_err_t ptl_ni_fail_t
-
-
-/*
- * The Cray Portals has no maximum number of IOVs.  The
- * maximum is limited only my memory and size of the
- * int parameters (2^31-1).
- * Lustre only really require that the underyling
- * implemenation to support at least LNET_MAX_IOV,
- * so for Cray portals we can safely just use that
- * value here.
- *
- */
-#define PTL_MD_MAX_IOV          LNET_MAX_IOV
-
-#endif
 
 #if CONFIG_SMP
 # define PTLLND_N_SCHED         num_online_cpus()   /* # schedulers */

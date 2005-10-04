@@ -23,8 +23,8 @@
 #include <lnet/ptllnd_wire.h>
 
 #include <portals/p30.h>
+#include <lnet/ptllnd.h>           /* Depends on portals/p30.h */
 
-#define LUSTRE_PORTALS_UNLINK_SEMANTICS
 
 #define PTLLND_MSGS_PER_BUFFER     64
 #define PTLLND_MSGS_SPARE          256
@@ -32,13 +32,8 @@
 #define PTLLND_EQ_SIZE             1024
 #define PTLLND_NTX                 256
 
-#ifdef PTL_MD_LUSTRE_COMPLETION_SEMANTICS
-# define PTLLND_MD_OPTIONS        (PTL_MD_LUSTRE_COMPLETION_SEMANTICS |\
-                                   PTL_MD_EVENT_START_DISABLE)
-#else
-# define PTLLND_MD_OPTIONS         PTL_MD_EVENT_START_DISABLE
-#endif   
-                                     
+#define PTLLND_MD_OPTIONS        (PTL_MD_LUSTRE_COMPLETION_SEMANTICS |\
+                                  PTL_MD_EVENT_START_DISABLE)
 typedef struct
 {
         int                        plni_portal;
