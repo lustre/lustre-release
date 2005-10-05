@@ -338,6 +338,13 @@ ptllnd_startup (lnet_ni_t *ni)
         plni->plni_ntxs = 0;
         CFS_INIT_LIST_HEAD(&plni->plni_active_txs);
         CFS_INIT_LIST_HEAD(&plni->plni_zombie_txs);
+        
+        /*
+         *  Initilize buffer related data structures
+         */
+        CFS_INIT_LIST_HEAD(&plni->plni_buffers);
+        plni->plni_nbuffers = 0;
+        plni->plni_nposted_buffers = 0;
 
         rc = ptllnd_get_tunables(ni);
         if (rc != 0)
