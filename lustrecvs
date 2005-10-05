@@ -54,7 +54,7 @@ case "$lustretag" in
 	exit 0
 	;;
 
-    b1_4_newconfig*|b_newconfig_rdmarouting*|b1_4_mountconf*)
+    b1_4_newconfig*|b_newconfig_rdmarouting*|b1_4_mountconf*|b1_4_xattr)
         buildtag="b_lnet"
         ;;
 
