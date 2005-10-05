@@ -518,6 +518,8 @@ kptllnd_peer_check_sends (
         int              rc,rc2;
         ptl_md_t         md;
         ptl_handle_me_t  meh;
+        ptl_handle_md_t  mdh;
+        ptl_handle_md_t  mdh_msg;
         ptl_process_id_t target;
         unsigned long    flags;
 
@@ -619,6 +621,8 @@ kptllnd_peer_check_sends (
                 PJK_UT_MSG_DATA("Sending TX=%p Size=%d\n",tx,tx->tx_msg->ptlm_nob);
                 PJK_UT_MSG_DATA("Target nid="LPX64"\n",peer->peer_nid);
 
+                mdh = PTL_INVALID_HANDLE;
+                mdh_msg =PTL_INVALID_HANDLE;
 
                 /*
                  * Assign matchbits for a put/get
@@ -682,6 +686,9 @@ kptllnd_peer_check_sends (
                  */
                 peer->peer_credits--;
 
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+
                 /*
                  * Set the state before the PtlPut() because
                  * we could get the PUT_END callback before PtlPut()
@@ -698,7 +705,7 @@ kptllnd_peer_check_sends (
                 target.pid = PTLLND_PID;
 
                 PJK_UT_MSG_DATA("Msg NOB = %d\n",tx->tx_msg->ptlm_nob);
-                PJK_UT_MSG_DATA("Returned Credits=%d\n",tx->tx_msg->ptlm_credits);
+                PJK_UT_MSG_DATA("Giving %d credits back to peer\n",tx->tx_msg->ptlm_credits);
                 PJK_UT_MSG_DATA("Seq # = "LPX64"\n",tx->tx_msg->ptlm_seq);
 
                 PJK_UT_MSG("lnet TX nid=" LPX64 "\n",peer->peer_nid);
@@ -710,7 +717,6 @@ kptllnd_peer_check_sends (
 
                         PJK_UT_MSG_DATA("matchibts=" LPX64 "\n",
                                 tx->tx_msg->ptlm_u.req.kptlrm_matchbits);
-
 
                         /*
                          * Attach the ME
@@ -726,7 +732,7 @@ kptllnd_peer_check_sends (
                             &meh);
                         if(rc != 0) {
                                 CERROR("PtlMeAttach failed %d\n",rc);
-                                goto failed_with_lock;
+                                goto failed_without_lock;
                         }
 
                         /* Setup the MD */
@@ -755,7 +761,7 @@ kptllnd_peer_check_sends (
                                 meh,
                                 md,
                                 PTL_UNLINK,
-                                &tx->tx_mdh);
+                                &mdh);
                         if(rc != 0){
                                 CERROR("PtlMDAttach failed %d\n",rc);
 
@@ -763,10 +769,6 @@ kptllnd_peer_check_sends (
                                  * Just drop the ref for this MD because it was never
                                  * posted to portals
                                  */
-                                tx->tx_mdh = PTL_INVALID_HANDLE;
-
-                                spin_unlock_irqrestore(&peer->peer_lock, flags);
-
                                 kptllnd_tx_decref(tx);
 
                                 rc2 = PtlMEUnlink(meh);
@@ -799,17 +801,40 @@ kptllnd_peer_check_sends (
                         kptllnd_data->kptl_nih,
                         md,
                         PTL_UNLINK,
-                        &tx->tx_mdh_msg);
+                        &mdh_msg);
                 if(rc != 0){
+                        if(!PtlHandleIsEqual(mdh,PTL_INVALID_HANDLE)){
+                                rc2 = PtlMDUnlink(mdh);
+                                /*
+                                 * The unlink should succeed
+                                 */
+                                LASSERT( rc2 == 0);
+                         }
                         CERROR("PtlMDBind failed %d\n",rc);
-                        tx->tx_mdh_msg = PTL_INVALID_HANDLE;
-                        goto failed_with_lock;
+                        goto failed_without_lock;
                 }
                 STAT_UPDATE(kps_posted_tx_msg_mds);
 
+                spin_lock_irqsave(&peer->peer_lock, flags);
+
+                /*
+                 *  Assign the MDH's under lock
+                 */
+                LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
+                LASSERT(PtlHandleIsEqual(tx->tx_mdh_msg,PTL_INVALID_HANDLE));
+#ifdef _USING_LUSTRE_PORTALS_
+                PJK_UT_MSG("tx_mdh     = " LPX64 "\n",mdh.cookie);
+                PJK_UT_MSG("tx_mdh_msg = " LPX64 "\n",mdh_msg.cookie);
+#endif
+                tx->tx_mdh = mdh;
+                tx->tx_mdh_msg = mdh_msg;
+
+                if(tx->tx_type == TX_TYPE_SMALL_MESSAGE)
+                        LASSERT(PtlHandleIsEqual(tx->tx_mdh,PTL_INVALID_HANDLE));
 
                 list_add_tail(&tx->tx_list, &peer->peer_active_txs);
                 peer->peer_active_txs_change_counter++;
+
                 LASSERT(tx->tx_peer == peer);
 
                 /*
@@ -862,8 +887,6 @@ kptllnd_peer_check_sends (
         PJK_UT_MSG_DATA("<<<\n");
         return;
 
-failed_with_lock:
-        spin_unlock_irqrestore(&peer->peer_lock, flags);
 failed_without_lock:
 
         /*
@@ -954,6 +977,9 @@ kptllnd_peer_check_bucket (int idx, kptl_data_t *kptllnd_data)
 
         list_for_each (ptmp, peers) {
                 peer = list_entry (ptmp, kptl_peer_t, peer_list);
+
+                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
+                        peer,peer->peer_credits,peer->peer_outstanding_credits);
 
                 /* In case we have enough credits to return via a
                  * NOOP, but there were no non-blocking tx descs

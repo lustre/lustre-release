@@ -18,6 +18,15 @@
 
 #include "ptllnd.h"
 
+
+/*
+ * TBD List
+ * - Add code to prevent peers with diffrent credits from connection
+ * - peer->peer_outstanding_credits LASSERT is incorrect if peer is allowed
+ *   to have a  diffrent number of credits configured
+ 
+ */
+
 lnd_t               kptllnd_lnd = {
         .lnd_type       = PTLLND,
         .lnd_startup    = kptllnd_startup,
@@ -411,12 +420,21 @@ kptllnd_startup (lnet_ni_t *ni)
         for (i = 0; i < PTLLND_N_SCHED; i++) {
                 rc = kptllnd_thread_start (
                         kptllnd_scheduler,
-                        i,
+                        i+1,
                         kptllnd_data);
                 if (rc != 0) {
-                        CERROR("Can't spawn scheduler[%d]: %d\n", i, rc);
+                        CERROR("Can't spawn scheduler[%d]: %d\n", i+1, rc);
                         goto failed;
                 }
+        }
+        
+        rc = kptllnd_thread_start (
+                kptllnd_watchdog,
+                0,
+                kptllnd_data);
+        if (rc != 0) {
+                CERROR("Can't spawn watchdog[0]: %d\n", rc);
+                goto failed;
         }
 
         /*

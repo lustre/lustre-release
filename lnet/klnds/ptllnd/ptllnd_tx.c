@@ -164,8 +164,8 @@ kptllnd_get_idle_tx(
                  * Initialize the TX descriptor so that cleanup can be
                  * handled easily even with a partially initialized descriptor
                  */
-                tx->tx_mdh = PTL_INVALID_HANDLE;
-                tx->tx_mdh_msg = PTL_INVALID_HANDLE;
+                tx->tx_mdh              = PTL_INVALID_HANDLE;
+                tx->tx_mdh_msg          = PTL_INVALID_HANDLE;
                 tx->tx_ptlmsg           = NULL;
                 tx->tx_ptlmsg_reply     = NULL;
                 tx->tx_peer             = NULL;

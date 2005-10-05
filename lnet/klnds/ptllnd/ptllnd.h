@@ -81,7 +81,7 @@
 #define PTLLND_PEER_HASH_SIZE   101        /* # of buckets in peer hash table */
 
 /* tunables fixed at compile time */
-#define PTLLND_CREDIT_HIGHWATER (*kptllnd_tunables.kptl_peercredits-1)  /* when to eagerly return credits */
+#define PTLLND_CREDIT_HIGHWATER ((*kptllnd_tunables.kptl_peercredits)-1)  /* when to eagerly return credits */
 #define PTLLND_TIMEOUT_SEC      3          /* How often we check a subset of the peer hash table for timeout*/
 
 typedef struct
@@ -392,6 +392,8 @@ void kptllnd_eq_callback(
 
 int  kptllnd_scheduler(
         void *arg);
+int  kptllnd_watchdog(
+        void *arg);        
 
 int  kptllnd_thread_start(
         int (*fn)(void *arg),

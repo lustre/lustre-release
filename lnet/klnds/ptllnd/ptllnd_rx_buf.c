@@ -59,7 +59,7 @@ kptllnd_rx_buffer_pool_fini(
         unsigned long           flags;
 
         PJK_UT_MSG("kptllnd_rx_buffer_pool_fini\n");
-        
+
         spin_lock_irqsave(&rxbp->rxbp_lock, flags);
 
         /*
@@ -502,7 +502,7 @@ kptllnd_rx_buffer_callback(ptl_event_t *ev)
         int                     nob;
         int                     unlinked;
         unsigned long           flags;
-       
+
         /*
          * Set the local unlinked flag
          */
@@ -648,7 +648,7 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         PJK_UT_MSG_DATA("RX=%p Type=%s(%d)\n",rx,
                 get_msg_type_string(type),type);
         PJK_UT_MSG_DATA("Msg NOB = %d\n",msg->ptlm_nob);
-        PJK_UT_MSG_DATA("Returned Credits=%d\n",msg->ptlm_credits);
+        PJK_UT_MSG_DATA("Credits back from peer=%d\n",msg->ptlm_credits);
         PJK_UT_MSG_DATA("Seq # ="LPX64"\n",msg->ptlm_seq);
         PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator_nid);
         PJK_UT_MSG("ptl  RX nid=" FMT_NID "\n",rx->rx_initiator.nid);
@@ -717,6 +717,22 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
          * Save the number of credits
          */
         returned_credits = msg->ptlm_credits;
+
+        if (returned_credits != 0) {
+
+                /* Have I received credits that will let me send? */
+                spin_lock_irqsave(&peer->peer_lock, flags);
+                peer->peer_credits += returned_credits;
+                LASSERT( peer->peer_credits <=
+                        *kptllnd_tunables.kptl_peercredits);
+                spin_unlock_irqrestore(&peer->peer_lock, flags);
+
+                PJK_UT_MSG("Peer=%p Credits=%d Outstanding=%d\n",
+                        peer,peer->peer_credits,peer->peer_outstanding_credits);
+                PJK_UT_MSG_DATA("Getting %d credits back rx=%p\n",returned_credits,rx);
+
+                kptllnd_peer_check_sends(peer);
+        }
 
         /*
          * Attach the peer to the RX
@@ -877,7 +893,6 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
 {
         kptl_peer_t    *peer = rx->rx_peer;
         kptl_msg_t     *msg = rx->rx_msg;
-        int             returned_credits = msg->ptlm_credits;
         unsigned long   flags;
 
         PJK_UT_MSG(">>> rx=%p\n",rx);
@@ -901,19 +916,16 @@ kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
                  * (Only after I've reposted the buffer)
                  */
                 spin_lock_irqsave(&peer->peer_lock, flags);
-                peer->peer_credits += returned_credits;
-                LASSERT( peer->peer_credits <=
-                        *kptllnd_tunables.kptl_peercredits);
                 peer->peer_outstanding_credits++;
                 LASSERT( peer->peer_outstanding_credits <=
                         *kptllnd_tunables.kptl_peercredits);
                 spin_unlock_irqrestore(&peer->peer_lock, flags);
 
-                PJK_UT_MSG_DATA("Giving Back %d credits rx=%p\n",returned_credits,rx);
+                PJK_UT_MSG_ALWAYS("Peer=%p Credits=%d Outstanding=%d\n",
+                        peer,peer->peer_credits,peer->peer_outstanding_credits);
 
                 /* Have I received credits that will let me send? */
-                if (returned_credits != 0)
-                        kptllnd_peer_check_sends(peer);
+                kptllnd_peer_check_sends(peer);
 
                 kptllnd_peer_decref(peer,"lookup");
         }

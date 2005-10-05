@@ -52,7 +52,7 @@ kptllnd_setup_md(
 
         /*
          * Get operations need threshold +1 to handle the
-         * reply operation.  But only on the receiver side. QQQ
+         * reply operation.  But only on the receiver side.
          */
         if( op == PTL_MD_OP_GET && tx->tx_associated_rx != NULL)
                 md->threshold++;
@@ -219,7 +219,8 @@ kptllnd_start_bulk_rdma(
         tempiov_t        tempiov;
         kptl_msg_t      *rxmsg = rx->rx_msg;
         kptl_peer_t     *peer = rx->rx_peer;
-        unsigned long   flags;
+        unsigned long    flags;
+        ptl_handle_md_t  mdh;
 
 
         /*
@@ -254,8 +255,6 @@ kptllnd_start_bulk_rdma(
                 payload_niov,payload_iov,payload_kiov,
                 payload_offset,payload_nob,&tempiov);
 
-        spin_lock_irqsave(&peer->peer_lock, flags);
-
         /*
          * Attach the MD
          */
@@ -263,19 +262,17 @@ kptllnd_start_bulk_rdma(
                 kptllnd_data->kptl_nih,
                 md,
                 PTL_UNLINK,
-                &tx->tx_mdh);
+                &mdh);
         if(ptl_rc != PTL_OK){
                 CERROR("PtlMDBind failed %d\n",ptl_rc);
-
-                spin_unlock_irqrestore(&peer->peer_lock, flags);
-                /*
-                 * Just drop the ref for this MD because it was never
-                 * posted to portals
-                 */
-                tx->tx_mdh = PTL_INVALID_HANDLE;
                 rc = -ENOMEM;
                 goto end;
         }
+
+        spin_lock_irqsave(&peer->peer_lock, flags);
+
+        tx->tx_mdh = mdh;
+
         STAT_UPDATE(kps_posted_tx_bulk_mds);
 
         /*
@@ -324,7 +321,6 @@ kptllnd_start_bulk_rdma(
                 CERROR("Ptl%s failed: %d\n",
                         op == PTL_MD_OP_GET ? "Get" : "Put",ptl_rc);
 
-                spin_lock_irqsave(&peer->peer_lock, flags);
 
                 /*
                  * Unlink the MD because it's not yet in use
@@ -342,6 +338,9 @@ kptllnd_start_bulk_rdma(
                 tx->tx_mdh = PTL_INVALID_HANDLE;
                 kptllnd_tx_decref(tx);
 #endif
+
+                spin_lock_irqsave(&peer->peer_lock, flags);
+
                 /*
                  * We are returning failure so we don't
                  * want tx_done to finalize the message
@@ -875,7 +874,83 @@ kptllnd_thread_start (int (*fn)(void *arg), int id,kptl_data_t *kptllnd_data)
         }
 }
 
+int
+kptllnd_watchdog(void *arg)
+{
+        kptllnd_thread_data_t *thread_data = arg;
+        int                id = thread_data->id;
+        kptl_data_t       *kptllnd_data = thread_data->kptllnd_data;
+        char               name[16];
+        cfs_waitlink_t     waitlink;
+        int                peer_index = 0;
+        unsigned long      deadline = jiffies;
+        int                timeout;
+        int                i;
 
+        PJK_UT_MSG(">>>\n");
+
+        /*
+         * Daemonize
+         */
+        snprintf(name, sizeof(name), "kptllnd_wd_%02d", id);
+        libcfs_daemonize(name);
+
+        cfs_waitlink_init(&waitlink);
+
+        /*
+         * Keep going around
+         */
+        while(!kptllnd_data->kptl_shutdown) {
+
+                /*
+                 * Wait on the scheduler waitq
+                 */
+
+                set_current_state (TASK_INTERRUPTIBLE);
+                cfs_waitq_add(&kptllnd_data->kptl_sched_waitq, &waitlink);
+                cfs_waitq_timedwait(&waitlink,cfs_time_seconds(PTLLND_TIMEOUT_SEC));
+                set_current_state (TASK_RUNNING);
+                cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);
+
+
+                timeout = (int)(deadline - jiffies);
+                if (timeout <= 0) {
+                        const int n = 4;
+                        const int p = 1;
+                        int       chunk = kptllnd_data->kptl_peer_hash_size;
+
+
+                        /* Time to check for RDMA timeouts on a few more
+                         * peers: I do checks every 'p' seconds on a
+                         * proportion of the peer table and I need to check
+                         * every connection 'n' times within a timeout
+                         * interval, to ensure I detect a timeout on any
+                         * connection within (n+1)/n times the timeout
+                         * interval. */
+
+                        if ((*kptllnd_tunables.kptl_timeout) > n * p)
+                                chunk = (chunk * n * p) /
+                                        (*kptllnd_tunables.kptl_timeout);
+                        if (chunk == 0)
+                                chunk = 1;
+
+                        for (i = 0; i < chunk; i++) {
+       -                        STAT_UPDATE(kps_checking_buckets);
+                                kptllnd_peer_check_bucket(peer_index,kptllnd_data);
+                                peer_index = (peer_index + 1) %
+                                     kptllnd_data->kptl_peer_hash_size;
+                        }
+
+                        deadline += p * HZ;
+                }
+
+                kptllnd_clean_canceled_peers(kptllnd_data);
+        }
+
+        kptllnd_thread_fini(thread_data);
+        PJK_UT_MSG("<<<\n");
+        return (0);
+};
 
 int
 kptllnd_scheduler(void *arg)
@@ -885,11 +960,6 @@ kptllnd_scheduler(void *arg)
         kptl_data_t    *kptllnd_data = thread_data->kptllnd_data;
         char            name[16];
         cfs_waitlink_t  waitlink;
-        int             bucket =0;
-        int             buckets_to_check;
-        cfs_time_t      last_check = cfs_time_current();
-        cfs_duration_t  duration;
-        time_t          duration_sec;
         unsigned long           flags;
         kptl_rx_t               *rx = NULL;
         kptl_rx_buffer_t        *rxb = NULL;
@@ -919,52 +989,6 @@ kptllnd_scheduler(void *arg)
                 cfs_waitq_timedwait(&waitlink,cfs_time_seconds(PTLLND_TIMEOUT_SEC));
                 set_current_state (TASK_RUNNING);
                 cfs_waitq_del (&kptllnd_data->kptl_sched_waitq, &waitlink);
-
-
-                duration = cfs_time_sub(cfs_time_current(),last_check);
-                duration_sec = cfs_duration_sec(duration);
-
-                /*
-                 * Check all the buckets over the kptl_timeout inteval
-                 * but just determine what percenations we are supposed to be
-                 * checking now.
-                 * Example
-                 * (duration/HZ) = 5 sec
-                 * HASH_SHZE = 100
-                 * kptl_timeout = 60 sec.
-                 * Result = 8 buckets to be checked (actually 8.3)
-                 */
-                buckets_to_check = duration_sec * kptllnd_data->kptl_peer_hash_size /
-                                   (*kptllnd_tunables.kptl_timeout);
-
-                if(buckets_to_check){
-                        /*PJK_UT_MSG("buckets_to_check=%d\n",buckets_to_check);*/
-                        STAT_UPDATE(kps_checking_buckets);
-
-                        /*
-                         * Because we round down the buckets we need to store
-                         * the left over portion (.3 in the above example)
-                         * somewhere so we don't
-                         * lose it.  Do this but updating the last check now
-                         * to "now" but rather to some time less than "now" that
-                         * takes into account the routing error.
-                         */
-                        last_check = cfs_time_add( last_check,
-                                cfs_time_seconds(buckets_to_check *
-                                        (*kptllnd_tunables.kptl_timeout))/
-                                        kptllnd_data->kptl_peer_hash_size);
-
-                        /*
-                         * If we are supposed to check buckets then
-                         * do that here.
-                         */
-                        while(buckets_to_check){
-                                kptllnd_peer_check_bucket(bucket,kptllnd_data);
-                                bucket = (bucket+1) % kptllnd_data->kptl_peer_hash_size;
-                                --buckets_to_check;
-                        }
-                }
-
 
                 /*
                  * Now service the queuse
@@ -1023,8 +1047,6 @@ kptllnd_scheduler(void *arg)
                          * try again.
                          */
                 }while(rx != NULL || rxb != NULL || tx != NULL);
-
-                kptllnd_clean_canceled_peers(kptllnd_data);
         }
 
         kptllnd_thread_fini(thread_data);
