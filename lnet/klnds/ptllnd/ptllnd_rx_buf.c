@@ -892,7 +892,6 @@ void
 kptllnd_rx_destroy(kptl_rx_t *rx,kptl_data_t *kptllnd_data)
 {
         kptl_peer_t    *peer = rx->rx_peer;
-        kptl_msg_t     *msg = rx->rx_msg;
         unsigned long   flags;
 
         PJK_UT_MSG(">>> rx=%p\n",rx);

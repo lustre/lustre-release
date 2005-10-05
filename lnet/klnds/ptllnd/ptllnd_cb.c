@@ -935,7 +935,7 @@ kptllnd_watchdog(void *arg)
                                 chunk = 1;
 
                         for (i = 0; i < chunk; i++) {
-       -                        STAT_UPDATE(kps_checking_buckets);
+                                STAT_UPDATE(kps_checking_buckets);
                                 kptllnd_peer_check_bucket(peer_index,kptllnd_data);
                                 peer_index = (peer_index + 1) %
                                      kptllnd_data->kptl_peer_hash_size;
