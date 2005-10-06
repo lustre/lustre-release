@@ -2354,6 +2354,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (vvrc != vv_return_ok) {
                 CERROR("gid2gid_index failed for %s: %d\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
+                rc = -EIO;
                 goto reject;
         }
         
@@ -2362,6 +2363,7 @@ kibnal_recv_connreq(cm_cep_handle_t *cep, cm_request_data_t *cmreq)
         if (vvrc != vv_return_ok) {
                 CERROR("pkey2pkey_index failed for %s: %d\n",
                        libcfs_nid2str(rxmsg.ibm_srcnid), vvrc);
+                rc = -EIO;
                 goto reject;
         }
 
