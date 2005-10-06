@@ -4,11 +4,11 @@
 # customize per survey
 
 # the SCSI devices to measure
-scsidevs="/dev/sde /dev/sdh"
+scsidevs=${scsidevs:-"/dev/sde /dev/sdh"}
 
 # result file prefix.  date/time+hostname makes unique
 # NB ensure the path exists if it includes subdirs
-rslt=/tmp/sgpdd_survey_`date +%F@%R`_`uname -n`
+rslt=${rslt:-"/tmp/sgpdd_survey_`date +%F@%R`_`uname -n`"}
 
 # what to do (read or write)
 actions="write read"
@@ -22,13 +22,13 @@ rszlo=1024
 rszhi=1024
 
 # Concurrent regions per device
-crglo=1
-crghi=256
+crglo=${crglo:-1}
+crghi=${crghi:-256}
 
 # threads to share between concurrent regions per device
 # NB survey skips over #thr < #regions and #thr/#regions > SG_MAX_QUEUE
-thrlo=1
-thrhi=4096
+thrlo=${thrlo:-1}
+thrhi=${thrhi:-4096}
 
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
