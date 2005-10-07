@@ -70,7 +70,7 @@ static int lnet_ioctl(unsigned int cmd, struct libcfs_ioctl_data *data)
 
 DECLARE_IOCTL_HANDLER(lnet_ioctl_handler, lnet_ioctl);
 
-void
+int
 lnet_configure (void *arg)
 {
         int    rc;
@@ -85,11 +85,12 @@ lnet_configure (void *arg)
                 the_lnet.ln_niinit_self = 0;
                 LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
         }
+
+        return 0;
 }
 
 static int init_lnet(void)
 {
-        static work_struct_t work;
         int                  rc;
         ENTRY;
 
@@ -103,9 +104,9 @@ static int init_lnet(void)
         LASSERT (rc == 0);
 
         if (config_on_load) {
-                /* Have to schedule a task to avoid deadlocking modload */
-                prepare_work(&work, lnet_configure, NULL);
-                schedule_work(&work);
+                /* Have to schedule a separate thread to avoid deadlocking
+                 * in modload */
+                (void) cfs_kernel_thread(lnet_configure, NULL, 0);
         }
 
         RETURN(0);
