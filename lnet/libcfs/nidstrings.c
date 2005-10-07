@@ -29,7 +29,9 @@
 #include <lnet/lnet.h>
 #include <libcfs/kp30.h>
 #ifndef __KERNEL__
-#include <netdb.h>
+#ifdef HAVE_GETHOSTBYNAME
+# include <netdb.h>
+#endif
 #endif
 
 /* CAVEAT VENDITOR! Keep the canonical string representation of nets/nids

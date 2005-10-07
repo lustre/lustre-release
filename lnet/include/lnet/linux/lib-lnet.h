@@ -14,7 +14,9 @@
 #else
 # include <libcfs/list.h>
 # include <string.h>
+#ifdef HAVE_LIBPTHREAD
 # include <pthread.h>
+#endif
 #endif
 
 #endif
