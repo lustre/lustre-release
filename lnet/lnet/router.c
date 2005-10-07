@@ -677,7 +677,7 @@ lnet_init_rtrpools (void)
 int
 lnet_alloc_rtrpools (int im_a_arouter)
 {
-        return -EOPNOTSUPP;
+        return 0;
 }
 
 #endif
