@@ -78,33 +78,6 @@ fi
 ])
 
 #
-# LN_CONFIG_PTHREAD
-#
-# configure support for libpthread
-#
-AC_DEFUN([LN_CONFIG_PTHREAD],
-[AC_MSG_CHECKING([whether to use libpthread for lnet library])
-AC_ARG_ENABLE([libpthread],
-       	AC_HELP_STRING([--disable-libpthread],
-               	[disable libpthread for liblustre]),
-       	[],[enable_libpthread=yes])
-if test "$enable_libpthread" = "yes" ; then
-	AC_CHECK_LIB([pthread], [pthread_create],
-		[ENABLE_LIBPTHREAD="yes"],
-		[ENABLE_LIBPTHREAD="no"])
-	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		AC_MSG_RESULT([no libpthread is found])
-	else
-		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
-	fi
-else
-	AC_MSG_RESULT([no (disabled explicitly)])
-	ENABLE_LIBPTHREAD="no"
-fi
-AC_SUBST(ENABLE_LIBPTHREAD)
-])
-
-#
 # LN_CONFIG_PTLLND
 #
 # configure support for Portals
@@ -127,6 +100,18 @@ else
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 AC_SUBST(PTLLND)
+])
+
+#
+# LN_CONFIG_UPTLLND
+#
+AC_DEFUN([LN_CONFIG_UPTLLND],
+[
+if test "x$PTLLND" != "xptllnd" ; then
+	LN_CONFIG_PTLLND
+fi
+UPTLLND=$PTLLND
+AC_SUBST(UPTLLND)
 ])
 
 # LN_CONFIG_USOCKLND
@@ -720,7 +705,6 @@ fi
 AC_DEFUN([LN_PROG_LINUX],
 [LN_CONFIG_ZEROCOPY
 LN_CONFIG_AFFINITY
-LN_CONFIG_PTHREAD
 LN_CONFIG_QUADRICS
 LN_CONFIG_GM
 LN_CONFIG_OPENIB
@@ -728,7 +712,6 @@ LN_CONFIG_VIB
 LN_CONFIG_IIB
 LN_CONFIG_RALND
 LN_CONFIG_PTLLND
-LN_CONFIG_USOCKLND
 
 LN_STRUCT_PAGE_LIST
 LN_STRUCT_SIGHAND
@@ -821,6 +804,27 @@ else
 fi
 AC_SUBST(LIBWRAP)
 
+# -------- check for -lpthread support ----
+AC_MSG_CHECKING([whether to use libpthread for lnet library])
+AC_ARG_ENABLE([libpthread],
+       	AC_HELP_STRING([--disable-libpthread],
+               	[disable libpthread for liblustre]),
+       	[],[enable_libpthread=yes])
+if test "$enable_libpthread" = "yes" ; then
+	AC_CHECK_LIB([pthread], [pthread_create],
+		[ENABLE_LIBPTHREAD="yes"],
+		[ENABLE_LIBPTHREAD="no"])
+	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
+		AC_MSG_RESULT([no libpthread is found])
+	else
+		AC_MSG_RESULT([$ENABLE_LIBPTHREAD])
+	fi
+else
+	AC_MSG_RESULT([no (disabled explicitly)])
+	ENABLE_LIBPTHREAD="no"
+fi
+AC_SUBST(ENABLE_LIBPTHREAD)
+
 # ----------------------------------------
 # some tests for catamount-like systems
 # ----------------------------------------
@@ -855,21 +859,17 @@ if test x$enable_liblustre = xyes ; then
 	AC_SUBST(CAP_LIBS)
 
 	if test "$ENABLE_LIBPTHREAD" = "yes" ; then
-		AC_CHECK_LIB([pthread], [pthread_create],
-			[
-				PTHREAD_LIBS="-lpthread"
-				AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
-			],
-			[
-				PTHREAD_LIBS=""
-				AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
-			])
+		PTHREAD_LIBS="-lpthread"
+		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
 	else
 		PTHREAD_LIBS=""
 		AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
 	fi
 	AC_SUBST(PTHREAD_LIBS)
 fi
+
+LN_CONFIG_UPTLLND
+LN_CONFIG_USOCKLND
 ])
 
 #
@@ -885,6 +885,7 @@ AM_CONDITIONAL(BUILD_IIBLND, test x$IIBLND = "xiiblnd")
 AM_CONDITIONAL(BUILD_VIBLND, test x$VIBLND = "xviblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
+AM_CONDITIONAL(BUILD_UPTLLND, test x$UPTLLND = "xptllnd")
 AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
 

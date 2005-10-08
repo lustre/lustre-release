@@ -1,5 +1,5 @@
 
-if BUILD_PTLLND
+if BUILD_UPTLLND
 if LIBLUSTRE 
 noinst_LIBRARIES = libptllnd.a
 noinst_HEADERS =  ptllnd.h
