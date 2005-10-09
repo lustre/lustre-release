@@ -718,7 +718,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         }
                 }
 
-                /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
+                /* Won't invoke llu_vmtruncate(), as we already cleared
+                 * ATTR_SIZE */
                 inode_setattr(inode, attr);
         }
 

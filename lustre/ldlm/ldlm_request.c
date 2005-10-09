@@ -422,11 +422,11 @@ int ldlm_cli_enqueue(struct obd_export *exp,
 
         /*
          * Liblustre client doesn't get extent locks, except for O_APPEND case
-         * where [0, OBD_OBJECT_EOF] lock is taken.
+         * where [0, OBD_OBJECT_EOF] lock is taken, or truncate, where
+         * [i_size, OBD_OBJECT_EOF] lock is taken.
          */
         LASSERT(ergo(LIBLUSTRE_CLIENT, type != LDLM_EXTENT ||
-                     (policy->l_extent.start == 0 &&
-                      policy->l_extent.end   == OBD_OBJECT_EOF)));
+                     policy->l_extent.end == OBD_OBJECT_EOF));
 
         reply = lustre_swab_repbuf(req, 0, sizeof(*reply),
                                    lustre_swab_ldlm_reply);

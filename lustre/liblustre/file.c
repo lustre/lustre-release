@@ -415,8 +415,8 @@ _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off)
         RETURN(off);
 }
 
-/* this isn't where truncate starts.   roughly:
- * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
+/* this isn't where truncate starts.  roughly:
+ * llu_iop_{open,setattr}->llu_setattr_raw->llu_vmtruncate->llu_truncate
  * we grab the lock back in setattr_raw to avoid races. */
 static void llu_truncate(struct inode *inode)
 {
