@@ -605,14 +605,14 @@ static int jt_setup()
 /* see jt_ptl_network */
 int jt_getnids(lnet_nid_t *nidarray, int maxnids)
 {
-        struct portal_ioctl_data data;
+        struct libcfs_ioctl_data data;
         int                      count;
         int                      rc;
 
         for (count = 0; count < maxnids; count++) {
-                PORTAL_IOC_INIT (data);
+                LIBCFS_IOC_INIT (data);
                 data.ioc_count = count;
-                rc = l_ioctl(LNET_DEV_ID, IOC_PORTAL_GET_NI, &data);
+                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
 
                 if (rc >= 0) {
                         vprint("%s\n", libcfs_nid2str(data.ioc_nid));

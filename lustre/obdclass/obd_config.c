@@ -723,7 +723,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                         __u32 addr = (__u32)(lcfg->lcfg_nid & 0xffffffff);
 
                         lcfg_new->lcfg_nid =
-                                PTL_MKNID(PTL_MKNET(lcfg->lcfg_nal, 0), addr);
+                                LNET_MKNID(LNET_MKNET(lcfg->lcfg_nal, 0), addr);
                         CWARN("Converted pre-newconfig NAL %d NID %x to %s\n",
                               lcfg->lcfg_nal, addr,
                               libcfs_nid2str(lcfg_new->lcfg_nid));
@@ -761,7 +761,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         ENTRY;
 
         CDEBUG(D_INFO, "looking up llog %s\n", name);
-        rc = llog_create(ctxt, &llh, NULL, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc)
                 RETURN(rc);
 
@@ -829,7 +829,7 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
         int rc, rc2;
         ENTRY;
 
-        rc = llog_create(ctxt, &llh, NULL, NULL, name);
+        rc = llog_create(ctxt, &llh, NULL, name);
         if (rc)
                 RETURN(rc);
 

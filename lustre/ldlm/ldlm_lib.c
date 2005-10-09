@@ -35,7 +35,6 @@
 #include <linux/obd.h>
 #include <linux/obd_ost.h> /* for LUSTRE_OSC_NAME */
 #include <linux/lustre_mds.h> /* for LUSTRE_MDC_NAME */
-#include <linux/lustre_mgmt.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_net.h>
 
@@ -96,7 +95,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         } else {
                 spin_unlock(&imp->imp_lock);
                 GOTO(out_free, rc = -ENOENT);
-                
+
         }
 
         spin_unlock(&imp->imp_lock);
@@ -180,6 +179,13 @@ out:
         RETURN(rc);
 }
 
+/* configure an RPC client OBD device
+ *
+ * lcfg parameters:
+ * 1 - client UUID
+ * 2 - server UUID
+ * 3 - inactive-on-startup
+ */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct lustre_cfg* lcfg = buf;
@@ -188,10 +194,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_uuid server_uuid;
         int rq_portal, rp_portal, connect_op;
         char *name = obddev->obd_type->typ_name;
-        char *mgmt_name = NULL;
         int rc;
-        struct obd_device *mgmt_obd;
-        mgmtcli_register_for_events_t register_f;
         ENTRY;
 
         /* In a more perfect world, we would hang a ptlrpc_client off of
@@ -204,10 +207,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rq_portal = MDS_REQUEST_PORTAL;
                 rp_portal = MDC_REPLY_PORTAL;
                 connect_op = MDS_CONNECT;
-        } else if (!strcmp(name, LUSTRE_MGMTCLI_NAME)) {
-                rq_portal = MGMT_REQUEST_PORTAL;
-                rp_portal = MGMT_REPLY_PORTAL;
-                connect_op = MGMT_CONNECT;
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);
@@ -310,37 +309,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                                name, obddev->obd_name,
                                imp->imp_target_uuid.uuid);
                         imp->imp_invalid = 1;
-
-                        if (LUSTRE_CFG_BUFLEN(lcfg, 4) > 0)
-                                mgmt_name = lustre_cfg_string(lcfg, 4);
-                } else {
-                        mgmt_name = lustre_cfg_string(lcfg, 3);
                 }
-        }
-
-        if (mgmt_name != NULL) {
-                /* Register with management client if we need to. */
-                CDEBUG(D_HA, "%s registering with %s for events about %s\n",
-                       obddev->obd_name, mgmt_name, server_uuid.uuid);
-
-                mgmt_obd = class_name2obd(mgmt_name);
-                if (!mgmt_obd) {
-                        CERROR("can't find mgmtcli %s to register\n",
-                               mgmt_name);
-                        GOTO(err_import, rc = -ENOSYS);
-                }
-
-                register_f = inter_module_get("mgmtcli_register_for_events");
-                if (!register_f) {
-                        CERROR("can't i_m_g mgmtcli_register_for_events\n");
-                        GOTO(err_import, rc = -ENOSYS);
-                }
-
-                rc = register_f(mgmt_obd, obddev, &imp->imp_target_uuid);
-                inter_module_put("mgmtcli_register_for_events");
-
-                if (!rc)
-                        cli->cl_mgmtcli_obd = mgmt_obd;
         }
 
         spin_lock_init(&cli->cl_qchk_lock);
@@ -363,13 +332,6 @@ int client_obd_cleanup(struct obd_device *obddev)
 
         if (!cli->cl_import)
                 RETURN(-EINVAL);
-        if (cli->cl_mgmtcli_obd) {
-                mgmtcli_deregister_for_events_t dereg_f;
-
-                dereg_f = inter_module_get("mgmtcli_deregister_for_events");
-                dereg_f(cli->cl_mgmtcli_obd, obddev);
-                inter_module_put("mgmtcli_deregister_for_events");
-        }
         class_destroy_import(cli->cl_import);
         cli->cl_import = NULL;
 
@@ -378,6 +340,7 @@ int client_obd_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
+/* ->o_connect() method for client side (OSC and MDC) */
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)
@@ -385,6 +348,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
+        struct obd_connect_data *ocd;
         int rc;
         ENTRY;
 
@@ -410,14 +374,22 @@ int client_connect_import(struct lustre_handle *dlm_handle,
         if (rc != 0)
                 GOTO(out_ldlm, rc);
 
+        ocd = &imp->imp_connect_data;
         if (data)
-                memcpy(&imp->imp_connect_data, data, sizeof(*data));
+                *ocd = *data;
+
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);
         }
         LASSERT(exp->exp_connection);
+
+        if (data) {
+                LASSERT((ocd->ocd_connect_flags & data->ocd_connect_flags) ==
+                        ocd->ocd_connect_flags);
+                data->ocd_connect_flags = ocd->ocd_connect_flags;
+        }
 
         ptlrpc_pinger_add_import(imp);
         EXIT;
@@ -524,7 +496,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
         conn->cookie = exp->exp_handle.h_cookie;
         CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
                cluuid->uuid, exp);
-        CDEBUG(D_IOCTL,"connect: cookie "LPX64"\n", conn->cookie);
+        CDEBUG(D_IOCTL, "connect: cookie "LPX64"\n", conn->cookie);
         RETURN(0);
 }
 
@@ -692,7 +664,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         spin_lock_irqsave(&export->exp_lock, flags);
         if (export->exp_conn_cnt >= req->rq_reqmsg->conn_cnt) {
                 CERROR("%s: already connected at a higher conn_cnt: %d > %d\n",
-                       cluuid.uuid, export->exp_conn_cnt, 
+                       cluuid.uuid, export->exp_conn_cnt,
                        req->rq_reqmsg->conn_cnt);
                 spin_unlock_irqrestore(&export->exp_lock, flags);
                 GOTO(out, rc = -EALREADY);
@@ -703,13 +675,15 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 export->exp_libclient = 1;
+                spin_lock(&target->obd_dev_lock);
                 list_del_init(&export->exp_obd_chain_timed);
+                spin_unlock(&target->obd_dev_lock);
         }
 
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
         export->exp_connection = ptlrpc_get_connection(req->rq_peer,
-                                                       &remote_uuid);
+                                                       req->rq_self, &remote_uuid);
 
         if (rc == EALREADY) {
                 /* We indicate the reconnection in a flag, not an error code. */
@@ -840,14 +814,14 @@ static void abort_recovery_queue(struct obd_device *obd)
         }
 }
 
-/* Called from a cleanup function if the device is being cleaned up 
-   forcefully.  The exports should all have been disconnected already, 
-   the only thing left to do is 
+/* Called from a cleanup function if the device is being cleaned up
+   forcefully.  The exports should all have been disconnected already,
+   the only thing left to do is
      - clear the recovery flags
      - cancel the timer
      - free queued requests and replies, but don't send replies
    Because the obd_stopping flag is set, no new requests should be received.
-     
+
 */
 void target_cleanup_recovery(struct obd_device *obd)
 {
@@ -932,10 +906,12 @@ static void reset_recovery_timer(struct obd_device *obd)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
-               (int)(OBD_RECOVERY_TIMEOUT / HZ));
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
         spin_unlock_bh(&obd->obd_processing_task_lock);
+        CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
+               (int)(OBD_RECOVERY_TIMEOUT / HZ));
+        /* Only used for lprocfs_status */
+        obd->obd_recovery_end = CURRENT_SECONDS + OBD_RECOVERY_TIMEOUT/HZ;
 }
 
 
@@ -1258,7 +1234,7 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
         return (ptlrpc_send_reply(req, 1));
 }
 
-void 
+void
 target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 {
         int                        netrc;
@@ -1299,12 +1275,12 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs->rs_xid       = req->rq_xid;
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
-        
+
         spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
 
         if (rs->rs_transno > obd->obd_last_committed) {
-                /* not committed already */ 
-                list_add_tail (&rs->rs_obd_list, 
+                /* not committed already */
+                list_add_tail (&rs->rs_obd_list,
                                &obd->obd_uncommitted_replies);
         }
 

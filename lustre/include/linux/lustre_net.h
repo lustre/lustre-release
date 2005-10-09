@@ -46,7 +46,7 @@
 /* Define maxima for bulk I/O 
  * CAVEAT EMPTOR, with multinet (i.e. routers forwarding between networks)
  * these limits are system wide and not interface-local. */
-#define PTLRPC_MAX_BRW_SIZE     PTL_MTU
+#define PTLRPC_MAX_BRW_SIZE     LNET_MTU
 #define PTLRPC_MAX_BRW_PAGES    (PTLRPC_MAX_BRW_SIZE/PAGE_SIZE)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
@@ -57,10 +57,10 @@
 # if (PTLRPC_MAX_BRW_SIZE != (PTLRPC_MAX_BRW_PAGES * PAGE_SIZE))
 #  error "PTLRPC_MAX_BRW_SIZE isn't PTLRPC_MAX_BRW_PAGES * PAGE_SIZE"
 # endif
-# if (PTLRPC_MAX_BRW_SIZE > PTL_MTU)
+# if (PTLRPC_MAX_BRW_SIZE > LNET_MTU)
 #  error "PTLRPC_MAX_BRW_SIZE too big"
 # endif
-# if (PTLRPC_MAX_BRW_PAGES > PTL_MD_MAX_IOV)
+# if (PTLRPC_MAX_BRW_PAGES > LNET_MAX_IOV)
 #  error "PTLRPC_MAX_BRW_PAGES too big"
 # endif
 #endif /* __KERNEL__ */
@@ -88,13 +88,6 @@
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXREPSIZE (1024)
-
-#define MGT_MAX_THREADS 8UL
-#define MGT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
-                                  MGT_MAX_THREADS), 2UL)
-#define MGS_NBUFS       (64 * smp_num_cpus)
-#define MGS_BUFSIZE     (8 * 1024)
-#define MGS_MAXREQSIZE  (5 * 1024)
 
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
@@ -139,7 +132,8 @@
 
 struct ptlrpc_connection {
         struct list_head        c_link;
-        lnet_process_id_t        c_peer;
+        lnet_nid_t              c_self;
+        lnet_process_id_t       c_peer;
         struct obd_uuid         c_remote_uuid;
         atomic_t                c_refcount;
 };
@@ -335,7 +329,8 @@ struct ptlrpc_request {
         wait_queue_head_t    rq_reply_waitq;
         struct ptlrpc_cb_id  rq_reply_cbid;
 
-        lnet_process_id_t   rq_peer;
+        lnet_nid_t         rq_self;
+        lnet_process_id_t  rq_peer;
         struct obd_export *rq_export;
         struct obd_import *rq_import;
 
@@ -461,9 +456,8 @@ struct ptlrpc_thread {
 
         struct list_head t_link; /* active threads for service, from svc->srv_threads */
 
+        void *t_data;            /* thread-private data (preallocated memory) */
         __u32 t_flags;
-
-        void *t_data; /* thread-private data (preallocated memory) */
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         wait_queue_head_t t_ctl_waitq;
@@ -495,7 +489,8 @@ struct ptlrpc_service {
         int              srv_n_active_reqs;     /* # reqs being served */
         int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
         int              srv_watchdog_timeout; /* soft watchdog timeout, in ms */
-        int              srv_num_threads;      /*# of threads to start/started*/
+        int              srv_num_threads;       /* # threads to start/started */
+        unsigned         srv_cpu_affinity:1;    /* bind threads to CPUs */
 
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
@@ -553,7 +548,8 @@ struct ptlrpc_service {
 
 /* ptlrpc/events.c */
 extern lnet_handle_eq_t ptlrpc_eq_h;
-extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, lnet_process_id_t *peer);
+extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid, 
+                               lnet_process_id_t *peer, lnet_nid_t *self);
 extern void request_out_callback (lnet_event_t *ev);
 extern void reply_in_callback(lnet_event_t *ev);
 extern void client_bulk_callback (lnet_event_t *ev);
@@ -565,7 +561,7 @@ extern void server_bulk_callback (lnet_event_t *ev);
 void ptlrpc_dump_connections(void);
 void ptlrpc_readdress_connection(struct ptlrpc_connection *, struct obd_uuid *);
 struct ptlrpc_connection *ptlrpc_get_connection(lnet_process_id_t peer,
-                                                struct obd_uuid *uuid);
+                                                lnet_nid_t self, struct obd_uuid *uuid);
 int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
@@ -594,6 +590,7 @@ int ptlrpc_reply(struct ptlrpc_request *req);
 int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
+int ptl_send_rpc_nowait(struct ptlrpc_request *request);
 int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
 
 /* ptlrpc/client.c */
