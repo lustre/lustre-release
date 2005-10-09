@@ -164,7 +164,7 @@ struct llog_operations {
         int (*lop_next_block)(struct llog_handle *h, int *curr_idx,
                               int next_idx, __u64 *offset, void *buf, int len);
         int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
-                          struct llog_logid *logid, char* fsname, char *name);
+                          struct llog_logid *logid, char *name);
         int (*lop_close)(struct llog_handle *handle);
         int (*lop_read_header)(struct llog_handle *handle);
 
@@ -364,7 +364,8 @@ static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
 }
 
 static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                              struct llog_logid *logid, char*fsname, char *name)
+//                              struct llog_logid *logid, char*fsname, char *name)
+                              struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
         int rc;
@@ -376,7 +377,8 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        rc = lop->lop_create(ctxt, res, logid, fsname, name);
+ //       rc = lop->lop_create(ctxt, res, logid, fsname, name);
+        rc = lop->lop_create(ctxt, res, logid, name);
         RETURN(rc);
 }
 

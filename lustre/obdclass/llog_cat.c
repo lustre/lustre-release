@@ -80,7 +80,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 llh->llh_tail.lrt_index = index;
         }
 
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL, NULL);
+        rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
         if (rc)
                 RETURN(ERR_PTR(rc));
 
@@ -152,7 +152,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                 }
         }
 
-        rc = llog_create(cathandle->lgh_ctxt, &loghandle, logid, NULL, NULL);
+        rc = llog_create(cathandle->lgh_ctxt, &loghandle, logid, NULL);
         if (rc) {
                 CERROR("error opening log id "LPX64":%x: rc %d\n",
                        logid->lgl_oid, logid->lgl_ogen, rc);

@@ -88,7 +88,11 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
         med->med_mcd = mcd;
-
+#if 0
+        /* FIXME: recovery of connection*/
+        rc = mgs_client_add(obd, &obd->u.mgs, med, -1);
+        GOTO(out, rc);
+#endif 
 out:
         if (rc) {
                 if (mcd) {
@@ -123,6 +127,7 @@ static int mgs_disconnect(struct obd_export *exp)
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
+        ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
         spin_lock_irqsave(&exp->exp_lock, irqflags);
@@ -190,13 +195,21 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lustre_cfg_string(lcfg, 1), mnt);
 
+        /*namespace for mgs llog */
+        sprintf(ns_name, "mgs-%s", obd->obd_uuid.uuid);
+        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
+        if (obd->obd_namespace == NULL) {
+                mgs_cleanup(obd);
+                GOTO(err_put, rc = -ENOMEM);
+        }
+
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
         rc = mgs_fs_setup(obd, mnt);
         if (rc) {
                 CERROR("%s: MGS filesystem method init failed: rc = %d\n",
                        obd->obd_name, rc);
-                GOTO(err_put, rc);
+                GOTO(err_ns, rc);
         }
 
         INIT_LIST_HEAD(&mgs->mgs_open_llogs);
@@ -205,12 +218,6 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = llog_start_commit_thread();
         if (rc < 0)
                 GOTO(err_fs, rc);
-#if 0  
-        //FIXME: no LDLM support for llog now
-        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                           "mgs_ldlm_client", &obd->obd_ldlm_client);
-#endif
-        obd->obd_replayable = 1;
 
         rc = mgs_postsetup(obd);
         if (rc)
@@ -240,7 +247,7 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
                               lustre_cfg_string(lcfg, 1),
                               obd->obd_replayable ? "enabled" : "disabled");
         }
-//FIXME: no ldlm support now
+
         ldlm_timeout = 6;
         ping_evictor_start();
 
@@ -249,6 +256,9 @@ static int mgs_setup(struct obd_device *obd, obd_count len, void *buf)
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mgs_fs_cleanup(obd);
+err_ns:
+        ldlm_namespace_free(obd->obd_namespace, 0);
+        obd->obd_namespace = NULL;
 err_put:
         unlock_kernel();
         mntput(mgs->mgs_vfsmnt);
@@ -312,6 +322,8 @@ static int mgs_cleanup(struct obd_device *obd)
         mntput(mgs->mgs_vfsmnt);
         mgs->mgs_sb = NULL;
 
+        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
+
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
                 target_cancel_recovery_timer(obd);
@@ -326,112 +338,9 @@ static int mgs_cleanup(struct obd_device *obd)
 
         fsfilt_put_ops(obd->obd_fsops);
 
-        LCONSOLE_INFO("MDT %s has stopped.\n", obd->obd_name);
+        LCONSOLE_INFO("MGT %s has stopped.\n", obd->obd_name);
 
         RETURN(0);
-}
-
-/* Look up an entry by inode number. */
-/* this function ONLY returns valid dget'd dentries with an initialized inode
-   or errors */
-struct dentry *mgs_fid2dentry(struct mgs_obd *mgs, struct ll_fid *fid,
-                              struct vfsmount **mnt)
-{
-        unsigned long ino = fid->id;
-        __u32 generation = fid->generation;
-        struct mgs_open_llog *mollog, *n;
-        struct list_head *llog_list = &mgs->mgs_open_llogs;
-        struct inode *inode;
-        struct dentry *result = NULL;
-
-        if (ino == 0)
-                RETURN(ERR_PTR(-ESTALE));
-
-
-        CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               ino, generation, mgs->mgs_sb);
-
-        list_for_each_entry_safe(mollog, n, llog_list, mol_list) {
-                if (mollog->mol_id == ino) {
-                        result = mollog->mol_dentry;
-                        dget(result);
-                }
-        }
-
-        if (!result)
-                RETURN(NULL);
-
-        inode = result->d_inode;
-        if (!inode)
-                RETURN(ERR_PTR(-ENOENT));
-
-        if (generation && inode->i_generation != generation) {
-                /* we didn't find the right inode.. */
-                CERROR("bad inode %lu, link: %lu ct: %d or generation %u/%u\n",
-                       inode->i_ino, (unsigned long)inode->i_nlink,
-                       atomic_read(&inode->i_count), inode->i_generation,
-                       generation);
-                dput(result);
-                RETURN(ERR_PTR(-ENOENT));
-        }
-
-        if (mnt) {
-                *mnt = mgs->mgs_vfsmnt;
-                mntget(*mnt);
-        }
-
-        RETURN(result);
-}
-
-static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
-                                          void *data)
-{
-        struct obd_device *obd = data;
-        struct ll_fid fid;
-        fid.id = id;
-        fid.generation = gen;
-        return mgs_fid2dentry(&obd->u.mgs, &fid, NULL);
-}
-
-static int mgs_open_llog(__u64 id, void *data, void *handle)
-{
-        struct obd_device *obd = data; 
-        struct mgs_update_llh *mul = handle;
-        struct llog_handle *lgh = &mul->mul_lgh;
-        struct dentry *dentry = lgh->lgh_file->f_dentry;
-        __u64  id = dentry->d_inode->i_ino;
-        struct mgs_obd *mgs = &obd->u.mgs;
-        struct mgs_open_llog *mollog, *n;
-        struct list_head *llog_list = &mgs->mgs_open_llogs;
-         
-        list_for_each_entry_safe(mollog, n, llog_list, mol_list) {
-                if (mollog->mol_id == id) {
-                        spin_lock(&mollog->mol_lock);
-                        mollog->mol_ref++;
-                        spin_unlock(&mollog->mol_lock);
-                        dget(dentry);
-                        return 0;
-                }
-        }
-
-        /* add a new open llog  to mgs_open_llogs */
-        OBD_ALLOC(mollog, sizeof(*mollog));
-        if (!mollog) {
-                CERROR("No memory for mollog.\n");
-                return -ENOMEM;
-        }
-        mollog->mol_id = id;
-        mollog->mol_dentry = dentry;
-        mollog->mol_update = 0;
-        mollog->mol_ref = 1;
-        spin_lock_init(&mollog->mol_lock);
-
-        spin_lock(&mgs->mgs_llogs_lock);
-        list_add(&mollog->mol_list, &mgs->mgs_open_llogs);
-        spin_unlock(&mgs->mgs_llogs_lock);
-
-        lgh->
-        return 0;
 }
 
 int mgs_handle(struct ptlrpc_request *req)
@@ -502,6 +411,21 @@ int mgs_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MGS_DISCONNECT_NET, 0);
                 rc = target_handle_disconnect(req);
                 req->rq_status = rc;            /* superfluous? */
+                break;
+
+        case LDLM_ENQUEUE:
+                DEBUG_REQ(D_INODE, req, "enqueue");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
+                rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
+                                         ldlm_server_blocking_ast, NULL);
+                fail = OBD_FAIL_LDLM_REPLY;
+                break;
+        case LDLM_BL_CALLBACK:
+        case LDLM_CP_CALLBACK:
+                DEBUG_REQ(D_INODE, req, "callback");
+                CERROR("callbacks should not happen on MDS\n");
+                LBUG();
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
                 break;
 
         case OBD_PING:
