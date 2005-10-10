@@ -29,7 +29,7 @@
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
-#define DEBUG_SUBSYSTEM S_CONFOBD
+#define DEBUG_SUBSYSTEM S_MGC
 
 #ifdef __KERNEL__
 # include <linux/module.h>
@@ -57,7 +57,6 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
         struct mgc_obd *mgcobd = &obd->u.mgc;
         struct dentry *dentry;
         int err = 0;
-
 
         LASSERT(sbi);
 
@@ -181,16 +180,15 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                         CERROR("fs setup failed %d\n", rc);
                         mgc_cleanup(obd);
                         RETURN(-ENOENT);
-                }                                                                                                     
-        } else {
-                CERROR("mgc does not have local disk (client only)\n");
-                rc = mgc_obd_setup(obd, len, buf);
-                if (rc) {
-                        mgc_cleanup(obd);
-                        RETURN(-ENOENT);
                 }
         }
 
+        CERROR("mgc does not have local disk (client only)\n");
+        rc = mgc_obd_setup(obd, len, buf);
+        if (rc) {
+                mgc_cleanup(obd);
+                RETURN(-ENOENT);
+        }
         RETURN(rc);
 
 err_rpc_lock:

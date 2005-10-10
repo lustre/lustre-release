@@ -811,6 +811,7 @@ typedef enum {
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,
 //      LDLM_IBITS     = 13,
+        LDLM_LLOG      = 14,
         LDLM_MAX_TYPE
 } ldlm_type_t;
 
@@ -830,9 +831,7 @@ struct ldlm_flock {
         __u32 pid;
 };
 
-struct ldlm_llog {
-       /*FIXME*/
-};
+
 /* it's important that the fields of the ldlm_extent structure match
  * the first fields of the ldlm_flock structure because there is only
  * one ldlm_swab routine to process the ldlm_policy_data_t union. if
@@ -842,7 +841,6 @@ struct ldlm_llog {
 typedef union {
         struct ldlm_extent l_extent;
         struct ldlm_flock  l_flock;
-        struct ldlm_llog   l_llog;
 } ldlm_policy_data_t;
 
 extern void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d);
