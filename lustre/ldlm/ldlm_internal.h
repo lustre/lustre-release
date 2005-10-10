@@ -49,6 +49,9 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
+/* ldlm_llog.c */
+int ldlm_process_llog_lock(struct ldlm_lock *lock, int *flags, int first_enq,
+                           ldlm_error_t *err);
 
 /* l_lock.c */
 void l_check_ns_lock(struct ldlm_namespace *ns);

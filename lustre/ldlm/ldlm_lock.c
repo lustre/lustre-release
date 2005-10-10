@@ -90,6 +90,7 @@ static ldlm_processing_policy ldlm_processing_policy_table[] = {
         [LDLM_EXTENT] ldlm_process_extent_lock,
 #ifdef __KERNEL__
         [LDLM_FLOCK] ldlm_process_flock_lock,
+        [LDLM_LLOG]  ldlm_process_llog_lock,
 #endif
 };
 
