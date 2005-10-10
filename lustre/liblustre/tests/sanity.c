@@ -547,6 +547,7 @@ int t19(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
+        int result;
         ENTRY("open(O_TRUNC) should truncate file to 0-length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
 
@@ -558,7 +559,9 @@ int t19(char *name)
                 return(-1);
         }
         close(fd);
-        check_file_size(file, 0);
+        result = check_file_size(file, 0);
+        if (result != 0)
+                return result;
         t_unlink(file);
         LEAVE();
 }
@@ -984,6 +987,7 @@ int t51(char *name)
         int fd;
         struct stat statbuf;
         off_t size;
+        int result;
 
         ENTRY("truncate() should truncate file to proper length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
@@ -994,7 +998,9 @@ int t51(char *name)
                         printf("error truncating file: %s\n", strerror(errno));
                         return(-1);
                 }
-                check_file_size(file, size);
+                result = check_file_size(file, size);
+                if (result != 0)
+                        return result;
                 t_unlink(file);
 
                 t_echo_create(file, "");
@@ -1008,7 +1014,9 @@ int t51(char *name)
                         return(-1);
                 }
                 close(fd);
-                check_file_size(file, size);
+                result = check_file_size(file, size);
+                if (result != 0)
+                        return result;
                 t_unlink(file);
         }
         LEAVE();
