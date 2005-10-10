@@ -1095,6 +1095,14 @@ lnet_startup_lndnis (void)
         return -ENETDOWN;
 }
 
+#ifndef __KERNEL__
+# if LNET_SINGLE_THREADED
+extern lnd_t the_ptllnd;
+# else
+extern lnd_t the_tcplnd;
+# endif
+#endif 
+
 int
 LNetInit(void)
 {
@@ -1121,9 +1129,9 @@ LNetInit(void)
         /* Register all LNDs that have been loaded
          * NB the order here determines default 'networks=' order */
 # if LNET_SINGLE_THREADED
-        LNET_REGISTER_LND_IF_PRESENT(the_ptllnd);
+        lnet_register_lnd(&the_ptllnd);
 # else
-        LNET_REGISTER_LND_IF_PRESENT(the_tcplnd);
+        lnet_register_lnd(&the_tcplnd);
 # endif
 #endif
         lnet_register_lnd(&the_lolnd);
