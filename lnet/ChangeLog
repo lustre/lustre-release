@@ -1,3 +1,21 @@
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Configuration change for the XT3
+             The PTLLND is now used to run Lustre over Portals on the XT3.
+	     The configure option(s) --with-cray-portals are no longer
+	     used.  Rather --with-portals=<path-to-portals-includes> is
+	     used to enable building on the XT3.  In addition to enable
+	     XT3 specific features the option --enable-cray-xt3 must be
+	     used.
+
+2005-10-10  Cluster File Systems, Inc. <info@clusterfs.com>
+	* Portals has been removed, replaced by LNET.
+  	   LNET is new networking infrastructure for Lustre, it includes a
+	   reorganized network configuration mode (see the user
+	   documentation for full details) as well as support for routing
+	   between different network fabrics.  Lustre Networking Devices
+	   (LNDS) for the supported network fabrics have also been created
+	   for this new infrastructure.
+	
 2005-04-06  Cluster File Systems, Inc. <info@clusterfs.com>
        * bugs
 	- update gmnal to use PTL_MTU, fix module refcounting (b=5786)
