@@ -18,7 +18,7 @@
 #ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
 #else
-#include "types.h"
+#include <libcfs/types.h>
 #endif
 
 
