@@ -528,12 +528,26 @@ int t18b(char *name)
         LEAVE();
 }
 
+static int check_file_size(char *file, off_t size)
+{
+        struct stat statbuf;
+
+        if(stat(file, &statbuf) != 0) {
+                printf("Error stat(%s)\n", file);
+                return(1);
+        }
+        if (statbuf.st_size != size) {
+                printf("size of %s: %ld != %ld\n", file, statbuf.st_size, size);
+                return(-1);
+        }
+        return 0;
+}
+
 int t19(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        struct stat statbuf;
-        ENTRY("open(O_TRUNC) should trancate file to 0-length");
+        ENTRY("open(O_TRUNC) should truncate file to 0-length");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
 
         t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -544,14 +558,7 @@ int t19(char *name)
                 return(-1);
         }
         close(fd);
-        if(stat(file, &statbuf) != 0) {
-                printf("Error stat\n");
-                return(1);
-        }
-        if (statbuf.st_size != 0) {
-                printf("size %ld is not zero\n", statbuf.st_size);
-                return(-1);
-        }
+        check_file_size(file, 0);
         t_unlink(file);
         LEAVE();
 }
@@ -963,6 +970,50 @@ int t50b(char *name)
         LEAVE();
 }
 
+enum {
+        T51_STEP = 42,
+        T51_NR   = 1000
+};
+
+/*
+ * truncate(2) checks.
+ */
+int t51(char *name)
+{
+        char file[MAX_PATH_LENGTH] = "";
+        int fd;
+        struct stat statbuf;
+        off_t size;
+
+        ENTRY("truncate() should truncate file to proper length");
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t19_file", lustre_path);
+
+        for (size = 0; size < T51_NR * T51_STEP; size += T51_STEP) {
+                t_echo_create(file, "");
+                if (truncate(file, size) != 0) {
+                        printf("error truncating file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                check_file_size(file, size);
+                t_unlink(file);
+
+                t_echo_create(file, "");
+                fd = open(file, O_RDWR|O_CREAT, (mode_t)0666);
+                if (fd < 0) {
+                        printf("error open file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                if (ftruncate(fd, size) != 0) {
+                        printf("error ftruncating file: %s\n", strerror(errno));
+                        return(-1);
+                }
+                close(fd);
+                check_file_size(file, size);
+                t_unlink(file);
+        }
+        LEAVE();
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -1005,6 +1056,7 @@ struct testlist {
         { t23, "23" },
         { t50, "50" },
         { t50b, "50b" },
+        { t51, "51" },
         { NULL, NULL }
 };
 
