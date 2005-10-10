@@ -78560,6 +78560,25 @@ diff -urN clean/drivers/net/qsnet/rms/rms_kern_Linux.c linux-2.6.9/drivers/net/q
 + * c-file-style: "stroustrup"
 + * End:
 + */
+diff -urN clean/drivers/net/Kconfig linux-2.6.9/drivers/net/Kconfig
+--- clean/drivers/net/Kconfig    2005-10-10 18:50:31.000000000 -0400
++++ linux-2.6.9/drivers/net/Kconfig 2005-10-10 18:50:34.000000000 -0400
+@@ -2271,6 +2271,8 @@
+
+ source "drivers/net/tokenring/Kconfig"
+
++source "drivers/net/qsnet/Kconfig"
++
+ source "drivers/net/wireless/Kconfig"
+
+ source "drivers/net/pcmcia/Kconfig"
+--- clean/drivers/net/Makefile   2005-10-10 18:59:11.000000000 -0400
++++ linux-2.6.9/drivers/net/Makefile        2005-10-10 18:59:28.000000000 -0400
+@@ -197,3 +197,4 @@
+
+ obj-$(CONFIG_NETCONSOLE) += netconsole.o
+ obj-$(CONFIG_NETDUMP) += netdump.o
++obj-$(CONFIG_QSNET) += qsnet/
 diff -urN clean/fs/exec.c linux-2.6.9/fs/exec.c
 --- clean/fs/exec.c	2005-10-10 17:43:57.000000000 -0400
 +++ linux-2.6.9/fs/exec.c	2005-10-10 17:47:17.000000000 -0400
