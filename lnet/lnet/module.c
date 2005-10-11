@@ -80,7 +80,7 @@ lnet_configure (void *arg)
         LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
 
         rc = LNetNIInit(LUSTRE_SRV_LNET_PID);
-        if (rc != 0) {
+        if (rc < 0) {
                 LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
                 the_lnet.ln_niinit_self = 0;
                 LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
