@@ -36,6 +36,8 @@
 #include <getopt.h>
 
 #include <linux/types.h>
+#define NO_SYS_VFS 1
+#include <linux/fs.h> // for BLKGETSIZE64
 #include <linux/lustre_disk.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
@@ -251,35 +253,34 @@ int is_block(char* devname)
         return S_ISBLK(st.st_mode);
 }
 
-/* Get the devsize from /proc/partitions with the major and minor number */
-int device_size_proc(char* device) 
+__u64 get_device_size(char* device) 
 {
-        int major,minor,i,ret;
-        char *ma, *mi, *sz;
-        struct stat st;
+        int ret, fd;
+        __u64 size = 0;
 
-        ret = stat(device,&st);
-        if (ret != 0) {
-                fprintf(stderr,"can not stat %s\n",device);
+#if 0
+        sprintf(cmd, "sfdisk -s %s", device);
+        ret = run_command(cmd);
+        if (ret == 0) {
+                size = atoll(cmd_out[0]);
+                return (size);
+        }
+#endif
+        /* bz5831 BLKGETSIZE64 */
+        fd = open(device, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "cannot open %s: %s\n", device, strerror(errno));
                 exit(4);
         }
-        major = dev_major(st.st_rdev);
-        minor = dev_minor(st.st_rdev);
 
-        sprintf(cmd, "cat /proc/partitions");
-        ret = run_command(cmd);
-        for (i = 0; i < 32; i++) {
-                if (strlen(cmd_out[i]) == 0) 
-                        break;
-                ma = strtok(cmd_out[i], " ");
-                mi = strtok(NULL, " ");
-                if ((major == atol(ma)) && (minor == atol(mi))) {
-                        sz = strtok(NULL," ");
-                        return atol(sz);
-                }
+        ret = ioctl(fd, BLKGETSIZE64, (void*)&size);
+        close(fd);
+        if (ret < 0) {
+                fprintf(stderr, "size ioctl failed: %s\n", strerror(errno));
+                exit(4);
         }
-
-        return 0; //FIXME : no entries in /proc/partitions
+        
+        return size;
 }
 
 void set_nid_pair(struct host_desc *nids, char *str)
@@ -383,7 +384,7 @@ int loop_format(struct mkfs_opts *mop)
        
         loop_init();
 
-        sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%ld of=%s", 
+        sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%lld of=%s", 
                 mop->mo_device_sz, mop->mo_device);
         ret = run_command(cmd);
         if (ret != 0){
@@ -404,7 +405,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         if (mop->mo_device_sz != 0) {
                 if (mop->mo_device_sz < 8096){
                         fprintf(stderr, "size of filesystem must be larger "
-                                "than 8MB, but is set to %ldKB\n",
+                                "than 8MB, but is set to %lldKB\n",
                                 mop->mo_device_sz);
                         return EINVAL;
                 }
@@ -413,17 +414,11 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         
         if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
             (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) { 
-                long device_sz = mop->mo_device_sz;
+                __u64 device_sz = mop->mo_device_sz;
 
                 /* we really need the size */
-                if (device_sz == 0){
-                        sprintf(cmd, "sfdisk -s %s", mop->mo_device);
-                        ret = run_command(cmd);
-                        if (ret == 0)
-                                device_sz = atol(cmd_out[0]);
-                        else 
-                                device_sz = device_size_proc(mop->mo_device);
-                }           
+                if (device_sz == 0)
+                        device_sz = get_device_size(mop->mo_device);
 
                 if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
                         /* Choose our own default journal size */
@@ -438,7 +433,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         }
                 }
 
-                /* Default is block size */
+                /* Default bytes_per_inode is block size */
                 if (strstr(mop->mo_mkfsopts, "-i") == NULL) {
                         long bytes_per_inode = 0;
                                         
@@ -476,6 +471,12 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 strcat(mop->mo_mkfsopts, buf);
                         }
                         
+                }
+
+                /* Enable hashed b-tree directory lookup in large dirs bz6224 */
+                if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
+                        sprintf(buf, " -O dir_index");
+                        strcat(mop->mo_mkfsopts, buf);
                 }
 
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b 4096 -L %s ",
@@ -532,20 +533,6 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 fprintf(stderr, "Unable to build fs: %s \n", dev);
                 run_command_out();
                 goto out;
-        }
-
-        /* Enable hashed b-tree directory lookup in large dirs 
-           FIXME MDT only? */
-        if ((mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
-            (mop->mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) { 
-                sprintf(cmd, "tune2fs -O dir_index %s", dev);
-                ret = run_command(cmd);
-                if (ret) {
-                        fatal();
-                        fprintf(stderr,"Unable to enable htree: %s\n",
-                                mop->mo_device);
-                        goto out;
-                }
         }
 
 out:
