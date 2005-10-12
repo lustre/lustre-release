@@ -275,12 +275,17 @@ struct ll_async_page {
         __u32 llap_checksum;
 };
 
+/*
+ * enumeration of llap_from_page() call-sites. Used to export statistics in
+ * /proc/fs/lustre/llite/fsN/dump_page_cache.
+ */
 enum {
         LLAP_ORIGIN_UNKNOWN = 0,
         LLAP_ORIGIN_READPAGE,
         LLAP_ORIGIN_READAHEAD,
         LLAP_ORIGIN_COMMIT_WRITE,
         LLAP_ORIGIN_WRITEPAGE,
+        LLAP_ORIGIN_REMOVEPAGE,
         LLAP__ORIGIN_MAX,
 };
 extern char *llap_origins[];
@@ -337,7 +342,6 @@ extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 void ll_ra_accounting(struct page *page, struct address_space *mapping);

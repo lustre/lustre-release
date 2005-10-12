@@ -492,7 +492,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         return count;
 }
 
-struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
+static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -506,8 +506,9 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 
         llap = llap_cast_private(page);
         if (llap != NULL) {
-                /* move to end of LRU list */
-                if (origin == 0) {
+                /* move to end of LRU list, except when page is just about to
+                 * die */
+                if (origin != LLAP_ORIGIN_REMOVEPAGE) {
                         spin_lock(&sbi->ll_lock);
                         sbi->ll_pglist_gen++;
                         list_del_init(&llap->llap_pglist_item);
