@@ -676,7 +676,7 @@ class LCTLInterface:
             self.cleanup(name, uuid, 0)
             raise e
         if (config.abort_recovery):
-            if (type == 'obdfilter' or type == 'mdt'):
+            if (type == 'obdfilter' or type == 'mds'):
                 self.abort_recovery(name)
 
     # cleanup a device
