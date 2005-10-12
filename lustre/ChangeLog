@@ -179,7 +179,7 @@ Frequency  : rare
 Bugzilla   : 5047
 Description: data loss during concurrent not-page-aligned writes.
 Details    : updates to KMS and lsm weren't protected by common lock. Resulting
-	     inconsistency leds to false short-reads, that were cached and later
+	     inconsistency led to false short-reads, that were cached and later
 	     used by ->prepare_write() to fill in partially written page,
 	     leading to data loss.
 
