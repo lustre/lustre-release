@@ -183,6 +183,12 @@ Details    : updates to KMS and lsm weren't protected by common lock. Resulting
 	     used by ->prepare_write() to fill in partially written page,
 	     leading to data loss.
 
+Severity   : minor
+Frequency  : always, if lconf --abort_recovery used
+Bugzilla   : 7047
+Description: lconf --abort_recovery fails with 'Operation not supported'
+Details    : lconf was attempting to abort recovery on the MDT device and not
+		 the MDS device
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
