@@ -102,10 +102,11 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 }
 
 /* this isn't where truncate starts.   roughly:
- * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
- * we grab the lock back in setattr_raw to avoid races.
+ * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate. setattr_raw grabs
+ * DLM lock on [0, EOF], i_sem, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
+ * avoid races.
  *
- * must be called with lli_size_sem held */
+ * must be called under ->lli_size_sem */
 void ll_truncate(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -116,7 +117,7 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu=%#Lx\n",inode->i_ino,
                inode->i_generation, inode, inode->i_size, inode->i_size);
 
-        if (lli->lli_size_pid != current->pid) {
+        if (lli->lli_size_sem_owner != current) {
                 EXIT;
                 return;
         }
@@ -131,11 +132,16 @@ void ll_truncate(struct inode *inode)
 
         /* XXX I'm pretty sure this is a hack to paper over a more fundamental
          * race condition. */
+        lov_stripe_lock(lsm);
         if (lov_merge_size(lsm, 0) == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
                        lsm->lsm_object_id, inode->i_size, inode->i_size);
+                lov_stripe_unlock(lsm);
                 GOTO(out_unlock, 0);
         }
+
+        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
+        lov_stripe_unlock(lsm);
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
                      (inode->i_size & ~PAGE_MASK))) {
@@ -162,10 +168,7 @@ void ll_truncate(struct inode *inode)
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
 
-        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
-
-        lli->lli_size_pid = 0;
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
 
         rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
@@ -179,8 +182,8 @@ void ll_truncate(struct inode *inode)
         return;
 
  out_unlock:
-        lli->lli_size_pid = 0;
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
+        EXIT;
 } /* ll_truncate */
 
 int ll_prepare_write(struct file *file, struct page *page, unsigned from,
@@ -230,9 +233,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         /* If are writing to a new page, no need to read old data.  The extent
          * locking will have updated the KMS, and for our purposes here we can
          * treat it like i_size. */
-        down(&lli->lli_size_sem);
+        lov_stripe_lock(lsm);
         kms = lov_merge_size(lsm, 1);
-        up(&lli->lli_size_sem);
+        lov_stripe_unlock(lsm);
         if (kms <= offset) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
                                kms, offset);
@@ -307,6 +310,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
         struct ll_async_page *llap;
         struct lov_stripe_md *lsm;
         struct page *page;
+        struct inode *inode;
         __u64 kms;
         ENTRY;
 
@@ -315,12 +319,13 @@ static int ll_ap_refresh_count(void *data, int cmd)
 
         llap = LLAP_FROM_COOKIE(data);
         page = llap->llap_page;
-        lli = ll_i2info(page->mapping->host);
+        inode = page->mapping->host;
+        lli = ll_i2info(inode);
         lsm = lli->lli_smd;
 
-        //down(&lli->lli_size_sem);
+        lov_stripe_lock(lsm);
         kms = lov_merge_size(lsm, 1);
-        //up(&lli->lli_size_sem);
+        lov_stripe_unlock(lsm);
 
         /* catch race with truncate */
         if (((__u64)page->index << PAGE_SHIFT) >= kms)
@@ -502,11 +507,13 @@ struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         llap = llap_cast_private(page);
         if (llap != NULL) {
                 /* move to end of LRU list */
-                spin_lock(&sbi->ll_lock);
-                sbi->ll_pglist_gen++;
-                list_del_init(&llap->llap_pglist_item);
-                list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
-                spin_unlock(&sbi->ll_lock);
+                if (origin == 0) {
+                        spin_lock(&sbi->ll_lock);
+                        sbi->ll_pglist_gen++;
+                        list_del_init(&llap->llap_pglist_item);
+                        list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+                        spin_unlock(&sbi->ll_lock);
+                }
                 GOTO(out, llap);
         }
 
@@ -709,9 +716,11 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
-        down(&lli->lli_size_sem);
+        ll_inode_size_lock(inode, 0);
         if (rc == 0) {
+                lov_stripe_lock(lsm);
                 obd_adjust_kms(exp, lsm, size, 0);
+                lov_stripe_unlock(lsm);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);
@@ -721,7 +730,7 @@ out:
                  * teardown our book-keeping here. */
                 ll_removepage(page);
         }
-        up(&lli->lli_size_sem);
+        ll_inode_size_unlock(inode, 0);
         RETURN(rc);
 }
 
@@ -1014,10 +1023,17 @@ static int ll_readahead(struct ll_readahead_state *ras,
         int rc, ret = 0, match_failed = 0;
         __u64 kms;
         unsigned int gfp_mask;
+        struct inode *inode;
+        struct lov_stripe_md *lsm;
         struct ll_ra_read *bead;
         ENTRY;
 
-        kms = lov_merge_size(ll_i2info(mapping->host)->lli_smd, 1);
+        inode = mapping->host;
+        lsm = ll_i2info(inode)->lli_smd;
+
+        lov_stripe_lock(lsm);
+        kms = lov_merge_size(lsm, 1);
+        lov_stripe_unlock(lsm);
         if (kms == 0) {
                 ll_ra_stats_inc(mapping, RA_STAT_ZERO_LEN);
                 RETURN(0);
@@ -1064,7 +1080,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
                 RETURN(0);
         }
 
-        reserved = ll_ra_count_get(ll_i2sbi(mapping->host), end - start + 1);
+        reserved = ll_ra_count_get(ll_i2sbi(inode), end - start + 1);
         if (reserved < end - start + 1)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
@@ -1120,7 +1136,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
         LASSERTF(reserved >= 0, "reserved %lu\n", reserved);
         if (reserved != 0)
-                ll_ra_count_put(ll_i2sbi(mapping->host), reserved);
+                ll_ra_count_put(ll_i2sbi(inode), reserved);
         if (i == end + 1 && end == (kms >> PAGE_CACHE_SHIFT))
                 ll_ra_stats_inc(mapping, RA_STAT_EOF);
 

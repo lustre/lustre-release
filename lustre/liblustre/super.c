@@ -138,7 +138,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
+                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                 CERROR("lsm mismatch for inode %lld\n",
                                        (long long)st->st_ino);
                                 LBUG();

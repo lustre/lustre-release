@@ -460,7 +460,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
         sema_init(&lli->lli_size_sem, 1);
-        lli->lli_size_pid = 0;
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
@@ -1078,14 +1077,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (rc != 0)
                         RETURN(rc);
 
-                down(&lli->lli_size_sem);
-                lli->lli_size_pid = current->pid;
+                /* Only ll_inode_size_lock is taken at this level.
+                 * lov_stripe_lock() is grabbed by ll_truncate() only over
+                 * call to obd_adjust_kms().  If vmtruncate returns 0, then
+                 * ll_truncate dropped ll_inode_size_lock() */
+                ll_inode_size_lock(inode, 0);
                 rc = vmtruncate(inode, attr->ia_size);
-                // if vmtruncate returned 0, then ll_truncate dropped _size_sem
                 if (rc != 0) {
                         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
-                        lli->lli_size_pid = 0;
-                        up(&lli->lli_size_sem);
+                        ll_inode_size_unlock(inode, 0);
                 }
 
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
@@ -1196,6 +1196,35 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         return 0;
 }
 
+void ll_inode_size_lock(struct inode *inode, int lock_lsm)
+{
+        struct ll_inode_info *lli;
+        struct lov_stripe_md *lsm;
+
+        lli = ll_i2info(inode);
+        LASSERT(lli->lli_size_sem_owner != current);
+        down(&lli->lli_size_sem);
+        LASSERT(lli->lli_size_sem_owner == NULL);
+        lli->lli_size_sem_owner = current;
+        lsm = lli->lli_smd;
+        if (lsm != NULL && lock_lsm)
+                lov_stripe_lock(lsm);
+}
+
+void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
+{
+        struct ll_inode_info *lli;
+        struct lov_stripe_md *lsm;
+
+        lli = ll_i2info(inode);
+        lsm = lli->lli_smd;
+        if (lsm != NULL && unlock_lsm)
+                lov_stripe_unlock(lsm);
+        LASSERT(lli->lli_size_sem_owner == current);
+        lli->lli_size_sem_owner = NULL;
+        up(&lli->lli_size_sem);
+}
+
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm)
 {
@@ -1210,12 +1239,14 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                         }
                         CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
                                lsm, inode->i_ino, inode->i_generation, inode);
+                        ll_inode_size_lock(inode, 0);
                         lli->lli_smd = lsm;
+                        ll_inode_size_unlock(inode, 0);
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        if (memcmp(lli->lli_smd, lsm, sizeof(*lsm))) {
+                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                 CERROR("lsm mismatch for inode %ld\n",
                                        inode->i_ino);
                                 CERROR("lli_smd:\n");

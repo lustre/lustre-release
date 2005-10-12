@@ -83,6 +83,9 @@ static inline void loi_init(struct lov_oinfo *loi)
 }
 
 struct lov_stripe_md {
+        spinlock_t       lsm_lock;
+        void            *lsm_lock_owner; /* debugging */
+
         /* Public members. */
         __u64 lsm_object_id;        /* lov object id */
         __u64 lsm_object_gr;        /* lov object id */
@@ -96,6 +99,17 @@ struct lov_stripe_md {
         unsigned lsm_stripe_count;  /* number of objects being striped over */
         struct lov_oinfo lsm_oinfo[0];
 };
+
+/* compare all fields except for semaphore */
+static inline int lov_stripe_md_cmp(struct lov_stripe_md *m1,
+                                    struct lov_stripe_md *m2)
+{
+        return memcmp(&m1->lsm_object_id, &m2->lsm_object_id,
+                      (char *)&m2->lsm_oinfo[0] - (char *)&m2->lsm_object_id);
+}
+
+void lov_stripe_lock(struct lov_stripe_md *md);
+void lov_stripe_unlock(struct lov_stripe_md *md);
 
 struct obd_type {
         struct list_head typ_chain;

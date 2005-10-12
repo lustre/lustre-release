@@ -49,6 +49,11 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
         __u64 size = 0;
         int i;
 
+        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+#ifdef CONFIG_SMP
+        LASSERT(lsm->lsm_lock_owner == current);
+#endif
+
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++) {
                 obd_size lov_size, tmpsize;
@@ -91,7 +96,7 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
 }
 EXPORT_SYMBOL(lov_merge_mtime);
 
-/* Must be called with the inode's lli_size_sem held. */
+/* Must be called under the lov_stripe_lock() */
 int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                    obd_off size, int shrink)
 {
@@ -99,6 +104,11 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
         int stripe = 0;
         __u64 kms;
         ENTRY;
+
+        LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+#ifdef CONFIG_SMP
+        LASSERT(lsm->lsm_lock_owner == current);
+#endif
 
         if (shrink) {
                 struct lov_oinfo *loi;

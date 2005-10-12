@@ -52,8 +52,8 @@ extern struct file_operations ll_pgcache_seq_fops;
 
 struct ll_inode_info {
         int                     lli_inode_magic;
-        int                     lli_size_pid;
         struct semaphore        lli_size_sem;
+        void                   *lli_size_sem_owner;
         struct semaphore        lli_open_sem;
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -80,6 +80,17 @@ struct ll_inode_info {
         struct inode            lli_vfs_inode;
 #endif
 };
+
+/*
+ * Locking to guarantee consistency of non-atomic updates to long long i_size,
+ * consistency between file size and KMS, and consistency within
+ * ->lli_smd->lsm_oinfo[]'s.
+ *
+ * Implemented by ->lli_size_sem and ->lsm_sem, nested in that order.
+ */
+
+void ll_inode_size_lock(struct inode *inode, int lock_lsm);
+void ll_inode_size_unlock(struct inode *inode, int unlock_lsm);
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
 // static inline struct ll_inode_info *LL_I(struct inode *inode)

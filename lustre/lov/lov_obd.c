@@ -2217,6 +2217,24 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
 }
 #endif
 
+
+void lov_stripe_lock(struct lov_stripe_md *md)
+{
+        LASSERT(md->lsm_lock_owner != current);
+        spin_lock(&md->lsm_lock);
+        LASSERT(md->lsm_lock_owner == NULL);
+        md->lsm_lock_owner = current;
+}
+EXPORT_SYMBOL(lov_stripe_lock);
+
+void lov_stripe_unlock(struct lov_stripe_md *md)
+{
+        LASSERT(md->lsm_lock_owner == current);
+        md->lsm_lock_owner = NULL;
+        spin_unlock(&md->lsm_lock);
+}
+EXPORT_SYMBOL(lov_stripe_unlock);
+
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,

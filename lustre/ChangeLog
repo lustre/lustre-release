@@ -174,6 +174,15 @@ Details    : Having an LWI_INTR() wait event (interruptible, but no timeout)
 	     request was interrupted, and we also didn't break out of the
 	     event loop if there was no timeout
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 5047
+Description: data loss during concurrent not-page-aligned writes.
+Details    : updates to KMS and lsm weren't protected by common lock. Resulting
+	     inconsistency leds to false short-reads, that were cached and later
+	     used by ->prepare_write() to fill in partially written page,
+	     leading to data loss.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
