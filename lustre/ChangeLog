@@ -189,6 +189,15 @@ Bugzilla   : 7047
 Description: lconf --abort_recovery fails with 'Operation not supported'
 Details    : lconf was attempting to abort recovery on the MDT device and not
 		 the MDS device
+
+Severity   : enhancement
+Frequency  : always
+Bugzilla   : 9445
+Description: remove cleanup logs
+Details    : replace lconf-generated cleanup logs with lustre internal
+             cleanup routines.  Eliminates the need for client-cleanup and
+	     mds-cleanup logs.
+	
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
