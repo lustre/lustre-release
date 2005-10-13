@@ -74,7 +74,8 @@ void usage(FILE *out)
                 "\t\tlocal_nid=0xNNNN: client ID (default ipaddr or nodenum)\n"
                 "\t\tserver_nid=0xNNNN: server node ID (default mdsnode)\n"
                 "\t\tport=NNN: server port (default 988 for tcp)\n"
-                "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n");
+                "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n"
+                "\t\tuser_xattr: enable manipulating user xattr\n");
         exit(out != stdout);
 }
 
@@ -271,6 +272,7 @@ static const struct opt_map opt_map[] = {
   { "_netdev",  0, 0, 0, 0         },      /* Device accessible only via network */
   { "flock",    0, 0, 0, LMD_FLG_FLOCK},   /* Enable flock support */
   { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
+  { "user_xattr", 0, 0, 0, LMD_FLG_USER_XATTR}, /* Enable get/set user xattr */
   { NULL,       0, 0, 0, 0         }
 };
 /****************************************************************************/

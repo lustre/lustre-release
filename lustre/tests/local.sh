@@ -17,6 +17,8 @@ NETTYPE=${NETTYPE:-tcp}
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-400000}
 
+CLIENTOPT=${CLIENTOPT:-"user_xattr"}
+
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
 [ "$JSIZE" -gt 0 ] && JARG="--journal_size $JSIZE"
@@ -53,6 +55,9 @@ ${LMC} --add ost --node localhost --lov lov1 --fstype $FSTYPE \
 	$OST_MOUNT_OPTS --size $OSTSIZE $JARG $OSTOPT || exit 30
 
 # create client config
+[ "x$CLIENTOPT" != "x" ] &&
+    CLIENTOPT="--clientoptions $CLIENTOPT"
+
 ${LMC} --add mtpt --node localhost --path $MOUNT \
 	--mds mds1 --lov lov1 $CLIENTOPT || exit 40
 ${LMC} --add mtpt --node client --path $MOUNT2 \

@@ -59,6 +59,8 @@ enum {
 #endif
          LPROC_LL_STAFS,
          LPROC_LL_ALLOC_INODE,
+         LPROC_LL_SETXATTR,
+         LPROC_LL_GETXATTR,
 
          LPROC_LL_DIRECT_READ,
          LPROC_LL_DIRECT_WRITE,

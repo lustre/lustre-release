@@ -350,6 +350,8 @@ struct llite_file_opcode {
         /* special inode operation */
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
+        { LPROC_LL_SETXATTR,       LPROCFS_TYPE_REGS, "setxattr" },
+        { LPROC_LL_GETXATTR,       LPROCFS_TYPE_REGS, "getxattr" },
         { LPROC_LL_DIRECT_READ,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
                                    "direct_read" },
         { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,

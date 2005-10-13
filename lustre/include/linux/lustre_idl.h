@@ -374,8 +374,12 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
 #define OBD_MD_FLGRPQUOTA  (0x40000000ULL) /* over quota flags sent from ost */
 
-#define OBD_MD_MDS        (0x100000000ULL) /* where an inode lives on */
-#define OBD_MD_REINT      (0x200000000ULL) /* reintegrate oa */
+#define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
+#define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
+
+#define OBD_MD_FLXATTR     (0x0000001000000000ULL) /* xattr */
+#define OBD_MD_FLXATTRLS   (0x0000002000000000ULL) /* xattr list */
+#define OBD_MD_FLXATTRRM   (0x0000004000000000ULL) /* xattr remove */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -491,6 +495,8 @@ typedef enum {
         MDS_SET_INFO     = 46,
         MDS_QUOTACHECK   = 47,
         MDS_QUOTACTL     = 48,
+        MDS_GETXATTR     = 49,
+        MDS_SETXATTR     = 50,
         MDS_LAST_OPC
 } mds_cmd_t;
 

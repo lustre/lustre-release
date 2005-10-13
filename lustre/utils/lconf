@@ -1054,6 +1054,8 @@ def def_mount_options(fstype, target):
                 mountfsoptions = "%s,asyncdel" % (mountfsoptions)
             #else:
             #    mountfsoptions = "%s,extents,mballoc" % (mountfsoptions)
+        elif target == 'mds':
+            mountfsoptions = "%s,user_xattr" % (mountfsoptions)
         return mountfsoptions
     return ""
 

@@ -245,6 +245,7 @@ struct lustre_mount_data {
         char     lmd_profile[64];
 };
 
-#define LMD_FLG_FLOCK 0x0001
+#define LMD_FLG_FLOCK           0x0001
+#define LMD_FLG_USER_XATTR      0x0002
 
 #endif // _LUSTRE_CFG_H

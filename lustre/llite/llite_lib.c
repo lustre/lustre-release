@@ -452,6 +452,11 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
                         *flags &= ~tmp;
                         continue;
                 }
+                tmp = ll_set_opt("user_xattr", this_char, LL_SBI_USER_XATTR);
+                if (tmp) {
+                        *flags |= tmp;
+                        continue;
+                }
         }
         EXIT;
 }
@@ -727,6 +732,8 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 memcpy(sbi->ll_lmd, lmd, sizeof(*lmd));
                 if (lmd->lmd_flags & LMD_FLG_FLOCK)
                         sbi->ll_flags |= LL_SBI_FLOCK;
+                if (lmd->lmd_flags & LMD_FLG_USER_XATTR)
+                        sbi->ll_flags |= LL_SBI_USER_XATTR;
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/

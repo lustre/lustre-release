@@ -2712,6 +2712,47 @@ test_101() {
 }
 run_test 101 "check read-ahead for random reads ==========="
 
+test_102() {
+	local testfile=$DIR/xattr_testfile
+
+	rm -f $testfile
+        touch $testfile
+
+	echo "set/get xattr..."
+        setfattr -n trusted.name1 -v value1 $testfile || error
+        [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
+        grep "trusted.name1"`" == "trusted.name1=\"value1\"" ] || error
+ 
+        setfattr -n user.author1 -v author1 $testfile || error
+        [ "`getfattr -n user.author1 $testfile 2> /dev/null | \
+        grep "user.author1"`" == "user.author1=\"author1\"" ] || error
+
+	echo "listxattr..."
+        setfattr -n trusted.name2 -v value2 $testfile || error
+        setfattr -n trusted.name3 -v value3 $testfile || error
+        [ `getfattr -d -m "^trusted" $testfile 2> /dev/null | \
+        grep "trusted.name" | wc -l` -eq 3 ] || error
+
+ 
+        setfattr -n user.author2 -v author2 $testfile || error
+        setfattr -n user.author3 -v author3 $testfile || error
+        [ `getfattr -d -m "^user" $testfile 2> /dev/null | \
+        grep "user" | wc -l` -eq 3 ] || error
+
+	echo "remove xattr..."
+        setfattr -x trusted.name1 $testfile || error
+        getfattr -d -m trusted $testfile 2> /dev/null | \
+        grep "trusted.name1" && error || true
+
+        setfattr -x user.author1 $testfile || error
+        getfattr -d -m user $testfile 2> /dev/null | \
+        grep "user.author1" && error || true
+
+	echo "set lustre specific xattr (should be denied)..."
+	setfattr -n "trusted.lov" -v "invalid value" $testfile || true
+}
+run_test 102 "user xattr test ====================="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

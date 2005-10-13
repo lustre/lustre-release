@@ -197,6 +197,10 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif
 
+/* mds/mds_xattr.c */
+int mds_setxattr(struct ptlrpc_request *req);
+int mds_getxattr(struct ptlrpc_request *req);
+
 /* mds/quota_master.c */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) && defined (HAVE_QUOTA_SUPPORT)
 int lustre_dquot_init(void);

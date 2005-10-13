@@ -891,4 +891,8 @@ struct inode_operations ll_dir_inode_operations = {
         .create             = ll_create_nd,
         .getattr_it         = ll_getattr,
 #endif
+        .setxattr           = ll_setxattr,
+        .getxattr           = ll_getxattr,
+        .listxattr          = ll_listxattr,
+        .removexattr        = ll_removexattr,
 };

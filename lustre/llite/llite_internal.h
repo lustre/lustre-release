@@ -131,6 +131,7 @@ struct ll_ra_info {
 #define LL_SBI_NOLCK            0x1 /* DLM locking disabled (directio-only) */
 #define LL_SBI_CHECKSUM         0x2 /* checksum each page as it's written */
 #define LL_SBI_FLOCK            0x4
+#define LL_SBI_USER_XATTR       0x8 /* support user xattr */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -540,5 +541,13 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 {
         return ll_i2info(inode)->lli_maxbytes;
 }
+
+/* llite/xattr.c */
+int ll_setxattr(struct dentry *dentry, const char *name,
+                const void *value, size_t size, int flags);
+int ll_getxattr(struct dentry *dentry, const char *name,
+                void *buffer, size_t size);
+int ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
+int ll_removexattr(struct dentry *dentry, const char *name);
 
 #endif /* LLITE_INTERNAL_H */

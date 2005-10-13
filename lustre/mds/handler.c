@@ -790,10 +790,8 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
-        if (body == NULL) {
-                CERROR("Can't unpack body\n");
+        if (body == NULL)
                 RETURN(-EFAULT);
-        }
 
         rc = mds_init_ucred(&uc, req, offset);
         if (rc)
@@ -1184,6 +1182,18 @@ int mds_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "getattr");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
                 rc = mds_getattr(0, req);
+                break;
+
+        case MDS_SETXATTR:
+                DEBUG_REQ(D_INODE, req, "setxattr");
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_SETXATTR_NET, 0);
+                rc = mds_setxattr(req);
+                break;
+
+        case MDS_GETXATTR:
+                DEBUG_REQ(D_INODE, req, "getxattr");
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_GETXATTR_NET, 0);
+                rc = mds_getxattr(req);
                 break;
 
         case MDS_GETATTR_NAME: {

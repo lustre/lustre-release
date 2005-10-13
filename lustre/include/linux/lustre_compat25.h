@@ -56,6 +56,9 @@ void groups_free(struct group_info *ginfo);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+#define lock_24kernel()         do {} while (0)
+#define unlock_24kernel()       do {} while (0)
+
 /*
  * OBD need working random driver, thus all our
  * initialization routines must be called after device
@@ -143,6 +146,9 @@ static inline int cleanup_group_info(void)
 #endif
 
 #else /* 2.4.. */
+
+#define lock_24kernel()         lock_kernel()
+#define unlock_24kernel()       unlock_kernel()
 
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>

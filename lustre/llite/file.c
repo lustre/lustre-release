@@ -1636,5 +1636,9 @@ struct inode_operations ll_file_inode_operations = {
 #else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
+        .setxattr       = ll_setxattr,
+        .getxattr       = ll_getxattr,
+        .listxattr      = ll_listxattr,
+        .removexattr    = ll_removexattr,
 };
 
