@@ -68,14 +68,14 @@ void usage(FILE *out)
                 "\t-n|--nomtab: do not update /etc/mtab after mount\n"
                 "\t-v|--verbose: print verbose config settings\n"
                 "\t-o: filesystem mount options:\n"
-                "\t\tflock/noflock: enable/disable flock support\n"
-                "\t\tnettype={tcp,elan,iibnal,lonal}: network type\n"
                 "\t\tcluster_id=0xNNNN: cluster this node is part of\n"
+                "\t\t{no}flock: enable/disable flock support\n"
                 "\t\tlocal_nid=0xNNNN: client ID (default ipaddr or nodenum)\n"
-                "\t\tserver_nid=0xNNNN: server node ID (default mdsnode)\n"
+                "\t\tnettype={tcp,elan,openib,vib,iib,lo,gm}: network type\n"
                 "\t\tport=NNN: server port (default 988 for tcp)\n"
                 "\t\troute=<gw>[-<gw>]:<low>[-<high>]: portal route to MDS\n"
-                "\t\tuser_xattr: enable manipulating user xattr\n");
+                "\t\tserver_nid=0xNNNN: server node ID (default mdsnode)\n"
+                "\t\t{no}user_xattr: enable/disable manipulating user xattr\n");
         exit(out != stdout);
 }
 
@@ -265,7 +265,7 @@ static const struct opt_map opt_map[] = {
   { "nodev",    0, 0, MS_NODEV,  0 },      /* don't interpret devices */
   { "async",    0, 1, MS_SYNCHRONOUS, 0},  /* asynchronous I/O */
   { "auto",     0, 0, 0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "noauto",   0, 0, 0, 0         },      /* Can only be mounted explicitly */
   { "nousers",  0, 1, 0, 0         },      /* Forbid ordinary user to mount */
   { "nouser",   0, 1, 0, 0         },      /* Forbid ordinary user to mount */
   { "noowner",  0, 1, 0, 0         },      /* Device owner has no special privs */
@@ -273,6 +273,8 @@ static const struct opt_map opt_map[] = {
   { "flock",    0, 0, 0, LMD_FLG_FLOCK},   /* Enable flock support */
   { "noflock",  1, 1, 0, LMD_FLG_FLOCK},   /* Disable flock support */
   { "user_xattr", 0, 0, 0, LMD_FLG_USER_XATTR}, /* Enable get/set user xattr */
+  { "nouser_xattr", 1, 1, 0, LMD_FLG_USER_XATTR}, /* Disable user xattr */
+  /* please add new mount options to usage message */
   { NULL,       0, 0, 0, 0         }
 };
 /****************************************************************************/

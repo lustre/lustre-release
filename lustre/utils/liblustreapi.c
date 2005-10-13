@@ -309,8 +309,8 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
 {
         int i, obdstripe = 0;
 
-        if (*fname != '\0' && obdindex != OBD_NOT_FOUND) {
-                for (i = 0; i < lum->lmm_stripe_count; i++) {
+        if (obdindex != OBD_NOT_FOUND) {
+                for (i = 0; fname[0] && i < lum->lmm_stripe_count; i++) {
                         if (obdindex == lum->lmm_objects[i].l_ost_idx) {
                                 printf("%s/%s\n", dname, fname);
                                 obdstripe = 1;

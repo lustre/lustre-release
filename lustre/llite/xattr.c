@@ -23,7 +23,12 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/smp_lock.h>
+#ifdef HAVE_LINUX_XATTR_ACL_H
 #include <linux/xattr_acl.h>
+#else
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

@@ -596,7 +596,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
          * divisor in a 32-bit kernel, we cannot support a stripe width
          * of 4GB or larger on 32-bit CPUs. */
         count = desc->ld_default_stripe_count;
-        if ((count ? count : desc->ld_tgt_count) *
+        if ((count > 0 ? count : desc->ld_tgt_count) *
             desc->ld_default_stripe_size > ~0UL) {
                 CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
                        desc->ld_default_stripe_size, count, ~0UL);

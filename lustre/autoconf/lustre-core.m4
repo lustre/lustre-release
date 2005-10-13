@@ -395,6 +395,26 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 ])
 
 #
+# LC_STRUCT_STATFS
+#
+# AIX does not have statfs.f_namelen
+#
+AC_DEFUN([LC_STRUCT_STATFS],
+[AC_MSG_CHECKING([if struct statfs has a f_namelen field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/vfs.h>
+],[
+	struct statfs sfs;
+	sfs.f_namelen = 1;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_STATFS_NAMELEN, 1, [struct statfs has a namelen field])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -416,6 +436,7 @@ LC_FUNC_REGISTER_CACHE
 LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 LC_FUNC_DEV_SET_RDONLY
 LC_FUNC_FILEMAP_FDATAWRITE
+LC_STRUCT_STATFS
 ])
 
 #
@@ -508,6 +529,9 @@ AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 # liblustre/lutil.c
 AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
 AC_CHECK_FUNCS([inet_ntoa])
+
+# llite/xattr.c
+AC_CHECK_HEADERS([linux/xattr_acl.h])
 ])
 
 #

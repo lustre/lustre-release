@@ -78,6 +78,7 @@ rm -f $OOS
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
+	rm -f $LOG
 else
 	exit 1
 fi

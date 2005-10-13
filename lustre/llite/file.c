@@ -233,7 +233,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                 if (rc) {
                         ll_file_data_put(fd);
                         GOTO(out, rc);
-        }
+                }
         }
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);

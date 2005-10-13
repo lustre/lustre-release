@@ -1433,7 +1433,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 /* mount the file system (secretly).  lustre_cfg parameters are:
  * 1 = device
  * 2 = fstype
- * 3 = flags: failover=f, failout=n, ignored for an MDS
+ * 3 = config name
  * 4 = mount options
  */
 static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -2197,7 +2197,7 @@ static struct obd_ops mdt_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_setup           = mdt_setup,
         .o_cleanup         = mdt_cleanup,
-        .o_health_check    = mdt_health_check,        
+        .o_health_check    = mdt_health_check,
 };
 
 static int __init mds_init(void)
@@ -2208,7 +2208,7 @@ static int __init mds_init(void)
         rc = lustre_dquot_init();
         if (rc)
                 return rc;
-        
+
         lprocfs_init_vars(mds, &lvars);
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
         lprocfs_init_vars(mdt, &lvars);

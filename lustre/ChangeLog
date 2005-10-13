@@ -164,6 +164,13 @@ Description: bind OST threads to NUMA nodes to improve performance
 Details    : all OST threads are uniformly bound to CPUs on a single NUMA
 	     node and do their allocations there to localize memory access
 
+Severity   : enhancement
+Bugzilla   : 7979
+Description: llmount can determine client NID directly from Myrinet (GM)
+Details    : the client NID code from gmnalnid was moved directly into
+	     llmount, removing the need to use this or specifying the
+	     client NID explicitly when mounting GM clients with zeroconf
+
 Severity   : minor
 Frequency  : if client is started with down MDS
 Bugzilla   : 7184
@@ -177,7 +184,8 @@ Details    : Having an LWI_INTR() wait event (interruptible, but no timeout)
 Severity   : minor
 Frequency  : rare
 Bugzilla   : 5047
-Description: data loss during concurrent not-page-aligned writes.
+Description: data loss during non-page-aligned writes to a single file from
+	     both multiple nodes and multiple threads on one node at same time
 Details    : updates to KMS and lsm weren't protected by common lock. Resulting
 	     inconsistency led to false short-reads, that were cached and later
 	     used by ->prepare_write() to fill in partially written page,
@@ -188,16 +196,22 @@ Frequency  : always, if lconf --abort_recovery used
 Bugzilla   : 7047
 Description: lconf --abort_recovery fails with 'Operation not supported'
 Details    : lconf was attempting to abort recovery on the MDT device and not
-		 the MDS device
+	     the MDS device
 
 Severity   : enhancement
-Frequency  : always
 Bugzilla   : 9445
 Description: remove cleanup logs
 Details    : replace lconf-generated cleanup logs with lustre internal
-             cleanup routines.  Eliminates the need for client-cleanup and
+	     cleanup routines.  Eliminates the need for client-cleanup and
 	     mds-cleanup logs.
-	
+
+Severity   : enhancement
+Bugzilla   : 8592
+Description: add support for EAs (user and system) on lustre filesystems
+Details    : it is now possible to store extended attributes in the Lustre
+	     client filesystem, and with the user_xattr mount option it
+	     is possible to allow users to store EAs on their files also
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>
