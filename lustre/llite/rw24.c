@@ -126,8 +126,11 @@ static int ll_direct_IO_24(int rw,
         ptlrpc_set_destroy(set);
         if (rc == 0) {
                 rc = iobuf->length;
-                if (rw == WRITE)
+                if (rw == WRITE) {
+                        lov_stripe_lock(lsm);
                         obd_adjust_kms(ll_i2obdexp(inode), lsm, offset, 0);
+                        lov_stripe_unlock(lsm);
+                }
         }
 
         OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);

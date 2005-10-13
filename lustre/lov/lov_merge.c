@@ -50,7 +50,9 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
         int i;
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+#ifdef __KERNEL__
         LASSERT(lsm->lsm_lock_owner == current);
+#endif
 
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++) {
@@ -104,7 +106,9 @@ int lov_adjust_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
         ENTRY;
 
         LASSERT_SPIN_LOCKED(&lsm->lsm_lock);
+#ifdef __KERNEL__
         LASSERT(lsm->lsm_lock_owner == current);
+#endif
 
         if (shrink) {
                 struct lov_oinfo *loi;
