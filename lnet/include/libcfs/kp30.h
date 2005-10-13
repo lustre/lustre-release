@@ -195,7 +195,7 @@ do {                                                                           \
 # endif
 # define LBUG()   assert(0)
 # define printk(format, args...) printf (format, ## args)
-# define LIBCFS_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
+# define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0);
 # define LIBCFS_FREE(a, b) do { free(a); } while (0);
 void libcfs_debug_dumplog(void);
 #endif
