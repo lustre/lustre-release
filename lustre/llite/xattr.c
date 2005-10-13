@@ -154,8 +154,14 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_GETXATTR);
 
-        if (!name)
+        /* listxattr have slightly different behavior from of ext3:
+         * without 'user_xattr' ext3 will list all xattr names but
+         * filtered out "^user..*"; we list them all for simplicity.
+         */
+        if (!name) {
+                xattr_type = XATTR_OTHER_T;
                 goto do_getxattr;
+        }
 
         xattr_type = get_xattr_type(name);
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
