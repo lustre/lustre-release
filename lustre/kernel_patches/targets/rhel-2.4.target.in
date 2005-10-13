@@ -16,7 +16,7 @@ SMP_ARCHS="i686 x86_64 ia64"
 UP_ARCHS=""
 
 # the modules in this kernel do not build with gcc 4, 3.4, or 2.96
-for cc in gcc33 gcc32 ; do
+for cc in gcc32 gcc33 ; do
     if which $cc >/dev/null 2>/dev/null ; then
         export CC=$cc
         break
