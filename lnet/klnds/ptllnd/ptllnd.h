@@ -249,6 +249,7 @@ struct kptl_peer
         struct list_head        peer_active_txs;        /* queue of activce txs */
         int                     peer_active_txs_change_counter;/* updated when peer_active_txs changes*/
         lnet_nid_t              peer_nid;               /* who's on the other end(s) */
+        int                     peer_pid;               /* the pid on the other end */
         __u64                   peer_incarnation;       /* peer's incarnation */
         __u64                   peer_tx_seqnum;         /* next seq# to send with*/
         int                     peer_credits;           /* number of send credits */
@@ -393,7 +394,7 @@ void kptllnd_eq_callback(
 int  kptllnd_scheduler(
         void *arg);
 int  kptllnd_watchdog(
-        void *arg);        
+        void *arg);
 
 int  kptllnd_thread_start(
         int (*fn)(void *arg),
@@ -540,6 +541,7 @@ kptl_peer_t *
 kptllnd_peer_handle_hello (
         kptl_data_t *kptllnd_data,
         lnet_nid_t nid,
+        int pid,
         kptl_msg_t *msg);
 
 static inline struct list_head *

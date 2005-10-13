@@ -777,6 +777,7 @@ const char *get_msg_type_string(int type)
                 DO_TYPE(PTLLND_MSG_TYPE_GET);
                 DO_TYPE(PTLLND_MSG_TYPE_IMMEDIATE);
                 DO_TYPE(PTLLND_MSG_TYPE_HELLO);
+                DO_TYPE(PTLLND_MSG_TYPE_NOOP);
         default:
                 return "";
         }

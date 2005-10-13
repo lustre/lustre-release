@@ -73,12 +73,13 @@ int
 kptllnd_peer_allocate (
         kptl_data_t *kptllnd_data,
         kptl_peer_t **peerp,
-        lnet_nid_t nid)
+        lnet_nid_t nid,
+        int pid)
 {
         kptl_peer_t     *peer;
         int             rc;
 
-        PJK_UT_MSG(">>> nid="LPX64"\n",nid);
+        PJK_UT_MSG(">>> nid="LPX64" pid=%d\n",nid,pid);
 
         LASSERT (nid != PTL_NID_ANY);
 
@@ -99,6 +100,7 @@ kptllnd_peer_allocate (
         peer->peer_state = PEER_STATE_ALLOCATED;
         peer->peer_kptllnd_data = kptllnd_data;
         peer->peer_nid = nid;
+        peer->peer_pid = pid;
         //peer->peer_incarnation = 0;
         //peer->peer_tx_seqnum = 0;
 
@@ -619,7 +621,7 @@ kptllnd_peer_check_sends (
 
                 PJK_UT_MSG_DATA("--- TXTXTXTXTXTXTXTXTXTXTXTXTXTX\n");
                 PJK_UT_MSG_DATA("Sending TX=%p Size=%d\n",tx,tx->tx_msg->ptlm_nob);
-                PJK_UT_MSG_DATA("Target nid="LPX64"\n",peer->peer_nid);
+                PJK_UT_MSG_DATA("Target nid="LPX64" pid=%d\n",peer->peer_nid,peer->peer_pid);
 
                 mdh = PTL_INVALID_HANDLE;
                 mdh_msg =PTL_INVALID_HANDLE;
@@ -702,14 +704,14 @@ kptllnd_peer_check_sends (
                  */
 
                 target.nid = lnet2ptlnid(kptllnd_data,peer->peer_nid);
-                target.pid = PTLLND_PID;
+                target.pid = peer->peer_pid;
 
                 PJK_UT_MSG_DATA("Msg NOB = %d\n",tx->tx_msg->ptlm_nob);
                 PJK_UT_MSG_DATA("Giving %d credits back to peer\n",tx->tx_msg->ptlm_credits);
                 PJK_UT_MSG_DATA("Seq # = "LPX64"\n",tx->tx_msg->ptlm_seq);
 
-                PJK_UT_MSG("lnet TX nid=" LPX64 "\n",peer->peer_nid);
-                PJK_UT_MSG("ptl  TX nid=" LPX64 "\n",target.nid);
+                PJK_UT_MSG("lnet TX nid=" LPX64 " pid=%d\n",peer->peer_nid,peer->peer_pid);
+                PJK_UT_MSG("ptl  TX nid=" LPX64 " pid=%d\n",target.nid,target.pid);
 
                 if(tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_GET ||
                    tx->tx_msg->ptlm_type == PTLLND_MSG_TYPE_PUT){
@@ -1055,6 +1057,7 @@ kptl_peer_t *
 kptllnd_peer_handle_hello (
         kptl_data_t *kptllnd_data,
         lnet_nid_t nid,
+        int pid,
         kptl_msg_t *msg)
 {
         kptl_peer_t    *peer           = NULL;
@@ -1104,7 +1107,7 @@ kptllnd_peer_handle_hello (
          * however we want to avoid doing this while holidng
          * the peer_rw_lock and be forced into atomic context
          */
-        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, nid);
+        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, nid, pid);
         if(rc != 0){
                 kptllnd_tx_decref(tx_hello);
                 CERROR("Failed to create peer (nid="LPX64")\n",nid);
@@ -1340,7 +1343,7 @@ kptllnd_tx_launch (
          * (it's not active until its on the list)
          */
         PJK_UT_MSG("TX %p creating NEW PEER nid="LPX64"\n",tx,target_nid);
-        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, target_nid);
+        rc = kptllnd_peer_allocate ( kptllnd_data, &peer_allocated, target_nid, PTLLND_PID);
         if(rc != 0){
                 CERROR("Failed to create peer (nid="LPX64")\n",target_nid);
                 kptllnd_tx_decref (tx);

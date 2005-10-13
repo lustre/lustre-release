@@ -651,13 +651,14 @@ kptllnd_rx_scheduler_handler(kptl_rx_t *rx)
         PJK_UT_MSG_DATA("Credits back from peer=%d\n",msg->ptlm_credits);
         PJK_UT_MSG_DATA("Seq # ="LPX64"\n",msg->ptlm_seq);
         PJK_UT_MSG_DATA("lnet RX nid=" LPX64 "\n",lnet_initiator_nid);
-        PJK_UT_MSG("ptl  RX nid=" FMT_NID "\n",rx->rx_initiator.nid);
+        PJK_UT_MSG("ptl  RX nid=" FMT_NID " pid=%d\n",rx->rx_initiator.nid,rx->rx_initiator.pid);
 
         if(type == PTLLND_MSG_TYPE_HELLO)
         {
                 peer = kptllnd_peer_handle_hello(
                         kptllnd_data,
                         lnet_initiator_nid,
+                        rx->rx_initiator.pid,
                         msg);
                 if( peer == NULL){
                         CERROR ("Failed to create peer for "LPX64"\n",
