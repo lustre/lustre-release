@@ -99,7 +99,7 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         struct ptlrpc_srv_ni  *sni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service *svc = sni->sni_service;
         unsigned long          flags;
-        
+
         LASSERT (rqbd->rqbd_refcount == 0);
         LASSERT (list_empty(&rqbd->rqbd_reqs));
 
@@ -440,7 +440,7 @@ ptlrpc_server_free_request(struct ptlrpc_request *req)
 
                         spin_lock_irqsave(&svc->srv_lock, flags);
 
-                        /* schedule request buffer for re-use.  
+                        /* schedule request buffer for re-use.
                          * NB I can only do this after I've disposed of their
                          * reqs; particularly the embedded req */
                         list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
@@ -624,7 +624,7 @@ put_conn:
 }
 
 static int
-ptlrpc_server_handle_reply (struct ptlrpc_service *svc) 
+ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
 {
         struct ptlrpc_reply_state *rs;
         unsigned long              flags;
@@ -678,13 +678,13 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                  * in mds_steal_ack_locks()  */
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",
-                      rs, 
+                      rs,
                       rs->rs_xid, rs->rs_transno,
-                      rs->rs_msg.opc, 
+                      rs->rs_msg.opc,
                       ptlrpc_peernid2str(&exp->exp_connection->c_peer, str));
         }
 
-        if ((!been_handled && rs->rs_on_net) || 
+        if ((!been_handled && rs->rs_on_net) ||
             nlocks > 0) {
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
 
@@ -695,7 +695,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 }
 
                 while (nlocks-- > 0)
-                        ldlm_lock_decref(&rs->rs_locks[nlocks], 
+                        ldlm_lock_decref(&rs->rs_locks[nlocks],
                                          rs->rs_modes[nlocks]);
 
                 spin_lock_irqsave(&svc->srv_lock, flags);
@@ -707,14 +707,14 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 /* Off the net */
                 svc->srv_n_difficult_replies--;
                 spin_unlock_irqrestore(&svc->srv_lock, flags);
-                
+
                 class_export_put (exp);
                 rs->rs_export = NULL;
                 ptlrpc_rs_decref (rs);
                 atomic_dec (&svc->srv_outstanding_replies);
                 RETURN(1);
         }
-        
+
         /* still on the net; callback will schedule */
         spin_unlock_irqrestore (&svc->srv_lock, flags);
         RETURN(1);
@@ -723,7 +723,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
 #ifndef __KERNEL__
 /* FIXME make use of timeout later */
 int
-liblustre_check_services (void *arg) 
+liblustre_check_services (void *arg)
 {
         int  did_something = 0;
         int  rc;
@@ -941,12 +941,12 @@ static int ptlrpc_main(void *arg)
                 }
         }
 
-        /*
-         * deconstruct service specific state created by ptlrpc_start_thread()
-         */
         lc_watchdog_delete(watchdog);
 
 out_srv_init:
+        /*
+         * deconstruct service specific state created by ptlrpc_start_thread()
+         */
         if (svc->srv_done != NULL)
                 svc->srv_done(thread);
 
@@ -1153,7 +1153,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                         list_entry(service->srv_request_queue.next,
                                    struct ptlrpc_request,
                                    rq_list);
-                
+
                 list_del(&req->rq_list);
                 service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
