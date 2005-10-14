@@ -53,6 +53,7 @@ typedef struct
 
         ptl_handle_ni_t            plni_nih;
         ptl_handle_eq_t            plni_eqh;
+        ptl_process_id_t           plni_portals_id;   /* Portals ID of interface */
 
         struct list_head          *plni_peer_hash;
         int                        plni_npeers;
@@ -88,7 +89,6 @@ typedef struct
         struct list_head           plb_list;
         lnet_ni_t                 *plb_ni;
         int                        plb_posted;
-        int                        plb_refcount;
         ptl_handle_md_t            plb_md;
         char                      *plb_buffer;
 } ptllnd_buffer_t;
@@ -129,29 +129,29 @@ typedef struct
 #define PTLLND_EVENTARG_TYPE_MASK   0x3
 
 static inline void *
-ptllnd_obj2eventarg (void *obj, int type) 
+ptllnd_obj2eventarg (void *obj, int type)
 {
         unsigned long ptr = (unsigned long)obj;
-        
+
         LASSERT ((ptr & PTLLND_EVENTARG_TYPE_MASK) == 0);
         LASSERT ((type & ~PTLLND_EVENTARG_TYPE_MASK) == 0);
-        
+
         return (void *)(ptr | type);
 }
 
 static inline int
-ptllnd_eventarg2type (void *arg) 
+ptllnd_eventarg2type (void *arg)
 {
         unsigned long ptr = (unsigned long)arg;
-        
+
         return (ptr & PTLLND_EVENTARG_TYPE_MASK);
 }
 
 static inline void *
-ptllnd_eventarg2obj (void *arg) 
+ptllnd_eventarg2obj (void *arg)
 {
         unsigned long ptr = (unsigned long)arg;
-        
+
         return (void *)(ptr & ~PTLLND_EVENTARG_TYPE_MASK);
 }
 
@@ -159,7 +159,7 @@ int ptllnd_startup(lnet_ni_t *ni);
 void ptllnd_shutdown(lnet_ni_t *ni);
 int ptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *msg);
 int ptllnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
-                int delayed, unsigned int niov, 
+                int delayed, unsigned int niov,
                 struct iovec *iov, lnet_kiov_t *kiov,
                 unsigned int offset, unsigned int mlen, unsigned int rlen);
 int ptllnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
@@ -172,9 +172,11 @@ void ptllnd_abort_txs(lnet_ni_t *ni);
 void ptllnd_close_peer(ptllnd_peer_t *peer);
 int ptllnd_post_buffer(ptllnd_buffer_t *buf);
 int ptllnd_grow_buffers (lnet_ni_t *ni);
+const char *get_ev_type_string(int type);
+const char *get_msg_type_string(int type);
 
 static inline void
-ptllnd_peer_addref (ptllnd_peer_t *peer) 
+ptllnd_peer_addref (ptllnd_peer_t *peer)
 {
         LASSERT (peer->plp_refcount > 0);
         peer->plp_refcount++;
@@ -193,8 +195,62 @@ static inline void
 ptllnd_post_tx(ptllnd_tx_t *tx)
 {
         ptllnd_peer_t *peer = tx->tx_peer;
-
+        LASSERT(tx->tx_peer != NULL);
         list_add_tail(&tx->tx_list, &peer->plp_txq);
         ptllnd_check_sends(peer);
 }
+
+static inline lnet_nid_t
+ptl2lnetnid(lnet_ni_t *ni,ptl_nid_t portals_nid)
+{
+	return LNET_MKNID(LNET_NIDNET(ni->ni_nid), portals_nid);
+}
+
+static inline ptl_nid_t
+lnet2ptlnid(lnet_nid_t lnet_nid)
+{
+	return LNET_NIDADDR(lnet_nid);
+}
+
+/*
+ * Define this to enable console debug logging
+ * and simulation
+ */
+//#define PJK_DEBUGGING
+
+#ifdef PJK_DEBUGGING
+
+#define PJK_UT_MSG_ALWAYS(fmt, a...)                    \
+do{                                                     \
+        lprintf("ptllnd:%-30s:",__FUNCTION__);          \
+        lprintf(fmt,## a);                              \
+}while(0)
+
+//        CDEBUG(D_TRACE,fmt,## a);
+
+
+#define PJK_UT_MSG_SIMULATION(fmt, a...)        PJK_UT_MSG_ALWAYS(fmt, ## a )
+
+
+#if 1
+#define PJK_UT_MSG_DATA(fmt, a...)              PJK_UT_MSG_ALWAYS(fmt, ## a )
+#else
+#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
+#endif
+
+#if 1
+#define PJK_UT_MSG(fmt, a...)                   PJK_UT_MSG_ALWAYS(fmt, ## a )
+#else
+#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
+#endif
+
+#else
+
+
+#define PJK_UT_MSG_ALWAYS(fmt, a...)            do{}while(0)
+#define PJK_UT_MSG_SIMULATION(fmt, a...)        do{}while(0)
+#define PJK_UT_MSG_DATA(fmt, a...)              do{}while(0)
+#define PJK_UT_MSG(fmt, a...)                   do{}while(0)
+
+#endif
 
