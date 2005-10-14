@@ -58,6 +58,11 @@ case "$lustretag" in
         buildtag="b_lnet"
         ;;
 
+    # These releases use the b_lnet build
+    v1_4_5_91)
+        buildtag="b_lnet"
+        ;;
+
     # Apparently these releases did not get build tagged for them...
     v1_2_8|v1_4_0) 
         buildtag="HEAD"
