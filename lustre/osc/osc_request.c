@@ -495,9 +495,46 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
         return rc;
 }
 
+static int osc_destroy_interpret(struct ptlrpc_request *req,
+                                 void *arg, int rc)
+{
+        struct obd_import *imp = req->rq_import; 
+        struct client_obd *cli = &imp->imp_obd->u.cli;
+        ENTRY;
+        spin_lock(&cli->cl_loi_list_lock);
+        cli->cl_dstr_in_flight--;
+        LASSERT(cli->cl_dstr_in_flight >= 0);
+        LASSERT(cli->cl_dstr_in_flight <= cli->cl_dstr_in_flight);
+        spin_unlock(&cli->cl_loi_list_lock);
+        wake_up(&cli->cl_wait_for_destroy_slot);
+        RETURN(rc);
+}
+
+static void osc_grab_destroy_slot(struct client_obd *cli)
+{
+        spin_lock(&cli->cl_loi_list_lock);
+        while (1) {
+                struct l_wait_info lwi = { 0 };
+
+                if (cli->cl_dstr_in_flight < cli->cl_max_dstr_in_flight) {
+                        cli->cl_dstr_in_flight++;
+                        break;
+                }
+
+                spin_unlock(&cli->cl_loi_list_lock);
+                l_wait_event(cli->cl_wait_for_destroy_slot,
+                                cli->cl_dstr_in_flight < cli->cl_max_dstr_in_flight,
+                                &lwi);
+                spin_lock(&cli->cl_loi_list_lock);
+        }
+        spin_unlock(&cli->cl_loi_list_lock);
+}
+
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti)
 {
+        struct obd_import *imp = class_exp2cliimp(exp);
+        struct client_obd *cli = &imp->imp_obd->u.cli;
         struct ptlrpc_request *request;
         struct ost_body *body;
         int rc, size = sizeof(*body);
@@ -526,6 +563,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
         request->rq_replen = lustre_msg_size(1, &size);
 
         if (oti != NULL && (oti->oti_flags & OBD_MODE_ASYNC)) {
+                osc_grab_destroy_slot(cli);
+                request->rq_interpret_reply = osc_destroy_interpret;
                 ptlrpcd_add_req(request);
                 rc = 0;
         } else {

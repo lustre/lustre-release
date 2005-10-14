@@ -356,6 +356,10 @@ struct client_obd {
         struct osc_creator       cl_oscc;
         int                      cl_async:1;
 
+        int                      cl_dstr_in_flight;
+        int                      cl_max_dstr_in_flight;
+        wait_queue_head_t        cl_wait_for_destroy_slot;
+
         /* debug stuff */
         struct timeval           cl_last_write_time;
         unsigned long            cl_write_gap_sum;

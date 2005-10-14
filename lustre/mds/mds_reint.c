@@ -2235,6 +2235,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         int rc = 0, cleanup_phase = 0;
         int unlink_by_id = 0;
         int update_mode;
+        int destroy_objects = 0;
         ENTRY;
 	
         LASSERT(offset == 1 || offset == 3);
@@ -2449,12 +2450,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                              &lcl) > 0){
                         body->valid |= OBD_MD_FLCOOKIE;
                 }
-                
-                rc = mds_destroy_object(obd, child_inode, 1);
-                if (rc) {
-                        CERROR("can't remove OST object, err %d\n",
-                               rc);
-                }
+       
+                /* destroy OST objects when diskfs transaction is closed */
+                destroy_objects = 1;
 
                 if (child_inode->i_nlink == 0)
                         mds_fidmap_del(obd, &body->id1);
@@ -2486,6 +2484,11 @@ cleanup:
         case 5: /* pending_dir semaphore */
                 up(&mds->mds_pending_dir->d_inode->i_sem);
         case 4: /* child inode semaphore */
+                if (destroy_objects) {
+                        rc = mds_destroy_object(obd, child_inode, 1);
+                        if (rc)
+                                CERROR("can't remove OST object, err %d\n", rc);
+                }
                 UP_READ_I_ALLOC_SEM(child_inode);
                  /* handle splitted dir */
                 if (rc == 0) {

@@ -256,6 +256,10 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
 
+        cli->cl_dstr_in_flight = 0;
+        cli->cl_max_dstr_in_flight = OST_MAX_THREADS;
+        init_waitqueue_head(&cli->cl_wait_for_destroy_slot);
+
         memset(&cli->cl_last_write_time, 0,
                sizeof(cli->cl_last_write_time));
         
