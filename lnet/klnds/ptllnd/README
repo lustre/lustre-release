@@ -41,7 +41,7 @@
             The maximum number of concurrent sends that are
             outstanding to a single piere at any given instant.
 
-        max_immd_size:
+        max_msg_size:
             The maximum immedate message size.  This MUST be
             the same on all nodes in a cluster.  A peer connecting
-            with a diffrent max_immd_size will be rejected.
+            with a diffrent max_msg_size will be rejected.

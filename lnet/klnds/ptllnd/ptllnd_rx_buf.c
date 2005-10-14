@@ -220,7 +220,7 @@ kptllnd_rx_buffer_pool_reserve(
          * +1 to handle any rounding error
          */
         nbuffers = (rxbp->rxbp_reserved) *
-                (*kptllnd_tunables.kptl_max_immd_size) /
+                (*kptllnd_tunables.kptl_max_msg_size) /
                 (PAGE_SIZE * (*kptllnd_tunables.kptl_rxb_npages));
         ++nbuffers ;
 
@@ -395,7 +395,7 @@ kptllnd_rx_buffer_post(
         md.options |= PTL_MD_EVENT_START_DISABLE;
         md.options |= PTL_MD_MAX_SIZE;
         md.user_ptr = rxb;
-        md.max_size = *kptllnd_tunables.kptl_max_immd_size;
+        md.max_size = *kptllnd_tunables.kptl_max_msg_size;
         md.eq_handle = kptllnd_data->kptl_eqh;
 
 

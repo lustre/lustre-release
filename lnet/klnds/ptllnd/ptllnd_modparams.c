@@ -51,8 +51,8 @@ static int peercredits = PTLLND_PEERCREDITS;
 CFS_MODULE_PARM(peercredits, "i", int, 0444,
 		"concurrent sends to 1 peer");
 
-static int max_immd_size = PTLLND_MAX_MSG_SIZE;
-CFS_MODULE_PARM(max_immd_size, "i", int, 0444,
+static int max_msg_size = PTLLND_MAX_MSG_SIZE;
+CFS_MODULE_PARM(max_msg_size, "i", int, 0444,
 		"max size of immediate message");
 
 static int peer_hash_table_size = PTLLND_PEER_HASH_SIZE;
@@ -75,7 +75,7 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_rxb_npages             = &rxb_npages,
         .kptl_credits                = &credits,
         .kptl_peercredits            = &peercredits,
-        .kptl_max_immd_size          = &max_immd_size,
+        .kptl_max_msg_size           = &max_msg_size,
         .kptl_peer_hash_table_size   = &peer_hash_table_size,
 #ifdef PJK_DEBUGGING
         .kptl_simulation_bitmap      = &simulation_bitmap,
@@ -102,7 +102,7 @@ static ctl_table kptllnd_ctl_table[] = {
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{8, "peercredits", &peercredits,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
-	{9, "max_immd_size", &max_immd_size,
+	{9, "max_msg_size", &max_msg_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},
 	{10, "peer_hash_table_size,", &peer_hash_table_size,
 	 sizeof(int), 0444, NULL, &proc_dointvec},

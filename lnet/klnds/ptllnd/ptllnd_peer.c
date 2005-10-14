@@ -1078,11 +1078,11 @@ kptllnd_peer_handle_hello (
         /*
          * Immediate message sizes MUST be equal
          */
-        if(  msg->ptlm_u.hello.kptlhm_max_immd_size !=
-                *kptllnd_tunables.kptl_max_immd_size){
+        if(  msg->ptlm_u.hello.kptlhm_max_msg_size !=
+                *kptllnd_tunables.kptl_max_msg_size){
                 CERROR("IMMD message size MUST be equal for all peers got %d expected %d\n",
-                        msg->ptlm_u.hello.kptlhm_max_immd_size,
-                        *kptllnd_tunables.kptl_max_immd_size);
+                        msg->ptlm_u.hello.kptlhm_max_msg_size,
+                        *kptllnd_tunables.kptl_max_msg_size);
 
                 return 0;
         }
@@ -1180,8 +1180,8 @@ kptllnd_peer_handle_hello (
                  */
                 tx_hello->tx_msg->ptlm_u.hello.kptlhm_matchbits =
                         safe_matchbits_to_peer;
-                tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_immd_size =
-                        *kptllnd_tunables.kptl_max_immd_size;
+                tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
+                        *kptllnd_tunables.kptl_max_msg_size;
 
                 /*
                  * Try and attach this peer to the list
@@ -1335,8 +1335,8 @@ kptllnd_tx_launch (
          * a default message.
          */
         tx_hello->tx_msg->ptlm_u.hello.kptlhm_matchbits = 0;
-        tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_immd_size =
-                *kptllnd_tunables.kptl_max_immd_size;
+        tx_hello->tx_msg->ptlm_u.hello.kptlhm_max_msg_size =
+                *kptllnd_tunables.kptl_max_msg_size;
 
         /*
          * Allocate a new peer

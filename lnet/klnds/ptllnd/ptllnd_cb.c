@@ -463,7 +463,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                if (nob <= *kptllnd_tunables.kptl_max_immd_size)
+                if (nob <= *kptllnd_tunables.kptl_max_msg_size)
                         break;
 
 
@@ -498,7 +498,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                 /* Is the payload small enough not to need RDMA? */
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[lntmsg->msg_md->md_length]);
-                if (nob <= *kptllnd_tunables.kptl_max_immd_size)
+                if (nob <= *kptllnd_tunables.kptl_max_msg_size)
                         break;
 
                 STAT_UPDATE(kps_send_get);
@@ -550,7 +550,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
                         /* Is the payload small enough not to need RDMA? */
                         nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                        if (nob <= *kptllnd_tunables.kptl_max_immd_size)
+                        if (nob <= *kptllnd_tunables.kptl_max_msg_size)
                                 break;
 
                         kptllnd_do_put(tx,lntmsg,kptllnd_data);
@@ -571,11 +571,11 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                         if (rx->rx_msg->ptlm_type == PTLLND_MSG_TYPE_IMMEDIATE) {
                                 /* RDMA not expected */
                                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob]);
-                                if (nob > *kptllnd_tunables.kptl_max_immd_size) {
+                                if (nob > *kptllnd_tunables.kptl_max_msg_size) {
                                         CERROR("REPLY for "LPX64" too big but RDMA not requested:"
                                                "%d (max for message is %d)\n",
                                                target.nid, payload_nob,
-                                               *kptllnd_tunables.kptl_max_immd_size);
+                                               *kptllnd_tunables.kptl_max_msg_size);
                                         CERROR("Can't REPLY IMMEDIATE %d to "LPX64"\n",
                                                nob, target.nid);
                                         return -EINVAL;
@@ -631,7 +631,7 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         STAT_UPDATE(kps_send_immd);
 
         LASSERT (offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[payload_nob])
-                 <= *kptllnd_tunables.kptl_max_immd_size);
+                 <= *kptllnd_tunables.kptl_max_msg_size);
 
         /*
          * Setup the header
@@ -641,14 +641,14 @@ kptllnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
         if (payload_nob > 0) {
                 if (payload_kiov != NULL)
                         lnet_copy_kiov2flat(
-                                *kptllnd_tunables.kptl_max_immd_size,
+                                *kptllnd_tunables.kptl_max_msg_size,
                                 tx->tx_msg->ptlm_u.immediate.kptlim_payload,
                                 0,
                                 payload_niov, payload_kiov,
                                 payload_offset, payload_nob);
                 else
                         lnet_copy_iov2flat(
-                                *kptllnd_tunables.kptl_max_immd_size,
+                                *kptllnd_tunables.kptl_max_msg_size,
                                 tx->tx_msg->ptlm_u.immediate.kptlim_payload,
                                 0,
                                 payload_niov, payload_iov,
@@ -676,7 +676,7 @@ int kptllnd_eager_recv(
 
         PJK_UT_MSG_DATA("Eager RX=%p RXB=%p\n",rx,rx->rx_rxb);
 
-        LASSERT(rx->rx_nob < *kptllnd_tunables.kptl_max_immd_size);
+        LASSERT(rx->rx_nob < *kptllnd_tunables.kptl_max_msg_size);
 
         /*
          * Copy the data directly into the RX
@@ -739,7 +739,7 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 PJK_UT_MSG_DATA("PTLLND_MSG_TYPE_IMMEDIATE\n");
 
                 nob = offsetof(kptl_msg_t, ptlm_u.immediate.kptlim_payload[rlen]);
-                if (nob > *kptllnd_tunables.kptl_max_immd_size) {
+                if (nob > *kptllnd_tunables.kptl_max_msg_size) {
                         CERROR ("Immediate message from "LPX64" too big: %d\n",
                                 rxmsg->ptlm_u.immediate.kptlim_hdr.src_nid, rlen);
                         rc = -EINVAL;
@@ -749,14 +749,14 @@ int kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
                 if (kiov != NULL)
                         lnet_copy_flat2kiov(
                                 niov, kiov, offset,
-                                *kptllnd_tunables.kptl_max_immd_size,
+                                *kptllnd_tunables.kptl_max_msg_size,
                                 rxmsg->ptlm_u.immediate.kptlim_payload,
                                 0,
                                 mlen);
                 else
                         lnet_copy_flat2iov(
                                 niov, iov, offset,
-                                *kptllnd_tunables.kptl_max_immd_size,
+                                *kptllnd_tunables.kptl_max_msg_size,
                                 rxmsg->ptlm_u.immediate.kptlim_payload,
                                 0,
                                 mlen);

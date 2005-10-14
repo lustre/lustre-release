@@ -50,7 +50,7 @@ typedef struct
 typedef struct
 {
         __u64             kptlhm_matchbits;       /* matchbits */
-        __u32             kptlhm_max_immd_size;   /* immd message size */
+        __u32             kptlhm_max_msg_size;    /* max message size */
 } WIRE_ATTR kptl_hello_msg_t;
 
 typedef struct kptl_msg

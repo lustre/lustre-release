@@ -189,7 +189,7 @@ main (int argc, char **argv)
 
         CHECK_STRUCT (kptl_hello_msg_t);
         CHECK_MEMBER (kptl_hello_msg_t, kptlhm_matchbits);
-        CHECK_MEMBER (kptl_hello_msg_t, kptlhm_max_immd_size);
+        CHECK_MEMBER (kptl_hello_msg_t, kptlhm_max_msg_size);
 
         printf ("}\n\n");
 

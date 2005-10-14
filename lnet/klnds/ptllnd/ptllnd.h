@@ -94,7 +94,7 @@ typedef struct
         int             *kptl_rxb_npages;       /* number of pages for rx buffer */
         int             *kptl_credits;          /* number of credits */
         int             *kptl_peercredits;      /* number of credits */
-        int             *kptl_max_immd_size;    /* max immd message size*/
+        int             *kptl_max_msg_size;     /* max immd message size*/
         int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
 
 #ifdef PJK_DEBUGGING

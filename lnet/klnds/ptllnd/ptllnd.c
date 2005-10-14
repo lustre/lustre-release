@@ -183,7 +183,7 @@ kptllnd_msg_unpack(kptl_msg_t *msg, int nob,kptl_data_t *kptllnd_data)
                                 break;
                         case PTLLND_MSG_TYPE_HELLO:
                                 __swab64s(&msg->ptlm_u.hello.kptlhm_matchbits);
-                                __swab32s(&msg->ptlm_u.hello.kptlhm_max_immd_size);
+                                __swab32s(&msg->ptlm_u.hello.kptlhm_max_msg_size);
                                 break;
                         default:
                                 CERROR("Bad message type: %d\n", msg->ptlm_type);
@@ -478,7 +478,7 @@ kptllnd_startup (lnet_ni_t *ni)
 
         kptllnd_data->kptl_rx_cache = cfs_mem_cache_create (
                 "ptllnd_rx",
-                sizeof(kptl_rx_t) + *kptllnd_tunables.kptl_max_immd_size,
+                sizeof(kptl_rx_t) + *kptllnd_tunables.kptl_max_msg_size,
                 0, /* offset */
                 0, /* flags */
                 NULL,NULL); /* CTOR/DTOR */
@@ -710,7 +710,7 @@ kptllnd_module_init (void)
         CDEBUG(D_INFO,"rxb_npages = %d\n",*kptllnd_tunables.kptl_rxb_npages);
         CDEBUG(D_INFO,"credits = %d\n",*kptllnd_tunables.kptl_credits);
         CDEBUG(D_INFO,"peercredits = %d\n",*kptllnd_tunables.kptl_peercredits);
-        CDEBUG(D_INFO,"max_immd_size = %d\n",*kptllnd_tunables.kptl_max_immd_size);
+        CDEBUG(D_INFO,"max_msg_size = %d\n",*kptllnd_tunables.kptl_max_msg_size);
 
         ptllnd_assert_wire_constants();
 
