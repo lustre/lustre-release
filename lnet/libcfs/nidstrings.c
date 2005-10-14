@@ -99,51 +99,51 @@ struct netstrfns {
 };
 
 static struct netstrfns  libcfs_netstrfns[] = {
-        {.nf_type     = LOLND,     
-         .nf_name     = "lo",         
-         .nf_modname  = "klolnd",  
-         .nf_addr2str = libcfs_num_addr2str,  
+        {.nf_type     = LOLND,
+         .nf_name     = "lo",
+         .nf_modname  = "klolnd",
+         .nf_addr2str = libcfs_num_addr2str,
          .nf_str2addr = libcfs_lo_str2addr},
-        {.nf_type     = SOCKLND,    
-         .nf_name     = "tcp",     
-         .nf_modname  = "ksocklnd",  
-         .nf_addr2str = libcfs_ip_addr2str,  
+        {.nf_type     = SOCKLND,
+         .nf_name     = "tcp",
+         .nf_modname  = "ksocklnd",
+         .nf_addr2str = libcfs_ip_addr2str,
          .nf_str2addr = libcfs_ip_str2addr},
-        {.nf_type     = OPENIBLND, 
-         .nf_name     = "openib", 
-         .nf_modname  = "kopeniblnd",  
-         .nf_addr2str = libcfs_ip_addr2str,  
+        {.nf_type     = OPENIBLND,
+         .nf_name     = "openib",
+         .nf_modname  = "kopeniblnd",
+         .nf_addr2str = libcfs_ip_addr2str,
          .nf_str2addr = libcfs_ip_str2addr},
-        {.nf_type     = IIBLND,    
-         .nf_name     = "iib",       
-         .nf_modname  = "kiiblnd",  
-         .nf_addr2str = libcfs_ip_addr2str,  
+        {.nf_type     = IIBLND,
+         .nf_name     = "iib",
+         .nf_modname  = "kiiblnd",
+         .nf_addr2str = libcfs_ip_addr2str,
          .nf_str2addr = libcfs_ip_str2addr},
-        {.nf_type     = VIBLND,    
-         .nf_name     = "vib",       
-         .nf_modname  = "kviblnd",  
-         .nf_addr2str = libcfs_ip_addr2str,  
+        {.nf_type     = VIBLND,
+         .nf_name     = "vib",
+         .nf_modname  = "kviblnd",
+         .nf_addr2str = libcfs_ip_addr2str,
          .nf_str2addr = libcfs_ip_str2addr},
-        {.nf_type     = RALND,     
-         .nf_name     = "ra",         
-         .nf_modname  = "kralnd",  
-         .nf_addr2str = libcfs_ip_addr2str,  
+        {.nf_type     = RALND,
+         .nf_name     = "ra",
+         .nf_modname  = "kralnd",
+         .nf_addr2str = libcfs_ip_addr2str,
          .nf_str2addr = libcfs_ip_str2addr},
         {.nf_type     = QSWLND,
-         .nf_name     = "elan",       
-         .nf_modname  = "kqswlnd", 
-         .nf_addr2str = libcfs_num_addr2str, 
+         .nf_name     = "elan",
+         .nf_modname  = "kqswlnd",
+         .nf_addr2str = libcfs_num_addr2str,
          .nf_str2addr = libcfs_num_str2addr},
-        {.nf_type     = GMLND,     
-         .nf_name     = "gm",         
-         .nf_modname  = "kgmlnd", 
-         .nf_addr2str = libcfs_num_addr2str, 
+        {.nf_type     = GMLND,
+         .nf_name     = "gm",
+         .nf_modname  = "kgmlnd",
+         .nf_addr2str = libcfs_num_addr2str,
          .nf_str2addr = libcfs_num_str2addr},
         {.nf_type     = PTLLND,
          .nf_name     = "ptl",
          .nf_modname  = "kptllnd",
          .nf_addr2str = libcfs_num_addr2str,
-         .nf_str2addr = libcfs_num_str2addr},         
+         .nf_str2addr = libcfs_num_str2addr},
         /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
         {.nf_type     = -1},
 };
@@ -163,7 +163,7 @@ libcfs_ip_addr2str(__u32 addr, char *str)
 #if !defined(__KERNEL__) && defined HAVE_GETHOSTBYNAME
         __u32           netip = htonl(addr);
         struct hostent *he = gethostbyaddr(&netip, sizeof(netip), AF_INET);
-        
+
         if (he != NULL) {
                 snprintf(str, LNET_NIDSTR_SIZE, "%s", he->h_name);
                 return;
@@ -218,7 +218,7 @@ libcfs_ip_str2addr(char *str, int nob, __u32 *addr)
 
                         if (he != NULL) {
                                 __u32 ip = *(__u32 *)he->h_addr;
-                                
+
                                 *addr = ntohl(ip);
                                 return 1;
                         }
@@ -239,17 +239,17 @@ libcfs_num_str2addr(char *str, int nob, __u32 *addr)
 {
         __u32   a;
         int     n = nob;
-        
+
         if (sscanf(str, "%u%n", &a, &n) < 1 ||
             n != nob)
                 return 0;
-        
+
         *addr = a;
         return 1;
 }
 
 struct netstrfns *
-libcfs_lnd2netstrfns(int lnd) 
+libcfs_lnd2netstrfns(int lnd)
 {
         int    i;
 
@@ -265,7 +265,7 @@ struct netstrfns *
 libcfs_name2netstrfns(char *name)
 {
         int    i;
-        
+
         for (i = 0; i < libcfs_nnetstrfns; i++)
                 if (libcfs_netstrfns[i].nf_type >= 0 &&
                     !strcmp(libcfs_netstrfns[i].nf_name, name))
@@ -281,7 +281,7 @@ libcfs_isknown_lnd(int type)
 }
 
 char *
-libcfs_lnd2modname(int lnd) 
+libcfs_lnd2modname(int lnd)
 {
         struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
 
@@ -289,14 +289,14 @@ libcfs_lnd2modname(int lnd)
 }
 
 char *
-libcfs_lnd2str(int lnd) 
+libcfs_lnd2str(int lnd)
 {
         char           *str;
         struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
-        
+
         if (nf != NULL)
                 return nf->nf_name;
-        
+
         str = libcfs_next_nidstring();
         snprintf(str, LNET_NIDSTR_SIZE, "?%u?", lnd);
         return str;
@@ -306,10 +306,10 @@ int
 libcfs_str2lnd(char *str)
 {
         struct netstrfns *nf = libcfs_name2netstrfns(str);
-        
+
         if (nf != NULL)
                 return nf->nf_type;
-        
+
         return -1;
 }
 
@@ -321,7 +321,7 @@ libcfs_net2str(__u32 net)
         struct netstrfns *nf  = libcfs_lnd2netstrfns(lnd);
         char             *str = libcfs_next_nidstring();
 
-        if (nf == NULL) 
+        if (nf == NULL)
                 snprintf(str, LNET_NIDSTR_SIZE, "<%u:%u>", lnd, num);
         else if (num == 0)
                 snprintf(str, LNET_NIDSTR_SIZE, "%s", nf->nf_name);
@@ -381,7 +381,7 @@ libcfs_str2net_internal(char *str, __u32 *net)
 
         if (i == libcfs_nnetstrfns)
                 return NULL;
-        
+
         nob = strlen(nf->nf_name);
 
         if (strlen(str) == nob) {
@@ -389,14 +389,14 @@ libcfs_str2net_internal(char *str, __u32 *net)
         } else {
                 if (nf->nf_type == LOLND) /* net number not allowed */
                         return NULL;
-          
+
                 str += nob;
                 i = strlen(str);
                 if (sscanf(str, "%u%n", &netnum, &i) < 1 ||
                     i != strlen(str))
                         return NULL;
         }
-        
+
         *net = LNET_MKNET(nf->nf_type, netnum);
         return nf;
 }
@@ -405,10 +405,10 @@ __u32
 libcfs_str2net(char *str)
 {
         __u32  net;
-        
+
         if (libcfs_str2net_internal(str, &net) != NULL)
                 return net;
-        
+
         return LNET_NIDNET(LNET_NID_ANY);
 }
 
@@ -433,7 +433,7 @@ libcfs_str2nid(char *str)
 
         if (!nf->nf_str2addr(str, sep - str, &addr))
                 return LNET_NID_ANY;
-        
+
         return LNET_MKNID(net, addr);
 }
 
@@ -441,8 +441,8 @@ char *
 libcfs_id2str(lnet_process_id_t id)
 {
         char *str = libcfs_next_nidstring();
-        
-        snprintf(str, LNET_NIDSTR_SIZE, "%s%u-%s", 
+
+        snprintf(str, LNET_NIDSTR_SIZE, "%s%u-%s",
                  ((id.pid & LNET_PID_USERFLAG) != 0) ? "U" : "",
                  (id.pid & ~LNET_PID_USERFLAG), libcfs_nid2str(id.nid));
         return str;
@@ -467,13 +467,13 @@ libcfs_setnet0alias(int lnd)
         struct netstrfns *nf = libcfs_lnd2netstrfns(lnd);
         struct netstrfns *nf0 = &libcfs_netstrfns[libcfs_nnetstrfns - 1];
 
-        /* Ghastly hack to allow LNET to inter-operate with portals.  
+        /* Ghastly hack to allow LNET to inter-operate with portals.
          * NET type 0 becomes an alias for whatever local network we have, and
          * this assignment here means we can parse and print its NIDs */
 
         LASSERT (nf != NULL);
         LASSERT (nf0->nf_type < 0);
-        
+
         nf0->nf_name = "zero";//nf->nf_name;
         nf0->nf_modname = nf->nf_modname;
         nf0->nf_addr2str = nf->nf_addr2str;
