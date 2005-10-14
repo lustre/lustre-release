@@ -212,6 +212,15 @@ Details    : it is now possible to store extended attributes in the Lustre
 	     client filesystem, and with the user_xattr mount option it
 	     is possible to allow users to store EAs on their files also
 
+Severity   : enhancement
+Bugzilla   : 7293
+Description: Add possibility (config option) to show minimal available OST free
+             space.
+Details    : When compiled with --enable-mindf configure option, statfs(2)
+             (and so, df) will return least minimal free space available from
+             all OSTs as amount of free space on FS, instead of summary of
+             free spaces of all OSTs.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

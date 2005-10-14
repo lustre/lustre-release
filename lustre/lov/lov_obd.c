@@ -1832,8 +1832,21 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                         memcpy(osfs, &lov_sfs, sizeof(lov_sfs));
                         set = 1;
                 } else {
+#ifdef MIN_DF
+                        /* Sandia requested that df (and so, statfs) only
+                           returned minimal available space on 
+                           a single OST, so people would be able to
+                           write this much data guaranteed. */
+                        if (osfs->os_bavail > lov_sfs.os_bavail) {
+                                /* Presumably if new bavail is smaller,
+                                   new bfree is bigger as well */
+                                osfs->os_bfree = lov_sfs.os_bfree;
+                                osfs->os_bavail = lov_sfs.os_bavail;
+                        }
+#else
                         osfs->os_bfree += lov_sfs.os_bfree;
                         osfs->os_bavail += lov_sfs.os_bavail;
+#endif
                         osfs->os_blocks += lov_sfs.os_blocks;
                         /* XXX not sure about this one - depends on policy.
                          *   - could be minimum if we always stripe on all OBDs

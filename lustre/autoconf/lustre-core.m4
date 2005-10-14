@@ -532,6 +532,16 @@ AC_CHECK_FUNCS([inet_ntoa])
 
 # llite/xattr.c
 AC_CHECK_HEADERS([linux/xattr_acl.h])
+
+# Super safe df
+AC_ARG_ENABLE([mindf],
+      AC_HELP_STRING([--enable-mindf],
+                      [Make statfs to report only minimal-available space on any simgle OST instead of sum of free spaces on all OSTs]),
+      [],[])
+if test "$enable_mindf" = "yes" ;  then
+      AC_DEFINE([MIN_DF], 1, [Report minimum OST free space])
+fi
+
 ])
 
 #
