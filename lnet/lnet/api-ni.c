@@ -1095,14 +1095,6 @@ lnet_startup_lndnis (void)
         return -ENETDOWN;
 }
 
-#ifndef __KERNEL__
-# if !HAVE_LIBPTHREAD
-extern lnd_t the_ptllnd;
-# else
-extern lnd_t the_tcplnd;
-# endif
-#endif 
-
 int
 LNetInit(void)
 {
@@ -1126,12 +1118,13 @@ LNetInit(void)
          * register themselves when their module loads, and unregister
          * themselves when their module is unloaded. */
 #else
-        /* Register all LNDs that have been loaded
+        /* Register LNDs
          * NB the order here determines default 'networks=' order */
-# if !HAVE_LIBPTHREAD
-        lnet_register_lnd(&the_ptllnd);
-# else
-        lnet_register_lnd(&the_tcplnd);
+# if HAVE_CRAY_XT3
+        LNET_REGISTER_ULND(the_ptllnd);
+# endif
+# if HAVE_LIBPTHREAD
+        LNET_REGISTER_ULND(the_tcplnd);
 # endif
 #endif
         lnet_register_lnd(&the_lolnd);

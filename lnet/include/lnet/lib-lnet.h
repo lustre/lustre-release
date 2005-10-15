@@ -459,7 +459,16 @@ lnet_nid2peerhash (lnet_nid_t nid)
 extern lnd_t the_lolnd;
 
 #ifndef __KERNEL__
-#define LNET_REGISTER_LND_IF_PRESENT(lnd)                               \
+/* unconditional registration */
+#define LNET_REGISTER_ULND(lnd)                 \
+do {                                            \
+        extern lnd_t lnd;                       \
+                                                \
+        lnet_register_lnd(&(lnd));              \
+} while (0)
+
+/* conditional registration */
+#define LNET_REGISTER_ULND_IF_PRESENT(lnd)                              \
 do {                                                                    \
         extern lnd_t lnd __attribute__ ((weak, alias("the_lolnd")));    \
                                                                         \
