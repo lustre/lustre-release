@@ -31,6 +31,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mount.h>
 
 #include <string.h>
 #include <getopt.h>
@@ -59,8 +60,6 @@ static char cmd[128];
 static char cmd_out[32][128];
 static char *ret_file = "/tmp/mkfs.log";
         
-/* for init loop */
-static char loop_base[20];
 
 void usage(FILE *out)
 {
@@ -181,9 +180,14 @@ static void run_command_out()
         }
 }
 
-/* Figure out the loop device names */
-void loop_init()
+/* Setup a file in the first unused loop_device */
+int loop_setup(struct mkfs_opts *mop)
 {
+        char loop_base[20];
+        char l_device[64];
+        int i,ret = 0;
+
+        /* Figure out the loop device names */
         if (!access("/dev/loop0", F_OK | R_OK))
                 strcpy(loop_base, "/dev/loop\0");
         else if (!access("/dev/loop/0", F_OK | R_OK))
@@ -192,15 +196,8 @@ void loop_init()
                 fprintf(stderr, "can't access loop devices\n");
                 exit(1);
         }
-        return;
-}
 
-/* Setup a file in the first unused loop_device */
-int loop_setup(struct mkfs_opts *mop)
-{
-        char l_device[64];
-        int i,ret = 0;
-
+        /* Find unused loop device */
         for (i = 0; i < MAX_LOOP_DEVICES; i++) {
                 sprintf(l_device, "%s%d", loop_base, i);
                 if (access(l_device, F_OK | R_OK)) 
@@ -210,6 +207,7 @@ int loop_setup(struct mkfs_opts *mop)
                 ret = run_command(cmd);
                 /* losetup gets 1 (256?) for good non-set-up device */
                 if (ret) {
+                        /* Setup up a loopback device to our file */
                         sprintf(cmd, "losetup %s %s", l_device, mop->mo_device);
                         ret = run_command(cmd);
                         if (ret) {
@@ -224,7 +222,7 @@ int loop_setup(struct mkfs_opts *mop)
         
         fprintf(stderr,"out of loop devices!\n");
         return EMFILE;
-}
+}       
 
 int loop_cleanup(struct mkfs_opts *mop)
 {
@@ -295,7 +293,7 @@ int write_local_files(struct mkfs_opts *mop)
         struct lr_server_data lsd;
         char mntpt[] = "/tmp/mntXXXXXX";
         char filepnm[128];
-        char local_mount_opts[sizeof(mop->mo_ldd.ldd_mount_opts)] = "";
+        char *dev;
         FILE *filep;
         int ret = 0;
 
@@ -307,22 +305,14 @@ int write_local_files(struct mkfs_opts *mop)
                 return errno;
         }
 
-        if (mop->mo_flags & MO_IS_LOOP) {
-                /* ext3 can't understand iopen_nopriv, others */
-                // FIXME ext3 on 2.6 can't. So use ldiskfs on 2.6
-                if (strlen(mop->mo_ldd.ldd_mount_opts)) 
-                        snprintf(local_mount_opts, sizeof(local_mount_opts),
-                                 "loop,%s", mop->mo_ldd.ldd_mount_opts);
-                else 
-                        sprintf(local_mount_opts, "loop");
-        }
-        sprintf(cmd, "mount -t %s %s%s %s %s",
-                MT_STR(&mop->mo_ldd), strlen(local_mount_opts) ? "-o ": "", 
-                local_mount_opts, mop->mo_device, mntpt);
-        ret = run_command(cmd);
+        dev = mop->mo_device;
+        if (mop->mo_flags & MO_IS_LOOP) 
+                dev = mop->mo_loopdev;
+        
+        ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0, NULL);
         if (ret) {
-                fprintf(stderr, "Unable to mount %s\n", mop->mo_device);
-                run_command_out();
+                fprintf(stderr, "Unable to mount %s: %s\n", mop->mo_device,
+                        strerror(ret));
                 goto out_rmdir;
         }
 
@@ -371,8 +361,7 @@ int write_local_files(struct mkfs_opts *mop)
         fclose(filep);
 out_umnt:
         vprint("unmounting backing device\n");
-        sprintf(cmd, "umount %s", mntpt);
-        run_command(cmd);
+        umount(mntpt);    
 out_rmdir:
         rmdir(mntpt);
         return ret;
@@ -382,14 +371,18 @@ int loop_format(struct mkfs_opts *mop)
 {
         int ret = 0;
        
-        loop_init();
+        if (mop->mo_device_sz == 0) {
+                fatal();
+                fprintf(stderr, "loop device requires a --device_size= "
+                        "param\n");
+                return EINVAL;
+        }
 
-        sprintf(cmd, "dd if=/dev/zero bs=1k count=0 seek=%lld of=%s", 
-                mop->mo_device_sz, mop->mo_device);
-        ret = run_command(cmd);
-        if (ret != 0){
+        ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
+        if (ret != 0) {
                 fprintf(stderr, "Unable to create backing store: %d\n", ret);
         }
+
         return ret;
 }
 
@@ -499,17 +492,8 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
         /* Loop device? */
         dev = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) {
-                ret = loop_format(mop);
-                if (!ret)
-                        ret = loop_setup(mop);
-                if (ret) {
-                        fatal();
-                        fprintf(stderr, "Loop device setup failed %d\n", ret);
-                        return ret;
-                }
+        if (mop->mo_flags & MO_IS_LOOP) 
                 dev = mop->mo_loopdev;
-        }
         
         vprint("formatting backing filesystem %s on %s\n",
                MT_STR(&mop->mo_ldd), dev);
@@ -536,7 +520,6 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         }
 
 out:
-        loop_cleanup(mop);      
         return ret;
 }
 
@@ -589,36 +572,20 @@ static int jt_setup()
         return 0; 
 }
 
-/* see jt_ptl_network */
+
+#if 0
+// do we need this for aything?
+/* see jt_ptl_list_nids */
 int jt_getnids(lnet_nid_t *nidarray, int maxnids)
 {
         struct libcfs_ioctl_data data;
         int                      count;
         int                      rc;
-
-        for (count = 0; count < maxnids; count++) {
-                LIBCFS_IOC_INIT (data);
-                data.ioc_count = count;
-                rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NI, &data);
-
-                if (rc >= 0) {
-                        vprint("%s\n", libcfs_nid2str(data.ioc_nid));
-                        nidarray[count] = data.ioc_nid;
-                        continue;
-                }
-
-                if (errno == ENOENT)
-                        break;
-
-                fprintf(stderr,"IOC_PORTAL_GET_NI error %d: %s\n",
-                        errno, strerror(errno));
-                return -1;
-        }
-        
         if (count == 0)
                 printf("<no local networks>\n");
         return count;
 }
+#endif
 
 static void jt_print(char *cmd_name, int argc, char **argv)
 {
@@ -686,12 +653,8 @@ int write_llog_files(struct mkfs_opts *mop)
         }
 
         dev = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) {
-                ret = loop_setup(mop);
-                if (ret)
-                        return ret;
+        if (mop->mo_flags & MO_IS_LOOP) 
                 dev = mop->mo_loopdev;
-        }
 
         /* FIXME can't we just write these log files ourselves? Why do we 
            have to go through an obd at all? jt_ioc_dump()? */
@@ -801,10 +764,10 @@ int write_llog_files(struct mkfs_opts *mop)
                               mop->mo_timeout, 0);
                 do_jt(jt_cfg_endrecord, "endrecord", 0);
 
+#if 0
                 /* Write client startup logs */
                 numnids = jt_getnids(nidarray, 
                                      sizeof(nidarray) / sizeof(nidarray[0]));
-#if 0
 //Let the MGS create the client logs after the MDT has registered 
                 if (numnids <= 0) {
                         fprintf(stderr, "%s: Can't figure out local nids, "
@@ -872,7 +835,6 @@ out_jt:
         do_jt_noret(jt_obd_detach,  "detach", 0);
 
         obd_finalize(1, (char **)&name /*dummy*/);
-        loop_cleanup(mop);
         return ret;
 }
 
@@ -1092,42 +1054,58 @@ int main(int argc , char *const argv[])
         
         strcpy(mop.mo_device, argv[optind]);
         
-        /* These are the permanent mount options. */ 
-        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_EXT3) ||
-            (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS)) {
+        /* These are the permanent mount options (always included) */ 
+        switch (mop.mo_ldd.ldd_mount_type) {
+        case LDD_MT_EXT3:
+        case LDD_MT_LDISKFS: {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "errors=remount-ro");
-                // extents,mballoc? 
                 if (IS_MDT(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",iopen_nopriv");
                 if ((get_os_version() == 24) && IS_OST(&mop.mo_ldd))
                         strcat(mop.mo_ldd.ldd_mount_opts, ",asyncdel");
-        } else if (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) {
+                if (mop.mo_ldd.ldd_mount_type == LDD_MT_LDISKFS) {
+                        strcat(mop.mo_ldd.ldd_mount_opts, ",extents,mballoc");
+                }
+                break;
+        }
+        case LDD_MT_SMFS: {
                 sprintf(mop.mo_ldd.ldd_mount_opts, "type=ext3,dev=%s",
                         mop.mo_device);
-        } else {
+                break;
+        }
+        default: {
                 fatal();
                 fprintf(stderr, "%s: unknown fs type %d '%s'\n",
                         progname, mop.mo_ldd.ldd_mount_type,
                         MT_STR(&mop.mo_ldd));
                 return EINVAL;
         }
+        }               
+
+        /* User supplied */
         if (mountopts) {
                 strcat(mop.mo_ldd.ldd_mount_opts, ",");
                 strcat(mop.mo_ldd.ldd_mount_opts, mountopts);
         }
 
-        if ((mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS) ||
-            !is_block(mop.mo_device)) {
+        /* Are we using a loop device? */
+        if (!is_block(mop.mo_device) || 
+            (mop.mo_ldd.ldd_mount_type == LDD_MT_SMFS))
                 mop.mo_flags |= MO_IS_LOOP;
-                if (mop.mo_device_sz == 0) {
-                        fatal();
-                        fprintf(stderr, "loop device requires a --device_size= "
-                                "param\n");
-                        return EINVAL;
-                }
-        }
                 
         make_sv_name(&mop);
+
+        /* Create the loopback file */
+        if (mop.mo_flags & MO_IS_LOOP) {
+                ret = loop_format(&mop);
+                if (!ret)
+                        ret = loop_setup(&mop);
+                if (ret) {
+                        fatal();
+                        fprintf(stderr, "Loop device setup failed %d\n", ret);
+                        return ret;
+                }
+        }
 
         ret = make_lustre_backfs(&mop);
         if (ret != 0) {
@@ -1149,6 +1127,8 @@ int main(int argc , char *const argv[])
                 fprintf(stderr, "failed to write setup logs\n");
                 return ret;
         }
+
+        loop_cleanup(&mop);      
         
         return ret;
 }
