@@ -221,6 +221,12 @@ Details    : When compiled with --enable-mindf configure option, statfs(2)
              all OSTs as amount of free space on FS, instead of summary of
              free spaces of all OSTs.
 
+Severity   : minor
+Bugzilla   : 7311
+Description: An optimization: do not expand extent locks acquired on OST-side
+Details    : Modify ldlm_extent_policy() to not expand local locks, acquired
+	     by server: they are not cached anyway.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

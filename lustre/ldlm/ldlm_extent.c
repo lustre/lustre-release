@@ -135,7 +135,22 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
 static void ldlm_extent_policy(struct ldlm_resource *res,
                                struct ldlm_lock *lock, int *flags)
 {
-        struct ldlm_extent new_ex = { .start = 0, .end = ~0};
+        struct ldlm_extent new_ex = { .start = 0, .end = OBD_OBJECT_EOF };
+
+        if (lock->l_export == NULL)
+                /*
+                 * this is local lock taken by server (e.g., as a part of
+                 * OST-side locking, or unlink handling). Expansion doesn't
+                 * make a lot of sense for local locks, because they are
+                 * dropped immediately on operation completion and would only
+                 * conflict with other threads.
+                 */
+                return;
+
+        if (lock->l_policy_data.l_extent.start == 0 &&
+            lock->l_policy_data.l_extent.end == OBD_OBJECT_EOF)
+                /* fast-path whole file locks */
+                return;
 
         ldlm_extent_internal_policy(&res->lr_granted, lock, &new_ex);
         ldlm_extent_internal_policy(&res->lr_waiting, lock, &new_ex);
