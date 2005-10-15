@@ -179,7 +179,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         cfs_waitlink_t   wl;
         cfs_time_t       now;
 #else
-# if !LNET_SINGLE_THREADED
+# if HAVE_LIBPTHREAD
         struct timeval   then;
         struct timeval   now;
         struct timespec  ts;
@@ -246,7 +246,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
                         continue;
                 }
 
-# if LNET_SINGLE_THREADED
+# if !HAVE_LIBPTHREAD
                 LNET_UNLOCK();
                 return -ENOENT;
 # else

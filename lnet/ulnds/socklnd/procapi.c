@@ -46,7 +46,7 @@
 # include <sys/utsname.h>
 #endif
 
-#if LNET_SINGLE_THREADED
+#if !HAVE_LIBPTHREAD
 # error "This LND requires a multi-threaded runtime"
 #endif
 

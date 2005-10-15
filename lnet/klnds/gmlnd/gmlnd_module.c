@@ -119,5 +119,5 @@ module_init(gmnal_load);
 module_exit(gmnal_unload);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel GM NAL v1.01");
+MODULE_DESCRIPTION("Kernel GM LND v1.01");
 MODULE_LICENSE("GPL");

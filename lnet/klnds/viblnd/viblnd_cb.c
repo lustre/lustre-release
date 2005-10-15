@@ -82,7 +82,6 @@ kibnal_get_idle_tx (void)
         
         spin_lock(&kibnal_data.kib_tx_lock);
 
-        /* "normal" descriptor is free */
         if (list_empty (&kibnal_data.kib_idle_txs)) {
                 spin_unlock(&kibnal_data.kib_tx_lock);
                 return NULL;
@@ -412,7 +411,7 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob, __u64 rxseq)
         unsigned long flags;
         int           rc;
 
-        CDEBUG (D_NET, "rx %p conn %p\n", rx, conn);
+        CDEBUG(D_NET, "rx %p conn %p\n", rx, conn);
         LASSERT (rx->rx_nob < 0);               /* was posted */
         rx->rx_nob = 0;                         /* isn't now */
 
@@ -834,7 +833,7 @@ void
 kibnal_check_sends (kib_conn_t *conn)
 {
         kib_tx_t       *tx;
-        vv_return_t     vvrc;                        
+        vv_return_t     vvrc;
         int             rc;
         int             done;
 
@@ -1370,7 +1369,7 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 
         /* NB 'private' is different depending on what we're sending.... */
 
-        CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n", 
+        CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
                payload_nob, payload_niov, libcfs_id2str(target));
 
         LASSERT (payload_nob == 0 || payload_niov > 0);
@@ -1527,7 +1526,6 @@ kibnal_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
                 if (nob <= IBNAL_MSG_SIZE)
                         break;                  /* send IMMEDIATE */
 
-                /* may block if caller is app thread */
                 tx = kibnal_get_idle_tx();
                 if (tx == NULL) {
                         CERROR("Can't allocate %s txd for %s\n",
@@ -1610,7 +1608,6 @@ kibnal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         int          rc = 0;
         
         LASSERT (mlen <= rlen);
-        LASSERT (mlen >= 0);
         LASSERT (!in_interrupt());
         /* Either all pages or all vaddrs */
         LASSERT (!(kiov != NULL && iov != NULL));
@@ -1749,7 +1746,7 @@ kibnal_schedule_conn (kib_conn_t *conn)
 void
 kibnal_close_conn_locked (kib_conn_t *conn, int error)
 {
-        /* This just does the immmediate housekeeping.  'error' is zero for a
+        /* This just does the immediate housekeeping.  'error' is zero for a
          * normal shutdown which can happen only after the connection has been
          * established.  If the connection is established, schedule the
          * connection to be finished off by the connd.  Otherwise the connd is
@@ -1782,7 +1779,6 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
                        list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
                        list_empty(&conn->ibc_active_txs) ? "" : "(waiting)",
                        conn->ibc_txseq, conn->ibc_rxseq);
-
 #if 0
                 /* can't skip down the queue without holding ibc_lock (see above) */
                 list_for_each(tmp, &conn->ibc_tx_queue) {
@@ -3012,7 +3008,7 @@ kibnal_check_conns (int idx)
                         
                         kibnal_conn_addref(conn); /* 1 ref for me... */
 
-                        read_unlock_irqrestore(&kibnal_data.kib_global_lock, 
+                        read_unlock_irqrestore(&kibnal_data.kib_global_lock,
                                                flags);
 
                         CERROR("Timed out RDMA with %s\n",
@@ -3095,7 +3091,7 @@ kibnal_connd (void *arg)
         init_waitqueue_entry (&wait, current);
         kibnal_data.kib_connd = current;
 
-        spin_lock_irqsave (&kibnal_data.kib_connd_lock, flags);
+        spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
 
         while (!kibnal_data.kib_shutdown) {
 

@@ -31,6 +31,7 @@
 
 /* NIDs are 64-bits on Lustre Portals */
 #define FMT_NID LPX64
+#define FMT_PID "%d"
 
 /* When using Lustre Portals Lustre completion semantics are imlicit*/
 #define PTL_MD_LUSTRE_COMPLETION_SEMANTICS      0
@@ -40,8 +41,9 @@
 /* Explicit NULL function pointer for EQ handler */
 #define PTL_EQ_HANDLER_NONE                     0
 
-/* NIDs are integers on Lustre Portals */
+/* NIDs are integers on Cray Portals */
 #define FMT_NID "%x"
+#define FMT_PID "%d"
 
 /* When using Cray Portals this is defined in the Cray Portals Header*/
 /*#define PTL_MD_LUSTRE_COMPLETION_SEMANTICS */

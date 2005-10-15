@@ -1645,7 +1645,7 @@ kranal_module_init (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel RapidArray NAL v0.01");
+MODULE_DESCRIPTION("Kernel RapidArray LND v0.01");
 MODULE_LICENSE("GPL");
 
 module_init(kranal_module_init);

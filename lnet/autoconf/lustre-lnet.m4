@@ -863,7 +863,6 @@ if test x$enable_liblustre = xyes ; then
 		AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
 	else
 		PTHREAD_LIBS=""
-		AC_DEFINE([LNET_SINGLE_THREADED], 1, [lnet single threaded])
 	fi
 	AC_SUBST(PTHREAD_LIBS)
 fi

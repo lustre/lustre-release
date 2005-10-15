@@ -1145,8 +1145,8 @@ kibnal_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
         switch(cmd) {
         case IOC_LIBCFS_GET_PEER: {
                 lnet_nid_t   nid = 0;
-                __u32       ip = 0;
-                int         share_count = 0;
+                __u32        ip = 0;
+                int          share_count = 0;
 
                 rc = kibnal_get_peer_info(data->ioc_count,
                                           &nid, &ip, &share_count);
@@ -1498,8 +1498,6 @@ kibnal_shutdown (lnet_ni_t *ni)
                         LASSERT (list_empty (&kibnal_data.kib_peers[i]));
                 }
                 LASSERT (atomic_read (&kibnal_data.kib_nconns) == 0);
-                LASSERT (list_empty (&kibnal_data.kib_sched_rxq));
-                LASSERT (list_empty (&kibnal_data.kib_sched_txq));
                 LASSERT (list_empty (&kibnal_data.kib_connd_zombies));
                 LASSERT (list_empty (&kibnal_data.kib_connd_conns));
                 LASSERT (list_empty (&kibnal_data.kib_connd_pcreqs));
@@ -1655,8 +1653,6 @@ kibnal_startup (lnet_ni_t *ni)
         init_waitqueue_head (&kibnal_data.kib_connd_waitq);
 
         spin_lock_init (&kibnal_data.kib_sched_lock);
-        INIT_LIST_HEAD (&kibnal_data.kib_sched_txq);
-        INIT_LIST_HEAD (&kibnal_data.kib_sched_rxq);
         init_waitqueue_head (&kibnal_data.kib_sched_waitq);
 
         spin_lock_init (&kibnal_data.kib_tx_lock);
@@ -1898,7 +1894,7 @@ kibnal_module_init (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel Voltaire IB NAL v1.00");
+MODULE_DESCRIPTION("Kernel Voltaire IB LND v1.00");
 MODULE_LICENSE("GPL");
 
 module_init(kibnal_module_init);

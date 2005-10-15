@@ -1672,7 +1672,7 @@ kibnal_module_init (void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Kernel OpenIB NAL v1.00");
+MODULE_DESCRIPTION("Kernel OpenIB LND v1.00");
 MODULE_LICENSE("GPL");
 
 module_init(kibnal_module_init);

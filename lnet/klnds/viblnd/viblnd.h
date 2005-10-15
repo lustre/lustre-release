@@ -223,7 +223,6 @@ typedef struct
         cm_cep_handle_t   kib_listen_handle;    /* IB listen handle */
 
         rwlock_t          kib_global_lock;      /* stabilize peer/conn ops */
-        spinlock_t        kib_vverbs_lock;      /* serialize vverbs calls */
         int               kib_ready;            /* CQ callback fired */
         int               kib_checking_cq;      /* a scheduler is checking the CQ */
         
@@ -241,8 +240,6 @@ typedef struct
         spinlock_t        kib_connd_lock;       /* serialise */
 
         wait_queue_head_t kib_sched_waitq;      /* schedulers sleep here */
-        struct list_head  kib_sched_txq;        /* tx requiring attention */
-        struct list_head  kib_sched_rxq;        /* rx requiring attention */
         spinlock_t        kib_sched_lock;       /* serialise */
 
         struct kib_tx    *kib_tx_descs;         /* all the tx descriptors */
@@ -298,7 +295,7 @@ typedef struct kib_tx                           /* transmit message */
         int                       tx_status;    /* completion status */
         unsigned long             tx_deadline;  /* completion deadline */
         __u64                     tx_cookie;    /* completion cookie */
-        lnet_msg_t               *tx_lntmsg[2]; /* ptl msgs to finalize on completion */
+        lnet_msg_t               *tx_lntmsg[2]; /* lnet msgs to finalize on completion */
         vv_l_key_t                tx_lkey;      /* local key for message buffer */
         kib_msg_t                *tx_msg;       /* message buffer (host vaddr) */
         int                       tx_nwrq;      /* # send work items */
@@ -445,12 +442,6 @@ extern int  kibnal_init_rdma(kib_tx_t *tx, int type, int nob,
                              kib_rdma_desc_t *dstrd, __u64 dstcookie);
 extern int  kibnal_tunables_init(void);
 extern void kibnal_tunables_fini(void);
-
-static inline int
-wrq_signals_completion (vv_wr_t *wrq)
-{
-        return wrq->completion_notification != 0;
-}
 
 #define kibnal_conn_addref(conn)                                \
 do {                                                            \

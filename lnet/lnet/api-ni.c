@@ -184,7 +184,7 @@ lnet_get_portals_compatibility(void)
         return 0;
 }
 
-# if LNET_SINGLE_THREADED
+# if !HAVE_LIBPTHREAD
 
 void lnet_init_locks(void)
 {
@@ -1044,7 +1044,7 @@ lnet_startup_lndnis (void)
                                 the_lnet.ln_eqwaitni = ni;
                         }
                 } else {
-# if LNET_SINGLE_THREADED
+# if !HAVE_LIBPTHREAD
                         LCONSOLE_ERROR("LND %s not supported in a "
                                        "single-threaded runtime\n",
                                        libcfs_lnd2str(lnd_type));
@@ -1096,7 +1096,7 @@ lnet_startup_lndnis (void)
 }
 
 #ifndef __KERNEL__
-# if LNET_SINGLE_THREADED
+# if !HAVE_LIBPTHREAD
 extern lnd_t the_ptllnd;
 # else
 extern lnd_t the_tcplnd;
@@ -1128,7 +1128,7 @@ LNetInit(void)
 #else
         /* Register all LNDs that have been loaded
          * NB the order here determines default 'networks=' order */
-# if LNET_SINGLE_THREADED
+# if !HAVE_LIBPTHREAD
         lnet_register_lnd(&the_ptllnd);
 # else
         lnet_register_lnd(&the_tcplnd);

@@ -162,6 +162,8 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
 
 	do_gettimeofday (&now);
 
+        memset(lp, 0, sizeof(*lp));             /* zero counters etc */
+        
 	CFS_INIT_LIST_HEAD(&lp->lp_txq);
         CFS_INIT_LIST_HEAD(&lp->lp_rtrq);
 	

@@ -309,6 +309,7 @@ lnet_new_text_buf (int str_len)
 	lnet_text_buf_t *ltb;
 	int              nob;
 
+        /* NB allocate space for the terminating 0 */
 	nob = offsetof(lnet_text_buf_t, ltb_text[str_len + 1]);
 	if (nob > LNET_SINGLE_TEXTBUF_NOB) {
 		/* _way_ conservative for "route net gateway..." */
@@ -326,6 +327,7 @@ lnet_new_text_buf (int str_len)
 		return NULL;
 
 	ltb->ltb_size = nob;
+        ltb->ltb_text[0] = 0;
 	lnet_tbnob += nob;
 	return ltb;
 }
@@ -389,7 +391,7 @@ lnet_str2tbs_sep (struct list_head *tbs, char *str)
 
 		nob = sep - str;
 		if (nob > 0) {
-			ltb = lnet_new_text_buf(nob + 1);
+			ltb = lnet_new_text_buf(nob);
 			if (ltb == NULL) {
 				lnet_free_text_bufs(&pending);
 				return -1;
@@ -435,7 +437,7 @@ lnet_expand1tb (struct list_head *list,
 	LASSERT (*sep1 == '[');
 	LASSERT (*sep2 == ']');
 
-	ltb = lnet_new_text_buf(len1 + itemlen + len2 + 1);
+	ltb = lnet_new_text_buf(len1 + itemlen + len2);
 	if (ltb == NULL)
 		return -ENOMEM;
 	
