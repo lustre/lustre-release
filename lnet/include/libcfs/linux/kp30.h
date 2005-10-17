@@ -172,10 +172,12 @@ do {                                                                    \
 #else  /* !__KERNEL__ */
 # include <stdio.h>
 # include <stdlib.h>
-#ifndef __CYGWIN__
-# include <stdint.h>
-#else
+#ifdef CRAY_XT3
+# include <ioctl.h>
+#elif defined(__CYGWIN__)
 # include <cygwin-ioctl.h>
+#else
+# include <stdint.h>
 #endif
 # include <unistd.h>
 # include <time.h>
