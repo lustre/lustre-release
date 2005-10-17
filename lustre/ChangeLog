@@ -227,6 +227,14 @@ Description: An optimization: do not expand extent locks acquired on OST-side
 Details    : Modify ldlm_extent_policy() to not expand local locks, acquired
 	     by server: they are not cached anyway.
 
+Severity   : medium
+Frequency  : seldom, when mmap is used/files executed from lustre
+Bugzilla   : 9482
+Description: Unmmap pages before throwing them away from read cache.
+Details    : llap_shrink cache now attempts to unmap pages before discarding
+             them (if unmapping failed - do not discard).  SLES9 kernel has
+             extra checks that trigger if this unmapping is not done first.
+
 ------------------------------------------------------------------------------
 
 08-26-2005  Cluster File Systems, Inc. <info@clusterfs.com>

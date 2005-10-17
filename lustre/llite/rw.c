@@ -473,10 +473,21 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
                 page_cache_get(page);
                 spin_unlock(&sbi->ll_lock);
 
-                ++count;
                 if (page->mapping != NULL) {
-                        ll_ra_accounting(page, page->mapping);
-                        ll_truncate_complete_page(page);
+                        ll_teardown_mmaps(page->mapping,
+                                          (__u64)page->index<<PAGE_CACHE_SHIFT,
+                                          (__u64)((page->index+1)<<PAGE_CACHE_SHIFT) - 1);
+                        if (!PageDirty(page) && !page_mapped(page)) {
+                                ll_ra_accounting(llap, page->mapping);
+                                ll_truncate_complete_page(page);
+                                ++count;
+                        } else {
+                                LL_CDEBUG_PAGE(D_PAGE, page, "Not dropping page"
+                                                             " because it is "
+                                                             "%s\n",
+                                                              PageDirty(page)?
+                                                              "dirty":"mapped");
+                        }
                 }
                 unlock_page(page);
                 page_cache_release(page);
@@ -926,14 +937,8 @@ static void ll_ra_stats_inc(struct address_space *mapping, enum ra_stat which)
         spin_unlock(&sbi->ll_lock);
 }
 
-void ll_ra_accounting(struct page *page, struct address_space *mapping)
+void ll_ra_accounting(struct ll_async_page *llap, struct address_space *mapping)
 {
-        struct ll_async_page *llap;
-
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
-        if (IS_ERR(llap))
-                return;
-
         if (!llap->llap_defer_uptodate || llap->llap_ra_used)
                 return;
 

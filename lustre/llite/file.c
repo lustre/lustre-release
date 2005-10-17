@@ -473,9 +473,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                                       &lock->l_resource->lr_name, LDLM_EXTENT,
                                       &tmpex, LCK_PR | LCK_PW, &lockh);
                 if (rc2 == 0 && page->mapping != NULL) {
+                        struct ll_async_page *llap = llap_cast_private(page);
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
-                        ll_ra_accounting(page, inode->i_mapping);
+                        if (llap)
+                                ll_ra_accounting(llap, inode->i_mapping);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
