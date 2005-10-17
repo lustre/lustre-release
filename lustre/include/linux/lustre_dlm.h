@@ -267,7 +267,7 @@ struct ldlm_resource {
         struct list_head       lr_converting;
         struct list_head       lr_waiting;
         ldlm_mode_t            lr_most_restr;
-        ldlm_type_t            lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK} */
+        ldlm_type_t            lr_type; /* LDLM_{PLAIN,EXTENT,FLOCK,LLOG} */
         struct ldlm_resource  *lr_root;
         struct ldlm_res_id     lr_name;
         atomic_t               lr_refcount;

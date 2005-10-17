@@ -73,7 +73,7 @@ int mgc_enqueue(struct obd_export *exp, int lock_mode,
 
         rc = ldlm_cli_enqueue(exp, req, obd->obd_namespace, res_id, LDLM_LLOG,
                               NULL, mode, flags, bl_cb, cp_cb, gl_cb, data,
-                              &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
+                              NULL, 0, NULL, lockh);
 
         if (req != NULL) {
                 if (rc == ELDLM_LOCK_ABORTED) {
@@ -89,3 +89,4 @@ int mgc_enqueue(struct obd_export *exp, int lock_mode,
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(mgc_enqueue)

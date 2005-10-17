@@ -189,6 +189,8 @@ static int mgc_setup(struct obd_device *obd, obd_count len, void *buf)
                 mgc_cleanup(obd);
                 RETURN(-ENOENT);
         }
+        INIT_LIST_HEAD(&mgc->mgc_open_llogs);
+
         RETURN(rc);
 
 err_rpc_lock:
@@ -196,7 +198,6 @@ err_rpc_lock:
         OBD_FREE(mgc->mgc_rpc_lock, sizeof (*mgc->mgc_rpc_lock));
         RETURN(rc);
 }
-
 
 static int mgc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)

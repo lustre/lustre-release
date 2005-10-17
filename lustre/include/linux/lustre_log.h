@@ -60,6 +60,7 @@ struct llog_handle {
         struct rw_semaphore     lgh_lock;
         struct llog_logid       lgh_id;             /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
+        struct mgc_open_llog   *lgh_mol;
         struct file            *lgh_file;
         char                   *lgh_fsname;
         int                     lgh_last_idx;
@@ -184,7 +185,6 @@ struct llog_operations {
                            struct obd_uuid *uuid);
         int (*lop_update)(struct llog_ctxt *ctxt, struct llog_handle **,
                            struct llog_logid *logid, void *data);
-        /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
 /* llog_lvfs.c */
@@ -364,7 +364,6 @@ static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
 }
 
 static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-//                              struct llog_logid *logid, char*fsname, char *name)
                               struct llog_logid *logid, char *name)
 {
         struct llog_operations *lop;
@@ -377,7 +376,6 @@ static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (lop->lop_create == NULL)
                 RETURN(-EOPNOTSUPP);
 
- //       rc = lop->lop_create(ctxt, res, logid, fsname, name);
         rc = lop->lop_create(ctxt, res, logid, name);
         RETURN(rc);
 }

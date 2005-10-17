@@ -776,7 +776,6 @@ parse_out:
                 rc = rc2;
 
         RETURN(rc);
-
 }
 
 int class_config_dump_handler(struct llog_handle * handle,

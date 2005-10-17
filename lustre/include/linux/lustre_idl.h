@@ -1086,6 +1086,7 @@ struct llog_gen_rec {
 
 struct llog_log_hdr {
         struct llog_rec_hdr     llh_hdr;
+        __u64                   llh_version;
         __u64                   llh_timestamp;
         __u32                   llh_count;
         __u32                   llh_bitmap_offset;
@@ -1124,6 +1125,7 @@ enum llogd_rpc_ops {
 
 struct llogd_body {
         struct llog_logid  lgd_logid;
+        __u64 lgd_local_version;
         __u32 lgd_ctxt_idx;
         __u32 lgd_llh_flags;
         __u32 lgd_index;

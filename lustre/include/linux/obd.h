@@ -328,8 +328,8 @@ struct mgc_obd {
         struct mgc_rpc_lock     *mgc_rpc_lock;
         struct vfsmount         *mgc_vfsmnt;     /* for local config dirs */
         struct super_block      *mgc_sb;
-        struct file             *mgc_rcvd_filp;
         struct dentry           *mgc_configs_dir;
+        struct list_head         mgc_open_llogs;
 };
 
 struct mgs_obd {

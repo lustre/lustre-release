@@ -46,4 +46,26 @@
 
 #include "mgc_internal.h"
 
-static 
+int mgc_get_process_llog(struct obd_device *obd, char *llog_name,
+                         struct config_llog_instance *cfg)
+{
+        struct llog_ctxt *ctxt;
+
+        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+
+        rc = class_config_parse_llog(ctxt, llog_name, cfg);
+
+        if (!rc) {
+                if (rc == -EINVAL)
+                        LCONSOLE_ERROR("%s: The configuration '%s' could not " 
+                                       "be read from the MGS.  Make sure this " 
+                                       "client and the MGS are running " 
+                                       "compatible versions of Lustre.\n",
+                                       obd->obd_name, llog_name);
+                else
+                        CERROR("class_config_parse_llog failed: rc = %d\n", rc);
+        }
+        return 0;
+}
+
+EXPORT_SYMBOL(mgc_get_process_llog)
