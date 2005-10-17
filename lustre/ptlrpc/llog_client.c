@@ -41,20 +41,23 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
+#include <linux/lustre_mgs.h>
 #include <libcfs/list.h>
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
 static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char* fsname ,char *name)
+                              struct llog_logid *logid, char *name)
 {
         struct obd_import *imp;
         struct llogd_body req_body;
         struct llogd_body *body;
         struct llog_handle *handle;
+        struct obd_device *obd = ctxt->loc_obd;
+        struct mgc_open_llog *mol;
         struct ptlrpc_request *req = NULL;
-        int size[3] = {sizeof(req_body)};
-        char *tmp[3] = {(char*) &req_body};
+        int size[2] = {sizeof(req_body)};
+        char *tmp[2] = {(char*) &req_body};
         int bufcount = 1;
         int repsize[] = {sizeof (req_body)};
         int rc;
@@ -79,13 +82,14 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 req_body.lgd_logid = *logid;
         req_body.lgd_ctxt_idx = ctxt->loc_idx - 1;
 
-        if (fsname) {
-                size[bufcount] = strlen(fsname) + 1;
-                tmp[bufcount] = fsname;
-                bufcount++;
-        }
-
         if (name) {
+                mol = mgc_find_open_llog(obd, name);
+                if (!mol) {
+                        CERROR("The llog have not registered "
+                               "in mgc obd when mount.\n");
+                        GOTO(err_free, rc = -EINVAL);
+                }
+                handle->lgh_mol = mol;
                 size[bufcount] = strlen(name) + 1;
                 tmp[bufcount] = name;
                 bufcount++;
@@ -182,17 +186,20 @@ out:
 
 static int llog_client_read_header(struct llog_handle *handle)
 {
+
         struct obd_import *imp = handle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
         struct llog_rec_hdr *llh_hdr;
+        struct mgc_open_llog *mol = handle->lgh_mol;
         int size = sizeof(*body);
         int repsize = sizeof (*hdr);
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,1,&size,NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER,
+                              1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -200,6 +207,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         body->lgd_logid = handle->lgh_id;
         body->lgd_ctxt_idx = handle->lgh_ctxt->loc_idx - 1;
         body->lgd_llh_flags = handle->lgh_hdr->llh_flags;
+        if (mol)
+                body->lgd_local_version = mol->mol_version;
 
         req->rq_replen = lustre_msg_size(1, &repsize);
         rc = ptlrpc_queue_wait(req);
