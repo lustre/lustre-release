@@ -488,7 +488,8 @@ LB_CONFIG_MODULES
 
 LC_CONFIG_LIBLUSTRE
 
-LC_CONFIG_QUOTA
+# Commented out to avoid a configure error. -gord
+#LC#_CONFIG_QUOTA
 
 LP_CONFIGURE
 LC_CONFIGURE
